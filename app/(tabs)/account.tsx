@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { supabase } from "../../lib/supabase";
@@ -11,7 +11,7 @@ import { SecondaryButton } from "../../components/ui/secondary-button";
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { isLoggedIn, sessionEmail, businessId, loading, refresh } = useBusiness();
+  const { isLoggedIn, sessionEmail, businessId, businessProfile, loading, refresh } = useBusiness();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,6 +20,25 @@ export default function AccountScreen() {
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [businessName, setBusinessName] = useState("");
   const [creatingBusiness, setCreatingBusiness] = useState(false);
+  const [profileCategory, setProfileCategory] = useState("");
+  const [profileTone, setProfileTone] = useState("");
+  const [profileLocation, setProfileLocation] = useState("");
+  const [profileShortDescription, setProfileShortDescription] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (!businessProfile) {
+      setProfileCategory("");
+      setProfileTone("");
+      setProfileLocation("");
+      setProfileShortDescription("");
+      return;
+    }
+    setProfileCategory(businessProfile.category ?? "");
+    setProfileTone(businessProfile.tone ?? "");
+    setProfileLocation(businessProfile.location ?? "");
+    setProfileShortDescription(businessProfile.short_description ?? "");
+  }, [businessProfile]);
 
   useEffect(() => {
     (async () => {
@@ -136,6 +155,30 @@ export default function AccountScreen() {
     }
   }
 
+  async function saveBusinessProfile() {
+    if (!businessId) return;
+    setSavingProfile(true);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          category: profileCategory.trim() || null,
+          tone: profileTone.trim() || null,
+          location: profileLocation.trim() || null,
+          short_description: profileShortDescription.trim() || null,
+        })
+        .eq("id", businessId);
+      if (error) throw error;
+      await refresh();
+      setBanner({ message: "Business profile saved. AI ads will use this when set.", tone: "success" });
+    } catch (e: any) {
+      setBanner({ message: e?.message ?? "Could not save profile.", tone: "error" });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   async function createBusiness() {
     if (!sessionEmail) {
       setBanner({ message: "Please log in to create a business.", tone: "error" });
@@ -209,7 +252,7 @@ export default function AccountScreen() {
           <PrimaryButton title="Demo Login" onPress={() => signIn("demo@demo.com", "demo12345")} disabled={busy} />
         </View>
       ) : (
-        <View style={{ marginTop: 16, gap: 12 }}>
+        <ScrollView style={{ marginTop: 16 }} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <PrimaryButton title="Customer mode" onPress={() => router.replace("/(tabs)")} />
             <SecondaryButton title="Business mode" onPress={() => router.replace("/(tabs)/create")} />
@@ -236,6 +279,93 @@ export default function AccountScreen() {
             </View>
             <Switch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
           </View>
+
+          {businessId ? (
+            <View
+              style={{
+                backgroundColor: "#fafafa",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "#eee",
+                gap: 10,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>Business profile (optional)</Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+                Helps AI write ads that fit your place. Skip any field — deals and AI still work without
+                them.
+              </Text>
+              <View>
+                <Text style={{ fontSize: 13 }}>Category</Text>
+                <TextInput
+                  value={profileCategory}
+                  onChangeText={setProfileCategory}
+                  placeholder="e.g. Coffee shop, bakery"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Tone</Text>
+                <TextInput
+                  value={profileTone}
+                  onChangeText={setProfileTone}
+                  placeholder="e.g. friendly, local, straightforward"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Location</Text>
+                <TextInput
+                  value={profileLocation}
+                  onChangeText={setProfileLocation}
+                  placeholder="Neighborhood or city"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Short description</Text>
+                <TextInput
+                  value={profileShortDescription}
+                  onChangeText={setProfileShortDescription}
+                  placeholder="One or two sentences about your business"
+                  multiline
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                    minHeight: 72,
+                    textAlignVertical: "top",
+                  }}
+                />
+              </View>
+              <PrimaryButton
+                title={savingProfile ? "Saving…" : "Save business profile"}
+                onPress={saveBusinessProfile}
+                disabled={savingProfile}
+              />
+            </View>
+          ) : null}
 
           {businessId ? (
             <PrimaryButton title="Business Dashboard" onPress={() => router.push("/dashboard")} />
@@ -286,7 +416,7 @@ export default function AccountScreen() {
           >
             <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>Log out</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       )}
     </View>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -11,6 +11,16 @@ import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { parseFunctionError } from "../../lib/functions";
+import {
+  adToDealDraft,
+  composeListingDescription,
+  CREATIVE_LANE_LABEL,
+  CREATIVE_LANE_ORDER,
+  type CreativeLane,
+  type GeneratedAd,
+} from "../../lib/ad-variants";
+import { AiAdsEvents, trackEvent } from "../../lib/analytics";
+import { assessDealQuality } from "../../lib/deal-quality";
 
 type TemplateRow = {
   id: string;
@@ -48,10 +58,40 @@ function formatMinutes(minutes: number) {
   return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
+/** Sent to AI so copy matches the deal schedule (MVP test cases). */
+function buildOfferScheduleSummary(
+  validityMode: "one-time" | "recurring",
+  startTime: Date,
+  endTime: Date,
+  daysOfWeek: number[],
+  windowStart: Date,
+  windowEnd: Date,
+  timezone: string,
+): string {
+  if (validityMode === "one-time") {
+    return `One-time: ${startTime.toLocaleString()} → ${endTime.toLocaleString()}`;
+  }
+  const dayLabels = dayOptions
+    .filter((d) => daysOfWeek.includes(d.value))
+    .map((d) => d.label)
+    .join(", ");
+  return `Recurring: ${dayLabels} · ${formatMinutes(minutesFromDate(windowStart))}–${formatMinutes(
+    minutesFromDate(windowEnd),
+  )} (${timezone})`;
+}
+
+const MAX_REGENERATIONS_PER_DRAFT = 2;
+
+/** Manual QA tags for validation runs — see docs/ai-ad-validation/ */
+const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padStart(2, "0")}`);
+
+const FALLBACK_INTRO =
+  "We couldn’t generate ads right now. You can still finish this offer manually.";
+
 export default function AiDealScreen() {
   const router = useRouter();
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
-  const { isLoggedIn, businessId, businessName } = useBusiness();
+  const { isLoggedIn, businessId, businessContextForAi } = useBusiness();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
 
@@ -62,6 +102,7 @@ export default function AiDealScreen() {
   const [price, setPrice] = useState("");
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
+  const [ctaText, setCtaText] = useState("");
   const [description, setDescription] = useState("");
   const [maxClaims, setMaxClaims] = useState("50");
   const [cutoffMins, setCutoffMins] = useState("15");
@@ -80,14 +121,59 @@ export default function AiDealScreen() {
   );
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [generatedAds, setGeneratedAds] = useState<GeneratedAd[] | null>(null);
+  const [selectedAdIndex, setSelectedAdIndex] = useState<number | null>(null);
+  /** After "Use this ad", snapshot for detecting edits before publish */
+  const aiDraftBaselineRef = useRef<{
+    title: string;
+    promo_line: string;
+    cta_text: string;
+    description: string;
+  } | null>(null);
+  /** Successful regenerations after the latest initial generation (max 2). */
+  const [regenerationsUsed, setRegenerationsUsed] = useState(0);
+  const [lastSuccessfulGenAttempt, setLastSuccessfulGenAttempt] = useState(0);
+  const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
+  const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
+  /** Tags generation in Supabase logs; see docs/ai-ad-validation/README.md */
+  const [manualValidationTag, setManualValidationTag] = useState("");
+  const [qaPanelOpen, setQaPanelOpen] = useState(false);
+
+  const offerScheduleSummary = useMemo(
+    () =>
+      buildOfferScheduleSummary(
+        validityMode,
+        startTime,
+        endTime,
+        daysOfWeek,
+        windowStart,
+        windowEnd,
+        timezone,
+      ),
+    [validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone],
+  );
+
+  const listingBody = useMemo(
+    () => composeListingDescription(promoLine, ctaText, description),
+    [promoLine, ctaText, description],
+  );
 
   const canPublish = useMemo(() => {
-    return title.trim().length > 0 && description.trim().length > 0;
-  }, [title, description]);
+    return title.trim().length > 0 && listingBody.trim().length > 0;
+  }, [title, listingBody]);
+
+  const showDraftEditor =
+    templateLoaded ||
+    selectedAdIndex !== null ||
+    title.trim().length > 0 ||
+    promoLine.trim().length > 0 ||
+    ctaText.trim().length > 0 ||
+    description.trim().length > 0 ||
+    manualDraftUnlocked;
 
   useEffect(() => {
     if (!templateId || !businessId) return;
@@ -102,6 +188,8 @@ export default function AiDealScreen() {
         const t = data as TemplateRow;
         setTitle(t.title ?? "");
         setDescription(t.description ?? "");
+        setPromoLine("");
+        setCtaText("");
         setPrice(t.price != null ? String(t.price) : "");
         setPosterUrl(t.poster_url ?? null);
         setMaxClaims(String(t.max_claims ?? 50));
@@ -119,6 +207,11 @@ export default function AiDealScreen() {
           setWindowEnd(d);
         }
         setTemplateLoaded(true);
+        setGeneratedAds(null);
+        setSelectedAdIndex(null);
+        aiDraftBaselineRef.current = null;
+        setManualDraftUnlocked(false);
+        setLastGenerationError(null);
       }
     })();
   }, [templateId, businessId]);
@@ -129,7 +222,7 @@ export default function AiDealScreen() {
       setBanner({ message: "Please allow photo access.", tone: "error" });
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
     if (result.canceled || !result.assets?.[0]?.uri) return;
     setPhotoUri(result.assets[0].uri);
     setPosterUrl(null);
@@ -220,29 +313,151 @@ export default function AiDealScreen() {
     return data?.signedUrl ?? null;
   }
 
-  async function generateCopy() {
+  function applyAdToDraft(ad: GeneratedAd) {
+    const draft = adToDealDraft(ad, hintText);
+    setTitle(draft.title);
+    setPromoLine(draft.promo_line);
+    setCtaText(draft.cta_text);
+    setDescription(draft.offer_details);
+    aiDraftBaselineRef.current = {
+      title: draft.title,
+      promo_line: draft.promo_line,
+      cta_text: draft.cta_text,
+      description: draft.offer_details,
+    };
+  }
+
+  function friendlyGenerationError(raw: string): string {
+    const t = raw.toLowerCase();
+    if (t.includes("openai_api_key") || t.includes("not set")) {
+      return "AI isn’t configured on the server yet. You can still write your deal below.";
+    }
+    if (t.includes("unauthorized") || t.includes("log in")) {
+      return "Session expired. Log in again, then try generating.";
+    }
+    if (t.includes("photo") || t.includes("access the photo")) {
+      return "We couldn’t use that photo. Try taking or picking a new one.";
+    }
+    if (t.includes("regeneration limit")) {
+      return "You’ve used the free refreshes for this draft. Tap Generate 3 ad ideas for a new batch, or edit below.";
+    }
+    if (t.includes("rate limit") || t.includes("429")) {
+      return `${FALLBACK_INTRO} The service may be busy — try again shortly or fill in the fields below.`;
+    }
+    if (raw.length > 120) {
+      return `${FALLBACK_INTRO} Try again in a moment, or fill in the fields below.`;
+    }
+    return FALLBACK_INTRO;
+  }
+
+  async function generateAdVariants(mode: "initial" | "regenerate") {
     if (!validateInputs(true)) return;
+    if (!businessId) {
+      setBanner({ message: "Create a business first.", tone: "error" });
+      return;
+    }
+
+    if (mode === "regenerate" && regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT) {
+      const limTag = manualValidationTag.trim().slice(0, 80);
+      trackEvent(AiAdsEvents.REGENERATE_LIMIT_HIT, {
+        screen: "create_ai",
+        ...(limTag ? { manual_validation_tag: limTag } : {}),
+      });
+      setBanner({
+        message:
+          "You’ve used both free refreshes for this draft. Tap “Generate 3 ad ideas” for a new batch, or edit the text below.",
+        tone: "info",
+      });
+      return;
+    }
+
+    const attemptForApi = mode === "initial" ? 0 : regenerationsUsed + 1;
+
+    const tagForLog = manualValidationTag.trim().slice(0, 80);
+
+    if (mode === "initial") {
+      trackEvent(AiAdsEvents.GENERATE_TAPPED, {
+        screen: "create_ai",
+        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
+      });
+      setRegenerationsUsed(0);
+    } else {
+      trackEvent(AiAdsEvents.REGENERATE_TAPPED, {
+        screen: "create_ai",
+        attempt: attemptForApi,
+        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
+      });
+    }
+
     setGenerating(true);
     setBanner(null);
+    setLastGenerationError(null);
+    setSelectedAdIndex(null);
+    setGeneratedAds(null);
+    aiDraftBaselineRef.current = null;
+
     try {
       const path = await ensureUploadedPhoto();
+      if (!path) {
+        throw new Error("Upload the photo before generating.");
+      }
       await ensurePosterUrl(path);
       const priceNum = price.trim() ? Number(price) : null;
-      const { data, error } = await supabase.functions.invoke("ai-generate-deal-copy", {
+      if (price.trim() && (priceNum === null || Number.isNaN(priceNum))) {
+        setBanner({ message: "Price must be a number.", tone: "error" });
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
         body: {
+          business_id: businessId,
+          photo_path: path,
           hint_text: hintText.trim(),
           price: priceNum,
-          business_name: businessName ?? "Local business",
+          business_context: businessContextForAi,
+          regeneration_attempt: attemptForApi,
+          offer_schedule_summary: offerScheduleSummary,
+          ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
         },
       });
       if (error) {
         throw new Error(parseFunctionError(error));
       }
-      setTitle(data.title ?? "");
-      setPromoLine(data.promo_line ?? "");
-      setDescription(data.description ?? "");
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(String((data as { error?: string }).error ?? "Generation failed"));
+      }
+      const ads = (data as { ads?: GeneratedAd[] })?.ads;
+      if (!Array.isArray(ads) || ads.length !== 3) {
+        throw new Error("Unexpected response from AI. Try again.");
+      }
+      setGeneratedAds(ads);
+      setLastSuccessfulGenAttempt(attemptForApi);
+      if (mode === "regenerate") {
+        setRegenerationsUsed((u) => u + 1);
+      }
+      setLastGenerationError(null);
+      setBanner({
+        message:
+          attemptForApi > 0
+            ? "New batch ready — value, neighborhood, and quality angles. Pick one to load into your draft."
+            : "Three angles: value, neighborhood, and premium. Pick one—you can edit before publishing.",
+        tone: "success",
+      });
+      trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
+        screen: "create_ai",
+        regeneration_attempt: attemptForApi,
+        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
+      });
     } catch (err: any) {
-      setBanner({ message: err?.message ?? "AI generation failed.", tone: "error" });
+      const raw = err?.message ?? "AI generation failed.";
+      const friendly = friendlyGenerationError(raw);
+      setLastGenerationError(friendly);
+      setBanner({ message: friendly, tone: "error" });
+      trackEvent(AiAdsEvents.GENERATION_FAILED, {
+        screen: "create_ai",
+        regeneration_attempt: attemptForApi,
+        message_snippet: raw.slice(0, 80),
+        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
+      });
     } finally {
       setGenerating(false);
     }
@@ -274,10 +489,22 @@ export default function AiDealScreen() {
       const start = isRecurring ? new Date() : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
 
+      const composedDescription = composeListingDescription(promoLine, ctaText, description);
+
+      const quality = assessDealQuality({
+        title: title.trim(),
+        description: composedDescription,
+        price: priceNum,
+      });
+      if (quality.blocked) {
+        setBanner({ message: quality.message, tone: "error" });
+        return;
+      }
+
       const { error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
-        description: description.trim(),
+        description: composedDescription.trim(),
         price: priceNum,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
@@ -290,8 +517,28 @@ export default function AiDealScreen() {
         window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
         timezone: isRecurring ? timezone : null,
+        quality_tier: quality.tier,
       });
       if (error) throw error;
+
+      const baseline = aiDraftBaselineRef.current;
+      if (baseline) {
+        const edited =
+          title.trim() !== baseline.title.trim() ||
+          promoLine.trim() !== baseline.promo_line.trim() ||
+          ctaText.trim() !== baseline.cta_text.trim() ||
+          description.trim() !== baseline.description.trim();
+        if (edited) {
+          trackEvent(AiAdsEvents.FIELDS_EDITED_BEFORE_PUBLISH, { screen: "create_ai" });
+        }
+        const pubTag = manualValidationTag.trim().slice(0, 80);
+        trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
+          screen: "create_ai",
+          draft_edited: edited,
+          ...(pubTag ? { manual_validation_tag: pubTag } : {}),
+        });
+      }
+
       router.replace("/(tabs)");
     } catch (err: any) {
       setBanner({ message: err?.message ?? "Publish failed.", tone: "error" });
@@ -323,10 +570,12 @@ export default function AiDealScreen() {
       const cutoffNum = Number(cutoffMins);
       const isRecurring = validityMode === "recurring";
 
+      const composedDescription = composeListingDescription(promoLine, ctaText, description);
+
       const { error } = await supabase.from("deal_templates").insert({
         business_id: businessId,
         title: title.trim(),
-        description: description.trim(),
+        description: composedDescription.trim(),
         price: priceNum,
         poster_url: signedPoster,
         max_claims: maxClaimsNum,
@@ -345,15 +594,10 @@ export default function AiDealScreen() {
     }
   }
 
-  const validitySummary =
-    validityMode === "one-time"
-      ? `${startTime.toLocaleString()} → ${endTime.toLocaleString()}`
-      : `${dayOptions.filter((d) => daysOfWeek.includes(d.value)).map((d) => d.label).join(", ")} · ${formatMinutes(minutesFromDate(windowStart))}–${formatMinutes(minutesFromDate(windowEnd))} (${timezone})`;
-
   if (!isLoggedIn) {
     return (
       <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI Deal</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads</Text>
         <Text style={{ marginTop: 12, opacity: 0.7 }}>Please log in to create deals.</Text>
       </View>
     );
@@ -362,15 +606,87 @@ export default function AiDealScreen() {
   if (!businessId) {
     return (
       <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI Deal</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>Create a business to use AI Deal.</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads</Text>
+        <Text style={{ marginTop: 12, opacity: 0.7 }}>Create a business to use AI ad ideas.</Text>
       </View>
     );
   }
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 70, paddingHorizontal: 16, paddingBottom: 40 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>AI Deal</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads for your deal</Text>
+      <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>
+        Upload a photo of the product or menu item, describe the offer in your own words, then get three
+        different ad angles. Choose one, tweak the text, and publish when you’re ready.
+      </Text>
+
+      <View style={{ marginTop: 12 }}>
+        <Pressable
+          onPress={() => setQaPanelOpen((o) => !o)}
+          style={{
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 10,
+            backgroundColor: "#f3f3f3",
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={{ fontWeight: "700", fontSize: 13 }}>
+            {qaPanelOpen ? "▼" : "▶"} Manual QA (validation)
+          </Text>
+        </Pressable>
+        {qaPanelOpen ? (
+          <View style={{ marginTop: 8, gap: 8 }}>
+            <Text style={{ fontSize: 12, opacity: 0.75, lineHeight: 17 }}>
+              Tag runs for the 12 test cases (see docs/ai-ad-validation). Appears in Supabase function logs
+              and dev analytics. Optional — leave blank for normal use.
+            </Text>
+            <TextInput
+              value={manualValidationTag}
+              onChangeText={(t) => setManualValidationTag(t.slice(0, 80))}
+              placeholder="e.g. TC01"
+              autoCapitalize="characters"
+              style={{
+                borderWidth: 1,
+                borderColor: "#ccc",
+                borderRadius: 10,
+                padding: 10,
+                fontSize: 14,
+              }}
+            />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {QA_CASE_IDS.map((id) => (
+                <Pressable
+                  key={id}
+                  onPress={() => setManualValidationTag(id)}
+                  style={{
+                    paddingVertical: 4,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    backgroundColor: manualValidationTag === id ? "#111" : "#eee",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: manualValidationTag === id ? "#fff" : "#111",
+                    }}
+                  >
+                    {id}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {manualValidationTag.trim() ? (
+              <Text style={{ fontSize: 11, opacity: 0.6 }}>
+                Active tag: {manualValidationTag.trim()} — cards will show QA lane_id for screenshots.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {showCamera ? (
@@ -398,7 +714,12 @@ export default function AiDealScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={{ height: 200, borderRadius: 16, marginTop: 12, backgroundColor: "#eee" }} />
+            <View style={{ marginTop: 12 }}>
+              <View style={{ height: 200, borderRadius: 16, backgroundColor: "#eee" }} />
+              <Text style={{ marginTop: 8, opacity: 0.65, fontSize: 13 }}>
+                Add a clear photo of the dish, drink, or item—AI uses it to stay accurate.
+              </Text>
+            </View>
           )}
 
           <Text style={{ marginTop: 16 }}>A few words</Text>
@@ -618,13 +939,172 @@ export default function AiDealScreen() {
             }}
           />
 
-          <View style={{ marginTop: 16 }}>
-            <PrimaryButton title={generating ? "Generating..." : "Generate"} onPress={generateCopy} disabled={generating} />
+          <View style={{ marginTop: 16, gap: 10 }}>
+            <PrimaryButton
+              title={generating ? "Working on your 3 ads…" : "Generate 3 ad ideas"}
+              onPress={() => void generateAdVariants("initial")}
+              disabled={generating}
+            />
+            {generatedAds && generatedAds.length === 3 ? (
+              <>
+                <SecondaryButton
+                  title={generating ? "Regenerating…" : "Regenerate (new wording)"}
+                  onPress={() => void generateAdVariants("regenerate")}
+                  disabled={generating || regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT}
+                />
+                <Text style={{ fontSize: 12, opacity: 0.6 }}>
+                  {regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT
+                    ? "Refresh limit reached — tap Generate 3 ad ideas for a new batch."
+                    : `Free refreshes left: ${MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed}`}
+                </Text>
+              </>
+            ) : null}
+            {generating ? (
+              <View style={{ marginTop: 4, gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <ActivityIndicator />
+                  <Text style={{ opacity: 0.75, flex: 1 }}>
+                    Creating three different angles: value, neighborhood, and premium. Usually under half a
+                    minute.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
           </View>
 
-          {(title.trim() || description.trim() || templateLoaded) ? (
+          {lastGenerationError && !generating ? (
+            <View
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 14,
+                backgroundColor: "#fafafa",
+                borderWidth: 1,
+                borderColor: "#e0e0e0",
+                gap: 10,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>{FALLBACK_INTRO}</Text>
+              <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+                Your photo and offer note stay put. Open the title, subheadline, CTA, and details below, then
+                publish — or adjust the note and tap Generate again.
+              </Text>
+              <SecondaryButton
+                title="Show title & description fields"
+                onPress={() => {
+                  setManualDraftUnlocked(true);
+                  setBanner({
+                    message: "Fill in title and description yourself, then publish when ready.",
+                    tone: "info",
+                  });
+                }}
+              />
+            </View>
+          ) : null}
+
+          {generatedAds && generatedAds.length === 3 ? (
+            <View style={{ marginTop: 20, gap: 12 }}>
+              <Text style={{ fontWeight: "700", fontSize: 16 }}>Pick an ad</Text>
+              <Text style={{ opacity: 0.7, marginBottom: 4 }}>
+                Value = savings clarity · Neighborhood = local & regulars · Premium = quality & craft. Tap
+                &quot;Use this ad&quot; to load one into your draft.
+              </Text>
+              {generatedAds.map((ad, index) => {
+                const selected = selectedAdIndex === index;
+                const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
+                const laneTitle = CREATIVE_LANE_LABEL[laneKey] ?? "Option";
+                return (
+                  <View
+                    key={`${ad.creative_lane ?? index}-${index}`}
+                    style={{
+                      borderRadius: 16,
+                      padding: 14,
+                      backgroundColor: "#fff",
+                      borderWidth: selected ? 2 : 1,
+                      borderColor: selected ? "#111" : "#e5e5e5",
+                      shadowColor: "#000",
+                      shadowOpacity: 0.06,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 2 },
+                      elevation: 2,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                      <Text
+                        style={{
+                          alignSelf: "flex-start",
+                          fontSize: 11,
+                          fontWeight: "800",
+                          color: "#fff",
+                          backgroundColor: "#111",
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {laneTitle}
+                      </Text>
+                      <Text
+                        style={{
+                          alignSelf: "flex-start",
+                          fontSize: 12,
+                          fontWeight: "700",
+                          color: "#444",
+                          backgroundColor: "#f0f0f0",
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                        }}
+                      >
+                        {ad.style_label}
+                      </Text>
+                    </View>
+                    {manualValidationTag.trim() ? (
+                      <Text
+                        style={{ fontSize: 10, color: "#888", marginBottom: 6 }}
+                        accessibilityLabel={`Creative lane ${ad.creative_lane}`}
+                      >
+                        QA metadata · lane_id: {ad.creative_lane}
+                      </Text>
+                    ) : null}
+                    <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
+                    <Text style={{ marginTop: 6, opacity: 0.85 }}>{ad.subheadline}</Text>
+                    <Text style={{ marginTop: 8, fontWeight: "700" }}>{ad.cta}</Text>
+                    <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.65, fontStyle: "italic" }}>
+                      {ad.rationale}
+                    </Text>
+                    {ad.visual_direction?.trim() ? (
+                      <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.55 }}>
+                        Visual note: {ad.visual_direction}
+                      </Text>
+                    ) : null}
+                    <View style={{ marginTop: 12 }}>
+                      <SecondaryButton
+                        title={selected ? "Selected — edit below" : "Use this ad"}
+                        onPress={() => {
+                          setSelectedAdIndex(index);
+                          applyAdToDraft(ad);
+                          trackEvent(AiAdsEvents.AD_SELECTED, {
+                            screen: "create_ai",
+                            creative_lane: ad.creative_lane ?? CREATIVE_LANE_ORDER[index],
+                            regeneration_attempt: lastSuccessfulGenAttempt,
+                            ...(manualValidationTag.trim()
+                              ? { manual_validation_tag: manualValidationTag.trim().slice(0, 80) }
+                              : {}),
+                          });
+                        }}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {showDraftEditor ? (
             <>
-              <Text style={{ marginTop: 18, fontWeight: "700" }}>Preview</Text>
+              <Text style={{ marginTop: 22, fontWeight: "700" }}>Deal preview</Text>
               <View
                 style={{
                   borderRadius: 18,
@@ -652,17 +1132,20 @@ export default function AiDealScreen() {
                   {promoLine ? (
                     <Text style={{ marginTop: 6, fontWeight: "600" }}>{promoLine}</Text>
                   ) : null}
-                  <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || "Short description"}</Text>
-                  <Text style={{ marginTop: 8, opacity: 0.7 }}>Validity: {validitySummary}</Text>
+                  {ctaText ? (
+                    <Text style={{ marginTop: 6, fontWeight: "700" }}>{ctaText}</Text>
+                  ) : null}
+                  <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || "Offer details"}</Text>
+                  <Text style={{ marginTop: 8, opacity: 0.7 }}>Schedule: {offerScheduleSummary}</Text>
                   <Text style={{ marginTop: 4, opacity: 0.7 }}>Max claims: {maxClaims}</Text>
                 </View>
               </View>
 
-              <Text style={{ marginTop: 16 }}>Edit title</Text>
+              <Text style={{ marginTop: 16 }}>Edit headline</Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Title"
+                placeholder="Headline"
                 style={{
                   borderWidth: 1,
                   borderColor: "#ccc",
@@ -671,11 +1154,11 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               />
-              <Text style={{ marginTop: 12 }}>Edit promo line</Text>
+              <Text style={{ marginTop: 12 }}>Edit subheadline</Text>
               <TextInput
                 value={promoLine}
                 onChangeText={setPromoLine}
-                placeholder="Promo line"
+                placeholder="Supporting line under the headline"
                 style={{
                   borderWidth: 1,
                   borderColor: "#ccc",
@@ -684,11 +1167,24 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               />
-              <Text style={{ marginTop: 12 }}>Edit description</Text>
+              <Text style={{ marginTop: 12 }}>Edit CTA</Text>
+              <TextInput
+                value={ctaText}
+                onChangeText={setCtaText}
+                placeholder="e.g. Stop in this afternoon"
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#ccc",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 6,
+                }}
+              />
+              <Text style={{ marginTop: 12 }}>Edit offer details</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Description"
+                placeholder="What’s included, times, fine print"
                 multiline
                 style={{
                   borderWidth: 1,

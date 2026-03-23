@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -63,6 +64,16 @@ export default function QuickDealScreen() {
         return;
       }
 
+      const quality = assessDealQuality({
+        title: title.trim(),
+        description: null,
+        price: priceNum,
+      });
+      if (quality.blocked) {
+        setBanner(quality.message);
+        return;
+      }
+
       const { error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
@@ -74,6 +85,7 @@ export default function QuickDealScreen() {
         max_claims: maxClaimsNum,
         is_active: true,
         poster_url: null,
+        quality_tier: quality.tier,
       });
 
       if (error) throw error;

@@ -119,9 +119,9 @@ export default function CreateDeal() {
               backgroundColor: "#eee",
             }}
           >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>AI Deal</Text>
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>AI ad ideas</Text>
             <Text style={{ color: "#111", opacity: 0.7, marginTop: 6 }}>
-              Photo + a few words. AI creates the ad copy.
+              Photo + short note → 3 distinct ad options. Pick one and publish.
             </Text>
           </Pressable>
 
