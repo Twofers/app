@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { supabase } from "../../lib/supabase";
 import { claimDeal } from "../../lib/functions";
 import { checkForNewFavoriteDeals } from "../../lib/notifications";
@@ -35,6 +36,7 @@ type Deal = {
 
 export default function HomeDeals() {
   const router = useRouter();
+  const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { isLoggedIn, sessionEmail, userId } = useBusiness();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [qrToken, setQrToken] = useState<string | null>(null);
@@ -213,9 +215,9 @@ export default function HomeDeals() {
   }, [userId, favoriteBusinessIds]);
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Deals</Text>
-      <Text style={{ marginTop: 6, marginBottom: 12, opacity: 0.8 }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Deals</Text>
+      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15 }}>
         {sessionEmail ? `Logged in: ${sessionEmail}` : "Not logged in"}
       </Text>
 
@@ -225,9 +227,11 @@ export default function HomeDeals() {
         <LoadingSkeleton rows={3} />
       ) : (
         <FlatList
+          style={{ flex: 1 }}
           data={deals}
           keyExtractor={(d) => d.id}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
           renderItem={({ item }) => (
             <DealCardPoster
               title={item.title ?? "Deal"}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 
 type QrModalProps = {
@@ -12,6 +13,7 @@ type QrModalProps = {
 };
 
 export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshing }: QrModalProps) {
+  const insets = useSafeAreaInsets();
   const [remaining, setRemaining] = useState<string | null>(null);
   const [tick, setTick] = useState(false);
 
@@ -41,7 +43,16 @@ export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshi
           padding: 16,
         }}
       >
-        <View style={{ backgroundColor: "#fff", borderRadius: 18, padding: 16, width: "100%" }}>
+        <View
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: 18,
+            padding: 16,
+            paddingBottom: Math.max(16, insets.bottom + 8),
+            width: "100%",
+            maxWidth: 400,
+          }}
+        >
           <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>Your QR</Text>
           <View style={{ alignItems: "center", marginBottom: 10 }}>
             {token ? <QRCode value={token} size={220} /> : null}

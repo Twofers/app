@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -15,6 +16,7 @@ import {
 
 export default function QuickDealScreen() {
   const router = useRouter();
+  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { t, i18n } = useTranslation();
   const { isLoggedIn, businessId, userId, loading, businessPreferredLocale } = useBusiness();
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
@@ -105,18 +107,23 @@ export default function QuickDealScreen() {
   }
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createQuick.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createQuick.title")}</Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text>
+        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text>
       ) : loading ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.loading")}</Text>
+        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loading")}</Text>
       ) : !businessId ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.createBusinessFirst")}</Text>
+        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.createBusinessFirst")}</Text>
       ) : (
-        <View style={{ marginTop: 16, gap: 12 }}>
+        <ScrollView
+          style={{ flex: 1, marginTop: Spacing.lg }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View>
             <Text>{t("createQuick.fieldTitle")}</Text>
             <TextInput
@@ -215,7 +222,7 @@ export default function QuickDealScreen() {
             onPress={publishDeal}
             disabled={publishing || !canPublish}
           />
-        </View>
+        </ScrollView>
       )}
     </View>
   );

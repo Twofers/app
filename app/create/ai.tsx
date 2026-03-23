@@ -25,6 +25,7 @@ import {
   resolveDealFlowLanguage,
   translateDealQualityBlock,
 } from "../../lib/translate-deal-quality";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 
 type TemplateRow = {
   id: string;
@@ -92,6 +93,7 @@ const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padS
 
 export default function AiDealScreen() {
   const router = useRouter();
+  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
   const { t, i18n } = useTranslation();
   const { isLoggedIn, businessId, businessContextForAi, businessPreferredLocale } = useBusiness();
@@ -622,25 +624,33 @@ export default function AiDealScreen() {
 
   if (!isLoggedIn) {
     return (
-      <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleScreen")}</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>{t("createAi.loginPrompt")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.loginPrompt")}</Text>
       </View>
     );
   }
 
   if (!businessId) {
     return (
-      <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleScreen")}</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>{t("createAi.needBusiness")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.needBusiness")}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: 70, paddingHorizontal: 16, paddingBottom: 40 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleMain")}</Text>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingTop: top,
+        paddingHorizontal: horizontal,
+        paddingBottom: scrollBottom,
+      }}
+    >
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleMain")}</Text>
       <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>{t("createAi.intro")}</Text>
 
       <View style={{ marginTop: 12 }}>

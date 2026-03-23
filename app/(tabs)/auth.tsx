@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 
 export default function AuthScreen() {
   const { t } = useTranslation();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -114,10 +116,16 @@ export default function AuthScreen() {
   }
 
   return (
-    <View style={{ paddingTop: 80, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("auth.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("auth.title")}</Text>
 
-      <Text style={{ marginTop: 16 }}>{t("auth.email")}</Text>
+      <ScrollView
+        style={{ flex: 1, marginTop: Spacing.lg }}
+        contentContainerStyle={{ paddingBottom: scrollBottom }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+      <Text style={{ marginTop: 0 }}>{t("auth.email")}</Text>
       <TextInput
         value={email}
         onChangeText={setEmail}
@@ -148,7 +156,7 @@ export default function AuthScreen() {
 
       <Pressable
         disabled={busy}
-        onPress={signIn}
+        onPress={() => void signIn()}
         style={{
           marginTop: 18,
           padding: 14,
@@ -246,6 +254,7 @@ export default function AuthScreen() {
           </Pressable>
         </View>
       ) : null}
+      </ScrollView>
     </View>
   );
 }

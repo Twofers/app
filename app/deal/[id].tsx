@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -31,6 +32,8 @@ type Deal = {
 
 export default function DealDetail() {
   const { t } = useTranslation();
+  const { height: winH } = useWindowDimensions();
+  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { id } = useLocalSearchParams<{ id: string }>();
   const [deal, setDeal] = useState<Deal | null>(null);
   const { isLoggedIn, userId } = useBusiness();
@@ -165,91 +168,117 @@ export default function DealDetail() {
 
   if (!deal) {
     return (
-      <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("dealDetail.title")}</Text>
-        <Text style={{ marginTop: 12, opacity: 0.8 }}>{t("dealDetail.loading")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealDetail.title")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.8 }}>{t("dealDetail.loading")}</Text>
       </View>
     );
   }
 
   const remaining = Math.max(0, deal.max_claims - claimsCount);
+  const heroHeight = Math.round(Math.min(380, Math.max(240, winH * 0.38)));
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       {banner ? <Banner message={banner} tone="error" /> : null}
-      <Pressable
-        onPress={toggleFavorite}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <MaterialIcons
-          name={isFavorite ? "favorite" : "favorite-border"}
-          size={20}
-          color={isFavorite ? "#e0245e" : "#666"}
-        />
-        <Text style={{ color: "#666" }}>{isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}</Text>
-      </Pressable>
-      {deal.poster_url ? (
-        <Image
-          source={{ uri: deal.poster_url }}
-          style={{ height: 220, width: "100%", borderRadius: 14 }}
-          contentFit="cover"
-        />
-      ) : (
-        <View
+        <Pressable
+          onPress={toggleFavorite}
+          hitSlop={8}
           style={{
-            height: 220,
-            borderRadius: 14,
-            backgroundColor: "#e5e5e5",
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
+            gap: Spacing.sm,
+            marginBottom: Spacing.md,
           }}
         >
-          <Text style={{ color: "#666" }}>{t("dealDetail.noImage")}</Text>
+          <MaterialIcons
+            name={isFavorite ? "favorite" : "favorite-border"}
+            size={22}
+            color={isFavorite ? "#e0245e" : "#666"}
+          />
+          <Text style={{ color: "#444", fontSize: 16, fontWeight: "600" }}>
+            {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
+          </Text>
+        </Pressable>
+        {deal.poster_url ? (
+          <Image
+            source={{ uri: deal.poster_url }}
+            style={{ height: heroHeight, width: "100%", borderRadius: 18 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={{
+              height: heroHeight,
+              borderRadius: 18,
+              backgroundColor: "#e8e8e8",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#666", fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+          </View>
+        )}
+
+        <Text
+          style={{
+            marginTop: Spacing.lg,
+            fontSize: 13,
+            fontWeight: "600",
+            opacity: 0.55,
+            textTransform: "uppercase",
+            letterSpacing: 0.4,
+          }}
+        >
+          {deal.businesses?.name ?? "Local business"}
+        </Text>
+        <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30 }}>
+          {deal.title ?? "Deal"}
+        </Text>
+        {deal.price != null ? (
+          <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20 }}>${deal.price.toFixed(2)}</Text>
+        ) : null}
+        {deal.description ? (
+          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24 }}>{deal.description}</Text>
+        ) : null}
+        <View
+          style={{
+            marginTop: Spacing.lg,
+            borderRadius: 16,
+            backgroundColor: "#f6f6f6",
+            padding: Spacing.lg,
+          }}
+        >
+          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16 }}>{t("dealDetail.finePrint")}</Text>
+          <Text style={{ opacity: 0.78, fontSize: 15, lineHeight: 22 }}>
+            {t("dealDetail.validityPrefix")} {formatValiditySummary(deal)}
+          </Text>
+          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+            {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}
+          </Text>
+          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+            {t("dealDetail.claimsRemaining")} {remaining} / {deal.max_claims}
+          </Text>
         </View>
-      )}
 
-      <Text style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-        {deal.businesses?.name ?? "Local business"}
-      </Text>
-      <Text style={{ fontSize: 20, fontWeight: "700", marginTop: 4 }}>{deal.title ?? "Deal"}</Text>
-      {deal.price != null ? (
-        <Text style={{ marginTop: 6, fontWeight: "700" }}>${deal.price.toFixed(2)}</Text>
-      ) : null}
-      {deal.description ? (
-        <Text style={{ marginTop: 8 }}>{deal.description}</Text>
-      ) : null}
-      <View
-        style={{
-          marginTop: 14,
-          borderRadius: 12,
-          backgroundColor: "#f8f8f8",
-          padding: 12,
-        }}
-      >
-        <Text style={{ fontWeight: "700", marginBottom: 6 }}>{t("dealDetail.finePrint")}</Text>
-        <Text style={{ opacity: 0.75 }}>
-          {t("dealDetail.validityPrefix")} {formatValiditySummary(deal)}
-        </Text>
-        <Text style={{ opacity: 0.75, marginTop: 4 }}>
-          {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}
-        </Text>
-        <Text style={{ opacity: 0.75, marginTop: 4 }}>
-          {t("dealDetail.claimsRemaining")} {remaining} / {deal.max_claims}
-        </Text>
-      </View>
-
-      <View style={{ marginTop: 16, gap: 8 }}>
-        <PrimaryButton
-          title={isClaiming ? t("dealDetail.claiming") : t("dealDetail.claim")}
-          onPress={doClaim}
-          disabled={isClaiming}
-        />
-        <SecondaryButton
-          title={refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
-          onPress={refreshQr}
-          disabled={refreshingQr}
-        />
-      </View>
+        <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
+          <PrimaryButton
+            title={isClaiming ? t("dealDetail.claiming") : t("dealDetail.claim")}
+            onPress={doClaim}
+            disabled={isClaiming}
+          />
+          <SecondaryButton
+            title={refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
+            onPress={refreshQr}
+            disabled={refreshingQr}
+          />
+        </View>
+      </ScrollView>
 
       <QrModal
         visible={qrVisible}

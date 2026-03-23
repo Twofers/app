@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
 
 export default function AccountScreen() {
   const router = useRouter();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const { t, i18n } = useTranslation();
   const { isLoggedIn, sessionEmail, businessId, businessProfile, loading, refresh } = useBusiness();
   const [email, setEmail] = useState("");
@@ -242,12 +244,12 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("account.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("account.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
-        <View style={{ marginTop: 16, gap: 12 }}>
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <View>
             <Text>Email</Text>
             <TextInput
@@ -286,7 +288,12 @@ export default function AccountScreen() {
           <PrimaryButton title="Demo Login" onPress={() => signIn("demo@demo.com", "demo12345")} disabled={busy} />
         </View>
       ) : (
-        <ScrollView style={{ marginTop: 16 }} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+        <ScrollView
+          style={{ marginTop: Spacing.lg, flex: 1 }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View
             style={{
               borderWidth: 1,
@@ -305,7 +312,7 @@ export default function AccountScreen() {
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ gap: Spacing.sm }}>
             <PrimaryButton title="Customer mode" onPress={() => router.replace("/(tabs)")} />
             <SecondaryButton title="Business mode" onPress={() => router.replace("/(tabs)/create")} />
           </View>
