@@ -2,15 +2,22 @@ import { useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
+import {
+  resolveDealFlowLanguage,
+  translateDealQualityBlock,
+} from "../../lib/translate-deal-quality";
 
 export default function QuickDealScreen() {
   const router = useRouter();
-  const { isLoggedIn, businessId, userId, loading } = useBusiness();
+  const { t, i18n } = useTranslation();
+  const { isLoggedIn, businessId, userId, loading, businessPreferredLocale } = useBusiness();
+  const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
@@ -24,11 +31,11 @@ export default function QuickDealScreen() {
 
   async function publishDeal() {
     if (!userId || !businessId) {
-      setBanner("Create a business first.");
+      setBanner(t("createQuick.errCreateBusiness"));
       return;
     }
     if (!canPublish) {
-      setBanner("Title is required.");
+      setBanner(t("createQuick.errTitleRequired"));
       return;
     }
 
@@ -38,20 +45,20 @@ export default function QuickDealScreen() {
     const cutoffNum = Number(cutoffMins);
 
     if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) {
-      setBanner("Max claims must be greater than 0.");
+      setBanner(t("createQuick.errMaxClaims"));
       return;
     }
     if (Number.isNaN(cutoffNum) || cutoffNum < 0) {
-      setBanner("Cutoff buffer must be 0 or more.");
+      setBanner(t("createQuick.errCutoff"));
       return;
     }
     if (now >= end) {
-      setBanner("End time must be in the future.");
+      setBanner(t("createQuick.errEndFuture"));
       return;
     }
     const durationMinutes = Math.floor((end.getTime() - now.getTime()) / 60000);
     if (cutoffNum >= durationMinutes) {
-      setBanner("Cutoff must be less than the deal duration.");
+      setBanner(t("createQuick.errCutoffDuration"));
       return;
     }
 
@@ -60,7 +67,7 @@ export default function QuickDealScreen() {
     try {
       const priceNum = price.trim() ? Number(price) : null;
       if (price.trim() && Number.isNaN(priceNum)) {
-        setBanner("Price must be a number.");
+        setBanner(t("createQuick.errPriceNumber"));
         return;
       }
 
@@ -70,7 +77,7 @@ export default function QuickDealScreen() {
         price: priceNum,
       });
       if (quality.blocked) {
-        setBanner(quality.message);
+        setBanner(translateDealQualityBlock(quality, dealLang));
         return;
       }
 
@@ -91,7 +98,7 @@ export default function QuickDealScreen() {
       if (error) throw error;
       router.replace("/(tabs)");
     } catch (err: any) {
-      setBanner(err?.message ?? "Publish failed.");
+      setBanner(err?.message ?? t("createQuick.errPublishFailed"));
     } finally {
       setPublishing(false);
     }
@@ -99,23 +106,23 @@ export default function QuickDealScreen() {
 
   return (
     <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Quick Deal</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createQuick.title")}</Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>Please log in to create deals.</Text>
+        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text>
       ) : loading ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>Loading...</Text>
+        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.loading")}</Text>
       ) : !businessId ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>Create a business first.</Text>
+        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("createQuick.createBusinessFirst")}</Text>
       ) : (
         <View style={{ marginTop: 16, gap: 12 }}>
           <View>
-            <Text>Title</Text>
+            <Text>{t("createQuick.fieldTitle")}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
-              placeholder="2-for-1 latte"
+              placeholder={t("createQuick.placeholderTitle")}
               style={{
                 borderWidth: 1,
                 borderColor: "#ccc",
@@ -127,7 +134,7 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>Price (optional)</Text>
+            <Text>{t("createQuick.fieldPrice")}</Text>
             <TextInput
               value={price}
               onChangeText={setPrice}
@@ -144,7 +151,7 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>End time</Text>
+            <Text>{t("createQuick.fieldEndTime")}</Text>
             <Pressable
               onPress={() => setShowEndPicker(true)}
               style={{
@@ -170,7 +177,7 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>Max claims</Text>
+            <Text>{t("createQuick.fieldMaxClaims")}</Text>
             <TextInput
               value={maxClaims}
               onChangeText={setMaxClaims}
@@ -187,7 +194,7 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>Claim cutoff buffer (minutes)</Text>
+            <Text>{t("createQuick.fieldCutoff")}</Text>
             <TextInput
               value={cutoffMins}
               onChangeText={setCutoffMins}
@@ -204,7 +211,7 @@ export default function QuickDealScreen() {
           </View>
 
           <PrimaryButton
-            title={publishing ? "Publishing..." : "Publish"}
+            title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
             onPress={publishDeal}
             disabled={publishing || !canPublish}
           />

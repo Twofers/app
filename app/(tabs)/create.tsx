@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -8,6 +9,7 @@ import { Banner } from "../../components/ui/banner";
 import { Image } from "expo-image";
 
 export default function CreateDeal() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { isLoggedIn, businessId, userId, loading, refresh } = useBusiness();
   const [businessName, setBusinessName] = useState("");
@@ -35,12 +37,12 @@ export default function CreateDeal() {
 
   async function createBusiness() {
     if (!userId) {
-      setBanner("Please log in to create a business.");
+      setBanner(t("createHub.errLoginBusiness"));
       return;
     }
     const name = businessName.trim();
     if (!name) {
-      setBanner("Business name required.");
+      setBanner(t("createHub.errNameRequired"));
       return;
     }
     setIsCreatingBusiness(true);
@@ -52,7 +54,7 @@ export default function CreateDeal() {
       await refresh();
       router.replace("/(tabs)/create");
     } catch (err: any) {
-      setBanner(err?.message ?? "Create business failed.");
+      setBanner(err?.message ?? t("createHub.errCreateFailed"));
     } finally {
       setIsCreatingBusiness(false);
     }
@@ -60,27 +62,25 @@ export default function CreateDeal() {
 
   return (
     <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Create</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createHub.title")}</Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
 
       {!isLoggedIn ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7 }}>Please log in to create deals.</Text>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.loginPrompt")}</Text>
         </View>
       ) : loading ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7 }}>Loading...</Text>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
         </View>
       ) : !businessId ? (
         <View style={{ marginTop: 16, gap: 12 }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>Create your business</Text>
-          <Text style={{ opacity: 0.7 }}>
-            Create a business to post deals and redeem QR codes.
-          </Text>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createHub.createBusinessHeader")}</Text>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.createBusinessBody")}</Text>
           <TextInput
             value={businessName}
             onChangeText={setBusinessName}
-            placeholder="Business name"
+            placeholder={t("createHub.placeholderBusinessName")}
             autoCapitalize="words"
             style={{
               borderWidth: 1,
@@ -90,7 +90,7 @@ export default function CreateDeal() {
             }}
           />
           <PrimaryButton
-            title={isCreatingBusiness ? "Creating..." : "Create Business"}
+            title={isCreatingBusiness ? t("createHub.creating") : t("createHub.createBusiness")}
             onPress={createBusiness}
             disabled={isCreatingBusiness}
           />
@@ -105,10 +105,8 @@ export default function CreateDeal() {
               backgroundColor: "#111",
             }}
           >
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Quick Deal</Text>
-            <Text style={{ color: "white", opacity: 0.8, marginTop: 6 }}>
-              Fast manual deal creation with minimal fields.
-            </Text>
+            <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
+            <Text style={{ color: "white", opacity: 0.8, marginTop: 6 }}>{t("createHub.quickDealSubtitle")}</Text>
           </Pressable>
 
           <Pressable
@@ -119,23 +117,21 @@ export default function CreateDeal() {
               backgroundColor: "#eee",
             }}
           >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>AI ad ideas</Text>
-            <Text style={{ color: "#111", opacity: 0.7, marginTop: 6 }}>
-              Photo + short note → 3 distinct ad options. Pick one and publish.
-            </Text>
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.7, marginTop: 6 }}>{t("createHub.aiAdsSubtitle")}</Text>
           </Pressable>
 
           <View style={{ marginTop: 8 }}>
-            <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 8 }}>Templates</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 8 }}>{t("createHub.templatesTitle")}</Text>
             {templatesLoading ? (
-              <Text style={{ opacity: 0.7 }}>Loading templates...</Text>
+              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesLoading")}</Text>
             ) : templates.length === 0 ? (
-              <Text style={{ opacity: 0.7 }}>No templates yet. Save one from AI Deal.</Text>
+              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesEmpty")}</Text>
             ) : (
-              templates.map((t) => (
+              templates.map((tpl) => (
                 <Pressable
-                  key={t.id}
-                  onPress={() => router.push({ pathname: "/create/ai", params: { templateId: t.id } })}
+                  key={tpl.id}
+                  onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
                   style={{
                     borderRadius: 16,
                     backgroundColor: "#fff",
@@ -148,18 +144,18 @@ export default function CreateDeal() {
                     elevation: 1,
                   }}
                 >
-                  {t.poster_url ? (
+                  {tpl.poster_url ? (
                     <Image
-                      source={{ uri: t.poster_url }}
+                      source={{ uri: tpl.poster_url }}
                       style={{ height: 120, width: "100%", borderRadius: 12 }}
                       contentFit="cover"
                     />
                   ) : (
                     <View style={{ height: 120, borderRadius: 12, backgroundColor: "#eee" }} />
                   )}
-                  <Text style={{ marginTop: 8, fontWeight: "700" }}>{t.title ?? "Untitled template"}</Text>
-                  {t.price != null ? (
-                    <Text style={{ marginTop: 4, opacity: 0.7 }}>${Number(t.price).toFixed(2)}</Text>
+                  <Text style={{ marginTop: 8, fontWeight: "700" }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
+                  {tpl.price != null ? (
+                    <Text style={{ marginTop: 4, opacity: 0.7 }}>${Number(tpl.price).toFixed(2)}</Text>
                   ) : null}
                 </Pressable>
               ))

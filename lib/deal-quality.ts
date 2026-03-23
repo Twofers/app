@@ -14,10 +14,19 @@ export type DealQualityInput = {
   price?: number | null;
 };
 
+/** Machine-readable reason for i18n (`dealQuality.blocks.*`). */
+export type DealQualityBlockReason =
+  | "TITLE_SHORT"
+  | "MULTI_PERCENT"
+  | "BELOW_THRESHOLD"
+  | "CLARIFY_VALUE";
+
 export type DealQualityResult = {
   tier: DealQualityTier;
   /** When true, block publish and show `message` */
   blocked: boolean;
+  /** Use with i18n for ES/KO; English `message` remains for regression tests. */
+  blockReason: DealQualityBlockReason | null;
   message: string;
   /** Optional nudge when published as acceptable (not shown by default in UI) */
   improvementTip?: string;
@@ -96,7 +105,28 @@ const CORE_STRONG_PATTERNS: RegExp[] = [
   /\b50\s*%\s+en\s+el\s+segundo\b/i,
 ];
 
-const STRONG_OFFER_PATTERNS: RegExp[] = [...CORE_STRONG_PATTERNS, ...MEANINGFUL_FREE_PATTERNS];
+/** Core Korean retail/deal phrases (MVP). */
+const KOREAN_DEAL_PATTERNS: RegExp[] = [
+  /1\s*\+\s*1/i,
+  /원플원/,
+  /투\s*포\s*원/,
+  /2\s*개\s*사면\s*1/i,
+  /하나\s*더\s*무료/,
+  /두\s*번째\s*반값/,
+  /두\s*번째\s*50\s*%/,
+  /50\s*%\s*할인/,
+  /\d{1,3}\s*%\s*할인/,
+  /증정\s*음료/,
+  /무료\s*음료/,
+  /마감\s*할인/,
+  /타임세일/,
+];
+
+const STRONG_OFFER_PATTERNS: RegExp[] = [
+  ...CORE_STRONG_PATTERNS,
+  ...MEANINGFUL_FREE_PATTERNS,
+  ...KOREAN_DEAL_PATTERNS,
+];
 
 /**
  * Headline offers that may coexist with other % mentions in fine print.
@@ -127,6 +157,15 @@ const STRUCTURAL_PRIMARY_PATTERNS: RegExp[] = [
   /\bsegundo\s+a\s+mitad\s+de\s+precio\b/i,
   /\bsegundo\s+al\s+50\s*%/i,
   /\b50\s*%\s+en\s+el\s+segundo\b/i,
+  /1\s*\+\s*1/i,
+  /원플원/,
+  /투\s*포\s*원/,
+  /2\s*개\s*사면\s*1/i,
+  /하나\s*더\s*무료/,
+  /두\s*번째\s*반값/,
+  /두\s*번째\s*50\s*%/,
+  /증정\s*음료/,
+  /무료\s*음료/,
 ];
 
 /** Obvious bundle / stack pricing (EN + ES). Keep small — see docs for copy tips. */
@@ -199,6 +238,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
     return {
       tier: "weak",
       blocked: true,
+      blockReason: "TITLE_SHORT",
       message: `Your title is too short to show the value. ${DEAL_QUALITY_BLOCK_MESSAGE}`,
     };
   }
@@ -213,20 +253,21 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
     return {
       tier: "weak",
       blocked: true,
+      blockReason: "MULTI_PERCENT",
       message: DEAL_QUALITY_MULTIPLE_PERCENT_MESSAGE,
     };
   }
 
   if (matchesAny(text, STRONG_OFFER_PATTERNS)) {
-    return { tier: "strong", blocked: false, message: "" };
+    return { tier: "strong", blocked: false, blockReason: null, message: "" };
   }
 
   if (matchesAny(text, END_OF_DAY_PATTERNS) && hasContextualValueForEodOrClearance(text)) {
-    return { tier: "strong", blocked: false, message: "" };
+    return { tier: "strong", blocked: false, blockReason: null, message: "" };
   }
 
   if (matchesAny(text, CLEARANCE_PATTERNS) && hasContextualValueForEodOrClearance(text)) {
-    return { tier: "strong", blocked: false, message: "" };
+    return { tier: "strong", blocked: false, blockReason: null, message: "" };
   }
 
   const singlePercent = uniquePercents.length === 1 ? uniquePercents[0] : null;
@@ -235,6 +276,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
     return {
       tier: "weak",
       blocked: true,
+      blockReason: "BELOW_THRESHOLD",
       message: DEAL_QUALITY_BLOCK_MESSAGE,
     };
   }
@@ -243,6 +285,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
     return {
       tier: "acceptable",
       blocked: false,
+      blockReason: null,
       message: "",
       improvementTip:
         "BOGO, 2-for-1, and clear bundles often rank higher than percent-off alone when you add those later.",
@@ -250,7 +293,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
   }
 
   if (matchesAny(text, BUNDLE_AND_FIXED_PRICE_PATTERNS)) {
-    return { tier: "acceptable", blocked: false, message: "" };
+    return { tier: "acceptable", blocked: false, blockReason: null, message: "" };
   }
 
   const len = combinedLength(input);
@@ -258,6 +301,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
     return {
       tier: "weak",
       blocked: true,
+      blockReason: "CLARIFY_VALUE",
       message: DEAL_QUALITY_CLARIFY_VALUE_MESSAGE,
     };
   }
@@ -265,6 +309,7 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
   return {
     tier: "weak",
     blocked: true,
+    blockReason: "CLARIFY_VALUE",
     message: DEAL_QUALITY_CLARIFY_VALUE_MESSAGE,
   };
 }

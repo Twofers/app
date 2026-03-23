@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "../../lib/supabase";
@@ -29,6 +30,7 @@ type Deal = {
 };
 
 export default function DealDetail() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [deal, setDeal] = useState<Deal | null>(null);
   const { isLoggedIn, userId } = useBusiness();
@@ -89,7 +91,7 @@ export default function DealDetail() {
   async function doClaim() {
     try {
       if (!isLoggedIn) {
-        setBanner("Log in to claim deals.");
+        setBanner(t("dealDetail.errLoginClaim"));
         return;
       }
       if (!deal) return;
@@ -135,7 +137,7 @@ export default function DealDetail() {
 
   async function toggleFavorite() {
     if (!userId || !deal?.business_id) {
-      setBanner("Log in to save favorites.");
+      setBanner(t("dealDetail.errLoginFavorite"));
       return;
     }
     const next = !isFavorite;
@@ -164,8 +166,8 @@ export default function DealDetail() {
   if (!deal) {
     return (
       <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Deal</Text>
-        <Text style={{ marginTop: 12, opacity: 0.8 }}>Loading...</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("dealDetail.title")}</Text>
+        <Text style={{ marginTop: 12, opacity: 0.8 }}>{t("dealDetail.loading")}</Text>
       </View>
     );
   }
@@ -184,7 +186,7 @@ export default function DealDetail() {
           size={20}
           color={isFavorite ? "#e0245e" : "#666"}
         />
-        <Text style={{ color: "#666" }}>{isFavorite ? "Favorited" : "Favorite"}</Text>
+        <Text style={{ color: "#666" }}>{isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}</Text>
       </Pressable>
       {deal.poster_url ? (
         <Image
@@ -202,7 +204,7 @@ export default function DealDetail() {
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#666" }}>No image</Text>
+          <Text style={{ color: "#666" }}>{t("dealDetail.noImage")}</Text>
         </View>
       )}
 
@@ -224,22 +226,26 @@ export default function DealDetail() {
           padding: 12,
         }}
       >
-        <Text style={{ fontWeight: "700", marginBottom: 6 }}>Fine print</Text>
+        <Text style={{ fontWeight: "700", marginBottom: 6 }}>{t("dealDetail.finePrint")}</Text>
         <Text style={{ opacity: 0.75 }}>
-          Validity: {formatValiditySummary(deal)}
+          {t("dealDetail.validityPrefix")} {formatValiditySummary(deal)}
         </Text>
         <Text style={{ opacity: 0.75, marginTop: 4 }}>
-          Cutoff buffer: {deal.claim_cutoff_buffer_minutes} minutes before end
+          {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}
         </Text>
         <Text style={{ opacity: 0.75, marginTop: 4 }}>
-          Claims remaining: {remaining} / {deal.max_claims}
+          {t("dealDetail.claimsRemaining")} {remaining} / {deal.max_claims}
         </Text>
       </View>
 
       <View style={{ marginTop: 16, gap: 8 }}>
-        <PrimaryButton title={isClaiming ? "Claiming..." : "Claim"} onPress={doClaim} disabled={isClaiming} />
+        <PrimaryButton
+          title={isClaiming ? t("dealDetail.claiming") : t("dealDetail.claim")}
+          onPress={doClaim}
+          disabled={isClaiming}
+        />
         <SecondaryButton
-          title={refreshingQr ? "Refreshing..." : "Refresh QR"}
+          title={refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
           onPress={refreshQr}
           disabled={refreshingQr}
         />

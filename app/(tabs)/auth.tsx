@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 
 export default function AuthScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,9 +55,9 @@ export default function AuthScreen() {
         password: pw,
       });
       if (error) throw error;
-      Alert.alert("Success", "Check your email to confirm, then log in.");
+      Alert.alert(t("auth.alertSignUpSuccessTitle"), t("auth.alertSignUpSuccessMsg"));
     } catch (e: any) {
-      Alert.alert("Sign up failed", e?.message ?? String(e));
+      Alert.alert(t("auth.alertSignUpFailTitle"), e?.message ?? String(e));
     } finally {
       setBusy(false);
     }
@@ -113,9 +115,9 @@ export default function AuthScreen() {
 
   return (
     <View style={{ paddingTop: 80, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Login</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("auth.title")}</Text>
 
-      <Text style={{ marginTop: 16 }}>Email</Text>
+      <Text style={{ marginTop: 16 }}>{t("auth.email")}</Text>
       <TextInput
         value={email}
         onChangeText={setEmail}
@@ -130,7 +132,7 @@ export default function AuthScreen() {
         }}
       />
 
-      <Text style={{ marginTop: 12 }}>Password</Text>
+      <Text style={{ marginTop: 12 }}>{t("auth.password")}</Text>
       <TextInput
         value={pw}
         onChangeText={setPw}
@@ -154,9 +156,7 @@ export default function AuthScreen() {
           backgroundColor: "#111",
         }}
       >
-        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-          Log in
-        </Text>
+        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.logIn")}</Text>
       </Pressable>
 
       <Pressable
@@ -169,9 +169,7 @@ export default function AuthScreen() {
           backgroundColor: "#2b6cb0",
         }}
       >
-        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-          Sign up
-        </Text>
+        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.signUp")}</Text>
       </Pressable>
 
       <Pressable
@@ -187,21 +185,17 @@ export default function AuthScreen() {
           opacity: busy ? 0.7 : 1,
         }}
       >
-        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-          Demo Login
-        </Text>
+        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.demoLogin")}</Text>
       </Pressable>
 
       {sessionEmail && !isBusinessOwner ? (
         <View style={{ marginTop: 24 }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>Create Business</Text>
-          <Text style={{ marginTop: 6, opacity: 0.8 }}>
-            Create a business to post deals and redeem QR codes.
-          </Text>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("auth.createBusinessHeader")}</Text>
+          <Text style={{ marginTop: 6, opacity: 0.8 }}>{t("auth.createBusinessBody")}</Text>
           <TextInput
             value={businessName}
             onChangeText={setBusinessName}
-            placeholder="Business name"
+            placeholder={t("auth.placeholderBusiness")}
             autoCapitalize="words"
             style={{
               borderWidth: 1,
@@ -216,12 +210,12 @@ export default function AuthScreen() {
             disabled={isCreatingBusiness}
             onPress={async () => {
               if (!userId) {
-                Alert.alert("Login required", "Please log in to create a business.");
+                Alert.alert(t("auth.alertLoginRequiredTitle"), t("auth.alertLoginRequiredMsg"));
                 return;
               }
               const name = businessName.trim();
               if (!name) {
-                Alert.alert("Business name required", "Please enter a business name.");
+                Alert.alert(t("auth.alertBizNameTitle"), t("auth.alertBizNameMsg"));
                 return;
               }
               setIsCreatingBusiness(true);
@@ -232,9 +226,9 @@ export default function AuthScreen() {
                 if (error) throw error;
                 setIsBusinessOwner(true);
                 setBusinessName("");
-                Alert.alert("Business created", "You can now create deals and redeem QR codes.");
+                Alert.alert(t("auth.alertBizCreatedTitle"), t("auth.alertBizCreatedMsg"));
               } catch (err: any) {
-                Alert.alert("Create business failed", err?.message ?? "Please try again.");
+                Alert.alert(t("auth.alertBizFailTitle"), err?.message ?? t("auth.alertBizFailMsg"));
               } finally {
                 setIsCreatingBusiness(false);
               }
@@ -247,7 +241,7 @@ export default function AuthScreen() {
             }}
           >
             <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-              {isCreatingBusiness ? "Creating..." : "Create Business"}
+              {isCreatingBusiness ? t("auth.creating") : t("auth.createBusiness")}
             </Text>
           </Pressable>
         </View>

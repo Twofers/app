@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,17 +118,20 @@ serve(async (req) => {
       ? body.manual_validation_tag.trim().slice(0, 80)
       : "";
 
+    const rawOutLang = typeof body.output_language === "string"
+      ? body.output_language.trim().toLowerCase()
+      : "en";
+    const output_language = rawOutLang === "es" || rawOutLang === "ko" ? rawOutLang : "en";
+    const outputLangName = output_language === "es"
+      ? "Spanish"
+      : output_language === "ko"
+      ? "Korean"
+      : "English";
+
     if (!business_id || !photo_path || !hint_text) {
       return new Response(
         JSON.stringify({ error: "Missing business_id, photo_path, or hint_text." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set. Add it to Supabase secrets." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -153,6 +157,54 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    /** Demo account: default path uses local templates (no OpenAI). Set AI_ADS_DEMO_USE_LIVE=true + OPENAI_API_KEY for live tests. */
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email)) {
+      const useDemoMock = !openAiKey || !demoWantsLive;
+      if (useDemoMock) {
+        const ms = 900 + Math.floor(Math.random() * 550);
+        await new Promise((r) => setTimeout(r, ms));
+        const demoAds = buildDemoAdVariants({
+          hint_text,
+          price,
+          business_name: typeof business.name === "string" ? business.name : "",
+          business_context,
+          offer_schedule_summary,
+          output_language,
+          regeneration_attempt,
+        });
+        const demoNorm = normalizeLaneOrder(demoAds as AdVariant[]);
+        if (!demoNorm) {
+          return new Response(JSON.stringify({ error: "Demo generation failed." }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.log(
+          JSON.stringify({
+            tag: "ai_ads",
+            event: "demo_mock_ok",
+            user_id: user.id,
+            business_id,
+            regeneration_attempt,
+            manual_validation_tag: manual_validation_tag || null,
+            lanes: demoNorm.map((a) => a.creative_lane),
+          }),
+        );
+        return new Response(JSON.stringify({ ads: demoNorm }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (!openAiKey) {
+      return new Response(
+        JSON.stringify({ error: "OPENAI_API_KEY is not set. Add it to Supabase secrets." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: prior } = await supabase
@@ -213,6 +265,7 @@ serve(async (req) => {
 
     const system = [
       "You write exactly 3 mobile ad concepts for a local deal app (Twofer). Output JSON only.",
+      `OUTPUT LANGUAGE: Write headline, subheadline, cta, style_label, rationale, and visual_direction entirely in ${outputLangName}. Do not mix languages.`,
       "PRIORITY ORDER: (1) SECTION A offer facts in the user message — owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only.",
       "Profile category/tone/location/blurb must NOT override item, discount type, price, or time window. If profile says 'bakery' but the offer is clearly about lattes, write for the latte offer.",
       "Each ad MUST set creative_lane to one of: value | neighborhood | premium — use each exactly once.",
@@ -227,7 +280,7 @@ serve(async (req) => {
       "No health, nutrition, or 'best in town' claims unless stated in the owner note.",
       "Headline <= 40 chars. Subheadline <= 88 chars. CTA <= 26 chars, verb-first.",
       "style_label: 2-4 words, specific to that lane (not generic 'Great deal').",
-      "rationale: one sentence, plain English, why this lane fits this business.",
+      `rationale: one sentence in ${outputLangName}, why this lane fits this business.`,
       "visual_direction: short art direction for this lane or empty string.",
       regenHint,
     ]

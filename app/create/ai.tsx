@@ -5,6 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
@@ -14,13 +15,16 @@ import { parseFunctionError } from "../../lib/functions";
 import {
   adToDealDraft,
   composeListingDescription,
-  CREATIVE_LANE_LABEL,
   CREATIVE_LANE_ORDER,
   type CreativeLane,
   type GeneratedAd,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
 import { assessDealQuality } from "../../lib/deal-quality";
+import {
+  resolveDealFlowLanguage,
+  translateDealQualityBlock,
+} from "../../lib/translate-deal-quality";
 
 type TemplateRow = {
   id: string;
@@ -36,15 +40,16 @@ type TemplateRow = {
   window_end_minutes: number | null;
 };
 
-const dayOptions = [
-  { label: "Mon", value: 1 },
-  { label: "Tue", value: 2 },
-  { label: "Wed", value: 3 },
-  { label: "Thu", value: 4 },
-  { label: "Fri", value: 5 },
-  { label: "Sat", value: 6 },
-  { label: "Sun", value: 7 },
-];
+/** English weekday labels for `offer_schedule_summary` sent to the edge function (stable for the model). */
+const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
+  1: "Mon",
+  2: "Tue",
+  3: "Wed",
+  4: "Thu",
+  5: "Fri",
+  6: "Sat",
+  7: "Sun",
+};
 
 function minutesFromDate(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
@@ -71,9 +76,9 @@ function buildOfferScheduleSummary(
   if (validityMode === "one-time") {
     return `One-time: ${startTime.toLocaleString()} → ${endTime.toLocaleString()}`;
   }
-  const dayLabels = dayOptions
-    .filter((d) => daysOfWeek.includes(d.value))
-    .map((d) => d.label)
+  const dayLabels = [...daysOfWeek]
+    .sort((a, b) => a - b)
+    .map((v) => SCHEDULE_DAY_BY_VALUE[v] ?? String(v))
     .join(", ");
   return `Recurring: ${dayLabels} · ${formatMinutes(minutesFromDate(windowStart))}–${formatMinutes(
     minutesFromDate(windowEnd),
@@ -85,13 +90,33 @@ const MAX_REGENERATIONS_PER_DRAFT = 2;
 /** Manual QA tags for validation runs — see docs/ai-ad-validation/ */
 const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padStart(2, "0")}`);
 
-const FALLBACK_INTRO =
-  "We couldn’t generate ads right now. You can still finish this offer manually.";
-
 export default function AiDealScreen() {
   const router = useRouter();
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
-  const { isLoggedIn, businessId, businessContextForAi } = useBusiness();
+  const { t, i18n } = useTranslation();
+  const { isLoggedIn, businessId, businessContextForAi, businessPreferredLocale } = useBusiness();
+  const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+
+  const dayOptionsUi = useMemo(
+    () => [
+      { label: t("createAi.dayMon"), value: 1 },
+      { label: t("createAi.dayTue"), value: 2 },
+      { label: t("createAi.dayWed"), value: 3 },
+      { label: t("createAi.dayThu"), value: 4 },
+      { label: t("createAi.dayFri"), value: 5 },
+      { label: t("createAi.daySat"), value: 6 },
+      { label: t("createAi.daySun"), value: 7 },
+    ],
+    [t],
+  );
+
+  function laneUiTitle(lane: CreativeLane): string {
+    if (lane === "value") return t("createAi.laneValue");
+    if (lane === "neighborhood") return t("createAi.laneNeighborhood");
+    if (lane === "premium") return t("createAi.lanePremium");
+    return t("createAi.optionFallback");
+  }
+
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
 
@@ -185,25 +210,25 @@ export default function AiDealScreen() {
         .eq("business_id", businessId)
         .single();
       if (!error && data) {
-        const t = data as TemplateRow;
-        setTitle(t.title ?? "");
-        setDescription(t.description ?? "");
+        const row = data as TemplateRow;
+        setTitle(row.title ?? "");
+        setDescription(row.description ?? "");
         setPromoLine("");
         setCtaText("");
-        setPrice(t.price != null ? String(t.price) : "");
-        setPosterUrl(t.poster_url ?? null);
-        setMaxClaims(String(t.max_claims ?? 50));
-        setCutoffMins(String(t.claim_cutoff_buffer_minutes ?? 15));
-        setValidityMode(t.is_recurring ? "recurring" : "one-time");
-        setDaysOfWeek(t.days_of_week ?? [1, 2, 3, 4, 5]);
-        if (t.window_start_minutes != null) {
+        setPrice(row.price != null ? String(row.price) : "");
+        setPosterUrl(row.poster_url ?? null);
+        setMaxClaims(String(row.max_claims ?? 50));
+        setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
+        setValidityMode(row.is_recurring ? "recurring" : "one-time");
+        setDaysOfWeek(row.days_of_week ?? [1, 2, 3, 4, 5]);
+        if (row.window_start_minutes != null) {
           const d = new Date();
-          d.setHours(Math.floor(t.window_start_minutes / 60), t.window_start_minutes % 60, 0, 0);
+          d.setHours(Math.floor(row.window_start_minutes / 60), row.window_start_minutes % 60, 0, 0);
           setWindowStart(d);
         }
-        if (t.window_end_minutes != null) {
+        if (row.window_end_minutes != null) {
           const d = new Date();
-          d.setHours(Math.floor(t.window_end_minutes / 60), t.window_end_minutes % 60, 0, 0);
+          d.setHours(Math.floor(row.window_end_minutes / 60), row.window_end_minutes % 60, 0, 0);
           setWindowEnd(d);
         }
         setTemplateLoaded(true);
@@ -219,7 +244,7 @@ export default function AiDealScreen() {
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== "granted") {
-      setBanner({ message: "Please allow photo access.", tone: "error" });
+      setBanner({ message: t("createAi.errPhotoAccess"), tone: "error" });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
@@ -232,7 +257,7 @@ export default function AiDealScreen() {
   async function takePhoto() {
     const perm = permission?.status === "granted" ? permission : await requestPermission();
     if (!perm?.granted) {
-      setBanner({ message: "Camera permission is required.", tone: "error" });
+      setBanner({ message: t("createAi.errCameraRequired"), tone: "error" });
       return;
     }
     setShowCamera(true);
@@ -253,35 +278,35 @@ export default function AiDealScreen() {
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
     if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) {
-      setBanner({ message: "Max claims must be greater than 0.", tone: "error" });
+      setBanner({ message: t("createAi.errMaxClaims"), tone: "error" });
       return false;
     }
     if (Number.isNaN(cutoffNum) || cutoffNum < 0) {
-      setBanner({ message: "Cutoff buffer must be 0 or more.", tone: "error" });
+      setBanner({ message: t("createAi.errCutoff"), tone: "error" });
       return false;
     }
     if (validityMode === "one-time") {
       if (endTime <= startTime) {
-        setBanner({ message: "End time must be after start time.", tone: "error" });
+        setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return false;
       }
     } else {
       if (daysOfWeek.length === 0) {
-        setBanner({ message: "Select at least one day for recurring deals.", tone: "error" });
+        setBanner({ message: t("createAi.errRecurringDay"), tone: "error" });
         return false;
       }
       if (minutesFromDate(windowStart) >= minutesFromDate(windowEnd)) {
-        setBanner({ message: "Recurring window start must be before end.", tone: "error" });
+        setBanner({ message: t("createAi.errRecurringWindow"), tone: "error" });
         return false;
       }
     }
     if (forGenerate) {
       if (!photoUri && !posterUrl) {
-        setBanner({ message: "Please add a photo.", tone: "error" });
+        setBanner({ message: t("createAi.errAddPhoto"), tone: "error" });
         return false;
       }
       if (!hintText.trim()) {
-        setBanner({ message: "Please add a few words about the deal.", tone: "error" });
+        setBanner({ message: t("createAi.errAddHint"), tone: "error" });
         return false;
       }
     }
@@ -328,32 +353,32 @@ export default function AiDealScreen() {
   }
 
   function friendlyGenerationError(raw: string): string {
-    const t = raw.toLowerCase();
-    if (t.includes("openai_api_key") || t.includes("not set")) {
-      return "AI isn’t configured on the server yet. You can still write your deal below.";
+    const lower = raw.toLowerCase();
+    if (lower.includes("openai_api_key") || lower.includes("not set")) {
+      return t("createAi.friendlyOpenaiConfig");
     }
-    if (t.includes("unauthorized") || t.includes("log in")) {
-      return "Session expired. Log in again, then try generating.";
+    if (lower.includes("unauthorized") || lower.includes("log in")) {
+      return t("createAi.friendlySession");
     }
-    if (t.includes("photo") || t.includes("access the photo")) {
-      return "We couldn’t use that photo. Try taking or picking a new one.";
+    if (lower.includes("photo") || lower.includes("access the photo")) {
+      return t("createAi.friendlyPhoto");
     }
-    if (t.includes("regeneration limit")) {
-      return "You’ve used the free refreshes for this draft. Tap Generate 3 ad ideas for a new batch, or edit below.";
+    if (lower.includes("regeneration limit")) {
+      return t("createAi.friendlyRegenLimit");
     }
-    if (t.includes("rate limit") || t.includes("429")) {
-      return `${FALLBACK_INTRO} The service may be busy — try again shortly or fill in the fields below.`;
+    if (lower.includes("rate limit") || lower.includes("429")) {
+      return t("createAi.friendlyGenerationRateLimit");
     }
     if (raw.length > 120) {
-      return `${FALLBACK_INTRO} Try again in a moment, or fill in the fields below.`;
+      return t("createAi.friendlyGenerationLongError");
     }
-    return FALLBACK_INTRO;
+    return t("createAi.fallbackIntro");
   }
 
   async function generateAdVariants(mode: "initial" | "regenerate") {
     if (!validateInputs(true)) return;
     if (!businessId) {
-      setBanner({ message: "Create a business first.", tone: "error" });
+      setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
     }
 
@@ -364,8 +389,7 @@ export default function AiDealScreen() {
         ...(limTag ? { manual_validation_tag: limTag } : {}),
       });
       setBanner({
-        message:
-          "You’ve used both free refreshes for this draft. Tap “Generate 3 ad ideas” for a new batch, or edit the text below.",
+        message: t("createAi.errRegenClientLimit"),
         tone: "info",
       });
       return;
@@ -404,7 +428,7 @@ export default function AiDealScreen() {
       await ensurePosterUrl(path);
       const priceNum = price.trim() ? Number(price) : null;
       if (price.trim() && (priceNum === null || Number.isNaN(priceNum))) {
-        setBanner({ message: "Price must be a number.", tone: "error" });
+        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
       const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
@@ -416,6 +440,7 @@ export default function AiDealScreen() {
           business_context: businessContextForAi,
           regeneration_attempt: attemptForApi,
           offer_schedule_summary: offerScheduleSummary,
+          output_language: dealOutputLang,
           ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
         },
       });
@@ -437,9 +462,7 @@ export default function AiDealScreen() {
       setLastGenerationError(null);
       setBanner({
         message:
-          attemptForApi > 0
-            ? "New batch ready — value, neighborhood, and quality angles. Pick one to load into your draft."
-            : "Three angles: value, neighborhood, and premium. Pick one—you can edit before publishing.",
+          attemptForApi > 0 ? t("createAi.successBatchNew") : t("createAi.successBatchFirst"),
         tone: "success",
       });
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
@@ -466,11 +489,11 @@ export default function AiDealScreen() {
   async function publishDeal() {
     if (!validateInputs(false)) return;
     if (!businessId) {
-      setBanner({ message: "Create a business first.", tone: "error" });
+      setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
     }
     if (!canPublish) {
-      setBanner({ message: "Please generate or enter title and description.", tone: "error" });
+      setBanner({ message: t("createAi.errPublishDraft"), tone: "error" });
       return;
     }
     setPublishing(true);
@@ -480,7 +503,7 @@ export default function AiDealScreen() {
       const signedPoster = await ensurePosterUrl(path);
       const priceNum = price.trim() ? Number(price) : null;
       if (price.trim() && Number.isNaN(priceNum)) {
-        setBanner({ message: "Price must be a number.", tone: "error" });
+        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
       const maxClaimsNum = Number(maxClaims);
@@ -497,7 +520,10 @@ export default function AiDealScreen() {
         price: priceNum,
       });
       if (quality.blocked) {
-        setBanner({ message: quality.message, tone: "error" });
+        setBanner({
+          message: translateDealQualityBlock(quality, dealOutputLang),
+          tone: "error",
+        });
         return;
       }
 
@@ -541,7 +567,7 @@ export default function AiDealScreen() {
 
       router.replace("/(tabs)");
     } catch (err: any) {
-      setBanner({ message: err?.message ?? "Publish failed.", tone: "error" });
+      setBanner({ message: err?.message ?? t("createAi.errPublishFailed"), tone: "error" });
     } finally {
       setPublishing(false);
     }
@@ -549,11 +575,11 @@ export default function AiDealScreen() {
 
   async function saveTemplate() {
     if (!businessId) {
-      setBanner({ message: "Create a business first.", tone: "error" });
+      setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
     }
     if (!canPublish) {
-      setBanner({ message: "Please generate or enter title and description first.", tone: "error" });
+      setBanner({ message: t("createAi.errPublishDraftFirst"), tone: "error" });
       return;
     }
     setSavingTemplate(true);
@@ -563,7 +589,7 @@ export default function AiDealScreen() {
       const signedPoster = await ensurePosterUrl(path);
       const priceNum = price.trim() ? Number(price) : null;
       if (price.trim() && Number.isNaN(priceNum)) {
-        setBanner({ message: "Price must be a number.", tone: "error" });
+        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
       const maxClaimsNum = Number(maxClaims);
@@ -586,9 +612,9 @@ export default function AiDealScreen() {
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
       });
       if (error) throw error;
-      setBanner({ message: "Template saved.", tone: "success" });
+      setBanner({ message: t("createAi.templateSaved"), tone: "success" });
     } catch (err: any) {
-      setBanner({ message: err?.message ?? "Saving template failed.", tone: "error" });
+      setBanner({ message: err?.message ?? t("createAi.errSaveTemplateFailed"), tone: "error" });
     } finally {
       setSavingTemplate(false);
     }
@@ -597,8 +623,8 @@ export default function AiDealScreen() {
   if (!isLoggedIn) {
     return (
       <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>Please log in to create deals.</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: 12, opacity: 0.7 }}>{t("createAi.loginPrompt")}</Text>
       </View>
     );
   }
@@ -606,19 +632,16 @@ export default function AiDealScreen() {
   if (!businessId) {
     return (
       <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>Create a business to use AI ad ideas.</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: 12, opacity: 0.7 }}>{t("createAi.needBusiness")}</Text>
       </View>
     );
   }
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 70, paddingHorizontal: 16, paddingBottom: 40 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>AI ads for your deal</Text>
-      <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>
-        Upload a photo of the product or menu item, describe the offer in your own words, then get three
-        different ad angles. Choose one, tweak the text, and publish when you’re ready.
-      </Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("createAi.titleMain")}</Text>
+      <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>{t("createAi.intro")}</Text>
 
       <View style={{ marginTop: 12 }}>
         <Pressable
@@ -632,19 +655,16 @@ export default function AiDealScreen() {
           }}
         >
           <Text style={{ fontWeight: "700", fontSize: 13 }}>
-            {qaPanelOpen ? "▼" : "▶"} Manual QA (validation)
+            {qaPanelOpen ? "▼" : "▶"} {t("createAi.qaToggle")}
           </Text>
         </Pressable>
         {qaPanelOpen ? (
           <View style={{ marginTop: 8, gap: 8 }}>
-            <Text style={{ fontSize: 12, opacity: 0.75, lineHeight: 17 }}>
-              Tag runs for the 12 test cases (see docs/ai-ad-validation). Appears in Supabase function logs
-              and dev analytics. Optional — leave blank for normal use.
-            </Text>
+            <Text style={{ fontSize: 12, opacity: 0.75, lineHeight: 17 }}>{t("createAi.qaHelp")}</Text>
             <TextInput
               value={manualValidationTag}
-              onChangeText={(t) => setManualValidationTag(t.slice(0, 80))}
-              placeholder="e.g. TC01"
+              onChangeText={(text) => setManualValidationTag(text.slice(0, 80))}
+              placeholder={t("createAi.qaPlaceholder")}
               autoCapitalize="characters"
               style={{
                 borderWidth: 1,
@@ -680,7 +700,7 @@ export default function AiDealScreen() {
             </View>
             {manualValidationTag.trim() ? (
               <Text style={{ fontSize: 11, opacity: 0.6 }}>
-                Active tag: {manualValidationTag.trim()} — cards will show QA lane_id for screenshots.
+                {t("createAi.qaActiveTag", { tag: manualValidationTag.trim() })}
               </Text>
             ) : null}
           </View>
@@ -693,18 +713,18 @@ export default function AiDealScreen() {
         <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
           <CameraView ref={cameraRef} style={{ height: 360, width: "100%" }} facing="back" />
           <View style={{ padding: 12, backgroundColor: "#111" }}>
-            <PrimaryButton title="Capture Photo" onPress={capturePhoto} />
+            <PrimaryButton title={t("createAi.capturePhoto")} onPress={capturePhoto} />
             <View style={{ marginTop: 8 }}>
-              <SecondaryButton title="Cancel" onPress={() => setShowCamera(false)} />
+              <SecondaryButton title={t("createAi.cancel")} onPress={() => setShowCamera(false)} />
             </View>
           </View>
         </View>
       ) : (
         <>
-          <Text style={{ marginTop: 16, fontWeight: "700" }}>Photo</Text>
+          <Text style={{ marginTop: 16, fontWeight: "700" }}>{t("createAi.photo")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            <PrimaryButton title="Take Photo" onPress={takePhoto} />
-            <SecondaryButton title="Pick Photo" onPress={pickPhotoFromLibrary} />
+            <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
+            <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
           </View>
 
           {photoUri || posterUrl ? (
@@ -716,17 +736,15 @@ export default function AiDealScreen() {
           ) : (
             <View style={{ marginTop: 12 }}>
               <View style={{ height: 200, borderRadius: 16, backgroundColor: "#eee" }} />
-              <Text style={{ marginTop: 8, opacity: 0.65, fontSize: 13 }}>
-                Add a clear photo of the dish, drink, or item—AI uses it to stay accurate.
-              </Text>
+              <Text style={{ marginTop: 8, opacity: 0.65, fontSize: 13 }}>{t("createAi.photoHint")}</Text>
             </View>
           )}
 
-          <Text style={{ marginTop: 16 }}>A few words</Text>
+          <Text style={{ marginTop: 16 }}>{t("createAi.fewWords")}</Text>
           <TextInput
             value={hintText}
             onChangeText={setHintText}
-            placeholder="2-for-1 latte, today only"
+            placeholder={t("createAi.hintPlaceholder")}
             style={{
               borderWidth: 1,
               borderColor: "#ccc",
@@ -736,7 +754,7 @@ export default function AiDealScreen() {
             }}
           />
 
-          <Text style={{ marginTop: 12 }}>Price (optional)</Text>
+          <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
           <TextInput
             value={price}
             onChangeText={setPrice}
@@ -751,7 +769,7 @@ export default function AiDealScreen() {
             }}
           />
 
-          <Text style={{ marginTop: 12, fontWeight: "700" }}>Validity</Text>
+          <Text style={{ marginTop: 12, fontWeight: "700" }}>{t("createAi.validity")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
             <Pressable
               onPress={() => setValidityMode("one-time")}
@@ -763,7 +781,7 @@ export default function AiDealScreen() {
               }}
             >
               <Text style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}>
-                One-time
+                {t("createAi.oneTime")}
               </Text>
             </Pressable>
             <Pressable
@@ -776,14 +794,14 @@ export default function AiDealScreen() {
               }}
             >
               <Text style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}>
-                Recurring
+                {t("createAi.recurring")}
               </Text>
             </Pressable>
           </View>
 
           {validityMode === "one-time" ? (
             <>
-              <Text style={{ marginTop: 12 }}>Start time</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.startTime")}</Text>
               <Pressable
                 onPress={() => setShowStartPicker(true)}
                 style={{
@@ -807,7 +825,7 @@ export default function AiDealScreen() {
                 />
               ) : null}
 
-              <Text style={{ marginTop: 12 }}>End time</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
               <Pressable
                 onPress={() => setShowEndPicker(true)}
                 style={{
@@ -833,9 +851,9 @@ export default function AiDealScreen() {
             </>
           ) : (
             <>
-              <Text style={{ marginTop: 12 }}>Days</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.days")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                {dayOptions.map((day) => {
+                {dayOptionsUi.map((day) => {
                   const selected = daysOfWeek.includes(day.value);
                   return (
                     <Pressable
@@ -860,7 +878,7 @@ export default function AiDealScreen() {
                 })}
               </View>
 
-              <Text style={{ marginTop: 12 }}>Time window</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.timeWindow")}</Text>
               <Pressable
                 onPress={() => setShowWindowStartPicker(true)}
                 style={{
@@ -871,7 +889,9 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               >
-                <Text>Start: {formatMinutes(minutesFromDate(windowStart))}</Text>
+                <Text>
+                  {t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}
+                </Text>
               </Pressable>
               {showWindowStartPicker ? (
                 <DateTimePicker
@@ -894,7 +914,9 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               >
-                <Text>End: {formatMinutes(minutesFromDate(windowEnd))}</Text>
+                <Text>
+                  {t("createAi.windowEnd")} {formatMinutes(minutesFromDate(windowEnd))}
+                </Text>
               </Pressable>
               {showWindowEndPicker ? (
                 <DateTimePicker
@@ -909,7 +931,7 @@ export default function AiDealScreen() {
             </>
           )}
 
-          <Text style={{ marginTop: 12 }}>Max claims</Text>
+          <Text style={{ marginTop: 12 }}>{t("createAi.maxClaims")}</Text>
           <TextInput
             value={maxClaims}
             onChangeText={setMaxClaims}
@@ -924,7 +946,7 @@ export default function AiDealScreen() {
             }}
           />
 
-          <Text style={{ marginTop: 12 }}>Claim cutoff buffer (minutes)</Text>
+          <Text style={{ marginTop: 12 }}>{t("createAi.cutoffBuffer")}</Text>
           <TextInput
             value={cutoffMins}
             onChangeText={setCutoffMins}
@@ -941,21 +963,23 @@ export default function AiDealScreen() {
 
           <View style={{ marginTop: 16, gap: 10 }}>
             <PrimaryButton
-              title={generating ? "Working on your 3 ads…" : "Generate 3 ad ideas"}
+              title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
               onPress={() => void generateAdVariants("initial")}
               disabled={generating}
             />
             {generatedAds && generatedAds.length === 3 ? (
               <>
                 <SecondaryButton
-                  title={generating ? "Regenerating…" : "Regenerate (new wording)"}
+                  title={generating ? t("createAi.regenerating") : t("createAi.regenerate")}
                   onPress={() => void generateAdVariants("regenerate")}
                   disabled={generating || regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT}
                 />
                 <Text style={{ fontSize: 12, opacity: 0.6 }}>
                   {regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT
-                    ? "Refresh limit reached — tap Generate 3 ad ideas for a new batch."
-                    : `Free refreshes left: ${MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed}`}
+                    ? t("createAi.refreshLimitReached")
+                    : t("createAi.refreshesLeft", {
+                        count: MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed,
+                      })}
                 </Text>
               </>
             ) : null}
@@ -963,10 +987,7 @@ export default function AiDealScreen() {
               <View style={{ marginTop: 4, gap: 6 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <ActivityIndicator />
-                  <Text style={{ opacity: 0.75, flex: 1 }}>
-                    Creating three different angles: value, neighborhood, and premium. Usually under half a
-                    minute.
-                  </Text>
+                  <Text style={{ opacity: 0.75, flex: 1 }}>{t("createAi.generatingHint")}</Text>
                 </View>
               </View>
             ) : null}
@@ -984,17 +1005,14 @@ export default function AiDealScreen() {
                 gap: 10,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>{FALLBACK_INTRO}</Text>
-              <Text style={{ opacity: 0.8, lineHeight: 20 }}>
-                Your photo and offer note stay put. Open the title, subheadline, CTA, and details below, then
-                publish — or adjust the note and tap Generate again.
-              </Text>
+              <Text style={{ fontWeight: "700" }}>{t("createAi.fallbackIntro")}</Text>
+              <Text style={{ opacity: 0.8, lineHeight: 20 }}>{t("createAi.fallbackBody")}</Text>
               <SecondaryButton
-                title="Show title & description fields"
+                title={t("createAi.showDraftFields")}
                 onPress={() => {
                   setManualDraftUnlocked(true);
                   setBanner({
-                    message: "Fill in title and description yourself, then publish when ready.",
+                    message: t("createAi.manualDraftBanner"),
                     tone: "info",
                   });
                 }}
@@ -1004,15 +1022,12 @@ export default function AiDealScreen() {
 
           {generatedAds && generatedAds.length === 3 ? (
             <View style={{ marginTop: 20, gap: 12 }}>
-              <Text style={{ fontWeight: "700", fontSize: 16 }}>Pick an ad</Text>
-              <Text style={{ opacity: 0.7, marginBottom: 4 }}>
-                Value = savings clarity · Neighborhood = local & regulars · Premium = quality & craft. Tap
-                &quot;Use this ad&quot; to load one into your draft.
-              </Text>
+              <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createAi.pickAdTitle")}</Text>
+              <Text style={{ opacity: 0.7, marginBottom: 4 }}>{t("createAi.pickAdHelp")}</Text>
               {generatedAds.map((ad, index) => {
                 const selected = selectedAdIndex === index;
                 const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
-                const laneTitle = CREATIVE_LANE_LABEL[laneKey] ?? "Option";
+                const laneTitle = laneUiTitle(laneKey);
                 return (
                   <View
                     key={`${ad.creative_lane ?? index}-${index}`}
@@ -1065,7 +1080,7 @@ export default function AiDealScreen() {
                         style={{ fontSize: 10, color: "#888", marginBottom: 6 }}
                         accessibilityLabel={`Creative lane ${ad.creative_lane}`}
                       >
-                        QA metadata · lane_id: {ad.creative_lane}
+                        {t("createAi.qaMetadata", { lane: ad.creative_lane })}
                       </Text>
                     ) : null}
                     <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
@@ -1076,12 +1091,12 @@ export default function AiDealScreen() {
                     </Text>
                     {ad.visual_direction?.trim() ? (
                       <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.55 }}>
-                        Visual note: {ad.visual_direction}
+                        {t("createAi.visualNote", { note: ad.visual_direction })}
                       </Text>
                     ) : null}
                     <View style={{ marginTop: 12 }}>
                       <SecondaryButton
-                        title={selected ? "Selected — edit below" : "Use this ad"}
+                        title={selected ? t("createAi.selectedEditBelow") : t("createAi.useThisAd")}
                         onPress={() => {
                           setSelectedAdIndex(index);
                           applyAdToDraft(ad);
@@ -1104,7 +1119,7 @@ export default function AiDealScreen() {
 
           {showDraftEditor ? (
             <>
-              <Text style={{ marginTop: 22, fontWeight: "700" }}>Deal preview</Text>
+              <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
               <View
                 style={{
                   borderRadius: 18,
@@ -1128,24 +1143,28 @@ export default function AiDealScreen() {
                   <View style={{ height: 200, backgroundColor: "#eee" }} />
                 )}
                 <View style={{ padding: 12 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || "Deal title"}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || t("createAi.placeholderDealTitle")}</Text>
                   {promoLine ? (
                     <Text style={{ marginTop: 6, fontWeight: "600" }}>{promoLine}</Text>
                   ) : null}
                   {ctaText ? (
                     <Text style={{ marginTop: 6, fontWeight: "700" }}>{ctaText}</Text>
                   ) : null}
-                  <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || "Offer details"}</Text>
-                  <Text style={{ marginTop: 8, opacity: 0.7 }}>Schedule: {offerScheduleSummary}</Text>
-                  <Text style={{ marginTop: 4, opacity: 0.7 }}>Max claims: {maxClaims}</Text>
+                  <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                  <Text style={{ marginTop: 8, opacity: 0.7 }}>
+                    {t("createAi.scheduleLabel")} {offerScheduleSummary}
+                  </Text>
+                  <Text style={{ marginTop: 4, opacity: 0.7 }}>
+                    {t("createAi.maxClaimsLabel")} {maxClaims}
+                  </Text>
                 </View>
               </View>
 
-              <Text style={{ marginTop: 16 }}>Edit headline</Text>
+              <Text style={{ marginTop: 16 }}>{t("createAi.editHeadline")}</Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Headline"
+                placeholder={t("createAi.headlinePlaceholder")}
                 style={{
                   borderWidth: 1,
                   borderColor: "#ccc",
@@ -1154,11 +1173,11 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               />
-              <Text style={{ marginTop: 12 }}>Edit subheadline</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
               <TextInput
                 value={promoLine}
                 onChangeText={setPromoLine}
-                placeholder="Supporting line under the headline"
+                placeholder={t("createAi.subheadlinePlaceholder")}
                 style={{
                   borderWidth: 1,
                   borderColor: "#ccc",
@@ -1167,11 +1186,11 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               />
-              <Text style={{ marginTop: 12 }}>Edit CTA</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
               <TextInput
                 value={ctaText}
                 onChangeText={setCtaText}
-                placeholder="e.g. Stop in this afternoon"
+                placeholder={t("createAi.ctaPlaceholder")}
                 style={{
                   borderWidth: 1,
                   borderColor: "#ccc",
@@ -1180,11 +1199,11 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               />
-              <Text style={{ marginTop: 12 }}>Edit offer details</Text>
+              <Text style={{ marginTop: 12 }}>{t("createAi.editDetails")}</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="What’s included, times, fine print"
+                placeholder={t("createAi.detailsPlaceholder")}
                 multiline
                 style={{
                   borderWidth: 1,
@@ -1197,9 +1216,13 @@ export default function AiDealScreen() {
               />
 
               <View style={{ marginTop: 16, gap: 8 }}>
-                <PrimaryButton title={publishing ? "Publishing..." : "Publish Deal"} onPress={publishDeal} disabled={publishing} />
+                <PrimaryButton
+                  title={publishing ? t("createAi.publishing") : t("createAi.publishDeal")}
+                  onPress={publishDeal}
+                  disabled={publishing}
+                />
                 <SecondaryButton
-                  title={savingTemplate ? "Saving..." : "Save as Template"}
+                  title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}
                   onPress={saveTemplate}
                   disabled={savingTemplate}
                 />

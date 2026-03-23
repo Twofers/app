@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -10,6 +11,7 @@ import { Banner } from "../../components/ui/banner";
 import { redeemToken } from "../../lib/functions";
 
 export default function RedeemScanner() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { isLoggedIn, businessId, userId, loading, refresh } = useBusiness();
   const [businessName, setBusinessName] = useState("");
@@ -22,13 +24,13 @@ export default function RedeemScanner() {
 
   async function createBusiness() {
     if (!userId) {
-      setBanner({ message: "Please log in to create a business.", tone: "error" });
+      setBanner({ message: t("redeem.errLogin"), tone: "error" });
       return;
     }
 
     const name = businessName.trim();
     if (!name) {
-      setBanner({ message: "Business name required.", tone: "error" });
+      setBanner({ message: t("redeem.errName"), tone: "error" });
       return;
     }
 
@@ -41,7 +43,7 @@ export default function RedeemScanner() {
       await refresh();
       router.replace("/(tabs)/redeem");
     } catch (err: any) {
-      setBanner({ message: err?.message ?? "Create business failed.", tone: "error" });
+      setBanner({ message: err?.message ?? t("redeem.errCreateFailed"), tone: "error" });
     } finally {
       setIsCreatingBusiness(false);
     }
@@ -55,11 +57,11 @@ export default function RedeemScanner() {
     try {
       const result = await redeemToken(token);
       setSuccess({
-        dealTitle: result.deal_title ?? "Deal",
+        dealTitle: result.deal_title ?? t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
       });
     } catch (err: any) {
-      setBanner({ message: err?.message ?? "Redemption failed.", tone: "error" });
+      setBanner({ message: err?.message ?? t("redeem.errRedeemFailed"), tone: "error" });
       setScanned(false);
     } finally {
       setProcessing(false);
@@ -73,21 +75,21 @@ export default function RedeemScanner() {
 
   return (
     <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Redeem</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("redeem.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>Please log in to redeem deals.</Text>
+        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("redeem.loginPrompt")}</Text>
       ) : loading ? (
-        <Text style={{ marginTop: 16, opacity: 0.7 }}>Loading...</Text>
+        <Text style={{ marginTop: 16, opacity: 0.7 }}>{t("redeem.loading")}</Text>
       ) : !businessId ? (
         <View style={{ marginTop: 16, gap: 12 }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>Create your business</Text>
-          <Text style={{ opacity: 0.7 }}>Create a business to redeem QR codes.</Text>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("redeem.createHeader")}</Text>
+          <Text style={{ opacity: 0.7 }}>{t("redeem.createBody")}</Text>
           <TextInput
             value={businessName}
             onChangeText={setBusinessName}
-            placeholder="Business name"
+            placeholder={t("redeem.placeholderBusiness")}
             autoCapitalize="words"
             style={{
               borderWidth: 1,
@@ -97,21 +99,19 @@ export default function RedeemScanner() {
             }}
           />
           <PrimaryButton
-            title={isCreatingBusiness ? "Creating..." : "Create Business"}
+            title={isCreatingBusiness ? t("redeem.creating") : t("redeem.createBusiness")}
             onPress={createBusiness}
             disabled={isCreatingBusiness}
           />
         </View>
       ) : !permission ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7 }}>Requesting camera permission...</Text>
+          <Text style={{ opacity: 0.7 }}>{t("redeem.requestingCamera")}</Text>
         </View>
       ) : !permission.granted ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7, marginBottom: 12 }}>
-            Camera permission is required to scan QR codes.
-          </Text>
-          <PrimaryButton title="Grant Permission" onPress={requestPermission} />
+          <Text style={{ opacity: 0.7, marginBottom: 12 }}>{t("redeem.cameraRequired")}</Text>
+          <PrimaryButton title={t("redeem.grantPermission")} onPress={requestPermission} />
         </View>
       ) : success ? (
         <View style={{ marginTop: 16 }}>
@@ -122,10 +122,10 @@ export default function RedeemScanner() {
               backgroundColor: "#e8f5e9",
             }}
           >
-            <Text style={{ fontWeight: "700" }}>Redeemed</Text>
+            <Text style={{ fontWeight: "700" }}>{t("redeem.redeemed")}</Text>
             <Text style={{ marginTop: 6 }}>{success.dealTitle}</Text>
             <Text style={{ marginTop: 6, opacity: 0.7 }}>
-              Redeemed at {new Date(success.redeemedAt).toLocaleString()}
+              {t("redeem.redeemedAt")} {new Date(success.redeemedAt).toLocaleString()}
             </Text>
           </View>
           <View style={{ marginTop: 12 }}>
@@ -165,7 +165,7 @@ export default function RedeemScanner() {
                 }}
               >
                 <ActivityIndicator size="large" color="#fff" />
-                <Text style={{ color: "#fff", marginTop: 8 }}>Redeeming...</Text>
+                <Text style={{ color: "#fff", marginTop: 8 }}>{t("redeem.redeeming")}</Text>
               </View>
             ) : null}
           </View>
@@ -178,7 +178,7 @@ export default function RedeemScanner() {
               backgroundColor: "#eee",
             }}
           >
-            <Text style={{ textAlign: "center", fontWeight: "700" }}>Scan next</Text>
+            <Text style={{ textAlign: "center", fontWeight: "700" }}>{t("redeem.scanNext")}</Text>
           </Pressable>
         </View>
       )}

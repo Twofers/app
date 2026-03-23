@@ -2,15 +2,19 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import type { AppLocale } from "../../lib/i18n/config";
+import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
 
 export default function AccountScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
   const { isLoggedIn, sessionEmail, businessId, businessProfile, loading, refresh } = useBusiness();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -25,6 +29,8 @@ export default function AccountScreen() {
   const [profileLocation, setProfileLocation] = useState("");
   const [profileShortDescription, setProfileShortDescription] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  /** null = follow app language for AI / deal-quality */
+  const [profilePreferredLocale, setProfilePreferredLocale] = useState<string | null>(null);
 
   useEffect(() => {
     if (!businessProfile) {
@@ -32,12 +38,14 @@ export default function AccountScreen() {
       setProfileTone("");
       setProfileLocation("");
       setProfileShortDescription("");
+      setProfilePreferredLocale(null);
       return;
     }
     setProfileCategory(businessProfile.category ?? "");
     setProfileTone(businessProfile.tone ?? "");
     setProfileLocation(businessProfile.location ?? "");
     setProfileShortDescription(businessProfile.short_description ?? "");
+    setProfilePreferredLocale(businessProfile.preferred_locale ?? null);
   }, [businessProfile]);
 
   useEffect(() => {
@@ -52,13 +60,13 @@ export default function AccountScreen() {
     if (next) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") {
-        setBanner({ message: "Enable notifications to receive deal alerts.", tone: "info" });
+        setBanner({ message: t("account.alertsEnableHint"), tone: "info" });
         return;
       }
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);
-    setBanner({ message: next ? "Deal alerts enabled." : "Deal alerts disabled.", tone: "success" });
+    setBanner({ message: next ? t("account.alertsOn") : t("account.alertsOff"), tone: "success" });
   }
 
   async function signUp() {
@@ -167,6 +175,7 @@ export default function AccountScreen() {
           tone: profileTone.trim() || null,
           location: profileLocation.trim() || null,
           short_description: profileShortDescription.trim() || null,
+          preferred_locale: profilePreferredLocale,
         })
         .eq("id", businessId);
       if (error) throw error;
@@ -207,9 +216,34 @@ export default function AccountScreen() {
     }
   }
 
+  async function chooseAppLocale(locale: AppLocale) {
+    setBanner(null);
+    await setUiLocalePreference(locale, { manual: true });
+    await i18n.changeLanguage(locale);
+    setBanner({ message: t("account.languageSaved"), tone: "success" });
+  }
+
+  function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          backgroundColor: active ? "#111" : "#f0f0f0",
+          marginRight: 8,
+          marginBottom: 8,
+        }}
+      >
+        <Text style={{ color: active ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>{label}</Text>
+      </Pressable>
+    );
+  }
+
   return (
     <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Account</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("account.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
@@ -253,6 +287,24 @@ export default function AccountScreen() {
         </View>
       ) : (
         <ScrollView style={{ marginTop: 16 }} contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#eee",
+              borderRadius: 12,
+              padding: 12,
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontWeight: "700" }}>{t("language.sectionApp")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("language.sectionAppHelp")}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+              {localeChip(t("language.english"), "en", i18n.language === "en", () => chooseAppLocale("en"))}
+              {localeChip(t("language.spanish"), "es", i18n.language === "es", () => chooseAppLocale("es"))}
+              {localeChip(t("language.korean"), "ko", i18n.language === "ko", () => chooseAppLocale("ko"))}
+            </View>
+          </View>
+
           <View style={{ flexDirection: "row", gap: 8 }}>
             <PrimaryButton title="Customer mode" onPress={() => router.replace("/(tabs)")} />
             <SecondaryButton title="Business mode" onPress={() => router.replace("/(tabs)/create")} />
@@ -291,7 +343,63 @@ export default function AccountScreen() {
                 gap: 10,
               }}
             >
-              <Text style={{ fontWeight: "700" }}>Business profile (optional)</Text>
+              <Text style={{ fontWeight: "700" }}>{t("language.sectionBusiness")}</Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+                {t("language.sectionBusinessHelp")}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => setProfilePreferredLocale(null)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: profilePreferredLocale == null ? "#111" : "#e8e8e8",
+                    marginRight: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: profilePreferredLocale == null ? "#fff" : "#111",
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {t("language.useAppLanguage")}
+                  </Text>
+                </Pressable>
+                {(["en", "es", "ko"] as const).map((loc) => (
+                  <Pressable
+                    key={loc}
+                    onPress={() => setProfilePreferredLocale(loc)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      backgroundColor: profilePreferredLocale === loc ? "#111" : "#e8e8e8",
+                      marginRight: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: profilePreferredLocale === loc ? "#fff" : "#111",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      {loc === "en"
+                        ? t("language.english")
+                        : loc === "es"
+                          ? t("language.spanish")
+                          : t("language.korean")}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={{ fontWeight: "700", marginTop: 8 }}>Business profile (optional)</Text>
               <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
                 Helps AI write ads that fit your place. Skip any field — deals and AI still work without
                 them.

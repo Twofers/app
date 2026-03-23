@@ -7,7 +7,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.english-regression.test.ts"],
+    include: ["lib/**/*.english-regression.test.ts", "lib/**/*.locale.test.ts"],
     passWithNoTests: false,
   },
 });

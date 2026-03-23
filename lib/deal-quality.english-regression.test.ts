@@ -14,6 +14,7 @@ describe("deal quality — English regression", () => {
   it("blocks title shorter than 8 characters", () => {
     const r = assessDealQuality({ title: "short" });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("TITLE_SHORT");
     expect(r.message).toContain("too short");
     expect(r.message).toContain(DEAL_QUALITY_BLOCK_MESSAGE);
   });
@@ -24,6 +25,7 @@ describe("deal quality — English regression", () => {
       description: "Buy one get one on all bagels until 3pm.",
     });
     expect(r.blocked).toBe(false);
+    expect(r.blockReason).toBeNull();
     expect(r.tier).toBe("strong");
   });
 
@@ -78,6 +80,7 @@ describe("deal quality — English regression", () => {
       description: "Free item with purchase while supplies last.",
     });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("CLARIFY_VALUE");
     expect(r.message).toBe(DEAL_QUALITY_CLARIFY_VALUE_MESSAGE);
   });
 
@@ -87,6 +90,7 @@ describe("deal quality — English regression", () => {
       description: "Everything 25% off this week only.",
     });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("BELOW_THRESHOLD");
     expect(r.message).toBe(DEAL_QUALITY_BLOCK_MESSAGE);
   });
 
@@ -141,6 +145,7 @@ describe("deal quality — English regression", () => {
       description: "End of day specials at our counter ask staff.",
     });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("CLARIFY_VALUE");
     expect(r.message).toBe(DEAL_QUALITY_CLARIFY_VALUE_MESSAGE);
   });
 
@@ -159,6 +164,7 @@ describe("deal quality — English regression", () => {
       description: "Forty percent off entire store today only, no code needed.",
     });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("CLARIFY_VALUE");
     expect(r.message).toBe(DEAL_QUALITY_CLARIFY_VALUE_MESSAGE);
   });
 
@@ -168,6 +174,17 @@ describe("deal quality — English regression", () => {
       description: "Shoes 30% off. Shirts 40% off. In store only.",
     });
     expect(r.blocked).toBe(true);
+    expect(r.blockReason).toBe("MULTI_PERCENT");
     expect(r.message).toBe(DEAL_QUALITY_MULTIPLE_PERCENT_MESSAGE);
+  });
+
+  it("accepts Korean 1+1 style headline as strong", () => {
+    const r = assessDealQuality({
+      title: "카페 라떼 1+1 오늘만",
+      description: "매장에서만 적용됩니다.",
+    });
+    expect(r.blocked).toBe(false);
+    expect(r.tier).toBe("strong");
+    expect(r.blockReason).toBeNull();
   });
 });

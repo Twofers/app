@@ -9,6 +9,8 @@ type BusinessInfo = {
   tone: string | null;
   location: string | null;
   short_description: string | null;
+  /** en | es | ko — AI + deal-quality on create; null = use app language */
+  preferred_locale: string | null;
 };
 
 /** Strip empties for Edge Function `business_context` (all optional). */
@@ -53,7 +55,7 @@ export function useBusiness() {
 
     const { data } = await supabase
       .from("businesses")
-      .select("id,name,category,tone,location,short_description")
+      .select("id,name,category,tone,location,short_description,preferred_locale")
       .eq("owner_id", session.user.id)
       .maybeSingle();
 
@@ -66,6 +68,7 @@ export function useBusiness() {
             tone: data.tone ?? null,
             location: data.location ?? null,
             short_description: data.short_description ?? null,
+            preferred_locale: data.preferred_locale ?? null,
           }
         : null,
     );
@@ -90,6 +93,8 @@ export function useBusiness() {
     businessProfile: business,
     /** Passed to `ai-generate-ad-variants` as `business_context` */
     businessContextForAi,
+    /** For AI output + deal-quality messages on publish (null → app locale) */
+    businessPreferredLocale: business?.preferred_locale ?? null,
     loading,
     refresh,
   };
