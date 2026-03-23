@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams } from "expo-router";
@@ -46,13 +46,17 @@ export default function DealDetail() {
   const [claimsCount, setClaimsCount] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      await loadDeal();
-    })();
-  }, [id]);
+  const loadClaimCount = useCallback(async (dealId: string) => {
+    const { count, error } = await supabase
+      .from("deal_claims")
+      .select("id", { count: "exact", head: true })
+      .eq("deal_id", dealId);
+    if (!error && typeof count === "number") {
+      setClaimsCount(count);
+    }
+  }, []);
 
-  async function loadDeal() {
+  const loadDeal = useCallback(async () => {
     if (!id) return;
     const { data, error } = await supabase
       .from("deals")
@@ -63,20 +67,14 @@ export default function DealDetail() {
       setBanner(error.message);
       return;
     }
-    const dealData = data as Deal;
+    const dealData = data as unknown as Deal;
     setDeal(dealData);
     await loadClaimCount(dealData.id);
-  }
+  }, [id, loadClaimCount]);
 
-  async function loadClaimCount(dealId: string) {
-    const { count, error } = await supabase
-      .from("deal_claims")
-      .select("id", { count: "exact", head: true })
-      .eq("deal_id", dealId);
-    if (!error && typeof count === "number") {
-      setClaimsCount(count);
-    }
-  }
+  useEffect(() => {
+    void loadDeal();
+  }, [loadDeal]);
 
   useEffect(() => {
     (async () => {

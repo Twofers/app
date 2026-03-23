@@ -2,9 +2,37 @@
   "tabs": {
     "deals": "딜",
     "favorites": "즐겨찾기",
+    "wallet": "지갑",
     "create": "만들기",
     "redeem": "사용",
     "account": "계정"
+  },
+  "dealsBrowse": {
+    "categoriesHeading": "카테고리",
+    "categoryHint": "팁: 계정 → 비즈니스 프로필에서 카테고리를 설정한 매장만 여기 필터 칩으로 표시됩니다.",
+    "filterAll": "전체",
+    "emptyTitle": "아직 딜이 없습니다",
+    "emptyMessage": "비즈니스를 만들고 첫 딜을 올려 보세요.",
+    "emptyFilterTitle": "이 카테고리에 딜이 없습니다",
+    "emptyFilterMessage": "다른 카테고리를 선택하거나 필터를 해제해 보세요."
+  },
+  "wallet": {
+    "title": "지갑",
+    "subtitleGuest": "로그인하면 클레임과 QR 코드를 볼 수 있습니다.",
+    "emptyLoginTitle": "내 지갑",
+    "emptyLoginMessage": "로그인하면 클레임한 딜과 결제 시 사용할 QR을 확인할 수 있습니다.",
+    "emptyTitle": "클레임 내역 없음",
+    "emptyMessage": "딜 탭에서 딜을 클레임하면 여기에 QR과 함께 표시됩니다.",
+    "untitledDeal": "딜",
+    "localBusiness": "로컬 매장",
+    "claimedAt": "클레임",
+    "redeemed": "사용 완료",
+    "qrExpired": "QR이 만료되었습니다. 새 QR을 받아 사용하세요.",
+    "showQr": "QR 보기",
+    "getNewQr": "새 QR 받기",
+    "refreshing": "새로고침 중…",
+    "errRefreshQr": "QR을 새로고침할 수 없습니다.",
+    "errNoDealForQr": "QR을 새로고침하려면 먼저 딜을 클레임하세요."
   },
   "dealQuality": {
     "blocks": {

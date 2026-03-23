@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
@@ -49,32 +49,7 @@ export default function FavoritesScreen() {
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      await loadFavorites(userId);
-    })();
-  }, [userId]);
-
-  async function loadFavorites(currentUserId: string | null) {
-    if (!currentUserId) {
-      setFavoriteBusinessIds([]);
-      setDeals([]);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("favorites")
-      .select("business_id")
-      .eq("user_id", currentUserId);
-    if (error) {
-      setBanner(error.message);
-      return;
-    }
-    const ids = (data ?? []).map((row) => row.business_id);
-    setFavoriteBusinessIds(ids);
-    await loadDeals(ids);
-  }
-
-  async function loadDeals(businessIds: string[]) {
+  const loadDealsForBusinesses = useCallback(async (businessIds: string[]) => {
     if (businessIds.length === 0) {
       setDeals([]);
       setLoadingDeals(false);
@@ -94,10 +69,37 @@ export default function FavoritesScreen() {
       setLoadingDeals(false);
       return;
     }
-    const raw = (data ?? []) as Deal[];
+    const raw = (data ?? []) as unknown as Deal[];
     setDeals(raw.filter((deal) => isDealActiveNow(deal)));
     setLoadingDeals(false);
-  }
+  }, []);
+
+  const loadFavorites = useCallback(
+    async (currentUserId: string | null) => {
+      if (!currentUserId) {
+        setFavoriteBusinessIds([]);
+        setDeals([]);
+        setLoadingDeals(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("favorites")
+        .select("business_id")
+        .eq("user_id", currentUserId);
+      if (error) {
+        setBanner(error.message);
+        return;
+      }
+      const ids = (data ?? []).map((row) => row.business_id);
+      setFavoriteBusinessIds(ids);
+      await loadDealsForBusinesses(ids);
+    },
+    [loadDealsForBusinesses],
+  );
+
+  useEffect(() => {
+    void loadFavorites(userId);
+  }, [userId, loadFavorites]);
 
   async function toggleFavorite(businessId: string) {
     if (!userId) {

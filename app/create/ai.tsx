@@ -143,7 +143,7 @@ export default function AiDealScreen() {
   const [windowStart, setWindowStart] = useState(new Date());
   const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [timezone, setTimezone] = useState(
+  const [timezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago"
   );
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);

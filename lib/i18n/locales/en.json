@@ -2,9 +2,37 @@
   "tabs": {
     "deals": "Deals",
     "favorites": "Favorites",
+    "wallet": "Wallet",
     "create": "Create",
     "redeem": "Redeem",
     "account": "Account"
+  },
+  "dealsBrowse": {
+    "categoriesHeading": "Categories",
+    "categoryHint": "Tip: businesses that set a category in Account → business profile show up as filter chips here.",
+    "filterAll": "All",
+    "emptyTitle": "No deals yet",
+    "emptyMessage": "Create a business and post your first deal.",
+    "emptyFilterTitle": "Nothing in this category",
+    "emptyFilterMessage": "Try another category or clear the filter."
+  },
+  "wallet": {
+    "title": "Wallet",
+    "subtitleGuest": "Log in to see claims and QR codes.",
+    "emptyLoginTitle": "Your wallet",
+    "emptyLoginMessage": "Log in to see deals you’ve claimed and open your QR at checkout.",
+    "emptyTitle": "No claims yet",
+    "emptyMessage": "Claim a deal from the Deals tab — it will show up here with your QR.",
+    "untitledDeal": "Deal",
+    "localBusiness": "Local business",
+    "claimedAt": "Claimed",
+    "redeemed": "Redeemed",
+    "qrExpired": "This QR expired. Get a fresh one to redeem.",
+    "showQr": "Show QR",
+    "getNewQr": "Get new QR",
+    "refreshing": "Refreshing…",
+    "errRefreshQr": "Could not refresh QR.",
+    "errNoDealForQr": "Claim a deal first to refresh the QR."
   },
   "dealQuality": {
     "blocks": {

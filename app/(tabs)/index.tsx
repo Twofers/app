@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { supabase } from "../../lib/supabase";
 import { claimDeal } from "../../lib/functions";
@@ -25,6 +26,7 @@ type Deal = {
   max_claims: number | null;
   businesses?: {
     name: string | null;
+    category: string | null;
   } | null;
   start_time: string;
   is_recurring: boolean;
@@ -35,10 +37,12 @@ type Deal = {
 };
 
 export default function HomeDeals() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { isLoggedIn, sessionEmail, userId } = useBusiness();
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
@@ -51,18 +55,25 @@ export default function HomeDeals() {
   const [claimCounts, setClaimCounts] = useState<Record<string, number>>({});
   const [claimStatus, setClaimStatus] = useState<Record<string, { message: string; tone: "success" | "error" | "info" }>>({});
 
-  useEffect(() => {
-    (async () => {
-      await loadDeals();
-      await loadFavorites(userId);
-    })();
+  const loadClaimCounts = useCallback(async (dealIds: string[]) => {
+    if (dealIds.length === 0) return;
+    const { data, error } = await supabase
+      .from("deal_claims")
+      .select("deal_id")
+      .in("deal_id", dealIds);
+    if (error) return;
+    const counts: Record<string, number> = {};
+    (data ?? []).forEach((row: { deal_id: string }) => {
+      counts[row.deal_id] = (counts[row.deal_id] ?? 0) + 1;
+    });
+    setClaimCounts((prev) => ({ ...prev, ...counts }));
   }, []);
 
-  async function loadDeals() {
+  const loadDeals = useCallback(async () => {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
@@ -74,14 +85,14 @@ export default function HomeDeals() {
       return;
     }
 
-    const raw = (data ?? []) as Deal[];
+    const raw = (data ?? []) as unknown as Deal[];
     const filtered = raw.filter((deal) => isDealActiveNow(deal));
     setDeals(filtered);
     await loadClaimCounts(filtered.map((d) => d.id));
     setLoadingDeals(false);
-  }
+  }, [loadClaimCounts]);
 
-  async function loadFavorites(currentUserId: string | null) {
+  const loadFavorites = useCallback(async (currentUserId: string | null) => {
     if (!currentUserId) {
       setFavoriteBusinessIds([]);
       return;
@@ -95,7 +106,14 @@ export default function HomeDeals() {
       return;
     }
     setFavoriteBusinessIds((data ?? []).map((row) => row.business_id));
-  }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDeals();
+      void loadFavorites(userId);
+    }, [loadDeals, loadFavorites, userId]),
+  );
 
   async function toggleFavorite(businessId: string) {
     if (!userId) {
@@ -128,13 +146,6 @@ export default function HomeDeals() {
     }
   }
 
-  useFocusEffect(
-    useCallback(() => {
-      loadDeals();
-      loadFavorites(userId);
-    }, [userId])
-  );
-
   async function doClaim(dealId: string) {
     try {
       if (!isLoggedIn) {
@@ -165,20 +176,6 @@ export default function HomeDeals() {
     } finally {
       setClaimingDealId(null);
     }
-  }
-
-  async function loadClaimCounts(dealIds: string[]) {
-    if (dealIds.length === 0) return;
-    const { data, error } = await supabase
-      .from("deal_claims")
-      .select("deal_id")
-      .in("deal_id", dealIds);
-    if (error) return;
-    const counts: Record<string, number> = {};
-    (data ?? []).forEach((row: any) => {
-      counts[row.deal_id] = (counts[row.deal_id] ?? 0) + 1;
-    });
-    setClaimCounts((prev) => ({ ...prev, ...counts }));
   }
 
   async function refreshQr() {
@@ -214,6 +211,26 @@ export default function HomeDeals() {
     });
   }, [userId, favoriteBusinessIds]);
 
+  const categoryLabels = useMemo(() => {
+    const labels = new Set<string>();
+    deals.forEach((d) => {
+      const c = d.businesses?.category?.trim();
+      if (c) labels.add(c);
+    });
+    return Array.from(labels).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [deals]);
+
+  useEffect(() => {
+    if (selectedCategory && !categoryLabels.includes(selectedCategory)) {
+      setSelectedCategory(null);
+    }
+  }, [categoryLabels, selectedCategory]);
+
+  const filteredDeals = useMemo(() => {
+    if (!selectedCategory) return deals;
+    return deals.filter((d) => (d.businesses?.category?.trim() ?? "") === selectedCategory);
+  }, [deals, selectedCategory]);
+
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Deals</Text>
@@ -223,12 +240,85 @@ export default function HomeDeals() {
 
       {banner ? <Banner message={banner} tone="error" /> : null}
 
+      {!loadingDeals && deals.length > 0 && categoryLabels.length === 0 ? (
+        <Text
+          style={{
+            fontSize: 13,
+            opacity: 0.62,
+            lineHeight: 18,
+            marginBottom: Spacing.md,
+          }}
+        >
+          {t("dealsBrowse.categoryHint")}
+        </Text>
+      ) : null}
+
+      {!loadingDeals && categoryLabels.length > 0 ? (
+        <View style={{ marginBottom: Spacing.md }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.55, marginBottom: Spacing.sm }}>
+            {t("dealsBrowse.categoriesHeading")}
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: "row", flexWrap: "nowrap", gap: Spacing.sm, paddingRight: Spacing.lg }}
+          >
+            <Pressable
+              onPress={() => setSelectedCategory(null)}
+              style={{
+                paddingVertical: Spacing.sm,
+                paddingHorizontal: Spacing.md,
+                borderRadius: 20,
+                backgroundColor: selectedCategory == null ? "#111" : "#ececec",
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "600",
+                  fontSize: 14,
+                  color: selectedCategory == null ? "#fff" : "#333",
+                }}
+              >
+                {t("dealsBrowse.filterAll")}
+              </Text>
+            </Pressable>
+            {categoryLabels.map((label) => {
+              const active = selectedCategory === label;
+              return (
+                <Pressable
+                  key={label}
+                  onPress={() => setSelectedCategory(active ? null : label)}
+                  style={{
+                    paddingVertical: Spacing.sm,
+                    paddingHorizontal: Spacing.md,
+                    borderRadius: 20,
+                    backgroundColor: active ? "#111" : "#ececec",
+                    maxWidth: 220,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontWeight: "600",
+                      fontSize: 14,
+                      color: active ? "#fff" : "#333",
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {loadingDeals ? (
         <LoadingSkeleton rows={3} />
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={deals}
+          data={filteredDeals}
           keyExtractor={(d) => d.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
@@ -255,10 +345,17 @@ export default function HomeDeals() {
             />
           )}
           ListEmptyComponent={
-            <EmptyState
-              title="No deals yet"
-              message="Create a business and post your first deal."
-            />
+            deals.length === 0 ? (
+              <EmptyState
+                title={t("dealsBrowse.emptyTitle")}
+                message={t("dealsBrowse.emptyMessage")}
+              />
+            ) : (
+              <EmptyState
+                title={t("dealsBrowse.emptyFilterTitle")}
+                message={t("dealsBrowse.emptyFilterMessage")}
+              />
+            )
           }
         />
       )}

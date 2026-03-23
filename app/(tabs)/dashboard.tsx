@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
@@ -43,12 +43,7 @@ export default function BusinessDashboard() {
     conversion: 0,
   });
 
-  useEffect(() => {
-    if (!businessId) return;
-    loadMetrics();
-  }, [businessId]);
-
-  async function loadMetrics() {
+  const loadMetrics = useCallback(async () => {
     if (!businessId) return;
     setLoadingMetrics(true);
     setBanner(null);
@@ -122,7 +117,12 @@ export default function BusinessDashboard() {
     } finally {
       setLoadingMetrics(false);
     }
-  }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    void loadMetrics();
+  }, [businessId, loadMetrics]);
 
   async function onRefresh() {
     setRefreshing(true);

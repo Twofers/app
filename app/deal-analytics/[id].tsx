@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -38,12 +38,8 @@ export default function DealAnalyticsDetail() {
   const [loading, setLoading] = useState(true);
   const [bestTime, setBestTime] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!id) return;
-    loadData();
-  }, [id]);
-
-  async function loadData() {
     setLoading(true);
     setBanner(null);
     try {
@@ -106,7 +102,11 @@ export default function DealAnalyticsDetail() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const claimsByDay = useMemo(() => {
     const map: Record<string, { claims: number; redeems: number }> = {};

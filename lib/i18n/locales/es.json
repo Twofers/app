@@ -2,9 +2,37 @@
   "tabs": {
     "deals": "Ofertas",
     "favorites": "Favoritos",
+    "wallet": "Billetera",
     "create": "Crear",
     "redeem": "Canjear",
     "account": "Cuenta"
+  },
+  "dealsBrowse": {
+    "categoriesHeading": "Categorías",
+    "categoryHint": "Consejo: los negocios que indican una categoría en Cuenta → perfil del negocio aparecen como filtros aquí.",
+    "filterAll": "Todas",
+    "emptyTitle": "Aún no hay ofertas",
+    "emptyMessage": "Crea un negocio y publica tu primera oferta.",
+    "emptyFilterTitle": "Nada en esta categoría",
+    "emptyFilterMessage": "Prueba otra categoría o quita el filtro."
+  },
+  "wallet": {
+    "title": "Billetera",
+    "subtitleGuest": "Inicia sesión para ver reclamaciones y códigos QR.",
+    "emptyLoginTitle": "Tu billetera",
+    "emptyLoginMessage": "Inicia sesión para ver las ofertas que reclamaste y abrir tu QR al pagar.",
+    "emptyTitle": "Aún no hay reclamaciones",
+    "emptyMessage": "Reclama una oferta en la pestaña Ofertas: aparecerá aquí con tu QR.",
+    "untitledDeal": "Oferta",
+    "localBusiness": "Negocio local",
+    "claimedAt": "Reclamada",
+    "redeemed": "Canjeada",
+    "qrExpired": "Este QR venció. Obtén uno nuevo para canjear.",
+    "showQr": "Ver QR",
+    "getNewQr": "Nuevo QR",
+    "refreshing": "Actualizando…",
+    "errRefreshQr": "No se pudo actualizar el QR.",
+    "errNoDealForQr": "Reclama una oferta primero para actualizar el QR."
   },
   "dealQuality": {
     "blocks": {
