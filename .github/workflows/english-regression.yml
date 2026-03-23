@@ -1,0 +1,26 @@
+# English regression: deal-quality rules on English copy.
+# Policy: do not merge PRs that fail this job until tests are fixed.
+name: English regression
+
+on:
+  pull_request:
+    branches: [main, protect/**]
+  push:
+    branches: [main, protect/**, chore/**]
+
+jobs:
+  english-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: English regression (deal quality)
+        run: npm run test:english
