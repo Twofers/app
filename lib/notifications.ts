@@ -56,6 +56,9 @@ export async function checkForNewFavoriteDeals({
     content: {
       title: "New deals from your favorites",
       body: `${count} new deal${count === 1 ? "" : "s"} just posted.`,
+      data: {
+        path: "/(tabs)",
+      },
     },
     trigger: null,
   });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
@@ -13,6 +14,7 @@ import { EmptyState } from "../../components/ui/empty-state";
 import { Banner } from "../../components/ui/banner";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
+import { collectGeocodeHints, dealMatchesNearHints, dealMatchesSearch } from "../../lib/deals-discovery-filters";
 
 type Deal = {
   id: string;
@@ -27,6 +29,7 @@ type Deal = {
   businesses?: {
     name: string | null;
     category: string | null;
+    location: string | null;
   } | null;
   start_time: string;
   is_recurring: boolean;
@@ -43,6 +46,9 @@ export default function HomeDeals() {
   const { isLoggedIn, sessionEmail, userId } = useBusiness();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [nearMeHints, setNearMeHints] = useState<string[]>([]);
+  const [nearMeBusy, setNearMeBusy] = useState(false);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
@@ -73,7 +79,7 @@ export default function HomeDeals() {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category,location),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
@@ -226,10 +232,51 @@ export default function HomeDeals() {
     }
   }, [categoryLabels, selectedCategory]);
 
-  const filteredDeals = useMemo(() => {
+  const categoryFilteredDeals = useMemo(() => {
     if (!selectedCategory) return deals;
     return deals.filter((d) => (d.businesses?.category?.trim() ?? "") === selectedCategory);
   }, [deals, selectedCategory]);
+
+  const searchFilteredDeals = useMemo(
+    () => categoryFilteredDeals.filter((d) => dealMatchesSearch(d, searchQuery)),
+    [categoryFilteredDeals, searchQuery],
+  );
+
+  const filteredDeals = useMemo(
+    () => searchFilteredDeals.filter((d) => dealMatchesNearHints(d, nearMeHints)),
+    [searchFilteredDeals, nearMeHints],
+  );
+
+  async function toggleNearMeFilter() {
+    if (nearMeHints.length > 0) {
+      setNearMeHints([]);
+      return;
+    }
+    setNearMeBusy(true);
+    setBanner(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setBanner(t("dealsBrowse.nearMeDenied"));
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const places = await Location.reverseGeocodeAsync({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+      const hints = collectGeocodeHints(places ?? []);
+      if (hints.length === 0) {
+        setBanner(t("dealsBrowse.nearMeNoHints"));
+        return;
+      }
+      setNearMeHints(hints);
+    } catch {
+      setBanner(t("dealsBrowse.nearMeError"));
+    } finally {
+      setNearMeBusy(false);
+    }
+  }
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
@@ -251,6 +298,63 @@ export default function HomeDeals() {
         >
           {t("dealsBrowse.categoryHint")}
         </Text>
+      ) : null}
+
+      {!loadingDeals ? (
+        <View style={{ marginBottom: Spacing.md, gap: Spacing.sm }}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t("dealsBrowse.searchPlaceholder")}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            style={{
+              borderWidth: 1,
+              borderColor: "#ddd",
+              borderRadius: 12,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
+              fontSize: 16,
+            }}
+          />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
+            <Pressable
+              onPress={() => void toggleNearMeFilter()}
+              disabled={nearMeBusy}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: Spacing.sm,
+                paddingVertical: Spacing.sm,
+                paddingHorizontal: Spacing.md,
+                borderRadius: 20,
+                backgroundColor: nearMeHints.length > 0 ? "#111" : "#ececec",
+                opacity: nearMeBusy ? 0.65 : 1,
+              }}
+            >
+              {nearMeBusy ? <ActivityIndicator size="small" color={nearMeHints.length > 0 ? "#fff" : "#111"} /> : null}
+              <Text
+                style={{
+                  fontWeight: "600",
+                  fontSize: 14,
+                  color: nearMeHints.length > 0 ? "#fff" : "#333",
+                }}
+              >
+                {nearMeHints.length > 0 ? t("dealsBrowse.nearMeActive") : t("dealsBrowse.nearMe")}
+              </Text>
+            </Pressable>
+            {nearMeHints.length > 0 ? (
+              <Text style={{ fontSize: 12, opacity: 0.55, flex: 1, minWidth: 120 }} numberOfLines={2}>
+                {t("dealsBrowse.nearMeHelp")}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 12, opacity: 0.55, flex: 1, minWidth: 120 }} numberOfLines={2}>
+                {t("dealsBrowse.nearMeCaption")}
+              </Text>
+            )}
+          </View>
+        </View>
       ) : null}
 
       {!loadingDeals && categoryLabels.length > 0 ? (
@@ -349,6 +453,16 @@ export default function HomeDeals() {
               <EmptyState
                 title={t("dealsBrowse.emptyTitle")}
                 message={t("dealsBrowse.emptyMessage")}
+              />
+            ) : nearMeHints.length > 0 && filteredDeals.length === 0 ? (
+              <EmptyState
+                title={t("dealsBrowse.emptyNearMeTitle")}
+                message={t("dealsBrowse.emptyNearMeMessage")}
+              />
+            ) : searchQuery.trim().length > 0 ? (
+              <EmptyState
+                title={t("dealsBrowse.emptySearchTitle")}
+                message={t("dealsBrowse.emptySearchMessage")}
               />
             ) : (
               <EmptyState

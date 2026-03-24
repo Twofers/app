@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
+import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -18,6 +19,7 @@ export default function RootLayout() {
     <AppI18nGate>
       <SafeAreaProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <NotificationDeepLinkHandler />
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

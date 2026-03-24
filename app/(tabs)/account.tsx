@@ -12,10 +12,12 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import type { AppLocale } from "../../lib/i18n/config";
 import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
+import { useTabMode } from "../../lib/tab-mode";
 
 export default function AccountScreen() {
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const { mode: tabMode, setMode: setTabMode } = useTabMode();
   const { t, i18n } = useTranslation();
   const { isLoggedIn, sessionEmail, businessId, businessProfile, loading, refresh } = useBusiness();
   const [email, setEmail] = useState("");
@@ -312,9 +314,36 @@ export default function AccountScreen() {
             </View>
           </View>
 
-          <View style={{ gap: Spacing.sm }}>
-            <PrimaryButton title="Customer mode" onPress={() => router.replace("/(tabs)")} />
-            <SecondaryButton title="Business mode" onPress={() => router.replace("/(tabs)/create")} />
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#eee",
+              borderRadius: 12,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "700" }}>{t("tabMode.title")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("tabMode.subtitle")}</Text>
+            <View style={{ gap: Spacing.sm }}>
+              <PrimaryButton
+                title={t("tabMode.customer")}
+                onPress={async () => {
+                  await setTabMode("customer");
+                  router.replace("/(tabs)");
+                }}
+              />
+              <SecondaryButton
+                title={t("tabMode.business")}
+                onPress={async () => {
+                  await setTabMode("business");
+                  router.replace("/(tabs)/create");
+                }}
+              />
+            </View>
+            <Text style={{ fontSize: 12, opacity: 0.55 }}>
+              {tabMode === "business" ? t("tabMode.currentBusiness") : t("tabMode.currentCustomer")}
+            </Text>
           </View>
           <View>
             <Text style={{ opacity: 0.7 }}>Logged in as</Text>
@@ -483,7 +512,7 @@ export default function AccountScreen() {
           ) : null}
 
           {businessId ? (
-            <PrimaryButton title="Business Dashboard" onPress={() => router.push("/dashboard")} />
+            <PrimaryButton title="Business Dashboard" onPress={() => router.push("/(tabs)/dashboard")} />
           ) : (
             <View
               style={{

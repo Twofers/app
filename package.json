@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
     "test:watch": "vitest"
@@ -32,6 +33,7 @@
     "expo-image-picker": "~17.0.10",
     "expo-linking": "~8.0.11",
     "expo-localization": "^55.0.9",
+    "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.22",
     "expo-secure-store": "~15.0.8",

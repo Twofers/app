@@ -46,7 +46,13 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to suggest nearby deals using your area and business locations in profiles."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
