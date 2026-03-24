@@ -36,7 +36,10 @@
       "favicon": "./assets/images/favicon.png"
     },
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "cf448cfe-fabd-4c32-8afd-88104bb59cbe"
+      },
+      "router": {}
     },
     "plugins": [
       "expo-router",
@@ -71,6 +74,7 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "owner": "unvmex2"
   }
 }
