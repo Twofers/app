@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { Banner } from "../../components/ui/banner";
 import { formatValiditySummary } from "../../lib/deal-time";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 
 type ClaimRow = {
   created_at: string;
@@ -30,18 +31,15 @@ function dayKey(dateStr: string) {
 
 export default function DealAnalyticsDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [bestTime, setBestTime] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!id) return;
-    loadData();
-  }, [id]);
-
-  async function loadData() {
     setLoading(true);
     setBanner(null);
     try {
@@ -94,17 +92,21 @@ export default function DealAnalyticsDetail() {
           const startLabel = hour % 12 === 0 ? 12 : hour % 12;
           const endHour = (hour + 2) % 24;
           const endLabel = endHour % 12 === 0 ? 12 : endHour % 12;
-          const startPeriod = hour < 12 ? "AM" : "PM";
           const endPeriod = endHour < 12 ? "AM" : "PM";
           setBestTime(`Best time: ${dayNames[day]} ${startLabel}-${endLabel} ${endPeriod}`);
         }
       }
-    } catch (err: any) {
-      setBanner(err?.message ?? "Failed to load analytics.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load analytics.";
+      setBanner(msg);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const claimsByDay = useMemo(() => {
     const map: Record<string, { claims: number; redeems: number }> = {};
@@ -121,51 +123,58 @@ export default function DealAnalyticsDetail() {
 
   if (loading) {
     return (
-      <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Deal analytics</Text>
-        <Text style={{ marginTop: 12, opacity: 0.7 }}>Loading...</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Deal analytics</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Deal analytics</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Deal analytics</Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
-      {deal ? (
-        <View style={{ marginTop: 8 }}>
-          <Text style={{ fontWeight: "700" }}>{deal.title ?? "Deal"}</Text>
-          <Text style={{ opacity: 0.7, marginTop: 4 }}>{formatValiditySummary(deal)}</Text>
-        </View>
-      ) : null}
+      <ScrollView
+        style={{ flex: 1, marginTop: Spacing.md }}
+        contentContainerStyle={{ paddingBottom: scrollBottom }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {deal ? (
+          <View style={{ marginBottom: Spacing.lg }}>
+            <Text style={{ fontWeight: "700", fontSize: 20 }}>{deal.title ?? "Deal"}</Text>
+            <Text style={{ opacity: 0.68, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {formatValiditySummary(deal)}
+            </Text>
+          </View>
+        ) : null}
 
-      <View style={{ marginTop: 16 }}>
-        <Text style={{ fontWeight: "700" }}>Claims over time</Text>
-        <FlatList
-          data={claimsByDay}
-          keyExtractor={(item) => item.day}
-          renderItem={({ item }) => (
-            <View
-              style={{
-                paddingVertical: 8,
-                borderBottomWidth: 1,
-                borderBottomColor: "#eee",
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>{item.day}</Text>
-              <Text style={{ opacity: 0.7 }}>
-                Claims: {item.claims} · Redeems: {item.redeems}
-              </Text>
-            </View>
-          )}
-          ListEmptyComponent={<Text style={{ opacity: 0.7 }}>No claims yet.</Text>}
-        />
-      </View>
+        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md }}>Claims over time</Text>
+        {claimsByDay.length === 0 ? (
+          <Text style={{ opacity: 0.7, marginBottom: Spacing.lg }}>No claims yet.</Text>
+        ) : (
+          <View style={{ marginBottom: Spacing.xl }}>
+            {claimsByDay.map((item) => (
+              <View
+                key={item.day}
+                style={{
+                  paddingVertical: Spacing.md,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#eee",
+                }}
+              >
+                <Text style={{ fontWeight: "700", fontSize: 16 }}>{item.day}</Text>
+                <Text style={{ opacity: 0.72, marginTop: Spacing.xs, fontSize: 15 }}>
+                  Claims: {item.claims} · Redeems: {item.redeems}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-      <View style={{ marginTop: 16 }}>
-        <Text style={{ fontWeight: "700" }}>What worked</Text>
-        <Text style={{ marginTop: 6, opacity: 0.7 }}>{bestTime ?? "Not enough data yet."}</Text>
-      </View>
+        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.sm }}>What worked</Text>
+        <Text style={{ opacity: 0.72, fontSize: 15, lineHeight: 22 }}>{bestTime ?? "Not enough data yet."}</Text>
+      </ScrollView>
     </View>
   );
 }

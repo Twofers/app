@@ -1,11 +1,14 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Spacing } from "@/lib/screen-layout";
 
 type DealCardPosterProps = {
   title: string;
   description?: string | null;
   businessName?: string | null;
+  /** Shown under business name when Near me + coordinates (localized in parent). */
+  distanceLabel?: string | null;
   posterUrl?: string | null;
   price?: number | null;
   endTime: string;
@@ -23,6 +26,7 @@ export function DealCardPoster({
   title,
   description,
   businessName,
+  distanceLabel,
   posterUrl,
   price,
   endTime,
@@ -35,6 +39,12 @@ export function DealCardPoster({
   statusMessage,
   statusTone = "info",
 }: DealCardPosterProps) {
+  const { height: windowHeight } = useWindowDimensions();
+  /** Immersive feed: image ~40–48% of viewport height, clamped for very small/large phones. */
+  const imageHeight = Math.round(
+    Math.min(400, Math.max(248, windowHeight * 0.44)),
+  );
+
   const statusColors = {
     success: { background: "#e8f5e9", text: "#1b5e20" },
     error: { background: "#fde8e8", text: "#7a1f1f" },
@@ -47,79 +57,122 @@ export function DealCardPoster({
         borderRadius: 20,
         backgroundColor: "#fff",
         overflow: "hidden",
-        marginBottom: 12,
+        marginBottom: Spacing.lg,
         shadowColor: "#000",
         shadowOpacity: 0.08,
-        shadowRadius: 10,
+        shadowRadius: 12,
         shadowOffset: { width: 0, height: 4 },
-        elevation: 2,
+        elevation: 3,
       }}
     >
-      <Pressable onPress={onPress}>
+      <Pressable onPress={onPress} accessibilityRole="button">
         {posterUrl ? (
-          <Image source={{ uri: posterUrl }} style={{ height: 200, width: "100%" }} contentFit="cover" />
+          <Image
+            source={{ uri: posterUrl }}
+            style={{ height: imageHeight, width: "100%" }}
+            contentFit="cover"
+          />
         ) : (
-          <View style={{ height: 200, backgroundColor: "#e5e5e5", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#666" }}>No image</Text>
+          <View
+            style={{
+              height: imageHeight,
+              backgroundColor: "#ececec",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#666", fontSize: 15 }}>No image</Text>
           </View>
         )}
-        <View style={{ padding: 12 }}>
+        <View style={{ padding: Spacing.lg }}>
           {businessName ? (
-            <Text style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>{businessName}</Text>
+            <View style={{ marginBottom: Spacing.xs }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  opacity: 0.55,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
+              >
+                {businessName}
+              </Text>
+              {distanceLabel ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{distanceLabel}</Text>
+              ) : null}
+            </View>
           ) : null}
-          <Text style={{ fontSize: 18, fontWeight: "700" }}>{title}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "700", lineHeight: 26 }}>{title}</Text>
           {price != null ? (
-            <Text style={{ marginTop: 6, fontWeight: "600" }}>${price.toFixed(2)}</Text>
-          ) : null}
-          {description ? (
-            <Text style={{ marginTop: 6, opacity: 0.75 }}>
-              {description.length > 90 ? `${description.slice(0, 90)}...` : description}
+            <Text style={{ marginTop: Spacing.sm, fontSize: 18, fontWeight: "700" }}>
+              ${price.toFixed(2)}
             </Text>
           ) : null}
-          <Text style={{ marginTop: 8, opacity: 0.7 }}>
-            Ends at {new Date(endTime).toLocaleString()}
+          {description ? (
+            <Text style={{ marginTop: Spacing.sm, opacity: 0.78, fontSize: 15, lineHeight: 22 }}>
+              {description.length > 140 ? `${description.slice(0, 140)}…` : description}
+            </Text>
+          ) : null}
+          <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 14 }}>
+            Ends {new Date(endTime).toLocaleString()}
           </Text>
           {typeof remainingClaims === "number" ? (
-            <Text style={{ marginTop: 4, opacity: 0.7 }}>
-              Remaining claims: {remainingClaims}
+            <Text style={{ marginTop: Spacing.xs, opacity: 0.65, fontSize: 14 }}>
+              {remainingClaims} claims left
             </Text>
           ) : null}
         </View>
       </Pressable>
 
-      <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+      <View
+        style={{
+          paddingHorizontal: Spacing.lg,
+          paddingTop: Spacing.sm,
+          paddingBottom: Spacing.lg,
+          gap: Spacing.md,
+          borderTopWidth: 1,
+          borderTopColor: "#f0f0f0",
+        }}
+      >
         <Pressable
           onPress={onToggleFavorite}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}
+          hitSlop={8}
+          style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}
         >
-          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={20} color={isFavorite ? "#e0245e" : "#666"} />
-          <Text style={{ color: "#666" }}>{isFavorite ? "Favorited" : "Favorite"}</Text>
+          <MaterialIcons
+            name={isFavorite ? "favorite" : "favorite-border"}
+            size={22}
+            color={isFavorite ? "#e0245e" : "#666"}
+          />
+          <Text style={{ color: "#444", fontSize: 16, fontWeight: "600" }}>
+            {isFavorite ? "Saved" : "Save to favorites"}
+          </Text>
         </Pressable>
         <Pressable
           onPress={onClaim}
           disabled={claiming}
           style={{
-            paddingVertical: 12,
-            borderRadius: 12,
+            paddingVertical: Spacing.md + 2,
+            borderRadius: 14,
             backgroundColor: "#111",
-            opacity: claiming ? 0.7 : 1,
+            opacity: claiming ? 0.65 : 1,
           }}
         >
-          <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-            {claiming ? "Claiming..." : "Claim"}
+          <Text style={{ color: "white", fontWeight: "700", textAlign: "center", fontSize: 16 }}>
+            {claiming ? "Claiming…" : "Claim deal"}
           </Text>
         </Pressable>
         {statusMessage ? (
           <View
             style={{
-              marginTop: 8,
               backgroundColor: statusColors.background,
-              borderRadius: 10,
-              paddingVertical: 6,
-              paddingHorizontal: 10,
+              borderRadius: 12,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
             }}
           >
-            <Text style={{ color: statusColors.text, fontSize: 12, fontWeight: "600" }}>
+            <Text style={{ color: statusColors.text, fontSize: 14, fontWeight: "600", lineHeight: 20 }}>
               {statusMessage}
             </Text>
           </View>

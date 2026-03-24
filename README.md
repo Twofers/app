@@ -35,6 +35,41 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
+## AI ad generation (business)
+
+The **Create → AI ad ideas** flow calls the Supabase Edge Function `ai-generate-ad-variants`.
+
+1. Set secrets (Supabase project → Edge Functions → Secrets):
+
+   - `OPENAI_API_KEY` (required)
+   - `OPENAI_AD_MODEL` (optional, default `gpt-4o-mini` — use a cheaper/faster model when you want)
+
+2. Deploy the function:
+
+   ```bash
+   supabase functions deploy ai-generate-ad-variants
+   ```
+
+3. The app uploads the photo to the `deal-photos` bucket first; the function uses a short-lived signed URL for vision input. Keys never ship in the client.
+
+### AI ads — product brief
+
+See **`docs/twofer-ai-ad-mvp.md`** for MVP definition of done, 12 QA test cases, guardrails, and metrics.  
+Product calls (regen cap, moderation stance, profile): **`docs/PRODUCT_DECISIONS_AI_ADS.md`**.  
+Manual validation (12 cases, scorecard, QA tags + logs): **`docs/ai-ad-validation/README.md`**.
+
+Apply DB migrations (includes optional business profile columns for AI context):
+
+```bash
+supabase db push
+# or run new migration files against your project
+```
+
+### AI ads — analytics & logs
+
+- **Client:** `lib/analytics.ts` logs `[analytics] <event>` in **development** (`__DEV__`). Wire `setAnalyticsSink()` to forward events to PostHog, Segment, or your API in production.
+- **Server:** Edge Function logs JSON lines with `tag: "ai_ads"` (`generation_ok`, `openai_error`, `parse_error`, `lane_validation_failed`) for Supabase function log drains.
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

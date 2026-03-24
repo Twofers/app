@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -8,6 +10,8 @@ import { Banner } from "../../components/ui/banner";
 import { Image } from "expo-image";
 
 export default function CreateDeal() {
+  const { t } = useTranslation();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const { isLoggedIn, businessId, userId, loading, refresh } = useBusiness();
   const [businessName, setBusinessName] = useState("");
@@ -35,12 +39,12 @@ export default function CreateDeal() {
 
   async function createBusiness() {
     if (!userId) {
-      setBanner("Please log in to create a business.");
+      setBanner(t("createHub.errLoginBusiness"));
       return;
     }
     const name = businessName.trim();
     if (!name) {
-      setBanner("Business name required.");
+      setBanner(t("createHub.errNameRequired"));
       return;
     }
     setIsCreatingBusiness(true);
@@ -52,35 +56,33 @@ export default function CreateDeal() {
       await refresh();
       router.replace("/(tabs)/create");
     } catch (err: any) {
-      setBanner(err?.message ?? "Create business failed.");
+      setBanner(err?.message ?? t("createHub.errCreateFailed"));
     } finally {
       setIsCreatingBusiness(false);
     }
   }
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Create</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createHub.title")}</Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
 
       {!isLoggedIn ? (
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7 }}>Please log in to create deals.</Text>
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.loginPrompt")}</Text>
         </View>
       ) : loading ? (
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ opacity: 0.7 }}>Loading...</Text>
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
         </View>
       ) : !businessId ? (
-        <View style={{ marginTop: 16, gap: 12 }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>Create your business</Text>
-          <Text style={{ opacity: 0.7 }}>
-            Create a business to post deals and redeem QR codes.
-          </Text>
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createHub.createBusinessHeader")}</Text>
+          <Text style={{ opacity: 0.7 }}>{t("createHub.createBusinessBody")}</Text>
           <TextInput
             value={businessName}
             onChangeText={setBusinessName}
-            placeholder="Business name"
+            placeholder={t("createHub.placeholderBusinessName")}
             autoCapitalize="words"
             style={{
               borderWidth: 1,
@@ -90,82 +92,87 @@ export default function CreateDeal() {
             }}
           />
           <PrimaryButton
-            title={isCreatingBusiness ? "Creating..." : "Create Business"}
+            title={isCreatingBusiness ? t("createHub.creating") : t("createHub.createBusiness")}
             onPress={createBusiness}
             disabled={isCreatingBusiness}
           />
         </View>
       ) : (
-        <View style={{ marginTop: 20, gap: 12 }}>
+        <ScrollView
+          style={{ flex: 1, marginTop: Spacing.lg }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Pressable
             onPress={() => router.push("/create/quick")}
             style={{
-              borderRadius: 16,
-              padding: 16,
+              borderRadius: 18,
+              padding: Spacing.lg,
               backgroundColor: "#111",
             }}
           >
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Quick Deal</Text>
-            <Text style={{ color: "white", opacity: 0.8, marginTop: 6 }}>
-              Fast manual deal creation with minimal fields.
+            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
+            <Text style={{ color: "white", opacity: 0.85, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {t("createHub.quickDealSubtitle")}
             </Text>
           </Pressable>
 
           <Pressable
             onPress={() => router.push("/create/ai")}
             style={{
-              borderRadius: 16,
-              padding: 16,
+              borderRadius: 18,
+              padding: Spacing.lg,
               backgroundColor: "#eee",
             }}
           >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>AI Deal</Text>
-            <Text style={{ color: "#111", opacity: 0.7, marginTop: 6 }}>
-              Photo + a few words. AI creates the ad copy.
+            <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.72, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {t("createHub.aiAdsSubtitle")}
             </Text>
           </Pressable>
 
-          <View style={{ marginTop: 8 }}>
-            <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 8 }}>Templates</Text>
+          <View style={{ marginTop: Spacing.sm }}>
+            <Text style={{ fontSize: 17, fontWeight: "700", marginBottom: Spacing.md }}>{t("createHub.templatesTitle")}</Text>
             {templatesLoading ? (
-              <Text style={{ opacity: 0.7 }}>Loading templates...</Text>
+              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesLoading")}</Text>
             ) : templates.length === 0 ? (
-              <Text style={{ opacity: 0.7 }}>No templates yet. Save one from AI Deal.</Text>
+              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesEmpty")}</Text>
             ) : (
-              templates.map((t) => (
+              templates.map((tpl) => (
                 <Pressable
-                  key={t.id}
-                  onPress={() => router.push({ pathname: "/create/ai", params: { templateId: t.id } })}
+                  key={tpl.id}
+                  onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
                   style={{
-                    borderRadius: 16,
+                    borderRadius: 18,
                     backgroundColor: "#fff",
-                    padding: 12,
-                    marginBottom: 10,
+                    padding: Spacing.md,
+                    marginBottom: Spacing.md,
                     shadowColor: "#000",
-                    shadowOpacity: 0.06,
-                    shadowRadius: 8,
+                    shadowOpacity: 0.07,
+                    shadowRadius: 10,
                     shadowOffset: { width: 0, height: 3 },
-                    elevation: 1,
+                    elevation: 2,
                   }}
                 >
-                  {t.poster_url ? (
+                  {tpl.poster_url ? (
                     <Image
-                      source={{ uri: t.poster_url }}
-                      style={{ height: 120, width: "100%", borderRadius: 12 }}
+                      source={{ uri: tpl.poster_url }}
+                      style={{ height: 140, width: "100%", borderRadius: 14 }}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ height: 120, borderRadius: 12, backgroundColor: "#eee" }} />
+                    <View style={{ height: 140, borderRadius: 14, backgroundColor: "#eee" }} />
                   )}
-                  <Text style={{ marginTop: 8, fontWeight: "700" }}>{t.title ?? "Untitled template"}</Text>
-                  {t.price != null ? (
-                    <Text style={{ marginTop: 4, opacity: 0.7 }}>${Number(t.price).toFixed(2)}</Text>
+                  <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16 }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
+                  {tpl.price != null ? (
+                    <Text style={{ marginTop: Spacing.xs, opacity: 0.7, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
                   ) : null}
                 </Pressable>
               ))
             )}
           </View>
-        </View>
+        </ScrollView>
       )}
     </View>
   );

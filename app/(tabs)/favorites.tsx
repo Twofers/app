@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { supabase } from "../../lib/supabase";
 import { claimDeal } from "../../lib/functions";
 import { checkForNewFavoriteDeals } from "../../lib/notifications";
@@ -34,6 +35,7 @@ type Deal = {
 
 export default function FavoritesScreen() {
   const router = useRouter();
+  const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { sessionEmail, userId } = useBusiness();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
@@ -47,32 +49,7 @@ export default function FavoritesScreen() {
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      await loadFavorites(userId);
-    })();
-  }, [userId]);
-
-  async function loadFavorites(currentUserId: string | null) {
-    if (!currentUserId) {
-      setFavoriteBusinessIds([]);
-      setDeals([]);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("favorites")
-      .select("business_id")
-      .eq("user_id", currentUserId);
-    if (error) {
-      setBanner(error.message);
-      return;
-    }
-    const ids = (data ?? []).map((row) => row.business_id);
-    setFavoriteBusinessIds(ids);
-    await loadDeals(ids);
-  }
-
-  async function loadDeals(businessIds: string[]) {
+  const loadDealsForBusinesses = useCallback(async (businessIds: string[]) => {
     if (businessIds.length === 0) {
       setDeals([]);
       setLoadingDeals(false);
@@ -92,10 +69,37 @@ export default function FavoritesScreen() {
       setLoadingDeals(false);
       return;
     }
-    const raw = (data ?? []) as Deal[];
+    const raw = (data ?? []) as unknown as Deal[];
     setDeals(raw.filter((deal) => isDealActiveNow(deal)));
     setLoadingDeals(false);
-  }
+  }, []);
+
+  const loadFavorites = useCallback(
+    async (currentUserId: string | null) => {
+      if (!currentUserId) {
+        setFavoriteBusinessIds([]);
+        setDeals([]);
+        setLoadingDeals(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("favorites")
+        .select("business_id")
+        .eq("user_id", currentUserId);
+      if (error) {
+        setBanner(error.message);
+        return;
+      }
+      const ids = (data ?? []).map((row) => row.business_id);
+      setFavoriteBusinessIds(ids);
+      await loadDealsForBusinesses(ids);
+    },
+    [loadDealsForBusinesses],
+  );
+
+  useEffect(() => {
+    void loadFavorites(userId);
+  }, [userId, loadFavorites]);
 
   async function toggleFavorite(businessId: string) {
     if (!userId) {
@@ -194,9 +198,9 @@ export default function FavoritesScreen() {
   }, [userId, favoriteBusinessIds]);
 
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Favorites</Text>
-      <Text style={{ marginTop: 6, marginBottom: 12, opacity: 0.8 }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Favorites</Text>
+      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15 }}>
         {sessionEmail ? `Logged in: ${sessionEmail}` : "Not logged in"}
       </Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
@@ -205,10 +209,12 @@ export default function FavoritesScreen() {
         <LoadingSkeleton rows={3} />
       ) : (
         <FlatList
+          style={{ flex: 1 }}
           data={deals}
           keyExtractor={(d) => d.id}
+          showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
           renderItem={({ item }) => (
             <DealCardPoster
               title={item.title ?? "Deal"}

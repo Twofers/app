@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import type { AppLocale } from "../../lib/i18n/config";
+import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
+import { useTabMode } from "../../lib/tab-mode";
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { isLoggedIn, sessionEmail, businessId, loading, refresh } = useBusiness();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const { mode: tabMode, setMode: setTabMode } = useTabMode();
+  const { t, i18n } = useTranslation();
+  const { isLoggedIn, sessionEmail, businessId, businessProfile, loading, refresh } = useBusiness();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,6 +28,43 @@ export default function AccountScreen() {
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [businessName, setBusinessName] = useState("");
   const [creatingBusiness, setCreatingBusiness] = useState(false);
+  const [profileCategory, setProfileCategory] = useState("");
+  const [profileTone, setProfileTone] = useState("");
+  const [profileLocation, setProfileLocation] = useState("");
+  const [profileLatitude, setProfileLatitude] = useState("");
+  const [profileLongitude, setProfileLongitude] = useState("");
+  const [profileShortDescription, setProfileShortDescription] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  /** null = follow app language for AI / deal-quality */
+  const [profilePreferredLocale, setProfilePreferredLocale] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!businessProfile) {
+      setProfileCategory("");
+      setProfileTone("");
+      setProfileLocation("");
+      setProfileLatitude("");
+      setProfileLongitude("");
+      setProfileShortDescription("");
+      setProfilePreferredLocale(null);
+      return;
+    }
+    setProfileCategory(businessProfile.category ?? "");
+    setProfileTone(businessProfile.tone ?? "");
+    setProfileLocation(businessProfile.location ?? "");
+    setProfileLatitude(
+      businessProfile.latitude != null && Number.isFinite(businessProfile.latitude)
+        ? String(businessProfile.latitude)
+        : "",
+    );
+    setProfileLongitude(
+      businessProfile.longitude != null && Number.isFinite(businessProfile.longitude)
+        ? String(businessProfile.longitude)
+        : "",
+    );
+    setProfileShortDescription(businessProfile.short_description ?? "");
+    setProfilePreferredLocale(businessProfile.preferred_locale ?? null);
+  }, [businessProfile]);
 
   useEffect(() => {
     (async () => {
@@ -33,13 +78,13 @@ export default function AccountScreen() {
     if (next) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") {
-        setBanner({ message: "Enable notifications to receive deal alerts.", tone: "info" });
+        setBanner({ message: t("account.alertsEnableHint"), tone: "info" });
         return;
       }
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);
-    setBanner({ message: next ? "Deal alerts enabled." : "Deal alerts disabled.", tone: "success" });
+    setBanner({ message: next ? t("account.alertsOn") : t("account.alertsOff"), tone: "success" });
   }
 
   async function signUp() {
@@ -136,6 +181,65 @@ export default function AccountScreen() {
     }
   }
 
+  function parseOptionalCoord(raw: string, kind: "lat" | "lng"): number | null {
+    const t = raw.trim();
+    if (!t) return null;
+    const n = Number(t);
+    if (!Number.isFinite(n)) {
+      throw new Error(kind === "lat" ? "Latitude must be a number." : "Longitude must be a number.");
+    }
+    if (kind === "lat" && (n < -90 || n > 90)) {
+      throw new Error("Latitude must be between -90 and 90.");
+    }
+    if (kind === "lng" && (n < -180 || n > 180)) {
+      throw new Error("Longitude must be between -180 and 180.");
+    }
+    return n;
+  }
+
+  async function saveBusinessProfile() {
+    if (!businessId) return;
+    setSavingProfile(true);
+    setBanner(null);
+    try {
+      let latitude: number | null;
+      let longitude: number | null;
+      try {
+        latitude = parseOptionalCoord(profileLatitude, "lat");
+        longitude = parseOptionalCoord(profileLongitude, "lng");
+      } catch (e: any) {
+        setBanner({ message: e?.message ?? "Invalid coordinates.", tone: "error" });
+        return;
+      }
+      if ((latitude == null) !== (longitude == null)) {
+        setBanner({
+          message: "Set both latitude and longitude, or clear both.",
+          tone: "error",
+        });
+        return;
+      }
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          category: profileCategory.trim() || null,
+          tone: profileTone.trim() || null,
+          location: profileLocation.trim() || null,
+          latitude,
+          longitude,
+          short_description: profileShortDescription.trim() || null,
+          preferred_locale: profilePreferredLocale,
+        })
+        .eq("id", businessId);
+      if (error) throw error;
+      await refresh();
+      setBanner({ message: "Business profile saved. AI ads will use this when set.", tone: "success" });
+    } catch (e: any) {
+      setBanner({ message: e?.message ?? "Could not save profile.", tone: "error" });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   async function createBusiness() {
     if (!sessionEmail) {
       setBanner({ message: "Please log in to create a business.", tone: "error" });
@@ -164,13 +268,38 @@ export default function AccountScreen() {
     }
   }
 
+  async function chooseAppLocale(locale: AppLocale) {
+    setBanner(null);
+    await setUiLocalePreference(locale, { manual: true });
+    await i18n.changeLanguage(locale);
+    setBanner({ message: t("account.languageSaved"), tone: "success" });
+  }
+
+  function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          backgroundColor: active ? "#111" : "#f0f0f0",
+          marginRight: 8,
+          marginBottom: 8,
+        }}
+      >
+        <Text style={{ color: active ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>{label}</Text>
+      </Pressable>
+    );
+  }
+
   return (
-    <View style={{ paddingTop: 70, paddingHorizontal: 16, flex: 1 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Account</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("account.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
-        <View style={{ marginTop: 16, gap: 12 }}>
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <View>
             <Text>Email</Text>
             <TextInput
@@ -209,10 +338,60 @@ export default function AccountScreen() {
           <PrimaryButton title="Demo Login" onPress={() => signIn("demo@demo.com", "demo12345")} disabled={busy} />
         </View>
       ) : (
-        <View style={{ marginTop: 16, gap: 12 }}>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <PrimaryButton title="Customer mode" onPress={() => router.replace("/(tabs)")} />
-            <SecondaryButton title="Business mode" onPress={() => router.replace("/(tabs)/create")} />
+        <ScrollView
+          style={{ marginTop: Spacing.lg, flex: 1 }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#eee",
+              borderRadius: 12,
+              padding: 12,
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontWeight: "700" }}>{t("language.sectionApp")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("language.sectionAppHelp")}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+              {localeChip(t("language.english"), "en", i18n.language === "en", () => chooseAppLocale("en"))}
+              {localeChip(t("language.spanish"), "es", i18n.language === "es", () => chooseAppLocale("es"))}
+              {localeChip(t("language.korean"), "ko", i18n.language === "ko", () => chooseAppLocale("ko"))}
+            </View>
+          </View>
+
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#eee",
+              borderRadius: 12,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "700" }}>{t("tabMode.title")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("tabMode.subtitle")}</Text>
+            <View style={{ gap: Spacing.sm }}>
+              <PrimaryButton
+                title={t("tabMode.customer")}
+                onPress={async () => {
+                  await setTabMode("customer");
+                  router.replace("/(tabs)");
+                }}
+              />
+              <SecondaryButton
+                title={t("tabMode.business")}
+                onPress={async () => {
+                  await setTabMode("business");
+                  router.replace("/(tabs)/create");
+                }}
+              />
+            </View>
+            <Text style={{ fontSize: 12, opacity: 0.55 }}>
+              {tabMode === "business" ? t("tabMode.currentBusiness") : t("tabMode.currentCustomer")}
+            </Text>
           </View>
           <View>
             <Text style={{ opacity: 0.7 }}>Logged in as</Text>
@@ -238,7 +417,186 @@ export default function AccountScreen() {
           </View>
 
           {businessId ? (
-            <PrimaryButton title="Business Dashboard" onPress={() => router.push("/dashboard")} />
+            <View
+              style={{
+                backgroundColor: "#fafafa",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "#eee",
+                gap: 10,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>{t("language.sectionBusiness")}</Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+                {t("language.sectionBusinessHelp")}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => setProfilePreferredLocale(null)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: profilePreferredLocale == null ? "#111" : "#e8e8e8",
+                    marginRight: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: profilePreferredLocale == null ? "#fff" : "#111",
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {t("language.useAppLanguage")}
+                  </Text>
+                </Pressable>
+                {(["en", "es", "ko"] as const).map((loc) => (
+                  <Pressable
+                    key={loc}
+                    onPress={() => setProfilePreferredLocale(loc)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      backgroundColor: profilePreferredLocale === loc ? "#111" : "#e8e8e8",
+                      marginRight: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: profilePreferredLocale === loc ? "#fff" : "#111",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      {loc === "en"
+                        ? t("language.english")
+                        : loc === "es"
+                          ? t("language.spanish")
+                          : t("language.korean")}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={{ fontWeight: "700", marginTop: 8 }}>Business profile (optional)</Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+                Helps AI write ads that fit your place. Skip any field — deals and AI still work without
+                them.
+              </Text>
+              <View>
+                <Text style={{ fontSize: 13 }}>Category</Text>
+                <TextInput
+                  value={profileCategory}
+                  onChangeText={setProfileCategory}
+                  placeholder="e.g. Coffee shop, bakery"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Tone</Text>
+                <TextInput
+                  value={profileTone}
+                  onChangeText={setProfileTone}
+                  placeholder="e.g. friendly, local, straightforward"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Location</Text>
+                <TextInput
+                  value={profileLocation}
+                  onChangeText={setProfileLocation}
+                  placeholder="Neighborhood or city"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Latitude / longitude (optional, WGS84)</Text>
+                <Text style={{ opacity: 0.65, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+                  Lets customers sort by distance with Near me. Leave blank if unsure — Location text still helps.
+                </Text>
+                <TextInput
+                  value={profileLatitude}
+                  onChangeText={setProfileLatitude}
+                  placeholder="e.g. 30.2672"
+                  keyboardType="numbers-and-punctuation"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 6,
+                  }}
+                />
+                <TextInput
+                  value={profileLongitude}
+                  onChangeText={setProfileLongitude}
+                  placeholder="e.g. -97.7431"
+                  keyboardType="numbers-and-punctuation"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 8,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Short description</Text>
+                <TextInput
+                  value={profileShortDescription}
+                  onChangeText={setProfileShortDescription}
+                  placeholder="One or two sentences about your business"
+                  multiline
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 4,
+                    minHeight: 72,
+                    textAlignVertical: "top",
+                  }}
+                />
+              </View>
+              <PrimaryButton
+                title={savingProfile ? "Saving…" : "Save business profile"}
+                onPress={saveBusinessProfile}
+                disabled={savingProfile}
+              />
+            </View>
+          ) : null}
+
+          {businessId ? (
+            <PrimaryButton title="Business Dashboard" onPress={() => router.push("/(tabs)/dashboard")} />
           ) : (
             <View
               style={{
@@ -286,7 +644,7 @@ export default function AccountScreen() {
           >
             <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>Log out</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       )}
     </View>
   );

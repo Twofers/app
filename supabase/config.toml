@@ -416,3 +416,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/ai-generate-deal-copy/deno.json"
 entrypoint = "./functions/ai-generate-deal-copy/index.ts"
+
+[functions.ai-generate-ad-variants]
+enabled = true
+verify_jwt = true
+import_map = "./functions/ai-generate-ad-variants/deno.json"
+entrypoint = "./functions/ai-generate-ad-variants/index.ts"
