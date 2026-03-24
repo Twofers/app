@@ -31,6 +31,8 @@ export default function AccountScreen() {
   const [profileCategory, setProfileCategory] = useState("");
   const [profileTone, setProfileTone] = useState("");
   const [profileLocation, setProfileLocation] = useState("");
+  const [profileLatitude, setProfileLatitude] = useState("");
+  const [profileLongitude, setProfileLongitude] = useState("");
   const [profileShortDescription, setProfileShortDescription] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   /** null = follow app language for AI / deal-quality */
@@ -41,6 +43,8 @@ export default function AccountScreen() {
       setProfileCategory("");
       setProfileTone("");
       setProfileLocation("");
+      setProfileLatitude("");
+      setProfileLongitude("");
       setProfileShortDescription("");
       setProfilePreferredLocale(null);
       return;
@@ -48,6 +52,16 @@ export default function AccountScreen() {
     setProfileCategory(businessProfile.category ?? "");
     setProfileTone(businessProfile.tone ?? "");
     setProfileLocation(businessProfile.location ?? "");
+    setProfileLatitude(
+      businessProfile.latitude != null && Number.isFinite(businessProfile.latitude)
+        ? String(businessProfile.latitude)
+        : "",
+    );
+    setProfileLongitude(
+      businessProfile.longitude != null && Number.isFinite(businessProfile.longitude)
+        ? String(businessProfile.longitude)
+        : "",
+    );
     setProfileShortDescription(businessProfile.short_description ?? "");
     setProfilePreferredLocale(businessProfile.preferred_locale ?? null);
   }, [businessProfile]);
@@ -167,17 +181,51 @@ export default function AccountScreen() {
     }
   }
 
+  function parseOptionalCoord(raw: string, kind: "lat" | "lng"): number | null {
+    const t = raw.trim();
+    if (!t) return null;
+    const n = Number(t);
+    if (!Number.isFinite(n)) {
+      throw new Error(kind === "lat" ? "Latitude must be a number." : "Longitude must be a number.");
+    }
+    if (kind === "lat" && (n < -90 || n > 90)) {
+      throw new Error("Latitude must be between -90 and 90.");
+    }
+    if (kind === "lng" && (n < -180 || n > 180)) {
+      throw new Error("Longitude must be between -180 and 180.");
+    }
+    return n;
+  }
+
   async function saveBusinessProfile() {
     if (!businessId) return;
     setSavingProfile(true);
     setBanner(null);
     try {
+      let latitude: number | null;
+      let longitude: number | null;
+      try {
+        latitude = parseOptionalCoord(profileLatitude, "lat");
+        longitude = parseOptionalCoord(profileLongitude, "lng");
+      } catch (e: any) {
+        setBanner({ message: e?.message ?? "Invalid coordinates.", tone: "error" });
+        return;
+      }
+      if ((latitude == null) !== (longitude == null)) {
+        setBanner({
+          message: "Set both latitude and longitude, or clear both.",
+          tone: "error",
+        });
+        return;
+      }
       const { error } = await supabase
         .from("businesses")
         .update({
           category: profileCategory.trim() || null,
           tone: profileTone.trim() || null,
           location: profileLocation.trim() || null,
+          latitude,
+          longitude,
           short_description: profileShortDescription.trim() || null,
           preferred_locale: profilePreferredLocale,
         })
@@ -482,6 +530,42 @@ export default function AccountScreen() {
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                  }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13 }}>Latitude / longitude (optional, WGS84)</Text>
+                <Text style={{ opacity: 0.65, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+                  Lets customers sort by distance with Near me. Leave blank if unsure — Location text still helps.
+                </Text>
+                <TextInput
+                  value={profileLatitude}
+                  onChangeText={setProfileLatitude}
+                  placeholder="e.g. 30.2672"
+                  keyboardType="numbers-and-punctuation"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 6,
+                  }}
+                />
+                <TextInput
+                  value={profileLongitude}
+                  onChangeText={setProfileLongitude}
+                  placeholder="e.g. -97.7431"
+                  keyboardType="numbers-and-punctuation"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                    marginTop: 8,
                   }}
                 />
               </View>

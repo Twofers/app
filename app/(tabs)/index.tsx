@@ -15,6 +15,7 @@ import { Banner } from "../../components/ui/banner";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { collectGeocodeHints, dealMatchesNearHints, dealMatchesSearch } from "../../lib/deals-discovery-filters";
+import { haversineKm } from "../../lib/geo";
 
 type Deal = {
   id: string;
@@ -30,6 +31,8 @@ type Deal = {
     name: string | null;
     category: string | null;
     location: string | null;
+    latitude: number | string | null;
+    longitude: number | string | null;
   } | null;
   start_time: string;
   is_recurring: boolean;
@@ -38,6 +41,14 @@ type Deal = {
   window_end_minutes: number | null;
   timezone: string | null;
 };
+
+function bizCoords(b: Deal["businesses"]): { lat: number; lng: number } | null {
+  if (!b) return null;
+  const lat = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
+  const lng = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
 
 export default function HomeDeals() {
   const { t } = useTranslation();
@@ -48,6 +59,7 @@ export default function HomeDeals() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [nearMeHints, setNearMeHints] = useState<string[]>([]);
+  const [userGeo, setUserGeo] = useState<{ lat: number; lng: number } | null>(null);
   const [nearMeBusy, setNearMeBusy] = useState(false);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
@@ -79,7 +91,7 @@ export default function HomeDeals() {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category,location),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
@@ -242,13 +254,37 @@ export default function HomeDeals() {
     [categoryFilteredDeals, searchQuery],
   );
 
-  const filteredDeals = useMemo(
-    () => searchFilteredDeals.filter((d) => dealMatchesNearHints(d, nearMeHints)),
-    [searchFilteredDeals, nearMeHints],
-  );
+  const filteredDeals = useMemo(() => {
+    let list = searchFilteredDeals;
+    const nearOn = userGeo !== null || nearMeHints.length > 0;
+    if (!nearOn) return list;
+
+    const anyCoordDeals = list.some((d) => bizCoords(d.businesses) !== null);
+
+    if (userGeo && anyCoordDeals) {
+      list = [...list];
+      list.sort((a, b) => {
+        const ca = bizCoords(a.businesses);
+        const cb = bizCoords(b.businesses);
+        const da = ca ? haversineKm(userGeo.lat, userGeo.lng, ca.lat, ca.lng) : Number.POSITIVE_INFINITY;
+        const db = cb ? haversineKm(userGeo.lat, userGeo.lng, cb.lat, cb.lng) : Number.POSITIVE_INFINITY;
+        return da - db;
+      });
+      return list;
+    }
+
+    if (nearMeHints.length > 0) {
+      return list.filter((d) => dealMatchesNearHints(d, nearMeHints));
+    }
+
+    return list;
+  }, [searchFilteredDeals, userGeo, nearMeHints]);
+
+  const nearMeActive = userGeo !== null || nearMeHints.length > 0;
 
   async function toggleNearMeFilter() {
-    if (nearMeHints.length > 0) {
+    if (nearMeActive) {
+      setUserGeo(null);
       setNearMeHints([]);
       return;
     }
@@ -261,15 +297,12 @@ export default function HomeDeals() {
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setUserGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       const places = await Location.reverseGeocodeAsync({
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
       });
       const hints = collectGeocodeHints(places ?? []);
-      if (hints.length === 0) {
-        setBanner(t("dealsBrowse.nearMeNoHints"));
-        return;
-      }
       setNearMeHints(hints);
     } catch {
       setBanner(t("dealsBrowse.nearMeError"));
@@ -329,24 +362,24 @@ export default function HomeDeals() {
                 paddingVertical: Spacing.sm,
                 paddingHorizontal: Spacing.md,
                 borderRadius: 20,
-                backgroundColor: nearMeHints.length > 0 ? "#111" : "#ececec",
+                backgroundColor: nearMeActive ? "#111" : "#ececec",
                 opacity: nearMeBusy ? 0.65 : 1,
               }}
             >
-              {nearMeBusy ? <ActivityIndicator size="small" color={nearMeHints.length > 0 ? "#fff" : "#111"} /> : null}
+              {nearMeBusy ? <ActivityIndicator size="small" color={nearMeActive ? "#fff" : "#111"} /> : null}
               <Text
                 style={{
                   fontWeight: "600",
                   fontSize: 14,
-                  color: nearMeHints.length > 0 ? "#fff" : "#333",
+                  color: nearMeActive ? "#fff" : "#333",
                 }}
               >
-                {nearMeHints.length > 0 ? t("dealsBrowse.nearMeActive") : t("dealsBrowse.nearMe")}
+                {nearMeActive ? t("dealsBrowse.nearMeActive") : t("dealsBrowse.nearMe")}
               </Text>
             </Pressable>
-            {nearMeHints.length > 0 ? (
+            {nearMeActive ? (
               <Text style={{ fontSize: 12, opacity: 0.55, flex: 1, minWidth: 120 }} numberOfLines={2}>
-                {t("dealsBrowse.nearMeHelp")}
+                {nearMeHints.length > 0 ? t("dealsBrowse.nearMeHelp") : t("dealsBrowse.nearMeCoordsOnly")}
               </Text>
             ) : (
               <Text style={{ fontSize: 12, opacity: 0.55, flex: 1, minWidth: 120 }} numberOfLines={2}>
@@ -426,28 +459,38 @@ export default function HomeDeals() {
           keyExtractor={(d) => d.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
-          renderItem={({ item }) => (
-            <DealCardPoster
-              title={item.title ?? "Deal"}
-              description={item.description}
-              businessName={item.businesses?.name ?? "Local business"}
-              posterUrl={item.poster_url}
-              price={item.price}
-              endTime={item.end_time}
-              remainingClaims={
-                typeof item.max_claims === "number"
-                  ? Math.max(0, item.max_claims - (claimCounts[item.id] ?? 0))
-                  : null
-              }
-              isFavorite={favoriteBusinessIds.includes(item.business_id)}
-              onPress={() => router.push(`/deal/${item.id}`)}
-              onToggleFavorite={() => toggleFavorite(item.business_id)}
-              onClaim={() => doClaim(item.id)}
-              claiming={claimingDealId === item.id}
-              statusMessage={claimStatus[item.id]?.message}
-              statusTone={claimStatus[item.id]?.tone}
-            />
-          )}
+          renderItem={({ item }) => {
+            const coords = bizCoords(item.businesses);
+            const distanceLabel =
+              userGeo && coords
+                ? t("dealsBrowse.distanceAway", {
+                    distance: haversineKm(userGeo.lat, userGeo.lng, coords.lat, coords.lng).toFixed(1),
+                  })
+                : undefined;
+            return (
+              <DealCardPoster
+                title={item.title ?? "Deal"}
+                description={item.description}
+                businessName={item.businesses?.name ?? "Local business"}
+                distanceLabel={distanceLabel}
+                posterUrl={item.poster_url}
+                price={item.price}
+                endTime={item.end_time}
+                remainingClaims={
+                  typeof item.max_claims === "number"
+                    ? Math.max(0, item.max_claims - (claimCounts[item.id] ?? 0))
+                    : null
+                }
+                isFavorite={favoriteBusinessIds.includes(item.business_id)}
+                onPress={() => router.push(`/deal/${item.id}`)}
+                onToggleFavorite={() => toggleFavorite(item.business_id)}
+                onClaim={() => doClaim(item.id)}
+                claiming={claimingDealId === item.id}
+                statusMessage={claimStatus[item.id]?.message}
+                statusTone={claimStatus[item.id]?.tone}
+              />
+            );
+          }}
           ListEmptyComponent={
             deals.length === 0 ? (
               <EmptyState

@@ -1,0 +1,33 @@
+twoforone — store & privacy copy (draft; replace YOUR_PRIVACY_URL before submission)
+
+SHORT DESCRIPTION (≤80 chars typical)
+Local 2-for-1 style deals: browse, claim, show QR at checkout.
+
+FULL DESCRIPTION (outline)
+- Discover active deals from nearby businesses.
+- Save favorites and get optional alerts when they post deals.
+- Claim deals to your in-app wallet; redeem with a QR code at the business.
+- Business accounts: create a profile, optional location text and coordinates for “Near me” distance sorting, post deals with posters and schedules.
+
+LOCATION (why we need it)
+Used only when you tap “Near me”: we read approximate device location to sort deals by distance when businesses have set latitude/longitude, or to match your city/region to the free-text Location field on business profiles. We do not sell location data.
+
+CAMERA
+Used to scan QR codes when redeeming a claimed deal at a business.
+
+NOTIFICATIONS (optional)
+If you enable deal alerts, we send local/push-style notifications about new deals from businesses you favorited. You can turn this off in Account.
+
+DATA & ACCOUNTS
+Sign-in and deal data are handled through the app backend (Supabase). See your privacy policy URL for retention, deletion, and contact.
+
+PRIVACY POLICY URL
+YOUR_PRIVACY_URL
+
+DATA SAFETY / GOOGLE (checklist hints)
+- Location: collected when user opts in via Near me; not required for core browse.
+- Photos/images: deal posters uploaded by businesses; camera only for QR scan if user uses Redeem flow.
+- Financial: if you process payments outside the app, say so; this template assumes in-person redemption only.
+
+CONTACT / SUPPORT
+YOUR_SUPPORT_EMAIL

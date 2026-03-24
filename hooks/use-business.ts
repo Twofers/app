@@ -8,10 +8,22 @@ type BusinessInfo = {
   category: string | null;
   tone: string | null;
   location: string | null;
+  /** WGS84 — optional, for distance sorting on Deals */
+  latitude: number | null;
+  longitude: number | null;
   short_description: string | null;
   /** en | es | ko — AI + deal-quality on create; null = use app language */
   preferred_locale: string | null;
 };
+
+function numOrNull(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 
 /** Strip empties for Edge Function `business_context` (all optional). */
 export function businessRowToAiContext(b: BusinessInfo | null): BusinessContextPayload {
@@ -55,7 +67,7 @@ export function useBusiness() {
 
     const { data } = await supabase
       .from("businesses")
-      .select("id,name,category,tone,location,short_description,preferred_locale")
+      .select("id,name,category,tone,location,latitude,longitude,short_description,preferred_locale")
       .eq("owner_id", session.user.id)
       .maybeSingle();
 
@@ -67,6 +79,8 @@ export function useBusiness() {
             category: data.category ?? null,
             tone: data.tone ?? null,
             location: data.location ?? null,
+            latitude: numOrNull(data.latitude),
+            longitude: numOrNull(data.longitude),
             short_description: data.short_description ?? null,
             preferred_locale: data.preferred_locale ?? null,
           }

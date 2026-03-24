@@ -7,6 +7,8 @@ type DealCardPosterProps = {
   title: string;
   description?: string | null;
   businessName?: string | null;
+  /** Shown under business name when Near me + coordinates (localized in parent). */
+  distanceLabel?: string | null;
   posterUrl?: string | null;
   price?: number | null;
   endTime: string;
@@ -24,6 +26,7 @@ export function DealCardPoster({
   title,
   description,
   businessName,
+  distanceLabel,
   posterUrl,
   price,
   endTime,
@@ -83,18 +86,22 @@ export function DealCardPoster({
         )}
         <View style={{ padding: Spacing.lg }}>
           {businessName ? (
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "600",
-                opacity: 0.55,
-                textTransform: "uppercase",
-                letterSpacing: 0.4,
-                marginBottom: Spacing.xs,
-              }}
-            >
-              {businessName}
-            </Text>
+            <View style={{ marginBottom: Spacing.xs }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  opacity: 0.55,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
+              >
+                {businessName}
+              </Text>
+              {distanceLabel ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{distanceLabel}</Text>
+              ) : null}
+            </View>
           ) : null}
           <Text style={{ fontSize: 20, fontWeight: "700", lineHeight: 26 }}>{title}</Text>
           {price != null ? (
