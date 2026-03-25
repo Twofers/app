@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
+import { formatAppDateTime } from "../lib/i18n/format-datetime";
 
 type QrModalProps = {
   visible: boolean;
@@ -13,6 +15,7 @@ type QrModalProps = {
 };
 
 export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshing }: QrModalProps) {
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const [remaining, setRemaining] = useState<string | null>(null);
   const [tick, setTick] = useState(false);
@@ -27,7 +30,7 @@ export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshi
       const mins = Math.floor(diff / 60);
       const secs = diff % 60;
       setRemaining(`${mins}:${secs.toString().padStart(2, "0")}`);
-      setTick((t) => !t);
+      setTick((prev) => !prev);
     }, 1000);
     return () => clearInterval(interval);
   }, [expiresAt]);
@@ -53,16 +56,22 @@ export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshi
             maxWidth: 400,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>Your QR</Text>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+            {t("consumerWallet.qrModalTitle")}
+          </Text>
           <View style={{ alignItems: "center", marginBottom: 10 }}>
             {token ? <QRCode value={token} size={220} /> : null}
           </View>
           <Text style={{ opacity: 0.75, textAlign: "center" }}>
-            Valid until: {remaining ?? "--"} {tick ? "•" : " "}
+            {t("consumerWallet.qrValidUntil", {
+              time: `${remaining ?? "--"}${tick ? " •" : " "}`,
+            })}
           </Text>
           {expiresAt ? (
             <Text style={{ opacity: 0.6, textAlign: "center", marginTop: 4 }}>
-              Expires: {new Date(expiresAt).toLocaleString()}
+              {t("consumerWallet.qrExpiresAt", {
+                datetime: formatAppDateTime(expiresAt, i18n.language),
+              })}
             </Text>
           ) : null}
 
@@ -76,7 +85,9 @@ export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshi
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>Hide</Text>
+              <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
+                {t("consumerWallet.hideQr")}
+              </Text>
             </Pressable>
             {onRefresh ? (
               <Pressable
@@ -88,7 +99,7 @@ export function QrModal({ visible, token, expiresAt, onHide, onRefresh, refreshi
                 }}
               >
                 <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>
-                  {refreshing ? "Refreshing..." : "Refresh QR"}
+                  {refreshing ? t("consumerWallet.refreshingQrModal") : t("consumerWallet.refreshQr")}
                 </Text>
               </Pressable>
             ) : null}

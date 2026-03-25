@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import { useBusiness } from "../../hooks/use-business";
 import { supabase } from "../../lib/supabase";
+import { isPastClaimRedeemDeadline } from "../../lib/claim-redeem-deadline";
+import { parseMerchantInsights, type MerchantInsightsRow } from "../../lib/merchant-insights";
 import { formatValiditySummary } from "../../lib/deal-time";
 import { Banner } from "../../components/ui/banner";
 import { LoadingSkeleton } from "../../components/ui/loading-skeleton";
+import { MerchantInsightsPanel } from "../../components/merchant-insights-panel";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 
 type DealRow = {
@@ -23,11 +27,12 @@ type DealRow = {
   timezone: string | null;
   claims: number;
   redeems: number;
-  uniqueRedeemers: number;
+  expiredUnredeemed: number;
   conversion: number;
 };
 
 export default function BusinessDashboard() {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { isLoggedIn, businessId, loading } = useBusiness();
@@ -39,9 +44,10 @@ export default function BusinessDashboard() {
   const [summary, setSummary] = useState({
     claims: 0,
     redeems: 0,
-    uniqueRedeemers: 0,
+    expiredUnredeemed: 0,
     conversion: 0,
   });
+  const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
 
   const loadMetrics = useCallback(async () => {
     if (!businessId) return;
@@ -49,6 +55,7 @@ export default function BusinessDashboard() {
     setBanner(null);
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const nowMs = Date.now();
       const { data: dealsData, error: dealsError } = await supabase
         .from("deals")
         .select(
@@ -61,63 +68,83 @@ export default function BusinessDashboard() {
 
       if (dealIds.length === 0) {
         setDeals([]);
-        setSummary({ claims: 0, redeems: 0, uniqueRedeemers: 0, conversion: 0 });
+        setSummary({ claims: 0, redeems: 0, expiredUnredeemed: 0, conversion: 0 });
+        setInsights(null);
         setLoadingMetrics(false);
         return;
       }
 
       const { data: claims, error: claimsError } = await supabase
         .from("deal_claims")
-        .select("deal_id,user_id,created_at,redeemed_at")
+        .select("deal_id,created_at,redeemed_at,expires_at,grace_period_minutes")
         .in("deal_id", dealIds)
         .gte("created_at", thirtyDaysAgo);
       if (claimsError) throw claimsError;
 
-      const perDealMap: Record<string, { claims: number; redeems: number; uniqueRedeemers: Set<string> }> = {};
-      const uniqueRedeemersAll = new Set<string>();
+      const perDealMap: Record<
+        string,
+        { claims: number; redeems: number; expiredUnredeemed: number }
+      > = {};
       let claimCount = 0;
       let redeemCount = 0;
+      let expiredUnredeemedAll = 0;
 
-      (claims ?? []).forEach((c: { deal_id: string; user_id: string; redeemed_at: string | null }) => {
-        claimCount += 1;
-        if (!perDealMap[c.deal_id]) {
-          perDealMap[c.deal_id] = { claims: 0, redeems: 0, uniqueRedeemers: new Set() };
-        }
-        perDealMap[c.deal_id].claims += 1;
-        if (c.redeemed_at) {
-          redeemCount += 1;
-          perDealMap[c.deal_id].redeems += 1;
-          perDealMap[c.deal_id].uniqueRedeemers.add(c.user_id);
-          uniqueRedeemersAll.add(c.user_id);
-        }
-      });
+      (claims ?? []).forEach(
+        (c: { deal_id: string; redeemed_at: string | null; expires_at: string }) => {
+          claimCount += 1;
+          if (!perDealMap[c.deal_id]) {
+            perDealMap[c.deal_id] = { claims: 0, redeems: 0, expiredUnredeemed: 0 };
+          }
+          perDealMap[c.deal_id].claims += 1;
+          if (c.redeemed_at) {
+            redeemCount += 1;
+            perDealMap[c.deal_id].redeems += 1;
+          } else if (new Date(c.expires_at).getTime() < nowMs) {
+            perDealMap[c.deal_id].expiredUnredeemed += 1;
+            expiredUnredeemedAll += 1;
+          }
+        },
+      );
 
-      const hydrated: DealRow[] = (dealsData ?? []).map((deal: Omit<DealRow, "claims" | "redeems" | "uniqueRedeemers" | "conversion">) => {
-        const metrics = perDealMap[deal.id] ?? { claims: 0, redeems: 0, uniqueRedeemers: new Set() };
-        const conversion = metrics.claims > 0 ? Math.round((metrics.redeems / metrics.claims) * 100) : 0;
-        return {
-          ...deal,
-          claims: metrics.claims,
-          redeems: metrics.redeems,
-          uniqueRedeemers: metrics.uniqueRedeemers.size,
-          conversion,
-        };
-      });
+      const hydrated: DealRow[] = (dealsData ?? []).map(
+        (deal: Omit<DealRow, "claims" | "redeems" | "expiredUnredeemed" | "conversion">) => {
+          const metrics = perDealMap[deal.id] ?? { claims: 0, redeems: 0, expiredUnredeemed: 0 };
+          const conversion = metrics.claims > 0 ? Math.round((metrics.redeems / metrics.claims) * 100) : 0;
+          return {
+            ...deal,
+            claims: metrics.claims,
+            redeems: metrics.redeems,
+            expiredUnredeemed: metrics.expiredUnredeemed,
+            conversion,
+          };
+        },
+      );
 
       setDeals(hydrated);
+
+      const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {
+        p_business_id: businessId,
+      });
+      if (!rpcErr) {
+        setInsights(parseMerchantInsights(rpcInsights));
+      } else {
+        setInsights(null);
+      }
+
       setSummary({
         claims: claimCount,
         redeems: redeemCount,
-        uniqueRedeemers: uniqueRedeemersAll.size,
+        expiredUnredeemed: expiredUnredeemedAll,
         conversion: claimCount > 0 ? Math.round((redeemCount / claimCount) * 100) : 0,
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load dashboard.";
+      setInsights(null);
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
       setBanner(msg);
     } finally {
       setLoadingMetrics(false);
     }
-  }, [businessId]);
+  }, [businessId, t]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -144,7 +171,7 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Could not end deal.";
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errEndDeal");
       setBanner(msg);
     } finally {
       setEndingDealId(null);
@@ -156,28 +183,30 @@ export default function BusinessDashboard() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>My offers</Text>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("tabs.dashboard")}</Text>
       <Text style={{ marginTop: Spacing.xs, opacity: 0.65, fontSize: 15, marginBottom: Spacing.md }}>
-        Last 30 days · tap a card for analytics
+        {t("offersDashboard.subtitle")}
       </Text>
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>Please log in to view your dashboard.</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.loginPrompt")}</Text>
       ) : loading ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>Loading...</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.loading")}</Text>
       ) : !businessId ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>Create a business to unlock analytics.</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ marginTop: Spacing.sm, flex: 1 }}>
           {banner ? <Banner message={banner} tone="error" /> : null}
 
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 15 }}>Overview</Text>
+          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 15 }}>
+            {t("offersDashboard.overview")}
+          </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, marginBottom: Spacing.lg }}>
             {[
-              { label: "Claims", value: summary.claims },
-              { label: "Redeems", value: summary.redeems },
-              { label: "Unique redeemers", value: summary.uniqueRedeemers },
-              { label: "Conversion", value: `${summary.conversion}%` },
+              { label: t("businessDashboard.metricClaims"), value: summary.claims },
+              { label: t("businessDashboard.metricRedeems"), value: summary.redeems },
+              { label: t("businessDashboard.metricExpiredUnredeemed"), value: summary.expiredUnredeemed },
+              { label: t("businessDashboard.metricConversion"), value: `${summary.conversion}%` },
             ].map((item) => (
               <View
                 key={item.label}
@@ -195,7 +224,11 @@ export default function BusinessDashboard() {
             ))}
           </View>
 
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 15 }}>Your deals</Text>
+          <MerchantInsightsPanel insights={insights} />
+
+          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 15 }}>
+            {t("offersDashboard.yourDeals")}
+          </Text>
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={2} />
@@ -247,10 +280,14 @@ export default function BusinessDashboard() {
                         )}
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={{ fontWeight: "700", fontSize: 17 }} numberOfLines={2}>
-                            {item.title ?? "Deal"}
+                            {item.title ?? t("offersDashboard.dealFallback")}
                           </Text>
                           <Text style={{ opacity: 0.68, marginTop: Spacing.xs, fontSize: 14 }} numberOfLines={2}>
-                            {formatValiditySummary(item)}
+                            {formatValiditySummary(item, {
+                              lang: i18n.language,
+                              endsVerb: t("commonUi.dealEndsVerb"),
+                              t,
+                            })}
                           </Text>
                           <View
                             style={{
@@ -260,9 +297,18 @@ export default function BusinessDashboard() {
                               marginTop: Spacing.md,
                             }}
                           >
-                            <Text style={{ fontSize: 13, opacity: 0.72 }}>Claims {item.claims}</Text>
-                            <Text style={{ fontSize: 13, opacity: 0.72 }}>· Redeems {item.redeems}</Text>
-                            <Text style={{ fontSize: 13, opacity: 0.72 }}>· Conv. {item.conversion}%</Text>
+                            <Text style={{ fontSize: 13, opacity: 0.72 }}>
+                              {t("offersDashboard.rowClaims", { count: item.claims })}
+                            </Text>
+                            <Text style={{ fontSize: 13, opacity: 0.72 }}>
+                              · {t("offersDashboard.rowRedeems", { count: item.redeems })}
+                            </Text>
+                            <Text style={{ fontSize: 13, opacity: 0.72 }}>
+                              · {t("offersDashboard.rowExpired", { count: item.expiredUnredeemed })}
+                            </Text>
+                            <Text style={{ fontSize: 13, opacity: 0.72 }}>
+                              · {t("offersDashboard.rowConv", { pct: item.conversion })}
+                            </Text>
                           </View>
                         </View>
                       </View>
@@ -293,7 +339,7 @@ export default function BusinessDashboard() {
                             color: active ? "#1b5e20" : "#555",
                           }}
                         >
-                          {active ? "Live" : "Ended"}
+                          {active ? t("commonUi.live") : t("commonUi.ended")}
                         </Text>
                       </View>
                       {active ? (
@@ -316,7 +362,7 @@ export default function BusinessDashboard() {
                             <ActivityIndicator color="#c62828" />
                           ) : (
                             <Text style={{ color: "#c62828", fontWeight: "700", textAlign: "center", fontSize: 15 }}>
-                              End deal early
+                              {t("offersDashboard.endDealEarly")}
                             </Text>
                           )}
                         </Pressable>
@@ -326,7 +372,7 @@ export default function BusinessDashboard() {
                 );
               }}
               ListEmptyComponent={
-                <Text style={{ opacity: 0.7, fontSize: 15 }}>No deals yet. Create one to see analytics.</Text>
+                <Text style={{ opacity: 0.7, fontSize: 15 }}>{t("offersDashboard.emptyDeals")}</Text>
               }
             />
           )}

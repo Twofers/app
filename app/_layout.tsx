@@ -2,30 +2,60 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
 
+import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
+import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
+import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { TabModeProvider } from '@/lib/tab-mode';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-export default function RootLayout() {
+function RootNavigationStack() {
   const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
+  return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <NotificationDeepLinkHandler />
+      <AuthRecoveryLinkHandler />
+      <Stack>
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="consumer-profile-setup" options={{ title: t('consumerProfile.navTitle') }} />
+        <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
+        <Stack.Screen name="reset-password" options={{ title: t('passwordRecovery.resetTitle') }} />
+        <Stack.Screen name="create/ai-compose" options={{ title: t('aiCompose.title') }} />
+        <Stack.Screen name="create/reuse" options={{ title: t('reuseHub.title') }} />
+        <Stack.Screen name="deal/[id]" options={{ title: t('dealDetail.title') }} />
+        <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
+        <Stack.Screen
+          name="modal"
+          options={{ presentation: 'modal', title: t('commonUi.modalTitle') }}
+        />
+        <Stack.Screen name="debug-diagnostics" options={{ title: 'Diagnostics' }} />
+      </Stack>
+      <StatusBar style="auto" />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
   return (
     <AppI18nGate>
       <SafeAreaProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <NotificationDeepLinkHandler />
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
+        <TabModeProvider>
+          <DiagnosticBootLog />
+          <RootNavigationStack />
+          <ConsumerOnboardingGate />
+        </TabModeProvider>
       </SafeAreaProvider>
     </AppI18nGate>
   );

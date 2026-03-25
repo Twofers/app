@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,8 @@ type AiResult = {
   promo_line: string;
   hashtags?: string[];
 };
+
+const CHAT_MODEL = resolveOpenAiChatModel();
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -31,7 +34,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const openAiKey = Deno.env.get("OPENAI_API_KEY")!;
+    const openAiKey = Deno.env.get("OPENAI_API_KEY");
 
     const supabase = createClient(
       supabaseUrl,
@@ -123,6 +126,18 @@ serve(async (req) => {
       );
     }
 
+    if (!openAiKey?.trim()) {
+      return new Response(
+        JSON.stringify({
+          error: "OPENAI_API_KEY is not set. Add it to Supabase Edge Function secrets.",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const prompt = [
       "You are generating a mobile-optimized restaurant deal ad.",
       "Return concise, punchy copy.",
@@ -132,7 +147,7 @@ serve(async (req) => {
     ].join(" ");
 
     const aiBody = {
-      model: "gpt-4o-mini",
+      model: CHAT_MODEL,
       response_format: {
         type: "json_schema",
         json_schema: {

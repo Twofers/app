@@ -1,0 +1,406 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Audio } from "expo-av";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { useBusiness } from "@/hooks/use-business";
+import { Banner } from "@/components/ui/banner";
+import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import {
+  aiComposeOfferGenerate,
+  aiComposeOfferTranscribe,
+  fetchAiComposeQuota,
+  pickVariantCopyForLocale,
+  type AiAdVariant,
+  type AiComposeResultPayload,
+  type AiComposeQuota,
+} from "@/lib/ai-compose-offer";
+
+type UiPhase =
+  | "idle"
+  | "transcribing"
+  | "generating"
+  | "results"
+  | "quota"
+  | "cooldown"
+  | "error";
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+async function fileUriToBase64(uri: string): Promise<string> {
+  const res = await fetch(uri);
+  const buf = await res.arrayBuffer();
+  return arrayBufferToBase64(buf);
+}
+
+function errCode(e: unknown): string | undefined {
+  return e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : undefined;
+}
+
+function errQuota(e: unknown): AiComposeQuota | undefined {
+  return e && typeof e === "object" && "quota" in e ? (e as { quota?: AiComposeQuota }).quota : undefined;
+}
+
+export default function AiComposeOfferScreen() {
+  const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const { isLoggedIn, businessId, loading } = useBusiness();
+
+  const [prompt, setPrompt] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+
+  const [quota, setQuota] = useState<AiComposeQuota | null>(null);
+  const [phase, setPhase] = useState<UiPhase>("idle");
+  const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+  const [result, setResult] = useState<AiComposeResultPayload | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+
+  const reloadQuota = useCallback(async () => {
+    if (!businessId) return;
+    const q = await fetchAiComposeQuota(businessId);
+    setQuota(q);
+  }, [businessId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reloadQuota();
+    }, [reloadQuota]),
+  );
+
+  useEffect(() => {
+    return () => {
+      void recording?.stopAndUnloadAsync();
+    };
+  }, [recording]);
+
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setBanner({ message: t("aiCompose.errPhotoPermission"), tone: "error" });
+      return;
+    }
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.65,
+      base64: true,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    const a = picked.assets[0];
+    setImageUri(a.uri);
+    if (a.base64) {
+      const mime = a.mimeType ?? "image/jpeg";
+      setImageBase64(`data:${mime};base64,${a.base64}`);
+    } else {
+      setImageBase64(null);
+      setBanner({ message: t("aiCompose.errImageRead"), tone: "error" });
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        setBanner({ message: t("aiCompose.errMicPermission"), tone: "error" });
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+      await rec.startAsync();
+      setRecording(rec);
+      setIsRecording(true);
+      setBanner(null);
+    } catch {
+      setBanner({ message: t("aiCompose.errRecordingStart"), tone: "error" });
+    }
+  }
+
+  async function stopRecordingAndTranscribe() {
+    if (!businessId || !recording) return;
+    setIsRecording(false);
+    setPhase("transcribing");
+    setBanner(null);
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (!uri) throw new Error("no_uri");
+      const b64 = await fileUriToBase64(uri);
+      const { transcript } = await aiComposeOfferTranscribe({ business_id: businessId, audio_base64: b64 });
+      if (transcript) {
+        setPrompt((p) => (p.trim() ? `${p.trim()}\n${transcript}` : transcript));
+        setBanner({ message: t("aiCompose.transcribeDone"), tone: "success" });
+      } else {
+        setBanner({ message: t("aiCompose.transcribeEmpty"), tone: "info" });
+      }
+      setPhase("idle");
+    } catch (e: unknown) {
+      const code = errCode(e);
+      if (code === "COOLDOWN_ACTIVE") {
+        setPhase("cooldown");
+        setBanner({ message: t("aiCompose.cooldownTranscribe"), tone: "info" });
+      } else {
+        setBanner({
+          message: e instanceof Error ? e.message : t("aiCompose.transcribeFailed"),
+          tone: "error",
+        });
+        setPhase("idle");
+      }
+    }
+  }
+
+  async function onGenerate() {
+    if (!businessId) return;
+    const hasImg = !!imageBase64;
+    const hasTxt = prompt.trim().length > 0;
+    if (!hasImg && !hasTxt) {
+      setBanner({ message: t("aiCompose.errNeedInput"), tone: "error" });
+      return;
+    }
+    setPhase("generating");
+    setBanner(null);
+    setResult(null);
+    setSelectedVariantId(null);
+    try {
+      const out = await aiComposeOfferGenerate({
+        business_id: businessId,
+        prompt_text: hasTxt ? prompt : undefined,
+        image_base64: hasImg ? imageBase64! : undefined,
+      });
+      setResult(out.result);
+      setQuota(out.quota);
+      setPhase("results");
+      if (out.duplicate_cached) {
+        setBanner({ message: t("aiCompose.duplicateCached"), tone: "info" });
+      }
+    } catch (e: unknown) {
+      const code = errCode(e);
+      const q = errQuota(e);
+      if (q) setQuota(q);
+      if (code === "QUOTA_EXCEEDED") {
+        setPhase("quota");
+        setBanner({ message: t("aiCompose.quotaExceededBody"), tone: "info" });
+      } else if (code === "COOLDOWN_ACTIVE") {
+        setPhase("cooldown");
+        setBanner({ message: t("aiCompose.cooldownGenerate"), tone: "info" });
+      } else if (code === "PROFILE_INCOMPLETE") {
+        setBanner({ message: t("aiCompose.profileIncomplete"), tone: "error" });
+        setPhase("idle");
+      } else {
+        setBanner({
+          message: e instanceof Error ? e.message : t("aiCompose.genericError"),
+          tone: "error",
+        });
+        setPhase("idle");
+      }
+    }
+  }
+
+  function applyVariant(v: AiAdVariant) {
+    const copy = pickVariantCopyForLocale(v, i18n.language);
+    const ro = result?.recommended_offer;
+    const title = [copy.headline, ro?.item_name].filter(Boolean).join(" · ").slice(0, 120);
+    const hint = [ro?.display_offer, copy.sub, copy.cta].filter(Boolean).join(" — ").slice(0, 500);
+    router.push({
+      pathname: "/create/quick",
+      params: { prefillTitle: title, prefillHint: hint, fromAiCompose: "1" },
+    } as Href);
+  }
+
+  function renderVariantCard(v: AiAdVariant, recommended: boolean) {
+    const copy = pickVariantCopyForLocale(v, i18n.language);
+    const selected = selectedVariantId === v.variant_id;
+    return (
+      <Pressable
+        key={v.variant_id}
+        onPress={() => setSelectedVariantId(v.variant_id)}
+        style={{
+          borderRadius: 16,
+          padding: Spacing.md,
+          marginBottom: Spacing.md,
+          borderWidth: 2,
+          borderColor: selected ? "#111" : "#e5e5e5",
+          backgroundColor: "#fafafa",
+        }}
+      >
+        {recommended ? (
+          <Text style={{ fontSize: 11, fontWeight: "800", opacity: 0.5, marginBottom: 6 }}>
+            {t("aiCompose.recommendedTag")}
+          </Text>
+        ) : null}
+        <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.45, marginBottom: 4 }}>{v.style_label}</Text>
+        <Text style={{ fontSize: 18, fontWeight: "800" }}>{copy.headline}</Text>
+        <Text style={{ marginTop: 6, opacity: 0.78, fontSize: 15, lineHeight: 22 }}>{copy.sub}</Text>
+        <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 14 }}>{copy.cta}</Text>
+        <PrimaryButton
+          title={t("aiCompose.useThisOption")}
+          onPress={() => applyVariant(v)}
+          style={{ marginTop: Spacing.md }}
+        />
+      </Pressable>
+    );
+  }
+
+  const busy = phase === "generating" || phase === "transcribing";
+
+  return (
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("aiCompose.title")}</Text>
+      <Text style={{ marginTop: 6, opacity: 0.65, fontSize: 15, lineHeight: 22 }}>{t("aiCompose.subtitle")}</Text>
+
+      {quota ? (
+        <Text style={{ marginTop: Spacing.sm, fontSize: 13, opacity: 0.55 }}>
+          {t("aiCompose.usageLeft", { remaining: quota.remaining, limit: quota.limit })}
+        </Text>
+      ) : null}
+
+      {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+
+      {!isLoggedIn || loading ? (
+        <Text style={{ marginTop: Spacing.lg }}>{t("aiCompose.loginOrLoad")}</Text>
+      ) : !businessId ? (
+        <Text style={{ marginTop: Spacing.lg }}>{t("aiCompose.needBusiness")}</Text>
+      ) : (
+        <ScrollView
+          style={{ flex: 1, marginTop: Spacing.md }}
+          contentContainerStyle={{ paddingBottom: scrollBottom }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md, flexWrap: "wrap" }}>
+            <SecondaryButton title={t("aiCompose.reuseSavedAds")} onPress={() => router.push("/create/reuse" as Href)} />
+          </View>
+
+          {phase === "quota" ? (
+            <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>
+              <Text style={{ fontSize: 16, fontWeight: "700" }}>{t("aiCompose.quotaExceededTitle")}</Text>
+              <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("aiCompose.quotaExceededBody")}</Text>
+              <PrimaryButton title={t("aiCompose.ctaReuseAds")} onPress={() => router.push("/create/reuse" as Href)} />
+              <SecondaryButton title={t("aiCompose.ctaQuickDeal")} onPress={() => router.push("/create/quick" as Href)} />
+            </View>
+          ) : null}
+
+          {result && phase === "results" ? (
+            <View style={{ marginBottom: Spacing.lg }}>
+              {result.low_confidence ? (
+                <Banner message={t("aiCompose.lowConfidence", { reason: result.recommendation_reason ?? "" })} tone="info" />
+              ) : null}
+              <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("aiCompose.offerSummary")}</Text>
+              <Text style={{ opacity: 0.8, marginBottom: Spacing.md, lineHeight: 22 }}>
+                {result.recommended_offer?.display_offer}
+              </Text>
+              <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("aiCompose.pickVariant")}</Text>
+              {result.ad_variants.map((v, i) => renderVariantCard(v, i === 0))}
+              <SecondaryButton
+                title={t("aiCompose.regenerateHint")}
+                onPress={() => {
+                  setPhase("idle");
+                  setResult(null);
+                }}
+              />
+            </View>
+          ) : null}
+
+          {(!result || phase !== "results") && phase !== "quota" ? (
+            <>
+              <Text style={{ fontWeight: "600", marginBottom: 6 }}>{t("aiCompose.photoLabel")}</Text>
+              <Pressable
+                onPress={pickImage}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#ddd",
+                  borderRadius: 14,
+                  minHeight: 120,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: Spacing.md,
+                  overflow: "hidden",
+                }}
+              >
+                {imageUri ? (
+                  <Image source={{ uri: imageUri }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+                ) : (
+                  <View style={{ padding: Spacing.lg, alignItems: "center" }}>
+                    <MaterialIcons name="add-a-photo" size={32} color="#666" />
+                    <Text style={{ marginTop: 8, opacity: 0.65 }}>{t("aiCompose.tapAddPhoto")}</Text>
+                  </View>
+                )}
+              </Pressable>
+
+              <Text style={{ fontWeight: "600", marginBottom: 6 }}>{t("aiCompose.promptLabel")}</Text>
+              <View style={{ position: "relative" }}>
+                <TextInput
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  placeholder={t("aiCompose.promptPlaceholder")}
+                  multiline
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 12,
+                    padding: 12,
+                    paddingRight: 52,
+                    minHeight: 100,
+                    textAlignVertical: "top",
+                    fontSize: 16,
+                  }}
+                />
+                <Pressable
+                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    bottom: 10,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: isRecording ? "#e0245e" : "#111",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {phase === "transcribing" ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={22} color="#fff" />
+                  )}
+                </Pressable>
+              </View>
+              <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>{t("aiCompose.micHint")}</Text>
+
+              <PrimaryButton
+                title={busy ? t("aiCompose.generating") : t("aiCompose.generateCta")}
+                onPress={() => void onGenerate()}
+                disabled={busy}
+                style={{ marginTop: Spacing.lg }}
+              />
+            </>
+          ) : null}
+        </ScrollView>
+      )}
+    </View>
+  );
+}

@@ -25,6 +25,7 @@ const MAPPING = {
   'gearshape.fill': 'settings',
   'person.crop.circle.fill': 'person',
   'wallet.pass.fill': 'account-balance-wallet',
+  'map.fill': 'map',
 } as IconMapping;
 
 /**

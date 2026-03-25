@@ -4,77 +4,84 @@ import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { Banner } from "../../components/ui/banner";
 import { redeemToken } from "../../lib/functions";
+import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
+import { formatAppDateTime } from "../../lib/i18n/format-datetime";
+
+type RedeemMode = "scan" | "manual";
+
+function normalizeClaimCode(raw: string): string {
+  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
 
 export default function RedeemScanner() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { height: winH } = useWindowDimensions();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
-  const { isLoggedIn, businessId, userId, loading, refresh } = useBusiness();
-  const [businessName, setBusinessName] = useState("");
-  const [isCreatingBusiness, setIsCreatingBusiness] = useState(false);
+  const { isLoggedIn, businessId, loading } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [mode, setMode] = useState<RedeemMode>("scan");
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string } | null>(null);
+  const [claimCodeInput, setClaimCodeInput] = useState("");
 
-  async function createBusiness() {
-    if (!userId) {
-      setBanner({ message: t("redeem.errLogin"), tone: "error" });
-      return;
-    }
+  useEffect(() => {
+    if (!permission) return;
+    if (permission.granted) return;
+  }, [permission]);
 
-    const name = businessName.trim();
-    if (!name) {
-      setBanner({ message: t("redeem.errName"), tone: "error" });
-      return;
-    }
-
-    setIsCreatingBusiness(true);
+  useEffect(() => {
     setBanner(null);
-    try {
-      const { error } = await supabase.from("businesses").insert({ owner_id: userId, name });
-      if (error) throw error;
-      setBusinessName("");
-      await refresh();
-      router.replace("/(tabs)/redeem");
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("redeem.errCreateFailed"), tone: "error" });
-    } finally {
-      setIsCreatingBusiness(false);
-    }
-  }
+    setScanned(false);
+  }, [mode]);
 
-  async function onScan(token: string) {
-    if (processing || scanned) return;
+  async function runRedeem(body: { token?: string; short_code?: string }) {
+    if (processing) return;
     setProcessing(true);
-    setScanned(true);
     setBanner(null);
     try {
-      const result = await redeemToken(token);
+      const result = await redeemToken(body);
       setSuccess({
         dealTitle: result.deal_title ?? t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
       });
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("redeem.errRedeemFailed"), tone: "error" });
+      setClaimCodeInput("");
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : t("redeem.errRedeemFailed");
+      setBanner({ message: translateKnownApiMessage(String(raw), t), tone: "error" });
       setScanned(false);
     } finally {
       setProcessing(false);
     }
   }
 
-  useEffect(() => {
-    if (!permission) return;
-    if (permission.granted) return;
-  }, [permission]);
+  async function onScan(data: string) {
+    if (processing || scanned) return;
+    setScanned(true);
+    const token = data.trim();
+    if (!token) {
+      setScanned(false);
+      setBanner({ message: translateKnownApiMessage("Missing or invalid token", t), tone: "error" });
+      return;
+    }
+    await runRedeem({ token });
+  }
+
+  async function onManualRedeem() {
+    const code = normalizeClaimCode(claimCodeInput);
+    if (code.length < 4) {
+      setBanner({ message: t("redeem.errCodeRequired"), tone: "error" });
+      return;
+    }
+    await runRedeem({ short_code: code });
+  }
 
   const cameraBlockHeight = Math.round(Math.min(420, Math.max(260, winH * 0.42)));
 
@@ -91,32 +98,7 @@ export default function RedeemScanner() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("redeem.createHeader")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("redeem.createBody")}</Text>
-          <TextInput
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder={t("redeem.placeholderBusiness")}
-            autoCapitalize="words"
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-            }}
-          />
-          <PrimaryButton
-            title={isCreatingBusiness ? t("redeem.creating") : t("redeem.createBusiness")}
-            onPress={createBusiness}
-            disabled={isCreatingBusiness}
-          />
-        </View>
-      ) : !permission ? (
-        <View style={{ marginTop: Spacing.lg }}>
-          <Text style={{ opacity: 0.7 }}>{t("redeem.requestingCamera")}</Text>
-        </View>
-      ) : !permission.granted ? (
-        <View style={{ marginTop: Spacing.lg }}>
-          <Text style={{ opacity: 0.7, marginBottom: Spacing.md }}>{t("redeem.cameraRequired")}</Text>
-          <PrimaryButton title={t("redeem.grantPermission")} onPress={requestPermission} />
+          <PrimaryButton title={t("redeem.startBusinessSetup")} onPress={() => router.push("/business-setup")} />
         </View>
       ) : success ? (
         <View style={{ marginTop: Spacing.lg, paddingBottom: scrollBottom }}>
@@ -130,12 +112,13 @@ export default function RedeemScanner() {
             <Text style={{ fontWeight: "700", fontSize: 17 }}>{t("redeem.redeemed")}</Text>
             <Text style={{ marginTop: Spacing.sm, fontSize: 16 }}>{success.dealTitle}</Text>
             <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 14 }}>
-              {t("redeem.redeemedAt")} {new Date(success.redeemedAt).toLocaleString()}
+              {t("redeem.redeemedAt")}{" "}
+              {formatAppDateTime(success.redeemedAt, i18n.language)}
             </Text>
           </View>
           <View style={{ marginTop: Spacing.md }}>
             <SecondaryButton
-              title="Scan next"
+              title={t("redeem.scanNext")}
               onPress={() => {
                 setSuccess(null);
                 setScanned(false);
@@ -144,47 +127,113 @@ export default function RedeemScanner() {
           </View>
         </View>
       ) : (
-        <View style={{ marginTop: Spacing.lg, flex: 1, paddingBottom: scrollBottom }}>
-          <View
-            style={{
-              borderRadius: 18,
-              overflow: "hidden",
-              backgroundColor: "#000",
-              height: cameraBlockHeight,
-            }}
-          >
-            <CameraView
-              style={{ height: "100%", width: "100%" }}
-              facing="back"
-              onBarcodeScanned={scanned ? undefined : (result) => onScan(result.data)}
-              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-            />
-            {processing ? (
+        <View style={{ marginTop: Spacing.lg, flex: 1, paddingBottom: scrollBottom, gap: Spacing.md }}>
+          <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+            <Pressable
+              onPress={() => setMode("scan")}
+              style={{
+                flex: 1,
+                paddingVertical: Spacing.sm,
+                borderRadius: 12,
+                backgroundColor: mode === "scan" ? "#111" : "#eee",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: mode === "scan" ? "#fff" : "#333" }}>{t("redeem.modeScan")}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode("manual")}
+              style={{
+                flex: 1,
+                paddingVertical: Spacing.sm,
+                borderRadius: 12,
+                backgroundColor: mode === "manual" ? "#111" : "#eee",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: mode === "manual" ? "#fff" : "#333" }}>{t("redeem.modeManual")}</Text>
+            </Pressable>
+          </View>
+
+          {mode === "manual" ? (
+            <View style={{ gap: Spacing.md }}>
+              <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20 }}>{t("redeem.manualHelp")}</Text>
+              <TextInput
+                value={claimCodeInput}
+                onChangeText={setClaimCodeInput}
+                placeholder={t("redeem.manualPlaceholder")}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!processing}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#ccc",
+                  borderRadius: 10,
+                  padding: 12,
+                  fontSize: 18,
+                  fontWeight: "700",
+                  letterSpacing: 2,
+                }}
+              />
+              <PrimaryButton
+                title={processing ? t("redeem.redeeming") : t("redeem.redeemButton")}
+                onPress={() => void onManualRedeem()}
+                disabled={processing}
+              />
+            </View>
+          ) : !permission ? (
+            <View>
+              <Text style={{ opacity: 0.7 }}>{t("redeem.requestingCamera")}</Text>
+            </View>
+          ) : !permission.granted ? (
+            <View>
+              <Text style={{ opacity: 0.7, marginBottom: Spacing.md }}>{t("redeem.cameraRequired")}</Text>
+              <PrimaryButton title={t("redeem.grantPermission")} onPress={requestPermission} />
+            </View>
+          ) : (
+            <>
               <View
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "rgba(0,0,0,0.5)",
+                  borderRadius: 18,
+                  overflow: "hidden",
+                  backgroundColor: "#000",
+                  height: cameraBlockHeight,
                 }}
               >
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={{ color: "#fff", marginTop: 8 }}>{t("redeem.redeeming")}</Text>
+                <CameraView
+                  style={{ height: "100%", width: "100%" }}
+                  facing="back"
+                  onBarcodeScanned={scanned || processing ? undefined : (result) => void onScan(result.data)}
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                />
+                {processing ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "rgba(0,0,0,0.5)",
+                    }}
+                  >
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={{ color: "#fff", marginTop: 8 }}>{t("redeem.redeeming")}</Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          <Pressable
-            onPress={() => setScanned(false)}
-            style={{
-              marginTop: Spacing.md,
-              paddingVertical: Spacing.md,
-              borderRadius: 12,
-              backgroundColor: "#eee",
-            }}
-          >
-            <Text style={{ textAlign: "center", fontWeight: "700" }}>{t("redeem.scanNext")}</Text>
-          </Pressable>
+              <Pressable
+                onPress={() => setScanned(false)}
+                style={{
+                  marginTop: Spacing.sm,
+                  paddingVertical: Spacing.md,
+                  borderRadius: 12,
+                  backgroundColor: "#eee",
+                }}
+              >
+                <Text style={{ textAlign: "center", fontWeight: "700" }}>{t("redeem.scanNext")}</Text>
+              </Pressable>
+            </>
+          )}
         </View>
       )}
     </View>

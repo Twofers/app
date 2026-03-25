@@ -1,17 +1,22 @@
 {
   "expo": {
-    "name": "twoforone",
+    "name": "TWOFER",
     "slug": "twoforone",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "twoforone",
+    "scheme": [
+      "twoforone",
+      "twofer"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.twofer.app",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "twoforone uses your location to sort nearby deals and match your area to business profile locations."
+        "NSLocationWhenInUseUsageDescription": "twoforone uses your location to sort nearby deals and match your area to business profile locations.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

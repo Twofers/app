@@ -3,6 +3,8 @@
   "needBusiness": "Crea un negocio para usar ideas de anuncio con IA.",
   "titleMain": "Anuncios con IA para tu oferta",
   "intro": "Sube una foto del producto o plato, describe la oferta con tus palabras y obtén tres enfoques distintos. Elige uno, ajusta el texto y publica cuando quieras.",
+  "demoModeTitle": "Cuenta demo",
+  "demoModeBody": "Salvo que tu proyecto en Supabase tenga OPENAI_API_KEY y AI_ADS_DEMO_USE_LIVE=true, esta cuenta recibe plantillas integradas, no GPT. El resto de cuentas necesitan OPENAI_API_KEY en los secretos de Edge Functions para IA real.",
   "qaToggle": "QA manual (validación)",
   "qaHelp": "Etiqueta ejecuciones para los 12 casos de prueba (ver docs/ai-ad-validation). Aparece en logs de Supabase y analíticas de desarrollo. Opcional — déjalo vacío en uso normal.",
   "capturePhoto": "Capturar foto",

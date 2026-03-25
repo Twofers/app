@@ -1,3 +1,8 @@
+import type { TFunction } from "i18next";
+import { addDays, format, isValid } from "date-fns";
+import type { Locale } from "date-fns";
+import { dateFnsLocaleFor } from "./i18n/date-locale";
+
 type RecurringInfo = {
   is_recurring?: boolean | null;
   days_of_week?: number[] | null;
@@ -18,15 +23,12 @@ const dayMap: Record<string, number> = {
   Sun: 7,
 };
 
-const dayLabels: Record<number, string> = {
-  1: "Mon",
-  2: "Tue",
-  3: "Wed",
-  4: "Thu",
-  5: "Fri",
-  6: "Sat",
-  7: "Sun",
-};
+/** Jan 1, 2024 is Monday — aligns with `days_of_week` 1=Mon … 7=Sun. */
+const BASE_MONDAY = new Date(2024, 0, 1);
+
+function dayNumberToDate(dayNum: number): Date {
+  return addDays(BASE_MONDAY, dayNum - 1);
+}
 
 function getLocalParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -42,20 +44,20 @@ function getLocalParts(date: Date, timeZone: string) {
   return { day: dayMap[weekday] ?? 1, minutes: hour * 60 + minute };
 }
 
-function formatMinutes(minutes: number) {
+function formatMinutesLocalized(minutes: number, locale: Locale) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  const ampm = h < 12 ? "AM" : "PM";
-  return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
+  return format(new Date(2000, 0, 1, h, m, 0, 0), "p", { locale });
 }
 
-function formatDays(days: number[]) {
+function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
   const sorted = [...days].sort((a, b) => a - b);
-  if (sorted.length === 7) return "Every day";
-  if (sorted.join(",") === "1,2,3,4,5") return "Mon–Fri";
-  if (sorted.join(",") === "6,7") return "Sat–Sun";
-  return sorted.map((d) => dayLabels[d] ?? "Mon").join(", ");
+  if (sorted.length === 7) return t?.("dealValidity.everyDay") ?? "Every day";
+  if (sorted.join(",") === "1,2,3,4,5") return t?.("dealValidity.weekdaysMonFri") ?? "Mon–Fri";
+  if (sorted.join(",") === "6,7") return t?.("dealValidity.weekend") ?? "Sat–Sun";
+  return sorted
+    .map((d) => format(dayNumberToDate(d), "EEE", { locale }))
+    .join(", ");
 }
 
 export function isDealActiveNow(deal: RecurringInfo) {
@@ -80,23 +82,37 @@ export function isDealActiveNow(deal: RecurringInfo) {
   return minutes >= windowStart && minutes < windowEnd;
 }
 
-export function formatValiditySummary(deal: RecurringInfo) {
-  if (!deal) return "Validity unavailable";
+export type FormatValiditySummaryOptions = {
+  lang?: string;
+  /** Prefix before end date when only `end_time` is set (e.g. t('commonUi.dealEndsVerb')). */
+  endsVerb?: string;
+  /** When set, preset day patterns (every day, weekdays, weekend) use translated copy. */
+  t?: TFunction;
+};
+
+export function formatValiditySummary(deal: RecurringInfo, options?: FormatValiditySummaryOptions) {
+  const lang = options?.lang;
+  const endsVerb = options?.endsVerb ?? "Ends";
+  const t = options?.t;
+  const loc = dateFnsLocaleFor(lang);
+  const fmt = (d: Date) => (isValid(d) ? format(d, "PPp", { locale: loc }) : "");
+
+  if (!deal) return t?.("dealValidity.unavailable") ?? "Validity unavailable";
   if (deal.is_recurring) {
     const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
     const windowStart = deal.window_start_minutes;
     const windowEnd = deal.window_end_minutes;
     const tz = deal.timezone || "America/Chicago";
     if (!days.length || windowStart == null || windowEnd == null) {
-      return "Recurring window";
+      return t?.("dealValidity.recurringWindow") ?? "Recurring window";
     }
-    return `${formatDays(days)} · ${formatMinutes(windowStart)}–${formatMinutes(windowEnd)} (${tz})`;
+    return `${formatDaysLocalized(days, loc, t)} · ${formatMinutesLocalized(windowStart, loc)}–${formatMinutesLocalized(windowEnd, loc)} (${tz})`;
   }
   const start = deal.start_time ? new Date(deal.start_time) : null;
   const end = deal.end_time ? new Date(deal.end_time) : null;
   if (start && end) {
-    return `${start.toLocaleString()} → ${end.toLocaleString()}`;
+    return `${fmt(start)} → ${fmt(end)}`;
   }
-  if (end) return `Ends ${end.toLocaleString()}`;
-  return "One-time deal";
+  if (end) return `${endsVerb} ${fmt(end)}`.trim();
+  return t?.("dealValidity.oneTime") ?? "One-time deal";
 }

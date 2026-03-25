@@ -19,10 +19,11 @@ export type GeneratedAd = {
 
 export const CREATIVE_LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
 
-export const CREATIVE_LANE_LABEL: Record<CreativeLane, string> = {
-  value: "Value",
-  neighborhood: "Neighborhood",
-  premium: "Premium / quality",
+/** Pass to `t()` at UI call sites (keeps copy in locale JSON). */
+export const CREATIVE_LANE_I18N_KEY: Record<CreativeLane, string> = {
+  value: "createAi.laneValue",
+  neighborhood: "createAi.laneNeighborhood",
+  premium: "createAi.lanePremium",
 };
 
 export type BusinessContextPayload = {
@@ -30,7 +31,10 @@ export type BusinessContextPayload = {
   category?: string;
   tone?: string;
   location?: string;
+  address?: string;
   description?: string;
+  contactName?: string;
+  businessEmail?: string;
 };
 
 export type GenerateAdVariantsResponse = {

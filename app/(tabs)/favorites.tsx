@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { supabase } from "../../lib/supabase";
 import { claimDeal } from "../../lib/functions";
-import { checkForNewFavoriteDeals } from "../../lib/notifications";
+import { syncConsumerDealNotifications } from "../../lib/notifications";
 import { isDealActiveNow } from "../../lib/deal-time";
 import { DealCardPoster } from "../../components/deal-card-poster";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -12,6 +13,7 @@ import { LoadingSkeleton } from "../../components/ui/loading-skeleton";
 import { Banner } from "../../components/ui/banner";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
+import { translateFunctionErrorMessage } from "../../lib/i18n/function-errors";
 
 type Deal = {
   id: string;
@@ -35,8 +37,10 @@ type Deal = {
 
 export default function FavoritesScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
-  const { sessionEmail, userId } = useBusiness();
+  const { isLoggedIn, sessionEmail, userId } = useBusiness();
+  const mapFnErr = (raw: string) => translateFunctionErrorMessage(raw, t);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,7 +107,7 @@ export default function FavoritesScreen() {
 
   async function toggleFavorite(businessId: string) {
     if (!userId) {
-      setBanner("Log in to save favorites.");
+      setBanner(t("dealDetail.errLoginFavorite"));
       return;
     }
     const isFav = favoriteBusinessIds.includes(businessId);
@@ -133,8 +137,8 @@ export default function FavoritesScreen() {
   }
 
   async function doClaim(dealId: string) {
-    if (!sessionEmail) {
-      setBanner("Log in to claim deals.");
+    if (!isLoggedIn) {
+      setBanner(t("dealDetail.errLoginClaim"));
       return;
     }
     if (claimingDealId) return;
@@ -152,7 +156,7 @@ export default function FavoritesScreen() {
           : typeof e === "string"
           ? e
           : JSON.stringify(e, null, 2);
-      setBanner(msg);
+      setBanner(mapFnErr(msg));
     } finally {
       setClaimingDealId(null);
     }
@@ -160,7 +164,7 @@ export default function FavoritesScreen() {
 
   async function refreshQr() {
     if (!lastClaimDealId) {
-      setBanner("Claim a deal first to refresh the QR.");
+      setBanner(t("consumerWallet.errNoDealForQr"));
       return;
     }
     if (refreshingQr) return;
@@ -176,7 +180,7 @@ export default function FavoritesScreen() {
           : typeof e === "string"
           ? e
           : JSON.stringify(e, null, 2);
-      setBanner(msg);
+      setBanner(mapFnErr(msg));
     } finally {
       setRefreshingQr(false);
     }
@@ -191,7 +195,7 @@ export default function FavoritesScreen() {
   useEffect(() => {
     if (!userId) return;
     if (favoriteBusinessIds.length === 0) return;
-    checkForNewFavoriteDeals({
+    syncConsumerDealNotifications({
       userId,
       favoriteBusinessIds,
     });
@@ -199,9 +203,9 @@ export default function FavoritesScreen() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>Favorites</Text>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("tabs.favorites")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15 }}>
-        {sessionEmail ? `Logged in: ${sessionEmail}` : "Not logged in"}
+        {sessionEmail ? t("dealsBrowse.loggedInAs", { email: sessionEmail }) : t("dealsBrowse.notLoggedIn")}
       </Text>
       {banner ? <Banner message={banner} tone="error" /> : null}
 
@@ -217,9 +221,9 @@ export default function FavoritesScreen() {
           contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
           renderItem={({ item }) => (
             <DealCardPoster
-              title={item.title ?? "Deal"}
+              title={item.title ?? t("dealDetail.dealFallback")}
               description={item.description}
-              businessName={item.businesses?.name ?? "Local business"}
+              businessName={item.businesses?.name ?? t("dealDetail.localBusiness")}
               posterUrl={item.poster_url}
               price={item.price}
               endTime={item.end_time}
@@ -231,10 +235,7 @@ export default function FavoritesScreen() {
             />
           )}
           ListEmptyComponent={
-            <EmptyState
-              title="No favorites yet"
-              message="Favorite a business to see deals here."
-            />
+            <EmptyState title={t("favorites.emptyTitle")} message={t("favorites.emptyMessage")} />
           }
         />
       )}

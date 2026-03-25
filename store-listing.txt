@@ -1,4 +1,4 @@
-twoforone — store & privacy copy (draft; replace YOUR_PRIVACY_URL before submission)
+twoforone — store & privacy copy (production legal URLs below)
 
 SHORT DESCRIPTION (≤80 chars typical)
 Local 2-for-1 style deals: browse, claim, show QR at checkout.
@@ -22,7 +22,10 @@ DATA & ACCOUNTS
 Sign-in and deal data are handled through the app backend (Supabase). See your privacy policy URL for retention, deletion, and contact.
 
 PRIVACY POLICY URL
-YOUR_PRIVACY_URL
+https://www.twoferapp.com/privacy
+
+TERMS OF SERVICE URL
+https://www.twoferapp.com/terms
 
 DATA SAFETY / GOOGLE (checklist hints)
 - Location: collected when user opts in via Near me; not required for core browse.

@@ -9,9 +9,17 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "true",
+        "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+        "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true"
+      }
     },
-    "production": {}
+    "production": {
+      "environment": "production"
+    }
   },
   "submit": {
     "production": {}

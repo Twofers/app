@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
+import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { LegalExternalLinks } from "../../components/legal-external-links";
 
 export default function AuthScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -13,8 +17,6 @@ export default function AuthScreen() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isBusinessOwner, setIsBusinessOwner] = useState(false);
-  const [businessName, setBusinessName] = useState("");
-  const [isCreatingBusiness, setIsCreatingBusiness] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -80,10 +82,9 @@ export default function AuthScreen() {
       });
 
       if (error) {
-        const isDev = process.env.NODE_ENV !== "production";
         const msg = String(error.message || "");
         const canAutoSignUp =
-          isDev &&
+          isDemoAuthHelperEnabled() &&
           isDemo &&
           (msg.includes("Invalid login credentials") ||
             msg.toLowerCase().includes("user not found"));
@@ -155,6 +156,13 @@ export default function AuthScreen() {
       />
 
       <Pressable
+        onPress={() => router.push("/forgot-password" as Href)}
+        style={{ alignSelf: "flex-start", marginTop: 10, paddingVertical: 4 }}
+      >
+        <Text style={{ fontSize: 15, fontWeight: "600", color: "#2563eb" }}>{t("passwordRecovery.forgotLink")}</Text>
+      </Pressable>
+
+      <Pressable
         disabled={busy}
         onPress={() => void signIn()}
         style={{
@@ -196,60 +204,32 @@ export default function AuthScreen() {
         <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.demoLogin")}</Text>
       </Pressable>
 
+      <View style={{ marginTop: Spacing.lg, gap: Spacing.sm }}>
+        <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, textAlign: "center" }}>{t("legal.authFooterHint")}</Text>
+        <LegalExternalLinks align="center" />
+      </View>
+
       {sessionEmail && !isBusinessOwner ? (
         <View style={{ marginTop: 24 }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("auth.createBusinessHeader")}</Text>
           <Text style={{ marginTop: 6, opacity: 0.8 }}>{t("auth.createBusinessBody")}</Text>
-          <TextInput
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder={t("auth.placeholderBusiness")}
-            autoCapitalize="words"
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 10,
-              marginBottom: 10,
-            }}
-          />
           <Pressable
-            disabled={isCreatingBusiness}
-            onPress={async () => {
+            onPress={() => {
               if (!userId) {
                 Alert.alert(t("auth.alertLoginRequiredTitle"), t("auth.alertLoginRequiredMsg"));
                 return;
               }
-              const name = businessName.trim();
-              if (!name) {
-                Alert.alert(t("auth.alertBizNameTitle"), t("auth.alertBizNameMsg"));
-                return;
-              }
-              setIsCreatingBusiness(true);
-              try {
-                const { error } = await supabase
-                  .from("businesses")
-                  .insert({ owner_id: userId, name });
-                if (error) throw error;
-                setIsBusinessOwner(true);
-                setBusinessName("");
-                Alert.alert(t("auth.alertBizCreatedTitle"), t("auth.alertBizCreatedMsg"));
-              } catch (err: any) {
-                Alert.alert(t("auth.alertBizFailTitle"), err?.message ?? t("auth.alertBizFailMsg"));
-              } finally {
-                setIsCreatingBusiness(false);
-              }
+              router.push("/business-setup" as Href);
             }}
             style={{
               padding: 12,
               borderRadius: 12,
               backgroundColor: "#111",
-              opacity: isCreatingBusiness ? 0.7 : 1,
+              marginTop: 12,
             }}
           >
             <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
-              {isCreatingBusiness ? t("auth.creating") : t("auth.createBusiness")}
+              {t("account.startBusinessSetup")}
             </Text>
           </Pressable>
         </View>

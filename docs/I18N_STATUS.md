@@ -1,50 +1,80 @@
 # Multilingual status (EN / ES / KO)
 
-## Fully wired (this branch)
+Use this file as a **living checklist**. Tick items in your PR or delete rows when obsolete.
 
-| Area | Status |
-|------|--------|
-| **i18n foundation** | `i18next` + `react-i18next`, `lib/i18n/locales/{en,es,ko}.json`, fallback `en` |
-| **First launch + persistence** | Device → `en` \| `es` \| `ko` (else `en`); stored in AsyncStorage; manual override flag |
-| **App UI (partial)** | Tab labels; **Quick Deal** screen; **Account** title + language controls + alerts toasts; business **Offers & AI language** (saved to DB) |
-| **Business preference** | `businesses.preferred_locale` (`NULL` \| `en` \| `es` \| `ko`) — migration `20260130120000_business_preferred_locale.sql` |
-| **AI ad generation** | Client sends `output_language`; Edge Function instructs model to write all ad fields in that language |
-| **Deal-quality banners** | `blockReason` + `translateDealQualityBlock()` using `resolveDealFlowLanguage(businessPreferredLocale, appLanguage)` |
-| **Korean deal heuristics** | Extra patterns in `lib/deal-quality.ts` (e.g. `1+1`, `원플원`, `%할인`, …) |
-| **English regression** | `npm run test:english` — unchanged English **logic** + `message` text; asserts `blockReason` |
+## Foundation
 
-## Still English-only (incremental backlog)
+| Item | Done |
+|------|------|
+| `i18next` + `react-i18next`; `lib/i18n/locales/{en,es,ko}.json`; `fallbackLng: en` | ✓ |
+| Device → `en` \| `es` \| `ko`; AsyncStorage + manual override (`AppI18nGate`, Account) | ✓ |
+| `businesses.preferred_locale` for offers / AI / deal-quality banners | ✓ |
+| Edge: `output_language` on AI ad generation | ✓ |
 
-- Home feed (`index.tsx`), favorites body, create tab hub, AI screen **bulk** copy, deal detail, redeem, analytics, auth strings (except where touched), shared error toasts from Supabase functions, modal title.
-- **Push notifications** — when implemented, resolve copy using stored user locale (see `lib/notifications.ts` / future user metadata).
-- **Favorites** — no schema change; notification payloads should carry or resolve locale at send time.
+## UI surfaces
+
+| Area | Done | Notes |
+|------|------|--------|
+| Tab labels | ✓ | `tabs.*` |
+| Home / deals browse | ✓ | `dealsBrowse.*`, `dealDetail.*` fallbacks |
+| Favorites | ✓ | `favorites.*`, shared browse keys |
+| Create hub | ✓ | `createHub.*` |
+| Quick deal | ✓ | `createQuick.*` |
+| AI deal screen | ✓ | `createAi.*` (+ ES/KO merge overrides) |
+| Account (auth, profile, alerts, language) | ✓ | `account.*`, `auth.*`, `language.*`, `tabMode.*` |
+| Redeem (scanner) | ✓ | `redeem.*` |
+| Deal detail (consumer) | ✓ | `dealDetail.*`, `consumerDealDetail.*` as applicable |
+| Wallet / QR modal | ✓ | `consumerWallet.*` |
+| Business dashboard / analytics | ✓ | Partial; verify any new copy |
+| Root modal chrome | ✓ | `commonUi.modalTitle`, `modalScreen.*` |
+| Deal validity summary | ✓ | `dealValidity.*`, date-fns locale |
+
+## API & error strings
+
+| Item | Done | Notes |
+|------|------|--------|
+| Edge: `claim-deal`, `redeem-token` | ✓ | Exact + dynamic prefixes in `lib/i18n/api-messages.ts` |
+| Edge: `ai-generate-ad-variants`, `ai-create-deal`, `ai-generate-deal-copy` | ✓ | Same file (`API_MESSAGE_KEY`) |
+| Client invoke fallbacks (`functions.ts`) | ✓ | Same mapper |
+| Postgres / RLS / JWT / network heuristics | ✓ | Regex table → `apiErrors.db*` / `sessionExpired` / `networkFailed` |
+| Long or internal-looking blobs | ✓ | `apiErrors.operationFailedTryAgain` (no raw leak) |
+| Raw / unknown short user-facing English | — | Still passed through; add an exact key when you introduce a new fixed `error` string on the server |
+
+## Push (local)
+
+| Item | Done | Notes |
+|------|------|--------|
+| Favorite new-deal local notification | ✓ | `pushTemplates.*` + `i18n.t` in `lib/notifications.ts` (`newDealsBody_one` / `_other`) |
+| Server-driven push (FCM/APNs) | — | When shipped: templates per locale at send time |
+
+## Backlog (not exhaustive)
+
+| Item | Priority |
+|------|----------|
+| Remote push payloads localized on server | When shipped |
+| `parseFunctionError` + nested JSON `details` | Optional: map `details` snippets or log-only |
+| New Edge `error` literals | Add to `API_MESSAGE_KEY` + `apiErrors` / reuse key |
 
 ## Testing checklist
 
 ### English (regression)
 
-1. Cold start on English device → UI English; `npm run test:english` passes.
-2. Quick Deal: publish valid BOGO → succeeds; invalid % → English banner matches legacy tone.
-3. AI generate with `preferred_locale` null → `output_language` = app language (verify in function logs / output).
+1. Cold start, English device → UI English; `npm run test` (includes `api-messages` map) + `npm run test:english` for deal-quality copy.
+2. Quick Deal: valid BOGO → publish OK; blocked deal → banner text OK.
+3. Claim deal → errors from `claim-deal` map to readable English (rate limit, sold out, etc.).
 
-### Spanish
+### Spanish / Korean
 
-1. Account → App language **Español** → tabs + Quick Deal Spanish.
-2. Set **Offers & AI** to Spanish, app English → Quick Deal quality message Spanish; AI ads Spanish.
-3. Deal title with Spanish BOGO patterns still passes quality rules.
-
-### Korean
-
-1. Account → **한국어** → tabs + Quick Deal Korean; check long labels wrap (e.g. field labels).
-2. Title containing `1+1` / `원플원` → strong tier (see unit test).
-3. AI output Korean when business or app locale is `ko`.
+1. Account → app language ES or KO → tabs + Account + browse + redeem labels localized.
+2. **Offers & AI** override vs app language → deal-quality + AI output as designed.
+3. Trigger a known API error (e.g. expired token) → banner uses `apiErrors.*` in that language.
 
 ### Fallback
 
-1. Remove a key from `ko.json` → UI shows English string for that key.
-2. `preferred_locale` invalid / old row → client treats as null, uses app language.
+1. Remove one `ko.json` key → English fallback for that string.
+2. Invalid `preferred_locale` row → client treats as null.
 
 ## Deploy notes
 
-- Apply Supabase migration for `preferred_locale` before relying on Account save.
-- Redeploy **`ai-generate-ad-variants`** Edge Function so `output_language` is honored.
+- Apply migrations for `preferred_locale` before Account save.
+- Redeploy Edge functions when changing `error` strings — update `lib/i18n/api-messages.ts` + `apiErrors` in locale files to match.

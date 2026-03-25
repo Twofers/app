@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
 
 const corsHeaders = {
@@ -30,6 +31,8 @@ type AdsResult = { ads: AdVariant[] };
 
 const LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
 
+const CHAT_MODEL = resolveOpenAiChatModel();
+
 function normalizeLaneOrder(ads: AdVariant[]): AdVariant[] | null {
   if (!Array.isArray(ads) || ads.length !== 3) return null;
   const byLane = new Map<CreativeLane, AdVariant>();
@@ -58,7 +61,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
-    const model = Deno.env.get("OPENAI_AD_MODEL")?.trim() || "gpt-4o-mini";
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
@@ -329,7 +331,7 @@ serve(async (req) => {
     };
 
     const aiBody = {
-      model,
+      model: CHAT_MODEL,
       response_format: { type: "json_schema", json_schema: jsonSchema },
       messages: [
         { role: "system", content: system },

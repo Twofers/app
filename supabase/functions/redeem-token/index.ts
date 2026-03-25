@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  finalizeStaleVisualRedeemForClaim,
+  isPastRedeemDeadline,
+} from "../_shared/claim-redeem.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,22 +113,15 @@ serve(async (req) => {
       );
     }
 
-    const token = body.token;
+    const tokenRaw = body.token;
+    const shortCodeRaw = body.short_code;
+    const shortCodeNorm =
+      typeof shortCodeRaw === "string"
+        ? shortCodeRaw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+        : "";
+    const tokenNorm = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
 
-    if (!token || typeof token !== "string") {
-      return new Response(
-        JSON.stringify({ error: "Missing or invalid token" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // 🔍 Fetch claim with deal and business info
-    const { data: claim, error: claimError } = await supabase
-      .from("deal_claims")
-      .select(`
+    const selectClaim = `
         *,
         deal:deals!inner(
           id,
@@ -132,19 +129,50 @@ serve(async (req) => {
           title,
           business:businesses!inner(id, owner_id)
         )
-      `)
-      .eq("token", token)
-      .single();
+      `;
+
+    let claim: Record<string, unknown> | null = null;
+    let claimError: { message?: string } | null = null;
+
+    if (shortCodeNorm.length >= 4) {
+      const r = await supabase
+        .from("deal_claims")
+        .select(selectClaim)
+        .eq("short_code", shortCodeNorm)
+        .maybeSingle();
+      claim = r.data as Record<string, unknown> | null;
+      claimError = r.error;
+    } else if (tokenNorm.length > 0) {
+      const r = await supabase
+        .from("deal_claims")
+        .select(selectClaim)
+        .eq("token", tokenNorm)
+        .maybeSingle();
+      claim = r.data as Record<string, unknown> | null;
+      claimError = r.error;
+    } else {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid token or claim code" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     if (claimError || !claim) {
       return new Response(
-        JSON.stringify({ error: "Invalid token" }),
+        JSON.stringify({ error: "Invalid token or claim code" }),
         {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
+
+    const claimId = claim.id as string;
+    const now = new Date();
+    const nowIso = now.toISOString();
 
     // 🔒 Verify token belongs to a deal owned by this business
     const deal = claim.deal as any;
@@ -158,8 +186,16 @@ serve(async (req) => {
       );
     }
 
+    await finalizeStaleVisualRedeemForClaim(supabase, claimId, nowIso);
+
+    const { data: freshRow } = await supabase
+      .from("deal_claims")
+      .select("redeemed_at, claim_status, expires_at, grace_period_minutes")
+      .eq("id", claimId)
+      .maybeSingle();
+
     // ✅ Check if already redeemed
-    if (claim.redeemed_at) {
+    if (freshRow?.redeemed_at || claim.redeemed_at) {
       return new Response(
         JSON.stringify({ error: "This token has already been redeemed" }),
         {
@@ -169,10 +205,34 @@ serve(async (req) => {
       );
     }
 
-    // ⏰ Check if expired
-    const now = new Date();
-    const expiresAt = new Date(claim.expires_at);
-    if (expiresAt < now) {
+    const claimStatus = String(freshRow?.claim_status ?? claim.claim_status ?? "active");
+    if (claimStatus === "canceled" || claimStatus === "expired") {
+      return new Response(
+        JSON.stringify({ error: "This token has expired" }),
+        {
+          status: 410,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    if (claimStatus !== "active" && claimStatus !== "redeeming") {
+      return new Response(
+        JSON.stringify({ error: "This claim cannot be redeemed" }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // ⏰ Check if past redeem deadline (expires_at + grace)
+    const grace =
+      typeof freshRow?.grace_period_minutes === "number" && freshRow.grace_period_minutes > 0
+        ? freshRow.grace_period_minutes
+        : 10;
+    const expiresIso = (freshRow?.expires_at ?? claim.expires_at) as string;
+    if (isPastRedeemDeadline(now.getTime(), expiresIso, grace)) {
+      await supabase.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
       return new Response(
         JSON.stringify({ error: "This token has expired" }),
         {
@@ -182,11 +242,16 @@ serve(async (req) => {
       );
     }
 
-    // 💾 Mark as redeemed (guard against double-redeem)
+    // 💾 Mark as redeemed (idempotent: same claim id, only if still null)
     const { data: updated, error: updateError } = await supabase
       .from("deal_claims")
-      .update({ redeemed_at: now.toISOString() })
-      .eq("token", token)
+      .update({
+        redeemed_at: nowIso,
+        claim_status: "redeemed",
+        redeem_method: "qr",
+        redeem_started_at: null,
+      })
+      .eq("id", claimId)
       .is("redeemed_at", null)
       .select("redeemed_at")
       .single();
@@ -207,7 +272,7 @@ serve(async (req) => {
       JSON.stringify({
         ok: true,
         deal_title: deal.title,
-        redeemed_at: now.toISOString(),
+        redeemed_at: nowIso,
         deal_id: deal.id,
       }),
       {

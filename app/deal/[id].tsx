@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "../../lib/supabase";
 import { claimDeal } from "../../lib/functions";
+import { buildClaimDealTelemetry } from "../../lib/claim-telemetry";
+import { trackAppAnalyticsEvent } from "../../lib/app-analytics";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { formatValiditySummary } from "../../lib/deal-time";
+import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 
 type Deal = {
   id: string;
@@ -28,14 +31,21 @@ type Deal = {
   businesses?: {
     name: string | null;
   } | null;
+  is_recurring?: boolean;
+  days_of_week?: number[] | null;
+  window_start_minutes?: number | null;
+  window_end_minutes?: number | null;
+  timezone?: string | null;
 };
 
 export default function DealDetail() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const router = useRouter();
   const { height: winH } = useWindowDimensions();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { id } = useLocalSearchParams<{ id: string }>();
   const [deal, setDeal] = useState<Deal | null>(null);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "failed">("loading");
   const { isLoggedIn, userId } = useBusiness();
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
@@ -57,20 +67,30 @@ export default function DealDetail() {
   }, []);
 
   const loadDeal = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setLoadStatus("failed");
+      return;
+    }
+    setLoadStatus("loading");
+    setBanner(null);
     const { data, error } = await supabase
       .from("deals")
-      .select("id,title,description,end_time,start_time,poster_url,business_id,price,claim_cutoff_buffer_minutes,max_claims,businesses(name)")
+      .select(
+        "id,title,description,end_time,start_time,poster_url,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
+      )
       .eq("id", id)
       .single();
     if (error) {
-      setBanner(error.message);
+      setDeal(null);
+      setBanner(translateKnownApiMessage(error.message, t));
+      setLoadStatus("failed");
       return;
     }
     const dealData = data as unknown as Deal;
     setDeal(dealData);
+    setLoadStatus("ready");
     await loadClaimCount(dealData.id);
-  }, [id, loadClaimCount]);
+  }, [id, loadClaimCount, t]);
 
   useEffect(() => {
     void loadDeal();
@@ -98,7 +118,16 @@ export default function DealDetail() {
       if (!deal) return;
       if (isClaiming) return;
       setIsClaiming(true);
-      const out = await claimDeal(deal.id);
+      const telem = await buildClaimDealTelemetry(isFavorite ? "favorite" : "direct");
+      const out = await claimDeal(deal.id, telem);
+      if (out.claim_id) {
+        trackAppAnalyticsEvent({
+          event_name: "deal_claimed",
+          deal_id: deal.id,
+          business_id: deal.business_id,
+          claim_id: out.claim_id,
+        });
+      }
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrVisible(true);
@@ -109,7 +138,7 @@ export default function DealDetail() {
           : typeof e === "string"
           ? e
           : JSON.stringify(e, null, 2);
-      setBanner(msg);
+      setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setIsClaiming(false);
     }
@@ -130,7 +159,7 @@ export default function DealDetail() {
           : typeof e === "string"
           ? e
           : JSON.stringify(e, null, 2);
-      setBanner(msg);
+      setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);
     }
@@ -149,7 +178,7 @@ export default function DealDetail() {
         .insert({ user_id: userId, business_id: deal.business_id });
       if (error) {
         setIsFavorite(!next);
-        setBanner(error.message);
+        setBanner(translateKnownApiMessage(error.message, t));
       }
     } else {
       const { error } = await supabase
@@ -159,12 +188,12 @@ export default function DealDetail() {
         .eq("business_id", deal.business_id);
       if (error) {
         setIsFavorite(!next);
-        setBanner(error.message);
+        setBanner(translateKnownApiMessage(error.message, t));
       }
     }
   }
 
-  if (!deal) {
+  if (loadStatus === "loading") {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
         <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealDetail.title")}</Text>
@@ -173,8 +202,25 @@ export default function DealDetail() {
     );
   }
 
+  if (loadStatus === "failed" || !deal) {
+    return (
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealDetail.title")}</Text>
+        {banner ? <Banner message={banner} tone="error" /> : null}
+        <Text style={{ opacity: 0.78, fontSize: 16, lineHeight: 24 }}>{t("dealDetail.couldNotLoad")}</Text>
+        <SecondaryButton
+          title={t("commonUi.goBack")}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/(tabs)");
+          }}
+        />
+      </View>
+    );
+  }
+
   const remaining = Math.max(0, deal.max_claims - claimsCount);
-  const heroHeight = Math.round(Math.min(380, Math.max(240, winH * 0.38)));
+  const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
@@ -186,12 +232,14 @@ export default function DealDetail() {
       >
         <Pressable
           onPress={toggleFavorite}
-          hitSlop={8}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
           style={{
             flexDirection: "row",
             alignItems: "center",
             gap: Spacing.sm,
             marginBottom: Spacing.md,
+            minHeight: 44,
           }}
         >
           <MaterialIcons
@@ -223,20 +271,25 @@ export default function DealDetail() {
           </View>
         )}
 
-        <Text
-          style={{
-            marginTop: Spacing.lg,
-            fontSize: 13,
-            fontWeight: "600",
-            opacity: 0.55,
-            textTransform: "uppercase",
-            letterSpacing: 0.4,
-          }}
-        >
-          {deal.businesses?.name ?? "Local business"}
-        </Text>
+        <View style={{ marginTop: Spacing.lg, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: Spacing.sm }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: "600",
+              opacity: 0.55,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+            }}
+          >
+            {deal.businesses?.name ?? t("dealDetail.localBusiness")}
+          </Text>
+          <SecondaryButton
+            title={t("dealDetail.viewBusiness")}
+            onPress={() => router.push(`/business/${deal.business_id}` as Href)}
+          />
+        </View>
         <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30 }}>
-          {deal.title ?? "Deal"}
+          {deal.title ?? t("dealDetail.dealFallback")}
         </Text>
         {deal.price != null ? (
           <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20 }}>${deal.price.toFixed(2)}</Text>
@@ -254,7 +307,12 @@ export default function DealDetail() {
         >
           <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16 }}>{t("dealDetail.finePrint")}</Text>
           <Text style={{ opacity: 0.78, fontSize: 15, lineHeight: 22 }}>
-            {t("dealDetail.validityPrefix")} {formatValiditySummary(deal)}
+            {t("dealDetail.validityPrefix")}{" "}
+            {formatValiditySummary(deal, {
+              lang: i18n.language,
+              endsVerb: t("commonUi.dealEndsVerb"),
+              t,
+            })}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
             {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}

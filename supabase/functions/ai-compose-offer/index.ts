@@ -1,0 +1,584 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
+const DEFAULT_MONTHLY = Number(Deno.env.get("AI_MONTHLY_LIMIT") ?? "30");
+const DEFAULT_COOLDOWN_SEC = Number(Deno.env.get("AI_COOLDOWN_SECONDS") ?? "60");
+const DEFAULT_DEDUP_SEC = Number(Deno.env.get("AI_DEDUP_WINDOW_SECONDS") ?? "600");
+
+/** Compose + vision JSON uses OPENAI_MODEL from Edge secrets (allowlisted in _shared). */
+const MODEL = resolveOpenAiChatModel();
+
+/** Voice transcription (Whisper). */
+const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
+
+const OFFER_TYPES = [
+  "bogo_same_item",
+  "bogo_second_item_half_off",
+  "free_add_on_with_purchase",
+  "simple_bundle_offer",
+] as const;
+
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function utcMonthStartIso(): string {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString();
+}
+
+function normalizePrompt(parts: (string | null | undefined)[]): string {
+  return parts
+    .filter((p): p is string => typeof p === "string")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 8000);
+}
+
+async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<string> {
+  const raw = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
+  const blob = new Blob([raw], { type: "audio/m4a" });
+  const form = new FormData();
+  form.append("file", blob, "clip.m4a");
+  form.append("model", WHISPER_MODEL);
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openAiKey}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Whisper failed: ${t.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  return typeof j.text === "string" ? j.text.trim() : "";
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed", error_code: "METHOD" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const openAiKey = Deno.env.get("OPENAI_API_KEY");
+
+  const userClient = createClient(supabaseUrl, supabaseServiceKey, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+  });
+
+  const admin = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await userClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized. Please log in.", error_code: "UNAUTHORIZED" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body.", error_code: "BAD_JSON" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const business_id = body.business_id as string | undefined;
+    if (!business_id) {
+      return new Response(
+        JSON.stringify({ error: "Missing business_id.", error_code: "INVALID_INPUT" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: biz, error: bizErr } = await admin
+      .from("businesses")
+      .select("id,name,category,tone,location,address,short_description,owner_id")
+      .eq("id", business_id)
+      .maybeSingle();
+
+    if (bizErr || !biz || biz.owner_id !== user.id) {
+      return new Response(
+        JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const nameOk = typeof biz.name === "string" && biz.name.trim().length > 0;
+    const addrText =
+      (typeof biz.address === "string" && biz.address.trim()) ||
+      (typeof biz.location === "string" && biz.location.trim()) ||
+      "";
+    const locOk = addrText.length > 0;
+    if (!nameOk || !locOk) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode: "blocked",
+        request_hash: "profile",
+        prompt_version: PROMPT_VERSION,
+        success: false,
+        failure_reason: "PROFILE_INCOMPLETE",
+        quota_blocked: false,
+        duplicate_blocked: false,
+        openai_called: false,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Complete your business name and street or location before using AI.",
+          error_code: "PROFILE_INCOMPLETE",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const promptTextRaw = typeof body.prompt_text === "string" ? body.prompt_text.trim() : "";
+    const voiceTranscriptIn = typeof body.voice_transcript === "string" ? body.voice_transcript.trim() : "";
+    const imageBase64 = typeof body.image_base64 === "string" ? body.image_base64.trim() : "";
+    const audioBase64 = typeof body.audio_base64 === "string" ? body.audio_base64.trim() : "";
+    const transcribeOnly = body.transcribe_only === true;
+
+    if (transcribeOnly) {
+      if (!openAiKey) {
+        return new Response(
+          JSON.stringify({ error: "OPENAI_API_KEY is not configured.", error_code: "SERVER_CONFIG" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (!audioBase64 || audioBase64.length > 700_000) {
+        return new Response(
+          JSON.stringify({ error: "Record a short voice note and try again.", error_code: "INVALID_INPUT" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const transcribeCooldownMs = 15_000;
+      const { data: recentTx } = await admin
+        .from("ai_generation_logs")
+        .select("id")
+        .eq("business_id", business_id)
+        .eq("request_type", "voice_transcribe")
+        .gte("created_at", new Date(Date.now() - transcribeCooldownMs).toISOString())
+        .limit(1)
+        .maybeSingle();
+      if (recentTx) {
+        return new Response(
+          JSON.stringify({
+            error: "Please wait a moment before transcribing again.",
+            error_code: "COOLDOWN_ACTIVE",
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      try {
+        const tx = await transcribeAudio(openAiKey, audioBase64);
+        const th = await sha256Hex(audioBase64.slice(0, 4000));
+        await admin.from("ai_generation_logs").insert({
+          business_id,
+          user_id: user.id,
+          request_type: "voice_transcribe",
+          input_mode: "voice",
+          prompt_text: tx || null,
+          request_hash: th,
+          prompt_version: PROMPT_VERSION,
+          model: WHISPER_MODEL,
+          success: true,
+          openai_called: true,
+        });
+        return new Response(
+          JSON.stringify({ ok: true, transcript: tx }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify({
+            error: e instanceof Error ? e.message : "Voice transcription failed.",
+            error_code: "TRANSCRIPTION_FAILED",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    let promptText = promptTextRaw;
+    const combinedText = normalizePrompt([promptText, voiceTranscriptIn]);
+    const hasImage = imageBase64.length > 0;
+    const hasText = combinedText.length > 0;
+
+    if (!hasImage && !hasText) {
+      return new Response(
+        JSON.stringify({
+          error: "Add a photo, type a request, or record a voice note.",
+          error_code: "INVALID_INPUT",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (imageBase64.length > 1_200_000) {
+      return new Response(
+        JSON.stringify({ error: "Image is too large. Try a smaller photo.", error_code: "INVALID_INPUT" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const input_mode = hasImage && hasText ? "mixed" : hasImage ? "image_only" : "text_only";
+    const request_hash = await sha256Hex(
+      JSON.stringify({
+        b: business_id,
+        i: hasImage ? await sha256Hex(imageBase64.slice(0, 2000)) : "",
+        t: combinedText.slice(0, 4000),
+      }),
+    );
+
+    const now = Date.now();
+    const cooldownMs = Math.max(10, DEFAULT_COOLDOWN_SEC) * 1000;
+    const dedupMs = Math.max(60, DEFAULT_DEDUP_SEC) * 1000;
+    const monthStart = utcMonthStartIso();
+
+    const { data: dupRow } = await admin
+      .from("ai_generation_logs")
+      .select("id,response_payload")
+      .eq("business_id", business_id)
+      .eq("request_type", "compose_offer")
+      .eq("request_hash", request_hash)
+      .eq("success", true)
+      .not("response_payload", "is", null)
+      .gte("created_at", new Date(now - dedupMs).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (dupRow?.response_payload) {
+      const dupOf = dupRow.id;
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        voice_transcript: voiceTranscriptIn || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        model: MODEL,
+        success: true,
+        duplicate_blocked: true,
+        duplicate_of_log_id: dupOf,
+        openai_called: false,
+        response_payload: dupRow.response_payload,
+        low_confidence: !!(dupRow.response_payload as Record<string, unknown>)?.low_confidence,
+      });
+
+      const usedOpenAi = await admin
+        .from("ai_generation_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", business_id)
+        .eq("request_type", "compose_offer")
+        .eq("openai_called", true)
+        .eq("success", true)
+        .gte("created_at", monthStart);
+
+      const limit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
+      const used = usedOpenAi.count ?? 0;
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          duplicate_cached: true,
+          result: dupRow.response_payload,
+          quota: { used, limit, remaining: Math.max(0, limit - used) },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: recentCooldown } = await admin
+      .from("ai_generation_logs")
+      .select("id")
+      .eq("business_id", business_id)
+      .eq("request_type", "compose_offer")
+      .gte("created_at", new Date(now - cooldownMs).toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (recentCooldown) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        success: false,
+        failure_reason: "COOLDOWN_ACTIVE",
+        openai_called: false,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Please wait a moment before generating again.",
+          error_code: "COOLDOWN_ACTIVE",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { count: monthlyCount } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", business_id)
+      .eq("request_type", "compose_offer")
+      .eq("openai_called", true)
+      .eq("success", true)
+      .gte("created_at", monthStart);
+
+    const limit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
+    const used = monthlyCount ?? 0;
+    if (used >= limit) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        success: false,
+        failure_reason: "QUOTA_EXCEEDED",
+        quota_blocked: true,
+        openai_called: false,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Monthly AI generation limit reached.",
+          error_code: "QUOTA_EXCEEDED",
+          quota: { used, limit, remaining: 0 },
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!openAiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "OPENAI_API_KEY is not configured.",
+          error_code: "SERVER_CONFIG",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const systemPrompt = [
+      "You help local cafés and small businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
+      `Allowed offer_type values only: ${OFFER_TYPES.join(", ")}.`,
+      "Rules:",
+      "- Never invent prices. If no price is given, omit price language or say price varies.",
+      "- Never invent menu items not visible in the image or stated in text.",
+      "- If the user clearly states the offer (e.g. BOGO latte), keep that offer; use image only as supporting context.",
+      "- If input is vague, recommend one sensible offer from allowed types.",
+      "- Output valid JSON only, no markdown.",
+      "- ad_variants must contain exactly 2 objects; same underlying offer, different copy style (tone/framing).",
+      "- Each variant: variant_id 'A' or 'B', headline_en/es/ko (<=42 chars), subheadline_* (<=80), cta_* (<=24), style_label, rationale, visual_direction.",
+      "- Include detected_items array (strings).",
+      "- confidence 0-1. low_confidence true if unsure; add recommendation_reason.",
+      "- recommended_offer: offer_type, item_name, display_offer (short plain sentence).",
+    ].join("\n");
+
+    const userParts: unknown[] = [];
+    userParts.push({
+      type: "text",
+      text: [
+        `Business: ${biz.name}. Category: ${biz.category ?? "n/a"}. Location: ${biz.location}.`,
+        biz.short_description ? `About: ${biz.short_description}` : "",
+        combinedText ? `Owner request:\n${combinedText}` : "No text request; infer from image only.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    if (hasImage) {
+      const mime = imageBase64.startsWith("data:") ? imageBase64.split(";")[0].replace("data:", "") : "image/jpeg";
+      const b64 = imageBase64.includes(",") ? imageBase64.split(",")[1]! : imageBase64;
+      userParts.push({
+        type: "image_url",
+        image_url: { url: `data:${mime};base64,${b64}` },
+      });
+    }
+
+    const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userParts },
+        ],
+        max_tokens: 1200,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!openAiRes.ok) {
+      const errText = await openAiRes.text();
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        model: MODEL,
+        success: false,
+        failure_reason: `OPENAI_${openAiRes.status}`,
+        openai_called: true,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "AI service error. Try again shortly.",
+          error_code: "OPENAI_ERROR",
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const completion = await openAiRes.json();
+    const content = completion?.choices?.[0]?.message?.content;
+    const usage = completion?.usage ?? {};
+    const inTok = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
+    const outTok = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null;
+    const estCost =
+      inTok != null && outTok != null
+        ? Number(((inTok * 0.15 + outTok * 0.6) / 1_000_000).toFixed(6))
+        : null;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = typeof content === "string" ? JSON.parse(content) : {};
+    } catch {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        model: MODEL,
+        success: false,
+        failure_reason: "PARSE_ERROR",
+        openai_called: true,
+        input_token_count: inTok,
+        output_token_count: outTok,
+        estimated_cost_usd: estCost,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Could not parse AI response. Try again.",
+          error_code: "PARSE_ERROR",
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const variants = parsed.ad_variants;
+    const offer = parsed.recommended_offer as Record<string, unknown> | undefined;
+    if (!Array.isArray(variants) || variants.length !== 2 || !offer?.offer_type) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        model: MODEL,
+        success: false,
+        failure_reason: "INVALID_AI_SHAPE",
+        openai_called: true,
+        input_token_count: inTok,
+        output_token_count: outTok,
+        estimated_cost_usd: estCost,
+        response_payload: parsed,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "AI returned an unexpected format. Try again.",
+          error_code: "PARSE_ERROR",
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const low = !!parsed.low_confidence;
+    const offerType = String(offer.offer_type);
+    const logPayload = { ...parsed, input_type: input_mode };
+
+    await admin.from("ai_generation_logs").insert({
+      business_id,
+      user_id: user.id,
+      request_type: "compose_offer",
+      input_mode,
+      prompt_text: combinedText || null,
+      voice_transcript: voiceTranscriptIn || null,
+      request_hash,
+      prompt_version: PROMPT_VERSION,
+      model: MODEL,
+      success: true,
+      openai_called: true,
+      low_confidence: low,
+      recommended_offer_type: offerType,
+      input_token_count: inTok,
+      output_token_count: outTok,
+      estimated_cost_usd: estCost,
+      response_payload: logPayload,
+    });
+
+    const newUsed = used + 1;
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        duplicate_cached: false,
+        result: logPayload,
+        quota: { used: newUsed, limit, remaining: Math.max(0, limit - newUsed) },
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(
+      JSON.stringify({ error: msg || "Unexpected error", error_code: "INTERNAL" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+});

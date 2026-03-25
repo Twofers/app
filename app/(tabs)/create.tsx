@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
@@ -13,9 +13,7 @@ export default function CreateDeal() {
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
-  const { isLoggedIn, businessId, userId, loading, refresh } = useBusiness();
-  const [businessName, setBusinessName] = useState("");
-  const [isCreatingBusiness, setIsCreatingBusiness] = useState(false);
+  const { isLoggedIn, businessId, loading } = useBusiness();
   const [banner, setBanner] = useState<string | null>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -37,31 +35,6 @@ export default function CreateDeal() {
     })();
   }, [businessId]);
 
-  async function createBusiness() {
-    if (!userId) {
-      setBanner(t("createHub.errLoginBusiness"));
-      return;
-    }
-    const name = businessName.trim();
-    if (!name) {
-      setBanner(t("createHub.errNameRequired"));
-      return;
-    }
-    setIsCreatingBusiness(true);
-    setBanner(null);
-    try {
-      const { error } = await supabase.from("businesses").insert({ owner_id: userId, name });
-      if (error) throw error;
-      setBusinessName("");
-      await refresh();
-      router.replace("/(tabs)/create");
-    } catch (err: any) {
-      setBanner(err?.message ?? t("createHub.errCreateFailed"));
-    } finally {
-      setIsCreatingBusiness(false);
-    }
-  }
-
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createHub.title")}</Text>
@@ -79,22 +52,9 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createHub.createBusinessHeader")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("createHub.createBusinessBody")}</Text>
-          <TextInput
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder={t("createHub.placeholderBusinessName")}
-            autoCapitalize="words"
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-            }}
-          />
           <PrimaryButton
-            title={isCreatingBusiness ? t("createHub.creating") : t("createHub.createBusiness")}
-            onPress={createBusiness}
-            disabled={isCreatingBusiness}
+            title={t("account.startBusinessSetup")}
+            onPress={() => router.push("/business-setup" as Href)}
           />
         </View>
       ) : (
@@ -115,6 +75,36 @@ export default function CreateDeal() {
             <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
             <Text style={{ color: "white", opacity: 0.85, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
               {t("createHub.quickDealSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/create/ai-compose")}
+            style={{
+              borderRadius: 18,
+              padding: Spacing.lg,
+              backgroundColor: "#1e3a5f",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
+            <Text style={{ color: "white", opacity: 0.88, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {t("createHub.aiComposeSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/create/reuse")}
+            style={{
+              borderRadius: 18,
+              padding: Spacing.md,
+              backgroundColor: "#f4f4f5",
+              borderWidth: 1,
+              borderColor: "#e4e4e7",
+            }}
+          >
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.reuseTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+              {t("createHub.reuseSubtitle")}
             </Text>
           </Pressable>
 

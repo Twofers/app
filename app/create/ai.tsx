@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -11,10 +19,11 @@ import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
-import { parseFunctionError } from "../../lib/functions";
+import { aiCreateDeal, aiGenerateDealCopy, parseFunctionError } from "../../lib/functions";
 import {
   adToDealDraft,
   composeListingDescription,
+  CREATIVE_LANE_I18N_KEY,
   CREATIVE_LANE_ORDER,
   type CreativeLane,
   type GeneratedAd,
@@ -26,6 +35,9 @@ import {
   translateDealQualityBlock,
 } from "../../lib/translate-deal-quality";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { format } from "date-fns";
+import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
+import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 
 type TemplateRow = {
   id: string;
@@ -96,7 +108,15 @@ export default function AiDealScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
   const { t, i18n } = useTranslation();
-  const { isLoggedIn, businessId, businessContextForAi, businessPreferredLocale } = useBusiness();
+  const {
+    isLoggedIn,
+    businessId,
+    businessContextForAi,
+    businessPreferredLocale,
+    sessionEmail,
+    businessName,
+  } = useBusiness();
+  const isDemoAiAccount = (sessionEmail ?? "").trim().toLowerCase() === "demo@demo.com";
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   const dayOptionsUi = useMemo(
@@ -113,10 +133,12 @@ export default function AiDealScreen() {
   );
 
   function laneUiTitle(lane: CreativeLane): string {
-    if (lane === "value") return t("createAi.laneValue");
-    if (lane === "neighborhood") return t("createAi.laneNeighborhood");
-    if (lane === "premium") return t("createAi.lanePremium");
-    return t("createAi.optionFallback");
+    const key = CREATIVE_LANE_I18N_KEY[lane];
+    return key ? t(key) : t("createAi.optionFallback");
+  }
+
+  function formatPickerTime(date: Date) {
+    return format(date, "p", { locale: dateFnsLocaleFor(i18n.language) });
   }
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -169,6 +191,7 @@ export default function AiDealScreen() {
   /** Tags generation in Supabase logs; see docs/ai-ad-validation/README.md */
   const [manualValidationTag, setManualValidationTag] = useState("");
   const [qaPanelOpen, setQaPanelOpen] = useState(false);
+  const [devEdgeBusy, setDevEdgeBusy] = useState<"copy" | "create" | null>(null);
 
   const offerScheduleSummary = useMemo(
     () =>
@@ -488,6 +511,76 @@ export default function AiDealScreen() {
     }
   }
 
+  async function devTestGenerateDealCopy() {
+    if (!hintText.trim()) {
+      setBanner({ message: t("createAi.errAddHint"), tone: "error" });
+      return;
+    }
+    setDevEdgeBusy("copy");
+    setBanner(null);
+    try {
+      const priceNum = price.trim() ? Number(price) : null;
+      const out = await aiGenerateDealCopy({
+        hint_text: hintText.trim(),
+        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+        business_name: businessName ?? null,
+      });
+      const body = [`title: ${out.title}`, `promo_line: ${out.promo_line}`, `description: ${out.description}`].join(
+        "\n\n",
+      );
+      Alert.alert(t("createAi.devCopyOkTitle"), body.length > 1600 ? `${body.slice(0, 1600)}…` : body);
+    } catch (e: any) {
+      Alert.alert(t("createAi.devCopyFailTitle"), e?.message ?? String(e));
+    } finally {
+      setDevEdgeBusy(null);
+    }
+  }
+
+  function devPromptAiCreateDeal() {
+    if (!validateInputs(true)) return;
+    Alert.alert(t("createAi.devCreateConfirmTitle"), t("createAi.devCreateConfirmMsg"), [
+      { text: t("createAi.cancel"), style: "cancel" },
+      {
+        text: t("createAi.devCreateConfirmRun"),
+        style: "destructive",
+        onPress: () => void runDevAiCreateDeal(),
+      },
+    ]);
+  }
+
+  async function runDevAiCreateDeal() {
+    if (!businessId) return;
+    setDevEdgeBusy("create");
+    setBanner(null);
+    try {
+      const path = await ensureUploadedPhoto();
+      if (!path) {
+        throw new Error("Upload a photo first.");
+      }
+      const maxClaimsNum = Number(maxClaims);
+      const cutoffNum = Number(cutoffMins);
+      const priceNum = price.trim() ? Number(price) : null;
+      const isRecurring = validityMode === "recurring";
+      const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
+      const out = await aiCreateDeal({
+        business_id: businessId,
+        photo_path: path,
+        hint_text: hintText.trim(),
+        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+        end_time: end.toISOString(),
+        max_claims: maxClaimsNum,
+        claim_cutoff_buffer_minutes: cutoffNum,
+      });
+      Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
+        { text: "OK", onPress: () => router.replace("/(tabs)/dashboard") },
+      ]);
+    } catch (e: any) {
+      Alert.alert(t("createAi.devCreateFailTitle"), e?.message ?? String(e));
+    } finally {
+      setDevEdgeBusy(null);
+    }
+  }
+
   async function publishDeal() {
     if (!validateInputs(false)) return;
     if (!businessId) {
@@ -653,6 +746,51 @@ export default function AiDealScreen() {
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleMain")}</Text>
       <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>{t("createAi.intro")}</Text>
 
+      {isDemoAiAccount ? (
+        <View
+          style={{
+            marginTop: 14,
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: "#f0f7ff",
+            borderWidth: 1,
+            borderColor: "#c5daf7",
+          }}
+        >
+          <Text style={{ fontWeight: "700", fontSize: 15, color: "#0d47a1" }}>{t("createAi.demoModeTitle")}</Text>
+          <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: "#1565c0" }}>
+            {t("createAi.demoModeBody")}
+          </Text>
+        </View>
+      ) : null}
+
+      {__DEV__ ? (
+        <View
+          style={{
+            marginTop: 14,
+            padding: 14,
+            borderRadius: 14,
+            backgroundColor: "#fff8e1",
+            borderWidth: 1,
+            borderColor: "#e6d29a",
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createAi.devToolsTitle")}</Text>
+          <Text style={{ fontSize: 12, opacity: 0.78, lineHeight: 18 }}>{t("createAi.devToolsIntro")}</Text>
+          <SecondaryButton
+            title={devEdgeBusy === "copy" ? t("createAi.devBusy") : t("createAi.devTestCopy")}
+            onPress={() => void devTestGenerateDealCopy()}
+            disabled={devEdgeBusy !== null}
+          />
+          <SecondaryButton
+            title={devEdgeBusy === "create" ? t("createAi.devBusy") : t("createAi.devTestCreate")}
+            onPress={devPromptAiCreateDeal}
+            disabled={devEdgeBusy !== null}
+          />
+        </View>
+      ) : null}
+
       <View style={{ marginTop: 12 }}>
         <Pressable
           onPress={() => setQaPanelOpen((o) => !o)}
@@ -769,7 +907,7 @@ export default function AiDealScreen() {
             value={price}
             onChangeText={setPrice}
             keyboardType="decimal-pad"
-            placeholder="5.99"
+            placeholder={t("createAi.placeholderPrice")}
             style={{
               borderWidth: 1,
               borderColor: "#ccc",
@@ -846,7 +984,7 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               >
-                <Text>{endTime.toLocaleString()}</Text>
+                <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
               </Pressable>
               {showEndPicker ? (
                 <DateTimePicker
@@ -925,7 +1063,7 @@ export default function AiDealScreen() {
                 }}
               >
                 <Text>
-                  {t("createAi.windowEnd")} {formatMinutes(minutesFromDate(windowEnd))}
+                  {t("createAi.windowEnd")} {formatPickerTime(windowEnd)}
                 </Text>
               </Pressable>
               {showWindowEndPicker ? (
@@ -946,7 +1084,7 @@ export default function AiDealScreen() {
             value={maxClaims}
             onChangeText={setMaxClaims}
             keyboardType="number-pad"
-            placeholder="50"
+            placeholder={t("createAi.placeholderMaxClaims")}
             style={{
               borderWidth: 1,
               borderColor: "#ccc",
@@ -961,7 +1099,7 @@ export default function AiDealScreen() {
             value={cutoffMins}
             onChangeText={setCutoffMins}
             keyboardType="number-pad"
-            placeholder="15"
+            placeholder={t("createAi.placeholderCutoff")}
             style={{
               borderWidth: 1,
               borderColor: "#ccc",

@@ -11,18 +11,19 @@ export const Spacing = {
   xxxl: 32,
 } as const;
 
-/**
- * Tab bar main column (icons + label), excluding the system home-indicator inset.
- * React Navigation / Expo tabs land around 49–56dp; we pad generously for Android labels.
- */
-const TAB_BAR_COLUMN = 56;
-
 type ScreenVariant = "tab" | "stack";
+
+/**
+ * Tab screens are laid out **above** the bottom tab bar; the bar already clears the home indicator.
+ * Adding `safe area bottom + fixed tab height` here double-counted insets and diverged on Android
+ * edge-to-edge / Expo Go vs native release. Use modest scroll padding only.
+ */
+const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl + Spacing.md;
 
 export function useScreenInsets(variant: ScreenVariant = "tab") {
   const insets = useSafeAreaInsets();
-  const tabOffset = variant === "tab" ? TAB_BAR_COLUMN : 0;
-  const bottomInset = insets.bottom + tabOffset + Spacing.xl;
+  const bottomInset =
+    variant === "tab" ? TAB_SCREEN_SCROLL_EXTRA : insets.bottom + Spacing.xl;
 
   return {
     insets,
