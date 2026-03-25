@@ -2,6 +2,7 @@ import "react-native-url-polyfill/auto";
 import { createClient } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 
+/** Inlined at bundle time — set the same keys in EAS for `preview` and `production` environment scopes. */
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
 

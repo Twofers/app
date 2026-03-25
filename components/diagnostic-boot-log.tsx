@@ -4,11 +4,13 @@ import { supabase } from "@/lib/supabase";
 import { useTabMode } from "@/lib/tab-mode";
 import {
   getAppExtra,
+  getBuildProfileLabel,
   getExpoAppVersion,
   getExecutionEnvironment,
   getNativeBuildLabel,
   getPublicEnvSnapshot,
   isDebugBootLogEnabled,
+  isPreviewOrDevClientProfile,
 } from "@/lib/runtime-env";
 
 /**
@@ -30,8 +32,10 @@ export function DiagnosticBootLog() {
       if (cancelled) return;
       const payload = {
         version: getExpoAppVersion(),
+        buildProfile: getBuildProfileLabel(),
         nativeBuild: getNativeBuildLabel(),
         executionEnvironment: getExecutionEnvironment(),
+        previewOrDevClientProfile: isPreviewOrDevClientProfile(),
         ...getAppExtra(),
         tabMode,
         language,

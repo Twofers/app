@@ -63,7 +63,7 @@ export default function ReuseDealScreen() {
     }, [load]),
   );
 
-  function useTemplate(row: TemplateRow) {
+  function openTemplate(row: TemplateRow) {
     router.push({ pathname: "/create/ai", params: { templateId: row.id } } as Href);
   }
 
@@ -106,7 +106,7 @@ export default function ReuseDealScreen() {
               templates.map((row) => (
                 <Pressable
                   key={row.id}
-                  onPress={() => useTemplate(row)}
+                  onPress={() => openTemplate(row)}
                   style={{
                     flexDirection: "row",
                     gap: Spacing.md,

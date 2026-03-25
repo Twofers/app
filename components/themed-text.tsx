@@ -1,7 +1,7 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { StyleSheet, Text, type TextProps } from "react-native";
 
-import { Fonts } from '@/constants/theme';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { Fonts } from "@/constants/theme";
+import { useThemeColor } from "@/hooks/use-theme-color";
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
@@ -18,7 +18,7 @@ export function ThemedText({
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
 
-  const sans = Platform.OS === "ios" ? undefined : Fonts.sans;
+  const sans = Fonts.sans;
 
   return (
     <Text

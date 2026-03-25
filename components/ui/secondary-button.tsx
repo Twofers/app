@@ -1,4 +1,4 @@
-import { Platform, Pressable, Text, ViewStyle } from "react-native";
+import { Pressable, Text, ViewStyle } from "react-native";
 
 import { Fonts } from "@/constants/theme";
 
@@ -32,7 +32,7 @@ export function SecondaryButton({ title, onPress, disabled, style }: SecondaryBu
           color: "#111",
           fontWeight: "700",
           textAlign: "center",
-          ...(Platform.OS === "ios" ? {} : { fontFamily: Fonts.sans }),
+          ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
         }}
       >
         {title}

@@ -6,7 +6,13 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "true",
+        "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
+        "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+        "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -14,7 +20,8 @@
       "env": {
         "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "true",
         "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
-        "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true"
+        "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
+        "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true"
       }
     },
     "production": {

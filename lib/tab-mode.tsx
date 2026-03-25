@@ -1,12 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import { supabase } from "@/lib/supabase";
 
 /** Primary store (cleared on uninstall; avoids iOS Keychain “ghost” state after reinstall). */
 const ASYNC_KEY = "twoforone_tab_mode_v2";
 /** Legacy SecureStore key from earlier builds. */
 const LEGACY_SECURE_KEY = "twoforone_tab_mode";
+/**
+ * SecureStore flag: once set, we never copy legacy tab mode into AsyncStorage again.
+ * Survives iOS Keychain across reinstall (like auth), so an empty AsyncStorage + this flag means “fresh UX” → customer.
+ */
+const LEGACY_IMPORT_DONE_SECURE_KEY = "twoforone_tab_mode_legacy_import_done";
 
 export type TabMode = "customer" | "business";
 
@@ -24,33 +28,33 @@ async function loadStoredMode(): Promise<TabMode> {
     return asyncVal;
   }
 
-  const keys = await AsyncStorage.getAllKeys();
-  const hasConsumerData = keys.some((k) => k.startsWith("twoforone_consumer_v1_"));
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const trustLegacySecure = hasConsumerData || !!session?.user;
-
-  if (!trustLegacySecure) {
-    try {
-      await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
-    } catch {
-      /* missing */
+  try {
+    const importDone = await SecureStore.getItemAsync(LEGACY_IMPORT_DONE_SECURE_KEY);
+    if (importDone === "1") {
+      try {
+        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
+      } catch {
+        /* missing */
+      }
+      return "customer";
     }
-    return "customer";
+
+    const legacy = await SecureStore.getItemAsync(LEGACY_SECURE_KEY);
+    if (legacy === "business" || legacy === "customer") {
+      await AsyncStorage.setItem(ASYNC_KEY, legacy);
+      try {
+        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
+      } catch {
+        /* missing */
+      }
+    }
+    await SecureStore.setItemAsync(LEGACY_IMPORT_DONE_SECURE_KEY, "1");
+  } catch {
+    /* SecureStore unavailable */
   }
 
-  const legacy = await SecureStore.getItemAsync(LEGACY_SECURE_KEY);
-  if (legacy === "business" || legacy === "customer") {
-    await AsyncStorage.setItem(ASYNC_KEY, legacy);
-    try {
-      await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
-    } catch {
-      /* missing */
-    }
-    return legacy;
-  }
-
+  const after = await AsyncStorage.getItem(ASYNC_KEY);
+  if (after === "business" || after === "customer") return after;
   return "customer";
 }
 

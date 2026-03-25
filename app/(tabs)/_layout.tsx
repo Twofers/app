@@ -1,12 +1,12 @@
-import { Tabs, useRouter, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Tabs, useRouter, useSegments } from "expo-router";
+import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useTabMode } from '@/lib/tab-mode';
+import { HapticTab } from "@/components/haptic-tab";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTabMode } from "@/lib/tab-mode";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -21,12 +21,14 @@ export default function TabLayout() {
       <TabModeRedirect />
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+          tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
           headerShown: false,
           tabBarButton: HapticTab,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
           tabBarItemStyle: { paddingVertical: 2 },
-        }}>
+          tabBarHideOnKeyboard: true,
+        }}
+      >
         <Tabs.Screen
           name="index"
           options={{

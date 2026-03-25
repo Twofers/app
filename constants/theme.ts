@@ -27,27 +27,21 @@ export const Colors = {
   },
 };
 
+/**
+ * Native iOS/Android: omit `fontFamily` for body text so RN uses the platform system UI font (matches Expo Go).
+ * Web keeps explicit stacks. Use `mono` only where a fixed-width font is intentional.
+ */
 export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'sans-serif',
-    serif: 'serif',
-    rounded: 'sans-serif',
-    mono: 'monospace',
-  },
   web: {
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
     rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  },
+  default: {
+    sans: undefined,
+    serif: undefined,
+    rounded: undefined,
+    mono: "monospace",
   },
 });

@@ -23,8 +23,9 @@ export async function hydrateUiLocale(): Promise<AppLocale> {
   const manual = await AsyncStorage.getItem(KEY_MANUAL_OVERRIDE);
   const saved = await AsyncStorage.getItem(KEY_UI_LOCALE);
 
-  if (manual === "1" && isAppLocale(saved)) {
-    return saved;
+  if (manual === "1") {
+    if (isAppLocale(saved)) return saved;
+    await AsyncStorage.removeItem(KEY_MANUAL_OVERRIDE);
   }
 
   if (isAppLocale(saved)) {

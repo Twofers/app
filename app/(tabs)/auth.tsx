@@ -188,21 +188,23 @@ export default function AuthScreen() {
         <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.signUp")}</Text>
       </Pressable>
 
-      <Pressable
-        disabled={busy}
-        onPress={async () => {
-          await signIn("demo@demo.com", "demo12345");
-        }}
-        style={{
-          marginTop: 12,
-          padding: 14,
-          borderRadius: 12,
-          backgroundColor: "#111",
-          opacity: busy ? 0.7 : 1,
-        }}
-      >
-        <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.demoLogin")}</Text>
-      </Pressable>
+      {isDemoAuthHelperEnabled() ? (
+        <Pressable
+          disabled={busy}
+          onPress={async () => {
+            await signIn("demo@demo.com", "demo12345");
+          }}
+          style={{
+            marginTop: 12,
+            padding: 14,
+            borderRadius: 12,
+            backgroundColor: "#111",
+            opacity: busy ? 0.7 : 1,
+          }}
+        >
+          <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>{t("auth.demoLogin")}</Text>
+        </Pressable>
+      ) : null}
 
       <View style={{ marginTop: Spacing.lg, gap: Spacing.sm }}>
         <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, textAlign: "center" }}>{t("legal.authFooterHint")}</Text>

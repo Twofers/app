@@ -6,11 +6,13 @@ import { supabase } from "@/lib/supabase";
 import { useTabMode } from "@/lib/tab-mode";
 import {
   getAppExtra,
+  getBuildProfileLabel,
   getExpoAppVersion,
   getExecutionEnvironment,
   getNativeBuildLabel,
   getPublicEnvSnapshot,
   isDemoAuthHelperEnabled,
+  isPreviewOrDevClientProfile,
   isSupabaseConfigured,
 } from "@/lib/runtime-env";
 
@@ -45,8 +47,10 @@ export default function DebugDiagnosticsScreen() {
 
   const snapshot = {
     appVersion: getExpoAppVersion(),
+    buildProfile: getBuildProfileLabel(),
     nativeBuild: getNativeBuildLabel(),
     executionEnvironment: getExecutionEnvironment(),
+    previewOrDevClientProfile: isPreviewOrDevClientProfile(),
     ...getAppExtra(),
     tabModeReady: tabReady,
     tabMode: mode,

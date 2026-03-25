@@ -16,6 +16,17 @@ function resolveGitCommitShort() {
 /** Merges env-based EAS project id with static app.json (Expo loads both). */
 module.exports = ({ config }) => ({
   ...config,
+  name: "TWOFER",
+  ios: {
+    ...config.ios,
+    infoPlist: {
+      ...config.ios?.infoPlist,
+      CFBundleDisplayName: "TWOFER",
+    },
+  },
+  android: {
+    ...config.android,
+  },
   extra: {
     ...config.extra,
     gitCommit: resolveGitCommitShort(),
