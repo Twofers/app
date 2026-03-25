@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -19,6 +19,7 @@ import {
   setOnboardingComplete,
 } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
+import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { setAlertsEnabled } from "@/lib/notifications";
 import { supabase } from "@/lib/supabase";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
@@ -83,6 +84,11 @@ export default function OnboardingScreen() {
     setBusy(true);
     setHint(null);
     try {
+      const geo = await geocodeUsZip(z);
+      if (!geo.ok) {
+        setHint(geo.failure === "invalid_format" ? t("onboarding.zipInvalidFormat") : t("onboarding.zipLookupFail"));
+        return;
+      }
       await setConsumerLocationMode("zip");
       await setConsumerZipCode(z);
       const {
@@ -91,17 +97,10 @@ export default function OnboardingScreen() {
       if (session?.user?.id) {
         await updateConsumerProfileZip(session.user.id, z);
       }
-      const prefs = await getConsumerPreferences();
-      const coords = await resolveConsumerCoordinates({ ...prefs, zipCode: z, locationMode: "zip" });
-      if (!coords) {
-        setHint(t("onboarding.zipGeocodeFail"));
-        setBusy(false);
-        return;
-      }
-      await setLastKnownConsumerCoords(coords.lat, coords.lng);
+      await setLastKnownConsumerCoords(geo.lat, geo.lng);
       setStep(3);
     } catch {
-      setHint(t("onboarding.zipGeocodeFail"));
+      setHint(t("onboarding.zipLookupFail"));
     } finally {
       setBusy(false);
     }
@@ -160,6 +159,7 @@ export default function OnboardingScreen() {
           <View style={{ gap: Spacing.md }}>
             <Text style={{ fontSize: 17, lineHeight: 24 }}>{t("onboarding.introBody")}</Text>
             <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(1)} />
+            <SecondaryButton title={t("onboarding.signInCta")} onPress={() => router.push("/(tabs)/auth" as Href)} />
           </View>
         ) : null}
 

@@ -111,6 +111,10 @@ export default function ConsumerProfileSetupScreen() {
           setBanner({ message: t("consumerProfile.errBirthdate"), tone: "error" });
           return;
         }
+        if (error.message === "ZIP_FORMAT_INVALID") {
+          setBanner({ message: t("consumerProfile.errZipInvalid"), tone: "error" });
+          return;
+        }
         throw error;
       }
       if (isEdit) {

@@ -1,4 +1,4 @@
--- Seed Test Data
+-- Seed Test Data (demo / QA only — remove or rename businesses in production databases)
 -- Run this in Supabase SQL Editor AFTER signing up via the app
 -- Replace 'YOUR_USER_EMAIL@example.com' with your actual email
 

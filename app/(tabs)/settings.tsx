@@ -19,6 +19,7 @@ import {
   setLastKnownConsumerCoords,
 } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
+import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { supabase } from "@/lib/supabase";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import type { AppLocale } from "@/lib/i18n/config";
@@ -99,14 +100,27 @@ export default function SettingsScreen() {
   }
 
   async function saveZip() {
-    await setConsumerZipCode(zip);
+    const trimmed = zip.trim();
+    if (!trimmed) {
+      Alert.alert(t("consumerSettings.zipSaveFailTitle"), t("consumerSettings.zipEmpty"));
+      return;
+    }
+    const geo = await geocodeUsZip(trimmed);
+    if (!geo.ok) {
+      Alert.alert(
+        t("consumerSettings.zipSaveFailTitle"),
+        geo.failure === "invalid_format" ? t("consumerSettings.zipInvalid") : t("consumerSettings.zipLookupFail"),
+      );
+      return;
+    }
+    await setConsumerZipCode(trimmed);
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (session?.user?.id && zip.trim()) {
-      await updateConsumerProfileZip(session.user.id, zip.trim());
+    if (session?.user?.id) {
+      await updateConsumerProfileZip(session.user.id, trimmed);
     }
-    await persistCoords();
+    await setLastKnownConsumerCoords(geo.lat, geo.lng);
   }
 
   async function applyRadius(m: ConsumerRadiusMiles) {

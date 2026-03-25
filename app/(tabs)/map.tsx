@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
-import MapView, { Circle, Marker } from "react-native-maps";
+import MapView, { Circle, Marker, type Region } from "react-native-maps";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
+import { logPostgrestError } from "@/lib/supabase-client-log";
 import { isDealActiveNow } from "@/lib/deal-time";
 import { useBusiness } from "@/hooks/use-business";
 import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
@@ -12,6 +13,7 @@ import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { haversineMiles } from "@/lib/geo";
 import { BusinessRowCard } from "@/components/business-row-card";
 import { Banner } from "@/components/ui/banner";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Biz = {
   id: string;
@@ -37,7 +39,16 @@ function parseCoord(lat: unknown, lng: unknown): { lat: number; lng: number } | 
   const la = typeof lat === "number" ? lat : lat != null ? Number(lat) : NaN;
   const ln = typeof lng === "number" ? lng : lng != null ? Number(lng) : NaN;
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+  if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
   return { lat: la, lng: ln };
+}
+
+function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number, longitudeDelta: number): Region {
+  const lat = Math.min(90, Math.max(-90, center.lat));
+  const lng = Math.min(180, Math.max(-180, center.lng));
+  const dLat = Number.isFinite(latitudeDelta) && latitudeDelta > 0 ? Math.min(80, Math.max(0.02, latitudeDelta)) : 0.12;
+  const dLng = Number.isFinite(longitudeDelta) && longitudeDelta > 0 ? Math.min(80, Math.max(0.02, longitudeDelta)) : 0.12;
+  return { latitude: lat, longitude: lng, latitudeDelta: dLat, longitudeDelta: dLng };
 }
 
 export default function MapScreen() {
@@ -51,7 +62,11 @@ export default function MapScreen() {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+  /** Map center / radius circle — may be ZIP centroid or GPS. */
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  /** Device blue dot only when GPS + permission; never for ZIP-only mode. */
+  const [showDeviceBlueDot, setShowDeviceBlueDot] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [radiusMiles, setRadiusMiles] = useState(3);
 
@@ -67,10 +82,17 @@ export default function MapScreen() {
   const loadMapData = useCallback(async () => {
     setLoading(true);
     setBanner(null);
+    setDataError(null);
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
     const coords = await resolveConsumerCoordinates(prefs);
-    setUserPos(coords);
+    if (coords) {
+      setUserPos({ lat: coords.lat, lng: coords.lng });
+      setShowDeviceBlueDot(coords.showsDeviceLocationBlueDot);
+    } else {
+      setUserPos(null);
+      setShowDeviceBlueDot(false);
+    }
 
     const { data: bz, error: eb } = await supabase
       .from("businesses")
@@ -78,8 +100,9 @@ export default function MapScreen() {
       .order("name", { ascending: true })
       .limit(400);
     if (eb) {
-      setBanner(eb.message);
+      logPostgrestError("map screen businesses", eb);
       setBusinesses([]);
+      setDataError(t("consumerMap.dataError"));
     } else {
       setBusinesses((bz ?? []) as Biz[]);
     }
@@ -93,13 +116,15 @@ export default function MapScreen() {
       .gte("end_time", new Date().toISOString())
       .limit(200);
     if (ed) {
+      logPostgrestError("map screen deals", ed);
       setDeals([]);
+      setDataError(t("consumerMap.dataError"));
     } else {
       setDeals((dz ?? []) as DealLite[]);
     }
     await loadFavorites();
     setLoading(false);
-  }, [loadFavorites]);
+  }, [loadFavorites, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -151,32 +176,18 @@ export default function MapScreen() {
     }
   }
 
-  const initialRegion = useMemo(() => {
-    if (userPos) {
-      return {
-        latitude: userPos.lat,
-        longitude: userPos.lng,
-        latitudeDelta: 0.12,
-        longitudeDelta: 0.12,
-      };
+  const initialRegion = useMemo((): Region => {
+    if (userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng)) {
+      return safeRegion(userPos, 0.12, 0.12);
     }
     if (markers[0]) {
-      return {
-        latitude: markers[0].lat,
-        longitude: markers[0].lng,
-        latitudeDelta: 0.25,
-        longitudeDelta: 0.25,
-      };
+      return safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
     }
-    return {
-      latitude: 39.8283,
-      longitude: -98.5795,
-      latitudeDelta: 40,
-      longitudeDelta: 40,
-    };
+    return safeRegion({ lat: 39.8283, lng: -98.5795 }, 40, 40);
   }, [userPos, markers]);
 
-  const radiusKm = milesToKm(radiusMiles);
+  const radiusKm = milesToKm(Number.isFinite(radiusMiles) ? radiusMiles : 3);
+  const showUserLocationDot = Platform.OS !== "web" && showDeviceBlueDot && !!userPos;
 
   if (Platform.OS === "web") {
     return (
@@ -192,6 +203,11 @@ export default function MapScreen() {
       {banner ? (
         <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
           <Banner message={banner} tone="error" />
+        </View>
+      ) : null}
+      {dataError ? (
+        <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
+          <Banner message={dataError} tone="error" />
         </View>
       ) : null}
       <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
@@ -251,8 +267,8 @@ export default function MapScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <MapView style={{ flex: 1 }} initialRegion={initialRegion} showsUserLocation={!!userPos}>
-            {userPos ? (
+          <MapView style={{ flex: 1 }} initialRegion={initialRegion} showsUserLocation={showUserLocationDot}>
+            {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) && radiusKm > 0 ? (
               <Circle
                 center={{ latitude: userPos.lat, longitude: userPos.lng }}
                 radius={radiusKm * 1000}
@@ -280,6 +296,20 @@ export default function MapScreen() {
               </Marker>
             ))}
           </MapView>
+
+          {!loading && markers.length === 0 ? (
+            <View
+              style={{
+                position: "absolute",
+                left: horizontal,
+                right: horizontal,
+                top: "28%",
+              }}
+              pointerEvents="none"
+            >
+              <EmptyState title={t("consumerMap.emptyMarkersTitle")} message={t("consumerMap.emptyMarkersBody")} />
+            </View>
+          ) : null}
 
           {selected && selectedCoords ? (
             <View

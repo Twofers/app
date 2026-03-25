@@ -62,24 +62,29 @@ function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
 
 export function isDealActiveNow(deal: RecurringInfo) {
   if (!deal) return false;
-  const now = new Date();
-  const start = deal.start_time ? new Date(deal.start_time) : null;
-  const end = deal.end_time ? new Date(deal.end_time) : null;
+  try {
+    const now = new Date();
+    const start = deal.start_time ? new Date(deal.start_time) : null;
+    const end = deal.end_time ? new Date(deal.end_time) : null;
 
-  if (start && now < start) return false;
-  if (end && now >= end) return false;
+    if (start && now < start) return false;
+    if (end && now >= end) return false;
 
-  if (!deal.is_recurring) return true;
+    if (!deal.is_recurring) return true;
 
-  const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
-  const windowStart = deal.window_start_minutes;
-  const windowEnd = deal.window_end_minutes;
-  const tz = deal.timezone || "America/Chicago";
+    const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
+    const windowStart = deal.window_start_minutes;
+    const windowEnd = deal.window_end_minutes;
+    const tz = deal.timezone || "America/Chicago";
 
-  if (!days.length || windowStart == null || windowEnd == null || windowStart >= windowEnd) return false;
-  const { day, minutes } = getLocalParts(now, tz);
-  if (!days.includes(day)) return false;
-  return minutes >= windowStart && minutes < windowEnd;
+    if (!days.length || windowStart == null || windowEnd == null || windowStart >= windowEnd) return false;
+    const { day, minutes } = getLocalParts(now, tz);
+    if (!days.includes(day)) return false;
+    return minutes >= windowStart && minutes < windowEnd;
+  } catch (e) {
+    console.warn("[deal-time] isDealActiveNow failed (bad dates/timezone?)", e);
+    return false;
+  }
 }
 
 export type FormatValiditySummaryOptions = {

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
@@ -16,9 +16,11 @@ import {
 import { buildClaimDealTelemetry } from "@/lib/claim-telemetry";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { logPostgrestError } from "@/lib/supabase-client-log";
 import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { PrimaryButton } from "@/components/ui/primary-button";
 import { WalletRedeemModal } from "@/components/wallet-redeem-modal";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
@@ -117,14 +119,15 @@ export default function WalletScreen() {
       .limit(120);
 
     if (error) {
-      setBanner(error.message);
+      logPostgrestError("wallet deal_claims", error);
+      setBanner(t("consumerWallet.loadError"));
       setClaims([]);
       setLoading(false);
       return;
     }
     setClaims((data ?? []) as unknown as ClaimRow[]);
     setLoading(false);
-  }, [userId]);
+  }, [userId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -530,6 +533,12 @@ export default function WalletScreen() {
           {t("consumerWallet.guestSubtitle")}
         </Text>
         <EmptyState title={t("consumerWallet.emptyLoginTitle")} message={t("consumerWallet.emptyLoginMessage")} />
+        <View style={{ marginTop: Spacing.lg }}>
+          <PrimaryButton
+            title={t("consumerWallet.guestSignInCta")}
+            onPress={() => router.push("/(tabs)/auth" as Href)}
+          />
+        </View>
       </View>
     );
   }

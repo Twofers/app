@@ -20,6 +20,7 @@ import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
+import { logPostgrestError } from "@/lib/supabase-client-log";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 type Deal = {
   id: string;
@@ -164,7 +165,8 @@ export default function HomeScreen() {
       .limit(80);
 
     if (error) {
-      setBanner(error.message);
+      logPostgrestError("home screen deals", error);
+      setBanner(t("consumerHome.loadDealsError"));
       setDeals([]);
       setLoadingDeals(false);
       return;
@@ -176,7 +178,7 @@ export default function HomeScreen() {
     await loadClaimCounts(filtered.map((d) => d.id));
     await loadUserClaims(filtered.map((d) => d.id));
     setLoadingDeals(false);
-  }, [loadClaimCounts, loadUserClaims]);
+  }, [loadClaimCounts, loadUserClaims, t]);
 
   const loadBusinesses = useCallback(async () => {
     setLoadingBiz(true);
@@ -186,6 +188,7 @@ export default function HomeScreen() {
       .order("name", { ascending: true })
       .limit(300);
     if (error) {
+      logPostgrestError("home screen businesses", error);
       setBusinesses([]);
     } else {
       setBusinesses((data ?? []) as BusinessRow[]);
@@ -394,6 +397,30 @@ export default function HomeScreen() {
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>
         {sessionEmail ? t("dealsBrowse.loggedInAs", { email: sessionEmail }) : t("dealsBrowse.notLoggedIn")}
       </Text>
+
+      {!sessionEmail ? (
+        <Pressable
+          onPress={() => router.push("/(tabs)/auth" as Href)}
+          accessibilityRole="button"
+          style={{
+            marginBottom: Spacing.md,
+            paddingVertical: Spacing.md,
+            paddingHorizontal: Spacing.md,
+            borderRadius: 14,
+            backgroundColor: "#f4f4f5",
+            borderWidth: 1,
+            borderColor: "#e4e4e7",
+          }}
+        >
+          <Text style={{ fontWeight: "800", fontSize: 15, color: "#18181b" }}>{t("consumerHome.guestBannerTitle")}</Text>
+          <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.72, lineHeight: 20 }}>
+            {t("consumerHome.guestBannerBody")}
+          </Text>
+          <Text style={{ marginTop: Spacing.sm, fontSize: 14, fontWeight: "700", color: "#2563eb" }}>
+            {t("consumerHome.guestSignInCta")}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {banner ? <Banner message={banner} tone="error" /> : null}
 

@@ -1,10 +1,16 @@
 import * as Location from "expo-location";
 import type { ConsumerPreferences } from "./consumer-preferences";
+import { geocodeUsZip } from "./us-zip-geocode";
 
 export type ResolvedConsumerCoords = {
   lat: number;
   lng: number;
   source: "gps" | "zip_geocode";
+  /**
+   * Only true when position came from device GPS with foreground permission.
+   * MapView `showsUserLocation` must stay false for ZIP-based coordinates — otherwise Android can crash without location permission.
+   */
+  showsDeviceLocationBlueDot: boolean;
 };
 
 /**
@@ -15,18 +21,14 @@ export async function resolveConsumerCoordinates(
   prefs: ConsumerPreferences,
 ): Promise<ResolvedConsumerCoords | null> {
   if (prefs.locationMode === "zip") {
-    const zip = prefs.zipCode.trim();
-    if (!zip) return null;
-    try {
-      const results = await Location.geocodeAsync(`${zip}, USA`);
-      const first = results[0];
-      if (first && Number.isFinite(first.latitude) && Number.isFinite(first.longitude)) {
-        return { lat: first.latitude, lng: first.longitude, source: "zip_geocode" };
-      }
-    } catch {
-      return null;
-    }
-    return null;
+    const r = await geocodeUsZip(prefs.zipCode);
+    if (!r.ok) return null;
+    return {
+      lat: r.lat,
+      lng: r.lng,
+      source: "zip_geocode",
+      showsDeviceLocationBlueDot: false,
+    };
   }
 
   const { status } = await Location.getForegroundPermissionsAsync();
@@ -37,6 +39,7 @@ export async function resolveConsumerCoordinates(
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       source: "gps",
+      showsDeviceLocationBlueDot: true,
     };
   } catch {
     return null;

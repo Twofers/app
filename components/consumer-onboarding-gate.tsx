@@ -15,7 +15,10 @@ const SKIP_ROOTS = new Set([
 
 /**
  * Customer mode: logged-in users must complete Supabase consumer profile (ZIP + birthday, or legacy age range),
- * then local onboarding (location radius + notifications). Guests skip profile.
+ * then local onboarding (location radius + notifications).
+ *
+ * Intentional guest browsing: users without a session skip the Supabase consumer profile gate and only complete
+ * local onboarding — they can browse listings but claim/wallet/favorites sync require sign-in.
  */
 export function ConsumerOnboardingGate() {
   const router = useRouter();

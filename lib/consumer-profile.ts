@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { setConsumerZipCode } from "./consumer-preferences";
+import { isValidUsZipFormat, normalizeUsZipInput } from "./us-zip";
 
 /** Legacy age bands (onboarding previously used chips). */
 export const CONSUMER_AGE_RANGE_VALUES = [
@@ -70,8 +71,9 @@ export async function upsertConsumerProfile(input: {
   zipCode: string;
   birthdate: string;
 }): Promise<{ error: Error | null }> {
-  const zip = input.zipCode.trim();
+  const zip = normalizeUsZipInput(input.zipCode);
   if (!zip) return { error: new Error("ZIP_REQUIRED") };
+  if (!isValidUsZipFormat(zip)) return { error: new Error("ZIP_FORMAT_INVALID") };
   const bd = input.birthdate.trim();
   if (!isValidBirthdateIso(bd)) return { error: new Error("BIRTHDATE_INVALID") };
   const { error } = await supabase.from("consumer_profiles").upsert(

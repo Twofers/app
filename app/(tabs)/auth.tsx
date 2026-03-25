@@ -108,9 +108,9 @@ export default function AuthScreen() {
         }
       }
 
-      Alert.alert("Logged in", "You’re in.");
+      Alert.alert(t("auth.alertLoggedInTitle"), t("auth.alertLoggedInMsg"));
     } catch (e: any) {
-      Alert.alert("Login failed", e?.message ?? String(e));
+      Alert.alert(t("auth.alertLoginFailTitle"), e?.message ?? String(e));
     } finally {
       setBusy(false);
     }
