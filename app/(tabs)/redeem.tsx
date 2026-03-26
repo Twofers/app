@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
@@ -8,6 +8,7 @@ import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { Banner } from "../../components/ui/banner";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { redeemToken } from "../../lib/functions";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";

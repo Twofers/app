@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../../lib/supabase";
-import { Banner } from "../../components/ui/banner";
-import { MerchantInsightsPanel } from "../../components/merchant-insights-panel";
-import { parseMerchantInsights, type MerchantInsightsRow } from "../../lib/merchant-insights";
-import { formatValiditySummary } from "../../lib/deal-time";
-import { formatAppDateFromDayKey } from "../../lib/i18n/format-datetime";
-import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { supabase } from "@/lib/supabase";
+import { Banner } from "@/components/ui/banner";
+import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
+import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
+import { formatValiditySummary } from "@/lib/deal-time";
+import { formatAppDateFromDayKey } from "@/lib/i18n/format-datetime";
+import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors } from "@/constants/theme";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -205,7 +206,7 @@ export default function DealAnalyticsDetail() {
                 style={{
                   paddingVertical: Spacing.md,
                   borderBottomWidth: 1,
-                  borderBottomColor: "#eee",
+                  borderBottomColor: Colors.light.border,
                 }}
               >
                 <Text style={{ fontWeight: "700", fontSize: 16 }}>

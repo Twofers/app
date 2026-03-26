@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
-import { Redirect } from "expo-router";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { Redirect, useGlobalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
 export default function Index() {
+  const params = useGlobalSearchParams<{ e2e?: string }>();
+  const forceE2E =
+    Platform.OS === "web" &&
+    ((params.e2e === "1") ||
+      (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
@@ -30,6 +35,10 @@ export default function Index() {
         <ActivityIndicator />
       </View>
     );
+  }
+
+  if (forceE2E) {
+    return <Redirect href="/(tabs)/account?e2e=1" />;
   }
 
   if (!hasSession) {

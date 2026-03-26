@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
+import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors, Radii } from "@/constants/theme";
 import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
@@ -25,8 +26,10 @@ import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -72,7 +75,11 @@ export default function SettingsScreen() {
 
   async function toggleAlerts(next: boolean) {
     if (next) {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
+      if (skippedBecauseExpoGo) {
+        Alert.alert(t("settingsScreen.alertsPermissionTitle"), t("settingsScreen.alertsExpoGoBody"));
+        return;
+      }
       if (status !== "granted") {
         Alert.alert(t("settingsScreen.alertsPermissionTitle"), t("settingsScreen.alertsPermissionBody"));
         return;
@@ -145,8 +152,8 @@ export default function SettingsScreen() {
         style={{
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
-          borderRadius: 14,
-          backgroundColor: active ? "#111" : "#ececec",
+          borderRadius: Radii.md,
+          backgroundColor: active ? "#111" : Colors.light.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
         }}
@@ -169,9 +176,11 @@ export default function SettingsScreen() {
         <Pressable
           onPress={() => router.push("/(tabs)/account")}
           style={{
-            borderRadius: 16,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             backgroundColor: "#111",
+            boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
+            elevation: 3,
           }}
         >
           <Text style={{ color: "#fff", fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.accountCta")}</Text>
@@ -185,8 +194,8 @@ export default function SettingsScreen() {
             onPress={() => router.push("/consumer-profile-setup?edit=1" as Href)}
             style={{
               borderWidth: 1,
-              borderColor: "#e5e5e5",
-              borderRadius: 16,
+              borderColor: Colors.light.border,
+              borderRadius: Radii.lg,
               padding: Spacing.lg,
             }}
           >
@@ -200,8 +209,8 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: "#e5e5e5",
-            borderRadius: 16,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
           }}
@@ -223,8 +232,8 @@ export default function SettingsScreen() {
                 autoCapitalize="characters"
                 style={{
                   borderWidth: 1,
-                  borderColor: "#ddd",
-                  borderRadius: 12,
+                  borderColor: Colors.light.border,
+                  borderRadius: Radii.md,
                   padding: Spacing.md,
                   fontSize: 16,
                 }}
@@ -239,8 +248,8 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: "#e5e5e5",
-            borderRadius: 16,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
           }}
@@ -257,8 +266,8 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: "#e5e5e5",
-            borderRadius: 16,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
           }}
@@ -298,8 +307,8 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: "#e5e5e5",
-            borderRadius: 16,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,
           }}
@@ -307,59 +316,37 @@ export default function SettingsScreen() {
           <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("language.sectionApp")}</Text>
           <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("language.sectionAppHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: Spacing.sm }}>
-            <Pressable
-              onPress={() => chooseAppLocale("en")}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                backgroundColor: i18n.language === "en" ? "#111" : "#f0f0f0",
-                marginRight: 8,
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ color: i18n.language === "en" ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>
-                {t("language.english")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => chooseAppLocale("es")}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                backgroundColor: i18n.language === "es" ? "#111" : "#f0f0f0",
-                marginRight: 8,
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ color: i18n.language === "es" ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>
-                {t("language.spanish")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => chooseAppLocale("ko")}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                backgroundColor: i18n.language === "ko" ? "#111" : "#f0f0f0",
-                marginRight: 8,
-                marginBottom: 8,
-              }}
-            >
-              <Text style={{ color: i18n.language === "ko" ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>
-                {t("language.korean")}
-              </Text>
-            </Pressable>
+            {(["en", "es", "ko"] as const).map((loc) => {
+              const active = i18n.language === loc;
+              return (
+                <Pressable
+                  key={loc}
+                  onPress={() => chooseAppLocale(loc)}
+                  style={{
+                    paddingVertical: Spacing.sm,
+                    paddingHorizontal: Spacing.md,
+                    borderRadius: Radii.pill,
+                    backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+                    marginRight: Spacing.sm,
+                    marginBottom: Spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>
+                    {loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
         <View
           style={{
             borderWidth: 1,
-            borderColor: "#e5e5e5",
-            borderRadius: 16,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,
           }}
@@ -368,7 +355,8 @@ export default function SettingsScreen() {
           <LegalExternalLinks />
         </View>
 
-        <Pressable
+        <SecondaryButton
+          title={t("settingsScreen.checkStatus")}
           onPress={async () => {
             const enabled = await getAlertsEnabled();
             Alert.alert(
@@ -376,31 +364,14 @@ export default function SettingsScreen() {
               enabled ? t("settingsScreen.statusOn") : t("settingsScreen.statusOff"),
             );
           }}
-          style={{
-            paddingVertical: Spacing.md + 2,
-            borderRadius: 14,
-            backgroundColor: "#eee",
-          }}
-        >
-          <Text style={{ color: "#111", fontWeight: "700", textAlign: "center", fontSize: 16 }}>
-            {t("settingsScreen.checkStatus")}
-          </Text>
-        </Pressable>
+        />
 
         {isDebugPanelEnabled() ? (
-          <Pressable
+          <PrimaryButton
+            title="Diagnostics (build / env)"
             onPress={() => router.push("/debug-diagnostics")}
-            style={{
-              marginTop: Spacing.md,
-              paddingVertical: Spacing.md + 2,
-              borderRadius: 14,
-              backgroundColor: "#222",
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "700", textAlign: "center", fontSize: 16 }}>
-              Diagnostics (build / env)
-            </Text>
-          </Pressable>
+            style={{ marginTop: Spacing.md, backgroundColor: "#222" }}
+          />
         ) : null}
       </ScrollView>
     </View>

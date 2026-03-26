@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seed:demo": "node scripts/seed-demo.cjs",
+    "screenshots:pages": "node scripts/screenshot-pages.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -24,7 +26,7 @@
     "@supabase/supabase-js": "^2.93.1",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",
-    "expo-av": "~16.0.8",
+    "expo-audio": "~1.1.1",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
     "expo-device": "~8.0.10",
@@ -64,6 +66,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "playwright": "^1.54.2",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
   },

@@ -61,10 +61,10 @@ export function SlideToUseDeal({ onConfirmed, disabled }: SlideToUseDealProps) {
         }}
       >
         <Text
-          pointerEvents="none"
           style={{
             position: "absolute",
             alignSelf: "center",
+            pointerEvents: "none",
             fontWeight: "800",
             fontSize: 14,
             color: "#888",

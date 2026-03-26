@@ -19,6 +19,9 @@
     "currentCustomer": "Current: customer tabs",
     "currentBusiness": "Current: business tabs"
   },
+  "emptyState": {
+    "encouragement": "No worries — more deals will pop up soon."
+  },
   "dealsBrowse": {
     "categoriesHeading": "Categories",
     "categoryHint": "Tip: businesses that set a category in Account → business profile show up as filter chips here.",
@@ -208,6 +211,7 @@
     "claimDuplicateActive": "You already have an active claim for this deal",
     "claimActiveOtherDeal": "You already have an active claim from this business. Redeem or wait for it to expire before claiming another offer.",
     "claimDailyLimitBusiness": "You can only claim once per business per day (in the business’s local time). Try again after midnight in that time zone.",
+    "claimHourlyLimit": "You can only claim one deal per hour. Please try again shortly.",
     "claimSoldOut": "This deal has reached its claim limit.",
     "claimCreateFailed": "Could not create claim: {{detail}}",
     "redeemUnauthorized": "Unauthorized. Please log in as a business owner.",
@@ -374,6 +378,7 @@
     "title": "Settings",
     "alertsPermissionTitle": "Permission required",
     "alertsPermissionBody": "Enable notifications to receive deal alerts.",
+    "alertsExpoGoBody": "Expo Go on Android can’t use full push setup. Use a development or preview build for notification permission, or continue without alerts.",
     "checkStatus": "Check alerts status",
     "statusAlertTitle": "Deal alerts",
     "statusOn": "On",
@@ -513,8 +518,16 @@
     "password": "Password",
     "logIn": "Log in",
     "loggingIn": "Logging in...",
+    "signingUp": "Creating account...",
     "signUp": "Sign up",
+    "createAccountCta": "Create account",
     "demoLogin": "Demo Login",
+    "errRateLimited": "Too many attempts. Wait a few minutes and try again, or use a development build with the demo account pre-seeded (see docs/DEMO_SEED.md).",
+    "errInvalidCredentials": "Email or password is incorrect.",
+    "errGeneric": "Something went wrong. Try again.",
+    "errNetwork": "Network error. Check your connection and try again.",
+    "errDemoNotProvisioned": "Demo account is not set up in this Supabase project. Run once: npm run seed:demo (service role), or create demo@demo.com with password demo12345 in the Auth dashboard.",
+    "errFieldsRequired": "Enter email and password.",
     "alertSignUpSuccessTitle": "Success",
     "alertSignUpSuccessMsg": "Check your email to confirm, then log in.",
     "alertSignUpFailTitle": "Sign up failed",
@@ -582,12 +595,22 @@
     "zipMix": "ZIP area clusters (masked)",
     "acqMix": "How shoppers found the deal",
     "methodMix": "Redeem method",
+    "claimBlockedMix": "Claim blocks (why shoppers could not claim)",
     "hourHeat": "Claims by hour (local to each deal)",
     "hourPeak": "Busiest around {{hour}}:00 local ({{count}} claims)",
     "hourHeatSparse": "Not enough claims yet for a clear hourly pattern.",
     "methodVisual": "In-app pass",
     "methodQr": "QR / code",
     "methodPending": "Pending",
+    "claimBlockedReasons": {
+      "hourly_limit": "Hourly claim limit",
+      "business_daily_limit": "Business daily limit",
+      "active_business_claim": "Existing active claim at business",
+      "duplicate_deal_claim": "Already claimed this deal",
+      "deal_sold_out": "Deal sold out / max claims",
+      "deal_closed": "Claim window closed or expired",
+      "unknown": "Unknown"
+    },
     "acquisition": {
       "organic": "Organic",
       "push": "Push",
@@ -631,7 +654,7 @@
     "titleMain": "AI ads for your deal",
     "intro": "Upload a photo of the product or menu item, describe the offer in your own words, then get three different ad angles. Choose one, tweak the text, and publish when you’re ready.",
     "demoModeTitle": "Demo account",
-    "demoModeBody": "Unless your Supabase project has OPENAI_API_KEY and AI_ADS_DEMO_USE_LIVE=true, this login gets built-in template ads—not GPT. Any other account still needs OPENAI_API_KEY in Edge Function secrets for real AI.",
+    "demoModeBody": "For demo@demo.com, ad ideas use built-in templates (no OpenAI) unless your project sets Edge secrets OPENAI_API_KEY and AI_ADS_DEMO_USE_LIVE=true. Publishing the deal does not call OpenAI. Other accounts need OPENAI_API_KEY for real AI ads.",
     "devToolsTitle": "Developer: extra AI edge functions",
     "devToolsIntro": "Dev-only — shows right under the intro (no QA panel needed). Tests edge functions besides “Generate 3 ad ideas”. Needs photo + hint on screen for ai-create-deal.",
     "devTestCopy": "Test ai-generate-deal-copy",
@@ -678,6 +701,11 @@
     "refreshLimitReached": "Refresh limit reached — tap Generate 3 ad ideas for a new batch.",
     "refreshesLeft": "Free refreshes left: {{count}}",
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
+    "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
+    "errGenerationFailed": "Generation failed",
+    "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",
+    "errAiGenerationFailed": "AI generation failed.",
+    "errUploadPhotoForDevCreate": "Upload a photo first.",
     "fallbackIntro": "We couldn’t generate ads right now. You can still finish this offer manually.",
     "fallbackBody": "Your photo and offer note stay put. Open the title, subheadline, CTA, and details below, then publish — or adjust the note and tap Generate again.",
     "showDraftFields": "Show title & description fields",
@@ -749,6 +777,7 @@
     "friendlyGenerationLongError": "We couldn’t generate ads right now. You can still finish this offer manually. Try again in a moment, or fill in the fields below."
   },
   "commonUi": {
+    "ok": "OK",
     "cancel": "Cancel",
     "goBack": "Go Back",
     "dealNotFound": "Deal not found",
@@ -764,6 +793,9 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Ends",
     "modalTitle": "Modal"
+  },
+  "debugDiagnostics": {
+    "title": "Diagnostics"
   },
   "modalScreen": {
     "title": "This is a modal",
@@ -1094,11 +1126,24 @@
     "alertWindowBody": "Enter a valid start and end time"
   },
   "offersDashboard": {
-    "subtitle": "Last 30 days · tap a card for analytics",
+    "subtitle": "This month at a glance · tap a deal for details",
+    "periodHint": "Figures reflect the current calendar month unless noted.",
     "loginPrompt": "Please log in to view your dashboard.",
     "loading": "Loading...",
     "needBusiness": "Create a business to unlock analytics.",
-    "overview": "Overview",
+    "overview": "Performance",
+    "metricDealsLaunched": "Deals launched",
+    "metricTotalClaims": "Total claims",
+    "metricRedemptions": "Redemptions",
+    "metricNewCustomers": "Est. new customers",
+    "metricNewCustomersSub": "Unique redeemers",
+    "metricAvgRedemption": "Redemption rate",
+    "metricAvgRedemptionSub": "Claims redeemed",
+    "inventorySaved": "Inventory saved",
+    "inventoryPlaceholder": "Est. 18 pastries / 42 coffees not wasted",
+    "chartTitle": "Daily claims · last 7 days",
+    "chartFooter": "Based on claim time in your time zone.",
+    "recentDeals": "Recent deals",
     "yourDeals": "Your deals",
     "dealFallback": "Deal",
     "rowClaims": "Claims {{count}}",
@@ -1108,7 +1153,8 @@
     "endDealEarly": "End deal early",
     "errLoadDashboard": "Failed to load dashboard.",
     "errEndDeal": "Could not end deal.",
-    "emptyDeals": "No deals yet. Create one to see analytics."
+    "emptyDeals": "No deals yet. Create one to see analytics.",
+    "createFirstDeal": "Create Your First Deal"
   },
   "consumerProfile": {
     "navTitle": "Your profile",
@@ -1148,6 +1194,8 @@
     "businessName": "Business name",
     "phone": "Phone",
     "address": "Street address",
+    "shortDescription": "Short description",
+    "shortDescriptionPh": "e.g., Neighborhood coffee shop · fast pickup · family-owned",
     "categoryLabel": "Category",
     "hoursLabel": "Hours",
     "categoryOtherPh": "Describe your category",

@@ -1,18 +1,27 @@
-import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { PlatformPressable } from '@react-navigation/elements';
-import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
+import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+
+import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
+
+const AnimatedPlatformPressable = Animated.createAnimatedComponent(PlatformPressable);
 
 export function HapticTab(props: BottomTabBarButtonProps) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
   return (
-    <PlatformPressable
+    <AnimatedPlatformPressable
       {...props}
+      style={[props.style, animatedStyle]}
       onPressIn={(ev) => {
-        if (Platform.OS === 'ios') {
-          // Add a soft haptic feedback when pressing down on the tabs.
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
+        triggerLightHaptic();
+        scale.value = springPressIn();
         props.onPressIn?.(ev);
+      }}
+      onPressOut={(ev) => {
+        scale.value = springPressOut();
+        props.onPressOut?.(ev);
       }}
     />
   );

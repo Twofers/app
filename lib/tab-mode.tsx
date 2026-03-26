@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 /** Primary store (cleared on uninstall; avoids iOS Keychain “ghost” state after reinstall). */
 const ASYNC_KEY = "twoforone_tab_mode_v2";
@@ -23,12 +23,24 @@ type TabModeContextValue = {
 const TabModeContext = createContext<TabModeContextValue | null>(null);
 
 async function loadStoredMode(): Promise<TabMode> {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const qpMode = new URLSearchParams(window.location.search).get("mode");
+    if (qpMode === "business" || qpMode === "customer") {
+      return qpMode;
+    }
+  }
+
   const asyncVal = await AsyncStorage.getItem(ASYNC_KEY);
   if (asyncVal === "business" || asyncVal === "customer") {
     return asyncVal;
   }
 
   try {
+    if (Platform.OS === "web") {
+      // Legacy SecureStore migration does not apply on web.
+      return "customer";
+    }
+    const SecureStore = await import("expo-secure-store");
     const importDone = await SecureStore.getItemAsync(LEGACY_IMPORT_DONE_SECURE_KEY);
     if (importDone === "1") {
       try {
@@ -83,7 +95,10 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     setModeState(next);
     await AsyncStorage.setItem(ASYNC_KEY, next);
     try {
-      await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
+      if (Platform.OS !== "web") {
+        const SecureStore = await import("expo-secure-store");
+        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
+      }
     } catch {
       /* missing */
     }

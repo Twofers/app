@@ -15,6 +15,7 @@ const ALLOWED = new Set([
   "redeem_completed",
   "redeem_failed",
   "claim_expired",
+  "claim_blocked",
 ]);
 
 serve(async (req) => {

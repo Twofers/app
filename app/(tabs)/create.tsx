@@ -1,22 +1,51 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
-import { useRouter, type Href } from "expo-router";
+import { Colors, Radii } from "@/constants/theme";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { Banner } from "../../components/ui/banner";
 import { Image } from "expo-image";
+import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 
 export default function CreateDeal() {
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
+  const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { isLoggedIn, businessId, loading } = useBusiness();
   const [banner, setBanner] = useState<string | null>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [profileCheckLoading, setProfileCheckLoading] = useState(false);
+  const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
+
+  useEffect(() => {
+    const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
+    if (!isLoggedIn || bypass) {
+      setHasBusinessProfileAccess(bypass);
+      setProfileCheckLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setProfileCheckLoading(true);
+    void getBusinessProfileAccessForCurrentUser()
+      .then((access) => {
+        if (cancelled) return;
+        setHasBusinessProfileAccess(access.isComplete);
+      })
+      .finally(() => {
+        if (!cancelled) setProfileCheckLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, params.skipSetup, params.e2e]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -44,11 +73,12 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ opacity: 0.7 }}>{t("createHub.loginPrompt")}</Text>
         </View>
-      ) : loading ? (
+      ) : loading || profileCheckLoading ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
+          <ActivityIndicator />
+          <Text style={{ opacity: 0.7, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>
         </View>
-      ) : !businessId ? (
+      ) : !hasBusinessProfileAccess ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createHub.createBusinessHeader")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("createHub.createBusinessBody")}</Text>
@@ -56,6 +86,12 @@ export default function CreateDeal() {
             title={t("account.startBusinessSetup")}
             onPress={() => router.push("/business-setup" as Href)}
           />
+        </View>
+      ) : !businessId ? (
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+          <Text style={{ opacity: 0.7 }}>
+            Business profile found. Finalizing your business account record. You can still start creating a deal.
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -67,13 +103,15 @@ export default function CreateDeal() {
           <Pressable
             onPress={() => router.push("/create/quick")}
             style={{
-              borderRadius: 18,
+              borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: "#111",
+              backgroundColor: Colors.light.primary,
+              boxShadow: "0px 4px 10px rgba(0,0,0,0.10)",
+              elevation: 3,
             }}
           >
-            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
-            <Text style={{ color: "white", opacity: 0.85, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+            <Text style={{ color: Colors.light.primaryText, fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
+            <Text style={{ color: Colors.light.primaryText, opacity: 0.9, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
               {t("createHub.quickDealSubtitle")}
             </Text>
           </Pressable>
@@ -81,9 +119,11 @@ export default function CreateDeal() {
           <Pressable
             onPress={() => router.push("/create/ai-compose")}
             style={{
-              borderRadius: 18,
+              borderRadius: Radii.lg,
               padding: Spacing.lg,
               backgroundColor: "#1e3a5f",
+              boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
+              elevation: 2,
             }}
           >
             <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
@@ -95,11 +135,11 @@ export default function CreateDeal() {
           <Pressable
             onPress={() => router.push("/create/reuse")}
             style={{
-              borderRadius: 18,
+              borderRadius: Radii.lg,
               padding: Spacing.md,
-              backgroundColor: "#f4f4f5",
+              backgroundColor: Colors.light.surface,
               borderWidth: 1,
-              borderColor: "#e4e4e7",
+              borderColor: Colors.light.border,
             }}
           >
             <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.reuseTitle")}</Text>
@@ -111,9 +151,9 @@ export default function CreateDeal() {
           <Pressable
             onPress={() => router.push("/create/ai")}
             style={{
-              borderRadius: 18,
+              borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: "#eee",
+              backgroundColor: Colors.light.surfaceMuted,
             }}
           >
             <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
@@ -129,25 +169,26 @@ export default function CreateDeal() {
             ) : templates.length === 0 ? (
               <Text style={{ opacity: 0.7 }}>{t("createHub.templatesEmpty")}</Text>
             ) : (
-              templates.map((tpl) => (
+              templates.map((tpl) => {
+                const tplPoster = resolveDealPosterDisplayUri(tpl.poster_url, null);
+                return (
                 <Pressable
                   key={tpl.id}
                   onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
                   style={{
-                    borderRadius: 18,
-                    backgroundColor: "#fff",
+                    borderRadius: Radii.lg,
+                    backgroundColor: Colors.light.surface,
                     padding: Spacing.md,
                     marginBottom: Spacing.md,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.07,
-                    shadowRadius: 10,
-                    shadowOffset: { width: 0, height: 3 },
+                    boxShadow: "0px 4px 8px rgba(0,0,0,0.08)",
                     elevation: 2,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
                   }}
                 >
-                  {tpl.poster_url ? (
+                  {tplPoster ? (
                     <Image
-                      source={{ uri: tpl.poster_url }}
+                      source={{ uri: tplPoster }}
                       style={{ height: 140, width: "100%", borderRadius: 14 }}
                       contentFit="cover"
                     />
@@ -159,7 +200,8 @@ export default function CreateDeal() {
                     <Text style={{ marginTop: Spacing.xs, opacity: 0.7, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
                   ) : null}
                 </Pressable>
-              ))
+              );
+              })
             )}
           </View>
         </ScrollView>

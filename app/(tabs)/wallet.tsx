@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, RefreshControl, SectionList, Text, View } from "react-native";
+import { RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors, Radii } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal, beginVisualRedeem, finalizeStaleRedeems } from "@/lib/functions";
 import {
@@ -21,6 +22,7 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
 import { WalletRedeemModal } from "@/components/wallet-redeem-modal";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
@@ -29,6 +31,7 @@ import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type ClaimRow = {
   id: string;
@@ -234,6 +237,15 @@ export default function WalletScreen() {
       }
       a.push(c);
     }
+    a.sort((x, y) => {
+      const xDeadline = new Date(
+        getClaimRedeemDeadlineIso(x.expires_at, x.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES),
+      ).getTime();
+      const yDeadline = new Date(
+        getClaimRedeemDeadlineIso(y.expires_at, y.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES),
+      ).getTime();
+      return xDeadline - yDeadline;
+    });
     e.sort((x, y) => new Date(y.row.created_at).getTime() - new Date(x.row.created_at).getTime());
     return { active: a, ended: e };
   }, [claims, nowMs]);
@@ -329,6 +341,12 @@ export default function WalletScreen() {
       bucket === "active" && !redeemed && !tokenDead
         ? formatConsumerCountdown(redeemByIso, nowMs, t)
         : null;
+    const remainingMs = new Date(redeemByIso).getTime() - nowMs;
+    const urgent =
+      bucket === "active" &&
+      !redeemed &&
+      !tokenDead &&
+      remainingMs <= 15 * 60 * 1000;
 
     const shortLabel = row.short_code
       ? `${row.short_code.slice(0, 3)} ${row.short_code.slice(3)}`
@@ -348,17 +366,65 @@ export default function WalletScreen() {
     return (
       <View
         style={{
-          borderRadius: 18,
-          backgroundColor: "#fff",
+          borderRadius: Radii.lg,
+          backgroundColor:
+            bucket === "active" && !redeemed && !tokenDead
+              ? urgent
+                ? "#fff7ed"
+                : "#f8fafc"
+              : Colors.light.surface,
           padding: Spacing.md,
           marginBottom: Spacing.md,
-          shadowColor: "#000",
-          shadowOpacity: 0.07,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 3 },
+          borderWidth: 1.5,
+          borderColor:
+            bucket === "active" && !redeemed && !tokenDead
+              ? urgent
+                ? "#fb923c"
+                : "#86efac"
+              : Colors.light.border,
+          boxShadow: "0px 3px 8px rgba(0,0,0,0.06)",
           elevation: 2,
         }}
       >
+        {bucket === "active" && !redeemed && !tokenDead && countdown ? (
+          <View
+            style={{
+              borderRadius: Radii.md,
+              backgroundColor: urgent ? "#7c2d12" : "#14532d",
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
+              marginBottom: Spacing.md,
+              borderWidth: 1,
+              borderColor: urgent ? "#ea580c" : "#22c55e",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "800",
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: urgent ? "#ffedd5" : "#dcfce7",
+              }}
+            >
+              {urgent ? "Redeem soon" : t("consumerWallet.timeLeftHeading")}
+            </Text>
+            <Text
+              style={{
+                fontSize: 32,
+                marginTop: 2,
+                fontWeight: "900",
+                color: "#fff",
+                letterSpacing: -0.5,
+              }}
+            >
+              {countdown}
+            </Text>
+            <Text style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#bbf7d0", marginTop: 2 }}>
+              {t("consumerWallet.redeemByCaption", { datetime: expiryShown })}
+            </Text>
+          </View>
+        ) : null}
         <Pressable
           onPress={() => {
             if (row.deals?.id) router.push(`/deal/${row.deals.id}`);
@@ -423,33 +489,6 @@ export default function WalletScreen() {
                   {t("consumerWallet.redeemedViaQr")}
                 </Text>
               ) : null}
-              {countdown ? (
-                <View
-                  style={{
-                    marginTop: Spacing.sm,
-                    alignSelf: "flex-start",
-                    backgroundColor: "#eff6ff",
-                    paddingVertical: Spacing.sm,
-                    paddingHorizontal: Spacing.md,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: "#bfdbfe",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      opacity: 0.55,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.4,
-                    }}
-                  >
-                    {t("consumerWallet.timeLeftHeading")}
-                  </Text>
-                  <Text style={{ fontSize: 16, fontWeight: "800", marginTop: 2 }}>{countdown}</Text>
-                </View>
-              ) : null}
               <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17 }}>
                 {bucket === "active" && !redeemed && !tokenDead
                   ? t("consumerWallet.redeemByCaption", { datetime: expiryShown })
@@ -460,53 +499,67 @@ export default function WalletScreen() {
         </Pressable>
         {bucket === "active" && !redeemed && !tokenDead ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <Pressable
+            <View
+              style={{
+                borderRadius: Radii.md,
+                borderWidth: 1,
+                borderColor: "#d1d5db",
+                backgroundColor: "#fff",
+                padding: Spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, opacity: 0.65 }}>
+                Scan QR at counter
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: "#111827",
+                    borderStyle: "dashed",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#f9fafb",
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "700", opacity: 0.55 }}>QR</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, opacity: 0.58 }}>
+                    {t("consumerWallet.verifyCodeLabel")}
+                  </Text>
+                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2 }}>
+                    {shortLabel}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <PrimaryButton
+              title={isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
-              style={{
-                paddingVertical: Spacing.md,
-                borderRadius: 14,
-                backgroundColor: "#16a34a",
-                opacity: useDealBusy ? 0.65 : 1,
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center", fontSize: 17 }}>
-                {isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
-              </Text>
-            </Pressable>
-            <Pressable
+              style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
+            />
+            <SecondaryButton
+              title={`QR fallback - ${t("consumerWallet.qrFallbackCta")}`}
               onPress={() => openVerifyForClaim(row)}
               disabled={isRedeeming}
-              style={{
-                paddingVertical: Spacing.sm,
-                borderRadius: 12,
-                backgroundColor: "#f4f4f5",
-                opacity: isRedeeming ? 0.45 : 1,
-              }}
-            >
-              <Text style={{ color: "#333", fontWeight: "700", textAlign: "center" }}>
-                {t("consumerWallet.qrFallbackCta")}
-              </Text>
-            </Pressable>
+              style={{ opacity: isRedeeming ? 0.45 : 1 }}
+            />
           </View>
         ) : null}
         {bucket === "active" && tokenDead && !redeemed ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
             <Text style={{ fontSize: 13, opacity: 0.65 }}>{t("consumerWallet.qrExpired")}</Text>
-            <Pressable
+            <PrimaryButton
+              title={claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
               disabled={claimingRefreshId === row.id}
-              style={{
-                paddingVertical: Spacing.sm,
-                borderRadius: 12,
-                backgroundColor: "#111",
-                opacity: claimingRefreshId === row.id ? 0.65 : 1,
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "700", textAlign: "center" }}>
-                {claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
-              </Text>
-            </Pressable>
+              style={{ backgroundColor: "#111", borderRadius: Radii.lg }}
+            />
           </View>
         ) : null}
       </View>
@@ -532,7 +585,7 @@ export default function WalletScreen() {
 
   if (!isLoggedIn) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
         <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("consumerWallet.title")}</Text>
         <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.65, fontSize: 15, lineHeight: 22 }}>
           {t("consumerWallet.guestSubtitle")}
@@ -549,7 +602,7 @@ export default function WalletScreen() {
   }
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("consumerWallet.title")}</Text>
       <Text style={{ marginTop: Spacing.xs, opacity: 0.62, fontSize: 15, lineHeight: 22 }}>{t("consumerWallet.subtitle")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>{sessionEmail ?? ""}</Text>
@@ -559,11 +612,11 @@ export default function WalletScreen() {
           flexDirection: "row",
           gap: Spacing.md,
           marginBottom: Spacing.lg,
-          borderRadius: 16,
+          borderRadius: Radii.lg,
           borderWidth: 1,
-          borderColor: "#eee",
+          borderColor: Colors.light.border,
           padding: Spacing.md,
-          backgroundColor: "#fafafa",
+          backgroundColor: Colors.light.surfaceMuted,
         }}
       >
         <View style={{ flex: 1 }}>

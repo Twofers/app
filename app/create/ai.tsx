@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -19,6 +18,7 @@ import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { aiCreateDeal, aiGenerateDealCopy, parseFunctionError } from "../../lib/functions";
 import {
   adToDealDraft,
@@ -39,6 +39,8 @@ import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
+import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
+import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 
 type TemplateRow = {
   id: string;
@@ -117,7 +119,7 @@ export default function AiDealScreen() {
     sessionEmail,
     businessName,
   } = useBusiness();
-  const isDemoAiAccount = (sessionEmail ?? "").trim().toLowerCase() === "demo@demo.com";
+  const isDemoAiAccount = isDemoPreviewAccountEmail(sessionEmail);
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   const dayOptionsUi = useMemo(
@@ -169,7 +171,10 @@ export default function AiDealScreen() {
   const [timezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago"
   );
-  const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
+  const [banner, setBanner] = useState<{
+    message: string;
+    tone?: "error" | "success" | "info" | "warning";
+  } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generatedAds, setGeneratedAds] = useState<GeneratedAd[] | null>(null);
   const [selectedAdIndex, setSelectedAdIndex] = useState<number | null>(null);
@@ -449,7 +454,7 @@ export default function AiDealScreen() {
     try {
       const path = await ensureUploadedPhoto();
       if (!path) {
-        throw new Error("Upload the photo before generating.");
+        throw new Error(t("createAi.errUploadPhotoBeforeGenerate"));
       }
       await ensurePosterUrl(path);
       const priceNum = price.trim() ? Number(price) : null;
@@ -474,11 +479,11 @@ export default function AiDealScreen() {
         throw new Error(parseFunctionError(error));
       }
       if (data && typeof data === "object" && "error" in data) {
-        throw new Error(String((data as { error?: string }).error ?? "Generation failed"));
+        throw new Error(String((data as { error?: string }).error ?? t("createAi.errGenerationFailed")));
       }
       const ads = (data as { ads?: GeneratedAd[] })?.ads;
       if (!Array.isArray(ads) || ads.length !== 3) {
-        throw new Error("Unexpected response from AI. Try again.");
+        throw new Error(t("createAi.errUnexpectedAiResponse"));
       }
       setGeneratedAds(ads);
       setLastSuccessfulGenAttempt(attemptForApi);
@@ -497,7 +502,7 @@ export default function AiDealScreen() {
         ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
       });
     } catch (err: any) {
-      const raw = err?.message ?? "AI generation failed.";
+      const raw = err?.message ?? t("createAi.errAiGenerationFailed");
       const friendly = friendlyGenerationError(raw);
       setLastGenerationError(friendly);
       setBanner({ message: friendly, tone: "error" });
@@ -556,7 +561,7 @@ export default function AiDealScreen() {
     try {
       const path = await ensureUploadedPhoto();
       if (!path) {
-        throw new Error("Upload a photo first.");
+        throw new Error(t("createAi.errUploadPhotoForDevCreate"));
       }
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
@@ -573,7 +578,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
       });
       Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
-        { text: "OK", onPress: () => router.replace("/(tabs)/dashboard") },
+        { text: t("commonUi.ok"), onPress: () => router.replace("/(tabs)/dashboard") },
       ]);
     } catch (e: any) {
       Alert.alert(t("createAi.devCreateFailTitle"), e?.message ?? String(e));
@@ -622,6 +627,15 @@ export default function AiDealScreen() {
           message: translateDealQualityBlock(quality, dealOutputLang),
           tone: "error",
         });
+        return;
+      }
+
+      const strongGuard = validateStrongDealOnly({
+        title: title.trim(),
+        description: composedDescription,
+      });
+      if (!strongGuard.ok) {
+        setBanner({ message: strongGuard.message, tone: "warning" });
         return;
       }
 
@@ -873,7 +887,19 @@ export default function AiDealScreen() {
         </View>
       ) : (
         <>
-          <Text style={{ marginTop: 16, fontWeight: "700" }}>{t("createAi.photo")}</Text>
+          <View
+            style={{
+              marginTop: 14,
+              borderRadius: 14,
+              backgroundColor: "#f6f7fb",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 1</Text>
+          </View>
+          <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
             <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
             <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
@@ -882,27 +908,55 @@ export default function AiDealScreen() {
           {photoUri || posterUrl ? (
             <Image
               source={{ uri: photoUri ?? posterUrl ?? "" }}
-              style={{ height: 200, width: "100%", borderRadius: 16, marginTop: 12 }}
+              style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
               contentFit="cover"
             />
           ) : (
             <View style={{ marginTop: 12 }}>
-              <View style={{ height: 200, borderRadius: 16, backgroundColor: "#eee" }} />
-              <Text style={{ marginTop: 8, opacity: 0.65, fontSize: 13 }}>{t("createAi.photoHint")}</Text>
+              <View
+                style={{
+                  height: 260,
+                  borderRadius: 18,
+                  backgroundColor: "#f3f6ff",
+                  borderWidth: 1.5,
+                  borderColor: "#cfd7ff",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 16,
+                }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#2f3fb2" }}>
+                  {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
+                </Text>
+                <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center" }}>{t("createAi.photoHint")}</Text>
+              </View>
             </View>
           )}
 
-          <Text style={{ marginTop: 16 }}>{t("createAi.fewWords")}</Text>
+          <View
+            style={{
+              marginTop: 16,
+              borderRadius: 14,
+              backgroundColor: "#f6f7fb",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 2</Text>
+          </View>
+          <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
           <TextInput
             value={hintText}
             onChangeText={setHintText}
             placeholder={t("createAi.hintPlaceholder")}
             style={{
               borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
+              borderColor: "#cfd3de",
+              borderRadius: 14,
+              padding: 14,
               marginTop: 6,
+              backgroundColor: "#fff",
             }}
           />
 
@@ -921,7 +975,19 @@ export default function AiDealScreen() {
             }}
           />
 
-          <Text style={{ marginTop: 12, fontWeight: "700" }}>{t("createAi.validity")}</Text>
+          <View
+            style={{
+              marginTop: 16,
+              borderRadius: 14,
+              backgroundColor: "#f6f7fb",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 3</Text>
+          </View>
+          <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
             <Pressable
               onPress={() => setValidityMode("one-time")}
@@ -1118,6 +1184,7 @@ export default function AiDealScreen() {
               title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
               onPress={() => void generateAdVariants("initial")}
               disabled={generating}
+              style={{ height: 62, borderRadius: 18 }}
             />
             {generatedAds && generatedAds.length === 3 ? (
               <>
@@ -1189,13 +1256,17 @@ export default function AiDealScreen() {
                       backgroundColor: "#fff",
                       borderWidth: selected ? 2 : 1,
                       borderColor: selected ? "#111" : "#e5e5e5",
-                      shadowColor: "#000",
-                      shadowOpacity: 0.06,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 2 },
+                      boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
                       elevation: 2,
                     }}
                   >
+                    {photoUri || posterUrl ? (
+                      <Image
+                        source={{ uri: photoUri ?? posterUrl ?? "" }}
+                        style={{ height: 128, width: "100%", borderRadius: 12, marginBottom: 10 }}
+                        contentFit="cover"
+                      />
+                    ) : null}
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                       <Text
                         style={{
@@ -1278,10 +1349,7 @@ export default function AiDealScreen() {
                   backgroundColor: "#fff",
                   overflow: "hidden",
                   marginTop: 10,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.08,
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 4 },
+                  boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
                   elevation: 2,
                 }}
               >
@@ -1372,6 +1440,7 @@ export default function AiDealScreen() {
                   title={publishing ? t("createAi.publishing") : t("createAi.publishDeal")}
                   onPress={publishDeal}
                   disabled={publishing}
+                  style={{ height: 66, borderRadius: 20 }}
                 />
                 <SecondaryButton
                   title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}

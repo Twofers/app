@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Linking, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Linking, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import {
   DELETE_ACCOUNT_URL,
@@ -7,6 +7,7 @@ import {
   SUPPORT_URL,
   TERMS_OF_SERVICE_URL,
 } from "@/lib/legal-urls";
+import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
 type Props = {
   style?: StyleProp<ViewStyle>;
@@ -61,13 +62,13 @@ export function LegalExternalLinks({
               ·
             </Text>
           ) : null}
-          <Pressable
+          <HapticScalePressable
             accessibilityRole="link"
             onPress={() => void open(item.url)}
             style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>{item.label}</Text>
-          </Pressable>
+          </HapticScalePressable>
         </Fragment>
       ))}
     </View>

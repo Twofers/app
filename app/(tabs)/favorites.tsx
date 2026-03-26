@@ -52,6 +52,7 @@ export default function FavoritesScreen() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
 
@@ -147,6 +148,7 @@ export default function FavoritesScreen() {
     setClaimingDealId(dealId);
     try {
       const out = await claimDeal(dealId);
+      if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setLastClaimDealId(dealId);
@@ -246,6 +248,7 @@ export default function FavoritesScreen() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

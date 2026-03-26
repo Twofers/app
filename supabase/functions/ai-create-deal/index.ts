@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -219,6 +220,21 @@ serve(async (req) => {
         JSON.stringify({ error: "AI response was invalid." }),
         {
           status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Keep AI generation as-is; enforce marketplace quality after model output.
+    const strongCheck = validateStrongDealOnly({
+      title: result.title,
+      description: `${result.promo_line}\n${result.description}`,
+    });
+    if (!strongCheck.ok) {
+      return new Response(
+        JSON.stringify({ error: strongCheck.message }),
+        {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );

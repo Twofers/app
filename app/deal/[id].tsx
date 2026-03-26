@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -17,6 +17,7 @@ import { useBusiness } from "../../hooks/use-business";
 import { formatValiditySummary } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type Deal = {
   id: string;
@@ -53,6 +54,7 @@ export default function DealDetail() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -135,6 +137,7 @@ export default function DealDetail() {
           business_id: deal.business_id,
           claim_id: out.claim_id,
         });
+        setClaimSuccessToastNonce((n) => n + 1);
       }
       setQrToken(out.token);
       setQrExpires(out.expires_at);
@@ -363,6 +366,7 @@ export default function DealDetail() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

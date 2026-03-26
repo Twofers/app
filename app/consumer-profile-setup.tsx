@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Platform, ScrollView, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Banner } from "@/components/ui/banner";
 import { supabase } from "@/lib/supabase";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
   fetchConsumerProfile,
   isConsumerProfileComplete,

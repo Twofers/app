@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { useBusiness } from "@/hooks/use-business";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type BizRow = {
   id: string;
@@ -278,10 +279,7 @@ export default function BusinessProfileScreen() {
                 borderRadius: 18,
                 overflow: "hidden",
                 backgroundColor: "#fff",
-                shadowColor: "#000",
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 2 },
+                boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
                 elevation: 2,
               }}
             >

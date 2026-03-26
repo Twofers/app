@@ -26,10 +26,14 @@ Apply these migration files in order:
 | 8 | `20260324180000_business_consumer_profile_fields.sql` |
 | 9 | `20260325120000_ai_generation_logs.sql` |
 | 10 | `20260325120100_ai_compose_quota_rpc.sql` |
-| 11 | `20260326120000_consumer_profiles_business_contact.sql` |
-| 12 | `20260326210000_deal_claims_short_code.sql` |
-| 13 | `20260327120000_launch_visual_redeem_analytics.sql` |
-| 14 | `20260328140000_merchant_insights_rpc.sql` |
+| 11 | `20260325183000_strong_deal_only_guardrail.sql` |
+| 12 | `20260326120000_consumer_profiles_business_contact.sql` |
+| 13 | `20260326210000_deal_claims_short_code.sql` |
+| 14 | `20260327120000_launch_visual_redeem_analytics.sql` |
+| 15 | `20260328140000_merchant_insights_rpc.sql` |
+| 16 | `20260330120000_fix_deal_claims_deals_rls_recursion.sql` |
+| 17 | `20260331120000_deal_poster_storage_public_read.sql` |
+| 18 | `20260401120000_add_claim_blocked_reason_mix_to_merchant_business_insights.sql` |
 
 **Launch-critical for merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql` (claim lifecycle + analytics) and `20260328140000_merchant_insights_rpc.sql` (`merchant_business_insights`, `merchant_deal_insights` RPCs).
 
@@ -70,7 +74,7 @@ Deploy all folders under `supabase/functions/` that ship with this repo. The **w
 | `EXPO_PUBLIC_SUPPORT_URL` | No | Default: `https://www.twoferapp.com/support` |
 | `EXPO_PUBLIC_DELETE_ACCOUNT_URL` | No | Default: `https://www.twoferapp.com/delete-account` |
 | `EXPO_PUBLIC_GIT_COMMIT` | No | Optional short SHA shown in **Diagnostics** / `app.config.js` `extra.gitCommit` (else `git rev-parse` at config time if available) |
-| `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER` | No | When `true`, `demo@demo.com` auto sign-up matches Metro dev behavior. **Preview** profile in `eas.json` sets this; **production** does not. |
+| `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER` | No | With a preview/dev client profile, when `true`, shows **Demo login** (password sign-in only; no auto–sign-up). **Preview** in `eas.json` sets this; **production** does not. Local Metro (`expo start`) also enables Demo login via `__DEV__` even if unset. |
 | `EXPO_PUBLIC_SHOW_DEBUG_PANEL` | No | Settings → **Diagnostics (build / env)** screen |
 | `EXPO_PUBLIC_DEBUG_BOOT_LOG` | No | One-shot `[twoforone:boot]` JSON in Metro / Logcat |
 

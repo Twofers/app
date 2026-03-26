@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { useBusiness } from "@/hooks/use-business";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
+import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type TemplateRow = {
   id: string;
@@ -22,6 +24,7 @@ type DealRow = {
   description: string | null;
   price: number | null;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   end_time: string;
 };
 
@@ -46,7 +49,7 @@ export default function ReuseDealScreen() {
         .limit(25),
       supabase
         .from("deals")
-        .select("id,title,description,price,poster_url,end_time")
+        .select("id,title,description,price,poster_url,poster_storage_path,end_time")
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(25),
@@ -103,7 +106,9 @@ export default function ReuseDealScreen() {
             {templates.length === 0 ? (
               <Text style={{ opacity: 0.65 }}>{t("reuseHub.templatesEmpty")}</Text>
             ) : (
-              templates.map((row) => (
+              templates.map((row) => {
+                const tplPoster = resolveDealPosterDisplayUri(row.poster_url, null);
+                return (
                 <Pressable
                   key={row.id}
                   onPress={() => openTemplate(row)}
@@ -118,9 +123,9 @@ export default function ReuseDealScreen() {
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  {row.poster_url ? (
+                  {tplPoster ? (
                     <Image
-                      source={{ uri: row.poster_url }}
+                      source={{ uri: tplPoster }}
                       style={{ width: 72, height: 72, borderRadius: 12 }}
                       contentFit="cover"
                     />
@@ -134,7 +139,8 @@ export default function ReuseDealScreen() {
                     <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.55 }}>{t("reuseHub.openInAiAds")}</Text>
                   </View>
                 </Pressable>
-              ))
+              );
+              })
             )}
           </View>
 
@@ -143,7 +149,9 @@ export default function ReuseDealScreen() {
             {deals.length === 0 ? (
               <Text style={{ opacity: 0.65 }}>{t("reuseHub.dealsEmpty")}</Text>
             ) : (
-              deals.map((row) => (
+              deals.map((row) => {
+                const dealPoster = resolveDealPosterDisplayUri(row.poster_url, row.poster_storage_path);
+                return (
                 <Pressable
                   key={row.id}
                   onPress={() => repeatDeal(row)}
@@ -158,9 +166,9 @@ export default function ReuseDealScreen() {
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  {row.poster_url ? (
+                  {dealPoster ? (
                     <Image
-                      source={{ uri: row.poster_url }}
+                      source={{ uri: dealPoster }}
                       style={{ width: 72, height: 72, borderRadius: 12 }}
                       contentFit="cover"
                     />
@@ -179,7 +187,8 @@ export default function ReuseDealScreen() {
                     </Text>
                   </View>
                 </Pressable>
-              ))
+              );
+              })
             )}
           </View>
 
