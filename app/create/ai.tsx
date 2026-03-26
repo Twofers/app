@@ -38,6 +38,7 @@ import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
+import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
 
 type TemplateRow = {
   id: string;
@@ -596,6 +597,8 @@ export default function AiDealScreen() {
     try {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
+      const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
+      const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
       const priceNum = price.trim() ? Number(price) : null;
       if (price.trim() && Number.isNaN(priceNum)) {
         setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
@@ -632,7 +635,8 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: signedPoster,
+        poster_url: publicPoster ?? signedPoster ?? posterUrl ?? null,
+        poster_storage_path: storagePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
         window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,

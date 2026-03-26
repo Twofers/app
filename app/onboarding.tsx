@@ -40,6 +40,22 @@ export default function OnboardingScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (!session?.user?.id) {
+        router.replace("/auth-landing");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   async function afterLocationResolved() {
     const prefs = await getConsumerPreferences();
     const coords = await resolveConsumerCoordinates({

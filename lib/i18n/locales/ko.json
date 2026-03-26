@@ -535,6 +535,14 @@
     "alertBizFailTitle": "비즈니스 생성 실패",
     "alertBizFailMsg": "다시 시도하세요."
   },
+  "authLanding": {
+    "title": "Twofer",
+    "subtitle": "실시간 지역 딜 — 둘러보기, 클레임, 사용을 위해 로그인하세요.",
+    "createAccount": "계정 만들기",
+    "languageLabel": "언어",
+    "heroA11y": "Twofer 마스코트",
+    "demoHint": "미리보기/개발 전용"
+  },
   "legal": {
     "sectionTitle": "법적 고지",
     "privacyPolicy": "개인정보 처리방침",

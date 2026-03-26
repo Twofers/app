@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { fetchConsumerProfile, isConsumerProfileComplete } from "@/lib/consumer-profile";
 
 const SKIP_ROOTS = new Set([
+  "index",
+  "auth-landing",
   "onboarding",
   "consumer-profile-setup",
   "business-setup",
@@ -15,10 +17,7 @@ const SKIP_ROOTS = new Set([
 
 /**
  * Customer mode: logged-in users must complete Supabase consumer profile (ZIP + birthday, or legacy age range),
- * then local onboarding (location radius + notifications).
- *
- * Intentional guest browsing: users without a session skip the Supabase consumer profile gate and only complete
- * local onboarding — they can browse listings but claim/wallet/favorites sync require sign-in.
+ * then local onboarding (location radius + notifications). No consumer onboarding before auth.
  */
 export function ConsumerOnboardingGate() {
   const router = useRouter();
@@ -38,12 +37,14 @@ export function ConsumerOnboardingGate() {
       } = await supabase.auth.getSession();
       if (cancelled) return;
 
-      if (session?.user?.id) {
-        const profile = await fetchConsumerProfile(session.user.id);
-        if (!isConsumerProfileComplete(profile)) {
-          router.replace("/consumer-profile-setup");
-          return;
-        }
+      if (!session?.user?.id) {
+        return;
+      }
+
+      const profile = await fetchConsumerProfile(session.user.id);
+      if (!isConsumerProfileComplete(profile)) {
+        router.replace("/consumer-profile-setup");
+        return;
       }
 
       const prefs = await getConsumerPreferences();

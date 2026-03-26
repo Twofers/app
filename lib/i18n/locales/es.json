@@ -535,6 +535,14 @@
     "alertBizFailTitle": "No se pudo crear el negocio",
     "alertBizFailMsg": "Inténtalo de nuevo."
   },
+  "authLanding": {
+    "title": "Twofer",
+    "subtitle": "Ofertas locales en vivo — inicia sesión para explorar, reclamar y canjear.",
+    "createAccount": "Crear cuenta",
+    "languageLabel": "Idioma",
+    "heroA11y": "Mascota Twofer",
+    "demoHint": "Solo vista previa / desarrollo"
+  },
   "legal": {
     "sectionTitle": "Legal",
     "privacyPolicy": "Política de privacidad",

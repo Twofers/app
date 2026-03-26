@@ -87,14 +87,20 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
+    EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY?.trim()
+      ? "set"
+      : "(unset)",
     NODE_ENV: process.env.NODE_ENV ?? "unknown",
   };
 }
 
-/** Dev-style demo auto-sign-up for demo@demo.com; EAS preview/development sets EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER (see eas.json). */
+/**
+ * Preview/dev-only demo login (demo@demo.com helper). Never enabled on production store builds.
+ * Local `expo start` counts as preview-like via `isPreviewOrDevClientProfile()`.
+ */
 export function isDemoAuthHelperEnabled(): boolean {
-  if (__DEV__) return true;
-  return process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
+  if (!isPreviewOrDevClientProfile()) return false;
+  return __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

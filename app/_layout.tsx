@@ -14,7 +14,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabModeProvider } from '@/lib/tab-mode';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  /** Auth-first: cold start hits `index` before `(tabs)`. */
+  anchor: 'index',
 };
 
 function RootNavigationStack() {
@@ -26,6 +27,8 @@ function RootNavigationStack() {
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="consumer-profile-setup" options={{ title: t('consumerProfile.navTitle') }} />
         <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />

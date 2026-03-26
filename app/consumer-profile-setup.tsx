@@ -57,7 +57,7 @@ export default function ConsumerProfileSetupScreen() {
       } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!session?.user?.id) {
-        router.replace("/(tabs)");
+        router.replace("/auth-landing");
         return;
       }
       setEmail(session.user.email ?? null);

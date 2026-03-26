@@ -28,6 +28,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
+import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 
 type ClaimRow = {
   id: string;
@@ -45,6 +46,7 @@ type ClaimRow = {
     business_id: string;
     title: string | null;
     poster_url: string | null;
+    poster_storage_path?: string | null;
     end_time: string;
     price: number | null;
     timezone: string | null;
@@ -112,7 +114,7 @@ export default function WalletScreen() {
     const { data, error } = await supabase
       .from("deal_claims")
       .select(
-        "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,poster_url,end_time,price,timezone,businesses(name))",
+        "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -365,26 +367,29 @@ export default function WalletScreen() {
           style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
         >
           <View style={{ flexDirection: "row", gap: Spacing.md }}>
-            {row.deals?.poster_url ? (
-              <Image
-                source={{ uri: row.deals.poster_url }}
-                style={{ width: 88, height: 110, borderRadius: 12, backgroundColor: "#eee" }}
-                contentFit="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  width: 88,
-                  height: 110,
-                  borderRadius: 12,
-                  backgroundColor: "#ececec",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 11, opacity: 0.5 }}>—</Text>
-              </View>
-            )}
+            {(() => {
+              const posterUri = resolveDealPosterDisplayUri(row.deals?.poster_url, row.deals?.poster_storage_path);
+              return posterUri ? (
+                <Image
+                  source={{ uri: posterUri }}
+                  style={{ width: 88, height: 110, borderRadius: 12, backgroundColor: "#eee" }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 88,
+                    height: 110,
+                    borderRadius: 12,
+                    backgroundColor: "#ececec",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 11, opacity: 0.5 }}>—</Text>
+                </View>
+              );
+            })()}
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.xs }}>
                 <DealStatusPill status={pillStatus} />

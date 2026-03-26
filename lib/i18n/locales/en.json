@@ -535,6 +535,14 @@
     "alertBizFailTitle": "Create business failed",
     "alertBizFailMsg": "Please try again."
   },
+  "authLanding": {
+    "title": "Twofer",
+    "subtitle": "Live local deals — sign in to browse, claim, and redeem.",
+    "createAccount": "Create account",
+    "languageLabel": "Language",
+    "heroA11y": "Twofer mascot",
+    "demoHint": "Preview / development only"
+  },
   "legal": {
     "sectionTitle": "Legal",
     "privacyPolicy": "Privacy Policy",

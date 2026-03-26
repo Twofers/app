@@ -7,11 +7,8 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { isDealActiveNow } from "@/lib/deal-time";
-import { useBusiness } from "@/hooks/use-business";
 import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
-import { haversineMiles } from "@/lib/geo";
-import { BusinessRowCard } from "@/components/business-row-card";
 import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -51,15 +48,16 @@ function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number,
   return { latitude: lat, longitude: lng, latitudeDelta: dLat, longitudeDelta: dLng };
 }
 
+/** Dallas–Fort Worth service area fallback when GPS and markers are unavailable. */
+const DALLAS_FALLBACK = { lat: 32.7767, lng: -96.797 };
+
 export default function MapScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
-  const { userId } = useBusiness();
   const [mode, setMode] = useState<"all" | "live">("all");
   const [businesses, setBusinesses] = useState<Biz[]>([]);
   const [deals, setDeals] = useState<DealLite[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -67,17 +65,7 @@ export default function MapScreen() {
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   /** Device blue dot only when GPS + permission; never for ZIP-only mode. */
   const [showDeviceBlueDot, setShowDeviceBlueDot] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [radiusMiles, setRadiusMiles] = useState(3);
-
-  const loadFavorites = useCallback(async () => {
-    if (!userId) {
-      setFavoriteIds([]);
-      return;
-    }
-    const { data } = await supabase.from("favorites").select("business_id").eq("user_id", userId);
-    setFavoriteIds((data ?? []).map((r) => r.business_id));
-  }, [userId]);
 
   const loadMapData = useCallback(async () => {
     setLoading(true);
@@ -122,9 +110,8 @@ export default function MapScreen() {
     } else {
       setDeals((dz ?? []) as DealLite[]);
     }
-    await loadFavorites();
     setLoading(false);
-  }, [loadFavorites, t]);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,29 +140,6 @@ export default function MapScreen() {
     return withCoords;
   }, [businesses, liveByBusiness, mode]);
 
-  const selected = selectedId ? businesses.find((b) => b.id === selectedId) : null;
-  const selectedCoords = selected ? parseCoord(selected.latitude, selected.longitude) : null;
-  const selectedLive = selected ? liveByBusiness.has(selected.id) : false;
-
-  async function toggleFavorite(businessId: string) {
-    if (!userId) {
-      setBanner(t("dealDetail.errLoginFavorite"));
-      return;
-    }
-    const isFav = favoriteIds.includes(businessId);
-    const next = isFav ? favoriteIds.filter((id) => id !== businessId) : [...favoriteIds, businessId];
-    setFavoriteIds(next);
-    if (isFav) {
-      await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", businessId);
-    } else {
-      const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: businessId });
-      if (error) {
-        setFavoriteIds(favoriteIds);
-        setBanner(error.message);
-      }
-    }
-  }
-
   const initialRegion = useMemo((): Region => {
     if (userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng)) {
       return safeRegion(userPos, 0.12, 0.12);
@@ -183,7 +147,7 @@ export default function MapScreen() {
     if (markers[0]) {
       return safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
     }
-    return safeRegion({ lat: 39.8283, lng: -98.5795 }, 40, 40);
+    return safeRegion(DALLAS_FALLBACK, 0.35, 0.35);
   }, [userPos, markers]);
 
   const radiusKm = milesToKm(Number.isFinite(radiusMiles) ? radiusMiles : 3);
@@ -280,7 +244,8 @@ export default function MapScreen() {
               <Marker
                 key={m.id}
                 coordinate={{ latitude: m.lat, longitude: m.lng }}
-                onPress={() => setSelectedId(m.id)}
+                tracksViewChanges={false}
+                onPress={() => router.push(`/business/${m.id}` as Href)}
               >
                 <View
                   style={{
@@ -311,46 +276,6 @@ export default function MapScreen() {
             </View>
           ) : null}
 
-          {selected && selectedCoords ? (
-            <View
-              style={{
-                position: "absolute",
-                left: horizontal,
-                right: horizontal,
-                bottom: listBottom,
-                borderRadius: 18,
-                backgroundColor: "#fff",
-                padding: Spacing.md,
-                shadowColor: "#000",
-                shadowOpacity: 0.12,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 4,
-              }}
-            >
-              <BusinessRowCard
-                name={selected.name}
-                address={selected.location}
-                hasLiveDeal={selectedLive}
-                isFavorite={favoriteIds.includes(selected.id)}
-                distanceLabel={
-                  userPos
-                    ? t("dealsBrowse.distanceAwayMiles", {
-                        distance: haversineMiles(userPos.lat, userPos.lng, selectedCoords.lat, selectedCoords.lng).toFixed(1),
-                      })
-                    : undefined
-                }
-                onPress={() => router.push(`/business/${selected.id}` as Href)}
-                onToggleFavorite={() => void toggleFavorite(selected.id)}
-              />
-              <Pressable
-                onPress={() => setSelectedId(null)}
-                style={{ marginTop: Spacing.sm, alignSelf: "center", padding: Spacing.sm }}
-              >
-                <Text style={{ fontWeight: "600", opacity: 0.55 }}>{t("consumerMap.dismissPreview")}</Text>
-              </Pressable>
-            </View>
-          ) : null}
         </View>
       )}
     </View>

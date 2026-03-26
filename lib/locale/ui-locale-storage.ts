@@ -32,7 +32,8 @@ export async function hydrateUiLocale(): Promise<AppLocale> {
     return saved;
   }
 
-  const initial = deviceToAppLocale();
+  /** Product default: English on first launch until the user picks a language. */
+  const initial = "en";
   await AsyncStorage.setItem(KEY_UI_LOCALE, initial);
   return initial;
 }

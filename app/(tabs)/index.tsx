@@ -21,6 +21,7 @@ import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
+import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 type Deal = {
   id: string;
@@ -29,6 +30,7 @@ type Deal = {
   end_time: string;
   is_active: boolean;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   business_id: string;
   price: number | null;
   max_claims: number | null;
@@ -157,7 +159,7 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,start_time,end_time,is_active,poster_url,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
@@ -394,32 +396,10 @@ export default function HomeScreen() {
     <View style={{ marginBottom: Spacing.md }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("tabs.home")}</Text>
       <Text style={{ marginTop: 6, fontSize: 15, opacity: 0.62, lineHeight: 22 }}>{t("consumerHome.tagline")}</Text>
-      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>
-        {sessionEmail ? t("dealsBrowse.loggedInAs", { email: sessionEmail }) : t("dealsBrowse.notLoggedIn")}
-      </Text>
-
-      {!sessionEmail ? (
-        <Pressable
-          onPress={() => router.push("/(tabs)/auth" as Href)}
-          accessibilityRole="button"
-          style={{
-            marginBottom: Spacing.md,
-            paddingVertical: Spacing.md,
-            paddingHorizontal: Spacing.md,
-            borderRadius: 14,
-            backgroundColor: "#f4f4f5",
-            borderWidth: 1,
-            borderColor: "#e4e4e7",
-          }}
-        >
-          <Text style={{ fontWeight: "800", fontSize: 15, color: "#18181b" }}>{t("consumerHome.guestBannerTitle")}</Text>
-          <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.72, lineHeight: 20 }}>
-            {t("consumerHome.guestBannerBody")}
-          </Text>
-          <Text style={{ marginTop: Spacing.sm, fontSize: 14, fontWeight: "700", color: "#2563eb" }}>
-            {t("consumerHome.guestSignInCta")}
-          </Text>
-        </Pressable>
+      {sessionEmail ? (
+        <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>
+          {t("dealsBrowse.loggedInAs", { email: sessionEmail })}
+        </Text>
       ) : null}
 
       {banner ? <Banner message={banner} tone="error" /> : null}
@@ -547,7 +527,7 @@ export default function HomeScreen() {
               description={item.description}
               businessName={item.businesses?.name ?? t("dealDetail.localBusiness")}
               distanceLabel={distanceLabel}
-              posterUrl={item.poster_url}
+              posterUrl={resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path)}
               price={item.price}
               endTime={item.end_time}
               remainingClaims={

@@ -1,5 +1,6 @@
-import { Tabs, useRouter, useSegments } from "expo-router";
-import React, { useEffect } from "react";
+import { Redirect, Tabs, useRouter, useSegments } from "expo-router";
+import React, { useEffect, useState, type ReactNode } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { HapticTab } from "@/components/haptic-tab";
@@ -7,6 +8,33 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
+import { supabase } from "@/lib/supabase";
+
+function TabAuthGate({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<"unknown" | "in" | "out">("unknown");
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setState(data.session?.user ? "in" : "out");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setState(session?.user ? "in" : "out");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (state === "unknown") {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+  if (state === "out") {
+    return <Redirect href="/auth-landing" />;
+  }
+  return <>{children}</>;
+}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -17,7 +45,7 @@ export default function TabLayout() {
     condition ? { href: null } : {};
 
   return (
-    <>
+    <TabAuthGate>
       <TabModeRedirect />
       <Tabs
         screenOptions={{
@@ -97,7 +125,7 @@ export default function TabLayout() {
         <Tabs.Screen name="explore" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
-    </>
+    </TabAuthGate>
   );
 }
 

@@ -53,8 +53,8 @@ export function DealCardPoster({
   const { t, i18n } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const minuteTick = useMinuteTick();
-  /** Immersive feed: generous hero for browse; clamped for small/large phones. */
-  const imageHeight = Math.round(Math.min(420, Math.max(260, windowHeight * 0.46)));
+  /** Image-first feed (restored Twofer card proportions from pre-drift polish baseline). */
+  const imageHeight = Math.round(Math.min(400, Math.max(248, windowHeight * 0.44)));
 
   const statusColors = {
     success: { background: "#e8f5e9", text: "#1b5e20" },
