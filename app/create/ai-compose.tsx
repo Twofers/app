@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import * as FileSystem from "expo-file-system";
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -52,6 +54,11 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 async function fileUriToBase64(uri: string): Promise<string> {
+  // On native, expo-file-system handles file:// URIs correctly.
+  // fetch(file://...) is blocked by the browser security model on web.
+  if (Platform.OS !== "web") {
+    return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  }
   const res = await fetch(uri);
   const buf = await res.arrayBuffer();
   return arrayBufferToBase64(buf);
@@ -399,28 +406,32 @@ export default function AiComposeOfferScreen() {
                     backgroundColor: "#fff",
                   }}
                 />
-                <Pressable
-                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    bottom: 10,
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: isRecording ? "#e0245e" : "#111",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {phase === "transcribing" ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={22} color="#fff" />
-                  )}
-                </Pressable>
+                {Platform.OS !== "web" ? (
+                  <Pressable
+                    onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                    style={{
+                      position: "absolute",
+                      right: 10,
+                      bottom: 10,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: isRecording ? "#e0245e" : "#111",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {phase === "transcribing" ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <MaterialIcons name={isRecording ? "stop" : "mic"} size={22} color="#fff" />
+                    )}
+                  </Pressable>
+                ) : null}
               </View>
-              <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>{t("aiCompose.micHint")}</Text>
+              {Platform.OS !== "web" ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>{t("aiCompose.micHint")}</Text>
+              ) : null}
 
               <PrimaryButton
                 title={busy ? t("aiCompose.generating") : t("aiCompose.generateCta")}
