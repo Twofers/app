@@ -1,102 +1,64 @@
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { ScrollView, Text, TextInput, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { Banner } from "@/components/ui/banner";
-import { LegalExternalLinks } from "@/components/legal-external-links";
-import { supabase } from "@/lib/supabase";
-import {
-  BUSINESS_CATEGORY_IDS,
-  BUSINESS_HOURS_PRESET_IDS,
-  type BusinessCategoryId,
-  type BusinessHoursPresetId,
-  HOURS_PRESET_DB_VALUE,
-} from "@/lib/business-signup";
 
-function Chip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.md,
-        borderRadius: 20,
-        backgroundColor: active ? "#111" : "#ececec",
-        marginRight: Spacing.sm,
-        marginBottom: Spacing.sm,
-      }}
-    >
-      <Text style={{ fontWeight: "700", color: active ? "#fff" : "#333", fontSize: 14 }}>{label}</Text>
-    </Pressable>
-  );
-}
+import { Banner } from "@/components/ui/banner";
+import { PrimaryButton } from "@/components/ui/primary-button";
+import { LegalExternalLinks } from "@/components/legal-external-links";
+import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { supabase } from "@/lib/supabase";
+import { useBusiness } from "@/hooks/use-business";
+import { Colors, Radii } from "@/constants/theme";
+
+type Tone = "error" | "success" | "info";
 
 export default function BusinessSetupScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const [contactName, setContactName] = useState("");
-  const [businessEmail, setBusinessEmail] = useState("");
+  const { sessionEmail } = useBusiness();
+
   const [businessName, setBusinessName] = useState("");
-  const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const [categoryId, setCategoryId] = useState<BusinessCategoryId | null>(null);
-  const [categoryOther, setCategoryOther] = useState("");
-  const [hoursPreset, setHoursPreset] = useState<BusinessHoursPresetId | null>(null);
-  const [hoursCustom, setHoursCustom] = useState("");
+  const [phone, setPhone] = useState("");
+  const [shortDescription, setShortDescription] = useState("");
   const [busy, setBusy] = useState(false);
-  const [banner, setBanner] = useState<{ message: string; tone: "error" } | null>(null);
+  const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
+
+  const trimmed = useMemo(
+    () => ({
+      businessName: businessName.trim(),
+      address: address.trim(),
+      phone: phone.trim(),
+      shortDescription: shortDescription.trim(),
+    }),
+    [businessName, address, phone, shortDescription],
+  );
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
-      if (!data.session?.user?.id) router.replace("/(tabs)/account");
+      const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
+      if (!bypass && !data.session?.user?.id) router.replace("/(tabs)/account");
     });
-  }, [router]);
+  }, [router, params.skipSetup, params.e2e]);
 
-  function resolveCategory(): string | null {
-    if (!categoryId) return null;
-    if (categoryId === "other") return categoryOther.trim() || null;
-    return t(`businessSetup.cat.${categoryId}`);
-  }
-
-  function resolveHoursText(): string | null {
-    if (!hoursPreset) return null;
-    if (hoursPreset === "custom_prompt") return hoursCustom.trim() || null;
-    return HOURS_PRESET_DB_VALUE[hoursPreset];
-  }
+  useEffect(() => {
+    // Quick prefill if we already know something about the user.
+    if (!businessName && sessionEmail) {
+      const left = sessionEmail.split("@")[0]?.replace(/[._-]+/g, " ")?.trim();
+      if (left && left.length >= 3) setBusinessName(left);
+    }
+  }, [sessionEmail, businessName]);
 
   async function onSubmit() {
     setBanner(null);
-    const email = businessEmail.trim();
-    const name = businessName.trim();
-    const cat = resolveCategory();
-    const hours = resolveHoursText();
-    if (
-      !contactName.trim() ||
-      !email ||
-      !name ||
-      !phone.trim() ||
-      !address.trim() ||
-      !cat ||
-      !hours
-    ) {
+    if (!trimmed.businessName || !trimmed.address || !trimmed.phone || !trimmed.shortDescription) {
       setBanner({ message: t("businessSetup.errRequired"), tone: "error" });
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setBanner({ message: t("businessSetup.errEmail"), tone: "error" });
-      return;
-    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -105,22 +67,43 @@ export default function BusinessSetupScreen() {
       setBanner({ message: t("createHub.errLoginBusiness"), tone: "error" });
       return;
     }
-    const addr = address.trim();
+
     setBusy(true);
     try {
-      const { error } = await supabase.from("businesses").insert({
+      const addr = trimmed.address;
+      const { data: business, error } = await supabase
+        .from("businesses")
+        .insert({
         owner_id: uid,
-        name,
-        contact_name: contactName.trim(),
-        business_email: email,
-        phone: phone.trim(),
+        name: trimmed.businessName,
+        phone: trimmed.phone,
         address: addr,
         location: addr,
-        category: cat,
-        hours_text: hours,
-      });
+        short_description: trimmed.shortDescription,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
-      router.replace("/(tabs)/create");
+
+      const { error: profileError } = await supabase.from("business_profiles").upsert(
+        {
+          user_id: uid,
+          business_id: business?.id ?? null,
+          name: trimmed.businessName,
+          address: addr,
+          phone: trimmed.phone,
+          short_description: trimmed.shortDescription,
+          setup_completed: true,
+          completed_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+      if (profileError) throw profileError;
+
+      setBanner({ message: "Setup complete - ready to launch BOGO deals!", tone: "success" });
+      setTimeout(() => {
+        router.replace("/create/quick");
+      }, 250);
     } catch (e: any) {
       setBanner({ message: e?.message ?? t("businessSetup.errSave"), tone: "error" });
     } finally {
@@ -142,78 +125,16 @@ export default function BusinessSetupScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Field label={t("businessSetup.contactName")} value={contactName} onChangeText={setContactName} />
-        <Field
-          label={t("businessSetup.businessEmail")}
-          value={businessEmail}
-          onChangeText={setBusinessEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
         <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={setBusinessName} />
-        <Field label={t("businessSetup.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <Field label={t("businessSetup.address")} value={address} onChangeText={setAddress} />
-
-        <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm }}>{t("businessSetup.categoryLabel")}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {BUSINESS_CATEGORY_IDS.map((id) => (
-              <Chip
-                key={id}
-                label={t(`businessSetup.cat.${id}`)}
-                active={categoryId === id}
-                onPress={() => setCategoryId(id)}
-              />
-            ))}
-          </View>
-          {categoryId === "other" ? (
-            <TextInput
-              value={categoryOther}
-              onChangeText={setCategoryOther}
-              placeholder={t("businessSetup.categoryOtherPh")}
-              style={{
-                borderWidth: 1,
-                borderColor: "#ddd",
-                borderRadius: 12,
-                padding: Spacing.md,
-                marginTop: Spacing.sm,
-                fontSize: 16,
-              }}
-            />
-          ) : null}
-        </View>
-
-        <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm }}>{t("businessSetup.hoursLabel")}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {BUSINESS_HOURS_PRESET_IDS.map((id) => (
-              <Chip
-                key={id}
-                label={t(`businessSetup.hoursPreset.${id}`)}
-                active={hoursPreset === id}
-                onPress={() => setHoursPreset(id)}
-              />
-            ))}
-          </View>
-          {hoursPreset === "custom_prompt" ? (
-            <TextInput
-              value={hoursCustom}
-              onChangeText={setHoursCustom}
-              placeholder={t("businessSetup.hoursCustomPh")}
-              multiline
-              style={{
-                borderWidth: 1,
-                borderColor: "#ddd",
-                borderRadius: 12,
-                padding: Spacing.md,
-                marginTop: Spacing.sm,
-                minHeight: 72,
-                textAlignVertical: "top",
-                fontSize: 16,
-              }}
-            />
-          ) : null}
-        </View>
+        <Field label={t("businessSetup.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+        <Field
+          label={t("businessSetup.shortDescription")}
+          value={shortDescription}
+          onChangeText={setShortDescription}
+          multiline
+          placeholder={t("businessSetup.shortDescriptionPh")}
+        />
 
         <View style={{ gap: Spacing.sm }}>
           <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.businessSetupHint")}</Text>
@@ -236,12 +157,16 @@ function Field({
   onChangeText,
   keyboardType,
   autoCapitalize,
+  multiline,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChangeText: (s: string) => void;
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "words";
+  multiline?: boolean;
+  placeholder?: string;
 }) {
   return (
     <View>
@@ -251,13 +176,18 @@ function Field({
         onChangeText={onChangeText}
         keyboardType={keyboardType ?? "default"}
         autoCapitalize={autoCapitalize ?? "words"}
+        multiline={multiline}
+        placeholder={placeholder}
         style={{
           borderWidth: 1,
-          borderColor: "#ddd",
-          borderRadius: 12,
+          borderColor: Colors.light.border,
+          borderRadius: Radii.lg,
+          backgroundColor: Colors.light.surface,
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           fontSize: 16,
+          minHeight: multiline ? 92 : undefined,
+          textAlignVertical: multiline ? "top" : "auto",
         }}
       />
     </View>

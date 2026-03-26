@@ -42,3 +42,9 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Claude Code internal tooling
+.claude/
+
+# Dev/debug screenshots
+screenshots/

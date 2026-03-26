@@ -14,7 +14,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabModeProvider } from '@/lib/tab-mode';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  /** Auth-first: cold start hits `index` before `(tabs)`. */
+  anchor: 'index',
 };
 
 function RootNavigationStack() {
@@ -26,12 +27,16 @@ function RootNavigationStack() {
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="consumer-profile-setup" options={{ title: t('consumerProfile.navTitle') }} />
         <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
         <Stack.Screen name="reset-password" options={{ title: t('passwordRecovery.resetTitle') }} />
+        <Stack.Screen name="create/quick" options={{ title: t('createQuick.title') }} />
+        <Stack.Screen name="create/ai" options={{ title: t('createAi.titleScreen') }} />
         <Stack.Screen name="create/ai-compose" options={{ title: t('aiCompose.title') }} />
         <Stack.Screen name="create/reuse" options={{ title: t('reuseHub.title') }} />
         <Stack.Screen name="deal/[id]" options={{ title: t('dealDetail.title') }} />
@@ -40,7 +45,8 @@ function RootNavigationStack() {
           name="modal"
           options={{ presentation: 'modal', title: t('commonUi.modalTitle') }}
         />
-        <Stack.Screen name="debug-diagnostics" options={{ title: 'Diagnostics' }} />
+        <Stack.Screen name="deal-analytics/[id]" options={{ title: t('dealAnalytics.title') }} />
+        <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

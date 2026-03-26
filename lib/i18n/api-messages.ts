@@ -32,6 +32,7 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "You can only claim once per business per day. Try again tomorrow.": "apiErrors.claimDailyLimitBusiness",
   "You can only claim once per business per day. Try again the next local day.":
     "apiErrors.claimDailyLimitBusiness",
+  "You can only claim one deal per hour. Please try again shortly.": "apiErrors.claimHourlyLimit",
   "This deal has reached its claim limit.": "apiErrors.claimSoldOut",
 
   "Unauthorized. Please log in as a business owner.": "apiErrors.redeemUnauthorized",

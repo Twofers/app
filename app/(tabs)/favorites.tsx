@@ -14,6 +14,7 @@ import { Banner } from "../../components/ui/banner";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { translateFunctionErrorMessage } from "../../lib/i18n/function-errors";
+import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 
 type Deal = {
   id: string;
@@ -22,6 +23,7 @@ type Deal = {
   end_time: string;
   is_active: boolean;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   business_id: string;
   price: number | null;
   businesses?: {
@@ -50,6 +52,7 @@ export default function FavoritesScreen() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
 
@@ -62,7 +65,7 @@ export default function FavoritesScreen() {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select("id,title,description,start_time,end_time,is_active,poster_url,business_id,price,businesses(name),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+      .select("id,title,description,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,businesses(name),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
       .in("business_id", businessIds)
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
@@ -145,6 +148,7 @@ export default function FavoritesScreen() {
     setClaimingDealId(dealId);
     try {
       const out = await claimDeal(dealId);
+      if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setLastClaimDealId(dealId);
@@ -224,7 +228,7 @@ export default function FavoritesScreen() {
               title={item.title ?? t("dealDetail.dealFallback")}
               description={item.description}
               businessName={item.businesses?.name ?? t("dealDetail.localBusiness")}
-              posterUrl={item.poster_url}
+              posterUrl={resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path)}
               price={item.price}
               endTime={item.end_time}
               isFavorite={favoriteBusinessIds.includes(item.business_id)}
@@ -244,6 +248,7 @@ export default function FavoritesScreen() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

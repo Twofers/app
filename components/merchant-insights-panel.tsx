@@ -16,6 +16,12 @@ function formatMethodLabel(key: string, t: (k: string) => string) {
   return key;
 }
 
+function formatClaimBlockedReasonLabel(key: string, t: (k: string) => string) {
+  const k = `merchantInsights.claimBlockedReasons.${key}`;
+  const s = t(k);
+  return s === k ? key : s;
+}
+
 type Props = {
   insights: MerchantInsightsRow | null;
 };
@@ -93,6 +99,17 @@ export function MerchantInsightsPanel({ insights }: Props) {
           {mixEntries(insights.redeem_method_mix).map(([k, n]) => (
             <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
               {formatMethodLabel(k, t)}: {n}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {mixEntries(insights.claim_blocked_reason_mix).length > 0 ? (
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.claimBlockedMix")}</Text>
+          {mixEntries(insights.claim_blocked_reason_mix).map(([k, n]) => (
+            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+              {formatClaimBlockedReasonLabel(k, t)}: {n}
             </Text>
           ))}
         </View>

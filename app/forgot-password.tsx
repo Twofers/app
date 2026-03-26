@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
@@ -8,6 +8,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 export default function ForgotPasswordScreen() {
   const { t } = useTranslation();

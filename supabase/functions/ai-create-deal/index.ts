@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,6 +127,14 @@ serve(async (req) => {
       );
     }
 
+    const baseUrl = supabaseUrl.replace(/\/$/, "");
+    const encodedPath = String(photo_path)
+      .split("/")
+      .filter(Boolean)
+      .map((seg: string) => encodeURIComponent(seg))
+      .join("/");
+    const posterPublicUrl = `${baseUrl}/storage/v1/object/public/deal-photos/${encodedPath}`;
+
     if (!openAiKey?.trim()) {
       return new Response(
         JSON.stringify({
@@ -216,6 +225,21 @@ serve(async (req) => {
       );
     }
 
+    // Keep AI generation as-is; enforce marketplace quality after model output.
+    const strongCheck = validateStrongDealOnly({
+      title: result.title,
+      description: `${result.promo_line}\n${result.description}`,
+    });
+    if (!strongCheck.ok) {
+      return new Response(
+        JSON.stringify({ error: strongCheck.message }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { data: deal, error: insertError } = await supabase
       .from("deals")
       .insert({
@@ -228,7 +252,8 @@ serve(async (req) => {
         claim_cutoff_buffer_minutes: claim_cutoff_buffer_minutes ?? 15,
         max_claims,
         is_active: true,
-        poster_url: signed.signedUrl,
+        poster_url: posterPublicUrl,
+        poster_storage_path: photo_path,
       })
       .select("id")
       .single();
@@ -249,7 +274,8 @@ serve(async (req) => {
         title: result.title,
         description: result.description,
         promo_line: result.promo_line,
-        poster_url: signed.signedUrl,
+        poster_url: posterPublicUrl,
+        poster_storage_path: photo_path,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

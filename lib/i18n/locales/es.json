@@ -19,6 +19,9 @@
     "currentCustomer": "Actual: pestañas de cliente",
     "currentBusiness": "Actual: pestañas de negocio"
   },
+  "emptyState": {
+    "encouragement": "Sin preocupaciones: aparecerán más ofertas pronto."
+  },
   "dealsBrowse": {
     "categoriesHeading": "Categorías",
     "categoryHint": "Consejo: los negocios que indican una categoría en Cuenta → perfil del negocio aparecen como filtros aquí.",
@@ -208,6 +211,7 @@
     "claimDuplicateActive": "Ya tienes un reclamo activo para esta oferta",
     "claimActiveOtherDeal": "Ya tienes un reclamo activo de este negocio. Canjéalo o espera a que caduque antes de reclamar otra oferta.",
     "claimDailyLimitBusiness": "Solo puedes reclamar una vez por negocio al día (hora local del negocio). Vuelve a intentarlo después de medianoche en esa zona horaria.",
+    "claimHourlyLimit": "Solo puedes reclamar una oferta por hora. Vuelve a intentarlo en unos minutos.",
     "claimSoldOut": "Esta oferta alcanzó el límite de reclamos.",
     "claimCreateFailed": "No se pudo crear el reclamo: {{detail}}",
     "redeemUnauthorized": "No autorizado. Inicia sesión como titular del negocio.",
@@ -374,6 +378,7 @@
     "title": "Ajustes",
     "alertsPermissionTitle": "Permiso necesario",
     "alertsPermissionBody": "Activa las notificaciones para alertas de ofertas.",
+    "alertsExpoGoBody": "Expo Go en Android no puede usar notificaciones push completas. Usa un build de desarrollo o continúa sin alertas.",
     "checkStatus": "Ver estado de alertas",
     "statusAlertTitle": "Alertas de ofertas",
     "statusOn": "Activadas",
@@ -513,8 +518,16 @@
     "password": "Contraseña",
     "logIn": "Entrar",
     "loggingIn": "Entrando...",
+    "signingUp": "Creando cuenta...",
     "signUp": "Registrarse",
+    "createAccountCta": "Crear cuenta",
     "demoLogin": "Entrada demo",
+    "errRateLimited": "Demasiados intentos. Espera unos minutos o usa una cuenta demo ya creada (ver docs/DEMO_SEED.md).",
+    "errInvalidCredentials": "Correo o contraseña incorrectos.",
+    "errGeneric": "Algo salió mal. Inténtalo de nuevo.",
+    "errNetwork": "Error de red. Revisa la conexión.",
+    "errDemoNotProvisioned": "La cuenta demo no existe en este proyecto. Ejecuta una vez: npm run seed:demo, o crea demo@demo.com en Auth.",
+    "errFieldsRequired": "Introduce correo y contraseña.",
     "alertSignUpSuccessTitle": "Listo",
     "alertSignUpSuccessMsg": "Revisa tu correo para confirmar y luego entra.",
     "alertSignUpFailTitle": "Registro fallido",
@@ -534,6 +547,14 @@
     "alertBizCreatedMsg": "Ya puedes crear ofertas y canjear QR.",
     "alertBizFailTitle": "No se pudo crear el negocio",
     "alertBizFailMsg": "Inténtalo de nuevo."
+  },
+  "authLanding": {
+    "title": "Twofer",
+    "subtitle": "Ofertas locales en vivo — inicia sesión para explorar, reclamar y canjear.",
+    "createAccount": "Crear cuenta",
+    "languageLabel": "Idioma",
+    "heroA11y": "Mascota Twofer",
+    "demoHint": "Solo vista previa / desarrollo"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -574,12 +595,22 @@
     "zipMix": "Zonas ZIP (enmascaradas)",
     "acqMix": "Cómo encontraron la oferta",
     "methodMix": "Método de canje",
+    "claimBlockedMix": "Bloqueos al reclamar (por qué no pudieron reclamar)",
     "hourHeat": "Reclamaciones por hora (hora local de cada oferta)",
     "hourPeak": "Pico sobre las {{hour}}:00 locales ({{count}} reclamaciones)",
     "hourHeatSparse": "Aún no hay suficientes datos por hora.",
     "methodVisual": "Pase en la app",
     "methodQr": "QR / código",
     "methodPending": "Pendiente",
+    "claimBlockedReasons": {
+      "hourly_limit": "Límite de reclamo por hora",
+      "business_daily_limit": "Límite diario por negocio",
+      "active_business_claim": "Ya tiene un reclamo activo en el negocio",
+      "duplicate_deal_claim": "Esta oferta ya fue reclamada",
+      "deal_sold_out": "Oferta agotada / límite alcanzado",
+      "deal_closed": "Ventana de reclamo cerrada o expirada",
+      "unknown": "Desconocido"
+    },
     "acquisition": {
       "organic": "Orgánico",
       "push": "Push",
@@ -617,6 +648,7 @@
     "continueToApp": "Continuar"
   },
   "commonUi": {
+    "ok": "OK",
     "cancel": "Cancelar",
     "goBack": "Volver",
     "dealNotFound": "Oferta no encontrada",
@@ -632,6 +664,9 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Termina",
     "modalTitle": "Modal"
+  },
+  "debugDiagnostics": {
+    "title": "Diagnósticos"
   },
   "modalScreen": {
     "title": "Esto es un modal",
@@ -961,11 +996,24 @@
     "alertWindowBody": "Introduce hora de inicio y fin válidas"
   },
   "offersDashboard": {
-    "subtitle": "Últimos 30 días · toca una tarjeta para analíticas",
+    "subtitle": "Este mes de un vistazo · toca un deal para detalles",
+    "periodHint": "Cifras del mes natural en curso salvo que se indique lo contrario.",
     "loginPrompt": "Inicia sesión para ver tu panel.",
     "loading": "Cargando...",
     "needBusiness": "Crea un negocio para desbloquear analíticas.",
-    "overview": "Resumen",
+    "overview": "Rendimiento",
+    "metricDealsLaunched": "Ofertas lanzadas",
+    "metricTotalClaims": "Reclamaciones totales",
+    "metricRedemptions": "Canjes",
+    "metricNewCustomers": "Clientes nuevos (aprox.)",
+    "metricNewCustomersSub": "Canjeadores únicos",
+    "metricAvgRedemption": "Tasa de canje",
+    "metricAvgRedemptionSub": "Sobre reclamaciones",
+    "inventorySaved": "Inventario ahorrado",
+    "inventoryPlaceholder": "Aprox. 18 pasteles / 42 cafés no desperdiciados",
+    "chartTitle": "Reclamaciones diarias · últimos 7 días",
+    "chartFooter": "Por hora local del dispositivo.",
+    "recentDeals": "Ofertas recientes",
     "yourDeals": "Tus ofertas",
     "dealFallback": "Oferta",
     "rowClaims": "Reclamaciones {{count}}",
@@ -975,7 +1023,8 @@
     "endDealEarly": "Finalizar oferta antes",
     "errLoadDashboard": "No se pudo cargar el panel.",
     "errEndDeal": "No se pudo finalizar la oferta.",
-    "emptyDeals": "Aún no hay ofertas. Crea una para ver analíticas."
+    "emptyDeals": "Aún no hay ofertas. Crea una para ver analíticas.",
+    "createFirstDeal": "Crea tu primera oferta"
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",
@@ -1015,6 +1064,8 @@
     "businessName": "Nombre del negocio",
     "phone": "Teléfono",
     "address": "Dirección",
+    "shortDescription": "Descripción corta",
+    "shortDescriptionPh": "ej. Cafetería de barrio · recogida rápida · familiar",
     "categoryLabel": "Categoría",
     "hoursLabel": "Horario",
     "categoryOtherPh": "Describe tu categoría",

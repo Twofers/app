@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,8 @@ import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { formatValiditySummary } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
+import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type Deal = {
   id: string;
@@ -24,6 +26,7 @@ type Deal = {
   end_time: string;
   start_time: string;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   business_id: string;
   price: number | null;
   claim_cutoff_buffer_minutes: number;
@@ -43,13 +46,15 @@ export default function DealDetail() {
   const router = useRouter();
   const { height: winH } = useWindowDimensions();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = typeof idParam === "string" ? idParam : idParam?.[0] ?? "";
   const [deal, setDeal] = useState<Deal | null>(null);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "failed">("loading");
-  const { isLoggedIn, userId } = useBusiness();
+  const { isLoggedIn, userId, loading: authLoading } = useBusiness();
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -76,7 +81,7 @@ export default function DealDetail() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,end_time,start_time,poster_url,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
+        "id,title,description,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
       )
       .eq("id", id)
       .single();
@@ -93,8 +98,13 @@ export default function DealDetail() {
   }, [id, loadClaimCount, t]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isLoggedIn) {
+      router.replace("/auth-landing");
+      return;
+    }
     void loadDeal();
-  }, [loadDeal]);
+  }, [loadDeal, authLoading, isLoggedIn, router]);
 
   useEffect(() => {
     (async () => {
@@ -127,6 +137,7 @@ export default function DealDetail() {
           business_id: deal.business_id,
           claim_id: out.claim_id,
         });
+        setClaimSuccessToastNonce((n) => n + 1);
       }
       setQrToken(out.token);
       setQrExpires(out.expires_at);
@@ -193,6 +204,18 @@ export default function DealDetail() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
+
   if (loadStatus === "loading") {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
@@ -251,25 +274,28 @@ export default function DealDetail() {
             {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
           </Text>
         </Pressable>
-        {deal.poster_url ? (
-          <Image
-            source={{ uri: deal.poster_url }}
-            style={{ height: heroHeight, width: "100%", borderRadius: 18 }}
-            contentFit="cover"
-          />
-        ) : (
-          <View
-            style={{
-              height: heroHeight,
-              borderRadius: 18,
-              backgroundColor: "#e8e8e8",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: "#666", fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
-          </View>
-        )}
+        {(() => {
+          const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+          return posterUri ? (
+            <Image
+              source={{ uri: posterUri }}
+              style={{ height: heroHeight, width: "100%", borderRadius: 18 }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              style={{
+                height: heroHeight,
+                borderRadius: 18,
+                backgroundColor: "#e8e8e8",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: "#666", fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+            </View>
+          );
+        })()}
 
         <View style={{ marginTop: Spacing.lg, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: Spacing.sm }}>
           <Text
@@ -340,6 +366,7 @@ export default function DealDetail() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}

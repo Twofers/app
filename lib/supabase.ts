@@ -1,6 +1,6 @@
 import "react-native-url-polyfill/auto";
 import { createClient } from "@supabase/supabase-js";
-import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 /** Inlined at bundle time — set the same keys in EAS for `preview` and `production` environment scopes. */
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
@@ -18,17 +18,68 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+const isWeb = Platform.OS === "web";
+const hasWindow = typeof window !== "undefined";
+const memory = new Map<string, string>();
+
+async function getNativeSecureStore() {
+  const mod = await import("expo-secure-store");
+  return mod;
+}
+
+const StorageAdapter = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (isWeb) {
+      if (!hasWindow) return memory.get(key) ?? null;
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return memory.get(key) ?? null;
+      }
+    }
+    const SecureStore = await getNativeSecureStore();
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (isWeb) {
+      if (!hasWindow) {
+        memory.set(key, value);
+        return;
+      }
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {
+        memory.set(key, value);
+      }
+      return;
+    }
+    const SecureStore = await getNativeSecureStore();
+    await SecureStore.setItemAsync(key, value);
+  },
+  removeItem: async (key: string): Promise<void> => {
+    if (isWeb) {
+      if (!hasWindow) {
+        memory.delete(key);
+        return;
+      }
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        memory.delete(key);
+      }
+      return;
+    }
+    const SecureStore = await getNativeSecureStore();
+    await SecureStore.deleteItemAsync(key);
+  },
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    storage: StorageAdapter,
     autoRefreshToken: true,
-    persistSession: true,
+    // SSR on web has no real storage; keep it purely client-side.
+    persistSession: !isWeb || hasWindow,
     detectSessionInUrl: false,
   },
 });

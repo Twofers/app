@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
+import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors, Radii } from "@/constants/theme";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -24,6 +26,11 @@ import { setAlertsEnabled } from "@/lib/notifications";
 import { supabase } from "@/lib/supabase";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 
+function sanitizeZipInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d-]/g, "");
+  return cleaned.slice(0, 10);
+}
+
 export default function OnboardingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -39,6 +46,22 @@ export default function OnboardingScreen() {
       if (p.zipCode.trim()) setZip(p.zipCode.trim());
     });
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (!session?.user?.id) {
+        router.replace("/auth-landing");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function afterLocationResolved() {
     const prefs = await getConsumerPreferences();
@@ -121,9 +144,11 @@ export default function OnboardingScreen() {
   async function enableNotificationsAndFinish() {
     setBusy(true);
     try {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
       if (status === "granted") {
         await setAlertsEnabled(true);
+      } else if (skippedBecauseExpoGo) {
+        await setAlertsEnabled(false);
       }
       await setConsumerNotificationPrefs({ v: 1, mode: "all_nearby" });
       await finish();
@@ -138,12 +163,29 @@ export default function OnboardingScreen() {
     await finish();
   }
 
+  const totalSteps = 5;
+
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("onboarding.title")}</Text>
-      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.lg, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+      <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
         {t("onboarding.subtitle")}
       </Text>
+
+      {/* Step progress dots */}
+      <View style={{ flexDirection: "row", gap: 6, marginTop: Spacing.lg, marginBottom: Spacing.md }}>
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <View
+            key={i}
+            style={{
+              height: 4,
+              flex: 1,
+              borderRadius: Radii.pill,
+              backgroundColor: i <= step ? Colors.light.primary : Colors.light.border,
+            }}
+          />
+        ))}
+      </View>
 
       {hint ? (
         <Text style={{ marginBottom: Spacing.md, color: "#b45309", fontSize: 14, lineHeight: 20 }}>{hint}</Text>
@@ -151,53 +193,56 @@ export default function OnboardingScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: scrollBottom }}
+        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {step === 0 ? (
-          <View style={{ gap: Spacing.md }}>
-            <Text style={{ fontSize: 17, lineHeight: 24 }}>{t("onboarding.introBody")}</Text>
+          <>
+            <Text style={{ fontSize: 17, lineHeight: 26, opacity: 0.85 }}>{t("onboarding.introBody")}</Text>
             <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(1)} />
             <SecondaryButton title={t("onboarding.signInCta")} onPress={() => router.push("/(tabs)/auth" as Href)} />
-          </View>
+          </>
         ) : null}
 
         {step === 1 ? (
-          <View style={{ gap: Spacing.md }}>
+          <>
             <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.locationTitle")}</Text>
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.locationBody")}</Text>
             <PrimaryButton title={t("onboarding.useGps")} onPress={() => void requestGps()} disabled={busy} />
             <SecondaryButton title={t("onboarding.useZipInstead")} onPress={() => setStep(2)} disabled={busy} />
-          </View>
+          </>
         ) : null}
 
         {step === 2 ? (
-          <View style={{ gap: Spacing.md }}>
+          <>
             <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.zipTitle")}</Text>
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.zipBody")}</Text>
             <TextInput
               value={zip}
-              onChangeText={setZip}
+              onChangeText={(value) => setZip(sanitizeZipInput(value))}
               placeholder={t("onboarding.zipPlaceholder")}
               autoCapitalize="characters"
               autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
               style={{
                 borderWidth: 1,
-                borderColor: "#ddd",
-                borderRadius: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
                 paddingVertical: Spacing.sm,
                 paddingHorizontal: Spacing.md,
                 fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
             <PrimaryButton title={t("onboarding.continueZip")} onPress={() => void saveZipAndContinue()} disabled={busy} />
             <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(1)} disabled={busy} />
-          </View>
+          </>
         ) : null}
 
         {step === 3 ? (
-          <View style={{ gap: Spacing.lg }}>
+          <>
             <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.radiusTitle")}</Text>
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.radiusBody")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
@@ -210,11 +255,13 @@ export default function OnboardingScreen() {
                     style={{
                       paddingVertical: Spacing.sm,
                       paddingHorizontal: Spacing.md,
-                      borderRadius: 20,
-                      backgroundColor: active ? "#111" : "#ececec",
+                      borderRadius: Radii.pill,
+                      backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                      borderWidth: 1,
+                      borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
                     }}
                   >
-                    <Text style={{ fontWeight: "700", color: active ? "#fff" : "#333" }}>
+                    <Text style={{ fontWeight: "700", color: active ? Colors.light.primary : "#333" }}>
                       {t("onboarding.radiusMiles", { miles: m })}
                     </Text>
                   </Pressable>
@@ -222,11 +269,11 @@ export default function OnboardingScreen() {
               })}
             </View>
             <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(4)} />
-          </View>
+          </>
         ) : null}
 
         {step === 4 ? (
-          <View style={{ gap: Spacing.md }}>
+          <>
             <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.notifyTitle")}</Text>
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.notifyBody")}</Text>
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.favoriteHint")}</Text>
@@ -236,7 +283,7 @@ export default function OnboardingScreen() {
               disabled={busy}
             />
             <SecondaryButton title={t("onboarding.notNow")} onPress={() => void skipNotificationsAndFinish()} disabled={busy} />
-          </View>
+          </>
         ) : null}
       </ScrollView>
     </View>

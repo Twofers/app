@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -18,6 +24,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
   aiComposeOfferGenerate,
   aiComposeOfferTranscribe,
@@ -47,6 +54,11 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 async function fileUriToBase64(uri: string): Promise<string> {
+  // On native, expo-file-system handles file:// URIs correctly.
+  // fetch(file://...) is blocked by the browser security model on web.
+  if (Platform.OS !== "web") {
+    return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  }
   const res = await fetch(uri);
   const buf = await res.arrayBuffer();
   return arrayBufferToBase64(buf);
@@ -66,10 +78,11 @@ export default function AiComposeOfferScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { isLoggedIn, businessId, loading } = useBusiness();
 
+  const recorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+
   const [prompt, setPrompt] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
   const [quota, setQuota] = useState<AiComposeQuota | null>(null);
@@ -89,12 +102,6 @@ export default function AiComposeOfferScreen() {
       void reloadQuota();
     }, [reloadQuota]),
   );
-
-  useEffect(() => {
-    return () => {
-      void recording?.stopAndUnloadAsync();
-    };
-  }, [recording]);
 
   async function pickImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -121,16 +128,14 @@ export default function AiComposeOfferScreen() {
 
   async function startRecording() {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) {
         setBanner({ message: t("aiCompose.errMicPermission"), tone: "error" });
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
-      await rec.startAsync();
-      setRecording(rec);
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setIsRecording(true);
       setBanner(null);
     } catch {
@@ -139,14 +144,13 @@ export default function AiComposeOfferScreen() {
   }
 
   async function stopRecordingAndTranscribe() {
-    if (!businessId || !recording) return;
+    if (!businessId || !isRecording) return;
     setIsRecording(false);
     setPhase("transcribing");
     setBanner(null);
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await recorder.stop();
+      const uri = recorder.uri;
       if (!uri) throw new Error("no_uri");
       const b64 = await fileUriToBase64(uri);
       const { transcript } = await aiComposeOfferTranscribe({ business_id: businessId, audio_base64: b64 });
@@ -286,7 +290,7 @@ export default function AiComposeOfferScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1, marginTop: Spacing.md }}
-          contentContainerStyle={{ paddingBottom: scrollBottom }}
+          contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.sm }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -326,31 +330,64 @@ export default function AiComposeOfferScreen() {
 
           {(!result || phase !== "results") && phase !== "quota" ? (
             <>
-              <Text style={{ fontWeight: "600", marginBottom: 6 }}>{t("aiCompose.photoLabel")}</Text>
+              <View
+                style={{
+                  marginTop: 4,
+                  borderRadius: 14,
+                  backgroundColor: "#f6f7fb",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.7 }}>
+                  Step 1 of 2
+                </Text>
+              </View>
+              <Text style={{ fontWeight: "700", marginBottom: 6, marginTop: 8 }}>{t("aiCompose.photoLabel")}</Text>
               <Pressable
                 onPress={pickImage}
                 style={{
-                  borderWidth: 1,
-                  borderColor: "#ddd",
-                  borderRadius: 14,
-                  minHeight: 120,
+                  borderWidth: 1.5,
+                  borderColor: imageUri ? "#d8d8d8" : "#cfd7ff",
+                  borderRadius: 20,
+                  minHeight: 220,
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: Spacing.md,
                   overflow: "hidden",
+                  backgroundColor: imageUri ? "#f8f8f8" : "#f3f6ff",
                 }}
               >
                 {imageUri ? (
-                  <Image source={{ uri: imageUri }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+                  <Image source={{ uri: imageUri }} style={{ width: "100%", height: 220 }} contentFit="cover" />
                 ) : (
                   <View style={{ padding: Spacing.lg, alignItems: "center" }}>
-                    <MaterialIcons name="add-a-photo" size={32} color="#666" />
-                    <Text style={{ marginTop: 8, opacity: 0.65 }}>{t("aiCompose.tapAddPhoto")}</Text>
+                    <MaterialIcons name="add-a-photo" size={44} color="#4d5ed9" />
+                    <Text style={{ marginTop: 10, opacity: 0.75, fontWeight: "700", fontSize: 16 }}>
+                      {t("aiCompose.tapAddPhoto")}
+                    </Text>
+                    <Text style={{ marginTop: 4, opacity: 0.52, fontSize: 13 }}>
+                      Tap once to choose from gallery
+                    </Text>
                   </View>
                 )}
               </Pressable>
 
-              <Text style={{ fontWeight: "600", marginBottom: 6 }}>{t("aiCompose.promptLabel")}</Text>
+              <View
+                style={{
+                  borderRadius: 14,
+                  backgroundColor: "#f6f7fb",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.7 }}>
+                  Step 2 of 2
+                </Text>
+              </View>
+              <Text style={{ fontWeight: "700", marginBottom: 6, marginTop: 8 }}>{t("aiCompose.promptLabel")}</Text>
               <View style={{ position: "relative" }}>
                 <TextInput
                   value={prompt}
@@ -359,43 +396,48 @@ export default function AiComposeOfferScreen() {
                   multiline
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
-                    borderRadius: 12,
-                    padding: 12,
+                    borderColor: "#cfd3de",
+                    borderRadius: 14,
+                    padding: 14,
                     paddingRight: 52,
-                    minHeight: 100,
+                    minHeight: 120,
                     textAlignVertical: "top",
                     fontSize: 16,
+                    backgroundColor: "#fff",
                   }}
                 />
-                <Pressable
-                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    bottom: 10,
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: isRecording ? "#e0245e" : "#111",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {phase === "transcribing" ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={22} color="#fff" />
-                  )}
-                </Pressable>
+                {Platform.OS !== "web" ? (
+                  <Pressable
+                    onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                    style={{
+                      position: "absolute",
+                      right: 10,
+                      bottom: 10,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: isRecording ? "#e0245e" : "#111",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {phase === "transcribing" ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <MaterialIcons name={isRecording ? "stop" : "mic"} size={22} color="#fff" />
+                    )}
+                  </Pressable>
+                ) : null}
               </View>
-              <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>{t("aiCompose.micHint")}</Text>
+              {Platform.OS !== "web" ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>{t("aiCompose.micHint")}</Text>
+              ) : null}
 
               <PrimaryButton
                 title={busy ? t("aiCompose.generating") : t("aiCompose.generateCta")}
                 onPress={() => void onGenerate()}
                 disabled={busy}
-                style={{ marginTop: Spacing.lg }}
+                style={{ marginTop: Spacing.lg, height: 62, borderRadius: 18 }}
               />
             </>
           ) : null}

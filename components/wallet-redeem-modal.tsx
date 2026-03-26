@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Modal, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
+import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
 type WalletRedeemModalProps = {
   visible: boolean;
@@ -236,7 +237,7 @@ export function WalletRedeemModal({
             </Text>
           </View>
 
-          <Pressable
+          <HapticScalePressable
             onPress={onHide}
             style={{
               paddingVertical: 14,
@@ -246,9 +247,9 @@ export function WalletRedeemModal({
             }}
           >
             <Text style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}>{t("consumerWallet.hideQr")}</Text>
-          </Pressable>
+          </HapticScalePressable>
           {onRefresh && !expired ? (
-            <Pressable
+            <HapticScalePressable
               onPress={onRefresh}
               style={{
                 paddingVertical: 12,
@@ -259,7 +260,7 @@ export function WalletRedeemModal({
               <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>
                 {refreshing ? t("consumerWallet.refreshingQrModal") : t("consumerWallet.refreshQr")}
               </Text>
-            </Pressable>
+            </HapticScalePressable>
           ) : null}
         </View>
       </View>

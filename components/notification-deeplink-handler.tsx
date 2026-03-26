@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
 import { useRouter, type Href } from "expo-router";
 
 function readPath(data: Record<string, unknown> | undefined): Href | null {
@@ -23,24 +23,45 @@ export function NotificationDeepLinkHandler() {
   const coldStartHandled = useRef(false);
 
   useEffect(() => {
-    const navigate = (data: Record<string, unknown> | undefined) => {
-      const href = readPath(data);
-      if (href) router.push(href);
-    };
+    if (Platform.OS === "web" && typeof window === "undefined") {
+      // Avoid SSR crashes: expo-notifications expects browser APIs.
+      return;
+    }
+    let subscription: { remove: () => void } | null = null;
+    try {
+      const navigate = (data: Record<string, unknown> | undefined) => {
+        const href = readPath(data);
+        if (href) router.push(href);
+      };
 
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
-    });
+      void import("expo-notifications").then((Notifications) => {
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
+        });
 
-    if (!coldStartHandled.current) {
-      coldStartHandled.current = true;
-      void Notifications.getLastNotificationResponseAsync().then((response) => {
-        if (!response) return;
-        navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
+        if (!coldStartHandled.current) {
+          coldStartHandled.current = true;
+          void Notifications.getLastNotificationResponseAsync()
+            .then((response) => {
+              if (!response) return;
+              navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
+            })
+            .catch((e) => {
+              console.warn("[notifications] getLastNotificationResponseAsync failed (non-fatal):", e);
+            });
+        }
       });
+    } catch (e) {
+      console.warn("[notifications] Deep link listener setup skipped (non-fatal):", e);
     }
 
-    return () => sub.remove();
+    return () => {
+      try {
+        subscription?.remove();
+      } catch {
+        /* ignore */
+      }
+    };
   }, [router]);
 
   return null;

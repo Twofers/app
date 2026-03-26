@@ -1,7 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
+import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
 type BusinessRowCardProps = {
   name: string;
@@ -25,17 +26,14 @@ export function BusinessRowCard({
   const { t } = useTranslation();
 
   return (
-    <Pressable
+    <HapticScalePressable
       onPress={onPress}
       style={{
         borderRadius: 18,
         backgroundColor: "#fff",
         padding: Spacing.md,
         marginBottom: Spacing.md,
-        shadowColor: "#000",
-        shadowOpacity: 0.07,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 3 },
+        boxShadow: "0px 3px 10px rgba(0,0,0,0.07)",
         elevation: 2,
       }}
     >
@@ -84,7 +82,7 @@ export function BusinessRowCard({
             )}
           </View>
         </View>
-        <Pressable
+        <HapticScalePressable
           onPress={onToggleFavorite}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
@@ -97,8 +95,8 @@ export function BusinessRowCard({
           })}
         >
           <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={26} color={isFavorite ? "#e0245e" : "#666"} />
-        </Pressable>
+        </HapticScalePressable>
       </View>
-    </Pressable>
+    </HapticScalePressable>
   );
 }

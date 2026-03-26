@@ -1,5 +1,5 @@
-import * as Notifications from "expo-notifications";
-import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+import { scheduleLocalNotificationSafe } from "@/lib/expo-notifications-support";
 import i18n from "./i18n/config";
 import { supabase } from "./supabase";
 import { getConsumerPreferences, milesToKm } from "./consumer-preferences";
@@ -8,21 +8,60 @@ import { haversineKm } from "./geo";
 const ALERTS_KEY = "deal_alerts_enabled";
 const LAST_SEEN_KEY = "last_seen_deals_at";
 
+const isWeb = Platform.OS === "web";
+const hasWindow = typeof window !== "undefined";
+const memory = new Map<string, string>();
+
+async function getNativeSecureStore() {
+  const mod = await import("expo-secure-store");
+  return mod;
+}
+
+async function getStored(key: string): Promise<string | null> {
+  if (isWeb) {
+    if (!hasWindow) return memory.get(key) ?? null;
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return memory.get(key) ?? null;
+    }
+  }
+  const SecureStore = await getNativeSecureStore();
+  return SecureStore.getItemAsync(key);
+}
+
+async function setStored(key: string, value: string): Promise<void> {
+  if (isWeb) {
+    if (!hasWindow) {
+      memory.set(key, value);
+      return;
+    }
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      memory.set(key, value);
+    }
+    return;
+  }
+  const SecureStore = await getNativeSecureStore();
+  await SecureStore.setItemAsync(key, value);
+}
+
 export async function getAlertsEnabled(): Promise<boolean> {
-  const val = await SecureStore.getItemAsync(ALERTS_KEY);
+  const val = await getStored(ALERTS_KEY);
   return val === "true";
 }
 
 export async function setAlertsEnabled(enabled: boolean): Promise<void> {
-  await SecureStore.setItemAsync(ALERTS_KEY, enabled ? "true" : "false");
+  await setStored(ALERTS_KEY, enabled ? "true" : "false");
 }
 
 export async function getLastSeen(): Promise<string | null> {
-  return SecureStore.getItemAsync(LAST_SEEN_KEY);
+  return getStored(LAST_SEEN_KEY);
 }
 
 export async function setLastSeen(value: string): Promise<void> {
-  await SecureStore.setItemAsync(LAST_SEEN_KEY, value);
+  await setStored(LAST_SEEN_KEY, value);
 }
 
 function bizLatLng(b: { latitude: unknown; longitude: unknown } | null | undefined): { lat: number; lng: number } | null {
@@ -76,7 +115,7 @@ export async function syncConsumerDealNotifications({
     if (!count) return;
 
     const lng = i18n.language;
-    await Notifications.scheduleNotificationAsync({
+    await scheduleLocalNotificationSafe({
       content: {
         title: String(i18n.t("pushTemplates.newDealsTitleFavorites", { lng })),
         body: String(i18n.t("pushTemplates.newDealsBody", { count, lng })),
@@ -124,7 +163,7 @@ export async function syncConsumerDealNotifications({
   if (matchCount === 0) return;
 
   const lang = i18n.language;
-  await Notifications.scheduleNotificationAsync({
+  await scheduleLocalNotificationSafe({
     content: {
       title: String(i18n.t("pushTemplates.newDealsTitleNearby", { lng: lang })),
       body: String(i18n.t("pushTemplates.newDealsBody", { count: matchCount, lng: lang })),

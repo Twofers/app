@@ -10,7 +10,8 @@ export type AppAnalyticsEventName =
   | "redeem_started"
   | "redeem_completed"
   | "redeem_failed"
-  | "claim_expired";
+  | "claim_expired"
+  | "claim_blocked";
 
 type Payload = {
   event_name: AppAnalyticsEventName;

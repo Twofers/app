@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -10,12 +10,15 @@ import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { aiGenerateDealCopy } from "../../lib/functions";
+import { Colors, Radii } from "../../constants/theme";
 import {
   resolveDealFlowLanguage,
   translateDealQualityBlock,
 } from "../../lib/translate-deal-quality";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
+import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 
 export default function QuickDealScreen() {
   const router = useRouter();
@@ -40,7 +43,10 @@ export default function QuickDealScreen() {
   const [cutoffMins, setCutoffMins] = useState("15");
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
+  const [banner, setBanner] = useState<{
+    message: string;
+    tone: "error" | "success" | "warning";
+  } | null>(null);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
 
@@ -155,6 +161,15 @@ export default function QuickDealScreen() {
         return;
       }
 
+      const strongGuard = validateStrongDealOnly({
+        title: title.trim(),
+        description: offerHint.trim() || null,
+      });
+      if (!strongGuard.ok) {
+        setBanner({ message: strongGuard.message, tone: "warning" });
+        return;
+      }
+
       const { error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
@@ -170,7 +185,7 @@ export default function QuickDealScreen() {
       });
 
       if (error) throw error;
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/dashboard");
     } catch (err: any) {
       setBanner({ message: err?.message ?? t("createQuick.errPublishFailed"), tone: "error" });
     } finally {
@@ -181,6 +196,9 @@ export default function QuickDealScreen() {
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createQuick.title")}</Text>
+      <Text style={{ marginTop: 6, opacity: 0.7, lineHeight: 20 }}>
+        Built for speed: complete this flow in under a minute.
+      </Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
@@ -197,7 +215,7 @@ export default function QuickDealScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View>
-            <Text>{t("createQuick.fieldOfferHint")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldOfferHint")}</Text>
             <TextInput
               value={offerHint}
               onChangeText={setOfferHint}
@@ -205,12 +223,14 @@ export default function QuickDealScreen() {
               multiline
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
                 minHeight: 72,
                 textAlignVertical: "top",
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
             <View style={{ marginTop: Spacing.sm }}>
@@ -226,23 +246,25 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>{t("createQuick.fieldTitle")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldTitle")}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
               placeholder={t("createQuick.placeholderTitle")}
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
           </View>
 
           <View>
-            <Text>{t("createQuick.fieldPrice")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldPrice")}</Text>
             <TextInput
               value={price}
               onChangeText={setPrice}
@@ -250,27 +272,30 @@ export default function QuickDealScreen() {
               placeholder={t("createQuick.placeholderPrice")}
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
           </View>
 
           <View>
-            <Text>{t("createQuick.fieldEndTime")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
             <Pressable
               onPress={() => setShowEndPicker(true)}
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
+                backgroundColor: Colors.light.surface,
               }}
             >
-              <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
+              <Text style={{ fontSize: 16 }}>{formatAppDateTime(endTime, i18n.language)}</Text>
             </Pressable>
             {showEndPicker ? (
               <DateTimePicker
@@ -285,7 +310,7 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text>{t("createQuick.fieldMaxClaims")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>
             <TextInput
               value={maxClaims}
               onChangeText={setMaxClaims}
@@ -293,16 +318,18 @@ export default function QuickDealScreen() {
               placeholder={t("createQuick.placeholderMaxClaims")}
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
           </View>
 
           <View>
-            <Text>{t("createQuick.fieldCutoff")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldCutoff")}</Text>
             <TextInput
               value={cutoffMins}
               onChangeText={setCutoffMins}
@@ -310,10 +337,12 @@ export default function QuickDealScreen() {
               placeholder={t("createQuick.placeholderCutoff")}
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 12,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 marginTop: 6,
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
               }}
             />
           </View>
@@ -322,6 +351,7 @@ export default function QuickDealScreen() {
             title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
             onPress={publishDeal}
             disabled={publishing || !canPublish}
+            style={{ height: 66, borderRadius: 20, marginTop: 4 }}
           />
         </ScrollView>
       )}

@@ -9,6 +9,7 @@ export type MerchantInsightsRow = {
   zip_cluster_mix: Record<string, number>;
   acquisition_mix: Record<string, number>;
   redeem_method_mix: Record<string, number>;
+  claim_blocked_reason_mix: Record<string, number>;
   claims_by_hour_local: number[];
 };
 
@@ -37,6 +38,7 @@ export function parseMerchantInsights(raw: unknown): MerchantInsightsRow | null 
     zip_cluster_mix: (o.zip_cluster_mix as Record<string, number>) ?? {},
     acquisition_mix: (o.acquisition_mix as Record<string, number>) ?? {},
     redeem_method_mix: (o.redeem_method_mix as Record<string, number>) ?? {},
+    claim_blocked_reason_mix: (o.claim_blocked_reason_mix as Record<string, number>) ?? {},
     claims_by_hour_local: hours.length === 24 ? hours : Array.from({ length: 24 }, (_, i) => hours[i] ?? 0),
   };
 }

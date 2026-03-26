@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
-import { isDealActiveNow } from "@/lib/deal-time";
+import { formatValiditySummary, isDealActiveNow } from "@/lib/deal-time";
 import { Banner } from "@/components/ui/banner";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useBusiness } from "@/hooks/use-business";
-import { formatValiditySummary } from "@/lib/deal-time";
 import { DealStatusPill } from "@/components/deal-status-pill";
+import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type BizRow = {
   id: string;
@@ -31,6 +32,7 @@ type DealRow = {
   title: string | null;
   description: string | null;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   end_time: string;
   start_time: string;
   price: number | null;
@@ -44,9 +46,10 @@ type DealRow = {
 export default function BusinessProfileScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = typeof idParam === "string" ? idParam : idParam?.[0] ?? "";
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { userId } = useBusiness();
+  const { userId, isLoggedIn, loading: authLoading } = useBusiness();
   const [biz, setBiz] = useState<BizRow | null>(null);
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +57,10 @@ export default function BusinessProfileScreen() {
   const [isFavorite, setIsFavorite] = useState(false);
 
   const load = useCallback(async () => {
-    if (!id) {
+    if (!id?.trim()) {
+      setBiz(null);
+      setDeal(null);
+      setBanner(t("businessProfile.notFound"));
       setLoading(false);
       return;
     }
@@ -77,7 +83,7 @@ export default function BusinessProfileScreen() {
     const { data: deals } = await supabase
       .from("deals")
       .select(
-        "id,title,description,poster_url,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("business_id", id)
       .eq("is_active", true)
@@ -104,8 +110,13 @@ export default function BusinessProfileScreen() {
   }, [id, userId, t]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isLoggedIn) {
+      router.replace("/auth-landing");
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, authLoading, isLoggedIn, router]);
 
   const canOpenDirections = useMemo(() => {
     if (!biz) return false;
@@ -167,6 +178,18 @@ export default function BusinessProfileScreen() {
     void Linking.openURL(`tel:${p}`);
   }
 
+  if (authLoading) {
+    return (
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
+
   if (loading) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
@@ -220,7 +243,7 @@ export default function BusinessProfileScreen() {
         ) : null}
 
         <View style={{ marginTop: Spacing.md }}>
-          <PrimaryButton title={t("businessProfile.directions")} onPress={openDirections} />
+          <PrimaryButton title={t("businessProfile.directions")} onPress={openDirections} disabled={!canOpenDirections} />
         </View>
 
         <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
@@ -256,20 +279,22 @@ export default function BusinessProfileScreen() {
                 borderRadius: 18,
                 overflow: "hidden",
                 backgroundColor: "#fff",
-                shadowColor: "#000",
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 2 },
+                boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
                 elevation: 2,
               }}
             >
-              {deal.poster_url ? (
-                <Image source={{ uri: deal.poster_url }} style={{ width: "100%", height: 200 }} contentFit="cover" />
-              ) : (
-                <View style={{ height: 120, backgroundColor: "#ececec", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ opacity: 0.5 }}>{t("dealDetail.noImage")}</Text>
-                </View>
-              )}
+              {(() => {
+                const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+                return uri ? (
+                  <Image source={{ uri }} style={{ width: "100%", height: 200 }} contentFit="cover" />
+                ) : (
+                  <View
+                    style={{ height: 120, backgroundColor: "#ececec", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Text style={{ opacity: 0.5 }}>{t("dealDetail.noImage")}</Text>
+                  </View>
+                );
+              })()}
               <View style={{ padding: Spacing.md, gap: Spacing.sm }}>
                 <DealStatusPill status="live" />
                 <Text style={{ fontSize: 18, fontWeight: "700" }}>{deal.title ?? t("dealDetail.dealFallback")}</Text>

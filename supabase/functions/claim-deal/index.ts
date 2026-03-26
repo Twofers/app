@@ -216,6 +216,27 @@ serve(async (req) => {
       );
     }
 
+    // 🚫 Global business rule: one claim per hour across the app (all businesses/deals).
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: claimsLastHour, error: claimsLastHourError } = await supabaseAdmin
+      .from("deal_claims")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", oneHourAgo);
+    if (claimsLastHourError) {
+      console.error("hourly claim guard lookup:", claimsLastHourError);
+    } else if ((claimsLastHour ?? 0) >= 1) {
+      return new Response(
+        JSON.stringify({
+          error: "You can only claim one deal per hour. Please try again shortly.",
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // 🔍 Fetch and validate deal
     const { data: deal, error: dealError } = await supabase
       .from("deals")

@@ -6,7 +6,6 @@ import {
   AppState,
   Easing,
   Modal,
-  Pressable,
   Text,
   View,
 } from "react-native";
@@ -16,6 +15,7 @@ import QRCode from "react-native-qrcode-svg";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { completeVisualRedeem } from "@/lib/functions";
 import { Spacing } from "@/lib/screen-layout";
+import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
 type WalletVisualPassModalProps = {
   visible: boolean;
@@ -270,7 +270,7 @@ export function WalletVisualPassModal({
 
         <View style={{ flex: 1 }} />
 
-        <Pressable
+        <HapticScalePressable
           onPress={confirmClose}
           disabled={completing}
           style={{
@@ -283,7 +283,7 @@ export function WalletVisualPassModal({
           <Text style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}>
             {remainingSec > 0 ? t("consumerWallet.passCloseEarly") : t("consumerWallet.passDone")}
           </Text>
-        </Pressable>
+        </HapticScalePressable>
       </View>
     </Modal>
   );

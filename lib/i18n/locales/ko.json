@@ -19,6 +19,9 @@
     "currentCustomer": "현재: 고객 탭",
     "currentBusiness": "현재: 비즈니스 탭"
   },
+  "emptyState": {
+    "encouragement": "걱정 마세요. 곧 더 많은 딜이 올라올 거예요."
+  },
   "dealsBrowse": {
     "categoriesHeading": "카테고리",
     "categoryHint": "팁: 계정 → 비즈니스 프로필에서 카테고리를 설정한 매장만 여기 필터 칩으로 표시됩니다.",
@@ -208,6 +211,7 @@
     "claimDuplicateActive": "이미 이 딜에 대한 활성 이용권이 있습니다",
     "claimActiveOtherDeal": "이 매장에서 이미 활성 이용권이 있습니다. 사용하거나 만료될 때까지 다른 딜을 받을 수 없습니다.",
     "claimDailyLimitBusiness": "매장당 매장 현지 달력 기준 하루에 한 번만 받을 수 있습니다. 그 시간대에서 자정이 지난 뒤 다시 시도하세요.",
+    "claimHourlyLimit": "한 시간에 한 번만 딜을 받을 수 있습니다. 잠시 후 다시 시도하세요.",
     "claimSoldOut": "이 딜은 신청 한도에 도달했습니다.",
     "claimCreateFailed": "이용권을 만들 수 없습니다: {{detail}}",
     "redeemUnauthorized": "인증되지 않았습니다. 비즈니스 계정으로 로그인하세요.",
@@ -374,6 +378,7 @@
     "title": "설정",
     "alertsPermissionTitle": "권한 필요",
     "alertsPermissionBody": "딜 알림을 받으려면 알림을 허용하세요.",
+    "alertsExpoGoBody": "Android Expo Go에서는 전체 푸시 설정을 쓸 수 없습니다. 개발/프리뷰 빌드를 쓰거나 알림 없이 계속하세요.",
     "checkStatus": "알림 상태 확인",
     "statusAlertTitle": "딜 알림",
     "statusOn": "켜짐",
@@ -513,8 +518,16 @@
     "password": "비밀번호",
     "logIn": "로그인",
     "loggingIn": "로그인 중…",
+    "signingUp": "계정 만드는 중…",
     "signUp": "가입",
+    "createAccountCta": "계정 만들기",
     "demoLogin": "데모 로그인",
+    "errRateLimited": "시도가 너무 많습니다. 잠시 후 다시 시도하거나 데모 계정을 미리 만드세요 (docs/DEMO_SEED.md).",
+    "errInvalidCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
+    "errGeneric": "문제가 발생했습니다. 다시 시도하세요.",
+    "errNetwork": "네트워크 오류입니다. 연결을 확인하세요.",
+    "errDemoNotProvisioned": "이 Supabase 프로젝트에 데모 계정이 없습니다. 한 번 실행: npm run seed:demo 또는 Auth에서 demo@demo.com을 만드세요.",
+    "errFieldsRequired": "이메일과 비밀번호를 입력하세요.",
     "alertSignUpSuccessTitle": "완료",
     "alertSignUpSuccessMsg": "이메일을 확인한 뒤 로그인하세요.",
     "alertSignUpFailTitle": "가입 실패",
@@ -534,6 +547,14 @@
     "alertBizCreatedMsg": "이제 딜을 만들고 QR을 사용할 수 있습니다.",
     "alertBizFailTitle": "비즈니스 생성 실패",
     "alertBizFailMsg": "다시 시도하세요."
+  },
+  "authLanding": {
+    "title": "Twofer",
+    "subtitle": "실시간 지역 딜 — 둘러보기, 클레임, 사용을 위해 로그인하세요.",
+    "createAccount": "계정 만들기",
+    "languageLabel": "언어",
+    "heroA11y": "Twofer 마스코트",
+    "demoHint": "미리보기/개발 전용"
   },
   "legal": {
     "sectionTitle": "법적 고지",
@@ -574,12 +595,22 @@
     "zipMix": "우편번호 구역 (마스킹)",
     "acqMix": "딜 유입 경로",
     "methodMix": "사용 방식",
+    "claimBlockedMix": "클레임 차단 사유 (왜 클레임하지 못했는지)",
     "hourHeat": "시간대별 클레임 (딜 현지 시각)",
     "hourPeak": "가장 많은 시간대 {{hour}}시 ({{count}}건)",
     "hourHeatSparse": "시간대 패턴을 보기에 데이터가 아직 부족합니다.",
     "methodVisual": "앱 패스",
     "methodQr": "QR / 코드",
     "methodPending": "대기",
+    "claimBlockedReasons": {
+      "hourly_limit": "시간당 클레임 제한",
+      "business_daily_limit": "매장별 일일 제한",
+      "active_business_claim": "해당 매장에 활성 클레임이 이미 있음",
+      "duplicate_deal_claim": "이 딜은 이미 클레임함",
+      "deal_sold_out": "딜 마감 / 최대 클레임 도달",
+      "deal_closed": "클레임 가능 시간이 종료되었거나 만료됨",
+      "unknown": "알 수 없음"
+    },
     "acquisition": {
       "organic": "자연 유입",
       "push": "푸시",
@@ -617,6 +648,7 @@
     "continueToApp": "계속"
   },
   "commonUi": {
+    "ok": "확인",
     "cancel": "취소",
     "goBack": "뒤로",
     "dealNotFound": "딜을 찾을 수 없습니다",
@@ -632,6 +664,9 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "종료",
     "modalTitle": "모달"
+  },
+  "debugDiagnostics": {
+    "title": "진단"
   },
   "modalScreen": {
     "title": "모달 화면입니다",
@@ -961,11 +996,24 @@
     "alertWindowBody": "올바른 시작·종료 시간을 입력하세요"
   },
   "offersDashboard": {
-    "subtitle": "최근 30일 · 카드를 탭하면 분석",
+    "subtitle": "이번 달 한눈에 · 딜을 탭하면 상세",
+    "periodHint": "별도 안내가 없으면 이번 달 기준입니다.",
     "loginPrompt": "대시보드를 보려면 로그인하세요.",
     "loading": "불러오는 중...",
     "needBusiness": "비즈니스를 만들면 분석을 볼 수 있습니다.",
-    "overview": "개요",
+    "overview": "성과",
+    "metricDealsLaunched": "이번 달 출시 딜",
+    "metricTotalClaims": "총 클레임",
+    "metricRedemptions": "사용(리딤)",
+    "metricNewCustomers": "추정 신규 고객",
+    "metricNewCustomersSub": "고유 리딤 사용자",
+    "metricAvgRedemption": "리딤 비율",
+    "metricAvgRedemptionSub": "클레임 대비 사용",
+    "inventorySaved": "재고 절감",
+    "inventoryPlaceholder": "추정 페이스트리 18개 / 커피 42잔이 버려지지 않음",
+    "chartTitle": "일별 클레임 · 최근 7일",
+    "chartFooter": "기기 시간대 기준 클레임 시각입니다.",
+    "recentDeals": "최근 딜",
     "yourDeals": "내 딜",
     "dealFallback": "딜",
     "rowClaims": "클레임 {{count}}",
@@ -975,7 +1023,8 @@
     "endDealEarly": "딜 조기 종료",
     "errLoadDashboard": "대시보드를 불러오지 못했습니다.",
     "errEndDeal": "딜을 종료하지 못했습니다.",
-    "emptyDeals": "아직 딜이 없습니다. 분석을 보려면 딜을 만드세요."
+    "emptyDeals": "아직 딜이 없습니다. 분석을 보려면 딜을 만드세요.",
+    "createFirstDeal": "첫 번째 딜 만들기"
   },
   "consumerProfile": {
     "navTitle": "내 프로필",
@@ -1015,6 +1064,8 @@
     "businessName": "비즈니스 이름",
     "phone": "전화번호",
     "address": "주소",
+    "shortDescription": "짧은 소개",
+    "shortDescriptionPh": "예: 동네 카페 · 빠른 픽업 · 가족 운영",
     "categoryLabel": "카테고리",
     "hoursLabel": "영업시간",
     "categoryOtherPh": "카테고리 설명",

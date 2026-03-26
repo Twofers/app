@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
-import * as Notifications from "expo-notifications";
+import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -17,7 +17,15 @@ import { useTabMode } from "../../lib/tab-mode";
 import { LegalExternalLinks } from "../../components/legal-external-links";
 import { DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER, deleteUserAccount } from "../../lib/functions";
 import { DELETE_ACCOUNT_URL, SUPPORT_URL, openWebsiteUrl } from "../../lib/legal-urls";
+import { DEMO_PREVIEW_EMAIL } from "../../lib/demo-account";
+import { ensureDemoCoffeePreview } from "../../lib/demo-preview-seed";
+import { signInDemoPreviewUser } from "../../lib/demo-auth-signin";
+import { friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
+import { logAuthPath } from "../../lib/auth-path-log";
 import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { Colors, Radii } from "@/constants/theme";
+import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -30,6 +38,7 @@ export default function AccountScreen() {
     businessId,
     businessOwnershipAmbiguous,
     businessProfile,
+    businessName,
     loading,
     refresh,
   } = useBusiness();
@@ -55,6 +64,52 @@ export default function AccountScreen() {
   const [profilePreferredLocale, setProfilePreferredLocale] = useState<string | null>(null);
   const [profilePhone, setProfilePhone] = useState("");
   const [profileHours, setProfileHours] = useState("");
+  const [businessProfileCheckLoading, setBusinessProfileCheckLoading] = useState(false);
+  const [businessProfileComplete, setBusinessProfileComplete] = useState(false);
+  const [businessSetupMessage, setBusinessSetupMessage] = useState<string | null>(null);
+  const [businessProfileSnapshot, setBusinessProfileSnapshot] = useState<{
+    name: string | null;
+    address: string | null;
+    category: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isLoggedIn || tabMode !== "business") {
+      setBusinessProfileComplete(false);
+      setBusinessProfileSnapshot(null);
+      setBusinessProfileCheckLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setBusinessProfileCheckLoading(true);
+    void getBusinessProfileAccessForCurrentUser()
+      .then((access) => {
+        if (cancelled) return;
+        setBusinessProfileComplete(access.isComplete);
+        setBusinessProfileSnapshot(
+          access.profile
+            ? {
+                name: access.profile.name ?? null,
+                address: access.profile.address ?? null,
+                category: access.profile.category ?? null,
+              }
+            : null,
+        );
+        if (access.isComplete) {
+          setBusinessSetupMessage("Setup complete - ready to launch BOGO deals!");
+        } else if (access.hasProfileRow) {
+          setBusinessSetupMessage("Finish your setup to unlock create, redeem, and dashboard.");
+        } else {
+          setBusinessSetupMessage("Complete your one-time setup to start launching deals.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBusinessProfileCheckLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, tabMode]);
 
   useEffect(() => {
     if (!businessProfile) {
@@ -106,7 +161,11 @@ export default function AccountScreen() {
 
   async function toggleAlerts(next: boolean) {
     if (next) {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
+      if (skippedBecauseExpoGo) {
+        setBanner({ message: t("settingsScreen.alertsExpoGoBody"), tone: "info" });
+        return;
+      }
       if (status !== "granted") {
         setBanner({ message: t("account.alertsEnableHint"), tone: "info" });
         return;
@@ -120,29 +179,39 @@ export default function AccountScreen() {
   async function signUp() {
     setBusy(true);
     setBanner(null);
+    logAuthPath("signup");
     try {
+      const trimmed = email.trim();
+      if (!trimmed || !pw) {
+        setBanner({ message: t("auth.errFieldsRequired"), tone: "error" });
+        return;
+      }
       const { error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: trimmed,
         password: pw,
       });
       if (error) throw error;
       setBanner({ message: t("auth.alertSignUpSuccessMsg"), tone: "success" });
-    } catch (e: any) {
-      setBanner({ message: e?.message ?? t("account.errSignUpFailed"), tone: "error" });
+    } catch (e: unknown) {
+      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
+      setBanner({ message: friendlyAuthMessage(raw, t), tone: "error" });
     } finally {
       setBusy(false);
     }
   }
 
-  async function signIn(overrideEmail?: string, overridePw?: string) {
+  async function signIn() {
     setBusy(true);
     setBanner(null);
     try {
-      const demoEmail = "demo@demo.com";
-      const demoPassword = "demo12345";
-      const emailToUse = (overrideEmail ?? email).trim();
-      const pwToUse = overridePw ?? pw;
-      const isDemo = emailToUse.toLowerCase() === demoEmail;
+      const emailToUse = email.trim();
+      const pwToUse = pw;
+      if (!emailToUse || !pwToUse) {
+        setBanner({ message: t("auth.errFieldsRequired"), tone: "error" });
+        return;
+      }
+      logAuthPath("normal_login", emailToUse);
+      const isDemoEmail = emailToUse.toLowerCase() === DEMO_PREVIEW_EMAIL;
 
       const { error } = await supabase.auth.signInWithPassword({
         email: emailToUse,
@@ -150,58 +219,40 @@ export default function AccountScreen() {
       });
 
       if (error) {
-        const msg = String(error.message || "");
-        const canAutoSignUp =
-          isDemoAuthHelperEnabled() &&
-          isDemo &&
-          (msg.includes("Invalid login credentials") || msg.toLowerCase().includes("user not found"));
+        setBanner({ message: friendlyAuthMessage(error.message ?? "", t), tone: "error" });
+        return;
+      }
 
-        if (canAutoSignUp) {
-          const { error: signUpError } = await supabase.auth.signUp({
-            email: demoEmail,
-            password: demoPassword,
-          });
-          if (signUpError) throw signUpError;
-
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email: demoEmail,
-            password: demoPassword,
-          });
-          if (retryError) throw retryError;
-        } else {
-          throw error;
-        }
+      if (isDemoEmail) {
+        await ensureDemoCoffeePreview(supabase);
       }
 
       await refresh();
-      if (isDemo) {
-        const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id;
-        if (userId) {
-          const { data } = await supabase
-            .from("businesses")
-            .select("id")
-            .eq("owner_id", userId)
-            .maybeSingle();
-          if (!data) {
-            await supabase.from("businesses").insert({
-              owner_id: userId,
-              name: t("account.demoBusinessName"),
-              contact_name: "Demo Owner",
-              business_email: "hello@demo.twofer.app",
-              phone: "(555) 555-0100",
-              address: "Austin, TX",
-              location: "Austin, TX",
-              category: "Demo",
-              hours_text: "Mon–Fri 9am–5pm",
-            });
-          }
-        }
-        await refresh();
-      }
       setBanner({ message: t("auth.alertLoggedInMsg"), tone: "success" });
-    } catch (e: any) {
-      setBanner({ message: e?.message ?? t("account.errLoginFailed"), tone: "error" });
+    } catch (e: unknown) {
+      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
+      setBanner({ message: friendlyAuthMessage(raw, t), tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function demoLoginFromAccount() {
+    if (busy || !isDemoAuthHelperEnabled()) return;
+    setBusy(true);
+    setBanner(null);
+    logAuthPath("demo_login");
+    try {
+      const result = await signInDemoPreviewUser();
+      if (!result.ok) {
+        setBanner({ message: friendlyDemoAuthMessage(result.message, t), tone: "error" });
+        return;
+      }
+      await refresh();
+      setBanner({ message: t("auth.alertLoggedInMsg"), tone: "success" });
+    } catch (e: unknown) {
+      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
+      setBanner({ message: friendlyDemoAuthMessage(raw, t), tone: "error" });
     } finally {
       setBusy(false);
     }
@@ -351,6 +402,10 @@ export default function AccountScreen() {
     router.push("/business-setup" as Href);
   }
 
+  function goToCreateDeal() {
+    router.push("/create/quick");
+  }
+
   async function chooseAppLocale(locale: AppLocale) {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
@@ -361,17 +416,20 @@ export default function AccountScreen() {
   function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
     return (
       <Pressable
+        key={locale}
         onPress={onPress}
         style={{
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: 10,
-          backgroundColor: active ? "#111" : "#f0f0f0",
-          marginRight: 8,
-          marginBottom: 8,
+          paddingVertical: Spacing.sm,
+          paddingHorizontal: Spacing.md,
+          borderRadius: Radii.pill,
+          backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+          borderWidth: 1,
+          borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+          marginRight: Spacing.sm,
+          marginBottom: Spacing.sm,
         }}
       >
-        <Text style={{ color: active ? "#fff" : "#111", fontWeight: "600", fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>{label}</Text>
       </Pressable>
     );
   }
@@ -382,6 +440,32 @@ export default function AccountScreen() {
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
+        tabMode === "business" ? (
+          <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+            <View
+              style={{
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                backgroundColor: Colors.light.surface,
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "700", fontSize: 18 }}>Your Coffee Shop</Text>
+              <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+                Sign in to continue your one-time setup and launch your first deal.
+              </Text>
+              <SecondaryButton
+                title="Switch to Consumer Mode"
+                onPress={async () => {
+                  await setTabMode("customer");
+                  router.replace("/(tabs)");
+                }}
+              />
+            </View>
+          </View>
+        ) : (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <View>
             <Text>{t("auth.email")}</Text>
@@ -417,20 +501,35 @@ export default function AccountScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push("/forgot-password" as Href)}
+            onPress={() => {
+              logAuthPath("forgot_password");
+              router.push("/forgot-password" as Href);
+            }}
             style={{ alignSelf: "flex-start", paddingVertical: 4 }}
           >
             <Text style={{ fontSize: 15, fontWeight: "600", color: "#2563eb" }}>{t("passwordRecovery.forgotLink")}</Text>
           </Pressable>
 
           <PrimaryButton title={busy ? t("auth.loggingIn") : t("auth.logIn")} onPress={() => void signIn()} disabled={busy} />
-          <SecondaryButton title={t("auth.signUp")} onPress={() => void signUp()} disabled={busy} />
-          <PrimaryButton title={t("auth.demoLogin")} onPress={() => void signIn("demo@demo.com", "demo12345")} disabled={busy} />
+          <SecondaryButton title={t("auth.createAccountCta")} onPress={() => void signUp()} disabled={busy} />
+          {isDemoAuthHelperEnabled() ? (
+            <SecondaryButton
+              title={busy ? t("auth.loggingIn") : t("auth.demoLogin")}
+              onPress={() => void demoLoginFromAccount()}
+              disabled={busy}
+              style={{
+                backgroundColor: busy ? "#e5e7eb" : "#eef2ff",
+                borderWidth: 1,
+                borderColor: busy ? "#d4d4d8" : "#6366f1",
+              }}
+            />
+          ) : null}
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
             <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.authFooterHint")}</Text>
             <LegalExternalLinks />
           </View>
         </View>
+        )
       ) : (
         <ScrollView
           style={{ marginTop: Spacing.lg, flex: 1 }}
@@ -438,6 +537,58 @@ export default function AccountScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {tabMode === "business" ? (
+            <View
+              style={{
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                backgroundColor: Colors.light.surface,
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "700", fontSize: 18 }}>Your Coffee Shop</Text>
+              {businessProfileCheckLoading ? (
+                <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
+              ) : (
+                <>
+                  <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+                    {businessProfileSnapshot?.name ?? businessName ?? "Your business"}
+                  </Text>
+                  <Text style={{ opacity: 0.7, lineHeight: 20 }}>{businessProfileSnapshot?.address ?? "No address on file yet."}</Text>
+                  {businessProfileSnapshot?.category ? (
+                    <Text style={{ opacity: 0.7, lineHeight: 20 }}>Category: {businessProfileSnapshot.category}</Text>
+                  ) : null}
+                  <Text style={{ opacity: 0.75, lineHeight: 20 }}>
+                    {businessSetupMessage ?? "Setup complete — ready to launch deals!"}
+                  </Text>
+                  <PrimaryButton
+                    title="Create New Deal"
+                    onPress={goToCreateDeal}
+                    style={{
+                      backgroundColor: "#FF9F1C",
+                      borderRadius: Radii.lg,
+                    }}
+                  />
+                  {!businessProfileComplete ? (
+                    <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
+                  ) : null}
+                  {businessProfileComplete ? (
+                    <SecondaryButton title="Edit Profile" onPress={goToBusinessSetup} />
+                  ) : null}
+                  <SecondaryButton
+                    title="Switch to Consumer Mode"
+                    onPress={async () => {
+                      await setTabMode("customer");
+                      router.replace("/(tabs)");
+                    }}
+                  />
+                </>
+              )}
+            </View>
+          ) : null}
+
           <View
             style={{
               borderWidth: 1,
@@ -866,36 +1017,17 @@ export default function AccountScreen() {
                     {t("legal.deleteAccount")}
                   </Text>
                 </Pressable>
-                <Pressable
+                <PrimaryButton
+                  title={t("deleteAccount.cta")}
                   onPress={confirmDeleteAccount}
                   disabled={busy || loading}
-                  style={{
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    backgroundColor: "#b91c1c",
-                    opacity: busy || loading ? 0.65 : 1,
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}>
-                    {t("deleteAccount.cta")}
-                  </Text>
-                </Pressable>
+                  style={{ backgroundColor: "#b91c1c" }}
+                />
               </>
             )}
           </View>
 
-          <Pressable
-            onPress={signOut}
-            disabled={busy || loading}
-            style={{
-              paddingVertical: 12,
-              borderRadius: 12,
-              backgroundColor: "#eee",
-              opacity: busy || loading ? 0.7 : 1,
-            }}
-          >
-            <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>{t("account.logOut")}</Text>
-          </Pressable>
+          <SecondaryButton title={t("account.logOut")} onPress={signOut} disabled={busy || loading} />
         </ScrollView>
       )}
     </View>
