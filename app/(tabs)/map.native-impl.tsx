@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import MapView, { Circle, Marker, type Region } from "react-native-maps";
+import { Component, type ReactNode, useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from "react-native-maps";
+import * as Location from "expo-location";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -63,6 +64,42 @@ function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number,
 /** Dallas–Fort Worth service area fallback when GPS and markers are unavailable. */
 const DALLAS_FALLBACK = { lat: 32.7767, lng: -96.797 };
 
+type EBState = { crashed: boolean };
+class MapErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { crashed: false };
+  }
+  static getDerivedStateFromError(): EBState {
+    return { crashed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn("[map] MapView crash caught by ErrorBoundary:", error);
+  }
+  render() {
+    if (this.state.crashed) {
+      return (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <MaterialIcons name="map" size={52} color="#d1d5db" />
+          <Text style={{ fontSize: 18, fontWeight: "700", textAlign: "center", color: "#111" }}>
+            Map couldn't load
+          </Text>
+          <Text style={{ fontSize: 14, opacity: 0.6, textAlign: "center", lineHeight: 20 }}>
+            Check your connection and tap to try again.
+          </Text>
+          <Text
+            style={{ marginTop: 4, fontSize: 14, color: "#FF9F1C", fontWeight: "700" }}
+            onPress={() => this.setState({ crashed: false })}
+          >
+            Retry
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function MapScreenNative() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -89,6 +126,13 @@ export default function MapScreenNative() {
     try {
       const prefs = await getConsumerPreferences();
       setRadiusMiles(prefs.radiusMiles);
+      // Request foreground location permission once on map open; if denied, fall back to ZIP/Dallas gracefully.
+      if (prefs.locationMode === "gps") {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") {
+          await Location.requestForegroundPermissionsAsync();
+        }
+      }
       const coords = await resolveConsumerCoordinates(prefs);
       if (coords) {
         setUserPos({ lat: coords.lat, lng: coords.lng });
@@ -258,9 +302,11 @@ export default function MapScreenNative() {
           <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
         </View>
       ) : (
+        <MapErrorBoundary>
         <View style={{ flex: 1 }}>
           <MapView
             style={{ flex: 1 }}
+            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
             initialRegion={initialRegion}
             showsUserLocation={showUserLocationDot}
             onMapReady={() => setMapReady(true)}
@@ -354,14 +400,17 @@ export default function MapScreenNative() {
             >
               <Pressable
                 onPress={() =>
-                  router.push((previewDeal ? `/deal/${previewDeal.id}` : `/business/${selectedBusiness.id}`) as Href)
+                  router.push(`/business/${selectedBusiness.id}` as Href)
                 }
                 accessibilityRole="button"
                 style={{
                   borderRadius: 24,
                   backgroundColor: "#fff",
                   overflow: "hidden",
-                  boxShadow: "0px 10px 20px rgba(0,0,0,0.16)",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 20,
                   elevation: 10,
                 }}
               >
@@ -397,6 +446,7 @@ export default function MapScreenNative() {
             </View>
           ) : null}
         </View>
+        </MapErrorBoundary>
       )}
     </View>
   );
