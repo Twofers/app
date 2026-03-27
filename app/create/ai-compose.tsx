@@ -272,14 +272,15 @@ export default function AiComposeOfferScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("aiCompose.title")}</Text>
-      <Text style={{ marginTop: 6, opacity: 0.65, fontSize: 15, lineHeight: 22 }}>{t("aiCompose.subtitle")}</Text>
-
-      {quota ? (
-        <Text style={{ marginTop: Spacing.sm, fontSize: 13, opacity: 0.55 }}>
-          {t("aiCompose.usageLeft", { remaining: quota.remaining, limit: quota.limit })}
-        </Text>
-      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 20, fontWeight: "700", letterSpacing: -0.3 }}>{t("aiCompose.title")}</Text>
+        {quota ? (
+          <Text style={{ fontSize: 12, opacity: 0.5 }}>
+            {quota.remaining}/{quota.limit} AI left
+          </Text>
+        ) : null}
+      </View>
+      <Text style={{ marginTop: 2, opacity: 0.55, fontSize: 12, lineHeight: 16 }}>{t("aiCompose.subtitle")}</Text>
 
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
@@ -351,7 +352,7 @@ export default function AiComposeOfferScreen() {
                   borderWidth: 1.5,
                   borderColor: imageUri ? "#d8d8d8" : "#cfd7ff",
                   borderRadius: 20,
-                  minHeight: 220,
+                  minHeight: 260,
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: Spacing.md,
@@ -360,7 +361,7 @@ export default function AiComposeOfferScreen() {
                 }}
               >
                 {imageUri ? (
-                  <Image source={{ uri: imageUri }} style={{ width: "100%", height: 220 }} contentFit="cover" />
+                  <Image source={{ uri: imageUri }} style={{ width: "100%", height: 260 }} contentFit="cover" />
                 ) : (
                   <View style={{ padding: Spacing.lg, alignItems: "center" }}>
                     <MaterialIcons name="add-a-photo" size={44} color="#4d5ed9" />

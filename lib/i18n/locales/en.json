@@ -413,7 +413,7 @@
   },
   "aiCompose": {
     "title": "AI offer",
-    "subtitle": "Add a menu photo, type what you want, or tap the mic. We suggest one offer and two ad styles — you choose and edit before publishing.",
+    "subtitle": "Photo, type, or speak — we build the ad.",
     "usageLeft": "AI generations left this month: {{remaining}} / {{limit}}",
     "loginOrLoad": "Sign in to use AI.",
     "needBusiness": "Create a business first.",
@@ -654,7 +654,7 @@
     "loginPrompt": "Please log in to create deals.",
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",
-    "intro": "Upload a photo of the product or menu item, describe the offer in your own words, then get three different ad angles. Choose one, tweak the text, and publish when you’re ready.",
+    "intro": "Add a photo, type your offer, and we’ll build the ad.",
     "demoModeTitle": "Demo account",
     "demoModeBody": "For demo@demo.com, ad ideas use built-in templates (no OpenAI) unless your project sets Edge secrets OPENAI_API_KEY and AI_ADS_DEMO_USE_LIVE=true. Publishing the deal does not call OpenAI. Other accounts need OPENAI_API_KEY for real AI ads.",
     "devToolsTitle": "Developer: extra AI edge functions",
