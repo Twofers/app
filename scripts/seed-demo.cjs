@@ -32,23 +32,23 @@ const BUSINESS = {
 const DEALS = [
   {
     title: "2-for-1 oat milk lattes",
-    description: "Bring a friend — two lattes for the price of one.",
+    description: "Bring a friend — two lattes for the price of one. Buy one oat milk latte, get one free.",
     price: 6.5,
     days: 14,
     max_claims: 200,
     poster_url: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=1200&q=80",
   },
   {
-    title: "Pastry + drip before 10am",
-    description: "Any pastry with a medium hot coffee.",
+    title: "Buy one pastry, get one free before 10am",
+    description: "Any pastry with a medium hot coffee — second pastry free every morning.",
     price: 4.25,
     days: 10,
     max_claims: 150,
     poster_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80",
   },
   {
-    title: "Weekend cold brew flight",
-    description: "Three single-origin cold brew samples.",
+    title: "BOGO cold brew — second one free",
+    description: "Two single-origin cold brews for the price of one. Weekend special.",
     price: 8.0,
     days: 21,
     max_claims: 80,

@@ -663,7 +663,7 @@ export default function HomeScreen() {
                     </View>
                     <View style={{ marginTop: Spacing.sm, flexDirection: "row", gap: Spacing.sm }}>
                       <PrimaryButton
-                        title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claimButton")}
+                        title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claim")}
                         onPress={() => void doClaim(item.id)}
                         disabled={claimingDealId === item.id || st !== "live"}
                         style={{ flex: 1 }}
