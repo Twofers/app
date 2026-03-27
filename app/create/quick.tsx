@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
@@ -18,7 +19,14 @@ import {
   translateDealQualityBlock,
 } from "../../lib/translate-deal-quality";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
-import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
+import { validateStrongDealOnly, type DealType } from "../../lib/strong-deal-guard";
+
+const DEAL_TYPE_OPTIONS: { key: DealType; label: string }[] = [
+  { key: "bogo", label: "BOGO" },
+  { key: "buy2get1", label: "Buy 2 Get 1" },
+  { key: "free_item", label: "Free Item" },
+  { key: "percentage_off", label: "% Off" },
+];
 
 export default function QuickDealScreen() {
   const router = useRouter();
@@ -34,14 +42,20 @@ export default function QuickDealScreen() {
   const { isLoggedIn, businessId, userId, loading, businessPreferredLocale, businessName } =
     useBusiness();
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+
+  const [dealType, setDealType] = useState<DealType>("bogo");
+  const [discountPercent, setDiscountPercent] = useState("");
   const [title, setTitle] = useState("");
-  const [offerHint, setOfferHint] = useState("");
+  const [description, setDescription] = useState("");
   const [suggestingAi, setSuggestingAi] = useState(false);
   const [price, setPrice] = useState("");
+  const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [photo, setPhoto] = useState<{ uri: string; type: string } | null>(null);
   const [maxClaims, setMaxClaims] = useState("50");
   const [cutoffMins, setCutoffMins] = useState("15");
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [banner, setBanner] = useState<{
     message: string;
@@ -58,7 +72,7 @@ export default function QuickDealScreen() {
     const fromAi = g(prefill.fromAiCompose);
     const fromReuse = g(prefill.fromReuse);
     if (t0) setTitle((prev) => prev || t0);
-    if (h0) setOfferHint((prev) => prev || h0);
+    if (h0) setDescription((prev) => prev || h0);
     if (p0) setPrice((prev) => prev || p0);
     if (fromAi === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
@@ -68,12 +82,43 @@ export default function QuickDealScreen() {
     }
   }, [prefill.prefillTitle, prefill.prefillHint, prefill.prefillPrice, prefill.fromAiCompose, prefill.fromReuse, t]);
 
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setBanner({ message: "Photo library permission is required to add a photo.", tone: "error" });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setPhoto({ uri: asset.uri, type: asset.mimeType ?? "image/jpeg" });
+    }
+  }
+
+  async function uploadPhoto(bizId: string): Promise<string | null> {
+    if (!photo) return null;
+    const ext = photo.type === "image/png" ? "png" : "jpg";
+    const path = `${bizId}/${Date.now()}.${ext}`;
+    const response = await fetch(photo.uri);
+    const blob = await response.blob();
+    const { data, error } = await supabase.storage
+      .from("deal-photos")
+      .upload(path, blob, { contentType: photo.type, upsert: false });
+    if (error) throw error;
+    return data.path;
+  }
+
   async function suggestTitleFromAi() {
     if (!businessId) {
       setBanner({ message: t("createQuick.errCreateBusiness"), tone: "error" });
       return;
     }
-    const hint = offerHint.trim();
+    const hint = description.trim();
     if (!hint) {
       setBanner({ message: t("createQuick.errHintForAi"), tone: "error" });
       return;
@@ -119,7 +164,22 @@ export default function QuickDealScreen() {
       return;
     }
 
+    // Validate discount percent for percentage_off deals
+    let discountPctNum: number | null = null;
+    if (dealType === "percentage_off") {
+      discountPctNum = Number(discountPercent);
+      if (!discountPercent.trim() || Number.isNaN(discountPctNum)) {
+        setBanner({ message: "Enter a valid discount percentage.", tone: "error" });
+        return;
+      }
+      if (discountPctNum < 40 || discountPctNum > 100) {
+        setBanner({ message: "Percentage discounts must be between 40% and 100%.", tone: "error" });
+        return;
+      }
+    }
+
     const end = endTime;
+    const start = startTime;
     const now = new Date();
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
@@ -134,6 +194,10 @@ export default function QuickDealScreen() {
     }
     if (now >= end) {
       setBanner({ message: t("createQuick.errEndFuture"), tone: "error" });
+      return;
+    }
+    if (start >= end) {
+      setBanner({ message: "Start time must be before end time.", tone: "error" });
       return;
     }
     const durationMinutes = Math.floor((end.getTime() - now.getTime()) / 60000);
@@ -153,7 +217,7 @@ export default function QuickDealScreen() {
 
       const quality = assessDealQuality({
         title: title.trim(),
-        description: null,
+        description: description.trim() || null,
         price: priceNum,
       });
       if (quality.blocked) {
@@ -163,24 +227,34 @@ export default function QuickDealScreen() {
 
       const strongGuard = validateStrongDealOnly({
         title: title.trim(),
-        description: offerHint.trim() || null,
+        description: description.trim() || null,
+        dealType,
+        discountPercent: discountPctNum,
       });
       if (!strongGuard.ok) {
         setBanner({ message: strongGuard.message, tone: "warning" });
         return;
       }
 
+      // Upload photo if selected
+      let posterStoragePath: string | null = null;
+      if (photo) {
+        posterStoragePath = await uploadPhoto(businessId);
+      }
+
       const { error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
-        description: null,
+        description: description.trim() || null,
         price: priceNum,
-        start_time: now.toISOString(),
+        start_time: start.toISOString(),
         end_time: end.toISOString(),
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
+        deal_type: dealType,
         poster_url: null,
+        poster_storage_path: posterStoragePath,
         quality_tier: quality.tier,
       });
 
@@ -214,12 +288,95 @@ export default function QuickDealScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Deal Type */}
           <View>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldOfferHint")}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 8 }}>
+              Deal Type *
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {DEAL_TYPE_OPTIONS.map((opt) => {
+                const selected = dealType === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setDealType(opt.key)}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: Radii.pill,
+                      borderWidth: 1.5,
+                      borderColor: selected ? Colors.light.primary : Colors.light.border,
+                      backgroundColor: selected ? "#FFF3E0" : Colors.light.surface,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selected ? Colors.light.primary : "#11181C",
+                        fontWeight: selected ? "700" : "400",
+                        fontSize: 14,
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Discount % — only for percentage_off */}
+          {dealType === "percentage_off" ? (
+            <View>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>
+                Discount % (minimum 40%)
+              </Text>
+              <TextInput
+                value={discountPercent}
+                onChangeText={setDiscountPercent}
+                keyboardType="number-pad"
+                placeholder="e.g. 40"
+                style={{
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  marginTop: 6,
+                  fontSize: 16,
+                  backgroundColor: Colors.light.surface,
+                }}
+              />
+              <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.55 }}>
+                Discounts under 40% are not allowed on TWOFER.
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Title */}
+          <View>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldTitle")}</Text>
             <TextInput
-              value={offerHint}
-              onChangeText={setOfferHint}
-              placeholder={t("createQuick.placeholderOfferHint")}
+              value={title}
+              onChangeText={setTitle}
+              placeholder={t("createQuick.placeholderTitle")}
+              style={{
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                marginTop: 6,
+                fontSize: 16,
+                backgroundColor: Colors.light.surface,
+              }}
+            />
+          </View>
+
+          {/* Description / AI hint */}
+          <View>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe your deal or add details for customers…"
               multiline
               style={{
                 borderWidth: 1,
@@ -245,24 +402,49 @@ export default function QuickDealScreen() {
             </Text>
           </View>
 
+          {/* Photo upload */}
           <View>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldTitle")}</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder={t("createQuick.placeholderTitle")}
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                marginTop: 6,
-                fontSize: 16,
-                backgroundColor: Colors.light.surface,
-              }}
-            />
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 8 }}>
+              Photo (optional)
+            </Text>
+            {photo ? (
+              <View>
+                <Image
+                  source={{ uri: photo.uri }}
+                  style={{ width: "100%", height: 160, borderRadius: Radii.lg, backgroundColor: "#eee" }}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  onPress={() => setPhoto(null)}
+                  style={{ marginTop: 6 }}
+                >
+                  <Text style={{ color: Colors.light.primary, fontWeight: "600", fontSize: 14 }}>
+                    Remove photo
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => void pickPhoto()}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: Colors.light.border,
+                  borderRadius: Radii.lg,
+                  borderStyle: "dashed",
+                  padding: Spacing.lg,
+                  alignItems: "center",
+                  backgroundColor: Colors.light.surface,
+                }}
+              >
+                <Text style={{ color: Colors.light.primary, fontWeight: "600", fontSize: 15 }}>
+                  + Add Photo
+                </Text>
+                <Text style={{ color: "#888", fontSize: 12, marginTop: 4 }}>16:9 recommended</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
+          {/* Price */}
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldPrice")}</Text>
             <TextInput
@@ -282,6 +464,35 @@ export default function QuickDealScreen() {
             />
           </View>
 
+          {/* Start Time */}
+          <View>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>Start Time</Text>
+            <Pressable
+              onPress={() => setShowStartPicker(true)}
+              style={{
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                marginTop: 6,
+                backgroundColor: Colors.light.surface,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>{formatAppDateTime(startTime, i18n.language)}</Text>
+            </Pressable>
+            {showStartPicker ? (
+              <DateTimePicker
+                value={startTime}
+                mode="datetime"
+                onChange={(_event, date) => {
+                  setShowStartPicker(false);
+                  if (date) setStartTime(date);
+                }}
+              />
+            ) : null}
+          </View>
+
+          {/* End Time */}
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
             <Pressable
@@ -309,6 +520,7 @@ export default function QuickDealScreen() {
             ) : null}
           </View>
 
+          {/* Max Claims */}
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>
             <TextInput
@@ -328,6 +540,7 @@ export default function QuickDealScreen() {
             />
           </View>
 
+          {/* Cutoff Buffer */}
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldCutoff")}</Text>
             <TextInput

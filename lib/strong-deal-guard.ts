@@ -3,6 +3,8 @@
  * Keep this logic in sync with the SQL trigger.
  *
  * Rules (in priority order):
+ *  0. EXPLICIT DEAL TYPE — bogo | buy2get1 | free_item → always pass.
+ *                          percentage_off → enforce discountPercent >= 40.
  *  1. FREE ITEM  — anything where something is given free → PASS
  *  2. CONDITIONAL DISCOUNT — "buy X + N% off Y" style (discount requires a purchase
  *     of a different item, and the reward is NOT free) → REJECT
@@ -17,12 +19,12 @@ export const STRONG_DEAL_ONLY_MESSAGE =
   'e.g. "Buy a coffee, get a muffin free" or "2-for-1 lattes". ' +
   'Conditional deals like "buy X + 40% off Y" don\'t qualify.';
 
+export type DealType = "bogo" | "buy2get1" | "free_item" | "percentage_off";
+
 // ── 1. FREE ITEM ─────────────────────────────────────────────────────────────
 // "free" preceded by whitespace or start-of-string (excludes "sugar-free",
 // "dairy-free" etc. where the hyphen sits right before the word).
 const FREE_ITEM_PATTERNS: RegExp[] = [
-  // "free" preceded by whitespace or start-of-string, followed by a word boundary.
-  // This excludes "sugar-free", "dairy-free" (hyphen before free, no space).
   /(?:^|\s)free\b/i,
   /\bon\s+the\s+house\b/i,   // on the house
   /\bcomplimentary\b/i,      // complimentary [item]
@@ -68,9 +70,29 @@ function extractPercents(text: string): number[] {
 export function validateStrongDealOnly(input: {
   title: string;
   description?: string | null;
-  /** Optional explicit percentage for future percentage-based offer types. */
+  /** Explicit deal type chosen by the user in the deal creation UI. */
+  dealType?: DealType | null;
+  /** Required when dealType is 'percentage_off'. */
   discountPercent?: number | null;
 }): { ok: true } | { ok: false; message: string } {
+  // ── 0. EXPLICIT DEAL TYPE ────────────────────────────────────────────────────
+  if (
+    input.dealType === "bogo" ||
+    input.dealType === "buy2get1" ||
+    input.dealType === "free_item"
+  ) {
+    return { ok: true };
+  }
+
+  if (input.dealType === "percentage_off") {
+    const pct = input.discountPercent;
+    if (typeof pct !== "number" || !Number.isFinite(pct) || pct < 40) {
+      return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+    }
+    return { ok: true };
+  }
+
+  // ── Legacy text-based checks (no explicit dealType) ─────────────────────────
   const title = (input.title ?? "").trim();
   const description = (input.description ?? "").trim();
   const text = `${title}\n${description}`.toLowerCase();

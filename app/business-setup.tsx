@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +13,8 @@ import { Colors, Radii } from "@/constants/theme";
 
 type Tone = "error" | "success" | "info";
 
+const CATEGORIES = ["Cafe", "Bakery", "Coffee Shop", "Restaurant", "Other"];
+
 export default function BusinessSetupScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -23,6 +25,8 @@ export default function BusinessSetupScreen() {
   const [businessName, setBusinessName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [category, setCategory] = useState("");
+  const [hours, setHours] = useState("");
   const [shortDescription, setShortDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
@@ -32,9 +36,11 @@ export default function BusinessSetupScreen() {
       businessName: businessName.trim(),
       address: address.trim(),
       phone: phone.trim(),
+      category: category.trim(),
+      hours: hours.trim(),
       shortDescription: shortDescription.trim(),
     }),
-    [businessName, address, phone, shortDescription],
+    [businessName, address, phone, category, hours, shortDescription],
   );
 
   useEffect(() => {
@@ -47,8 +53,14 @@ export default function BusinessSetupScreen() {
 
   async function onSubmit() {
     setBanner(null);
-    if (!trimmed.businessName || !trimmed.address || !trimmed.phone || !trimmed.shortDescription) {
-      setBanner({ message: t("businessSetup.errRequired"), tone: "error" });
+    if (
+      !trimmed.businessName ||
+      !trimmed.address ||
+      !trimmed.phone ||
+      !trimmed.category ||
+      !trimmed.shortDescription
+    ) {
+      setBanner({ message: "All fields except hours are required.", tone: "error" });
       return;
     }
 
@@ -73,6 +85,8 @@ export default function BusinessSetupScreen() {
             phone: trimmed.phone,
             address: addr,
             location: addr,
+            category: trimmed.category,
+            hours_text: trimmed.hours || null,
             short_description: trimmed.shortDescription,
           },
           { onConflict: "owner_id" },
@@ -86,7 +100,7 @@ export default function BusinessSetupScreen() {
           user_id: uid,
           name: trimmed.businessName,
           address: addr,
-          category: trimmed.shortDescription || null,
+          category: trimmed.category,
           setup_completed: true,
         },
         { onConflict: "user_id" },
@@ -121,6 +135,48 @@ export default function BusinessSetupScreen() {
         <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={setBusinessName} />
         <Field label={t("businessSetup.address")} value={address} onChangeText={setAddress} />
         <Field label={t("businessSetup.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+
+        {/* Category picker */}
+        <View>
+          <Text style={{ fontWeight: "700", marginBottom: 8 }}>Category *</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {CATEGORIES.map((cat) => {
+              const selected = category === cat;
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setCategory(cat)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: Radii.pill,
+                    borderWidth: 1.5,
+                    borderColor: selected ? Colors.light.primary : Colors.light.border,
+                    backgroundColor: selected ? "#FFF3E0" : Colors.light.surface,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: selected ? Colors.light.primary : "#11181C",
+                      fontWeight: selected ? "600" : "400",
+                      fontSize: 14,
+                    }}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <Field
+          label="Hours (optional)"
+          value={hours}
+          onChangeText={setHours}
+          placeholder="e.g. Mon–Fri 7am–6pm, Sat 8am–4pm"
+        />
+
         <Field
           label={t("businessSetup.shortDescription")}
           value={shortDescription}
