@@ -76,6 +76,18 @@ npx expo start -c     # -c clears the Metro cache
 
 ---
 
+## Build and Test Rules
+
+- NEVER attempt `expo run:android` or `expo run:ios` builds
+- NEVER start an Android emulator
+- NEVER use subst, junctions, or drive mapping workarounds
+- Start the dev server with `npx expo start` only
+- I will test on my physical Android phone using Expo Go
+- Your job is to make code changes, run TypeScript checks, and confirm the dev server starts. I handle device testing.
+- If a build or environment issue takes more than 2 attempts to fix, STOP and tell me what's wrong instead of trying more workarounds.
+
+---
+
 ## Do Not Touch
 
 - **Strong-deal guardrail** — client + server validation that rejects weak deals. Do not weaken or bypass this.
