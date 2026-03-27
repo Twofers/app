@@ -397,6 +397,24 @@ serve(async (req) => {
     const systemPrompt = [
       "You help local cafés and small businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
       `Allowed offer_type values only: ${OFFER_TYPES.join(", ")}.`,
+      "",
+      "SHORTHAND INTERPRETATION — very important:",
+      "- 'item1 + item2' (two items joined by +) always means: buy item1, get item2 FREE.",
+      "  Example: 'coffee + muffin' → 'Buy a coffee, get a free muffin'.",
+      "  Example: 'latte + cookie' → 'Buy a latte, get a free cookie'.",
+      "  Use offer_type 'free_add_on_with_purchase' for these.",
+      "- A single item with no offer context → recommend BOGO same item (bogo_same_item).",
+      "",
+      "MISSPELLING HANDLING — very important:",
+      "- Owners type quickly and make typos. Infer the correct item from context.",
+      "  Example: 'cofee' → coffee, 'mufin' → muffin, 'latt' → latte, 'espreso' → espresso.",
+      "- If a word is unrecognisable, use your best guess and set low_confidence: true.",
+      "",
+      "DEAL QUALITY — every output MUST qualify as a strong deal:",
+      "- Always output a deal that is either: (a) something FREE, (b) BOGO/2-for-1, or (c) 40%+ off.",
+      "- NEVER output conditional discounts like 'buy X + N% off Y' — that fails our quality check.",
+      "- If the input implies a partial discount, upgrade it to a free-item offer instead.",
+      "",
       "Rules:",
       "- Never invent prices. If no price is given, omit price language or say price varies.",
       "- Never invent menu items not visible in the image or stated in text.",
@@ -407,7 +425,7 @@ serve(async (req) => {
       "- Each variant: variant_id 'A' or 'B', headline_en/es/ko (<=42 chars), subheadline_* (<=80), cta_* (<=24), style_label, rationale, visual_direction.",
       "- Include detected_items array (strings).",
       "- confidence 0-1. low_confidence true if unsure; add recommendation_reason.",
-      "- recommended_offer: offer_type, item_name, display_offer (short plain sentence).",
+      "- recommended_offer: offer_type, item_name, display_offer (short plain sentence describing the deal clearly).",
     ].join("\n");
 
     const userParts: unknown[] = [];

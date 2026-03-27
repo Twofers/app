@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import i18n from "@/lib/i18n/config";
+import type { AppLocale } from "@/lib/i18n/config";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -36,6 +38,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [step, setStep] = useState(0);
+  const [lang, setLang] = useState<AppLocale>("en");
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
   const [busy, setBusy] = useState(false);
@@ -199,9 +202,65 @@ export default function OnboardingScreen() {
       >
         {step === 0 ? (
           <>
-            <Text style={{ fontSize: 17, lineHeight: 26, opacity: 0.85 }}>{t("onboarding.introBody")}</Text>
-            <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(1)} />
-            <SecondaryButton title={t("onboarding.signInCta")} onPress={() => router.push("/(tabs)/auth" as Href)} />
+            {/* Title shown in all three languages so users can recognise their own */}
+            <Text style={{ fontSize: 17, fontWeight: "700", lineHeight: 26 }}>
+              Choose your language
+            </Text>
+            <Text style={{ fontSize: 14, opacity: 0.55, lineHeight: 20 }}>
+              Elige tu idioma  ·  언어를 선택하세요
+            </Text>
+
+            <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
+              {(
+                [
+                  { code: "en" as AppLocale, flag: "🇺🇸", label: "English" },
+                  { code: "es" as AppLocale, flag: "🇪🇸", label: "Español" },
+                  { code: "ko" as AppLocale, flag: "🇰🇷", label: "한국어" },
+                ] as const
+              ).map(({ code, flag, label }) => {
+                const active = lang === code;
+                return (
+                  <Pressable
+                    key={code}
+                    onPress={() => setLang(code)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: Spacing.md,
+                      paddingHorizontal: Spacing.lg,
+                      borderRadius: Radii.lg,
+                      borderWidth: active ? 2 : 1,
+                      borderColor: active ? Colors.light.primary : Colors.light.border,
+                      backgroundColor: active ? "rgba(255,159,28,0.08)" : Colors.light.surface,
+                      gap: Spacing.md,
+                    }}
+                  >
+                    <Text style={{ fontSize: 28 }}>{flag}</Text>
+                    <Text
+                      style={{
+                        fontSize: 17,
+                        fontWeight: active ? "700" : "500",
+                        color: active ? Colors.light.primary : "#11181C",
+                      }}
+                    >
+                      {label}
+                    </Text>
+                    {active ? (
+                      <View style={{ marginLeft: "auto" }}>
+                        <Text style={{ color: Colors.light.primary, fontWeight: "700", fontSize: 18 }}>✓</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <PrimaryButton
+              title="Continue"
+              onPress={() => {
+                void i18n.changeLanguage(lang).then(() => setStep(1));
+              }}
+            />
           </>
         ) : null}
 

@@ -57,7 +57,7 @@ async function fileUriToBase64(uri: string): Promise<string> {
   // On native, expo-file-system handles file:// URIs correctly.
   // fetch(file://...) is blocked by the browser security model on web.
   if (Platform.OS !== "web") {
-    return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    return FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
   }
   const res = await fetch(uri);
   const buf = await res.arrayBuffer();

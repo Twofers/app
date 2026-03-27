@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 import { Redirect, useGlobalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+
+/** AsyncStorage key used by tab-mode.tsx */
+const TAB_MODE_KEY = "twoforone_tab_mode_v2";
 
 export default function Index() {
   const params = useGlobalSearchParams<{ e2e?: string }>();
@@ -10,24 +14,20 @@ export default function Index() {
     ((params.e2e === "1") ||
       (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
   const [ready, setReady] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setHasSession(!!data.session?.user);
+    if (forceE2E) {
       setReady(true);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setHasSession(!!session?.user);
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
+      return;
+    }
+    // On every cold start: sign out AND reset tab mode to "customer" so the
+    // app always opens at the login screen and lands on the deals feed —
+    // never inside the business setup flow.
+    void Promise.all([
+      supabase.auth.signOut(),
+      AsyncStorage.setItem(TAB_MODE_KEY, "customer"),
+    ]).finally(() => setReady(true));
+  }, [forceE2E]);
 
   if (!ready) {
     return (
@@ -41,9 +41,5 @@ export default function Index() {
     return <Redirect href="/(tabs)/account?e2e=1" />;
   }
 
-  if (!hasSession) {
-    return <Redirect href="/auth-landing" />;
-  }
-
-  return <Redirect href="/(tabs)" />;
+  return <Redirect href="/auth-landing" />;
 }

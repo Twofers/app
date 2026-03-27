@@ -44,13 +44,6 @@ export default function BusinessSetupScreen() {
     });
   }, [router, params.skipSetup, params.e2e]);
 
-  useEffect(() => {
-    // Quick prefill if we already know something about the user.
-    if (!businessName && sessionEmail) {
-      const left = sessionEmail.split("@")[0]?.replace(/[._-]+/g, " ")?.trim();
-      if (left && left.length >= 3) setBusinessName(left);
-    }
-  }, [sessionEmail, businessName]);
 
   async function onSubmit() {
     setBanner(null);
@@ -73,14 +66,17 @@ export default function BusinessSetupScreen() {
       const addr = trimmed.address;
       const { data: business, error } = await supabase
         .from("businesses")
-        .insert({
-        owner_id: uid,
-        name: trimmed.businessName,
-        phone: trimmed.phone,
-        address: addr,
-        location: addr,
-        short_description: trimmed.shortDescription,
-        })
+        .upsert(
+          {
+            owner_id: uid,
+            name: trimmed.businessName,
+            phone: trimmed.phone,
+            address: addr,
+            location: addr,
+            short_description: trimmed.shortDescription,
+          },
+          { onConflict: "owner_id" },
+        )
         .select("id")
         .single();
       if (error) throw error;
@@ -88,13 +84,10 @@ export default function BusinessSetupScreen() {
       const { error: profileError } = await supabase.from("business_profiles").upsert(
         {
           user_id: uid,
-          business_id: business?.id ?? null,
           name: trimmed.businessName,
           address: addr,
-          phone: trimmed.phone,
-          short_description: trimmed.shortDescription,
+          category: trimmed.shortDescription || null,
           setup_completed: true,
-          completed_at: new Date().toISOString(),
         },
         { onConflict: "user_id" },
       );

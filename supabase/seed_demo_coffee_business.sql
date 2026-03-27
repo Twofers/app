@@ -95,8 +95,8 @@ BEGIN
     ),
     (
       bid,
-      'Pastry + drip before 10am',
-      'Any pastry with a medium hot coffee.',
+      'BOGO pastry + drip before 10am',
+      'Buy one pastry and coffee, get one free before 10am.',
       4.25,
       NOW(),
       NOW() + INTERVAL '10 days',
@@ -109,8 +109,8 @@ BEGIN
     ),
     (
       bid,
-      'Weekend cold brew flight',
-      'Three single-origin cold brew samples.',
+      '2-for-1 cold brew flight',
+      'Two single-origin cold brew samples for the price of one.',
       8.00,
       NOW(),
       NOW() + INTERVAL '21 days',

@@ -142,6 +142,8 @@
     "title": "Welcome to Twofer",
     "subtitle": "Find real-time local deals, save favorites, and redeem with QR.",
     "introBody": "Twofer shows live offers from nearby businesses. Save places you like, claim in one tap, and keep tickets in your wallet.",
+    "langTitle": "Choose your language",
+    "langContinue": "Continue",
     "next": "Continue",
     "locationTitle": "Where should we start?",
     "locationBody": "We use your general area to sort nearby deals and improve alerts. You can switch to ZIP later in Settings.",

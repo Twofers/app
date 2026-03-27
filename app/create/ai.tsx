@@ -198,6 +198,7 @@ export default function AiDealScreen() {
   const [manualValidationTag, setManualValidationTag] = useState("");
   const [qaPanelOpen, setQaPanelOpen] = useState(false);
   const [devEdgeBusy, setDevEdgeBusy] = useState<"copy" | "create" | null>(null);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
 
   const offerScheduleSummary = useMemo(
     () =>
@@ -761,8 +762,8 @@ export default function AiDealScreen() {
         paddingBottom: scrollBottom,
       }}
     >
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleMain")}</Text>
-      <Text style={{ marginTop: 10, opacity: 0.75, lineHeight: 20 }}>{t("createAi.intro")}</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleMain")}</Text>
+      <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
 
       {isDemoAiAccount ? (
         <View
@@ -783,29 +784,17 @@ export default function AiDealScreen() {
       ) : null}
 
       {__DEV__ ? (
-        <View
-          style={{
-            marginTop: 14,
-            padding: 14,
-            borderRadius: 14,
-            backgroundColor: "#fff8e1",
-            borderWidth: 1,
-            borderColor: "#e6d29a",
-            gap: 10,
-          }}
+        <Pressable
+          onPress={() => setDevToolsOpen((o) => !o)}
+          style={{ marginTop: 8, alignSelf: "flex-start", paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8, backgroundColor: "#fff8e1", borderWidth: 1, borderColor: "#e6d29a" }}
         >
-          <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createAi.devToolsTitle")}</Text>
-          <Text style={{ fontSize: 12, opacity: 0.78, lineHeight: 18 }}>{t("createAi.devToolsIntro")}</Text>
-          <SecondaryButton
-            title={devEdgeBusy === "copy" ? t("createAi.devBusy") : t("createAi.devTestCopy")}
-            onPress={() => void devTestGenerateDealCopy()}
-            disabled={devEdgeBusy !== null}
-          />
-          <SecondaryButton
-            title={devEdgeBusy === "create" ? t("createAi.devBusy") : t("createAi.devTestCreate")}
-            onPress={devPromptAiCreateDeal}
-            disabled={devEdgeBusy !== null}
-          />
+          <Text style={{ fontSize: 11, fontWeight: "700", color: "#b45309" }}>DEV ▾</Text>
+        </Pressable>
+      ) : null}
+      {__DEV__ && devToolsOpen ? (
+        <View style={{ marginTop: 6, padding: 12, borderRadius: 14, backgroundColor: "#fff8e1", borderWidth: 1, borderColor: "#e6d29a", gap: 8 }}>
+          <SecondaryButton title={devEdgeBusy === "copy" ? t("createAi.devBusy") : t("createAi.devTestCopy")} onPress={() => void devTestGenerateDealCopy()} disabled={devEdgeBusy !== null} />
+          <SecondaryButton title={devEdgeBusy === "create" ? t("createAi.devBusy") : t("createAi.devTestCreate")} onPress={devPromptAiCreateDeal} disabled={devEdgeBusy !== null} />
         </View>
       ) : null}
 
