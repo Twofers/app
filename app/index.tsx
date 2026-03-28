@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 import { Redirect, useGlobalSearchParams } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-
-/** AsyncStorage key used by tab-mode.tsx */
-const TAB_MODE_KEY = "twoforone_tab_mode_v2";
 
 export default function Index() {
   const params = useGlobalSearchParams<{ e2e?: string }>();
@@ -13,23 +9,31 @@ export default function Index() {
     Platform.OS === "web" &&
     ((params.e2e === "1") ||
       (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
-  const [ready, setReady] = useState(false);
+  const [destination, setDestination] = useState<"tabs" | "login" | null>(null);
 
   useEffect(() => {
     if (forceE2E) {
-      setReady(true);
+      setDestination("tabs");
       return;
     }
-    // On every cold start: sign out AND reset tab mode to "customer" so the
-    // app always opens at the login screen and lands on the deals feed —
-    // never inside the business setup flow.
-    void Promise.all([
-      supabase.auth.signOut(),
-      AsyncStorage.setItem(TAB_MODE_KEY, "customer"),
-    ]).finally(() => setReady(true));
+    let cancelled = false;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      setDestination(data.session?.user ? "tabs" : "login");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (destination === null) {
+        setDestination(session?.user ? "tabs" : "login");
+      }
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, [forceE2E]);
 
-  if (!ready) {
+  if (destination === null) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" }}>
         <ActivityIndicator />
@@ -39,6 +43,10 @@ export default function Index() {
 
   if (forceE2E) {
     return <Redirect href="/(tabs)/account?e2e=1" />;
+  }
+
+  if (destination === "tabs") {
+    return <Redirect href="/(tabs)" />;
   }
 
   return <Redirect href="/auth-landing" />;

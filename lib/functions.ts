@@ -143,8 +143,8 @@ export async function cancelVisualRedeem(claimId: string) {
 export async function finalizeStaleRedeems(): Promise<void> {
   try {
     await supabase.functions.invoke("finalize-stale-redeems", { body: {} });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    if (__DEV__) console.warn("[finalizeStaleRedeems] failed (non-fatal):", err);
   }
 }
 

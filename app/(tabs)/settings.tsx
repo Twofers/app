@@ -98,8 +98,14 @@ export default function SettingsScreen() {
         try {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
-        } catch {
-          /* ignore */
+        } catch (err: unknown) {
+          const detail = err instanceof Error ? err.message : "";
+          Alert.alert(
+            t("consumerSettings.gpsErrorTitle"),
+            detail
+              ? `${t("consumerSettings.gpsErrorBody")} (${detail})`
+              : t("consumerSettings.gpsErrorBody"),
+          );
         }
       }
     }

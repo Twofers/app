@@ -197,7 +197,7 @@ export default function QuickDealScreen() {
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createQuick.title")}</Text>
       <Text style={{ marginTop: 6, opacity: 0.7, lineHeight: 20 }}>
-        Built for speed: complete this flow in under a minute.
+        {t("createQuick.subtitle")}
       </Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 

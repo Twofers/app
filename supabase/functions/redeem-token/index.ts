@@ -59,12 +59,13 @@ serve(async (req) => {
     }
 
     // 🔍 Verify user owns a business
-    const { data: business, error: businessError } = await supabase
+    const { data: businesses, error: businessError } = await supabase
       .from("businesses")
       .select("id")
       .eq("owner_id", user.id)
-      .single();
+      .limit(10);
 
+    const business = businesses?.[0] ?? null;
     if (businessError || !business) {
       return new Response(
         JSON.stringify({ error: "You must be a business owner to redeem tokens." }),
@@ -75,11 +76,13 @@ serve(async (req) => {
       );
     }
 
+    const businessIds = (businesses ?? []).map((b) => b.id);
+
     // 🚦 Rate limit: max 10 redeem attempts per minute per business owner
     const { data: dealIdsData } = await supabase
       .from("deals")
       .select("id")
-      .eq("business_id", business.id);
+      .in("business_id", businessIds);
     const dealIds = (dealIdsData ?? []).map((d) => d.id);
     if (dealIds.length > 0) {
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();

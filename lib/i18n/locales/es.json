@@ -102,7 +102,11 @@
     "countdownMinutes_one": "Queda {{count}} min",
     "countdownMinutes_other": "Quedan {{count}} min",
     "countdownSeconds_one": "Queda {{count}} s",
-    "countdownSeconds_other": "Quedan {{count}} s"
+    "countdownSeconds_other": "Quedan {{count}} s",
+    "emptyNearbyBodySub": "No hay ofertas en vivo cerca ahora — ¡vuelve pronto!",
+    "emptyNearbyPenguinHint": "Tu explorador pingüino sigue buscando ofertas.",
+    "timeLeftHM": "{{h}}h {{m}}m restantes",
+    "timeLeftM": "{{m}}m restantes"
   },
   "consumerMap": {
     "title": "Mapa",
@@ -136,6 +140,8 @@
     "notificationModeTitle": "Alcance de alertas",
     "notifAllNearby": "Todas las ofertas cercanas",
     "notifFavoritesOnly": "Solo favoritos",
+    "gpsErrorTitle": "Ubicación no disponible",
+    "gpsErrorBody": "No se pudo obtener tu posición. Intenta de nuevo o usa código postal.",
     "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio."
   },
   "onboarding": {
@@ -287,6 +293,7 @@
     "errCutoffDuration": "El corte debe ser menor que la duración de la oferta.",
     "errPriceNumber": "El precio debe ser un número.",
     "errPublishFailed": "Error al publicar.",
+    "subtitle": "Diseñado para velocidad: completa en menos de un minuto.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
     "placeholderCutoff": "15",
@@ -396,6 +403,7 @@
     "creating": "Creando...",
     "createBusiness": "Crear negocio",
     "errLoginBusiness": "Inicia sesión para crear un negocio.",
+    "bizProfilePending": "Perfil de negocio encontrado. Finalizando tu registro. Puedes empezar a crear una oferta.",
     "errNameRequired": "El nombre del negocio es obligatorio.",
     "errCreateFailed": "No se pudo crear el negocio.",
     "quickDealTitle": "Oferta rápida",
@@ -409,7 +417,8 @@
     "aiComposeTitle": "Generar con IA",
     "aiComposeSubtitle": "Foto, texto o voz → 2 anuncios para una oferta → publicación rápida.",
     "reuseTitle": "Reusar anuncio · Repetir oferta",
-    "reuseSubtitle": "Relanza una plantilla u oferta anterior en pocos toques."
+    "reuseSubtitle": "Relanza una plantilla u oferta anterior en pocos toques.",
+    "templatesLoadError": "No se pudieron cargar las plantillas. Desliza para reintentar."
   },
   "aiCompose": {
     "title": "Oferta con IA",
@@ -556,7 +565,22 @@
     "createAccount": "Crear cuenta",
     "languageLabel": "Idioma",
     "heroA11y": "Mascota Twofer",
-    "demoHint": "Solo vista previa / desarrollo"
+    "demoHint": "Solo vista previa / desarrollo",
+    "emailLabel": "Correo electrónico",
+    "passwordLabel": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "logIn": "Iniciar sesión",
+    "pleaseWait": "Por favor espera…",
+    "legalFooter": "Al continuar aceptas nuestros Términos y Política de privacidad.",
+    "errIncorrectCredentials": "Correo o contraseña incorrectos.",
+    "errNoAccount": "No encontramos una cuenta con ese correo.",
+    "errAlreadyExists": "Ya existe una cuenta con ese correo. Intenta iniciar sesión.",
+    "errRateLimit": "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
+    "errNetwork": "Error de red. Revisa tu conexión e inténtalo de nuevo.",
+    "errPasswordLength": "La contraseña debe tener al menos 6 caracteres.",
+    "errGeneric": "Algo salió mal. Inténtalo de nuevo.",
+    "loginFailedTitle": "Error al iniciar sesión",
+    "signUpFailedTitle": "Error al registrarse"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -761,6 +785,8 @@
     "verifyStaffHint": "El reloj se actualiza cada segundo; es más difícil de falsificar que una captura.",
     "verifyQrDisabled": "QR desactivado — ticket caducado",
     "codeLegacyQrOnly": "Solo QR (antiguo)",
+    "redeemSoon": "Canjea pronto",
+    "scanQrAtCounter": "Escanea QR en el mostrador",
     "timeLeftHeading": "Tiempo restante",
     "countdownLabel": "{{time}}",
     "redeemByCaption": "Canjear antes del {{datetime}} · hora local del negocio",

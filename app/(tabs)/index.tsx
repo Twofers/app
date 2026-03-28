@@ -448,8 +448,8 @@ export default function HomeScreen() {
       const totalMin = Math.max(1, Math.floor(deltaMs / 60_000));
       const h = Math.floor(totalMin / 60);
       const m = totalMin % 60;
-      if (h > 0) return `${h}h ${m}m left`;
-      return `${m}m left`;
+      if (h > 0) return t("consumerHome.timeLeftHM", { h, m });
+      return t("consumerHome.timeLeftM", { m });
     },
     [nowTick, t],
   );
@@ -572,10 +572,10 @@ export default function HomeScreen() {
           </View>
           <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("consumerHome.emptyNearbyTitle")}</Text>
           <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center" }}>
-            No live deals nearby right now - check back soon!
+            {t("consumerHome.emptyNearbyBodySub")}
           </Text>
           <Text style={{ fontSize: 13, color: Colors.light.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
-            Your penguin scout is still waddling for offers.
+            {t("consumerHome.emptyNearbyPenguinHint")}
           </Text>
           <PrimaryButton
             title={t("consumerHome.ctaWidenRadius")}

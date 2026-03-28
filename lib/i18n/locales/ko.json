@@ -102,7 +102,11 @@
     "countdownMinutes_one": "{{count}}분 남음",
     "countdownMinutes_other": "{{count}}분 남음",
     "countdownSeconds_one": "{{count}}초 남음",
-    "countdownSeconds_other": "{{count}}초 남음"
+    "countdownSeconds_other": "{{count}}초 남음",
+    "emptyNearbyBodySub": "지금 주변에 라이브 딜이 없습니다 — 곧 다시 확인해 보세요!",
+    "emptyNearbyPenguinHint": "펭귄 스카우트가 여전히 오퍼를 찾아 돌아다니고 있어요.",
+    "timeLeftHM": "{{h}}시간 {{m}}분 남음",
+    "timeLeftM": "{{m}}분 남음"
   },
   "consumerMap": {
     "title": "지도",
@@ -136,6 +140,8 @@
     "notificationModeTitle": "알림 범위",
     "notifAllNearby": "주변 모든 딜",
     "notifFavoritesOnly": "즐겨찾기만",
+    "gpsErrorTitle": "위치를 사용할 수 없음",
+    "gpsErrorBody": "현재 위치를 가져올 수 없습니다. 다시 시도하거나 우편번호로 전환하세요.",
     "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요."
   },
   "onboarding": {
@@ -287,6 +293,7 @@
     "errCutoffDuration": "마감 여유는 딜 기간보다 짧아야 합니다.",
     "errPriceNumber": "가격은 숫자여야 합니다.",
     "errPublishFailed": "게시에 실패했습니다.",
+    "subtitle": "속도를 위해 설계됨: 1분 안에 완료하세요.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
     "placeholderCutoff": "15",
@@ -396,6 +403,7 @@
     "creating": "만드는 중…",
     "createBusiness": "비즈니스 만들기",
     "errLoginBusiness": "비즈니스를 만들려면 로그인하세요.",
+    "bizProfilePending": "비즈니스 프로필을 찾았습니다. 계정 기록을 완료하는 중입니다. 딜 만들기를 시작할 수 있습니다.",
     "errNameRequired": "비즈니스 이름을 입력하세요.",
     "errCreateFailed": "비즈니스를 만들지 못했습니다.",
     "quickDealTitle": "빠른 딜",
@@ -409,7 +417,8 @@
     "aiComposeTitle": "AI로 만들기",
     "aiComposeSubtitle": "사진·입력·음성 → 같은 오퍼의 광고안 2개 → 빠른 게시.",
     "reuseTitle": "저장 광고 재사용 · 딜 반복",
-    "reuseSubtitle": "템플릿이나 지난 딜을 몇 번의 탭으로 다시 올리세요."
+    "reuseSubtitle": "템플릿이나 지난 딜을 몇 번의 탭으로 다시 올리세요.",
+    "templatesLoadError": "템플릿을 불러올 수 없습니다. 아래로 당겨 다시 시도하세요."
   },
   "aiCompose": {
     "title": "AI 오퍼",
@@ -556,7 +565,22 @@
     "createAccount": "계정 만들기",
     "languageLabel": "언어",
     "heroA11y": "Twofer 마스코트",
-    "demoHint": "미리보기/개발 전용"
+    "demoHint": "미리보기/개발 전용",
+    "emailLabel": "이메일",
+    "passwordLabel": "비밀번호",
+    "forgotPassword": "비밀번호를 잊으셨나요?",
+    "logIn": "로그인",
+    "pleaseWait": "잠시만 기다려 주세요…",
+    "legalFooter": "계속하면 약관 및 개인정보 처리방침에 동의하게 됩니다.",
+    "errIncorrectCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
+    "errNoAccount": "해당 이메일로 등록된 계정이 없습니다.",
+    "errAlreadyExists": "해당 이메일로 등록된 계정이 이미 있습니다. 로그인해 보세요.",
+    "errRateLimit": "너무 많은 시도입니다. 잠시 후 다시 시도해 주세요.",
+    "errNetwork": "네트워크 오류입니다. 연결을 확인하고 다시 시도해 주세요.",
+    "errPasswordLength": "비밀번호는 6자 이상이어야 합니다.",
+    "errGeneric": "문제가 발생했습니다. 다시 시도해 주세요.",
+    "loginFailedTitle": "로그인 실패",
+    "signUpFailedTitle": "가입 실패"
   },
   "legal": {
     "sectionTitle": "법적 고지",
@@ -761,6 +785,8 @@
     "verifyStaffHint": "시계가 매초 갱신되어 스크린샷보다 위조가 어렵습니다.",
     "verifyQrDisabled": "만료됨 — QR 사용 불가",
     "codeLegacyQrOnly": "QR만 (이전)",
+    "redeemSoon": "빨리 사용하세요",
+    "scanQrAtCounter": "카운터에서 QR 스캔",
     "timeLeftHeading": "남은 시간",
     "countdownLabel": "{{time}}",
     "redeemByCaption": "{{datetime}}까지 사용 · 매장 현지 시간",

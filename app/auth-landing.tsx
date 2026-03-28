@@ -13,19 +13,9 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { logAuthPath } from "@/lib/auth-path-log";
-
-function friendlyError(raw: string): string {
-  const m = (raw ?? "").toLowerCase();
-  if (m.includes("invalid login") || m.includes("invalid email or password")) return "Incorrect email or password.";
-  if (m.includes("user not found")) return "No account found with that email.";
-  if (m.includes("already registered") || m.includes("already exists")) return "An account with that email already exists. Try logging in.";
-  if (m.includes("rate limit") || m.includes("too many")) return "Too many attempts. Please wait a moment and try again.";
-  if (m.includes("network") || m.includes("fetch")) return "Network error. Check your connection and try again.";
-  if (m.includes("password") && m.includes("least")) return "Password must be at least 6 characters.";
-  return raw?.trim() ? raw : "Something went wrong. Please try again.";
-}
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
@@ -64,14 +54,28 @@ function ScalePressable({
   );
 }
 
+const DEMO_MODE = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
+
+function friendlyError(raw: string, t: (key: string) => string): string {
+  const m = (raw ?? "").toLowerCase();
+  if (m.includes("invalid login") || m.includes("invalid email or password")) return t("authLanding.errIncorrectCredentials");
+  if (m.includes("user not found")) return t("authLanding.errNoAccount");
+  if (m.includes("already registered") || m.includes("already exists")) return t("authLanding.errAlreadyExists");
+  if (m.includes("rate limit") || m.includes("too many")) return t("authLanding.errRateLimit");
+  if (m.includes("network") || m.includes("fetch")) return t("authLanding.errNetwork");
+  if (m.includes("password") && m.includes("least")) return t("authLanding.errPasswordLength");
+  return raw?.trim() ? raw : t("authLanding.errGeneric");
+}
+
 export default function AuthLandingScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ next?: string }>();
   const nextHref = (typeof params.next === "string" && params.next.length > 0 ? params.next : "/(tabs)") as Href;
   const insets = useSafeAreaInsets();
 
-  const [email, setEmail] = useState("demo@demo.com");
-  const [pw, setPw] = useState("123456");
+  const [email, setEmail] = useState(DEMO_MODE ? "demo@demo.com" : "");
+  const [pw, setPw] = useState(DEMO_MODE ? "123456" : "");
   const [busy, setBusy] = useState(false);
 
   const canSubmit = !busy && email.trim().length > 0 && pw.length > 0;
@@ -86,12 +90,12 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
-        Alert.alert("Login Failed", friendlyError(error.message));
+        Alert.alert(t("authLanding.loginFailedTitle"), friendlyError(error.message, t));
         return;
       }
       router.replace(nextHref);
     } catch (e: any) {
-      Alert.alert("Login Failed", friendlyError(e?.message ?? ""));
+      Alert.alert(t("authLanding.loginFailedTitle"), friendlyError(e?.message ?? "", t));
     } finally {
       setBusy(false);
     }
@@ -107,12 +111,12 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
-        Alert.alert("Sign Up Failed", friendlyError(error.message));
+        Alert.alert(t("authLanding.signUpFailedTitle"), friendlyError(error.message, t));
         return;
       }
       router.replace("/onboarding" as Href);
     } catch (e: any) {
-      Alert.alert("Sign Up Failed", friendlyError(e?.message ?? ""));
+      Alert.alert(t("authLanding.signUpFailedTitle"), friendlyError(e?.message ?? "", t));
     } finally {
       setBusy(false);
     }
@@ -147,7 +151,7 @@ export default function AuthLandingScreen() {
 
           {/* Email */}
           <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
-            Email
+            {t("authLanding.emailLabel")}
           </Text>
           <TextInput
             value={email}
@@ -172,7 +176,7 @@ export default function AuthLandingScreen() {
 
           {/* Password */}
           <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
-            Password
+            {t("authLanding.passwordLabel")}
           </Text>
           <TextInput
             value={pw}
@@ -199,7 +203,7 @@ export default function AuthLandingScreen() {
             style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.xl, paddingVertical: 4 }}
           >
             <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.light.primary, opacity: busy ? 0.45 : 1 }}>
-              Forgot Password?
+              {t("authLanding.forgotPassword")}
             </Text>
           </Pressable>
 
@@ -220,7 +224,7 @@ export default function AuthLandingScreen() {
             }}
           >
             <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18 }}>
-              {busy ? "Please wait…" : "Log In"}
+              {busy ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
             </Text>
           </ScalePressable>
 
@@ -241,13 +245,13 @@ export default function AuthLandingScreen() {
             }}
           >
             <Text style={{ color: Colors.light.primary, fontWeight: "900", fontSize: 18 }}>
-              Create Account
+              {t("authLanding.createAccount")}
             </Text>
           </ScalePressable>
 
           <View style={{ gap: Spacing.sm }}>
             <Text style={{ fontSize: 12, lineHeight: 18, opacity: 0.55, textAlign: "center" }}>
-              By continuing you agree to our Terms and Privacy Policy.
+              {t("authLanding.legalFooter")}
             </Text>
             <LegalExternalLinks align="center" />
           </View>

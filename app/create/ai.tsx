@@ -712,12 +712,15 @@ export default function AiDealScreen() {
 
       const composedDescription = composeListingDescription(promoLine, ctaText, description);
 
+      const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
+      const durablePoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
+
       const { error } = await supabase.from("deal_templates").insert({
         business_id: businessId,
         title: title.trim(),
         description: composedDescription.trim(),
         price: priceNum,
-        poster_url: signedPoster,
+        poster_url: durablePoster ?? signedPoster,
         max_claims: maxClaimsNum,
         claim_cutoff_buffer_minutes: cutoffNum,
         is_recurring: isRecurring,

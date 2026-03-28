@@ -19,8 +19,8 @@ export default function CreateDeal() {
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { isLoggedIn, businessId, loading } = useBusiness();
-  const [banner, setBanner] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+  const [templates, setTemplates] = useState<{ id: string; title: string | null; description: string | null; poster_url: string | null; price: number | null }[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
@@ -57,7 +57,9 @@ export default function CreateDeal() {
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(10);
-      if (!error) {
+      if (error) {
+        setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+      } else {
         setTemplates(data ?? []);
       }
       setTemplatesLoading(false);
@@ -67,7 +69,7 @@ export default function CreateDeal() {
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createHub.title")}</Text>
-      {banner ? <Banner message={banner} tone="error" /> : null}
+      {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
         <View style={{ marginTop: Spacing.lg }}>
@@ -90,7 +92,7 @@ export default function CreateDeal() {
       ) : !businessId ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Text style={{ opacity: 0.7 }}>
-            Business profile found. Finalizing your business account record. You can still start creating a deal.
+            {t("createHub.bizProfilePending")}
           </Text>
         </View>
       ) : (

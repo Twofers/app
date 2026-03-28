@@ -1,27 +1,21 @@
-/** Redeem is allowed until claim `expires_at` + grace (server + client must match). */
+/** Pure deadline logic for claim redemption, testable outside Deno. */
+
 export const DEFAULT_CLAIM_GRACE_MINUTES = 10;
 
-export function getClaimRedeemDeadlineMs(
+export function getClaimRedeemDeadlineIso(
   expiresAtIso: string,
-  graceMinutes: number = DEFAULT_CLAIM_GRACE_MINUTES,
-): number {
-  const t = new Date(expiresAtIso).getTime();
-  if (!Number.isFinite(t)) return 0;
-  return t + graceMinutes * 60 * 1000;
+  graceMinutes: number,
+): string {
+  const g = Number.isFinite(graceMinutes) && graceMinutes > 0 ? graceMinutes : DEFAULT_CLAIM_GRACE_MINUTES;
+  return new Date(new Date(expiresAtIso).getTime() + g * 60_000).toISOString();
 }
 
 export function isPastClaimRedeemDeadline(
   expiresAtIso: string,
   nowMs: number,
-  graceMinutes: number = DEFAULT_CLAIM_GRACE_MINUTES,
+  graceMinutes: number,
 ): boolean {
-  return nowMs >= getClaimRedeemDeadlineMs(expiresAtIso, graceMinutes);
-}
-
-/** ISO timestamp for display (countdown / copy). */
-export function getClaimRedeemDeadlineIso(
-  expiresAtIso: string,
-  graceMinutes: number = DEFAULT_CLAIM_GRACE_MINUTES,
-): string {
-  return new Date(getClaimRedeemDeadlineMs(expiresAtIso, graceMinutes)).toISOString();
+  const g = Number.isFinite(graceMinutes) && graceMinutes > 0 ? graceMinutes : DEFAULT_CLAIM_GRACE_MINUTES;
+  const deadline = new Date(expiresAtIso).getTime() + g * 60_000;
+  return nowMs >= deadline;
 }

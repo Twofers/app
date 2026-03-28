@@ -93,8 +93,13 @@ export default function OnboardingScreen() {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
       setStep(3);
-    } catch {
-      setHint(t("onboarding.locationError"));
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : "";
+      setHint(
+        detail
+          ? `${t("onboarding.locationError")} (${detail})`
+          : t("onboarding.locationError"),
+      );
       setStep(2);
     } finally {
       setBusy(false);
@@ -125,8 +130,13 @@ export default function OnboardingScreen() {
       }
       await setLastKnownConsumerCoords(geo.lat, geo.lng);
       setStep(3);
-    } catch {
-      setHint(t("onboarding.zipLookupFail"));
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : "";
+      setHint(
+        detail
+          ? `${t("onboarding.zipLookupFail")} (${detail})`
+          : t("onboarding.zipLookupFail"),
+      );
     } finally {
       setBusy(false);
     }
@@ -270,6 +280,7 @@ export default function OnboardingScreen() {
             <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.locationBody")}</Text>
             <PrimaryButton title={t("onboarding.useGps")} onPress={() => void requestGps()} disabled={busy} />
             <SecondaryButton title={t("onboarding.useZipInstead")} onPress={() => setStep(2)} disabled={busy} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(0)} disabled={busy} />
           </>
         ) : null}
 
@@ -328,6 +339,7 @@ export default function OnboardingScreen() {
               })}
             </View>
             <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(4)} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(1)} disabled={busy} />
           </>
         ) : null}
 
@@ -342,6 +354,7 @@ export default function OnboardingScreen() {
               disabled={busy}
             />
             <SecondaryButton title={t("onboarding.notNow")} onPress={() => void skipNotificationsAndFinish()} disabled={busy} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(3)} disabled={busy} />
           </>
         ) : null}
       </ScrollView>

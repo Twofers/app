@@ -629,10 +629,7 @@ serve(async (req) => {
   } catch (err) {
     console.error("Unexpected error:", err);
     return new Response(
-      JSON.stringify({
-        error: "Server error",
-        details: err instanceof Error ? err.message : String(err),
-      }),
+      JSON.stringify({ error: "Server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

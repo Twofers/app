@@ -95,6 +95,25 @@ serve(async (req) => {
       );
     }
 
+    const CHAT_MODEL = resolveOpenAiChatModel();
+
+    const DEFAULT_MONTHLY_LIMIT = Number(Deno.env.get("AI_COPY_MONTHLY_LIMIT") ?? "60");
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const { count: usedThisMonth } = await supabase
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("request_type", "deal_copy")
+      .gte("created_at", monthStart.toISOString());
+    if (usedThisMonth !== null && usedThisMonth >= DEFAULT_MONTHLY_LIMIT) {
+      return new Response(
+        JSON.stringify({ error: "Monthly AI copy limit reached. Try again next month." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const prompt = [
       "You create short, mobile-friendly deal copy for a local business.",
       "Keep it punchy, non-cringe, no excessive emojis.",
@@ -155,11 +174,22 @@ serve(async (req) => {
     }
 
     const aiJson = await aiRes.json();
+    const usage = aiJson?.usage;
     const content = aiJson?.choices?.[0]?.message?.content ?? "";
     let result: AiResult;
     try {
       result = JSON.parse(content);
     } catch {
+      void supabase.from("ai_generation_logs").insert({
+        user_id: user.id,
+        request_type: "deal_copy",
+        model: CHAT_MODEL,
+        success: false,
+        failure_reason: "PARSE_ERROR",
+        openai_called: true,
+        input_token_count: usage?.prompt_tokens ?? null,
+        output_token_count: usage?.completion_tokens ?? null,
+      });
       return new Response(
         JSON.stringify({ error: "AI response was invalid." }),
         {
@@ -168,6 +198,16 @@ serve(async (req) => {
         }
       );
     }
+
+    void supabase.from("ai_generation_logs").insert({
+      user_id: user.id,
+      request_type: "deal_copy",
+      model: CHAT_MODEL,
+      success: true,
+      openai_called: true,
+      input_token_count: usage?.prompt_tokens ?? null,
+      output_token_count: usage?.completion_tokens ?? null,
+    });
 
     return new Response(
       JSON.stringify(result),

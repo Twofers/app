@@ -10,6 +10,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
 import { supabase } from "@/lib/supabase";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
 
 function TabAuthGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<"unknown" | "in" | "out">("unknown");
@@ -30,10 +31,14 @@ function TabAuthGate({ children }: { children: ReactNode }) {
     }
 
     void supabase.auth.getSession().then(({ data }) => {
-      setState(data.session?.user ? "in" : "out");
+      const user = data.session?.user;
+      setState(user ? "in" : "out");
+      if (user) void registerPushTokenIfNeeded(user.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(session?.user ? "in" : "out");
+      const user = session?.user;
+      setState(user ? "in" : "out");
+      if (user) void registerPushTokenIfNeeded(user.id);
     });
     return () => sub.subscription.unsubscribe();
   }, [forceBypass]);

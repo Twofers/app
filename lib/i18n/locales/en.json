@@ -102,7 +102,11 @@
     "countdownMinutes_one": "{{count}} min left",
     "countdownMinutes_other": "{{count}} min left",
     "countdownSeconds_one": "{{count}} sec left",
-    "countdownSeconds_other": "{{count}} sec left"
+    "countdownSeconds_other": "{{count}} sec left",
+    "emptyNearbyBodySub": "No live deals nearby right now — check back soon!",
+    "emptyNearbyPenguinHint": "Your penguin scout is still waddling for offers.",
+    "timeLeftHM": "{{h}}h {{m}}m left",
+    "timeLeftM": "{{m}}m left"
   },
   "consumerMap": {
     "title": "Map",
@@ -136,6 +140,8 @@
     "notificationModeTitle": "Alert scope",
     "notifAllNearby": "All nearby deals",
     "notifFavoritesOnly": "Favorites only",
+    "gpsErrorTitle": "Location unavailable",
+    "gpsErrorBody": "Could not get your current position. Try again or switch to ZIP code.",
     "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius."
   },
   "onboarding": {
@@ -287,6 +293,7 @@
     "errCutoffDuration": "Cutoff must be less than the deal duration.",
     "errPriceNumber": "Price must be a number.",
     "errPublishFailed": "Publish failed.",
+    "subtitle": "Built for speed: complete this flow in under a minute.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
     "placeholderCutoff": "15",
@@ -395,6 +402,7 @@
     "placeholderBusinessName": "Business name",
     "creating": "Creating...",
     "createBusiness": "Create Business",
+    "bizProfilePending": "Business profile found. Finalizing your business account record. You can still start creating a deal.",
     "errLoginBusiness": "Please log in to create a business.",
     "errNameRequired": "Business name required.",
     "errCreateFailed": "Create business failed.",
@@ -409,7 +417,8 @@
     "aiComposeTitle": "Generate with AI",
     "aiComposeSubtitle": "Photo, type, or speak → 2 ad options for one offer → Quick publish.",
     "reuseTitle": "Reuse saved ad · Repeat deal",
-    "reuseSubtitle": "Relaunch a template or past offer in a few taps."
+    "reuseSubtitle": "Relaunch a template or past offer in a few taps.",
+    "templatesLoadError": "Could not load templates. Pull down to retry."
   },
   "aiCompose": {
     "title": "AI offer",
@@ -556,7 +565,22 @@
     "createAccount": "Create account",
     "languageLabel": "Language",
     "heroA11y": "Twofer mascot",
-    "demoHint": "Preview / development only"
+    "demoHint": "Preview / development only",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "forgotPassword": "Forgot Password?",
+    "logIn": "Log In",
+    "pleaseWait": "Please wait…",
+    "legalFooter": "By continuing you agree to our Terms and Privacy Policy.",
+    "errIncorrectCredentials": "Incorrect email or password.",
+    "errNoAccount": "No account found with that email.",
+    "errAlreadyExists": "An account with that email already exists. Try logging in.",
+    "errRateLimit": "Too many attempts. Please wait a moment and try again.",
+    "errNetwork": "Network error. Check your connection and try again.",
+    "errPasswordLength": "Password must be at least 6 characters.",
+    "errGeneric": "Something went wrong. Please try again.",
+    "loginFailedTitle": "Login Failed",
+    "signUpFailedTitle": "Sign Up Failed"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -891,6 +915,8 @@
     "verifyStaffHint": "Live clock updates every second — harder to fake than a screenshot.",
     "verifyQrDisabled": "QR disabled — ticket expired",
     "codeLegacyQrOnly": "QR only (legacy)",
+    "redeemSoon": "Redeem soon",
+    "scanQrAtCounter": "Scan QR at counter",
     "timeLeftHeading": "Time left",
     "countdownLabel": "{{time}}",
     "redeemByCaption": "Redeem by {{datetime}} · store’s local time",

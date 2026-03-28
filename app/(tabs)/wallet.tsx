@@ -407,7 +407,7 @@ export default function WalletScreen() {
                 color: urgent ? "#ffedd5" : "#dcfce7",
               }}
             >
-              {urgent ? "Redeem soon" : t("consumerWallet.timeLeftHeading")}
+              {urgent ? t("consumerWallet.redeemSoon") : t("consumerWallet.timeLeftHeading")}
             </Text>
             <Text
               style={{
@@ -509,7 +509,7 @@ export default function WalletScreen() {
               }}
             >
               <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, opacity: 0.65 }}>
-                Scan QR at counter
+                {t("consumerWallet.scanQrAtCounter")}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
                 <View
