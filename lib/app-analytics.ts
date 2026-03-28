@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
+import { devWarn } from "@/lib/dev-log";
 
 export type AppAnalyticsEventName =
   | "deal_viewed"
@@ -39,11 +40,11 @@ export function trackAppAnalyticsEvent(payload: Payload): void {
         },
       });
       if (error) {
-        console.warn("[analytics]", error.message ?? error);
+        devWarn("[analytics]", error.message ?? error);
         return;
       }
       if (data && typeof data === "object" && "error" in data) {
-        console.warn("[analytics]", (data as { error?: string }).error);
+        devWarn("[analytics]", (data as { error?: string }).error);
       }
     } catch {
       /* ignore */

@@ -341,6 +341,7 @@
     "fieldHoursRequired": "Hours",
     "startBusinessSetup": "Set up business",
     "errBizCoreRequired": "Fill in business name, contact, email, phone, address, category, and hours.",
+    "errBizNameAddress": "Business name and address are required.",
     "errBizEmailInvalid": "Enter a valid business email.",
     "fieldCategory": "Category",
     "fieldTone": "Tone",
@@ -381,7 +382,18 @@
     "errLatNumber": "Latitude must be a number.",
     "errLngNumber": "Longitude must be a number.",
     "errLatRange": "Latitude must be between -90 and 90.",
-    "errLngRange": "Longitude must be between -180 and 180."
+    "errLngRange": "Longitude must be between -180 and 180.",
+    "bizCardTitle": "Your Coffee Shop",
+    "bizSignInToContinue": "Sign in to continue your one-time setup and launch your first deal.",
+    "switchToConsumer": "Switch to Consumer Mode",
+    "bizYourBusiness": "Your business",
+    "bizNoAddress": "No address on file yet.",
+    "bizCategory": "Category",
+    "bizSetupComplete": "Setup complete — ready to launch BOGO deals!",
+    "bizSetupFinish": "Finish your setup to unlock create, redeem, and dashboard.",
+    "bizSetupStart": "Complete your one-time setup to start launching deals.",
+    "createNewDeal": "Create New Deal",
+    "editProfile": "Edit Profile"
   },
   "settingsScreen": {
     "title": "Settings",
@@ -456,7 +468,11 @@
     "errRecordingStart": "Could not start recording.",
     "transcribeDone": "Voice added to the text field — edit if needed, then generate.",
     "transcribeEmpty": "No speech detected. Try again.",
-    "transcribeFailed": "Could not transcribe audio."
+    "transcribeFailed": "Could not transcribe audio.",
+    "takePhoto": "Take photo",
+    "fromGallery": "Gallery",
+    "errCameraPermission": "Allow camera access to snap a photo.",
+    "quotaWarning": "{{remaining}} AI generations remaining this month."
   },
   "reuseHub": {
     "title": "Reuse & repeat",
@@ -881,6 +897,7 @@
     "useDealCta": "Use Deal",
     "continueUseDeal": "Continue at counter",
     "qrFallbackCta": "QR & code (backup)",
+    "qrFallbackLabel": "QR & code (backup)",
     "useDealTitle": "Use this deal",
     "useDealBody": "Slide to confirm — we’ll show a short live pass for staff. Your deal is marked used when the pass finishes.",
     "slideHint": "Slide right to confirm — avoids accidental taps in line.",
@@ -994,22 +1011,6 @@
     "multiOfferBody": "Upgrade to Pro to run multiple live offers at once.",
     "proOnly": "Pro only"
   },
-  "businessActiveDeals": {
-    "title": "My Offers",
-    "tabActive": "Active",
-    "tabEnded": "Ended",
-    "live": "Live",
-    "endedStat": "Ended",
-    "leftSuffix": "{{time}} left",
-    "endEarly": "End Early",
-    "viewDetails": "View Details",
-    "endTitle": "End Offer Early?",
-    "endMessage": "Are you sure you want to end \"{{title}}\"? This cannot be undone.",
-    "emptyActiveTitle": "No active offers",
-    "emptyActiveSub": "Create an offer to attract customers.",
-    "emptyEndedTitle": "No ended offers",
-    "emptyEndedSub": "Your ended offers will appear here."
-  },
   "businessScan": {
     "requestingCamera": "Requesting camera permission...",
     "cameraRequired": "Camera Access Required",
@@ -1051,41 +1052,12 @@
     "emptyTitle": "No past offers yet",
     "emptySub": "Create your first offer and it will show up here as a reusable template."
   },
-  "businessSetup": {
-    "title": "Set up your business",
-    "subtitle": "Just the essentials to get started.",
-    "businessName": "Business name",
-    "category": "Category (e.g., Coffee, Pizza)",
-    "city": "City",
-    "continue": "Continue"
-  },
   "businessNotifications": {
     "title": "Notifications",
     "emptyTitle": "No updates yet",
     "emptySub": "We'll notify you when offers go live or get redeemed.",
     "proAlerts": "Pro alerts",
     "proBody": "Unlock automated favorite alerts and advanced notification rules."
-  },
-  "businessDealDetail": {
-    "headerTitle": "Offer Performance",
-    "editOffer": "Edit Offer",
-    "claimsProgress": "Claims Progress ({{current}}/{{max}})",
-    "schedule": "Schedule",
-    "limits": "Limits",
-    "maxClaims": "Max claims: {{n}}",
-    "claimBuffer": "Claim buffer: {{n}} min",
-    "performanceSummary": "Performance Summary",
-    "proInsight": "Pro insight",
-    "proInsightBody": "Get redemptions by day and repeat customer trends with Pro.",
-    "redemptionsByDay": "Redemptions by day",
-    "topReturning": "Top returning customers",
-    "upgradePro": "Upgrade to Pro",
-    "starts": "Starts {{date}}",
-    "ends": "Ends {{date}}",
-    "metricClaims": "Claims",
-    "metricRedeemed": "Redeemed",
-    "metricConversion": "Conversion",
-    "locked": "Locked"
   },
   "createDeal": {
     "title": "Create Offer",
@@ -1160,6 +1132,7 @@
     "loading": "Loading...",
     "needBusiness": "Create a business to unlock analytics.",
     "overview": "Performance",
+    "metricViews": "Deal views",
     "metricDealsLaunched": "Deals launched",
     "metricTotalClaims": "Total claims",
     "metricRedemptions": "Redemptions",
@@ -1179,6 +1152,8 @@
     "rowExpired": "Expired {{count}}",
     "rowConv": "Conv. {{pct}}%",
     "endDealEarly": "End deal early",
+    "endDealConfirmTitle": "End deal early?",
+    "endDealConfirmBody": "This will deactivate the deal immediately. Active claims can still be redeemed.",
     "errLoadDashboard": "Failed to load dashboard.",
     "errEndDeal": "Could not end deal.",
     "emptyDeals": "No deals yet. Create one to see analytics.",
@@ -1239,6 +1214,8 @@
     "errRequired": "Fill in every field (use chips where you can).",
     "errEmail": "Enter a valid email.",
     "errSave": "Could not create business. Try again.",
+    "setupComplete": "Setup complete — ready to launch BOGO deals!",
+    "city": "City",
     "cat": {
       "restaurant": "Restaurant",
       "cafe": "Café",

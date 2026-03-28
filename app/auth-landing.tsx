@@ -9,6 +9,8 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -16,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { logAuthPath } from "@/lib/auth-path-log";
+import { friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
@@ -31,7 +34,7 @@ function ScalePressable({
 }: {
   onPress: () => void;
   disabled?: boolean;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
   const scale = useSharedValue(1);
@@ -56,16 +59,6 @@ function ScalePressable({
 
 const DEMO_MODE = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
 
-function friendlyError(raw: string, t: (key: string) => string): string {
-  const m = (raw ?? "").toLowerCase();
-  if (m.includes("invalid login") || m.includes("invalid email or password")) return t("authLanding.errIncorrectCredentials");
-  if (m.includes("user not found")) return t("authLanding.errNoAccount");
-  if (m.includes("already registered") || m.includes("already exists")) return t("authLanding.errAlreadyExists");
-  if (m.includes("rate limit") || m.includes("too many")) return t("authLanding.errRateLimit");
-  if (m.includes("network") || m.includes("fetch")) return t("authLanding.errNetwork");
-  if (m.includes("password") && m.includes("least")) return t("authLanding.errPasswordLength");
-  return raw?.trim() ? raw : t("authLanding.errGeneric");
-}
 
 export default function AuthLandingScreen() {
   const router = useRouter();
@@ -90,12 +83,15 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
-        Alert.alert(t("authLanding.loginFailedTitle"), friendlyError(error.message, t));
+        Alert.alert(t("authLanding.loginFailedTitle"), friendlyAuthMessage(error.message, t));
         return;
       }
       router.replace(nextHref);
-    } catch (e: any) {
-      Alert.alert(t("authLanding.loginFailedTitle"), friendlyError(e?.message ?? "", t));
+    } catch (e: unknown) {
+      Alert.alert(
+        t("authLanding.loginFailedTitle"),
+        friendlyAuthMessage(e instanceof Error ? e.message : String(e), t),
+      );
     } finally {
       setBusy(false);
     }
@@ -111,12 +107,15 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
-        Alert.alert(t("authLanding.signUpFailedTitle"), friendlyError(error.message, t));
+        Alert.alert(t("authLanding.signUpFailedTitle"), friendlyAuthMessage(error.message, t));
         return;
       }
       router.replace("/onboarding" as Href);
-    } catch (e: any) {
-      Alert.alert(t("authLanding.signUpFailedTitle"), friendlyError(e?.message ?? "", t));
+    } catch (e: unknown) {
+      Alert.alert(
+        t("authLanding.signUpFailedTitle"),
+        friendlyAuthMessage(e instanceof Error ? e.message : String(e), t),
+      );
     } finally {
       setBusy(false);
     }
@@ -139,7 +138,6 @@ export default function AuthLandingScreen() {
             paddingHorizontal: Spacing.xxl,
           }}
         >
-          {/* Penguin hero — large, centered, no wordmark */}
           <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
             <Image
               source={require("../assets/images/splash-icon.png")}
@@ -147,6 +145,9 @@ export default function AuthLandingScreen() {
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
+            <Text style={{ fontSize: 32, fontWeight: "900", color: Colors.light.primary, letterSpacing: 2, marginTop: 8 }}>
+              TWOFER
+            </Text>
           </View>
 
           {/* Email */}

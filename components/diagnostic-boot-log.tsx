@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useTabMode } from "@/lib/tab-mode";
+import { devLog } from "@/lib/dev-log";
 import {
   getAppExtra,
   getBuildProfileLabel,
@@ -43,7 +44,7 @@ export function DiagnosticBootLog() {
         authEmail: sessionData.session?.user?.email ?? null,
         publicEnv: getPublicEnvSnapshot(),
       };
-      console.log("[twoforone:boot]", JSON.stringify(payload, null, 2));
+      devLog("[twoforone:boot]", JSON.stringify(payload, null, 2));
     })();
     return () => {
       cancelled = true;

@@ -544,7 +544,7 @@ export default function WalletScreen() {
               style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
             />
             <SecondaryButton
-              title={`QR fallback - ${t("consumerWallet.qrFallbackCta")}`}
+              title={t("consumerWallet.qrFallbackLabel")}
               onPress={() => openVerifyForClaim(row)}
               disabled={isRedeeming}
               style={{ opacity: isRedeeming ? 0.45 : 1 }}

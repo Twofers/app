@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -96,11 +96,11 @@ export default function AccountScreen() {
             : null,
         );
         if (access.isComplete) {
-          setBusinessSetupMessage("Setup complete - ready to launch BOGO deals!");
+          setBusinessSetupMessage(t("account.bizSetupComplete"));
         } else if (access.hasProfileRow) {
-          setBusinessSetupMessage("Finish your setup to unlock create, redeem, and dashboard.");
+          setBusinessSetupMessage(t("account.bizSetupFinish"));
         } else {
-          setBusinessSetupMessage("Complete your one-time setup to start launching deals.");
+          setBusinessSetupMessage(t("account.bizSetupStart"));
         }
       })
       .finally(() => {
@@ -264,8 +264,11 @@ export default function AccountScreen() {
     try {
       await supabase.auth.signOut();
       setBanner({ message: t("account.loggedOut"), tone: "info" });
-    } catch (e: any) {
-      setBanner({ message: e?.message ?? t("account.errLogoutFailed"), tone: "error" });
+    } catch (e: unknown) {
+      setBanner({
+        message: (e instanceof Error ? e.message : String(e)) || t("account.errLogoutFailed"),
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -339,8 +342,11 @@ export default function AccountScreen() {
       try {
         latitude = parseOptionalCoord(profileLatitude, "lat", t);
         longitude = parseOptionalCoord(profileLongitude, "lng", t);
-      } catch (e: any) {
-        setBanner({ message: e?.message ?? t("account.errCoordsInvalid"), tone: "error" });
+      } catch (e: unknown) {
+        setBanner({
+          message: (e instanceof Error ? e.message : String(e)) || t("account.errCoordsInvalid"),
+          tone: "error",
+        });
         return;
       }
       if ((latitude == null) !== (longitude == null)) {
@@ -357,11 +363,11 @@ export default function AccountScreen() {
       const ad = profileAddress.trim();
       const cat = profileCategory.trim();
       const hrs = profileHours.trim();
-      if (!nm || !cn || !em || !ph || !ad || !cat || !hrs) {
-        setBanner({ message: t("account.errBizCoreRequired"), tone: "error" });
+      if (!nm || !ad) {
+        setBanner({ message: t("account.errBizNameAddress"), tone: "error" });
         return;
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
         setBanner({ message: t("account.errBizEmailInvalid"), tone: "error" });
         return;
       }
@@ -370,25 +376,29 @@ export default function AccountScreen() {
         .from("businesses")
         .update({
           name: nm,
-          contact_name: cn,
-          business_email: em,
+          contact_name: cn || null,
+          business_email: em || null,
           address: addr,
-          category: cat,
+          category: cat || null,
           tone: profileTone.trim() || null,
           location: profileLocation.trim() || addr,
           latitude,
           longitude,
           short_description: profileShortDescription.trim() || null,
           preferred_locale: profilePreferredLocale,
-          phone: ph,
-          hours_text: hrs,
+          phone: ph || null,
+          hours_text: hrs || null,
         })
         .eq("id", businessId);
       if (error) throw error;
       await refresh();
       setBanner({ message: t("account.profileSaved"), tone: "success" });
-    } catch (e: any) {
-      setBanner({ message: e?.message ?? t("account.errSaveProfileFailed"), tone: "error" });
+    } catch (e: unknown) {
+      setBanner({
+        message:
+          (e instanceof Error ? e.message : String(e)) || t("account.errSaveProfileFailed"),
+        tone: "error",
+      });
     } finally {
       setSavingProfile(false);
     }
@@ -435,6 +445,7 @@ export default function AccountScreen() {
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("account.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
@@ -452,12 +463,12 @@ export default function AccountScreen() {
                 gap: Spacing.sm,
               }}
             >
-              <Text style={{ fontWeight: "700", fontSize: 18 }}>Your Coffee Shop</Text>
+              <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
               <Text style={{ opacity: 0.8, lineHeight: 20 }}>
-                Sign in to continue your one-time setup and launch your first deal.
+                {t("account.bizSignInToContinue")}
               </Text>
               <SecondaryButton
-                title="Switch to Consumer Mode"
+                title={t("account.switchToConsumer")}
                 onPress={async () => {
                   await setTabMode("customer");
                   router.replace("/(tabs)");
@@ -548,23 +559,23 @@ export default function AccountScreen() {
                 gap: Spacing.sm,
               }}
             >
-              <Text style={{ fontWeight: "700", fontSize: 18 }}>Your Coffee Shop</Text>
+              <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
               {businessProfileCheckLoading ? (
                 <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
               ) : (
                 <>
                   <Text style={{ opacity: 0.8, lineHeight: 20 }}>
-                    {businessProfileSnapshot?.name ?? businessName ?? "Your business"}
+                    {businessProfileSnapshot?.name ?? businessName ?? t("account.bizYourBusiness")}
                   </Text>
-                  <Text style={{ opacity: 0.7, lineHeight: 20 }}>{businessProfileSnapshot?.address ?? "No address on file yet."}</Text>
+                  <Text style={{ opacity: 0.7, lineHeight: 20 }}>{businessProfileSnapshot?.address ?? t("account.bizNoAddress")}</Text>
                   {businessProfileSnapshot?.category ? (
-                    <Text style={{ opacity: 0.7, lineHeight: 20 }}>Category: {businessProfileSnapshot.category}</Text>
+                    <Text style={{ opacity: 0.7, lineHeight: 20 }}>{t("account.bizCategory")}: {businessProfileSnapshot.category}</Text>
                   ) : null}
                   <Text style={{ opacity: 0.75, lineHeight: 20 }}>
-                    {businessSetupMessage ?? "Setup complete — ready to launch deals!"}
+                    {businessSetupMessage ?? t("account.bizSetupComplete")}
                   </Text>
                   <PrimaryButton
-                    title="Create New Deal"
+                    title={t("account.createNewDeal")}
                     onPress={goToCreateDeal}
                     style={{
                       backgroundColor: "#FF9F1C",
@@ -575,10 +586,10 @@ export default function AccountScreen() {
                     <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
                   ) : null}
                   {businessProfileComplete ? (
-                    <SecondaryButton title="Edit Profile" onPress={goToBusinessSetup} />
+                    <SecondaryButton title={t("account.editProfile")} onPress={goToBusinessSetup} />
                   ) : null}
                   <SecondaryButton
-                    title="Switch to Consumer Mode"
+                    title={t("account.switchToConsumer")}
                     onPress={async () => {
                       await setTabMode("customer");
                       router.replace("/(tabs)");
@@ -655,8 +666,8 @@ export default function AccountScreen() {
             }}
           >
             <View>
-              <Text style={{ fontWeight: "700" }}>Deal alerts</Text>
-              <Text style={{ opacity: 0.7, marginTop: 4 }}>Notify me when favorites post new deals.</Text>
+              <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
+              <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
             <Switch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
           </View>
@@ -845,11 +856,11 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>Tone</Text>
+                <Text style={{ fontSize: 13 }}>{t("account.fieldTone")}</Text>
                 <TextInput
                   value={profileTone}
                   onChangeText={setProfileTone}
-                  placeholder="e.g. friendly, local, straightforward"
+                  placeholder={t("account.phTone")}
                   style={{
                     borderWidth: 1,
                     borderColor: "#ccc",
@@ -875,9 +886,9 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>Latitude / longitude (optional, WGS84)</Text>
+                <Text style={{ fontSize: 13 }}>{t("account.fieldLatLng")}</Text>
                 <Text style={{ opacity: 0.65, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
-                  Lets customers sort by distance with Near me. Leave blank if unsure — Location text still helps.
+                  {t("account.fieldLatLngHelp")}
                 </Text>
                 <TextInput
                   value={profileLatitude}
@@ -1031,5 +1042,6 @@ export default function AccountScreen() {
         </ScrollView>
       )}
     </View>
+    </KeyboardAvoidingView>
   );
 }

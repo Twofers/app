@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
@@ -93,18 +93,22 @@ export default function BusinessSetupScreen() {
       );
       if (profileError) throw profileError;
 
-      setBanner({ message: "Setup complete - ready to launch BOGO deals!", tone: "success" });
+      setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
       setTimeout(() => {
         router.replace("/create/quick");
       }, 250);
-    } catch (e: any) {
-      setBanner({ message: e?.message ?? t("businessSetup.errSave"), tone: "error" });
+    } catch (e: unknown) {
+      setBanner({
+        message: (e instanceof Error ? e.message : String(e)) || t("businessSetup.errSave"),
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("businessSetup.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
@@ -141,6 +145,7 @@ export default function BusinessSetupScreen() {
         />
       </ScrollView>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 

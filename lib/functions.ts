@@ -1,20 +1,39 @@
 import { supabase } from "./supabase";
+import { devWarn } from "@/lib/dev-log";
 
-export function parseFunctionError(error: any): string {
+type SupabaseFunctionInvokeError = {
+  message?: string;
+  context?: {
+    body?: unknown;
+    message?: string;
+  };
+};
+
+function isSupabaseFunctionInvokeError(e: unknown): e is SupabaseFunctionInvokeError {
+  return typeof e === "object" && e !== null;
+}
+
+export function parseFunctionError(error: unknown): string {
   // Supabase functions.invoke error structure:
   // - error.message: response body as string (often JSON)
   // - error.context: additional context
   // - error.context?.body: parsed response body (if available)
-  
+
+  if (!isSupabaseFunctionInvokeError(error)) {
+    return String(error);
+  }
+
   let errorMessage = "Unknown error";
-  
+
   // Try error.context.body first (parsed JSON)
-  if (error.context?.body && typeof error.context.body === "object") {
-    if (error.context.body.error) {
-      return error.context.body.error;
+  const body = error.context?.body;
+  if (body && typeof body === "object" && body !== null && "error" in body) {
+    const errField = (body as { error?: unknown }).error;
+    if (typeof errField === "string") {
+      return errField;
     }
   }
-  
+
   // Try error.message (might be JSON string)
   if (error.message) {
     errorMessage = error.message;
@@ -31,7 +50,8 @@ export function parseFunctionError(error: any): string {
   }
   
   // Fallback to error message or context
-  return errorMessage || error.context?.message || "Unknown error";
+  const ctxMsg = error.context?.message;
+  return errorMessage || (typeof ctxMsg === "string" ? ctxMsg : "") || "Unknown error";
 }
 
 export type ClaimDealExtraBody = {
@@ -54,7 +74,7 @@ export async function claimDeal(dealId: string, extra?: ClaimDealExtraBody) {
 
   // Check if data itself contains an error (shouldn't happen with proper function, but be safe)
   if (data && typeof data === "object" && "error" in data) {
-    throw new Error((data as any).error || "Server returned an error");
+    throw new Error((data as { error?: string }).error || "Server returned an error");
   }
 
   if (!data || !data.token) {
@@ -80,7 +100,7 @@ export async function redeemToken(body: { token?: string; short_code?: string })
 
   // Check if data itself contains an error
   if (data && typeof data === "object" && "error" in data) {
-    throw new Error((data as any).error || "Server returned an error");
+    throw new Error((data as { error?: string }).error || "Server returned an error");
   }
 
   if (!data || !data.ok) {
@@ -144,7 +164,7 @@ export async function finalizeStaleRedeems(): Promise<void> {
   try {
     await supabase.functions.invoke("finalize-stale-redeems", { body: {} });
   } catch (err) {
-    if (__DEV__) console.warn("[finalizeStaleRedeems] failed (non-fatal):", err);
+    devWarn("[finalizeStaleRedeems] failed (non-fatal):", err);
   }
 }
 
@@ -181,11 +201,11 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
     const { error } = await supabase.functions.invoke("send-deal-push", {
       body: { deal_id: dealId },
     });
-    if (error && __DEV__) {
-      console.warn("[notifyDealPublished] Push dispatch failed:", parseFunctionError(error));
+    if (error) {
+      devWarn("[notifyDealPublished] Push dispatch failed:", parseFunctionError(error));
     }
   } catch (err) {
-    if (__DEV__) console.warn("[notifyDealPublished] Non-fatal error:", err);
+    devWarn("[notifyDealPublished] Non-fatal error:", err);
   }
 }
 

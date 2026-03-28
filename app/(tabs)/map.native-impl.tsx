@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
+import { devWarn } from "@/lib/dev-log";
 
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors } from "@/constants/theme";
@@ -127,7 +128,7 @@ export default function MapScreenNative() {
         setDeals((dz ?? []) as DealLite[]);
       }
     } catch (error) {
-      console.warn("[map] loadMapData failed", error);
+      devWarn("[map] loadMapData failed", error);
       setDataError(t("consumerMap.dataError"));
     } finally {
       setLoading(false);
@@ -259,6 +260,28 @@ export default function MapScreenNative() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
+          <Pressable
+            onPress={() => void loadMapData()}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: horizontal + 8,
+              zIndex: 999,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "#fff",
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.15,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+          >
+            <MaterialIcons name="refresh" size={22} color="#333" />
+          </Pressable>
           <MapView
             style={{ flex: 1 }}
             initialRegion={initialRegion}

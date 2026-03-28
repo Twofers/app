@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { useRouter, type Href } from "expo-router";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Extracts a deal ID from incoming URLs:
@@ -38,9 +40,12 @@ export function DealDeepLinkHandler() {
   useEffect(() => {
     function navigate(url: string | null) {
       const dealId = extractDealId(url);
-      if (dealId) {
-        router.push(`/deal/${dealId}` as Href);
+      if (!dealId) return;
+      if (!UUID_RE.test(dealId)) {
+        Alert.alert("Invalid link", "This deal link is not valid.");
+        return;
       }
+      router.push(`/deal/${dealId}` as Href);
     }
 
     const sub = Linking.addEventListener("url", ({ url }) => {

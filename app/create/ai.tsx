@@ -502,8 +502,9 @@ export default function AiDealScreen() {
         regeneration_attempt: attemptForApi,
         ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
       });
-    } catch (err: any) {
-      const raw = err?.message ?? t("createAi.errAiGenerationFailed");
+    } catch (err: unknown) {
+      const raw =
+        (err instanceof Error ? err.message : String(err)) || t("createAi.errAiGenerationFailed");
       const friendly = friendlyGenerationError(raw);
       setLastGenerationError(friendly);
       setBanner({ message: friendly, tone: "error" });
@@ -536,8 +537,8 @@ export default function AiDealScreen() {
         "\n\n",
       );
       Alert.alert(t("createAi.devCopyOkTitle"), body.length > 1600 ? `${body.slice(0, 1600)}…` : body);
-    } catch (e: any) {
-      Alert.alert(t("createAi.devCopyFailTitle"), e?.message ?? String(e));
+    } catch (e: unknown) {
+      Alert.alert(t("createAi.devCopyFailTitle"), e instanceof Error ? e.message : String(e));
     } finally {
       setDevEdgeBusy(null);
     }
@@ -582,8 +583,8 @@ export default function AiDealScreen() {
       Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
         { text: t("commonUi.ok"), onPress: () => router.replace("/(tabs)/dashboard") },
       ]);
-    } catch (e: any) {
-      Alert.alert(t("createAi.devCreateFailTitle"), e?.message ?? String(e));
+    } catch (e: unknown) {
+      Alert.alert(t("createAi.devCreateFailTitle"), e instanceof Error ? e.message : String(e));
     } finally {
       setDevEdgeBusy(null);
     }
@@ -682,8 +683,12 @@ export default function AiDealScreen() {
       }
 
       router.replace("/(tabs)");
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("createAi.errPublishFailed"), tone: "error" });
+    } catch (err: unknown) {
+      setBanner({
+        message:
+          (err instanceof Error ? err.message : String(err)) || t("createAi.errPublishFailed"),
+        tone: "error",
+      });
     } finally {
       setPublishing(false);
     }
@@ -732,8 +737,13 @@ export default function AiDealScreen() {
       });
       if (error) throw error;
       setBanner({ message: t("createAi.templateSaved"), tone: "success" });
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("createAi.errSaveTemplateFailed"), tone: "error" });
+    } catch (err: unknown) {
+      setBanner({
+        message:
+          (err instanceof Error ? err.message : String(err)) ||
+          t("createAi.errSaveTemplateFailed"),
+        tone: "error",
+      });
     } finally {
       setSavingTemplate(false);
     }

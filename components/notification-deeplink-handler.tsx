@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { useRouter, type Href } from "expo-router";
+import { devWarn } from "@/lib/dev-log";
 
 function readPath(data: Record<string, unknown> | undefined): Href | null {
   if (!data) return null;
@@ -47,12 +48,12 @@ export function NotificationDeepLinkHandler() {
               navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
             })
             .catch((e) => {
-              console.warn("[notifications] getLastNotificationResponseAsync failed (non-fatal):", e);
+              devWarn("[notifications] getLastNotificationResponseAsync failed (non-fatal):", e);
             });
         }
       });
     } catch (e) {
-      console.warn("[notifications] Deep link listener setup skipped (non-fatal):", e);
+      devWarn("[notifications] Deep link listener setup skipped (non-fatal):", e);
     }
 
     return () => {

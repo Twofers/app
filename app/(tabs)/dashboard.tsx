@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -240,6 +241,7 @@ export default function BusinessDashboard() {
   const [monthRedeems, setMonthRedeems] = useState(0);
   const [uniqueRedeemers, setUniqueRedeemers] = useState(0);
   const [monthRedemptionPct, setMonthRedemptionPct] = useState(0);
+  const [monthViews, setMonthViews] = useState(0);
   const [weekLabels, setWeekLabels] = useState<string[]>([]);
   const [weekCounts, setWeekCounts] = useState<number[]>([]);
 
@@ -285,6 +287,7 @@ export default function BusinessDashboard() {
         setMonthRedeems(0);
         setUniqueRedeemers(0);
         setMonthRedemptionPct(0);
+        setMonthViews(0);
         setWeekCounts(weekDays.map(() => 0));
         setInsights(null);
         setLoadingMetrics(false);
@@ -371,6 +374,14 @@ export default function BusinessDashboard() {
 
       setDeals(hydrated);
 
+      const { count: viewsCount } = await supabase
+        .from("app_analytics_events")
+        .select("id", { count: "exact", head: true })
+        .in("event_type", ["deal_viewed", "deal_opened"])
+        .in("deal_id", dealIds)
+        .gte("created_at", monthStart.toISOString());
+      setMonthViews(viewsCount ?? 0);
+
       const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {
         p_business_id: businessId,
       });
@@ -400,8 +411,23 @@ export default function BusinessDashboard() {
     setRefreshing(false);
   }
 
-  async function endDealEarly(dealId: string) {
+  function endDealEarly(dealId: string) {
     if (!businessId || endingDealId) return;
+    Alert.alert(
+      t("offersDashboard.endDealConfirmTitle"),
+      t("offersDashboard.endDealConfirmBody"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("offersDashboard.endDealEarly"),
+          style: "destructive",
+          onPress: () => void doEndDealEarly(dealId),
+        },
+      ],
+    );
+  }
+
+  async function doEndDealEarly(dealId: string) {
     setEndingDealId(dealId);
     setBanner(null);
     try {
@@ -461,6 +487,11 @@ export default function BusinessDashboard() {
         </Text>
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, marginBottom: Spacing.md }}>
+          <MetricTile
+            label={t("offersDashboard.metricViews")}
+            value={String(monthViews)}
+            delay={20}
+          />
           <MetricTile
             label={t("offersDashboard.metricDealsLaunched")}
             value={String(dealsLaunchedMonth)}

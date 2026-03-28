@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
   FlatList,
   Image,
   RefreshControl,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated, { useSharedValue, withTiming, useAnimatedStyle } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -138,7 +138,8 @@ export default function HomeScreen() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
-  const dealsFade = useRef(new Animated.Value(0)).current;
+  const dealsFade = useSharedValue(0);
+  const dealsFadeStyle = useAnimatedStyle(() => ({ opacity: dealsFade.value }));
 
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 60_000);
@@ -424,8 +425,8 @@ export default function HomeScreen() {
   const wasShowingDealsSkeleton = useRef(showDealsSkeleton);
   useEffect(() => {
     if (wasShowingDealsSkeleton.current && !showDealsSkeleton) {
-      dealsFade.setValue(0);
-      Animated.timing(dealsFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+      dealsFade.value = 0;
+      dealsFade.value = withTiming(1, { duration: 220 });
     }
     wasShowingDealsSkeleton.current = showDealsSkeleton;
   }, [dealsFade, showDealsSkeleton]);
@@ -594,7 +595,7 @@ export default function HomeScreen() {
       ) : showDealsSkeleton ? (
         <LoadingSkeleton rows={2} />
       ) : (
-        <Animated.View style={{ opacity: dealsFade }}>
+        <Animated.View style={dealsFadeStyle}>
           {liveDealsDisplay.length === 0 ? (
             <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
           ) : (

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { getConsumerPreferences } from "./consumer-preferences";
+import { devWarn } from "@/lib/dev-log";
 
 /**
  * Sync the consumer's AsyncStorage notification prefs + last-known coords
@@ -32,10 +33,10 @@ export async function syncConsumerPrefsToServer(
       .eq("user_id", userId);
 
     if (error) {
-      if (__DEV__) console.warn("[sync-prefs] Failed:", error.message);
+      devWarn("[sync-prefs] Failed:", error.message);
     }
   } catch (err) {
-    if (__DEV__) console.warn("[sync-prefs] Non-fatal error:", err);
+    devWarn("[sync-prefs] Non-fatal error:", err);
   }
 }
 
@@ -59,10 +60,10 @@ export async function syncConsumerLocationToServer(
       })
       .eq("user_id", userId);
 
-    if (error && __DEV__) {
-      console.warn("[sync-prefs] Location sync failed:", error.message);
+    if (error) {
+      devWarn("[sync-prefs] Location sync failed:", error.message);
     }
   } catch (err) {
-    if (__DEV__) console.warn("[sync-prefs] Location sync error:", err);
+    devWarn("[sync-prefs] Location sync error:", err);
   }
 }

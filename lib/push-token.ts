@@ -4,6 +4,7 @@ import {
   isDevelopmentBuildOrStandalone,
 } from "./expo-notifications-support";
 import { supabase } from "./supabase";
+import { devLog, devWarn } from "@/lib/dev-log";
 
 let lastRegisteredToken: string | null = null;
 
@@ -17,7 +18,7 @@ export async function registerPushTokenIfNeeded(userId: string | null): Promise<
   if (!userId) return null;
   if (Platform.OS === "web") return null;
   if (isExpoGo() && Platform.OS === "android") {
-    console.log("[push-token] Skipped: Android Expo Go does not support remote push.");
+    devLog("[push-token] Skipped: Android Expo Go does not support remote push.");
     return null;
   }
 
@@ -51,14 +52,14 @@ export async function registerPushTokenIfNeeded(userId: string | null): Promise<
     );
 
     if (error) {
-      console.warn("[push-token] Failed to store push token:", error.message);
+      devWarn("[push-token] Failed to store push token:", error.message);
     } else {
       lastRegisteredToken = token;
     }
 
     return token;
   } catch (err) {
-    if (__DEV__) console.warn("[push-token] Registration failed (non-fatal):", err);
+    devWarn("[push-token] Registration failed (non-fatal):", err);
     return null;
   }
 }

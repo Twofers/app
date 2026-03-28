@@ -1,5 +1,6 @@
 import * as Location from "expo-location";
 import { isValidUsZipFormat, normalizeUsZipInput, parseUsZipFiveDigits } from "./us-zip";
+import { devWarn } from "@/lib/dev-log";
 
 const ZIP_LOG = "[consumer-zip]";
 
@@ -21,12 +22,12 @@ export type ZipGeocodeResult =
 export async function geocodeUsZip(raw: string): Promise<ZipGeocodeResult> {
   const normalized = normalizeUsZipInput(raw);
   if (!isValidUsZipFormat(normalized)) {
-    console.warn(ZIP_LOG, "validation_fail", { normalizedPreview: normalized.slice(0, 16) });
+    devWarn(ZIP_LOG, "validation_fail", { normalizedPreview: normalized.slice(0, 16) });
     return { ok: false, failure: "invalid_format" };
   }
   const zip5 = parseUsZipFiveDigits(normalized);
   if (!zip5) {
-    console.warn(ZIP_LOG, "parse_five_fail", { normalized });
+    devWarn(ZIP_LOG, "parse_five_fail", { normalized });
     return { ok: false, failure: "invalid_format" };
   }
 
@@ -34,19 +35,19 @@ export async function geocodeUsZip(raw: string): Promise<ZipGeocodeResult> {
     const expo = await Location.geocodeAsync(`${zip5}, USA`);
     const first = expo[0];
     if (first && Number.isFinite(first.latitude) && Number.isFinite(first.longitude)) {
-      console.warn(ZIP_LOG, "expo_ok", { zip5, lat: first.latitude, lng: first.longitude });
+      devWarn(ZIP_LOG, "expo_ok", { zip5, lat: first.latitude, lng: first.longitude });
       return { ok: true, lat: first.latitude, lng: first.longitude };
     }
-    console.warn(ZIP_LOG, "expo_empty", { zip5, resultCount: expo?.length ?? 0 });
+    devWarn(ZIP_LOG, "expo_empty", { zip5, resultCount: expo?.length ?? 0 });
   } catch (e) {
-    console.warn(ZIP_LOG, "expo_error", { zip5, error: String(e) });
+    devWarn(ZIP_LOG, "expo_error", { zip5, error: String(e) });
   }
 
   try {
     const url = `https://api.zippopotam.us/us/${encodeURIComponent(zip5)}`;
     const res = await fetch(url);
     if (!res.ok) {
-      console.warn(ZIP_LOG, "zippopotam_http", { zip5, status: res.status });
+      devWarn(ZIP_LOG, "zippopotam_http", { zip5, status: res.status });
       return { ok: false, failure: res.status >= 500 ? "http_error" : "no_coordinates" };
     }
     const j = (await res.json()) as { places?: { latitude?: string; longitude?: string }[] };
@@ -54,13 +55,13 @@ export async function geocodeUsZip(raw: string): Promise<ZipGeocodeResult> {
     const lat = p?.latitude != null ? Number(p.latitude) : NaN;
     const lng = p?.longitude != null ? Number(p.longitude) : NaN;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      console.warn(ZIP_LOG, "zippopotam_ok", { zip5, lat, lng });
+      devWarn(ZIP_LOG, "zippopotam_ok", { zip5, lat, lng });
       return { ok: true, lat, lng };
     }
-    console.warn(ZIP_LOG, "zippopotam_no_coords", { zip5 });
+    devWarn(ZIP_LOG, "zippopotam_no_coords", { zip5 });
     return { ok: false, failure: "no_coordinates" };
   } catch (e) {
-    console.warn(ZIP_LOG, "zippopotam_network", { zip5, error: String(e) });
+    devWarn(ZIP_LOG, "zippopotam_network", { zip5, error: String(e) });
     return { ok: false, failure: "http_error" };
   }
 }

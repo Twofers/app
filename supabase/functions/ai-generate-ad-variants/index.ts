@@ -32,6 +32,13 @@ type AdsResult = { ads: AdVariant[] };
 const LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
 
 const CHAT_MODEL = resolveOpenAiChatModel();
+const DEFAULT_MONTHLY = Number(Deno.env.get("AI_MONTHLY_LIMIT") ?? "30");
+const COOLDOWN_SEC = Number(Deno.env.get("AI_COOLDOWN_SECONDS") ?? "60");
+
+function utcMonthStartIso(): string {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString();
+}
 
 function normalizeLaneOrder(ads: AdVariant[]): AdVariant[] | null {
   if (!Array.isArray(ads) || ads.length !== 3) return null;
@@ -148,6 +155,61 @@ serve(async (req) => {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const monthStart = utcMonthStartIso();
+    const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
+
+    const { count: monthCount } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", business_id)
+      .eq("request_type", "ad_variants")
+      .eq("openai_called", true)
+      .eq("success", true)
+      .gte("created_at", monthStart);
+
+    if ((monthCount ?? 0) >= monthlyLimit) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_variants",
+        input_mode: "photo_hint",
+        prompt_version: "v1",
+        success: false,
+        failure_reason: "MONTHLY_LIMIT",
+        quota_blocked: true,
+        openai_called: false,
+      });
+      return new Response(
+        JSON.stringify({
+          error: `Monthly AI limit reached (${monthlyLimit}). Resets on the 1st.`,
+          error_code: "MONTHLY_LIMIT",
+          quota: { used: monthCount ?? 0, limit: monthlyLimit, remaining: 0 },
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const cooldownMs = Math.max(10, COOLDOWN_SEC) * 1000;
+    const { data: recentCall } = await admin
+      .from("ai_generation_logs")
+      .select("id")
+      .eq("business_id", business_id)
+      .eq("request_type", "ad_variants")
+      .gte("created_at", new Date(Date.now() - cooldownMs).toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (recentCall) {
+      return new Response(
+        JSON.stringify({
+          error: "Please wait a moment before generating again.",
+          error_code: "COOLDOWN_ACTIVE",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: signed, error: signedError } = await supabase.storage
@@ -366,6 +428,17 @@ serve(async (req) => {
           status: aiRes.status,
         }),
       );
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_variants",
+        input_mode: "photo_hint",
+        prompt_version: "v1",
+        model: CHAT_MODEL,
+        success: false,
+        failure_reason: `OPENAI_HTTP_${aiRes.status}`,
+        openai_called: true,
+      });
       return new Response(JSON.stringify({ error: "AI generation failed.", details: text }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -401,6 +474,17 @@ serve(async (req) => {
           manual_validation_tag: manual_validation_tag || null,
         }),
       );
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_variants",
+        input_mode: "photo_hint",
+        prompt_version: "v1",
+        model: CHAT_MODEL,
+        success: false,
+        failure_reason: "PARSE_ERROR",
+        openai_called: true,
+      });
       return new Response(JSON.stringify({ error: "AI response was invalid JSON." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -417,6 +501,17 @@ serve(async (req) => {
           manual_validation_tag: manual_validation_tag || null,
         }),
       );
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_variants",
+        input_mode: "photo_hint",
+        prompt_version: "v1",
+        model: CHAT_MODEL,
+        success: false,
+        failure_reason: "LANE_VALIDATION",
+        openai_called: true,
+      });
       return new Response(
         JSON.stringify({ error: "AI returned an invalid set of ads. Tap try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -436,7 +531,23 @@ serve(async (req) => {
       }),
     );
 
-    return new Response(JSON.stringify({ ads: normalized }), {
+    await admin.from("ai_generation_logs").insert({
+      business_id,
+      user_id: user.id,
+      request_type: "ad_variants",
+      input_mode: "photo_hint",
+      prompt_version: "v1",
+      model: CHAT_MODEL,
+      success: true,
+      openai_called: true,
+      prompt_tokens: usage?.prompt_tokens ?? null,
+      completion_tokens: usage?.completion_tokens ?? null,
+    });
+
+    const updatedUsed = (monthCount ?? 0) + 1;
+    const quota = { used: updatedUsed, limit: monthlyLimit, remaining: Math.max(0, monthlyLimit - updatedUsed) };
+
+    return new Response(JSON.stringify({ ads: normalized, quota }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

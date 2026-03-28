@@ -103,6 +103,17 @@ export default function AiComposeOfferScreen() {
     }, [reloadQuota]),
   );
 
+  function handlePickedAsset(a: ImagePicker.ImagePickerAsset) {
+    setImageUri(a.uri);
+    if (a.base64) {
+      const mime = a.mimeType ?? "image/jpeg";
+      setImageBase64(`data:${mime};base64,${a.base64}`);
+    } else {
+      setImageBase64(null);
+      setBanner({ message: t("aiCompose.errImageRead"), tone: "error" });
+    }
+  }
+
   async function pickImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -115,15 +126,22 @@ export default function AiComposeOfferScreen() {
       base64: true,
     });
     if (picked.canceled || !picked.assets?.[0]) return;
-    const a = picked.assets[0];
-    setImageUri(a.uri);
-    if (a.base64) {
-      const mime = a.mimeType ?? "image/jpeg";
-      setImageBase64(`data:${mime};base64,${a.base64}`);
-    } else {
-      setImageBase64(null);
-      setBanner({ message: t("aiCompose.errImageRead"), tone: "error" });
+    handlePickedAsset(picked.assets[0]);
+  }
+
+  async function takePhoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      setBanner({ message: t("aiCompose.errCameraPermission"), tone: "error" });
+      return;
     }
+    const taken = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.65,
+      base64: true,
+    });
+    if (taken.canceled || !taken.assets?.[0]) return;
+    handlePickedAsset(taken.assets[0]);
   }
 
   async function startRecording() {
@@ -282,6 +300,9 @@ export default function AiComposeOfferScreen() {
       </View>
       <Text style={{ marginTop: 2, opacity: 0.55, fontSize: 12, lineHeight: 16 }}>{t("aiCompose.subtitle")}</Text>
 
+      {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
+        <Banner message={t("aiCompose.quotaWarning", { remaining: quota.remaining })} tone="info" />
+      ) : null}
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn || loading ? (
@@ -346,34 +367,63 @@ export default function AiComposeOfferScreen() {
                 </Text>
               </View>
               <Text style={{ fontWeight: "700", marginBottom: 6, marginTop: 8 }}>{t("aiCompose.photoLabel")}</Text>
-              <Pressable
-                onPress={pickImage}
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: imageUri ? "#d8d8d8" : "#cfd7ff",
-                  borderRadius: 20,
-                  minHeight: 260,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: Spacing.md,
-                  overflow: "hidden",
-                  backgroundColor: imageUri ? "#f8f8f8" : "#f3f6ff",
-                }}
-              >
-                {imageUri ? (
+              {imageUri ? (
+                <Pressable
+                  onPress={pickImage}
+                  style={{
+                    borderWidth: 1.5,
+                    borderColor: "#d8d8d8",
+                    borderRadius: 20,
+                    minHeight: 260,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: Spacing.md,
+                    overflow: "hidden",
+                    backgroundColor: "#f8f8f8",
+                  }}
+                >
                   <Image source={{ uri: imageUri }} style={{ width: "100%", height: 260 }} contentFit="cover" />
-                ) : (
-                  <View style={{ padding: Spacing.lg, alignItems: "center" }}>
-                    <MaterialIcons name="add-a-photo" size={44} color="#4d5ed9" />
-                    <Text style={{ marginTop: 10, opacity: 0.75, fontWeight: "700", fontSize: 16 }}>
-                      {t("aiCompose.tapAddPhoto")}
+                </Pressable>
+              ) : (
+                <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md }}>
+                  <Pressable
+                    onPress={takePhoto}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1.5,
+                      borderColor: "#cfd7ff",
+                      borderRadius: 20,
+                      minHeight: 160,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#f3f6ff",
+                    }}
+                  >
+                    <MaterialIcons name="camera-alt" size={36} color="#4d5ed9" />
+                    <Text style={{ marginTop: 8, fontWeight: "700", fontSize: 14, opacity: 0.75 }}>
+                      {t("aiCompose.takePhoto")}
                     </Text>
-                    <Text style={{ marginTop: 4, opacity: 0.52, fontSize: 13 }}>
-                      Tap once to choose from gallery
+                  </Pressable>
+                  <Pressable
+                    onPress={pickImage}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1.5,
+                      borderColor: "#cfd7ff",
+                      borderRadius: 20,
+                      minHeight: 160,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#f3f6ff",
+                    }}
+                  >
+                    <MaterialIcons name="photo-library" size={36} color="#4d5ed9" />
+                    <Text style={{ marginTop: 8, fontWeight: "700", fontSize: 14, opacity: 0.75 }}>
+                      {t("aiCompose.fromGallery")}
                     </Text>
-                  </View>
-                )}
-              </Pressable>
+                  </Pressable>
+                </View>
+              )}
 
               <View
                 style={{

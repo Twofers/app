@@ -341,6 +341,7 @@
     "fieldHoursRequired": "Horario",
     "startBusinessSetup": "Configurar negocio",
     "errBizCoreRequired": "Completa nombre, contacto, email, teléfono, dirección, categoría y horario.",
+    "errBizNameAddress": "El nombre del negocio y la dirección son obligatorios.",
     "errBizEmailInvalid": "Introduce un email válido.",
     "fieldCategory": "Categoría",
     "fieldTone": "Tono",
@@ -381,7 +382,18 @@
     "errLatNumber": "La latitud debe ser un número.",
     "errLngNumber": "La longitud debe ser un número.",
     "errLatRange": "La latitud debe estar entre -90 y 90.",
-    "errLngRange": "La longitud debe estar entre -180 y 180."
+    "errLngRange": "La longitud debe estar entre -180 y 180.",
+    "bizCardTitle": "Tu cafetería",
+    "bizSignInToContinue": "Inicia sesión para completar tu configuración y lanzar tu primera oferta.",
+    "switchToConsumer": "Cambiar a modo consumidor",
+    "bizYourBusiness": "Tu negocio",
+    "bizNoAddress": "Aún no hay dirección.",
+    "bizCategory": "Categoría",
+    "bizSetupComplete": "¡Configuración completa! Listo para lanzar ofertas BOGO.",
+    "bizSetupFinish": "Completa tu configuración para desbloquear crear, canjear y panel.",
+    "bizSetupStart": "Completa la configuración inicial para empezar a lanzar ofertas.",
+    "createNewDeal": "Crear nueva oferta",
+    "editProfile": "Editar perfil"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -456,7 +468,11 @@
     "errRecordingStart": "No se pudo iniciar la grabación.",
     "transcribeDone": "Voz añadida al texto — edita si hace falta y genera.",
     "transcribeEmpty": "No detectamos voz. Inténtalo otra vez.",
-    "transcribeFailed": "No se pudo transcribir el audio."
+    "transcribeFailed": "No se pudo transcribir el audio.",
+    "takePhoto": "Tomar foto",
+    "fromGallery": "Galería",
+    "errCameraPermission": "Permite acceso a la cámara para tomar una foto.",
+    "quotaWarning": "{{remaining}} generaciones IA restantes este mes."
   },
   "reuseHub": {
     "title": "Reusar y repetir",
@@ -752,6 +768,7 @@
     "useDealCta": "Usar oferta",
     "continueUseDeal": "Continuar en caja",
     "qrFallbackCta": "QR y código (respaldo)",
+    "qrFallbackLabel": "QR y código (respaldo)",
     "useDealTitle": "Usar esta oferta",
     "useDealBody": "Desliza para confirmar: mostraremos un pase breve en vivo para el personal. La oferta se marca usada al terminar el pase.",
     "slideHint": "Desliza a la derecha para confirmar y evitar toques accidentales en fila.",
@@ -864,22 +881,6 @@
     "multiOfferBody": "Pásate a Pro para tener varias ofertas activas a la vez.",
     "proOnly": "Solo Pro"
   },
-  "businessActiveDeals": {
-    "title": "Mis ofertas",
-    "tabActive": "Activas",
-    "tabEnded": "Finalizadas",
-    "live": "Activa",
-    "endedStat": "Finalizada",
-    "leftSuffix": "Quedan {{time}}",
-    "endEarly": "Finalizar antes",
-    "viewDetails": "Ver detalles",
-    "endTitle": "¿Finalizar oferta antes?",
-    "endMessage": "¿Seguro que quieres finalizar \"{{title}}\"? No se puede deshacer.",
-    "emptyActiveTitle": "Sin ofertas activas",
-    "emptyActiveSub": "Crea una oferta para atraer clientes.",
-    "emptyEndedTitle": "Sin ofertas finalizadas",
-    "emptyEndedSub": "Tus ofertas finalizadas aparecerán aquí."
-  },
   "businessScan": {
     "requestingCamera": "Solicitando permiso de cámara...",
     "cameraRequired": "Se necesita la cámara",
@@ -921,41 +922,12 @@
     "emptyTitle": "Aún no hay ofertas anteriores",
     "emptySub": "Crea tu primera oferta y aparecerá aquí como plantilla."
   },
-  "businessSetup": {
-    "title": "Configura tu negocio",
-    "subtitle": "Solo lo esencial para empezar.",
-    "businessName": "Nombre del negocio",
-    "category": "Categoría (ej. café, pizza)",
-    "city": "Ciudad",
-    "continue": "Continuar"
-  },
   "businessNotifications": {
     "title": "Notificaciones",
     "emptyTitle": "Aún no hay novedades",
     "emptySub": "Te avisaremos cuando las ofertas estén activas o se canjeen.",
     "proAlerts": "Alertas Pro",
     "proBody": "Desbloquea alertas automáticas de favoritos y reglas avanzadas."
-  },
-  "businessDealDetail": {
-    "headerTitle": "Rendimiento de la oferta",
-    "editOffer": "Editar oferta",
-    "claimsProgress": "Progreso de reclamaciones ({{current}}/{{max}})",
-    "schedule": "Horario",
-    "limits": "Límites",
-    "maxClaims": "Máx. reclamaciones: {{n}}",
-    "claimBuffer": "Margen antes del cierre: {{n}} min",
-    "performanceSummary": "Resumen de rendimiento",
-    "proInsight": "Información Pro",
-    "proInsightBody": "Con Pro ver canjes por día y clientes recurrentes.",
-    "redemptionsByDay": "Canjes por día",
-    "topReturning": "Clientes que más repiten",
-    "upgradePro": "Pasarse a Pro",
-    "starts": "Empieza {{date}}",
-    "ends": "Termina {{date}}",
-    "metricClaims": "Reclamaciones",
-    "metricRedeemed": "Canjeados",
-    "metricConversion": "Conversión",
-    "locked": "Bloqueado"
   },
   "createDeal": {
     "title": "Crear oferta",
@@ -1030,6 +1002,7 @@
     "loading": "Cargando...",
     "needBusiness": "Crea un negocio para desbloquear analíticas.",
     "overview": "Rendimiento",
+    "metricViews": "Vistas de ofertas",
     "metricDealsLaunched": "Ofertas lanzadas",
     "metricTotalClaims": "Reclamaciones totales",
     "metricRedemptions": "Canjes",
@@ -1049,6 +1022,8 @@
     "rowExpired": "Caducados {{count}}",
     "rowConv": "Conv. {{pct}}%",
     "endDealEarly": "Finalizar oferta antes",
+    "endDealConfirmTitle": "¿Finalizar oferta antes?",
+    "endDealConfirmBody": "Esto desactivará la oferta de inmediato. Los reclamos activos aún se pueden canjear.",
     "errLoadDashboard": "No se pudo cargar el panel.",
     "errEndDeal": "No se pudo finalizar la oferta.",
     "emptyDeals": "Aún no hay ofertas. Crea una para ver analíticas.",
@@ -1109,6 +1084,8 @@
     "errRequired": "Rellena todos los campos (usa chips cuando puedas).",
     "errEmail": "Introduce un email válido.",
     "errSave": "No se pudo crear el negocio. Inténtalo de nuevo.",
+    "setupComplete": "¡Configuración completa! Listo para lanzar ofertas BOGO.",
+    "city": "Ciudad",
     "cat": {
       "restaurant": "Restaurante",
       "cafe": "Cafetería",

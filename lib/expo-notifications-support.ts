@@ -1,5 +1,6 @@
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Platform } from "react-native";
+import { devLog, devWarn } from "@/lib/dev-log";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -32,7 +33,7 @@ export async function requestNotificationPermissionsSafe(): Promise<{
   skippedBecauseExpoGo: boolean;
 }> {
   if (isExpoGo() && Platform.OS === "android") {
-    console.log(
+    devLog(
       "[notifications] Skipping permission request on Android Expo Go (remote push unavailable; use a dev build).",
     );
     return { status: "undetermined" as import("expo-notifications").PermissionStatus, skippedBecauseExpoGo: true };
@@ -46,7 +47,7 @@ export async function requestNotificationPermissionsSafe(): Promise<{
     const { status } = await Notifications.requestPermissionsAsync();
     return { status, skippedBecauseExpoGo: false };
   } catch (e) {
-    console.warn("[notifications] requestPermissionsAsync failed (non-fatal):", e);
+    devWarn("[notifications] requestPermissionsAsync failed (non-fatal):", e);
     return { status: "undetermined" as import("expo-notifications").PermissionStatus, skippedBecauseExpoGo: false };
   }
 }
@@ -63,7 +64,7 @@ export async function scheduleLocalNotificationSafe(request: ScheduleRequest): P
     if (!Notifications) return null;
     return await Notifications.scheduleNotificationAsync(request);
   } catch (e) {
-    console.warn("[notifications] scheduleNotificationAsync skipped (non-fatal):", e);
+    devWarn("[notifications] scheduleNotificationAsync skipped (non-fatal):", e);
     return null;
   }
 }

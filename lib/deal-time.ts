@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { addDays, format, isValid } from "date-fns";
 import type { Locale } from "date-fns";
 import { dateFnsLocaleFor } from "./i18n/date-locale";
+import { devWarn } from "@/lib/dev-log";
 
 type RecurringInfo = {
   is_recurring?: boolean | null;
@@ -82,7 +83,7 @@ export function isDealActiveNow(deal: RecurringInfo) {
     if (!days.includes(day)) return false;
     return minutes >= windowStart && minutes < windowEnd;
   } catch (e) {
-    console.warn("[deal-time] isDealActiveNow failed (bad dates/timezone?)", e);
+    devWarn("[deal-time] isDealActiveNow failed (bad dates/timezone?)", e);
     return false;
   }
 }
