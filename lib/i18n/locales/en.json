@@ -1182,7 +1182,13 @@
     "errLoadDashboard": "Failed to load dashboard.",
     "errEndDeal": "Could not end deal.",
     "emptyDeals": "No deals yet. Create one to see analytics.",
-    "createFirstDeal": "Create Your First Deal"
+    "createFirstDeal": "Create Your First Deal",
+    "printFlyer": "Print Flyer",
+    "generatingFlyer": "Generating…",
+    "errFlyer": "Could not generate flyer.",
+    "flyerScanAtCounter": "Scan at counter",
+    "flyerOpenInApp": "Open this deal in the TWOFER app",
+    "flyerPoweredBy": "Powered by TWOFER — local deals, zero waste"
   },
   "consumerProfile": {
     "navTitle": "Your profile",

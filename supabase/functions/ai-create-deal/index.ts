@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
+import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -266,6 +267,73 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Best-effort push notifications to eligible consumers
+    try {
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: bizRow } = await adminClient
+        .from("businesses")
+        .select("name, latitude, longitude")
+        .eq("id", business_id)
+        .single();
+
+      const bizName = bizRow?.name ?? "TWOFER";
+      const bizLat = typeof bizRow?.latitude === "number" ? bizRow.latitude : null;
+      const bizLng = typeof bizRow?.longitude === "number" ? bizRow.longitude : null;
+
+      const { data: favRows } = await adminClient
+        .from("favorites")
+        .select("user_id")
+        .eq("business_id", business_id);
+      const favIds = new Set((favRows ?? []).map((r: { user_id: string }) => r.user_id));
+
+      const radiusIds = new Set<string>();
+      if (bizLat != null && bizLng != null) {
+        const { data: cRows } = await adminClient
+          .from("consumer_profiles")
+          .select("user_id, last_latitude, last_longitude, radius_miles")
+          .eq("notification_mode", "all_nearby")
+          .not("last_latitude", "is", null)
+          .not("last_longitude", "is", null);
+        for (const r of cRows ?? []) {
+          const lat = Number(r.last_latitude);
+          const lng = Number(r.last_longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+          if (haversineMiles(bizLat, bizLng, lat, lng) <= (Number(r.radius_miles) || 3)) {
+            radiusIds.add(r.user_id);
+          }
+        }
+      }
+
+      const allIds = new Set([...favIds, ...radiusIds]);
+      allIds.delete(user.id);
+
+      if (allIds.size > 0) {
+        const { data: optOut } = await adminClient
+          .from("consumer_profiles")
+          .select("user_id")
+          .in("user_id", [...allIds])
+          .eq("notification_mode", "none");
+        for (const r of optOut ?? []) allIds.delete(r.user_id);
+      }
+
+      if (allIds.size > 0) {
+        const { data: tRows } = await adminClient
+          .from("push_tokens")
+          .select("expo_push_token")
+          .in("user_id", [...allIds]);
+        const tokens = (tRows ?? []).map((r: { expo_push_token: string }) => r.expo_push_token);
+        if (tokens.length > 0) {
+          await sendExpoPushBatch(tokens, bizName, result.title, {
+            dealId: deal.id,
+            path: `/deal/${deal.id}`,
+          });
+        }
+      }
+    } catch (pushErr) {
+      console.error("[ai-create-deal] Push notification failed (non-fatal):", pushErr);
     }
 
     return new Response(

@@ -34,7 +34,21 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.unvmex2.twoforone"
+      "package": "com.unvmex2.twoforone",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "kvodhiqhdqnptqovovia.supabase.co",
+              "pathPrefix": "/functions/v1/deal-link"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "output": "static",

@@ -1052,7 +1052,13 @@
     "errLoadDashboard": "No se pudo cargar el panel.",
     "errEndDeal": "No se pudo finalizar la oferta.",
     "emptyDeals": "Aún no hay ofertas. Crea una para ver analíticas.",
-    "createFirstDeal": "Crea tu primera oferta"
+    "createFirstDeal": "Crea tu primera oferta",
+    "printFlyer": "Imprimir volante",
+    "generatingFlyer": "Generando…",
+    "errFlyer": "No se pudo generar el volante.",
+    "flyerScanAtCounter": "Escanea en el mostrador",
+    "flyerOpenInApp": "Abre esta oferta en la app TWOFER",
+    "flyerPoweredBy": "Impulsado por TWOFER — ofertas locales, cero desperdicio"
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",

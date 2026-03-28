@@ -30,6 +30,7 @@ import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-
 import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { triggerLightHaptic } from "@/lib/press-feedback";
+import { printDealFlyer } from "@/lib/deal-flyer";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -95,6 +96,7 @@ type ClaimRow = {
 type DealRow = {
   id: string;
   title: string | null;
+  description: string | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   created_at: string;
@@ -230,6 +232,7 @@ export default function BusinessDashboard() {
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [endingDealId, setEndingDealId] = useState<string | null>(null);
+  const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
 
   const [dealsLaunchedMonth, setDealsLaunchedMonth] = useState(0);
@@ -264,7 +267,7 @@ export default function BusinessDashboard() {
       const { data: dealsData, error: dealsError } = await supabase
         .from("deals")
         .select(
-          "id,title,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+          "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false });
@@ -415,6 +418,32 @@ export default function BusinessDashboard() {
       setBanner(msg);
     } finally {
       setEndingDealId(null);
+    }
+  }
+
+  async function generateFlyer(deal: DealRow) {
+    if (generatingFlyerId) return;
+    setGeneratingFlyerId(deal.id);
+    setBanner(null);
+    try {
+      const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+      await printDealFlyer({
+        dealId: deal.id,
+        title: deal.title ?? t("offersDashboard.dealFallback"),
+        description: deal.description,
+        posterUri,
+        businessName: businessName ?? "",
+        strings: {
+          scanAtCounter: t("offersDashboard.flyerScanAtCounter"),
+          openInApp: t("offersDashboard.flyerOpenInApp"),
+          poweredBy: t("offersDashboard.flyerPoweredBy"),
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errFlyer");
+      setBanner(msg);
+    } finally {
+      setGeneratingFlyerId(null);
     }
   }
 
@@ -679,9 +708,9 @@ export default function BusinessDashboard() {
                         </View>
                       </HapticScalePressable>
 
-                      {active ? (
-                        <View style={{ marginTop: Spacing.md }}>
-                          {endingDealId === item.id ? (
+                      <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                        {active ? (
+                          endingDealId === item.id ? (
                             <View
                               style={{
                                 minHeight: 48,
@@ -699,9 +728,39 @@ export default function BusinessDashboard() {
                               title={t("offersDashboard.endDealEarly")}
                               onPress={() => endDealEarly(item.id)}
                             />
+                          )
+                        ) : null}
+
+                        <HapticScalePressable
+                          onPress={() => generateFlyer(item)}
+                          disabled={generatingFlyerId === item.id}
+                          style={{
+                            minHeight: 48,
+                            borderRadius: 20,
+                            borderWidth: 2,
+                            borderColor: Colors.light.primary,
+                            backgroundColor: "#fff",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            opacity: generatingFlyerId === item.id ? 0.6 : 1,
+                          }}
+                        >
+                          {generatingFlyerId === item.id ? (
+                            <ActivityIndicator color={Colors.light.primary} />
+                          ) : (
+                            <Text
+                              style={{
+                                color: Colors.light.primary,
+                                fontWeight: "800",
+                                fontSize: 15,
+                                ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
+                              }}
+                            >
+                              {t("offersDashboard.printFlyer")}
+                            </Text>
                           )}
-                        </View>
-                      ) : null}
+                        </HapticScalePressable>
+                      </View>
                     </View>
                   </Animated.View>
                 );

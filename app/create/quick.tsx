@@ -11,7 +11,7 @@ import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { aiGenerateDealCopy } from "../../lib/functions";
+import { aiGenerateDealCopy, notifyDealPublished } from "../../lib/functions";
 import { Colors, Radii } from "../../constants/theme";
 import {
   resolveDealFlowLanguage,
@@ -170,7 +170,7 @@ export default function QuickDealScreen() {
         return;
       }
 
-      const { error } = await supabase.from("deals").insert({
+      const { data: deal, error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
         description: null,
@@ -182,9 +182,10 @@ export default function QuickDealScreen() {
         is_active: true,
         poster_url: null,
         quality_tier: quality.tier,
-      });
+      }).select("id").single();
 
       if (error) throw error;
+      if (deal?.id) void notifyDealPublished(deal.id);
       router.replace("/(tabs)/dashboard");
     } catch (err: any) {
       setBanner({ message: err?.message ?? t("createQuick.errPublishFailed"), tone: "error" });

@@ -172,6 +172,23 @@ export async function deleteUserAccount(): Promise<void> {
   }
 }
 
+/**
+ * Fire-and-forget: tell the server to send push notifications to eligible consumers.
+ * Never throws — the merchant UX should not block on push delivery.
+ */
+export async function notifyDealPublished(dealId: string): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke("send-deal-push", {
+      body: { deal_id: dealId },
+    });
+    if (error && __DEV__) {
+      console.warn("[notifyDealPublished] Push dispatch failed:", parseFunctionError(error));
+    }
+  } catch (err) {
+    if (__DEV__) console.warn("[notifyDealPublished] Non-fatal error:", err);
+  }
+}
+
 export type AiDealCopyResult = {
   title: string;
   promo_line: string;

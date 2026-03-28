@@ -1052,7 +1052,13 @@
     "errLoadDashboard": "대시보드를 불러오지 못했습니다.",
     "errEndDeal": "딜을 종료하지 못했습니다.",
     "emptyDeals": "아직 딜이 없습니다. 분석을 보려면 딜을 만드세요.",
-    "createFirstDeal": "첫 번째 딜 만들기"
+    "createFirstDeal": "첫 번째 딜 만들기",
+    "printFlyer": "전단지 인쇄",
+    "generatingFlyer": "생성 중…",
+    "errFlyer": "전단지를 생성할 수 없습니다.",
+    "flyerScanAtCounter": "카운터에서 스캔하세요",
+    "flyerOpenInApp": "TWOFER 앱에서 이 딜 열기",
+    "flyerPoweredBy": "TWOFER 제공 — 지역 딜, 낭비 제로"
   },
   "consumerProfile": {
     "navTitle": "내 프로필",

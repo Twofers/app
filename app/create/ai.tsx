@@ -19,7 +19,7 @@ import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { aiCreateDeal, aiGenerateDealCopy, parseFunctionError } from "../../lib/functions";
+import { aiCreateDeal, aiGenerateDealCopy, notifyDealPublished, parseFunctionError } from "../../lib/functions";
 import {
   adToDealDraft,
   composeListingDescription,
@@ -578,6 +578,7 @@ export default function AiDealScreen() {
         max_claims: maxClaimsNum,
         claim_cutoff_buffer_minutes: cutoffNum,
       });
+      void notifyDealPublished(out.deal_id);
       Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
         { text: t("commonUi.ok"), onPress: () => router.replace("/(tabs)/dashboard") },
       ]);
@@ -640,7 +641,7 @@ export default function AiDealScreen() {
         return;
       }
 
-      const { error } = await supabase.from("deals").insert({
+      const { data: deal, error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
         description: composedDescription.trim(),
@@ -658,8 +659,9 @@ export default function AiDealScreen() {
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
         timezone: isRecurring ? timezone : null,
         quality_tier: quality.tier,
-      });
+      }).select("id").single();
       if (error) throw error;
+      if (deal?.id) void notifyDealPublished(deal.id);
 
       const baseline = aiDraftBaselineRef.current;
       if (baseline) {

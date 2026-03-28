@@ -11,6 +11,7 @@ import { useTabMode } from "@/lib/tab-mode";
 import { supabase } from "@/lib/supabase";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
+import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 
 function TabAuthGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<"unknown" | "in" | "out">("unknown");
@@ -33,12 +34,18 @@ function TabAuthGate({ children }: { children: ReactNode }) {
     void supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       setState(user ? "in" : "out");
-      if (user) void registerPushTokenIfNeeded(user.id);
+      if (user) {
+        void registerPushTokenIfNeeded(user.id);
+        void syncConsumerPrefsToServer(user.id);
+      }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user;
       setState(user ? "in" : "out");
-      if (user) void registerPushTokenIfNeeded(user.id);
+      if (user) {
+        void registerPushTokenIfNeeded(user.id);
+        void syncConsumerPrefsToServer(user.id);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [forceBypass]);

@@ -9,6 +9,7 @@ import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
 import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
+import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabModeProvider } from '@/lib/tab-mode';
@@ -26,6 +27,7 @@ function RootNavigationStack() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
+      <DealDeepLinkHandler />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />

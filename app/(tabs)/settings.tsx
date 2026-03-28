@@ -23,6 +23,7 @@ import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { supabase } from "@/lib/supabase";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
+import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -139,11 +140,15 @@ export default function SettingsScreen() {
   async function applyRadius(m: ConsumerRadiusMiles) {
     setRadius(m);
     await setConsumerRadiusMiles(m);
+    const sess = await supabase.auth.getSession();
+    void syncConsumerPrefsToServer(sess.data.session?.user?.id ?? null);
   }
 
   async function applyNotifMode(m: ConsumerNotificationMode) {
     setNotifModeState(m);
     await setConsumerNotificationPrefs({ v: 1, mode: m });
+    const sess = await supabase.auth.getSession();
+    void syncConsumerPrefsToServer(sess.data.session?.user?.id ?? null);
   }
 
   async function chooseAppLocale(locale: AppLocale) {

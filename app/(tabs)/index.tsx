@@ -32,6 +32,7 @@ import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
+import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -235,10 +236,11 @@ export default function HomeScreen() {
     if (coords) {
       setUserGeo({ lat: coords.lat, lng: coords.lng });
       await setLastKnownConsumerCoords(coords.lat, coords.lng);
+      void syncConsumerLocationToServer(userId, coords.lat, coords.lng);
     } else {
       setUserGeo(null);
     }
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
