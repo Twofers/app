@@ -142,13 +142,13 @@ export default function DealDetail() {
       setQrToken(out.token);
       setQrExpires(out.expires_at);
       setQrVisible(true);
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg =
-        typeof e?.message === "string"
+        e instanceof Error
           ? e.message
           : typeof e === "string"
-          ? e
-          : JSON.stringify(e, null, 2);
+            ? e
+            : JSON.stringify(e, null, 2);
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setIsClaiming(false);
@@ -163,13 +163,13 @@ export default function DealDetail() {
       const out = await claimDeal(deal.id);
       setQrToken(out.token);
       setQrExpires(out.expires_at);
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg =
-        typeof e?.message === "string"
+        e instanceof Error
           ? e.message
           : typeof e === "string"
-          ? e
-          : JSON.stringify(e, null, 2);
+            ? e
+            : JSON.stringify(e, null, 2);
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);

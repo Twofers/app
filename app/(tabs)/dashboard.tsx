@@ -377,9 +377,9 @@ export default function BusinessDashboard() {
       const { count: viewsCount } = await supabase
         .from("app_analytics_events")
         .select("id", { count: "exact", head: true })
-        .in("event_type", ["deal_viewed", "deal_opened"])
+        .in("event_name", ["deal_viewed", "deal_opened"])
         .in("deal_id", dealIds)
-        .gte("created_at", monthStart.toISOString());
+        .gte("occurred_at", monthStart.toISOString());
       setMonthViews(viewsCount ?? 0);
 
       const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {

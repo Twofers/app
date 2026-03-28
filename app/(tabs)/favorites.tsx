@@ -153,13 +153,13 @@ export default function FavoritesScreen() {
       setQrExpires(out.expires_at);
       setLastClaimDealId(dealId);
       setQrVisible(true);
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg =
-        typeof e?.message === "string"
+        e instanceof Error
           ? e.message
           : typeof e === "string"
-          ? e
-          : JSON.stringify(e, null, 2);
+            ? e
+            : JSON.stringify(e, null, 2);
       setBanner(mapFnErr(msg));
     } finally {
       setClaimingDealId(null);
@@ -177,13 +177,13 @@ export default function FavoritesScreen() {
       const out = await claimDeal(lastClaimDealId);
       setQrToken(out.token);
       setQrExpires(out.expires_at);
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg =
-        typeof e?.message === "string"
+        e instanceof Error
           ? e.message
           : typeof e === "string"
-          ? e
-          : JSON.stringify(e, null, 2);
+            ? e
+            : JSON.stringify(e, null, 2);
       setBanner(mapFnErr(msg));
     } finally {
       setRefreshingQr(false);

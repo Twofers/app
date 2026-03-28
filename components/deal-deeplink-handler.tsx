@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Alert, Platform } from "react-native";
+import { Alert } from "react-native";
 import * as Linking from "expo-linking";
 import { useRouter, type Href } from "expo-router";
+import { useTranslation } from "react-i18next";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -35,6 +36,7 @@ function extractDealId(url: string | null): string | null {
  */
 export function DealDeepLinkHandler() {
   const router = useRouter();
+  const { t } = useTranslation();
   const initialDone = useRef(false);
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function DealDeepLinkHandler() {
       const dealId = extractDealId(url);
       if (!dealId) return;
       if (!UUID_RE.test(dealId)) {
-        Alert.alert("Invalid link", "This deal link is not valid.");
+        Alert.alert(t("commonUi.invalidDealLinkTitle"), t("commonUi.invalidDealLinkBody"));
         return;
       }
       router.push(`/deal/${dealId}` as Href);
@@ -62,7 +64,7 @@ export function DealDeepLinkHandler() {
     return () => {
       sub.remove();
     };
-  }, [router]);
+  }, [router, t]);
 
   return null;
 }

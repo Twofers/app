@@ -102,8 +102,9 @@ export default function QuickDealScreen() {
         return;
       }
       setBanner({ message: t("createQuick.successAiTitle"), tone: "success" });
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("createQuick.errAiSuggestFailed"), tone: "error" });
+    } catch (err: unknown) {
+      const m = err instanceof Error ? err.message : String(err);
+      setBanner({ message: m || t("createQuick.errAiSuggestFailed"), tone: "error" });
     } finally {
       setSuggestingAi(false);
     }
@@ -187,8 +188,9 @@ export default function QuickDealScreen() {
       if (error) throw error;
       if (deal?.id) void notifyDealPublished(deal.id);
       router.replace("/(tabs)/dashboard");
-    } catch (err: any) {
-      setBanner({ message: err?.message ?? t("createQuick.errPublishFailed"), tone: "error" });
+    } catch (err: unknown) {
+      const m = err instanceof Error ? err.message : String(err);
+      setBanner({ message: m || t("createQuick.errPublishFailed"), tone: "error" });
     } finally {
       setPublishing(false);
     }

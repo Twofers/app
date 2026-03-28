@@ -47,8 +47,8 @@ export default function BusinessSetupScreen() {
 
   async function onSubmit() {
     setBanner(null);
-    if (!trimmed.businessName || !trimmed.address || !trimmed.phone || !trimmed.shortDescription) {
-      setBanner({ message: t("businessSetup.errRequired"), tone: "error" });
+    if (!trimmed.businessName || !trimmed.address) {
+      setBanner({ message: t("businessSetup.errNameAddress"), tone: "error" });
       return;
     }
 
@@ -70,10 +70,10 @@ export default function BusinessSetupScreen() {
           {
             owner_id: uid,
             name: trimmed.businessName,
-            phone: trimmed.phone,
+            phone: trimmed.phone || null,
             address: addr,
             location: addr,
-            short_description: trimmed.shortDescription,
+            short_description: trimmed.shortDescription || null,
           },
           { onConflict: "owner_id" },
         )
@@ -86,7 +86,7 @@ export default function BusinessSetupScreen() {
           user_id: uid,
           name: trimmed.businessName,
           address: addr,
-          category: trimmed.shortDescription || null,
+          category: trimmed.shortDescription || trimmed.businessName || null,
           setup_completed: true,
         },
         { onConflict: "user_id" },
@@ -108,7 +108,10 @@ export default function BusinessSetupScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("businessSetup.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
