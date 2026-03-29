@@ -119,7 +119,9 @@
     "webFallback": "Map view is available on the iOS and Android apps. Use Home to browse lists on web.",
     "dataError": "Some map data couldn’t load. Pins may be incomplete.",
     "emptyMarkersTitle": "No map pins yet",
-    "emptyMarkersBody": "Businesses need coordinates on their profile to appear on the map. You can still browse on Home."
+    "emptyMarkersBody": "Businesses need coordinates on their profile to appear on the map. You can still browse on Home.",
+    "androidMapsUnavailableTitle": "Map isn’t available in this build",
+    "androidMapsUnavailableBody": "This Android install was built without a Google Maps key, so the map can’t open safely. Browse deals on Home, or install an update after maps are configured for builds."
   },
   "consumerSettings": {
     "accountCta": "Account & sign in",

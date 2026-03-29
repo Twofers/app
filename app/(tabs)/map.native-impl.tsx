@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import Constants from "expo-constants";
 import MapView, { Circle, Marker, type Region } from "react-native-maps";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -68,6 +69,8 @@ export default function MapScreenNative() {
   const { t } = useTranslation();
   const router = useRouter();
   const { top, horizontal } = useScreenInsets("tab");
+  const androidMapsOk =
+    Platform.OS !== "android" || Boolean(Constants.expoConfig?.extra?.androidMapsKeyConfigured);
   const [mode, setMode] = useState<"all" | "live">("all");
   const [businesses, setBusinesses] = useState<Biz[]>([]);
   const [deals, setDeals] = useState<DealLite[]>([]);
@@ -208,55 +211,64 @@ export default function MapScreenNative() {
           {mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll")}
         </Text>
       </View>
-      <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.md, flexDirection: "row", gap: Spacing.sm }}>
-        <Pressable
-          onPress={() => setMode("all")}
-          accessibilityRole="button"
-          accessibilityState={{ selected: mode === "all" }}
-          style={{
-            flex: 1,
-            minHeight: 48,
-            paddingVertical: Spacing.md,
-            paddingHorizontal: Spacing.sm,
-            borderRadius: 14,
-            backgroundColor: mode === "all" ? "#111" : "#fff",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: mode === "all" ? 0 : 1,
-            borderColor: "#e4e4e7",
-          }}
-        >
-          <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? "#fff" : "#27272a", textAlign: "center" }}>
-            {t("consumerMap.toggleAll")}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setMode("live")}
-          accessibilityRole="button"
-          accessibilityState={{ selected: mode === "live" }}
-          style={{
-            flex: 1,
-            minHeight: 48,
-            paddingVertical: Spacing.md,
-            paddingHorizontal: Spacing.sm,
-            borderRadius: 14,
-            backgroundColor: mode === "live" ? "#111" : "#fff",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: mode === "live" ? 0 : 1,
-            borderColor: "#e4e4e7",
-          }}
-        >
-          <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? "#fff" : "#27272a", textAlign: "center" }}>
-            {t("consumerMap.toggleLive")}
-          </Text>
-        </Pressable>
-      </View>
+      {androidMapsOk ? (
+        <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.md, flexDirection: "row", gap: Spacing.sm }}>
+          <Pressable
+            onPress={() => setMode("all")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === "all" }}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              paddingVertical: Spacing.md,
+              paddingHorizontal: Spacing.sm,
+              borderRadius: 14,
+              backgroundColor: mode === "all" ? "#111" : "#fff",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: mode === "all" ? 0 : 1,
+              borderColor: "#e4e4e7",
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? "#fff" : "#27272a", textAlign: "center" }}>
+              {t("consumerMap.toggleAll")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMode("live")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === "live" }}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              paddingVertical: Spacing.md,
+              paddingHorizontal: Spacing.sm,
+              borderRadius: 14,
+              backgroundColor: mode === "live" ? "#111" : "#fff",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: mode === "live" ? 0 : 1,
+              borderColor: "#e4e4e7",
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? "#fff" : "#27272a", textAlign: "center" }}>
+              {t("consumerMap.toggleLive")}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
           <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
+        </View>
+      ) : !androidMapsOk ? (
+        <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: horizontal }}>
+          <EmptyState
+            title={t("consumerMap.androidMapsUnavailableTitle")}
+            message={t("consumerMap.androidMapsUnavailableBody")}
+          />
         </View>
       ) : (
         <View style={{ flex: 1 }}>

@@ -35,6 +35,8 @@ module.exports = ({ config }) => ({
   },
   extra: {
     ...config.extra,
+    /** Mirrors android.config.googleMaps — JS can skip MapView when empty to avoid native crashes. */
+    androidMapsKeyConfigured: Boolean(String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY ?? "").trim()),
     gitCommit: resolveGitCommitShort(),
     easBuildProfile: process.env.EAS_BUILD_PROFILE ?? null,
     eas: {

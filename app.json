@@ -90,12 +90,6 @@
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to suggest nearby deals using your area and business locations in profiles."
         }
       ],
-      [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": "AIzaSyDnjRgT0YNzb49z1XQbo8nd8_Glr07pPto"
-        }
-      ],
       "expo-notifications"
     ],
     "experiments": {

@@ -119,7 +119,9 @@
     "webFallback": "El mapa está en las apps iOS y Android. En la web usa Inicio para listas.",
     "dataError": "No se pudo cargar parte de los datos del mapa. Los pins pueden estar incompletos.",
     "emptyMarkersTitle": "Aún no hay pins en el mapa",
-    "emptyMarkersBody": "Los negocios necesitan coordenadas en su perfil para aparecer aquí. Sigue explorando en Inicio."
+    "emptyMarkersBody": "Los negocios necesitan coordenadas en su perfil para aparecer aquí. Sigue explorando en Inicio.",
+    "androidMapsUnavailableTitle": "El mapa no está disponible en esta versión",
+    "androidMapsUnavailableBody": "Esta instalación de Android se generó sin clave de Google Maps, así que el mapa no puede abrirse de forma segura. Usa Inicio para ver ofertas o instala una actualización cuando el mapa esté configurado en el build."
   },
   "consumerSettings": {
     "accountCta": "Cuenta e inicio de sesión",
