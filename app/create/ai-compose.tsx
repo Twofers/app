@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as FileSystem from "expo-file-system";
+import { File as ExpoFsFile } from "expo-file-system";
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -59,7 +59,7 @@ async function fileUriToBase64(uri: string): Promise<string> {
   // On native, expo-file-system handles file:// URIs correctly.
   // fetch(file://...) is blocked by the browser security model on web.
   if (Platform.OS !== "web") {
-    return FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+    return new ExpoFsFile(uri).base64();
   }
   const res = await fetch(uri);
   const buf = await res.arrayBuffer();
@@ -83,7 +83,10 @@ export default function AiComposeOfferScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { isLoggedIn, businessId, loading } = useBusiness();
 
-  const recorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+  // Android LOW_QUALITY is .3gp + AMR-NB; Whisper expects AAC/M4A/MP4/WebM/etc. Use MPEG4+AAC on Android.
+  const recorder = useAudioRecorder(
+    Platform.OS === "android" ? RecordingPresets.HIGH_QUALITY : RecordingPresets.LOW_QUALITY,
+  );
 
   const [prompt, setPrompt] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
