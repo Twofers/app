@@ -24,19 +24,31 @@ export function AppI18nGate({ children }: { children: ReactNode }) {
       } catch (e) {
         if (__DEV__) console.warn("AppI18nGate: locale hydrate failed", e);
       } finally {
-        if (cancelled) return;
-        setReady(true);
-        try {
-          await SplashScreen.hideAsync();
-        } catch {
-          // Native splash may already be hidden; continue rendering app shell.
-        }
+        if (!cancelled) setReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /** Hide native splash only after React commits the real app shell (avoids blank / “stuck” splash on Android). */
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) return;
+        void SplashScreen.hideAsync().catch(() => {});
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [ready]);
 
   if (!ready) {
     return (
