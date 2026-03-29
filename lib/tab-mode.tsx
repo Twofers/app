@@ -92,17 +92,28 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setMode = useCallback(async (next: TabMode) => {
+    const prev = mode;
     setModeState(next);
-    await AsyncStorage.setItem(ASYNC_KEY, next);
+    try {
+      await AsyncStorage.setItem(ASYNC_KEY, next);
+    } catch (e) {
+      setModeState(prev);
+      if (__DEV__) {
+        console.warn("[tab-mode] AsyncStorage.setItem failed; reverted mode", e);
+      }
+      throw e;
+    }
     try {
       if (Platform.OS !== "web") {
         const SecureStore = await import("expo-secure-store");
         await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
       }
-    } catch {
-      /* missing */
+    } catch (e) {
+      if (__DEV__) {
+        console.warn("[tab-mode] SecureStore legacy key cleanup failed", e);
+      }
     }
-  }, []);
+  }, [mode]);
 
   const value = useMemo(() => ({ mode, setMode, ready }), [mode, setMode, ready]);
 

@@ -705,6 +705,7 @@
   },
   "createAi": {
     "titleScreen": "AI ads",
+    "stepOfTotal": "Step {{current}} of {{total}}",
     "loginPrompt": "Please log in to create deals.",
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",

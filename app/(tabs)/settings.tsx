@@ -233,6 +233,7 @@ export default function SettingsScreen() {
                 onEndEditing={() => void saveZip()}
                 placeholder={t("onboarding.zipPlaceholder")}
                 autoCapitalize="characters"
+                maxLength={10}
                 style={{
                   borderWidth: 1,
                   borderColor: Colors.light.border,

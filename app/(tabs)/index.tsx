@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -110,7 +111,7 @@ export default function HomeScreen() {
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { height: windowHeight } = useWindowDimensions();
   const { isLoggedIn, sessionEmail, userId } = useBusiness();
-  const mapClaimError = (raw: string) => translateFunctionErrorMessage(raw, t);
+  const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [businesses, setBusinesses] = useState<BusinessRow[]>([]);
@@ -258,69 +259,75 @@ export default function HomeScreen() {
     void syncConsumerDealNotifications({ userId, favoriteBusinessIds });
   }, [userId, favoriteBusinessIds, deals.length]);
 
-  async function toggleFavorite(businessId: string) {
-    if (!userId) {
-      setBanner(t("dealDetail.errLoginFavorite"));
-      return;
-    }
-    const isFav = favoriteBusinessIds.includes(businessId);
-    const next = isFav ? favoriteBusinessIds.filter((id) => id !== businessId) : [...favoriteBusinessIds, businessId];
-    setFavoriteBusinessIds(next);
-    if (isFav) {
-      const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", businessId);
-      if (error) {
-        setFavoriteBusinessIds(favoriteBusinessIds);
-        setBanner(error.message);
-      }
-    } else {
-      const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: businessId });
-      if (error) {
-        setFavoriteBusinessIds(favoriteBusinessIds);
-        setBanner(error.message);
-      }
-    }
-  }
-
-  async function doClaim(dealId: string) {
-    try {
-      if (!isLoggedIn) {
-        setBanner(t("dealDetail.errLoginClaim"));
+  const toggleFavorite = useCallback(
+    async (businessId: string) => {
+      if (!userId) {
+        setBanner(t("dealDetail.errLoginFavorite"));
         return;
       }
-      if (claimingDealId) return;
-      setClaimingDealId(dealId);
-      setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
+      const isFav = favoriteBusinessIds.includes(businessId);
+      const next = isFav ? favoriteBusinessIds.filter((id) => id !== businessId) : [...favoriteBusinessIds, businessId];
+      setFavoriteBusinessIds(next);
+      if (isFav) {
+        const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", businessId);
+        if (error) {
+          setFavoriteBusinessIds(favoriteBusinessIds);
+          setBanner(error.message);
+        }
+      } else {
+        const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: businessId });
+        if (error) {
+          setFavoriteBusinessIds(favoriteBusinessIds);
+          setBanner(error.message);
+        }
+      }
+    },
+    [userId, favoriteBusinessIds, t],
+  );
 
-      const out = await claimDeal(dealId);
-      if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
-      trackAppAnalyticsEvent({ event_name: "deal_claimed", claim_id: out.claim_id ?? null, deal_id: dealId });
+  const doClaim = useCallback(
+    async (dealId: string) => {
+      try {
+        if (!isLoggedIn) {
+          setBanner(t("dealDetail.errLoginClaim"));
+          return;
+        }
+        if (claimingDealId) return;
+        setClaimingDealId(dealId);
+        setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
-      setLastClaimDealId(dealId);
-      setQrVisible(true);
-      setClaimStatus((prev) => ({
-        ...prev,
-        [dealId]: { message: t("dealsBrowse.statusClaimedShowQr"), tone: "success" },
-      }));
-      await loadUserClaims(dealsRef.current.map((d) => d.id));
-    } catch (e: unknown) {
-      const msg =
-        typeof (e as { message?: string })?.message === "string"
-          ? (e as { message: string }).message
-          : typeof e === "string"
-            ? e
-            : JSON.stringify(e, null, 2);
-      trackAppAnalyticsEvent({
-        event_name: "claim_blocked",
-        deal_id: dealId,
-        context: { reason: classifyClaimBlockReason(msg) },
-      });
-      setClaimStatus((prev) => ({ ...prev, [dealId]: { message: mapClaimError(msg), tone: "error" } }));
-    } finally {
-      setClaimingDealId(null);
-    }
-  }
+        const out = await claimDeal(dealId);
+        if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
+        trackAppAnalyticsEvent({ event_name: "deal_claimed", claim_id: out.claim_id ?? null, deal_id: dealId });
+
+        setQrToken(out.token);
+        setQrExpires(out.expires_at);
+        setLastClaimDealId(dealId);
+        setQrVisible(true);
+        setClaimStatus((prev) => ({
+          ...prev,
+          [dealId]: { message: t("dealsBrowse.statusClaimedShowQr"), tone: "success" },
+        }));
+        await loadUserClaims(dealsRef.current.map((d) => d.id));
+      } catch (e: unknown) {
+        const msg =
+          typeof (e as { message?: string })?.message === "string"
+            ? (e as { message: string }).message
+            : typeof e === "string"
+              ? e
+              : JSON.stringify(e, null, 2);
+        trackAppAnalyticsEvent({
+          event_name: "claim_blocked",
+          deal_id: dealId,
+          context: { reason: classifyClaimBlockReason(msg) },
+        });
+        setClaimStatus((prev) => ({ ...prev, [dealId]: { message: mapClaimError(msg), tone: "error" } }));
+      } finally {
+        setClaimingDealId(null);
+      }
+    },
+    [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t],
+  );
 
   async function refreshQr() {
     if (!lastClaimDealId) {
@@ -458,7 +465,8 @@ export default function HomeScreen() {
     [nowTick, t],
   );
 
-  const listHeader = (
+  const listHeader = useMemo(
+    () => (
     <View style={{ marginBottom: Spacing.md }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("tabs.home")}</Text>
       <Text style={{ marginTop: 6, fontSize: 15, opacity: 0.62, lineHeight: 22 }}>{t("consumerHome.tagline")}</Text>
@@ -665,6 +673,18 @@ export default function HomeScreen() {
                         {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
                       </Text>
                     </View>
+                    {claimStatus[item.id]?.message ? (
+                      <Text
+                        style={{
+                          marginTop: Spacing.sm,
+                          fontSize: 13,
+                          lineHeight: 18,
+                          color: claimStatus[item.id]?.tone === "error" ? "#b42318" : Colors.light.mutedText,
+                        }}
+                      >
+                        {claimStatus[item.id]?.message}
+                      </Text>
+                    ) : null}
                     <View style={{ marginTop: Spacing.sm, flexDirection: "row", gap: Spacing.sm }}>
                       <PrimaryButton
                         title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claimButton")}
@@ -674,18 +694,6 @@ export default function HomeScreen() {
                       />
                       <SecondaryButton title={t("dealDetail.viewBusiness")} onPress={() => router.push(`/business/${item.business_id}` as Href)} />
                     </View>
-                    {claimStatus[item.id]?.message ? (
-                      <Text
-                        style={{
-                          marginTop: Spacing.xs,
-                          fontSize: 13,
-                          lineHeight: 18,
-                          color: claimStatus[item.id]?.tone === "error" ? "#b42318" : Colors.light.mutedText,
-                        }}
-                      >
-                        {claimStatus[item.id]?.message}
-                      </Text>
-                    ) : null}
                   </View>
                 </Pressable>
               );
@@ -751,6 +759,34 @@ export default function HomeScreen() {
         <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: Spacing.sm }}>{t("consumerHome.nearbyBusinesses")}</Text>
       </View>
     </View>
+    ),
+    [
+      t,
+      sessionEmail,
+      banner,
+      searchQuery,
+      router,
+      userGeo,
+      radiusMiles,
+      favoritesOnly,
+      emptyNearbyLive,
+      showDealsSkeleton,
+      dealsFadeStyle,
+      liveDealsDisplay,
+      loadingDeals,
+      heroImageHeight,
+      heroCardHeight,
+      favoriteBusinessIds,
+      businesses,
+      toggleFavorite,
+      formatTimeLeft,
+      userClaimsByDeal,
+      nowTick,
+      claimingDealId,
+      doClaim,
+      claimStatus,
+      showAllLiveDeals,
+    ],
   );
 
   if (loadingBiz && businesses.length === 0) {
@@ -770,6 +806,10 @@ export default function HomeScreen() {
         keyExtractor={(b) => b.id}
         ListHeaderComponent={listHeader}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS === "android"}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        initialNumToRender={8}
         refreshControl={
           <RefreshControl
             refreshing={refreshingFeed}

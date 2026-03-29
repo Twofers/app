@@ -115,6 +115,14 @@ const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padS
 
 const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
+/** Empty input → `null` for APIs; non-empty but invalid → `NaN` (use `Number.isNaN` before saving). */
+function parseOptionalPriceInput(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isNaN(n) ? NaN : n;
+}
+
 export default function AiDealScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -513,8 +521,8 @@ export default function AiDealScreen() {
         throw new Error(t("createAi.errUploadPhotoBeforeGenerate"));
       }
       await ensurePosterUrl(path);
-      const priceNum = price.trim() ? Number(price) : null;
-      if (price.trim() && (priceNum === null || Number.isNaN(priceNum))) {
+      const priceNum = parseOptionalPriceInput(price);
+      if (priceNum !== null && Number.isNaN(priceNum)) {
         setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
@@ -583,7 +591,7 @@ export default function AiDealScreen() {
     setDevEdgeBusy("copy");
     setBanner(null);
     try {
-      const priceNum = price.trim() ? Number(price) : null;
+      const priceNum = parseOptionalPriceInput(price);
       const out = await aiGenerateDealCopy({
         hint_text: hintText.trim(),
         price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
@@ -623,7 +631,7 @@ export default function AiDealScreen() {
       }
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
-      const priceNum = price.trim() ? Number(price) : null;
+      const priceNum = parseOptionalPriceInput(price);
       const isRecurring = validityMode === "recurring";
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
       const out = await aiCreateDeal({
@@ -663,8 +671,8 @@ export default function AiDealScreen() {
       const signedPoster = await ensurePosterUrl(path);
       const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
-      const priceNum = price.trim() ? Number(price) : null;
-      if (price.trim() && Number.isNaN(priceNum)) {
+      const priceNum = parseOptionalPriceInput(price);
+      if (priceNum !== null && Number.isNaN(priceNum)) {
         setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
@@ -764,8 +772,8 @@ export default function AiDealScreen() {
     try {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
-      const priceNum = price.trim() ? Number(price) : null;
-      if (price.trim() && Number.isNaN(priceNum)) {
+      const priceNum = parseOptionalPriceInput(price);
+      if (priceNum !== null && Number.isNaN(priceNum)) {
         setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
         return;
       }
@@ -957,7 +965,9 @@ export default function AiDealScreen() {
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 1</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
+              {t("createAi.stepOfTotal", { current: 1, total: 3 })}
+            </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
@@ -1003,7 +1013,9 @@ export default function AiDealScreen() {
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 2</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
+              {t("createAi.stepOfTotal", { current: 2, total: 3 })}
+            </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
           <TextInput
@@ -1045,7 +1057,9 @@ export default function AiDealScreen() {
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>Step 3</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
+              {t("createAi.stepOfTotal", { current: 3, total: 3 })}
+            </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>

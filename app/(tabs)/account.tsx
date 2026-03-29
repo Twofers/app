@@ -302,7 +302,7 @@ export default function AccountScreen() {
     try {
       await deleteUserAccount();
       await supabase.auth.signOut();
-      router.replace("/(tabs)/account" as Href);
+      router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
       const code = e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined;
       if (code === DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER) {
@@ -374,11 +374,11 @@ export default function AccountScreen() {
       const ad = profileAddress.trim();
       const cat = profileCategory.trim();
       const hrs = profileHours.trim();
-      if (!nm || !ad) {
-        setBanner({ message: t("account.errBizNameAddress"), tone: "error" });
+      if (!nm || !cn || !em || !ph || !ad || !cat || !hrs) {
+        setBanner({ message: t("account.errBizCoreRequired"), tone: "error" });
         return;
       }
-      if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
         setBanner({ message: t("account.errBizEmailInvalid"), tone: "error" });
         return;
       }
