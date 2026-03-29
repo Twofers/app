@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -114,6 +114,57 @@ type DealRow = {
   expiredUnredeemed: number;
   conversion: number;
 };
+
+type PerDealMetrics = {
+  claims: number;
+  redeems: number;
+  expiredUnredeemed: number;
+};
+
+const DASHBOARD_DEALS_PAGE_SIZE = 100;
+const DASHBOARD_DEALS_SELECT =
+  "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+
+function buildPerDealMap(monthOnly: ClaimRow[], nowMs: number): Record<string, PerDealMetrics> {
+  const perDealMap: Record<string, PerDealMetrics> = {};
+  monthOnly.forEach((c) => {
+    if (!perDealMap[c.deal_id]) {
+      perDealMap[c.deal_id] = { claims: 0, redeems: 0, expiredUnredeemed: 0 };
+    }
+    perDealMap[c.deal_id].claims += 1;
+    if (c.redeemed_at) {
+      perDealMap[c.deal_id].redeems += 1;
+    } else {
+      const g = c.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
+      if (isPastClaimRedeemDeadline(c.expires_at, nowMs, g)) {
+        perDealMap[c.deal_id].expiredUnredeemed += 1;
+      }
+    }
+  });
+  return perDealMap;
+}
+
+function hydrateDealRows(
+  dealsData: Omit<DealRow, "claims" | "redeems" | "expiredUnredeemed" | "conversion">[],
+  perDealMap: Record<string, PerDealMetrics>,
+): DealRow[] {
+  return dealsData.map((deal) => {
+    const metrics = perDealMap[deal.id] ?? {
+      claims: 0,
+      redeems: 0,
+      expiredUnredeemed: 0,
+    };
+    const conversion =
+      metrics.claims > 0 ? Math.round((metrics.redeems / metrics.claims) * 100) : 0;
+    return {
+      ...deal,
+      claims: metrics.claims,
+      redeems: metrics.redeems,
+      expiredUnredeemed: metrics.expiredUnredeemed,
+      conversion,
+    };
+  });
+}
 
 function premiumCardStyle(extra?: object) {
   return {
@@ -235,6 +286,9 @@ export default function BusinessDashboard() {
   const [endingDealId, setEndingDealId] = useState<string | null>(null);
   const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
+  const [dealsHasMore, setDealsHasMore] = useState(false);
+  const [dealsLoadingMore, setDealsLoadingMore] = useState(false);
+  const perDealMetricsRef = useRef<Record<string, PerDealMetrics>>({});
 
   const [dealsLaunchedMonth, setDealsLaunchedMonth] = useState(0);
   const [monthClaims, setMonthClaims] = useState(0);
@@ -251,6 +305,7 @@ export default function BusinessDashboard() {
     if (!businessId) return;
     setLoadingMetrics(true);
     setBanner(null);
+    setDealsHasMore(false);
     const now = new Date();
     const monthStart = startOfMonth(now);
     const weekStart = startOfDay(subDays(now, 6));
@@ -266,45 +321,24 @@ export default function BusinessDashboard() {
     setWeekLabels(weekDays.map((w) => w.label));
 
     try {
-      const { data: dealsData, error: dealsError } = await supabase
+      const { count: launchedCount, error: launchedErr } = await supabase
         .from("deals")
-        .select(
-          "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-        )
+        .select("id", { count: "exact", head: true })
         .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (dealsError) throw dealsError;
-
-      const launched = (dealsData ?? []).filter(
-        (d) => new Date((d as { created_at: string }).created_at).getTime() >= monthStart.getTime(),
-      ).length;
-      setDealsLaunchedMonth(launched);
-
-      const dealIds = (dealsData ?? []).map((d) => d.id);
-      if (dealIds.length === 0) {
-        setDeals([]);
-        setMonthClaims(0);
-        setMonthRedeems(0);
-        setUniqueRedeemers(0);
-        setMonthRedemptionPct(0);
-        setMonthViews(0);
-        setWeekCounts(weekDays.map(() => 0));
-        setInsights(null);
-        setLoadingMetrics(false);
-        return;
-      }
+        .gte("created_at", monthStart.toISOString());
+      if (launchedErr) throw launchedErr;
+      setDealsLaunchedMonth(launchedCount ?? 0);
 
       const { data: claimsRaw, error: claimsError } = await supabase
         .from("deal_claims")
         .select(
-          "deal_id,user_id,created_at,redeemed_at,expires_at,grace_period_minutes",
+          "deal_id,user_id,created_at,redeemed_at,expires_at,grace_period_minutes, deals!inner(business_id)",
         )
-        .in("deal_id", dealIds)
+        .eq("deals.business_id", businessId)
         .gte("created_at", fetchLower.toISOString());
       if (claimsError) throw claimsError;
 
-      const claims = (claimsRaw ?? []) as ClaimRow[];
+      const claims = (claimsRaw ?? []) as unknown as ClaimRow[];
       const nowMs = Date.now();
       const weekKeyToCount: Record<string, number> = Object.fromEntries(
         weekDays.map((w) => [w.key, 0]),
@@ -333,53 +367,30 @@ export default function BusinessDashboard() {
         claimCount > 0 ? Math.round((redeemCount / claimCount) * 100) : 0,
       );
 
-      const perDealMap: Record<
-        string,
-        { claims: number; redeems: number; expiredUnredeemed: number }
-      > = {};
-      monthOnly.forEach((c) => {
-        if (!perDealMap[c.deal_id]) {
-          perDealMap[c.deal_id] = { claims: 0, redeems: 0, expiredUnredeemed: 0 };
-        }
-        perDealMap[c.deal_id].claims += 1;
-        if (c.redeemed_at) {
-          perDealMap[c.deal_id].redeems += 1;
-        } else {
-          const g = c.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
-          if (isPastClaimRedeemDeadline(c.expires_at, nowMs, g)) {
-            perDealMap[c.deal_id].expiredUnredeemed += 1;
-          }
-        }
-      });
+      const perDealMap = buildPerDealMap(monthOnly, nowMs);
+      perDealMetricsRef.current = perDealMap;
 
-      const hydrated: DealRow[] = (dealsData ?? []).map(
-        (
-          deal: Omit<DealRow, "claims" | "redeems" | "expiredUnredeemed" | "conversion">,
-        ) => {
-          const metrics = perDealMap[deal.id] ?? {
-            claims: 0,
-            redeems: 0,
-            expiredUnredeemed: 0,
-          };
-          const conversion =
-            metrics.claims > 0 ? Math.round((metrics.redeems / metrics.claims) * 100) : 0;
-          return {
-            ...deal,
-            claims: metrics.claims,
-            redeems: metrics.redeems,
-            expiredUnredeemed: metrics.expiredUnredeemed,
-            conversion,
-          };
-        },
-      );
+      const { data: dealsData, error: dealsError } = await supabase
+        .from("deals")
+        .select(DASHBOARD_DEALS_SELECT)
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(0, DASHBOARD_DEALS_PAGE_SIZE - 1);
+      if (dealsError) throw dealsError;
 
-      setDeals(hydrated);
+      const firstPage = (dealsData ?? []) as Omit<
+        DealRow,
+        "claims" | "redeems" | "expiredUnredeemed" | "conversion"
+      >[];
+      setDeals(hydrateDealRows(firstPage, perDealMap));
+      setDealsHasMore(firstPage.length === DASHBOARD_DEALS_PAGE_SIZE);
 
       const { count: viewsCount } = await supabase
         .from("app_analytics_events")
-        .select("id", { count: "exact", head: true })
+        .select("id, deals!inner(business_id)", { count: "exact", head: true })
         .in("event_name", ["deal_viewed", "deal_opened"])
-        .in("deal_id", dealIds)
+        .eq("deals.business_id", businessId)
         .gte("occurred_at", monthStart.toISOString());
       setMonthViews(viewsCount ?? 0);
 
@@ -393,6 +404,7 @@ export default function BusinessDashboard() {
       }
     } catch (err: unknown) {
       setInsights(null);
+      setDealsHasMore(false);
       const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
       setBanner(msg);
       setWeekCounts(weekDays.map(() => 0));
@@ -400,6 +412,35 @@ export default function BusinessDashboard() {
       setLoadingMetrics(false);
     }
   }, [businessId, t]);
+
+  const loadMoreDeals = useCallback(async () => {
+    if (!businessId || !dealsHasMore || dealsLoadingMore || loadingMetrics) return;
+    setDealsLoadingMore(true);
+    setBanner(null);
+    try {
+      const offset = deals.length;
+      const { data: dealsData, error: dealsError } = await supabase
+        .from("deals")
+        .select(DASHBOARD_DEALS_SELECT)
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + DASHBOARD_DEALS_PAGE_SIZE - 1);
+      if (dealsError) throw dealsError;
+      const chunk = (dealsData ?? []) as Omit<
+        DealRow,
+        "claims" | "redeems" | "expiredUnredeemed" | "conversion"
+      >[];
+      const map = perDealMetricsRef.current;
+      setDeals((prev) => [...prev, ...hydrateDealRows(chunk, map)]);
+      setDealsHasMore(chunk.length === DASHBOARD_DEALS_PAGE_SIZE);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
+      setBanner(msg);
+    } finally {
+      setDealsLoadingMore(false);
+    }
+  }, [businessId, deals.length, dealsHasMore, dealsLoadingMore, loadingMetrics, t]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -653,6 +694,15 @@ export default function BusinessDashboard() {
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
+              onEndReachedThreshold={0.35}
+              onEndReached={() => void loadMoreDeals()}
+              ListFooterComponent={
+                dealsLoadingMore ? (
+                  <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
+                    <ActivityIndicator color={primary} />
+                  </View>
+                ) : null
+              }
               ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
               renderItem={({ item }) => {
                 const active = dealActive(item);
