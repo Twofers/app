@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -20,6 +21,7 @@ import {
 } from "../../lib/translate-deal-quality";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
+import { buildPublicDealPhotoUrl } from "../../lib/deal-poster-url";
 
 export default function QuickDealScreen() {
   const router = useRouter();
@@ -28,8 +30,10 @@ export default function QuickDealScreen() {
     prefillTitle?: string;
     prefillHint?: string;
     prefillPrice?: string;
+    prefillPosterPath?: string;
     fromAiCompose?: string;
     fromReuse?: string;
+    fromMenuOffer?: string;
   }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { t, i18n } = useTranslation();
@@ -51,6 +55,7 @@ export default function QuickDealScreen() {
   } | null>(null);
   const [dirty, setDirty] = useState(false);
   const markDirty = useCallback(() => setDirty(true), []);
+  const [prefillPosterStoragePath, setPrefillPosterStoragePath] = useState<string | null>(null);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
 
@@ -59,19 +64,34 @@ export default function QuickDealScreen() {
     const t0 = (g(prefill.prefillTitle) ?? "").trim();
     const h0 = (g(prefill.prefillHint) ?? "").trim();
     const p0 = (g(prefill.prefillPrice) ?? "").trim();
+    const posterPath = (g(prefill.prefillPosterPath) ?? "").trim();
     const fromAi = g(prefill.fromAiCompose);
     const fromReuse = g(prefill.fromReuse);
+    const fromMenu = g(prefill.fromMenuOffer);
     if (t0) setTitle((prev) => prev || t0);
     if (h0) setOfferHint((prev) => prev || h0);
     if (p0) setPrice((prev) => prev || p0);
-    if (t0 || h0 || p0) setDirty(true);
+    if (posterPath) setPrefillPosterStoragePath(posterPath);
+    if (t0 || h0 || p0 || posterPath) setDirty(true);
     if (fromAi === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
     }
     if (fromReuse === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromReuse"), tone: "success" });
     }
-  }, [prefill.prefillTitle, prefill.prefillHint, prefill.prefillPrice, prefill.fromAiCompose, prefill.fromReuse, t]);
+    if (fromMenu === "1" && (t0 || h0)) {
+      setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
+    }
+  }, [
+    prefill.prefillTitle,
+    prefill.prefillHint,
+    prefill.prefillPrice,
+    prefill.prefillPosterPath,
+    prefill.fromAiCompose,
+    prefill.fromReuse,
+    prefill.fromMenuOffer,
+    t,
+  ]);
 
   usePreventRemove(
     dirty,
@@ -193,6 +213,9 @@ export default function QuickDealScreen() {
         return;
       }
 
+      const posterPath = prefillPosterStoragePath?.trim() || null;
+      const posterPublic = posterPath ? buildPublicDealPhotoUrl(posterPath) : null;
+
       const { data: deal, error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
@@ -203,7 +226,8 @@ export default function QuickDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: null,
+        poster_url: posterPublic,
+        poster_storage_path: posterPath,
         quality_tier: quality.tier,
       }).select("id").single();
 
@@ -240,6 +264,24 @@ export default function QuickDealScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {prefillPosterStoragePath ? (
+            <View style={{ marginBottom: Spacing.sm }}>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
+                {t("createQuick.aiPosterAttached")}
+              </Text>
+              <Image
+                source={{ uri: buildPublicDealPhotoUrl(prefillPosterStoragePath) ?? "" }}
+                style={{
+                  width: "100%",
+                  aspectRatio: 1,
+                  borderRadius: Radii.lg,
+                  backgroundColor: Colors.light.border,
+                }}
+                contentFit="cover"
+              />
+            </View>
+          ) : null}
+
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldOfferHint")}</Text>
             <TextInput

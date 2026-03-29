@@ -1,6 +1,7 @@
 import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { devWarn } from "@/lib/dev-log";
+import type { BusinessContextPayload, GeneratedAd } from "./ad-variants";
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = 45_000;
@@ -67,6 +68,51 @@ export function parseFunctionError(error: unknown): string {
   // Fallback to error message or context
   const ctxMsg = error.context?.message;
   return errorMessage || (typeof ctxMsg === "string" ? ctxMsg : "") || "Unknown error";
+}
+
+/** Thrown from AI edge invokes when the response body includes `error_code`. */
+export type ErrorWithCode = Error & { code?: string };
+
+function extractErrorCodeFromInvokeError(error: unknown): string | undefined {
+  if (!isSupabaseFunctionInvokeError(error)) return undefined;
+  const body = error.context?.body;
+  if (body && typeof body === "object" && body !== null && "error_code" in body) {
+    const c = (body as { error_code?: unknown }).error_code;
+    if (typeof c === "string" && c.length > 0) return c;
+  }
+  if (error.message) {
+    try {
+      const parsed = JSON.parse(error.message) as { error_code?: string };
+      if (typeof parsed.error_code === "string" && parsed.error_code.length > 0) {
+        return parsed.error_code;
+      }
+    } catch {
+      /* not JSON */
+    }
+  }
+  return undefined;
+}
+
+export function getErrorCode(e: unknown): string | undefined {
+  if (e && typeof e === "object" && e !== null && "code" in e) {
+    const c = (e as ErrorWithCode).code;
+    if (typeof c === "string" && c.length > 0) return c;
+  }
+  return extractErrorCodeFromInvokeError(e);
+}
+
+export function throwInvokeError(message: string, code?: string): never {
+  const err = new Error(message) as ErrorWithCode;
+  if (code) err.code = code;
+  throw err;
+}
+
+function throwIfEdgeResponseError(data: unknown): void {
+  if (!data || typeof data !== "object" || !("error" in data)) return;
+  const o = data as { error?: unknown; error_code?: unknown };
+  if (typeof o.error !== "string") return;
+  const code = typeof o.error_code === "string" ? o.error_code : undefined;
+  throwInvokeError(o.error, code);
 }
 
 export type ClaimDealExtraBody = {
@@ -327,4 +373,125 @@ export async function aiCreateDeal(body: {
     promo_line: d.promo_line,
     poster_url: d.poster_url,
   };
+}
+
+export type AiExtractMenuItem = {
+  name: string;
+  category?: string;
+  price_text?: string;
+  readable?: boolean;
+};
+
+export type AiExtractMenuResult = {
+  ok: true;
+  items: AiExtractMenuItem[];
+  low_legibility: boolean;
+  menu_notes: string;
+};
+
+/** Vision menu scan (Edge: `ai-extract-menu`). */
+export async function aiExtractMenu(body: {
+  business_id: string;
+  image_url?: string;
+  image_base64?: string;
+  image_mime_type?: string;
+}): Promise<AiExtractMenuResult> {
+  const { data, error } = await supabase.functions.invoke("ai-extract-menu", {
+    body,
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+  if (error) {
+    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+  }
+  throwIfEdgeResponseError(data);
+  const d = data as Partial<AiExtractMenuResult & { ok?: boolean }>;
+  if (!d?.ok || !Array.isArray(d.items)) {
+    throw new Error("Unexpected response from ai-extract-menu.");
+  }
+  return {
+    ok: true,
+    items: d.items as AiExtractMenuItem[],
+    low_legibility: d.low_legibility === true,
+    menu_notes: typeof d.menu_notes === "string" ? d.menu_notes : "",
+  };
+}
+
+export type AiRefineAdCopyUsage = {
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+};
+
+/** Refine one ad draft with chat history (Edge: `ai-refine-ad-copy`). */
+export async function aiRefineAdCopy(body: {
+  business_id: string;
+  structured_offer: Record<string, unknown>;
+  selected_draft: Record<string, unknown>;
+  instruction: string;
+  conversation_history: Array<{ role: string; content: string }>;
+  output_language?: string;
+}): Promise<{ ok: true; draft: GeneratedAd; usage: AiRefineAdCopyUsage }> {
+  const { data, error } = await supabase.functions.invoke("ai-refine-ad-copy", {
+    body: {
+      business_id: body.business_id,
+      structured_offer: body.structured_offer,
+      selected_draft: body.selected_draft,
+      instruction: body.instruction,
+      conversation_history: body.conversation_history,
+      output_language: body.output_language ?? "en",
+    },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+  if (error) {
+    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+  }
+  throwIfEdgeResponseError(data);
+  const d = data as {
+    ok?: boolean;
+    draft?: GeneratedAd;
+    usage?: AiRefineAdCopyUsage;
+  };
+  if (!d?.ok || !d.draft || typeof d.draft.headline !== "string") {
+    throw new Error("Unexpected response from ai-refine-ad-copy.");
+  }
+  return { ok: true, draft: d.draft, usage: d.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
+}
+
+export type AdVariantsQuota = { used: number; limit: number; remaining: number };
+
+/** Three ad lanes from structured offer (optional photo). Edge: `ai-generate-ad-variants`. */
+export async function aiGenerateAdVariantsStructured(body: {
+  business_id: string;
+  structured_offer: Record<string, unknown>;
+  hint_text: string;
+  business_context: BusinessContextPayload;
+  output_language: string;
+  photo_path?: string;
+  price?: number | null;
+  regeneration_attempt?: number;
+  offer_schedule_summary?: string;
+}): Promise<{ ads: GeneratedAd[]; quota?: AdVariantsQuota }> {
+  const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
+    body: {
+      business_id: body.business_id,
+      structured_offer: body.structured_offer,
+      hint_text: body.hint_text,
+      business_context: body.business_context,
+      output_language: body.output_language,
+      regeneration_attempt: body.regeneration_attempt ?? 0,
+      ...(body.photo_path ? { photo_path: body.photo_path } : {}),
+      ...(body.price != null ? { price: body.price } : {}),
+      ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+    },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+  if (error) {
+    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+  }
+  throwIfEdgeResponseError(data);
+  const d = data as { ads?: GeneratedAd[]; quota?: AdVariantsQuota };
+  if (!Array.isArray(d.ads) || d.ads.length !== 3) {
+    throw new Error("Unexpected response from ai-generate-ad-variants.");
+  }
+  return { ads: d.ads, quota: d.quota };
 }

@@ -36,6 +36,7 @@ import {
   type AiComposeResultPayload,
   type AiComposeQuota,
 } from "@/lib/ai-compose-offer";
+import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 
 type UiPhase =
   | "idle"
@@ -257,6 +258,7 @@ export default function AiComposeOfferScreen() {
         business_id: businessId,
         prompt_text: hasTxt ? prompt : undefined,
         image_base64: hasImg ? imageBase64! : undefined,
+        generate_poster_image: !hasImg && hasTxt,
       });
       setResult(out.result);
       setQuota(out.quota);
@@ -292,9 +294,15 @@ export default function AiComposeOfferScreen() {
     const ro = result?.recommended_offer;
     const title = [copy.headline, ro?.item_name].filter(Boolean).join(" · ").slice(0, 120);
     const hint = [ro?.display_offer, copy.sub, copy.cta].filter(Boolean).join(" — ").slice(0, 500);
+    const posterPath = result?.poster_storage_path?.trim();
     router.push({
       pathname: "/create/quick",
-      params: { prefillTitle: title, prefillHint: hint, fromAiCompose: "1" },
+      params: {
+        prefillTitle: title,
+        prefillHint: hint,
+        fromAiCompose: "1",
+        ...(posterPath ? { prefillPosterPath: posterPath } : {}),
+      },
     } as Href);
   }
 
@@ -384,6 +392,28 @@ export default function AiComposeOfferScreen() {
               <Text style={{ opacity: 0.8, marginBottom: Spacing.md, lineHeight: 22 }}>
                 {result.recommended_offer?.display_offer}
               </Text>
+              {result.poster_storage_path ? (
+                <View style={{ marginBottom: Spacing.lg }}>
+                  <Text style={{ fontSize: 15, fontWeight: "800", marginBottom: Spacing.sm }}>
+                    {t("aiCompose.aiPosterPreview")}
+                  </Text>
+                  {(() => {
+                    const posterUri = buildPublicDealPhotoUrl(result.poster_storage_path);
+                    return posterUri ? (
+                      <Image
+                        source={{ uri: posterUri }}
+                        style={{
+                          width: "100%",
+                          aspectRatio: 1,
+                          borderRadius: 20,
+                          backgroundColor: "#eee",
+                        }}
+                        contentFit="cover"
+                      />
+                    ) : null;
+                  })()}
+                </View>
+              ) : null}
               <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("aiCompose.pickVariant")}</Text>
               {result.ad_variants.map((v, i) => renderVariantCard(v, i === 0))}
               <SecondaryButton

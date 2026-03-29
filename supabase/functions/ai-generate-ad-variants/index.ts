@@ -98,7 +98,11 @@ serve(async (req) => {
     }
 
     const business_id = body.business_id as string | undefined;
-    const photo_path = body.photo_path as string | undefined;
+    const photo_path_raw = body.photo_path as string | undefined;
+    const photo_path = typeof photo_path_raw === "string" ? photo_path_raw.trim() : "";
+    const structured_offer = body.structured_offer;
+    const has_structured_offer =
+      structured_offer !== null && structured_offer !== undefined && typeof structured_offer === "object";
     const hint_text = typeof body.hint_text === "string" ? body.hint_text.trim() : "";
     const price = body.price;
     const business_context = (body.business_context ?? {}) as BusinessContext;
@@ -137,12 +141,24 @@ serve(async (req) => {
       ? "Korean"
       : "English";
 
-    if (!business_id || !photo_path || !hint_text) {
+    const input_mode_log = photo_path ? "photo_hint" : "structured_offer";
+
+    if (!business_id || (!photo_path && !has_structured_offer)) {
       return new Response(
-        JSON.stringify({ error: "Missing business_id, photo_path, or hint_text." }),
+        JSON.stringify({
+          error: "Missing business_id, or provide photo_path and/or structured_offer.",
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    const structuredOfferJson = has_structured_offer ? JSON.stringify(structured_offer) : "";
+
+    const hintForModel =
+      hint_text ||
+      (has_structured_offer
+        ? "Use STRUCTURED OFFER JSON in SECTION A as the only source of items and deal mechanics."
+        : "(No owner note — infer the item or dish from the photo only. Propose a strong, honest BOGO, 2-for-1, or free-add-on style offer that matches what you see. If the image is unclear, use a generic honest café/bakery offer and keep copy grounded in the photo.)");
 
     const { data: business, error: bizErr } = await supabase
       .from("businesses")
@@ -175,7 +191,7 @@ serve(async (req) => {
         business_id,
         user_id: user.id,
         request_type: "ad_variants",
-        input_mode: "photo_hint",
+        input_mode: input_mode_log,
         request_hash: "monthly_limit",
         prompt_version: "v1",
         success: false,
@@ -199,6 +215,7 @@ serve(async (req) => {
       .select("id")
       .eq("business_id", business_id)
       .eq("request_type", "ad_variants")
+      .eq("success", true)
       .gte("created_at", new Date(Date.now() - cooldownMs).toISOString())
       .limit(1)
       .maybeSingle();
@@ -213,15 +230,19 @@ serve(async (req) => {
       );
     }
 
-    const { data: signed, error: signedError } = await supabase.storage
-      .from("deal-photos")
-      .createSignedUrl(photo_path, 60 * 60);
+    let signedPosterUrl: string | null = null;
+    if (photo_path) {
+      const { data: signed, error: signedError } = await supabase.storage
+        .from("deal-photos")
+        .createSignedUrl(photo_path, 60 * 60);
 
-    if (signedError || !signed?.signedUrl) {
-      return new Response(JSON.stringify({ error: "Could not access the photo. Upload again." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (signedError || !signed?.signedUrl) {
+        return new Response(JSON.stringify({ error: "Could not access the photo. Upload again." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      signedPosterUrl = signed.signedUrl;
     }
 
     /** Demo account: default path uses local templates (no OpenAI). Set AI_ADS_DEMO_USE_LIVE=true + OPENAI_API_KEY for live tests. */
@@ -232,7 +253,7 @@ serve(async (req) => {
         const ms = 900 + Math.floor(Math.random() * 550);
         await new Promise((r) => setTimeout(r, ms));
         const demoAds = buildDemoAdVariants({
-          hint_text,
+          hint_text: hintForModel,
           price,
           business_name: typeof business.name === "string" ? business.name : "",
           business_context,
@@ -262,8 +283,10 @@ serve(async (req) => {
           business_id,
           user_id: user.id,
           request_type: "ad_variants",
-          input_mode: "photo_hint",
-          request_hash: `demo_mock:${regeneration_attempt}:${photo_path.slice(-48)}`,
+          input_mode: input_mode_log,
+          request_hash: `demo_mock:${regeneration_attempt}:${
+            photo_path ? photo_path.slice(-48) : "structured"
+          }`,
           prompt_version: "v1",
           model: "demo_mock",
           success: true,
@@ -293,9 +316,16 @@ serve(async (req) => {
 
     const factLines: string[] = [
       `Business name (display only; do not invent a different business type than the offer implies): ${business.name}`,
-      `OWNER OFFER NOTE — HIGHEST PRIORITY. Every headline, subheadline, and CTA must be consistent with this. Do not invent items, discounts, prices, or times not stated or clearly implied here: ${hint_text}`,
-      `Price field from app (use only if it matches the owner note; otherwise treat as not specified): ${price != null && price !== "" ? String(price) : "not specified"}`,
     ];
+    if (has_structured_offer) {
+      factLines.push(
+        `STRUCTURED OFFER — CANONICAL JSON (same priority as owner note; do not contradict): ${structuredOfferJson}`,
+      );
+    }
+    factLines.push(
+      `OWNER OFFER NOTE — HIGHEST PRIORITY. Every headline, subheadline, and CTA must be consistent with this. Do not invent items, discounts, prices, or times not stated or clearly implied here: ${hintForModel}`,
+      `Price field from app (use only if it matches the owner note; otherwise treat as not specified): ${price != null && price !== "" ? String(price) : "not specified"}`,
+    );
     if (offer_schedule_summary) {
       factLines.push(
         `OFFER SCHEDULE — same priority as owner note. When times matter, headline or subheadline must reflect this window accurately: ${offer_schedule_summary}`,
@@ -342,7 +372,9 @@ serve(async (req) => {
     const system = [
       "You write exactly 3 mobile ad concepts for a local deal app (Twofer). Output JSON only.",
       `OUTPUT LANGUAGE: Write headline, subheadline, cta, style_label, rationale, and visual_direction entirely in ${outputLangName}. Do not mix languages.`,
-      "PRIORITY ORDER: (1) SECTION A offer facts in the user message — owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only.",
+      signedPosterUrl
+        ? "PRIORITY ORDER: (1) SECTION A offer facts in the user message — structured offer JSON (if present), owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only."
+        : "PRIORITY ORDER: (1) SECTION A offer facts — structured offer JSON (if present), owner note, schedule, price field (2) SECTION B profile hints for tone/voice only. No image is provided; do not invent visual details of a dish.",
       "Profile category/tone/location/blurb must NOT override item, discount type, price, or time window. If profile says 'bakery' but the offer is clearly about lattes, write for the latte offer.",
       "Each ad MUST set creative_lane to one of: value | neighborhood | premium — use each exactly once.",
       "Lane rules:",
@@ -351,6 +383,7 @@ serve(async (req) => {
       "• premium: quality, ingredients, craft, care — not snobby corporate.",
       "Do not promise what SECTION A and the photo do not support.",
       "Differentiate lanes strongly: a reader should see three strategies, not three rephrasings.",
+      "Each of the three headlines must use a visibly different structure: one as a direct question to the reader, one as a clear factual or benefit statement, and one as a two-beat line (setup clause + payoff). Do not reuse the same opening pattern across lanes.",
       "Ban generic phrases: 'best deal ever', 'amazing offer', 'you won't believe', 'act now', 'limited time only' unless the owner note implies a real window.",
       "Do not say 'today only', 'today', or a specific weekday unless the owner note explicitly includes that day or 'today'.",
       "No health, nutrition, or 'best in town' claims unless stated in the owner note.",
@@ -404,6 +437,13 @@ serve(async (req) => {
       },
     };
 
+    const userContent: Array<{ type: string; text?: string; image_url?: { url: string; detail: string } }> = [
+      { type: "text", text: userText },
+    ];
+    if (signedPosterUrl) {
+      userContent.push({ type: "image_url", image_url: { url: signedPosterUrl, detail: "low" } });
+    }
+
     const aiBody = {
       model: CHAT_MODEL,
       response_format: { type: "json_schema", json_schema: jsonSchema },
@@ -411,10 +451,7 @@ serve(async (req) => {
         { role: "system", content: system },
         {
           role: "user",
-          content: [
-            { type: "text", text: userText },
-            { type: "image_url", image_url: { url: signed.signedUrl, detail: "low" } },
-          ],
+          content: userContent,
         },
       ],
     };
@@ -444,7 +481,7 @@ serve(async (req) => {
         business_id,
         user_id: user.id,
         request_type: "ad_variants",
-        input_mode: "photo_hint",
+        input_mode: input_mode_log,
         request_hash: `openai_http_${aiRes.status}`,
         prompt_version: "v1",
         model: CHAT_MODEL,
@@ -491,7 +528,7 @@ serve(async (req) => {
         business_id,
         user_id: user.id,
         request_type: "ad_variants",
-        input_mode: "photo_hint",
+        input_mode: input_mode_log,
         request_hash: "parse_error",
         prompt_version: "v1",
         model: CHAT_MODEL,
@@ -519,7 +556,7 @@ serve(async (req) => {
         business_id,
         user_id: user.id,
         request_type: "ad_variants",
-        input_mode: "photo_hint",
+        input_mode: input_mode_log,
         request_hash: "lane_validation",
         prompt_version: "v1",
         model: CHAT_MODEL,
@@ -550,8 +587,10 @@ serve(async (req) => {
       business_id,
       user_id: user.id,
       request_type: "ad_variants",
-      input_mode: "photo_hint",
-      request_hash: `live:${regeneration_attempt}:${photo_path.slice(-48)}`,
+      input_mode: input_mode_log,
+      request_hash: `live:${regeneration_attempt}:${
+        photo_path ? photo_path.slice(-48) : `struct:${structuredOfferJson.slice(0, 120)}`
+      }`,
       prompt_version: "v1",
       model: CHAT_MODEL,
       success: true,

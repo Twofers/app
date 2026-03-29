@@ -18,6 +18,9 @@ const MODEL = resolveOpenAiChatModel();
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
 
+/** Poster image for text-only compose (DALL·E / configured image model). */
+const IMAGE_MODEL = Deno.env.get("OPENAI_IMAGE_MODEL")?.trim() || "dall-e-3";
+
 const OFFER_TYPES = [
   "bogo_same_item",
   "bogo_second_item_half_off",
@@ -45,6 +48,70 @@ function normalizePrompt(parts: (string | null | undefined)[]): string {
     .filter(Boolean)
     .join("\n")
     .slice(0, 8000);
+}
+
+function buildPosterImagePrompt(params: {
+  businessName: string;
+  displayOffer: string;
+  headline: string;
+  sub: string;
+  visualDirection: string;
+}): string {
+  const { businessName, displayOffer, headline, sub, visualDirection } = params;
+  const esc = (s: string) => s.replace(/"/g, "'");
+  return [
+    "Square promotional graphic for a local café deal mobile app (TWOFER).",
+    "Clean, modern, appetizing — illustration or stylized food art. No photorealistic human faces.",
+    `Venue: ${esc(businessName)}.`,
+    `Offer: ${esc(displayOffer)}.`,
+    `Large readable headline on image: "${esc(headline || displayOffer)}".`,
+    sub.trim() ? `Smaller subline: "${esc(sub)}".` : "",
+    visualDirection.trim() ? `Mood: ${esc(visualDirection)}` : "",
+    "Accent color bright orange #FF9F1C; light background. English text only. No QR codes.",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 3800);
+}
+
+async function tryGeneratePosterPng(openAiKey: string, prompt: string): Promise<Uint8Array | null> {
+  try {
+    const payload: Record<string, unknown> = {
+      model: IMAGE_MODEL,
+      prompt,
+      n: 1,
+      size: "1024x1024",
+      response_format: "b64_json",
+    };
+    if (IMAGE_MODEL.includes("dall-e-3")) {
+      payload.quality = "standard";
+      payload.style = "vivid";
+    }
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.log(
+        JSON.stringify({ tag: "ai_compose", event: "image_gen_http", status: res.status }),
+      );
+      return null;
+    }
+    const j = await res.json();
+    const b64 = j?.data?.[0]?.b64_json;
+    if (typeof b64 !== "string" || !b64) return null;
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch (e) {
+    console.log(JSON.stringify({ tag: "ai_compose", event: "image_gen_error", err: String(e) }));
+    return null;
+  }
 }
 
 async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<string> {
@@ -164,6 +231,7 @@ serve(async (req) => {
     const imageBase64 = typeof body.image_base64 === "string" ? body.image_base64.trim() : "";
     const audioBase64 = typeof body.audio_base64 === "string" ? body.audio_base64.trim() : "";
     const transcribeOnly = body.transcribe_only === true;
+    const generate_poster_image = body.generate_poster_image === true;
 
     if (transcribeOnly) {
       if (!openAiKey) {
@@ -323,6 +391,7 @@ serve(async (req) => {
       .select("id")
       .eq("business_id", business_id)
       .eq("request_type", "compose_offer")
+      .eq("success", true)
       .gte("created_at", new Date(now - cooldownMs).toISOString())
       .limit(1)
       .maybeSingle();
@@ -560,7 +629,35 @@ serve(async (req) => {
 
     const low = !!parsed.low_confidence;
     const offerType = String(offer.offer_type);
-    const logPayload = { ...parsed, input_type: input_mode };
+    const logPayload = { ...parsed, input_type: input_mode } as Record<string, unknown>;
+
+    let poster_storage_path: string | null = null;
+    if (generate_poster_image && !hasImage && hasText) {
+      const v0 = variants[0] as Record<string, unknown>;
+      const headline = String(v0.headline_en ?? "");
+      const sub = String(v0.subheadline_en ?? "");
+      const displayOffer = String(offer.display_offer ?? "");
+      const visualDirection = String(v0.visual_direction ?? "");
+      const imgPrompt = buildPosterImagePrompt({
+        businessName: String(biz.name ?? ""),
+        displayOffer,
+        headline: headline || displayOffer,
+        sub,
+        visualDirection,
+      });
+      const png = await tryGeneratePosterPng(openAiKey, imgPrompt);
+      if (png && png.length > 100) {
+        const storagePath = `${business_id}/ai_poster_${Date.now()}.png`;
+        const { error: upErr } = await admin.storage.from("deal-photos").upload(storagePath, png, {
+          contentType: "image/png",
+          upsert: false,
+        });
+        if (!upErr) {
+          poster_storage_path = storagePath;
+          logPayload.poster_storage_path = storagePath;
+        }
+      }
+    }
 
     await admin.from("ai_generation_logs").insert({
       business_id,
@@ -588,6 +685,7 @@ serve(async (req) => {
         ok: true,
         duplicate_cached: false,
         result: logPayload,
+        poster_storage_path,
         quota: { used: newUsed, limit, remaining: Math.max(0, limit - newUsed) },
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

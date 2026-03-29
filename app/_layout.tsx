@@ -17,6 +17,7 @@ import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabModeProvider } from '@/lib/tab-mode';
+import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -34,6 +35,7 @@ function RootNavigationStack() {
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <DealDeepLinkHandler />
+      <CreateMenuOfferWizardProvider>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
@@ -47,6 +49,9 @@ function RootNavigationStack() {
         <Stack.Screen name="create/ai" options={{ title: t('createAi.titleScreen') }} />
         <Stack.Screen name="create/ai-compose" options={{ title: t('aiCompose.title') }} />
         <Stack.Screen name="create/reuse" options={{ title: t('reuseHub.title') }} />
+        <Stack.Screen name="create/menu-scan" options={{ title: t('menuScan.title') }} />
+        <Stack.Screen name="create/menu-offer" options={{ title: t('menuOffer.title') }} />
+        <Stack.Screen name="create/ad-refine" options={{ title: t('adRefine.title') }} />
         <Stack.Screen name="deal/[id]" options={{ title: t('dealDetail.title') }} />
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
         <Stack.Screen
@@ -56,6 +61,7 @@ function RootNavigationStack() {
         <Stack.Screen name="deal-analytics/[id]" options={{ title: t('dealAnalytics.title') }} />
         <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
       </Stack>
+      </CreateMenuOfferWizardProvider>
       <StatusBar style="auto" />
     </ThemeProvider>
   );

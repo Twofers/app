@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { File as ExpoFsFile } from "expo-file-system";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -400,10 +402,6 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errAddPhoto"), tone: "error" });
         return false;
       }
-      if (!hintText.trim()) {
-        setBanner({ message: t("createAi.errAddHint"), tone: "error" });
-        return false;
-      }
     }
     return true;
   }
@@ -412,11 +410,20 @@ export default function AiDealScreen() {
     if (photoPath) return photoPath;
     if (!photoUri || !businessId) return null;
     const path = `${businessId}/${Date.now()}.jpg`;
-    const response = await fetch(photoUri);
-    const blob = await response.blob();
+    let body: Blob | ArrayBuffer;
+    if (Platform.OS === "web") {
+      const response = await fetch(photoUri);
+      body = await response.blob();
+    } else {
+      const b64 = await new ExpoFsFile(photoUri).base64();
+      const raw = atob(b64);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      body = bytes.buffer;
+    }
     const { error: uploadError } = await supabase.storage
       .from("deal-photos")
-      .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      .upload(path, body, { contentType: "image/jpeg", upsert: false });
     if (uploadError) throw uploadError;
     setPhotoPath(path);
     return path;

@@ -37,6 +37,8 @@ export type AiComposeResultPayload = {
   recommendation_reason?: string;
   recommended_offer: RecommendedOffer;
   ad_variants: AiAdVariant[];
+  /** Set when text-only compose requested an AI poster image (stored under deal-photos). */
+  poster_storage_path?: string | null;
 };
 
 export type AiComposeSuccess = {
@@ -94,12 +96,15 @@ export async function aiComposeOfferGenerate(body: {
   business_id: string;
   prompt_text?: string;
   image_base64?: string;
+  /** When true and request is text-only, edge function generates a poster via OpenAI Images and uploads it. */
+  generate_poster_image?: boolean;
 }): Promise<AiComposeSuccess> {
   const { data, error } = await supabase.functions.invoke("ai-compose-offer", {
     body: {
       business_id: body.business_id,
       prompt_text: body.prompt_text?.trim() || undefined,
       image_base64: body.image_base64,
+      generate_poster_image: body.generate_poster_image === true,
     },
     timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });

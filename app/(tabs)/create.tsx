@@ -135,6 +135,38 @@ export default function CreateDeal() {
           </Pressable>
 
           <Pressable
+            onPress={() => router.push("/create/menu-scan" as Href)}
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              backgroundColor: Colors.light.surface,
+              borderWidth: 1,
+              borderColor: Colors.light.border,
+            }}
+          >
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.scanMenuTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+              {t("createHub.scanMenuSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/create/menu-offer" as Href)}
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              backgroundColor: Colors.light.surfaceMuted,
+              borderWidth: 1,
+              borderColor: Colors.light.border,
+            }}
+          >
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuOfferTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+              {t("createHub.menuOfferSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => router.push("/create/reuse")}
             style={{
               borderRadius: Radii.lg,
