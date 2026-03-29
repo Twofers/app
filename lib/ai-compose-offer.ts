@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { parseFunctionError } from "./functions";
+import { EDGE_FUNCTION_TIMEOUT_AI_MS, parseFunctionError } from "./functions";
 
 export type AiComposeQuota = {
   used: number;
@@ -76,6 +76,7 @@ export async function aiComposeOfferTranscribe(body: {
       audio_base64: body.audio_base64,
       transcribe_only: true,
     },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });
   if (error) {
     const e = new Error(parseFunctionError(error)) as Error & { code?: string };
@@ -100,6 +101,7 @@ export async function aiComposeOfferGenerate(body: {
       prompt_text: body.prompt_text?.trim() || undefined,
       image_base64: body.image_base64,
     },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });
 
   if (error) {

@@ -74,6 +74,22 @@ const StorageAdapter = {
   },
 };
 
+/** Avoids some RN fetch polyfill crashes (invalid Response status) surfacing as opaque "status 0" errors. */
+function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const run = globalThis.fetch.bind(globalThis);
+  return run(input, init).catch((err: unknown) => {
+    const m = err instanceof Error ? err.message : String(err);
+    if (
+      m.includes("status provided (0)") ||
+      m.includes("outside the range") ||
+      m.includes("Failed to construct 'Response'")
+    ) {
+      throw new Error("Network request failed. Check your connection and try again.");
+    }
+    throw err;
+  });
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: StorageAdapter,
@@ -81,5 +97,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // SSR on web has no real storage; keep it purely client-side.
     persistSession: !isWeb || hasWindow,
     detectSessionInUrl: false,
+  },
+  global: {
+    fetch: supabaseFetch,
   },
 });

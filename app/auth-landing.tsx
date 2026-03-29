@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
-  Alert,
+  ActivityIndicator,
+  BackHandler,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -16,12 +17,14 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { logAuthPath } from "@/lib/auth-path-log";
-import { friendlyAuthMessage } from "@/lib/auth-error-messages";
+import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
+import { Banner } from "@/components/ui/banner";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -49,7 +52,9 @@ function ScalePressable({
         triggerLightHaptic();
         scale.value = springPressIn();
       }}
-      onPressOut={() => { scale.value = springPressOut(); }}
+      onPressOut={() => {
+        scale.value = springPressOut();
+      }}
       style={[style, rStyle]}
     >
       {children}
@@ -59,23 +64,49 @@ function ScalePressable({
 
 const DEMO_MODE = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
 
-
 export default function AuthLandingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const params = useLocalSearchParams<{ next?: string }>();
   const nextHref = (typeof params.next === "string" && params.next.length > 0 ? params.next : "/(tabs)") as Href;
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState(DEMO_MODE ? "demo@demo.com" : "");
   const [pw, setPw] = useState(DEMO_MODE ? "123456" : "");
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
 
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => sub.remove();
+  }, []);
+
+  const busy = busyAction !== null;
   const canSubmit = !busy && email.trim().length > 0 && pw.length > 0;
+
+  function clearFeedback() {
+    setAuthError(null);
+  }
+
+  function onEmailChange(v: string) {
+    setEmail(v);
+    clearFeedback();
+    setSignUpAwaitingVerification(false);
+  }
+
+  function onPwChange(v: string) {
+    setPw(v);
+    clearFeedback();
+  }
 
   async function handleLogIn() {
     if (!canSubmit) return;
-    setBusy(true);
+    setBusyAction("login");
+    clearFeedback();
     logAuthPath("normal_login", email.trim());
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -83,50 +114,53 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
-        Alert.alert(t("authLanding.loginFailedTitle"), friendlyAuthMessage(error.message, t));
+        setAuthError(friendlyAuthError(error, t));
         return;
       }
       router.replace(nextHref);
     } catch (e: unknown) {
-      Alert.alert(
-        t("authLanding.loginFailedTitle"),
-        friendlyAuthMessage(e instanceof Error ? e.message : String(e), t),
-      );
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function handleSignUp() {
     if (!canSubmit) return;
-    setBusy(true);
+    setBusyAction("signup");
+    clearFeedback();
+    setSignUpAwaitingVerification(false);
     logAuthPath("signup");
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
       });
       if (error) {
-        Alert.alert(t("authLanding.signUpFailedTitle"), friendlyAuthMessage(error.message, t));
+        setAuthError(friendlyAuthError(error, t));
+        return;
+      }
+      if (!data.session) {
+        setSignUpAwaitingVerification(true);
         return;
       }
       router.replace("/onboarding" as Href);
     } catch (e: unknown) {
-      Alert.alert(
-        t("authLanding.signUpFailedTitle"),
-        friendlyAuthMessage(e instanceof Error ? e.message : String(e), t),
-      );
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
+  const inputBorder = theme.border;
+  const inputBg = busy ? theme.surfaceMuted : theme.surface;
+  const mutedLegal = colorScheme === "dark" ? "rgba(236,237,238,0.55)" : "rgba(17,24,28,0.55)";
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -145,113 +179,156 @@ export default function AuthLandingScreen() {
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
-            <Text style={{ fontSize: 32, fontWeight: "900", color: Colors.light.primary, letterSpacing: 2, marginTop: 8 }}>
+            <Text
+              style={{
+                fontSize: 32,
+                fontWeight: "900",
+                color: theme.primary,
+                letterSpacing: 2,
+                marginTop: 8,
+              }}
+            >
               TWOFER
             </Text>
           </View>
 
-          {/* Email */}
-          <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
-            {t("authLanding.emailLabel")}
-          </Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoCorrect={false}
-            editable={!busy}
-            placeholder="you@example.com"
-            placeholderTextColor="rgba(17,24,28,0.35)"
-            style={{
-              borderWidth: 1,
-              borderColor: "#e5e7eb",
-              borderRadius: Radii.md,
-              padding: Spacing.lg,
-              fontSize: 16,
-              backgroundColor: busy ? "#f9fafb" : "#fff",
-              color: "#111",
-              marginBottom: Spacing.md,
-            }}
-          />
+          {authError ? <Banner message={authError} tone="error" /> : null}
 
-          {/* Password */}
-          <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
-            {t("authLanding.passwordLabel")}
-          </Text>
-          <TextInput
-            value={pw}
-            onChangeText={setPw}
-            secureTextEntry
-            editable={!busy}
-            placeholder="••••••••"
-            placeholderTextColor="rgba(17,24,28,0.35)"
-            style={{
-              borderWidth: 1,
-              borderColor: "#e5e7eb",
-              borderRadius: Radii.md,
-              padding: Spacing.lg,
-              fontSize: 16,
-              backgroundColor: busy ? "#f9fafb" : "#fff",
-              color: "#111",
-            }}
-          />
+          {signUpAwaitingVerification ? (
+            <View style={{ marginBottom: Spacing.lg }}>
+              <Banner message={t("authLanding.verifyEmailTitle")} tone="info" />
+              <Text
+                style={{
+                  marginTop: Spacing.md,
+                  fontSize: 15,
+                  lineHeight: 22,
+                  color: theme.mutedText,
+                  textAlign: "center",
+                }}
+              >
+                {t("authLanding.verifyEmailBody", { email: email.trim() })}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setSignUpAwaitingVerification(false);
+                  clearFeedback();
+                }}
+                style={{ marginTop: Spacing.lg, alignSelf: "center", paddingVertical: Spacing.sm }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.primary }}>
+                  {t("authLanding.backToSignIn")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
-          {/* Forgot password */}
-          <Pressable
-            onPress={() => router.push("/forgot-password" as Href)}
-            disabled={busy}
-            style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.xl, paddingVertical: 4 }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.light.primary, opacity: busy ? 0.45 : 1 }}>
-              {t("authLanding.forgotPassword")}
-            </Text>
-          </Pressable>
+          {!signUpAwaitingVerification ? (
+            <>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+                {t("authLanding.emailLabel")}
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={onEmailChange}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                editable={!busy}
+                placeholder="you@example.com"
+                placeholderTextColor={theme.mutedText}
+                style={{
+                  borderWidth: 1,
+                  borderColor: inputBorder,
+                  borderRadius: Radii.md,
+                  padding: Spacing.lg,
+                  fontSize: 16,
+                  backgroundColor: inputBg,
+                  color: theme.text,
+                  marginBottom: Spacing.md,
+                }}
+              />
 
-          {/* Log In */}
-          <ScalePressable
-            disabled={!canSubmit}
-            onPress={() => void handleLogIn()}
-            style={{
-              minHeight: 58,
-              borderRadius: Radii.lg,
-              backgroundColor: Colors.light.primary,
-              justifyContent: "center",
-              alignItems: "center",
-              boxShadow: "0px 4px 10px rgba(0,0,0,0.15)",
-              elevation: 3,
-              opacity: canSubmit ? 1 : 0.5,
-              marginBottom: Spacing.md,
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18 }}>
-              {busy ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
-            </Text>
-          </ScalePressable>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+                {t("authLanding.passwordLabel")}
+              </Text>
+              <TextInput
+                value={pw}
+                onChangeText={onPwChange}
+                secureTextEntry
+                editable={!busy}
+                placeholder="••••••••"
+                placeholderTextColor={theme.mutedText}
+                style={{
+                  borderWidth: 1,
+                  borderColor: inputBorder,
+                  borderRadius: Radii.md,
+                  padding: Spacing.lg,
+                  fontSize: 16,
+                  backgroundColor: inputBg,
+                  color: theme.text,
+                }}
+              />
 
-          {/* Create Account */}
-          <ScalePressable
-            disabled={!canSubmit}
-            onPress={() => void handleSignUp()}
-            style={{
-              minHeight: 58,
-              borderRadius: Radii.lg,
-              backgroundColor: "#fff",
-              borderWidth: 2,
-              borderColor: Colors.light.primary,
-              justifyContent: "center",
-              alignItems: "center",
-              opacity: canSubmit ? 1 : 0.5,
-              marginBottom: Spacing.xl,
-            }}
-          >
-            <Text style={{ color: Colors.light.primary, fontWeight: "900", fontSize: 18 }}>
-              {t("authLanding.createAccount")}
-            </Text>
-          </ScalePressable>
+              <Pressable
+                onPress={() => router.push("/forgot-password" as Href)}
+                disabled={busy}
+                style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.xl, paddingVertical: 4 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
+                  {t("authLanding.forgotPassword")}
+                </Text>
+              </Pressable>
+
+              <ScalePressable
+                disabled={!canSubmit}
+                onPress={() => void handleLogIn()}
+                style={{
+                  minHeight: 58,
+                  borderRadius: Radii.lg,
+                  backgroundColor: theme.primary,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: Spacing.sm,
+                  boxShadow: "0px 4px 10px rgba(0,0,0,0.15)",
+                  elevation: 3,
+                  opacity: canSubmit ? 1 : 0.5,
+                  marginBottom: Spacing.md,
+                }}
+              >
+                {busyAction === "login" ? <ActivityIndicator color={theme.primaryText} /> : null}
+                <Text style={{ color: theme.primaryText, fontWeight: "900", fontSize: 18 }}>
+                  {busyAction === "login" ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
+                </Text>
+              </ScalePressable>
+
+              <ScalePressable
+                disabled={!canSubmit}
+                onPress={() => void handleSignUp()}
+                style={{
+                  minHeight: 58,
+                  borderRadius: Radii.lg,
+                  backgroundColor: theme.surface,
+                  borderWidth: 2,
+                  borderColor: theme.primary,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: Spacing.sm,
+                  opacity: canSubmit ? 1 : 0.5,
+                  marginBottom: Spacing.xl,
+                }}
+              >
+                {busyAction === "signup" ? <ActivityIndicator color={theme.primary} /> : null}
+                <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 18 }}>
+                  {t("authLanding.createAccount")}
+                </Text>
+              </ScalePressable>
+            </>
+          ) : null}
 
           <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 12, lineHeight: 18, opacity: 0.55, textAlign: "center" }}>
+            <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }}>
               {t("authLanding.legalFooter")}
             </Text>
             <LegalExternalLinks align="center" />

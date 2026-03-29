@@ -4,6 +4,18 @@ function lower(raw: string): string {
   return (raw ?? "").toLowerCase();
 }
 
+/** Use for `{ data, error }` results from `supabase.auth.*` so HTTP status (e.g. 429) is respected. */
+export function friendlyAuthError(
+  error: { message?: string; status?: number } | null | undefined,
+  t: TFunction,
+): string {
+  if (!error) return t("auth.errGeneric");
+  if (error.status === 429) {
+    return t("auth.errRateLimited");
+  }
+  return friendlyAuthMessage(error.message ?? "", t);
+}
+
 /** Maps Supabase / network auth errors to short, user-facing copy. */
 export function friendlyAuthMessage(raw: string, t: TFunction): string {
   const m = lower(raw);

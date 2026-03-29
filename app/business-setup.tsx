@@ -7,8 +7,8 @@ import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
-import { useBusiness } from "@/hooks/use-business";
 import { Colors, Radii } from "@/constants/theme";
 
 type Tone = "error" | "success" | "info";
@@ -18,7 +18,7 @@ export default function BusinessSetupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { sessionEmail } = useBusiness();
+  const { session, isInitialLoading: authLoading } = useAuthSession();
 
   const [businessName, setBusinessName] = useState("");
   const [address, setAddress] = useState("");
@@ -38,11 +38,10 @@ export default function BusinessSetupScreen() {
   );
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
-      if (!bypass && !data.session?.user?.id) router.replace("/(tabs)/account");
-    });
-  }, [router, params.skipSetup, params.e2e]);
+    if (authLoading) return;
+    const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
+    if (!bypass && !session?.user?.id) router.replace("/(tabs)/account");
+  }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
 
 
   async function onSubmit() {
@@ -52,9 +51,6 @@ export default function BusinessSetupScreen() {
       return;
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!uid) {
       setBanner({ message: t("createHub.errLoginBusiness"), tone: "error" });
@@ -64,7 +60,7 @@ export default function BusinessSetupScreen() {
     setBusy(true);
     try {
       const addr = trimmed.address;
-      const { data: business, error } = await supabase
+      const { error } = await supabase
         .from("businesses")
         .upsert(
           {

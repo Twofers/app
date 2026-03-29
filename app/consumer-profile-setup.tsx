@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Banner } from "@/components/ui/banner";
-import { supabase } from "@/lib/supabase";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
   fetchConsumerProfile,
@@ -38,6 +38,7 @@ function toIsoDate(d: Date): string {
 
 export default function ConsumerProfileSetupScreen() {
   const { t } = useTranslation();
+  const { session, isInitialLoading: authLoading } = useAuthSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ edit?: string }>();
   const isEdit = params.edit === "1" || params.edit === "true";
@@ -51,18 +52,17 @@ export default function ConsumerProfileSetupScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
     let cancelled = false;
     void (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!session?.user?.id) {
+      const uid = session?.user?.id;
+      if (!uid) {
         router.replace("/auth-landing");
         return;
       }
+      if (cancelled) return;
       setEmail(session.user.email ?? null);
-      const row = await fetchConsumerProfile(session.user.id);
+      const row = await fetchConsumerProfile(uid);
       if (row) {
         setZip(row.zip_code ?? "");
         const parsed = row.birthdate ? parseIsoToLocalDate(row.birthdate) : null;
@@ -78,7 +78,7 @@ export default function ConsumerProfileSetupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, isEdit]);
+  }, [router, isEdit, session, authLoading]);
 
   async function onContinue() {
     setBanner(null);
@@ -92,9 +92,6 @@ export default function ConsumerProfileSetupScreen() {
       setBanner({ message: t("consumerProfile.errBirthdate"), tone: "error" });
       return;
     }
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
     const uid = session?.user?.id;
     if (!uid) {
       setBanner({ message: t("consumerProfile.errLogin"), tone: "error" });

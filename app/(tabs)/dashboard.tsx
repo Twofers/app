@@ -272,7 +272,8 @@ export default function BusinessDashboard() {
           "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
         )
         .eq("business_id", businessId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(500);
       if (dealsError) throw dealsError;
 
       const launched = (dealsData ?? []).filter(

@@ -1,5 +1,11 @@
+import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { devWarn } from "@/lib/dev-log";
+
+/** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
+export const EDGE_FUNCTION_TIMEOUT_MS = 45_000;
+export const EDGE_FUNCTION_TIMEOUT_AI_MS = 120_000;
+export const EDGE_FUNCTION_TIMEOUT_QUICK_MS = 25_000;
 
 type SupabaseFunctionInvokeError = {
   message?: string;
@@ -14,6 +20,15 @@ function isSupabaseFunctionInvokeError(e: unknown): e is SupabaseFunctionInvokeE
 }
 
 export function parseFunctionError(error: unknown): string {
+  if (error instanceof FunctionsFetchError) {
+    const ctx = error.context as { name?: string; message?: string } | undefined;
+    const name = ctx?.name ?? "";
+    const msg = (ctx?.message ?? "").toLowerCase();
+    if (name === "AbortError" || msg.includes("abort")) {
+      return "Request timed out. Check your connection and try again.";
+    }
+  }
+
   // Supabase functions.invoke error structure:
   // - error.message: response body as string (often JSON)
   // - error.context: additional context
@@ -66,6 +81,7 @@ export type ClaimDealExtraBody = {
 export async function claimDeal(dealId: string, extra?: ClaimDealExtraBody) {
   const { data, error } = await supabase.functions.invoke("claim-deal", {
     body: { deal_id: dealId, ...extra },
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
 
   if (error) {
@@ -92,6 +108,7 @@ export async function claimDeal(dealId: string, extra?: ClaimDealExtraBody) {
 export async function redeemToken(body: { token?: string; short_code?: string }) {
   const { data, error } = await supabase.functions.invoke("redeem-token", {
     body,
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
 
   if (error) {
@@ -117,6 +134,7 @@ export async function redeemToken(body: { token?: string; short_code?: string })
 export async function beginVisualRedeem(claimId: string) {
   const { data, error } = await supabase.functions.invoke("begin-visual-redeem", {
     body: { claim_id: claimId },
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) throw new Error(parseFunctionError(error));
   if (data && typeof data === "object" && "error" in data) {
@@ -134,6 +152,7 @@ export async function beginVisualRedeem(claimId: string) {
 export async function completeVisualRedeem(claimId: string) {
   const { data, error } = await supabase.functions.invoke("complete-visual-redeem", {
     body: { claim_id: claimId },
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) throw new Error(parseFunctionError(error));
   if (data && typeof data === "object" && "error" in data) {
@@ -151,6 +170,7 @@ export async function completeVisualRedeem(claimId: string) {
 export async function cancelVisualRedeem(claimId: string) {
   const { data, error } = await supabase.functions.invoke("cancel-visual-redeem", {
     body: { claim_id: claimId },
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) throw new Error(parseFunctionError(error));
   if (data && typeof data === "object" && "error" in data) {
@@ -162,7 +182,10 @@ export async function cancelVisualRedeem(claimId: string) {
 /** Best-effort: server finalizes visual redemptions stuck past TTL. */
 export async function finalizeStaleRedeems(): Promise<void> {
   try {
-    await supabase.functions.invoke("finalize-stale-redeems", { body: {} });
+    await supabase.functions.invoke("finalize-stale-redeems", {
+      body: {},
+      timeout: EDGE_FUNCTION_TIMEOUT_QUICK_MS,
+    });
   } catch (err) {
     devWarn("[finalizeStaleRedeems] failed (non-fatal):", err);
   }
@@ -181,7 +204,10 @@ function throwIfDeleteBlockedBody(body: unknown): void {
 }
 
 export async function deleteUserAccount(): Promise<void> {
-  const { data, error } = await supabase.functions.invoke("delete-user-account", { body: {} });
+  const { data, error } = await supabase.functions.invoke("delete-user-account", {
+    body: {},
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
   if (error) {
     throwIfDeleteBlockedBody(error.context?.body);
     throw new Error(parseFunctionError(error));
@@ -200,6 +226,7 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
   try {
     const { error } = await supabase.functions.invoke("send-deal-push", {
       body: { deal_id: dealId },
+      timeout: EDGE_FUNCTION_TIMEOUT_QUICK_MS,
     });
     if (error) {
       devWarn("[notifyDealPublished] Push dispatch failed:", parseFunctionError(error));
@@ -227,6 +254,7 @@ export async function aiGenerateDealCopy(body: {
       price: body.price ?? undefined,
       business_name: body.business_name ?? undefined,
     },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });
 
   if (error) {
@@ -273,6 +301,7 @@ export async function aiCreateDeal(body: {
       max_claims: body.max_claims,
       claim_cutoff_buffer_minutes: body.claim_cutoff_buffer_minutes ?? 15,
     },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });
 
   if (error) {

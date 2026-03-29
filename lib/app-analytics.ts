@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
+import { EDGE_FUNCTION_TIMEOUT_QUICK_MS } from "@/lib/functions";
 import { devWarn } from "@/lib/dev-log";
 
 export type AppAnalyticsEventName =
@@ -38,6 +39,7 @@ export function trackAppAnalyticsEvent(payload: Payload): void {
           app_version: Constants.expoConfig?.version ?? (Constants as { nativeAppVersion?: string }).nativeAppVersion ?? null,
           device_platform: Platform.OS,
         },
+        timeout: EDGE_FUNCTION_TIMEOUT_QUICK_MS,
       });
       if (error) {
         devWarn("[analytics]", error.message ?? error);

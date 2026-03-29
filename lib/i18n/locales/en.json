@@ -89,8 +89,9 @@
     "favoritesStripTitle": "Your favorites",
     "nearbyBusinesses": "Nearby businesses",
     "emptyBusinessesTitle": "No businesses yet",
-    "emptyBusinessesBody": "When businesses join Twofer, they’ll show up here.",
+    "emptyBusinessesBody": "When businesses join TWOFER, they’ll show up here.",
     "loadDealsError": "We couldn’t load live deals. Try again in a moment.",
+    "loadBusinessesError": "We couldn’t load businesses. Pull to refresh or try again in a moment.",
     "guestBannerTitle": "Browsing without an account",
     "guestBannerBody": "Sign in to claim deals, use your wallet, and keep QR tickets. You can still browse listings.",
     "guestSignInCta": "Sign in or create account",
@@ -112,7 +113,7 @@
     "title": "Map",
     "toggleAll": "All businesses",
     "toggleLive": "Live deals",
-    "subtitleAll": "Every business on Twofer with a map pin.",
+    "subtitleAll": "Every business on TWOFER with a map pin.",
     "subtitleLive": "Only spots with a live offer right now.",
     "dismissPreview": "Dismiss",
     "webFallback": "Map view is available on the iOS and Android apps. Use Home to browse lists on web.",
@@ -145,9 +146,9 @@
     "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius."
   },
   "onboarding": {
-    "title": "Welcome to Twofer",
+    "title": "Welcome to TWOFER",
     "subtitle": "Find real-time local deals, save favorites, and redeem with QR.",
-    "introBody": "Twofer shows live offers from nearby businesses. Save places you like, claim in one tap, and keep tickets in your wallet.",
+    "introBody": "TWOFER shows live offers from nearby businesses. Save places you like, claim in one tap, and keep tickets in your wallet.",
     "langTitle": "Choose your language",
     "langContinue": "Continue",
     "next": "Continue",
@@ -266,11 +267,17 @@
   },
   "dealQuality": {
     "blocks": {
-      "TITLE_SHORT": "Your title is too short to show the value. Twofer only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.",
+      "TITLE_SHORT": "Your title is too short to show the value. TWOFER only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.",
       "MULTI_PERCENT": "This deal lists more than one discount percentage and the main offer isn’t clear. Simplify to one headline (40%+ off, BOGO, 2-for-1, or buy-2-get-1), or trim extra % lines from the fine print when your main offer is already one of those.",
-      "BELOW_THRESHOLD": "Twofer only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.",
+      "BELOW_THRESHOLD": "TWOFER only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.",
       "CLARIFY_VALUE": "Make the customer value obvious: name a strong free item (free drink, free side, or free dessert with purchase), or spell out a clear bundle (items + one price, e.g. “2 for $10” or “$8 lunch: 2 slices + drink”)."
     }
+  },
+  "dealDraft": {
+    "unsavedTitle": "Discard changes?",
+    "unsavedBody": "You have unsaved deal details. Leave without saving?",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
   },
   "createQuick": {
     "title": "Quick Deal",
@@ -365,6 +372,9 @@
     "createBizCardTitle": "Create business",
     "createBizCardBody": "Create a business to post deals and redeem QR codes.",
     "logOut": "Log out",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmBody": "You’ll need to sign in again to claim deals or manage your business.",
+    "logoutConfirmCta": "Log out",
     "errSignUpFailed": "Sign up failed.",
     "errLoginFailed": "Login failed.",
     "loggedOut": "Logged out.",
@@ -472,7 +482,8 @@
     "takePhoto": "Take photo",
     "fromGallery": "Gallery",
     "errCameraPermission": "Allow camera access to snap a photo.",
-    "quotaWarning": "{{remaining}} AI generations remaining this month."
+    "quotaWarning": "{{remaining}} AI generations remaining this month.",
+    "stepOfTotal": "Step {{current}} of {{total}}"
   },
   "reuseHub": {
     "title": "Reuse & repeat",
@@ -576,11 +587,11 @@
     "alertBizFailMsg": "Please try again."
   },
   "authLanding": {
-    "title": "Twofer",
+    "title": "TWOFER",
     "subtitle": "Live local deals — sign in to browse, claim, and redeem.",
     "createAccount": "Create account",
     "languageLabel": "Language",
-    "heroA11y": "Twofer mascot",
+    "heroA11y": "TWOFER mascot",
     "demoHint": "Preview / development only",
     "emailLabel": "Email",
     "passwordLabel": "Password",
@@ -596,7 +607,10 @@
     "errPasswordLength": "Password must be at least 6 characters.",
     "errGeneric": "Something went wrong. Please try again.",
     "loginFailedTitle": "Login Failed",
-    "signUpFailedTitle": "Sign Up Failed"
+    "signUpFailedTitle": "Sign Up Failed",
+    "verifyEmailTitle": "Check your email",
+    "verifyEmailBody": "We sent a confirmation link to {{email}}. Open it to verify your account, then log in.",
+    "backToSignIn": "Back to sign in"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -609,8 +623,8 @@
   },
   "deleteAccount": {
     "title": "Delete account?",
-    "body": "This permanently removes your Twofer account. If you created a business, its deals and related claim history will also be removed.",
-    "bodyConsumer": "This permanently removes your Twofer account and signs you out. This cannot be undone.",
+    "body": "This permanently removes your TWOFER account. If you created a business, its deals and related claim history will also be removed.",
+    "bodyConsumer": "This permanently removes your TWOFER account and signs you out. This cannot be undone.",
     "confirmDestructive": "Delete my account",
     "errFailed": "We could not delete your account. Try again or contact support.",
     "sectionTitle": "Delete account",
@@ -666,7 +680,7 @@
   "passwordRecovery": {
     "forgotLink": "Forgot password?",
     "forgotTitle": "Reset password",
-    "forgotSubtitle": "Enter the email you use for Twofer. If an account exists, we’ll email you a reset link.",
+    "forgotSubtitle": "Enter the email you use for TWOFER. If an account exists, we’ll email you a reset link.",
     "submitRequest": "Send reset link",
     "sending": "Sending…",
     "requestSuccess": "If an account exists for that email, we sent a password reset link.",

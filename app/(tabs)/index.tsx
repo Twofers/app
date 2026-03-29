@@ -210,12 +210,13 @@ export default function HomeScreen() {
       .limit(300);
     if (error) {
       logPostgrestError("home screen businesses", error);
+      setBanner(t("consumerHome.loadBusinessesError"));
       setBusinesses([]);
     } else {
       setBusinesses((data ?? []) as BusinessRow[]);
     }
     setLoadingBiz(false);
-  }, []);
+  }, [t]);
 
   const loadFavorites = useCallback(async (currentUserId: string | null) => {
     if (!currentUserId) {

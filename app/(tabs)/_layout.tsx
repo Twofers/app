@@ -5,18 +5,20 @@ import { useTranslation } from "react-i18next";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
-import { supabase } from "@/lib/supabase";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 
 function TabAuthGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<"unknown" | "in" | "out">("unknown");
+  const { session, isInitialLoading } = useAuthSession();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const segments = useSegments() as string[];
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const forceE2E =
     Platform.OS === "web" &&
     ((params.e2e === "1") ||
@@ -24,40 +26,26 @@ function TabAuthGate({ children }: { children: ReactNode }) {
   const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
 
   useEffect(() => {
-    // E2E/web screenshot mode: let routing + layout be captured without requiring a real auth session.
-    // This is web-only and opt-in via `?e2e=1`, so it won't affect native apps or production usage.
-    if (forceBypass) {
-      setState("in");
-      return;
+    if (forceBypass) return;
+    const user = session?.user;
+    if (user) {
+      void registerPushTokenIfNeeded(user.id);
+      void syncConsumerPrefsToServer(user.id);
     }
+  }, [forceBypass, session?.user?.id]);
 
-    void supabase.auth.getSession().then(({ data }) => {
-      const user = data.session?.user;
-      setState(user ? "in" : "out");
-      if (user) {
-        void registerPushTokenIfNeeded(user.id);
-        void syncConsumerPrefsToServer(user.id);
-      }
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const user = session?.user;
-      setState(user ? "in" : "out");
-      if (user) {
-        void registerPushTokenIfNeeded(user.id);
-        void syncConsumerPrefsToServer(user.id);
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [forceBypass]);
+  if (forceBypass) {
+    return <>{children}</>;
+  }
 
-  if (state === "unknown") {
+  if (isInitialLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
-  if (state === "out") {
+  if (!session?.user) {
     const tabsIdx = segments.indexOf("(tabs)");
     const tail = tabsIdx >= 0 ? segments.slice(tabsIdx + 1).filter(Boolean) : [];
     const nextPath = tail.length > 0 ? `/(tabs)/${tail.join("/")}` : "/(tabs)";
@@ -66,8 +54,10 @@ function TabAuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { t } = useTranslation();
   const { mode } = useTabMode();
 
@@ -89,15 +79,15 @@ export default function TabLayout() {
       <TabModeRedirect />
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: Colors[colorScheme ?? "light"].primary,
-          tabBarInactiveTintColor: Colors[colorScheme ?? "light"].tabIconDefault,
+          tabBarActiveTintColor: theme.primary,
+          tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
           tabBarButton: HapticTab,
           tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
           tabBarItemStyle: { paddingVertical: 2 },
-          tabBarStyle: { backgroundColor: "#ffffff" },
+          tabBarStyle: { backgroundColor: theme.background },
           tabBarHideOnKeyboard: true,
-          sceneStyle: { backgroundColor: "#ffffff" },
+          sceneStyle: { backgroundColor: theme.background },
         }}
       >
         <Tabs.Screen
@@ -173,6 +163,7 @@ export default function TabLayout() {
 }
 
 function TabModeRedirect() {
+  const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
   const segments = useSegments();
   const router = useRouter();
@@ -198,20 +189,19 @@ function TabModeRedirect() {
         if (forceBypass) return;
         let cancelled = false;
         setCheckingProfile(true);
-        void supabase.auth.getSession().then(async ({ data }) => {
-          if (cancelled) return;
-          const user = data.session?.user;
-          if (!user) {
-            setCheckingProfile(false);
-            return;
-          }
+        const user = session?.user;
+        if (!user) {
+          setCheckingProfile(false);
+          return;
+        }
+        void (async () => {
           const access = await getBusinessProfileAccessForCurrentUser();
           if (cancelled) return;
           if (!access.isComplete) {
             router.replace("/business-setup");
           }
           setCheckingProfile(false);
-        });
+        })();
         return () => {
           cancelled = true;
         };
@@ -221,7 +211,7 @@ function TabModeRedirect() {
         router.navigate("/(tabs)");
       }
     }
-  }, [ready, mode, segments, router, forceBypass]);
+  }, [ready, mode, segments, router, forceBypass, session?.user?.id]);
 
   if (checkingProfile) {
     return (

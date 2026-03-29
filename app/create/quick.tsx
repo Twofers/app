@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { assessDealQuality } from "../../lib/deal-quality";
@@ -22,6 +23,7 @@ import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 
 export default function QuickDealScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const prefill = useLocalSearchParams<{
     prefillTitle?: string;
     prefillHint?: string;
@@ -47,6 +49,8 @@ export default function QuickDealScreen() {
     message: string;
     tone: "error" | "success" | "warning";
   } | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const markDirty = useCallback(() => setDirty(true), []);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
 
@@ -60,6 +64,7 @@ export default function QuickDealScreen() {
     if (t0) setTitle((prev) => prev || t0);
     if (h0) setOfferHint((prev) => prev || h0);
     if (p0) setPrice((prev) => prev || p0);
+    if (t0 || h0 || p0) setDirty(true);
     if (fromAi === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
     }
@@ -67,6 +72,23 @@ export default function QuickDealScreen() {
       setBanner({ message: t("createQuick.prefillFromReuse"), tone: "success" });
     }
   }, [prefill.prefillTitle, prefill.prefillHint, prefill.prefillPrice, prefill.fromAiCompose, prefill.fromReuse, t]);
+
+  usePreventRemove(
+    dirty,
+    useCallback(
+      ({ data }) => {
+        Alert.alert(t("dealDraft.unsavedTitle"), t("dealDraft.unsavedBody"), [
+          { text: t("dealDraft.keepEditing"), style: "cancel" },
+          {
+            text: t("dealDraft.discard"),
+            style: "destructive",
+            onPress: () => navigation.dispatch(data.action),
+          },
+        ]);
+      },
+      [navigation, t],
+    ),
+  );
 
   async function suggestTitleFromAi() {
     if (!businessId) {
@@ -187,6 +209,7 @@ export default function QuickDealScreen() {
 
       if (error) throw error;
       if (deal?.id) void notifyDealPublished(deal.id);
+      setDirty(false);
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : String(err);
@@ -221,7 +244,10 @@ export default function QuickDealScreen() {
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldOfferHint")}</Text>
             <TextInput
               value={offerHint}
-              onChangeText={setOfferHint}
+              onChangeText={(v) => {
+                markDirty();
+                setOfferHint(v);
+              }}
               placeholder={t("createQuick.placeholderOfferHint")}
               multiline
               style={{
@@ -252,7 +278,10 @@ export default function QuickDealScreen() {
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldTitle")}</Text>
             <TextInput
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(v) => {
+                markDirty();
+                setTitle(v);
+              }}
               placeholder={t("createQuick.placeholderTitle")}
               style={{
                 borderWidth: 1,
@@ -270,7 +299,10 @@ export default function QuickDealScreen() {
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldPrice")}</Text>
             <TextInput
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(v) => {
+                markDirty();
+                setPrice(v);
+              }}
               keyboardType="decimal-pad"
               placeholder={t("createQuick.placeholderPrice")}
               style={{
@@ -288,7 +320,10 @@ export default function QuickDealScreen() {
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
             <Pressable
-              onPress={() => setShowEndPicker(true)}
+              onPress={() => {
+                markDirty();
+                setShowEndPicker(true);
+              }}
               style={{
                 borderWidth: 1,
                 borderColor: Colors.light.border,
@@ -306,7 +341,10 @@ export default function QuickDealScreen() {
                 mode="datetime"
                 onChange={(_event, date) => {
                   setShowEndPicker(false);
-                  if (date) setEndTime(date);
+                  if (date) {
+                    markDirty();
+                    setEndTime(date);
+                  }
                 }}
               />
             ) : null}
@@ -316,7 +354,10 @@ export default function QuickDealScreen() {
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>
             <TextInput
               value={maxClaims}
-              onChangeText={setMaxClaims}
+              onChangeText={(v) => {
+                markDirty();
+                setMaxClaims(v);
+              }}
               keyboardType="number-pad"
               placeholder={t("createQuick.placeholderMaxClaims")}
               style={{
@@ -335,7 +376,10 @@ export default function QuickDealScreen() {
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldCutoff")}</Text>
             <TextInput
               value={cutoffMins}
-              onChangeText={setCutoffMins}
+              onChangeText={(v) => {
+                markDirty();
+                setCutoffMins(v);
+              }}
               keyboardType="number-pad"
               placeholder={t("createQuick.placeholderCutoff")}
               style={{

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/lib/supabase";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { useTabMode } from "@/lib/tab-mode";
 import { devLog } from "@/lib/dev-log";
 import {
@@ -20,36 +20,29 @@ import {
 export function DiagnosticBootLog() {
   const { ready, mode } = useTabMode();
   const { i18n } = useTranslation();
+  const { session, isInitialLoading: authLoading } = useAuthSession();
   const didLog = useRef(false);
 
   useEffect(() => {
-    if (!isDebugBootLogEnabled() || !ready || didLog.current) return;
+    if (!isDebugBootLogEnabled() || !ready || authLoading || didLog.current) return;
     didLog.current = true;
-    let cancelled = false;
     const language = i18n.language;
     const tabMode = mode;
-    void (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (cancelled) return;
-      const payload = {
-        version: getExpoAppVersion(),
-        buildProfile: getBuildProfileLabel(),
-        nativeBuild: getNativeBuildLabel(),
-        executionEnvironment: getExecutionEnvironment(),
-        previewOrDevClientProfile: isPreviewOrDevClientProfile(),
-        ...getAppExtra(),
-        tabMode,
-        language,
-        authUserId: sessionData.session?.user?.id ?? null,
-        authEmail: sessionData.session?.user?.email ?? null,
-        publicEnv: getPublicEnvSnapshot(),
-      };
-      devLog("[twoforone:boot]", JSON.stringify(payload, null, 2));
-    })();
-    return () => {
-      cancelled = true;
+    const payload = {
+      version: getExpoAppVersion(),
+      buildProfile: getBuildProfileLabel(),
+      nativeBuild: getNativeBuildLabel(),
+      executionEnvironment: getExecutionEnvironment(),
+      previewOrDevClientProfile: isPreviewOrDevClientProfile(),
+      ...getAppExtra(),
+      tabMode,
+      language,
+      authUserId: session?.user?.id ?? null,
+      authEmail: session?.user?.email ?? null,
+      publicEnv: getPublicEnvSnapshot(),
     };
-  }, [ready, mode, i18n.language]);
+    devLog("[twoforone:boot]", JSON.stringify(payload, null, 2));
+  }, [ready, mode, i18n.language, session?.user?.id, session?.user?.email, authLoading]);
 
   return null;
 }

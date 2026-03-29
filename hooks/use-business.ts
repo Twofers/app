@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "../lib/supabase";
 import type { BusinessContextPayload } from "../lib/ad-variants";
 
@@ -52,6 +53,7 @@ export function businessRowToAiContext(b: BusinessInfo | null): BusinessContextP
 }
 
 export function useBusiness() {
+  const { session, isInitialLoading: authLoading } = useAuthSession();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -64,8 +66,8 @@ export function useBusiness() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
+    const uid = session?.user?.id;
+    if (!uid) {
       setIsLoggedIn(false);
       setUserId(null);
       setSessionEmail(null);
@@ -76,15 +78,15 @@ export function useBusiness() {
     }
 
     setIsLoggedIn(true);
-    setUserId(session.user.id);
-    setSessionEmail(session.user.email ?? null);
+    setUserId(uid);
+    setSessionEmail(session?.user?.email ?? null);
 
     const { data, error: bizError } = await supabase
       .from("businesses")
       .select(
         "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
       )
-      .eq("owner_id", session.user.id)
+      .eq("owner_id", uid)
       .maybeSingle();
 
     if (bizError) {
@@ -116,15 +118,12 @@ export function useBusiness() {
         : null,
     );
     setLoading(false);
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    refresh();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      refresh();
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [refresh]);
+    if (authLoading) return;
+    void refresh();
+  }, [refresh, authLoading]);
 
   return {
     isLoggedIn,

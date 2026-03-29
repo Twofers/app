@@ -20,7 +20,7 @@ import { DELETE_ACCOUNT_URL, SUPPORT_URL, openWebsiteUrl } from "../../lib/legal
 import { DEMO_PREVIEW_EMAIL } from "../../lib/demo-account";
 import { ensureDemoCoffeePreview } from "../../lib/demo-preview-seed";
 import { signInDemoPreviewUser } from "../../lib/demo-auth-signin";
-import { friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
+import { friendlyAuthError, friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
 import { logAuthPath } from "../../lib/auth-path-log";
 import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -219,7 +219,7 @@ export default function AccountScreen() {
       });
 
       if (error) {
-        setBanner({ message: friendlyAuthMessage(error.message ?? "", t), tone: "error" });
+        setBanner({ message: friendlyAuthError(error, t), tone: "error" });
         return;
       }
 
@@ -258,7 +258,7 @@ export default function AccountScreen() {
     }
   }
 
-  async function signOut() {
+  async function performSignOut() {
     setBusy(true);
     setBanner(null);
     try {
@@ -272,6 +272,17 @@ export default function AccountScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function confirmLogout() {
+    Alert.alert(t("account.logoutConfirmTitle"), t("account.logoutConfirmBody"), [
+      { text: t("commonUi.cancel"), style: "cancel" },
+      {
+        text: t("account.logoutConfirmCta"),
+        style: "destructive",
+        onPress: () => void performSignOut(),
+      },
+    ]);
   }
 
   function confirmDeleteAccount() {
@@ -896,7 +907,7 @@ export default function AccountScreen() {
                 <TextInput
                   value={profileLatitude}
                   onChangeText={setProfileLatitude}
-                  placeholder="e.g. 30.2672"
+                  placeholder={t("account.phLat")}
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -1041,7 +1052,7 @@ export default function AccountScreen() {
             )}
           </View>
 
-          <SecondaryButton title={t("account.logOut")} onPress={signOut} disabled={busy || loading} />
+          <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
         </ScrollView>
       )}
     </View>

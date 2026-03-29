@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
 import { PASSWORD_MIN_LENGTH, validateNewPasswordPair } from "@/lib/auth-password-recovery";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -14,6 +15,7 @@ type SessionCheck = "unknown" | "ok" | "missing";
 
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
+  const { session, isInitialLoading: authLoading } = useAuthSession();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [password, setPassword] = useState("");
@@ -24,16 +26,9 @@ export default function ResetPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      setSessionCheck(data.session ? "ok" : "missing");
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (authLoading) return;
+    setSessionCheck(session ? "ok" : "missing");
+  }, [authLoading, session]);
 
   async function onSubmit() {
     const v = validateNewPasswordPair(password, confirm, PASSWORD_MIN_LENGTH);

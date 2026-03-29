@@ -1,18 +1,24 @@
+import { useEffect } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
 
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
 import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
+import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabModeProvider } from '@/lib/tab-mode';
+
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export const unstable_settings = {
   /** Auth-first: cold start hits `index` before `(tabs)`. */
@@ -56,14 +62,25 @@ function RootNavigationStack() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    const id = setTimeout(() => {
+      void SplashScreen.hideAsync();
+    }, 8000);
+    return () => clearTimeout(id);
+  }, []);
+
   return (
     <AppI18nGate>
       <SafeAreaProvider>
-        <TabModeProvider>
-          <DiagnosticBootLog />
-          <RootNavigationStack />
-          <ConsumerOnboardingGate />
-        </TabModeProvider>
+        <AuthSessionProvider>
+          <TabModeProvider>
+            <DiagnosticBootLog />
+            <AppErrorBoundary>
+              <RootNavigationStack />
+            </AppErrorBoundary>
+            <ConsumerOnboardingGate />
+          </TabModeProvider>
+        </AuthSessionProvider>
       </SafeAreaProvider>
     </AppI18nGate>
   );

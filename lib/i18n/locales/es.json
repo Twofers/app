@@ -89,8 +89,9 @@
     "favoritesStripTitle": "Tus favoritos",
     "nearbyBusinesses": "Negocios cercanos",
     "emptyBusinessesTitle": "Aún no hay negocios",
-    "emptyBusinessesBody": "Cuando se unan a Twofer, aparecerán aquí.",
+    "emptyBusinessesBody": "Cuando se unan a TWOFER, aparecerán aquí.",
     "loadDealsError": "No pudimos cargar las ofertas en vivo. Inténtalo de nuevo en un momento.",
+    "loadBusinessesError": "No pudimos cargar los negocios. Desliza para actualizar o inténtalo de nuevo en un momento.",
     "guestBannerTitle": "Navegando sin cuenta",
     "guestBannerBody": "Inicia sesión para reclamar, usar la billetera y guardar códigos QR. Aún puedes explorar listados.",
     "guestSignInCta": "Iniciar sesión o crear cuenta",
@@ -112,7 +113,7 @@
     "title": "Mapa",
     "toggleAll": "Todos los negocios",
     "toggleLive": "Ofertas en vivo",
-    "subtitleAll": "Todos los negocios en Twofer con pin en el mapa.",
+    "subtitleAll": "Todos los negocios en TWOFER con pin en el mapa.",
     "subtitleLive": "Solo sitios con una oferta activa ahora.",
     "dismissPreview": "Cerrar",
     "webFallback": "El mapa está en las apps iOS y Android. En la web usa Inicio para listas.",
@@ -145,9 +146,9 @@
     "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio."
   },
   "onboarding": {
-    "title": "Bienvenido a Twofer",
+    "title": "Bienvenido a TWOFER",
     "subtitle": "Ofertas locales en vivo, favoritos y canje con QR.",
-    "introBody": "Twofer muestra ofertas en tiempo real. Guarda sitios, reclama en un toque y guarda tickets en tu billetera.",
+    "introBody": "TWOFER muestra ofertas en tiempo real. Guarda sitios, reclama en un toque y guarda tickets en tu billetera.",
     "langTitle": "Elige tu idioma",
     "langContinue": "Continuar",
     "next": "Continuar",
@@ -266,11 +267,17 @@
   },
   "dealQuality": {
     "blocks": {
-      "TITLE_SHORT": "El título es demasiado corto para mostrar el valor. Twofer solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más claro.",
+      "TITLE_SHORT": "El título es demasiado corto para mostrar el valor. TWOFER solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más claro.",
       "MULTI_PERCENT": "Esta oferta muestra más de un porcentaje de descuento y no está clara. Simplifica a un titular (40%+, BOGO, 2x1 o compra 2 y llévate 1), o quita porcentajes extra de la letra pequeña si tu oferta principal ya es una de esas.",
-      "BELOW_THRESHOLD": "Twofer solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más fuerte.",
+      "BELOW_THRESHOLD": "TWOFER solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más fuerte.",
       "CLARIFY_VALUE": "Haz obvio el valor: indica un regalo claro (bebida, guarnición o postre gratis con la compra) o un combo concreto (artículos + un precio, p. ej. “2 por $10” o “almuerzo $8: 2 porciones + bebida”)."
     }
+  },
+  "dealDraft": {
+    "unsavedTitle": "¿Descartar cambios?",
+    "unsavedBody": "Tienes detalles de la oferta sin guardar. ¿Salir sin guardar?",
+    "discard": "Descartar",
+    "keepEditing": "Seguir editando"
   },
   "createQuick": {
     "title": "Oferta rápida",
@@ -365,6 +372,9 @@
     "createBizCardTitle": "Crear negocio",
     "createBizCardBody": "Crea un negocio para publicar ofertas y canjear códigos QR.",
     "logOut": "Cerrar sesión",
+    "logoutConfirmTitle": "¿Cerrar sesión?",
+    "logoutConfirmBody": "Tendrás que volver a iniciar sesión para reclamar ofertas o administrar tu negocio.",
+    "logoutConfirmCta": "Cerrar sesión",
     "errSignUpFailed": "Error al registrarse.",
     "errLoginFailed": "Error al entrar.",
     "loggedOut": "Sesión cerrada.",
@@ -472,7 +482,8 @@
     "takePhoto": "Tomar foto",
     "fromGallery": "Galería",
     "errCameraPermission": "Permite acceso a la cámara para tomar una foto.",
-    "quotaWarning": "{{remaining}} generaciones IA restantes este mes."
+    "quotaWarning": "{{remaining}} generaciones IA restantes este mes.",
+    "stepOfTotal": "Paso {{current}} de {{total}}"
   },
   "reuseHub": {
     "title": "Reusar y repetir",
@@ -576,11 +587,11 @@
     "alertBizFailMsg": "Inténtalo de nuevo."
   },
   "authLanding": {
-    "title": "Twofer",
+    "title": "TWOFER",
     "subtitle": "Ofertas locales en vivo — inicia sesión para explorar, reclamar y canjear.",
     "createAccount": "Crear cuenta",
     "languageLabel": "Idioma",
-    "heroA11y": "Mascota Twofer",
+    "heroA11y": "Mascota TWOFER",
     "demoHint": "Solo vista previa / desarrollo",
     "emailLabel": "Correo electrónico",
     "passwordLabel": "Contraseña",
@@ -596,7 +607,10 @@
     "errPasswordLength": "La contraseña debe tener al menos 6 caracteres.",
     "errGeneric": "Algo salió mal. Inténtalo de nuevo.",
     "loginFailedTitle": "Error al iniciar sesión",
-    "signUpFailedTitle": "Error al registrarse"
+    "signUpFailedTitle": "Error al registrarse",
+    "verifyEmailTitle": "Revisa tu correo",
+    "verifyEmailBody": "Enviamos un enlace de confirmación a {{email}}. Ábrelo para verificar tu cuenta e inicia sesión.",
+    "backToSignIn": "Volver a iniciar sesión"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -609,8 +623,8 @@
   },
   "deleteAccount": {
     "title": "¿Eliminar cuenta?",
-    "body": "Esto elimina permanentemente tu cuenta de Twofer. Si creaste un negocio, también se eliminarán sus ofertas y el historial de reclamaciones relacionado.",
-    "bodyConsumer": "Esto elimina permanentemente tu cuenta de Twofer y cierra la sesión. No se puede deshacer.",
+    "body": "Esto elimina permanentemente tu cuenta de TWOFER. Si creaste un negocio, también se eliminarán sus ofertas y el historial de reclamaciones relacionado.",
+    "bodyConsumer": "Esto elimina permanentemente tu cuenta de TWOFER y cierra la sesión. No se puede deshacer.",
     "confirmDestructive": "Eliminar mi cuenta",
     "errFailed": "No pudimos eliminar la cuenta. Inténtalo de nuevo o contacta con soporte.",
     "sectionTitle": "Eliminar cuenta",
@@ -666,7 +680,7 @@
   "passwordRecovery": {
     "forgotLink": "¿Olvidaste tu contraseña?",
     "forgotTitle": "Restablecer contraseña",
-    "forgotSubtitle": "Introduce el correo que usas en Twofer. Si hay una cuenta, te enviaremos un enlace.",
+    "forgotSubtitle": "Introduce el correo que usas en TWOFER. Si hay una cuenta, te enviaremos un enlace.",
     "submitRequest": "Enviar enlace",
     "sending": "Enviando…",
     "requestSuccess": "Si existe una cuenta con ese correo, enviamos un enlace para restablecer la contraseña.",

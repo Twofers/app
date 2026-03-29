@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
@@ -19,7 +20,13 @@ import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { aiCreateDeal, aiGenerateDealCopy, notifyDealPublished, parseFunctionError } from "../../lib/functions";
+import {
+  aiCreateDeal,
+  aiGenerateDealCopy,
+  EDGE_FUNCTION_TIMEOUT_AI_MS,
+  notifyDealPublished,
+  parseFunctionError,
+} from "../../lib/functions";
 import {
   adToDealDraft,
   composeListingDescription,
@@ -106,8 +113,11 @@ const MAX_REGENERATIONS_PER_DRAFT = 2;
 /** Manual QA tags for validation runs — see docs/ai-ad-validation/ */
 const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padStart(2, "0")}`);
 
+const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
+
 export default function AiDealScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
   const { t, i18n } = useTranslation();
@@ -231,6 +241,51 @@ export default function AiDealScreen() {
     ctaText.trim().length > 0 ||
     description.trim().length > 0 ||
     manualDraftUnlocked;
+
+  const composeDirty = useMemo(() => {
+    if (photoUri || hintText.trim() || price.trim()) return true;
+    if (generatedAds != null || selectedAdIndex != null) return true;
+    if (title.trim() || promoLine.trim() || ctaText.trim() || description.trim()) return true;
+    if (maxClaims !== "50" || cutoffMins !== "15") return true;
+    if (validityMode !== "one-time") return true;
+    if ([...daysOfWeek].sort((a, b) => a - b).join(",") !== DEFAULT_WEEKDAYS_SORTED_KEY) return true;
+    if (manualDraftUnlocked) return true;
+    if (templateLoaded) return true;
+    return false;
+  }, [
+    photoUri,
+    hintText,
+    price,
+    generatedAds,
+    selectedAdIndex,
+    title,
+    promoLine,
+    ctaText,
+    description,
+    maxClaims,
+    cutoffMins,
+    validityMode,
+    daysOfWeek,
+    manualDraftUnlocked,
+    templateLoaded,
+  ]);
+
+  usePreventRemove(
+    composeDirty,
+    useCallback(
+      ({ data }) => {
+        Alert.alert(t("dealDraft.unsavedTitle"), t("dealDraft.unsavedBody"), [
+          { text: t("dealDraft.keepEditing"), style: "cancel" },
+          {
+            text: t("dealDraft.discard"),
+            style: "destructive",
+            onPress: () => navigation.dispatch(data.action),
+          },
+        ]);
+      },
+      [navigation, t],
+    ),
+  );
 
   useEffect(() => {
     if (!templateId || !businessId) return;
@@ -475,6 +530,7 @@ export default function AiDealScreen() {
           output_language: dealOutputLang,
           ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
         },
+        timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
       });
       if (error) {
         throw new Error(parseFunctionError(error));

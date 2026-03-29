@@ -87,8 +87,32 @@ export async function getConsumerPreferences(): Promise<ConsumerPreferences> {
   };
 }
 
+const ONBOARDING_STEP_KEY = `${PREFIX}onboarding_step`;
+const MAX_ONBOARDING_STEP = 4;
+
+export async function getOnboardingStepIndex(): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem(ONBOARDING_STEP_KEY);
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n < 0 || n > MAX_ONBOARDING_STEP) return null;
+    return Math.floor(n);
+  } catch {
+    return null;
+  }
+}
+
+export async function setOnboardingStepIndex(step: number) {
+  const n = Math.max(0, Math.min(MAX_ONBOARDING_STEP, Math.floor(step)));
+  await AsyncStorage.setItem(ONBOARDING_STEP_KEY, String(n));
+}
+
 export async function setOnboardingComplete(complete: boolean) {
   await AsyncStorage.setItem(PREFIX + "onboarding_complete", complete ? "true" : "false");
+  if (complete) {
+    await AsyncStorage.removeItem(ONBOARDING_STEP_KEY);
+  }
 }
 
 export async function setConsumerLocationMode(mode: ConsumerLocationMode) {

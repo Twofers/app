@@ -21,7 +21,7 @@ import {
 } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
-import { supabase } from "@/lib/supabase";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import type { AppLocale } from "@/lib/i18n/config";
@@ -34,6 +34,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
+  const { session } = useAuthSession();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
@@ -46,19 +47,15 @@ export default function SettingsScreen() {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const [a, p, sess] = await Promise.all([
-      getAlertsEnabled(),
-      getConsumerPreferences(),
-      supabase.auth.getSession(),
-    ]);
+    const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
     setAlertsEnabledState(a);
     setLocationModeState(p.locationMode);
     setZip(p.zipCode);
     setRadius(p.radiusMiles);
     setNotifModeState(p.notificationPrefs.mode);
-    setConsumerSession(!!sess.data.session?.user);
+    setConsumerSession(!!session?.user);
     setLoading(false);
-  }, []);
+  }, [session?.user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,9 +125,6 @@ export default function SettingsScreen() {
       return;
     }
     await setConsumerZipCode(trimmed);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
     if (session?.user?.id) {
       await updateConsumerProfileZip(session.user.id, trimmed);
     }
@@ -140,15 +134,13 @@ export default function SettingsScreen() {
   async function applyRadius(m: ConsumerRadiusMiles) {
     setRadius(m);
     await setConsumerRadiusMiles(m);
-    const sess = await supabase.auth.getSession();
-    void syncConsumerPrefsToServer(sess.data.session?.user?.id ?? null);
+    void syncConsumerPrefsToServer(session?.user?.id ?? null);
   }
 
   async function applyNotifMode(m: ConsumerNotificationMode) {
     setNotifModeState(m);
     await setConsumerNotificationPrefs({ v: 1, mode: m });
-    const sess = await supabase.auth.getSession();
-    void syncConsumerPrefsToServer(sess.data.session?.user?.id ?? null);
+    void syncConsumerPrefsToServer(session?.user?.id ?? null);
   }
 
   async function chooseAppLocale(locale: AppLocale) {

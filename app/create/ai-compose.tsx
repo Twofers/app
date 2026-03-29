@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   Text,
@@ -17,7 +18,8 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useBusiness } from "@/hooks/use-business";
@@ -72,8 +74,11 @@ function errQuota(e: unknown): AiComposeQuota | undefined {
   return e && typeof e === "object" && "quota" in e ? (e as { quota?: AiComposeQuota }).quota : undefined;
 }
 
+const QUOTA_FOCUS_MIN_MS = 30_000;
+
 export default function AiComposeOfferScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { isLoggedIn, businessId, loading } = useBusiness();
@@ -91,6 +96,8 @@ export default function AiComposeOfferScreen() {
   const [result, setResult] = useState<AiComposeResultPayload | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
+  const lastFocusQuotaFetchAtRef = useRef(0);
+
   const reloadQuota = useCallback(async () => {
     if (!businessId) return;
     const q = await fetchAiComposeQuota(businessId);
@@ -99,8 +106,44 @@ export default function AiComposeOfferScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void reloadQuota();
-    }, [reloadQuota]),
+      if (!businessId) return;
+      const now = Date.now();
+      const skip =
+        quota !== null && now - lastFocusQuotaFetchAtRef.current < QUOTA_FOCUS_MIN_MS;
+      if (skip) return;
+      void reloadQuota().then(() => {
+        lastFocusQuotaFetchAtRef.current = Date.now();
+      });
+    }, [businessId, reloadQuota, quota]),
+  );
+
+  const draftDirty = useMemo(
+    () =>
+      prompt.trim().length > 0 ||
+      !!imageUri ||
+      result != null ||
+      isRecording ||
+      phase === "transcribing" ||
+      phase === "generating" ||
+      phase === "results",
+    [prompt, imageUri, result, isRecording, phase],
+  );
+
+  usePreventRemove(
+    draftDirty,
+    useCallback(
+      ({ data }) => {
+        Alert.alert(t("dealDraft.unsavedTitle"), t("dealDraft.unsavedBody"), [
+          { text: t("dealDraft.keepEditing"), style: "cancel" },
+          {
+            text: t("dealDraft.discard"),
+            style: "destructive",
+            onPress: () => navigation.dispatch(data.action),
+          },
+        ]);
+      },
+      [navigation, t],
+    ),
   );
 
   function handlePickedAsset(a: ImagePicker.ImagePickerAsset) {
@@ -294,7 +337,7 @@ export default function AiComposeOfferScreen() {
         <Text style={{ fontSize: 20, fontWeight: "700", letterSpacing: -0.3 }}>{t("aiCompose.title")}</Text>
         {quota ? (
           <Text style={{ fontSize: 12, opacity: 0.5 }}>
-            {quota.remaining}/{quota.limit} AI left
+            {t("aiCompose.usageLeft", { remaining: quota.remaining, limit: quota.limit })}
           </Text>
         ) : null}
       </View>
@@ -363,7 +406,7 @@ export default function AiComposeOfferScreen() {
                 }}
               >
                 <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.7 }}>
-                  Step 1 of 2
+                  {t("aiCompose.stepOfTotal", { current: 1, total: 2 })}
                 </Text>
               </View>
               <Text style={{ fontWeight: "700", marginBottom: 6, marginTop: 8 }}>{t("aiCompose.photoLabel")}</Text>
@@ -435,7 +478,7 @@ export default function AiComposeOfferScreen() {
                 }}
               >
                 <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.7 }}>
-                  Step 2 of 2
+                  {t("aiCompose.stepOfTotal", { current: 2, total: 2 })}
                 </Text>
               </View>
               <Text style={{ fontWeight: "700", marginBottom: 6, marginTop: 8 }}>{t("aiCompose.promptLabel")}</Text>

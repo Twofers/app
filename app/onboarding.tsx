@@ -1,31 +1,34 @@
-import { useEffect, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { BackHandler, ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import i18n from "@/lib/i18n/config";
 import type { AppLocale } from "@/lib/i18n/config";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
   getConsumerPreferences,
+  getOnboardingStepIndex,
   setConsumerLocationMode,
   setConsumerNotificationPrefs,
   setConsumerRadiusMiles,
   setConsumerZipCode,
   setLastKnownConsumerCoords,
   setOnboardingComplete,
+  setOnboardingStepIndex,
 } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { setAlertsEnabled } from "@/lib/notifications";
-import { supabase } from "@/lib/supabase";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 
 function sanitizeZipInput(raw: string): string {
@@ -36,9 +39,18 @@ function sanitizeZipInput(raw: string): string {
 export default function OnboardingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { session } = useAuthSession();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const C = Colors[colorScheme];
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [step, setStep] = useState(0);
   const [lang, setLang] = useState<AppLocale>("en");
+
+  const goToStep = useCallback((next: number) => {
+    const clamped = Math.max(0, Math.min(4, Math.floor(next)));
+    setStep(clamped);
+    void setOnboardingStepIndex(clamped);
+  }, []);
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
   const [busy, setBusy] = useState(false);
@@ -51,20 +63,27 @@ export default function OnboardingScreen() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!session?.user?.id) {
-        router.replace("/auth-landing");
+    void getOnboardingStepIndex().then((s) => {
+      if (s !== null) goToStep(s);
+    });
+  }, [goToStep]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (step > 0) {
+        goToStep(step - 1);
+        return true;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+      return false;
+    });
+    return () => sub.remove();
+  }, [step, goToStep]);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      router.replace("/auth-landing");
+    }
+  }, [session?.user?.id, router]);
 
   async function afterLocationResolved() {
     const prefs = await getConsumerPreferences();
@@ -86,13 +105,13 @@ export default function OnboardingScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setHint(t("onboarding.locationDenied"));
-        setStep(2);
+        goToStep(2);
         return;
       }
       await setConsumerLocationMode("gps");
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
-      setStep(3);
+      goToStep(3);
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : "";
       setHint(
@@ -100,7 +119,7 @@ export default function OnboardingScreen() {
           ? `${t("onboarding.locationError")} (${detail})`
           : t("onboarding.locationError"),
       );
-      setStep(2);
+      goToStep(2);
     } finally {
       setBusy(false);
     }
@@ -122,14 +141,12 @@ export default function OnboardingScreen() {
       }
       await setConsumerLocationMode("zip");
       await setConsumerZipCode(z);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user?.id) {
-        await updateConsumerProfileZip(session.user.id, z);
+      const uid = session?.user?.id;
+      if (uid) {
+        await updateConsumerProfileZip(uid, z);
       }
       await setLastKnownConsumerCoords(geo.lat, geo.lng);
-      setStep(3);
+      goToStep(3);
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : "";
       setHint(
@@ -179,9 +196,9 @@ export default function OnboardingScreen() {
   const totalSteps = 5;
 
   return (
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("onboarding.title")}</Text>
-      <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>{t("onboarding.title")}</Text>
+      <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
         {t("onboarding.subtitle")}
       </Text>
 
@@ -194,7 +211,7 @@ export default function OnboardingScreen() {
               height: 4,
               flex: 1,
               borderRadius: Radii.pill,
-              backgroundColor: i <= step ? Colors.light.primary : Colors.light.border,
+              backgroundColor: i <= step ? C.primary : C.border,
             }}
           />
         ))}
@@ -213,10 +230,10 @@ export default function OnboardingScreen() {
         {step === 0 ? (
           <>
             {/* Title shown in all three languages so users can recognise their own */}
-            <Text style={{ fontSize: 17, fontWeight: "700", lineHeight: 26 }}>
+            <Text style={{ fontSize: 17, fontWeight: "700", lineHeight: 26, color: C.text }}>
               Choose your language
             </Text>
-            <Text style={{ fontSize: 14, opacity: 0.55, lineHeight: 20 }}>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: C.mutedText }}>
               Elige tu idioma  ·  언어를 선택하세요
             </Text>
 
@@ -240,8 +257,8 @@ export default function OnboardingScreen() {
                       paddingHorizontal: Spacing.lg,
                       borderRadius: Radii.lg,
                       borderWidth: active ? 2 : 1,
-                      borderColor: active ? Colors.light.primary : Colors.light.border,
-                      backgroundColor: active ? "rgba(255,159,28,0.08)" : Colors.light.surface,
+                      borderColor: active ? C.primary : C.border,
+                      backgroundColor: active ? "rgba(255,159,28,0.08)" : C.surface,
                       gap: Spacing.md,
                     }}
                   >
@@ -250,14 +267,14 @@ export default function OnboardingScreen() {
                       style={{
                         fontSize: 17,
                         fontWeight: active ? "700" : "500",
-                        color: active ? Colors.light.primary : "#11181C",
+                        color: active ? C.primary : C.text,
                       }}
                     >
                       {label}
                     </Text>
                     {active ? (
                       <View style={{ marginLeft: "auto" }}>
-                        <Text style={{ color: Colors.light.primary, fontWeight: "700", fontSize: 18 }}>✓</Text>
+                        <Text style={{ color: C.primary, fontWeight: "700", fontSize: 18 }}>✓</Text>
                       </View>
                     ) : null}
                   </Pressable>
@@ -268,7 +285,7 @@ export default function OnboardingScreen() {
             <PrimaryButton
               title="Continue"
               onPress={() => {
-                void i18n.changeLanguage(lang).then(() => setStep(1));
+                void i18n.changeLanguage(lang).then(() => goToStep(1));
               }}
             />
           </>
@@ -276,18 +293,18 @@ export default function OnboardingScreen() {
 
         {step === 1 ? (
           <>
-            <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.locationTitle")}</Text>
-            <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.locationBody")}</Text>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: C.text }}>{t("onboarding.locationTitle")}</Text>
+            <Text style={{ lineHeight: 22, color: C.mutedText }}>{t("onboarding.locationBody")}</Text>
             <PrimaryButton title={t("onboarding.useGps")} onPress={() => void requestGps()} disabled={busy} />
-            <SecondaryButton title={t("onboarding.useZipInstead")} onPress={() => setStep(2)} disabled={busy} />
-            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(0)} disabled={busy} />
+            <SecondaryButton title={t("onboarding.useZipInstead")} onPress={() => goToStep(2)} disabled={busy} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(0)} disabled={busy} />
           </>
         ) : null}
 
         {step === 2 ? (
           <>
-            <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.zipTitle")}</Text>
-            <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.zipBody")}</Text>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: C.text }}>{t("onboarding.zipTitle")}</Text>
+            <Text style={{ lineHeight: 22, color: C.mutedText }}>{t("onboarding.zipBody")}</Text>
             <TextInput
               value={zip}
               onChangeText={(value) => setZip(sanitizeZipInput(value))}
@@ -298,23 +315,28 @@ export default function OnboardingScreen() {
               maxLength={10}
               style={{
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: C.border,
                 borderRadius: Radii.lg,
                 paddingVertical: Spacing.sm,
                 paddingHorizontal: Spacing.md,
                 fontSize: 16,
-                backgroundColor: Colors.light.surface,
+                backgroundColor: C.surface,
+                color: C.text,
               }}
             />
-            <PrimaryButton title={t("onboarding.continueZip")} onPress={() => void saveZipAndContinue()} disabled={busy} />
-            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(1)} disabled={busy} />
+            <PrimaryButton
+              title={t("onboarding.continueZip")}
+              onPress={() => void saveZipAndContinue()}
+              disabled={busy || !zip.trim()}
+            />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(1)} disabled={busy} />
           </>
         ) : null}
 
         {step === 3 ? (
           <>
-            <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.radiusTitle")}</Text>
-            <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.radiusBody")}</Text>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: C.text }}>{t("onboarding.radiusTitle")}</Text>
+            <Text style={{ lineHeight: 22, color: C.mutedText }}>{t("onboarding.radiusBody")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
               {CONSUMER_RADIUS_MILES_OPTIONS.map((m) => {
                 const active = radius === m;
@@ -326,35 +348,35 @@ export default function OnboardingScreen() {
                       paddingVertical: Spacing.sm,
                       paddingHorizontal: Spacing.md,
                       borderRadius: Radii.pill,
-                      backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                      backgroundColor: active ? "rgba(255,159,28,0.16)" : C.surfaceMuted,
                       borderWidth: 1,
-                      borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+                      borderColor: active ? "rgba(255,159,28,0.4)" : C.border,
                     }}
                   >
-                    <Text style={{ fontWeight: "700", color: active ? Colors.light.primary : "#333" }}>
+                    <Text style={{ fontWeight: "700", color: active ? C.primary : C.text }}>
                       {t("onboarding.radiusMiles", { miles: m })}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
-            <PrimaryButton title={t("onboarding.next")} onPress={() => setStep(4)} />
-            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(1)} disabled={busy} />
+            <PrimaryButton title={t("onboarding.next")} onPress={() => goToStep(4)} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(1)} disabled={busy} />
           </>
         ) : null}
 
         {step === 4 ? (
           <>
-            <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("onboarding.notifyTitle")}</Text>
-            <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.notifyBody")}</Text>
-            <Text style={{ opacity: 0.75, lineHeight: 22 }}>{t("onboarding.favoriteHint")}</Text>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: C.text }}>{t("onboarding.notifyTitle")}</Text>
+            <Text style={{ lineHeight: 22, color: C.mutedText }}>{t("onboarding.notifyBody")}</Text>
+            <Text style={{ lineHeight: 22, color: C.mutedText }}>{t("onboarding.favoriteHint")}</Text>
             <PrimaryButton
               title={t("onboarding.enableNotifications")}
               onPress={() => void enableNotificationsAndFinish()}
               disabled={busy}
             />
             <SecondaryButton title={t("onboarding.notNow")} onPress={() => void skipNotificationsAndFinish()} disabled={busy} />
-            <SecondaryButton title={t("onboarding.back")} onPress={() => setStep(3)} disabled={busy} />
+            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(3)} disabled={busy} />
           </>
         ) : null}
       </ScrollView>
