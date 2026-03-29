@@ -28,6 +28,7 @@ import { BusinessRowCard } from "@/components/business-row-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { useBusiness } from "@/hooks/use-business";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
@@ -39,6 +40,9 @@ import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+
+/** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
+const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
 type Deal = {
   id: string;
   title: string | null;
@@ -111,6 +115,8 @@ export default function HomeScreen() {
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { height: windowHeight } = useWindowDimensions();
   const { isLoggedIn, sessionEmail, userId } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -139,6 +145,8 @@ export default function HomeScreen() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
+  const lastFeedFocusHydrateAtRef = useRef(0);
+  const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
   const dealsFade = useSharedValue(0);
   const dealsFadeStyle = useAnimatedStyle(() => ({ opacity: dealsFade.value }));
 
@@ -247,6 +255,20 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const uid = userId ?? null;
+      const now = Date.now();
+      const userChanged = lastFeedFocusHydrateUserIdRef.current !== uid;
+      const cooldownActive =
+        lastFeedFocusHydrateAtRef.current !== 0 &&
+        now - lastFeedFocusHydrateAtRef.current < MIN_FEED_FOCUS_REFRESH_MS;
+
+      if (cooldownActive && !userChanged) {
+        return;
+      }
+
+      lastFeedFocusHydrateAtRef.current = now;
+      lastFeedFocusHydrateUserIdRef.current = uid;
+
       void loadDeals();
       void loadBusinesses();
       void loadFavorites(userId);
@@ -321,7 +343,13 @@ export default function HomeScreen() {
           deal_id: dealId,
           context: { reason: classifyClaimBlockReason(msg) },
         });
-        setClaimStatus((prev) => ({ ...prev, [dealId]: { message: mapClaimError(msg), tone: "error" } }));
+        const mappedClaimErr = mapClaimError(msg);
+        setBanner(mappedClaimErr);
+        setClaimStatus((prev) => {
+          const next = { ...prev };
+          delete next[dealId];
+          return next;
+        });
       } finally {
         setClaimingDealId(null);
       }
@@ -444,6 +472,8 @@ export default function HomeScreen() {
     setRefreshingFeed(true);
     try {
       await Promise.all([loadDeals(), loadBusinesses(), loadFavorites(userId), hydrateLocationFromPrefs()]);
+      lastFeedFocusHydrateAtRef.current = Date.now();
+      lastFeedFocusHydrateUserIdRef.current = userId ?? null;
     } finally {
       setRefreshingFeed(false);
     }
@@ -468,46 +498,47 @@ export default function HomeScreen() {
   const listHeader = useMemo(
     () => (
     <View style={{ marginBottom: Spacing.md }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("tabs.home")}</Text>
-      <Text style={{ marginTop: 6, fontSize: 15, opacity: 0.62, lineHeight: 22 }}>{t("consumerHome.tagline")}</Text>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("tabs.home")}</Text>
+      <Text style={{ marginTop: 6, fontSize: 15, opacity: 0.62, lineHeight: 22, color: theme.text }}>
+        {t("consumerHome.tagline")}
+      </Text>
       {sessionEmail ? (
-        <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>
+        <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14, color: theme.text }}>
           {t("dealsBrowse.loggedInAs", { email: sessionEmail })}
         </Text>
       ) : null}
-
-      {banner ? <Banner message={banner} tone="error" /> : null}
 
       <View style={{ marginBottom: Spacing.md, gap: Spacing.sm }}>
         <View
           style={{
             borderWidth: 1.2,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             paddingVertical: Spacing.sm + 1,
             paddingHorizontal: Spacing.md,
-            backgroundColor: Colors.light.surface,
+            backgroundColor: theme.surface,
             flexDirection: "row",
             alignItems: "center",
             gap: Spacing.sm,
           }}
         >
-          <MaterialIcons name="search" size={22} color={Colors.light.mutedText} />
+          <MaterialIcons name="search" size={22} color={theme.mutedText} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t("dealsBrowse.searchPlaceholder")}
+            placeholderTextColor={theme.mutedText}
             autoCorrect={false}
             autoCapitalize="none"
             clearButtonMode="while-editing"
-            style={{ flex: 1, fontSize: 16, color: Colors.light.text, paddingVertical: 2 }}
+            style={{ flex: 1, fontSize: 16, color: theme.text, paddingVertical: 2 }}
           />
         </View>
         <Pressable
           onPress={() => router.push("/(tabs)/settings" as Href)}
           accessibilityRole="button"
         >
-          <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18 }} numberOfLines={2}>
+          <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18, color: theme.text }} numberOfLines={2}>
             {userGeo
               ? t("consumerHome.sortingHintWithLocation", { miles: radiusMiles })
               : t("consumerHome.sortingHintNoLocation")}
@@ -524,7 +555,7 @@ export default function HomeScreen() {
           gap: Spacing.md,
         }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "800", flex: 1 }}>{t("consumerHome.liveNearYou")}</Text>
+        <Text style={{ fontSize: 22, fontWeight: "800", flex: 1, color: theme.text }}>{t("consumerHome.liveNearYou")}</Text>
         <Pressable
           onPress={() => setFavoritesOnly(!favoritesOnly)}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -534,19 +565,25 @@ export default function HomeScreen() {
           style={({ pressed }) => ({
             padding: Spacing.sm,
             borderRadius: 22,
-            backgroundColor: favoritesOnly ? "rgba(224,36,94,0.12)" : pressed ? "#f4f4f5" : "transparent",
+            backgroundColor: favoritesOnly
+              ? colorScheme === "dark"
+                ? "rgba(236,72,153,0.2)"
+                : "rgba(224,36,94,0.12)"
+              : pressed
+                ? theme.surfaceMuted
+                : "transparent",
           })}
         >
           <MaterialIcons
             name={favoritesOnly ? "favorite" : "favorite-border"}
             size={26}
-            color={favoritesOnly ? "#e0245e" : "#666"}
+            color={favoritesOnly ? "#e0245e" : theme.mutedText}
           />
         </Pressable>
       </View>
 
       {favoritesOnly ? (
-        <Text style={{ fontSize: 13, opacity: 0.55, marginBottom: Spacing.md, lineHeight: 18 }}>
+        <Text style={{ fontSize: 13, opacity: 0.55, marginBottom: Spacing.md, lineHeight: 18, color: theme.text }}>
           {t("consumerHome.favoritesOnlyActive")}
         </Text>
       ) : null}
@@ -555,11 +592,11 @@ export default function HomeScreen() {
         <View
           style={{
             borderRadius: Radii.lg,
-            backgroundColor: Colors.light.surface,
+            backgroundColor: theme.surface,
             padding: Spacing.xxl,
             marginBottom: Spacing.xxl,
             borderWidth: 1,
-            borderColor: "rgba(255,159,28,0.22)",
+            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
             gap: Spacing.md,
             alignItems: "center",
           }}
@@ -569,7 +606,7 @@ export default function HomeScreen() {
               width: 56,
               height: 56,
               borderRadius: 28,
-              backgroundColor: "rgba(255,159,28,0.14)",
+              backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
               alignItems: "center",
               justifyContent: "center",
               marginTop: 2,
@@ -582,11 +619,11 @@ export default function HomeScreen() {
               accessibilityIgnoresInvertColors
             />
           </View>
-          <Text style={{ fontSize: 17, fontWeight: "700" }}>{t("consumerHome.emptyNearbyTitle")}</Text>
-          <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center" }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>{t("consumerHome.emptyNearbyTitle")}</Text>
+          <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
             {t("consumerHome.emptyNearbyBodySub")}
           </Text>
-          <Text style={{ fontSize: 13, color: Colors.light.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
+          <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
             {t("consumerHome.emptyNearbyPenguinHint")}
           </Text>
           <PrimaryButton
@@ -599,7 +636,9 @@ export default function HomeScreen() {
             onPress={() => setShowAllLiveDeals(true)}
             style={{ alignSelf: "stretch" }}
           />
-          <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20 }}>{t("consumerHome.ctaFavoriteHint")}</Text>
+          <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20, color: theme.text }}>
+            {t("consumerHome.ctaFavoriteHint")}
+          </Text>
         </View>
       ) : showDealsSkeleton ? (
         <LoadingSkeleton rows={2} />
@@ -626,10 +665,10 @@ export default function HomeScreen() {
                   style={{
                     marginBottom: Spacing.xl,
                     borderRadius: Radii.lg,
-                    backgroundColor: Colors.light.surface,
+                    backgroundColor: theme.surface,
                     overflow: "hidden",
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     ...Shadows.soft,
                   }}
                 >
@@ -644,7 +683,7 @@ export default function HomeScreen() {
                   />
                   <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
-                      <Text style={{ fontSize: 20, fontWeight: "800", flex: 1 }} numberOfLines={2}>
+                      <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
                         {item.businesses?.name ?? t("dealDetail.localBusiness")}
                       </Text>
                       <Pressable
@@ -655,21 +694,21 @@ export default function HomeScreen() {
                         <MaterialIcons
                           name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}
                           size={24}
-                          color={favoriteBusinessIds.includes(item.business_id) ? "#e0245e" : Colors.light.icon}
+                          color={favoriteBusinessIds.includes(item.business_id) ? "#e0245e" : theme.icon}
                         />
                       </Pressable>
                     </View>
-                    <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900" }} numberOfLines={2}>
+                    <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2}>
                       {bogoText}
                     </Text>
-                    <Text numberOfLines={2} style={{ fontSize: 15, color: Colors.light.mutedText, lineHeight: 22 }}>
+                    <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
                       {item.description || t("consumerHome.tagline")}
                     </Text>
                     <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
                       {distanceLabel ? (
-                        <Text style={{ color: Colors.light.primary, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
+                        <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
                       ) : null}
-                      <Text style={{ color: Colors.light.primary, fontWeight: "700", fontSize: 14 }}>
+                      <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>
                         {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
                       </Text>
                     </View>
@@ -679,7 +718,7 @@ export default function HomeScreen() {
                           marginTop: Spacing.sm,
                           fontSize: 13,
                           lineHeight: 18,
-                          color: claimStatus[item.id]?.tone === "error" ? "#b42318" : Colors.light.mutedText,
+                          color: theme.mutedText,
                         }}
                       >
                         {claimStatus[item.id]?.message}
@@ -708,16 +747,16 @@ export default function HomeScreen() {
             marginBottom: Spacing.lg,
             ...(favoritesOnly
               ? {
-                  backgroundColor: "#fffafa",
+                  backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
                   borderRadius: 16,
                   padding: Spacing.md,
                   borderWidth: 1,
-                  borderColor: "#fce7f3",
+                  borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
                 }
               : {}),
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", opacity: 0.55, marginBottom: Spacing.sm }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", opacity: 0.55, marginBottom: Spacing.sm, color: theme.text }}>
             {t("consumerHome.favoritesStripTitle")}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
@@ -732,13 +771,13 @@ export default function HomeScreen() {
                     paddingVertical: Spacing.sm,
                     paddingHorizontal: Spacing.md,
                     borderRadius: Radii.md,
-                    backgroundColor: Colors.light.surface,
+                    backgroundColor: theme.surface,
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     maxWidth: 160,
                   }}
                 >
-                  <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14 }}>
+                  <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
                     {b.name}
                   </Text>
                 </Pressable>
@@ -753,17 +792,18 @@ export default function HomeScreen() {
           marginTop: Spacing.md,
           paddingTop: Spacing.lg,
           borderTopWidth: 1,
-          borderTopColor: Colors.light.border,
+          borderTopColor: theme.border,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: Spacing.sm }}>{t("consumerHome.nearbyBusinesses")}</Text>
+        <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: Spacing.sm, color: theme.text }}>
+          {t("consumerHome.nearbyBusinesses")}
+        </Text>
       </View>
     </View>
     ),
     [
       t,
       sessionEmail,
-      banner,
       searchQuery,
       router,
       userGeo,
@@ -786,12 +826,15 @@ export default function HomeScreen() {
       doClaim,
       claimStatus,
       showAllLiveDeals,
+      colorScheme,
+      theme,
     ],
   );
 
   if (loadingBiz && businesses.length === 0) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+        {banner ? <Banner message={banner} tone="error" /> : null}
         {listHeader}
         <LoadingSkeleton rows={4} />
       </View>
@@ -799,7 +842,8 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      {banner ? <Banner message={banner} tone="error" /> : null}
       <FlatList
         style={{ flex: 1 }}
         data={businessesDisplay}
@@ -814,8 +858,8 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshingFeed}
             onRefresh={onPullToRefresh}
-            tintColor={Colors.light.primary}
-            colors={[Colors.light.primary]}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
         contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
