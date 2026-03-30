@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Text, View } from "react-native";
 import Constants from "expo-constants";
 import MapView, { Circle, Marker, type Region } from "react-native-maps";
@@ -19,6 +19,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
 
 type Biz = {
   id: string;
@@ -84,10 +85,12 @@ export default function MapScreenNative() {
   const [showDeviceBlueDot, setShowDeviceBlueDot] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(3);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
+  const mapRef = useRef<MapView>(null);
+  const cameraFittedRef = useRef(false);
+  const livePulse = useLiveDealPulse();
 
   const loadMapData = useCallback(async () => {
     setLoading(true);
-    setMapReady(false);
     setBanner(null);
     setDataError(null);
     try {
@@ -193,6 +196,20 @@ export default function MapScreenNative() {
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
 
+  /** initialRegion only applies on first paint; nudge camera once when data + map are ready. */
+  useEffect(() => {
+    if (!mapReady || !androidMapsOk) return;
+    if (cameraFittedRef.current) return;
+    const hasUser = userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng);
+    const hasMarkers = markers.length > 0;
+    if (!hasUser && !hasMarkers) return;
+    const region = hasUser
+      ? safeRegion({ lat: userPos!.lat, lng: userPos!.lng }, 0.12, 0.12)
+      : safeRegion({ lat: markers[0]!.lat, lng: markers[0]!.lng }, 0.25, 0.25);
+    mapRef.current?.animateToRegion(region, 480);
+    cameraFittedRef.current = true;
+  }, [mapReady, androidMapsOk, userPos, markers]);
+
   return (
     <View style={{ flex: 1, paddingTop: top }}>
       {banner ? (
@@ -295,11 +312,15 @@ export default function MapScreenNative() {
             <MaterialIcons name="refresh" size={22} color="#333" />
           </Pressable>
           <MapView
+            ref={mapRef}
             style={{ flex: 1 }}
             initialRegion={initialRegion}
             showsUserLocation={showUserLocationDot}
             onMapReady={() => setMapReady(true)}
-            onPress={() => setSelectedBusinessId(null)}
+            onPress={(e) => {
+              if (e.nativeEvent.action === "marker-press") return;
+              setSelectedBusinessId(null);
+            }}
           >
             {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) && radiusKm > 0 ? (
               <Circle
@@ -309,6 +330,15 @@ export default function MapScreenNative() {
                 fillColor="rgba(17,17,17,0.06)"
               />
             ) : null}
+            {markers
+              .filter((m) => m.live)
+              .map((m) => (
+                <LiveDealHaloCircles
+                  key={`halo-${m.id}`}
+                  center={{ latitude: m.lat, longitude: m.lng }}
+                  pulse={livePulse}
+                />
+              ))}
             {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) ? (
               <Marker coordinate={{ latitude: userPos.lat, longitude: userPos.lng }} tracksViewChanges={false} zIndex={1000}>
                 <View
@@ -328,6 +358,8 @@ export default function MapScreenNative() {
                 key={m.id}
                 coordinate={{ latitude: m.lat, longitude: m.lng }}
                 tracksViewChanges={false}
+                zIndex={m.live ? 10 : 5}
+                stopPropagation={Platform.OS === "ios"}
                 onPress={() => setSelectedBusinessId(m.id)}
               >
                 <View
@@ -336,9 +368,11 @@ export default function MapScreenNative() {
                     height: 28,
                     borderRadius: 14,
                     paddingHorizontal: 7,
-                    backgroundColor: selectedBusinessId === m.id ? Colors.light.primary : m.live ? "#166534" : "#404040",
+                    backgroundColor:
+                      selectedBusinessId === m.id ? Colors.light.primary : m.live ? Colors.light.primary : "#404040",
                     borderWidth: m.live ? 2 : 1,
-                    borderColor: selectedBusinessId === m.id ? "#ffd9a8" : m.live ? "#86efac" : "#a3a3a3",
+                    borderColor:
+                      selectedBusinessId === m.id ? "#ffd9a8" : m.live ? "rgba(255,255,255,0.95)" : "#a3a3a3",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
