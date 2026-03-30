@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   ScrollView,
+  Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -14,16 +16,22 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
+import { useBusinessLocations } from "@/hooks/use-business-locations";
 import { adToDealDraft, CREATIVE_LANE_ORDER, type CreativeLane, type GeneratedAd } from "@/lib/ad-variants";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
 import { aiGenerateAdVariantsStructured, getErrorCode } from "@/lib/functions";
 import { splitSubheadlineForPromoAndBody } from "@/lib/menu-ad-copy";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import {
+  loadLastMenuOfferPairingType,
+  saveLastMenuOfferPairingType,
+} from "@/lib/menu-offer-persist";
+import {
   buildOfferHintText,
   buildStructuredOffer,
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
+import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
 import { resolveDealFlowLanguage } from "@/lib/translate-deal-quality";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -34,9 +42,16 @@ type DbMenuItem = {
   name: string;
   category: string | null;
   price_text: string | null;
+  archived_at?: string | null;
 };
 
-type WizardStep = "main" | "paired" | "pairing" | "generate" | "ads";
+type WizardStep =
+  | "location"
+  | "main"
+  | "paired"
+  | "pairing"
+  | "generate"
+  | "ads";
 
 function laneUiTitle(lane: CreativeLane, t: (k: string) => string): string {
   if (lane === "value") return t("menuOffer.laneValue");
@@ -48,11 +63,22 @@ export default function MenuOfferScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { businessId, loading: bizLoading, businessContextForAi, businessPreferredLocale } =
-    useBusiness();
+  const {
+    businessId,
+    loading: bizLoading,
+    businessContextForAi,
+    businessPreferredLocale,
+    subscriptionTier,
+  } = useBusiness();
+  const { visibleLocations, loading: locLoading, error: locErr } = useBusinessLocations(
+    businessId,
+    subscriptionTier,
+  );
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   const {
+    dealLocationIds,
+    setDealLocationIds,
     structuredOffer,
     setStructuredOffer,
     setGenerationResult,
@@ -62,14 +88,32 @@ export default function MenuOfferScreen() {
 
   const [items, setItems] = useState<DbMenuItem[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [step, setStep] = useState<WizardStep>("main");
+  const [step, setStep] = useState<WizardStep>("location");
   const [mainItem, setMainItem] = useState<DbMenuItem | null>(null);
   const [pairedItem, setPairedItem] = useState<DbMenuItem | null>(null);
   const [pairingType, setPairingType] = useState<MenuOfferPairingType>("free_with_purchase");
+  const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
+  const [applyMultiLocation, setApplyMultiLocation] = useState(false);
+  const [extraLocationIds, setExtraLocationIds] = useState<Set<string>>(new Set());
+  const [discountPercent, setDiscountPercent] = useState(50);
+  const [fixedPriceText, setFixedPriceText] = useState("");
   const [generating, setGenerating] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
   );
+  const pairingPersistReady = useRef(false);
+
+  useEffect(() => {
+    void loadLastMenuOfferPairingType().then((saved) => {
+      if (saved) setPairingType(saved);
+      pairingPersistReady.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pairingPersistReady.current) return;
+    void saveLastMenuOfferPairingType(pairingType);
+  }, [pairingType]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -77,7 +121,7 @@ export default function MenuOfferScreen() {
     void (async () => {
       const { data, error } = await supabase
         .from("business_menu_items")
-        .select("id,name,category,price_text")
+        .select("id,name,category,price_text,archived_at")
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -88,15 +132,30 @@ export default function MenuOfferScreen() {
         );
         return;
       }
-      setItems((data ?? []) as DbMenuItem[]);
+      const rows = (data ?? []) as DbMenuItem[];
+      setItems(rows.filter((r) => !r.archived_at));
     })();
     return () => {
       cancelled = true;
     };
   }, [businessId, t]);
 
+  useEffect(() => {
+    if (visibleLocations.length === 1) {
+      setPrimaryLocationId(visibleLocations[0].id);
+    }
+  }, [visibleLocations]);
+
   const runGenerate = useCallback(async () => {
     if (!businessId || !structuredOffer) return;
+    const strong = validateMenuOfferCanonicalSummary({
+      human_summary: structuredOffer.human_summary,
+      discount_percent: structuredOffer.discount_percent,
+    });
+    if (!strong.ok) {
+      setBanner({ message: strong.message, tone: "error" });
+      return;
+    }
     setGenerating(true);
     setBanner(null);
     try {
@@ -128,6 +187,8 @@ export default function MenuOfferScreen() {
       if (!structuredOffer) return;
       const hint = buildOfferHintText(structuredOffer);
       const draft = adToDealDraft(ad, hint);
+      const locPrimary = dealLocationIds[0] ?? "";
+      const locExtra = dealLocationIds.slice(1).join(",");
       clearWizard();
       router.push({
         pathname: "/create/ai",
@@ -137,25 +198,73 @@ export default function MenuOfferScreen() {
           prefillCta: draft.cta_text,
           prefillDescription: draft.offer_details,
           prefillHint: hint,
+          prefillLocationId: locPrimary,
+          ...(locExtra ? { prefillExtraLocationIds: locExtra } : {}),
           fromMenuOffer: "1",
         },
       } as Href);
     },
-    [structuredOffer, clearWizard, router],
+    [structuredOffer, dealLocationIds, clearWizard, router],
   );
+
+  const onLocationNext = useCallback(() => {
+    if (!primaryLocationId) {
+      setBanner({ message: t("menuOffer.pickLocation"), tone: "error" });
+      return;
+    }
+    const extras = applyMultiLocation ? Array.from(extraLocationIds).filter((id) => id !== primaryLocationId) : [];
+    setDealLocationIds([primaryLocationId, ...extras]);
+    setBanner(null);
+    setStep("main");
+  }, [primaryLocationId, applyMultiLocation, extraLocationIds, setDealLocationIds, t]);
 
   const onPairingNext = useCallback(() => {
     if (!mainItem) return;
+    if (pairingType === "percent_off" && discountPercent < 40) {
+      setBanner({ message: t("menuOffer.errPercentWeak"), tone: "error" });
+      return;
+    }
+    if (pairingType === "fixed_price_special") {
+      const n = Number(fixedPriceText.trim());
+      if (!Number.isFinite(n) || n <= 0) {
+        setBanner({ message: t("menuOffer.errFixedPrice"), tone: "error" });
+        return;
+      }
+    }
+    if (pairingType === "free_with_purchase" && !pairedItem) {
+      setBanner({ message: t("menuOffer.errNeedPairedFree"), tone: "error" });
+      return;
+    }
+    setBanner(null);
     const offer = buildStructuredOffer({
       main: { id: mainItem.id, name: mainItem.name },
       paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name } : null,
       pairing_type: pairingType,
+      discount_percent: pairingType === "percent_off" ? discountPercent : undefined,
+      fixed_price_amount:
+        pairingType === "fixed_price_special" ? Number(fixedPriceText.trim()) : undefined,
     });
+    const strong = validateMenuOfferCanonicalSummary({
+      human_summary: offer.human_summary,
+      discount_percent: offer.discount_percent,
+    });
+    if (!strong.ok) {
+      setBanner({ message: strong.message, tone: "error" });
+      return;
+    }
     setStructuredOffer(offer);
     setStep("generate");
-  }, [mainItem, pairedItem, pairingType, setStructuredOffer]);
+  }, [
+    mainItem,
+    pairedItem,
+    pairingType,
+    discountPercent,
+    fixedPriceText,
+    setStructuredOffer,
+    t,
+  ]);
 
-  if (bizLoading) {
+  if (bizLoading || locLoading) {
     return (
       <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator />
@@ -175,6 +284,8 @@ export default function MenuOfferScreen() {
     { id: "free_with_purchase", label: t("menuOffer.pairFree") },
     { id: "bogo_pair", label: t("menuOffer.pairBogo") },
     { id: "second_half_off", label: t("menuOffer.pairHalf") },
+    { id: "percent_off", label: t("menuOffer.pairPercent") },
+    { id: "fixed_price_special", label: t("menuOffer.pairFixed") },
   ];
 
   return (
@@ -190,8 +301,76 @@ export default function MenuOfferScreen() {
       <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("menuOffer.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
       {loadErr ? <Banner message={loadErr} tone="error" /> : null}
+      {locErr ? <Banner message={locErr} tone="error" /> : null}
 
-      {items.length === 0 && !loadErr ? (
+      {step === "location" && visibleLocations.length > 0 ? (
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepLocation")}</Text>
+          <Text style={{ opacity: 0.7 }}>{t("menuOffer.locationHelp")}</Text>
+          {visibleLocations.map((loc) => (
+            <Pressable
+              key={loc.id}
+              onPress={() => setPrimaryLocationId(loc.id)}
+              style={{
+                padding: Spacing.md,
+                borderRadius: Radii.md,
+                borderWidth: primaryLocationId === loc.id ? 2 : 1,
+                borderColor: primaryLocationId === loc.id ? Colors.light.primary : Colors.light.border,
+                backgroundColor: Colors.light.surface,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>{loc.name}</Text>
+              <Text style={{ opacity: 0.65, marginTop: 4 }}>{loc.address}</Text>
+            </Pressable>
+          ))}
+          {subscriptionTier === "premium" && visibleLocations.length > 1 ? (
+            <View style={{ marginTop: Spacing.sm, gap: Spacing.sm }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: Spacing.md,
+                }}
+              >
+                <Text style={{ flex: 1, fontWeight: "600" }}>{t("menuOffer.multiLocationToggle")}</Text>
+                <Switch value={applyMultiLocation} onValueChange={setApplyMultiLocation} />
+              </View>
+              {applyMultiLocation
+                ? visibleLocations
+                    .filter((l) => l.id !== primaryLocationId)
+                    .map((loc) => (
+                      <Pressable
+                        key={loc.id}
+                        onPress={() => {
+                          setExtraLocationIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(loc.id)) next.delete(loc.id);
+                            else next.add(loc.id);
+                            return next;
+                          });
+                        }}
+                        style={{
+                          padding: Spacing.sm,
+                          borderRadius: Radii.md,
+                          borderWidth: extraLocationIds.has(loc.id) ? 2 : 1,
+                          borderColor: extraLocationIds.has(loc.id)
+                            ? Colors.light.primary
+                            : Colors.light.border,
+                          backgroundColor: Colors.light.surface,
+                        }}
+                      >
+                        <Text style={{ fontWeight: "600" }}>{loc.name}</Text>
+                      </Pressable>
+                    ))
+                : null}
+            </View>
+          ) : null}
+          <PrimaryButton title={t("menuOffer.next")} onPress={onLocationNext} />
+        </View>
+      ) : null}
+
+      {items.length === 0 && !loadErr && step === "main" ? (
         <Text style={{ opacity: 0.75 }}>{t("menuOffer.emptyMenu")}</Text>
       ) : null}
 
@@ -224,6 +403,7 @@ export default function MenuOfferScreen() {
               </Pressable>
             )}
           />
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("location")} />
         </View>
       ) : null}
 
@@ -234,6 +414,14 @@ export default function MenuOfferScreen() {
             title={t("menuOffer.skipPaired")}
             onPress={() => {
               setPairedItem(null);
+              setStep("pairing");
+            }}
+          />
+          <SecondaryButton
+            title={t("menuOffer.sameItemPaired")}
+            onPress={() => {
+              if (!mainItem) return;
+              setPairedItem(mainItem);
               setStep("pairing");
             }}
           />
@@ -282,6 +470,49 @@ export default function MenuOfferScreen() {
               <Text style={{ fontWeight: "600" }}>{opt.label}</Text>
             </Pressable>
           ))}
+          {pairingType === "percent_off" ? (
+            <View style={{ gap: Spacing.sm }}>
+              <Text style={{ fontWeight: "600" }}>{t("menuOffer.percentOffLabel")}</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
+                {[40, 50, 100].map((p) => (
+                  <Pressable
+                    key={p}
+                    onPress={() => setDiscountPercent(p)}
+                    style={{
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.sm,
+                      borderRadius: Radii.md,
+                      borderWidth: discountPercent === p ? 2 : 1,
+                      borderColor: discountPercent === p ? Colors.light.primary : Colors.light.border,
+                      backgroundColor: Colors.light.surface,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "600" }}>{p}%</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {pairingType === "fixed_price_special" ? (
+            <View>
+              <Text style={{ fontWeight: "600" }}>{t("menuOffer.fixedPriceLabel")}</Text>
+              <TextInput
+                value={fixedPriceText}
+                onChangeText={setFixedPriceText}
+                keyboardType="decimal-pad"
+                placeholder={t("menuOffer.fixedPricePlaceholder")}
+                style={{
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  marginTop: 6,
+                  fontSize: 16,
+                  backgroundColor: Colors.light.surface,
+                }}
+              />
+            </View>
+          ) : null}
           <PrimaryButton title={t("menuOffer.next")} onPress={onPairingNext} />
           <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("paired")} />
         </View>
@@ -289,12 +520,32 @@ export default function MenuOfferScreen() {
 
       {step === "generate" && structuredOffer ? (
         <View style={{ gap: Spacing.md }}>
-          <Text style={{ opacity: 0.85 }}>{buildOfferHintText(structuredOffer)}</Text>
-          <PrimaryButton
-            title={generating ? t("menuOffer.generating") : t("menuOffer.generate")}
-            onPress={() => void runGenerate()}
-            disabled={generating}
-          />
+          <View
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              backgroundColor: Colors.light.surface,
+              borderWidth: 1,
+              borderColor: Colors.light.border,
+              gap: Spacing.md,
+              boxShadow: "0px 8px 24px rgba(0,0,0,0.08)",
+              elevation: 5,
+            }}
+          >
+            <Text style={{ fontSize: 20, fontWeight: "800" }}>{t("menuOffer.generateStrongHeadline")}</Text>
+            <Text style={{ opacity: 0.88, fontSize: 16, fontWeight: "600" }}>
+              {buildOfferHintText(structuredOffer)}
+            </Text>
+            <Text style={{ opacity: 0.72, fontSize: 14 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
+            <PrimaryButton
+              title={
+                generating ? t("menuOffer.generatingStrongVariants") : t("menuOffer.generateStrongVariants")
+              }
+              onPress={() => void runGenerate()}
+              disabled={generating}
+              style={{ minHeight: 64 }}
+            />
+          </View>
           <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("pairing")} />
         </View>
       ) : null}
@@ -303,6 +554,7 @@ export default function MenuOfferScreen() {
         <View style={{ gap: Spacing.md }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.pickTitle")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("menuOffer.pickHelp")}</Text>
+          <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuOffer.adsOptionalRefine")}</Text>
           {adsWorking.map((ad, index) => {
             const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
             const subSplit = splitSubheadlineForPromoAndBody(ad.subheadline ?? "");

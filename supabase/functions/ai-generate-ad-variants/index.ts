@@ -375,6 +375,12 @@ serve(async (req) => {
       signedPosterUrl
         ? "PRIORITY ORDER: (1) SECTION A offer facts in the user message — structured offer JSON (if present), owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only."
         : "PRIORITY ORDER: (1) SECTION A offer facts — structured offer JSON (if present), owner note, schedule, price field (2) SECTION B profile hints for tone/voice only. No image is provided; do not invent visual details of a dish.",
+      ...(has_structured_offer
+        ? [
+            "STRUCTURED OFFER ENFORCEMENT: When SECTION A includes structured offer JSON, all three variants must reflect a strong deal only — BOGO or 2-for-1, a free item with purchase, 40%+ off, second-item half off, or the fixed-price special exactly as stated.",
+            "Never invent weak percentage discounts (for example 5–35% off) or small savings that contradict the structured JSON or owner note.",
+          ]
+        : []),
       "Profile category/tone/location/blurb must NOT override item, discount type, price, or time window. If profile says 'bakery' but the offer is clearly about lattes, write for the latte offer.",
       "Each ad MUST set creative_lane to one of: value | neighborhood | premium — use each exactly once.",
       "Lane rules:",

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
+import { useBusinessLocations } from "../../hooks/use-business-locations";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
@@ -38,8 +39,16 @@ export default function QuickDealScreen() {
   }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { t, i18n } = useTranslation();
-  const { isLoggedIn, businessId, userId, loading, businessPreferredLocale, businessName } =
-    useBusiness();
+  const {
+    isLoggedIn,
+    businessId,
+    userId,
+    loading,
+    businessPreferredLocale,
+    businessName,
+    subscriptionTier,
+  } = useBusiness();
+  const { visibleLocations, loading: locLoading } = useBusinessLocations(businessId, subscriptionTier);
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
   const [title, setTitle] = useState("");
   const [offerHint, setOfferHint] = useState("");
@@ -57,6 +66,13 @@ export default function QuickDealScreen() {
   const [dirty, setDirty] = useState(false);
   const markDirty = useCallback(() => setDirty(true), []);
   const [prefillPosterStoragePath, setPrefillPosterStoragePath] = useState<string | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visibleLocations.length > 0 && !selectedLocationId) {
+      setSelectedLocationId(visibleLocations[0].id);
+    }
+  }, [visibleLocations, selectedLocationId]);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
 
@@ -242,6 +258,7 @@ export default function QuickDealScreen() {
         poster_url: posterPublic,
         poster_storage_path: posterPath,
         quality_tier: quality.tier,
+        location_id: selectedLocationId,
       }).select("id").single();
 
       if (error) throw error;
@@ -267,7 +284,7 @@ export default function QuickDealScreen() {
 
       {!isLoggedIn ? (
         <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text>
-      ) : loading ? (
+      ) : loading || locLoading ? (
         <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loading")}</Text>
       ) : !businessId ? (
         <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.createBusinessFirst")}</Text>
@@ -293,6 +310,34 @@ export default function QuickDealScreen() {
                 }}
                 contentFit="cover"
               />
+            </View>
+          ) : null}
+
+          {visibleLocations.length > 0 ? (
+            <View style={{ marginBottom: Spacing.sm }}>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
+                {t("menuOffer.stepLocation")}
+              </Text>
+              {visibleLocations.map((loc) => (
+                <Pressable
+                  key={loc.id}
+                  onPress={() => {
+                    markDirty();
+                    setSelectedLocationId(loc.id);
+                  }}
+                  style={{
+                    padding: Spacing.md,
+                    borderRadius: Radii.lg,
+                    borderWidth: selectedLocationId === loc.id ? 2 : 1,
+                    borderColor: selectedLocationId === loc.id ? Colors.light.primary : Colors.light.border,
+                    marginBottom: Spacing.sm,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700" }}>{loc.name}</Text>
+                  <Text style={{ opacity: 0.65, marginTop: 4 }}>{loc.address}</Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
 

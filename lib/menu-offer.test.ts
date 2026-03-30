@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOfferHintText, buildStructuredOffer } from "./menu-offer";
+import { validateMenuOfferCanonicalSummary } from "./strong-deal-guard";
 
 describe("buildStructuredOffer", () => {
   it("free_with_purchase with paired item", () => {
@@ -14,14 +15,14 @@ describe("buildStructuredOffer", () => {
     expect(o.paired_item?.name).toBe("Croissant");
   });
 
-  it("free_with_purchase without paired", () => {
+  it("free_with_purchase without paired uses strong-deal phrasing as fallback", () => {
     const o = buildStructuredOffer({
       main: { id: "a", name: "Latte" },
       paired: null,
       pairing_type: "free_with_purchase",
     });
     expect(o.paired_item).toBeNull();
-    expect(o.human_summary).toContain("Featured item");
+    expect(o.human_summary.toLowerCase()).toContain("free");
     expect(o.human_summary).toContain("Latte");
   });
 
@@ -54,14 +55,29 @@ describe("buildStructuredOffer", () => {
     expect(withPaired.human_summary.toLowerCase()).toContain("half");
     expect(withPaired.human_summary).toContain("Bagel");
     expect(withPaired.human_summary).toContain("Schmear");
+    expect(
+      validateMenuOfferCanonicalSummary({ human_summary: withPaired.human_summary }).ok,
+    ).toBe(true);
 
     const solo = buildStructuredOffer({
       main: { name: "Bagel" },
       paired: null,
       pairing_type: "second_half_off",
     });
-    expect(solo.human_summary.toLowerCase()).toContain("half");
+    expect(solo.human_summary).toContain("50%");
+    expect(solo.human_summary.toLowerCase()).toContain("second");
     expect(solo.human_summary).toContain("Bagel");
+  });
+
+  it("percent_off uses discount in summary", () => {
+    const o = buildStructuredOffer({
+      main: { name: "Latte" },
+      paired: null,
+      pairing_type: "percent_off",
+      discount_percent: 50,
+    });
+    expect(o.human_summary).toContain("50%");
+    expect(o.human_summary).toContain("Latte");
   });
 
   it("trims names", () => {

@@ -12,6 +12,9 @@ import type { StructuredOffer } from "./menu-offer";
 export type RefineChatTurn = { role: "user" | "assistant"; content: string };
 
 type WizardContextValue = {
+  /** Primary first; additional locations when multi-location publish */
+  dealLocationIds: string[];
+  setDealLocationIds: (ids: string[]) => void;
   structuredOffer: StructuredOffer | null;
   setStructuredOffer: (o: StructuredOffer | null) => void;
   adsOriginal: GeneratedAd[] | null;
@@ -33,6 +36,7 @@ function cloneAd(a: GeneratedAd): GeneratedAd {
 }
 
 export function CreateMenuOfferWizardProvider({ children }: { children: React.ReactNode }) {
+  const [dealLocationIds, setDealLocationIds] = useState<string[]>([]);
   const [structuredOffer, setStructuredOffer] = useState<StructuredOffer | null>(null);
   const [adsOriginal, setAdsOriginal] = useState<GeneratedAd[] | null>(null);
   const [adsWorking, setAdsWorking] = useState<GeneratedAd[] | null>(null);
@@ -67,6 +71,7 @@ export function CreateMenuOfferWizardProvider({ children }: { children: React.Re
   }, [adsOriginal]);
 
   const clearWizard = useCallback(() => {
+    setDealLocationIds([]);
     setStructuredOffer(null);
     setAdsOriginal(null);
     setAdsWorking(null);
@@ -76,6 +81,8 @@ export function CreateMenuOfferWizardProvider({ children }: { children: React.Re
 
   const value = useMemo(
     () => ({
+      dealLocationIds,
+      setDealLocationIds,
       structuredOffer,
       setStructuredOffer,
       adsOriginal,
@@ -90,6 +97,7 @@ export function CreateMenuOfferWizardProvider({ children }: { children: React.Re
       clearWizard,
     }),
     [
+      dealLocationIds,
       structuredOffer,
       adsOriginal,
       adsWorking,

@@ -103,17 +103,37 @@ export default function CreateDeal() {
           showsVerticalScrollIndicator={false}
         >
           <Pressable
-            onPress={() => router.push("/create/quick")}
+            onPress={() => router.push("/create/menu-offer" as Href)}
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               backgroundColor: Colors.light.primary,
-              boxShadow: "0px 4px 10px rgba(0,0,0,0.10)",
-              elevation: 3,
+              boxShadow: "0px 4px 10px rgba(0,0,0,0.12)",
+              elevation: 4,
             }}
           >
-            <Text style={{ color: Colors.light.primaryText, fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
-            <Text style={{ color: Colors.light.primaryText, opacity: 0.9, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+            <Text style={{ color: Colors.light.primaryText, fontSize: 17, fontWeight: "700" }}>
+              {t("createHub.menuDealFastTitle")}
+            </Text>
+            <Text style={{ color: Colors.light.primaryText, opacity: 0.92, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {t("createHub.menuDealFastSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/create/quick")}
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              backgroundColor: Colors.light.surface,
+              borderWidth: 2,
+              borderColor: Colors.light.primary,
+              boxShadow: "0px 3px 8px rgba(0,0,0,0.06)",
+              elevation: 2,
+            }}
+          >
+            <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.8, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
               {t("createHub.quickDealSubtitle")}
             </Text>
           </Pressable>
@@ -151,7 +171,7 @@ export default function CreateDeal() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/create/menu-offer" as Href)}
+            onPress={() => router.push("/create/menu-manager" as Href)}
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.md,
@@ -160,9 +180,9 @@ export default function CreateDeal() {
               borderColor: Colors.light.border,
             }}
           >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuOfferTitle")}</Text>
+            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuManagerTitle")}</Text>
             <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-              {t("createHub.menuOfferSubtitle")}
+              {t("createHub.menuManagerSubtitle")}
             </Text>
           </Pressable>
 

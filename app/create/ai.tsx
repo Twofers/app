@@ -141,6 +141,8 @@ export default function AiDealScreen() {
     prefillPosterPath?: string;
     fromAiCompose?: string;
     fromMenuOffer?: string;
+    prefillLocationId?: string;
+    prefillExtraLocationIds?: string;
   }>();
   const { templateId } = params;
   const { t, i18n } = useTranslation();
@@ -223,6 +225,7 @@ export default function AiDealScreen() {
   const [lastSuccessfulGenAttempt, setLastSuccessfulGenAttempt] = useState(0);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
+  const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -365,8 +368,12 @@ export default function AiDealScreen() {
     const posterPath = g(params.prefillPosterPath).trim();
     const fromAi = g(params.fromAiCompose);
     const fromMenu = g(params.fromMenuOffer);
+    const pl = g(params.prefillLocationId).trim();
+    const pe = g(params.prefillExtraLocationIds).trim();
+    const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
+    if (locIds.length) setPublishLocationIds(locIds);
 
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && locIds.length === 0) return;
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -395,6 +402,8 @@ export default function AiDealScreen() {
     params.prefillPosterPath,
     params.fromAiCompose,
     params.fromMenuOffer,
+    params.prefillLocationId,
+    params.prefillExtraLocationIds,
     t,
   ]);
 
@@ -773,7 +782,7 @@ export default function AiDealScreen() {
         return;
       }
 
-      const { data: deal, error } = await supabase.from("deals").insert({
+      const baseRow = {
         business_id: businessId,
         title: title.trim(),
         description: composedDescription.trim(),
@@ -791,9 +800,18 @@ export default function AiDealScreen() {
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
         timezone: isRecurring ? timezone : null,
         quality_tier: quality.tier,
-      }).select("id").single();
+      };
+      const locTargets =
+        publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
+      const rows = locTargets.map((lid) => ({
+        ...baseRow,
+        location_id: lid,
+      }));
+      const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
       if (error) throw error;
-      if (deal?.id) void notifyDealPublished(deal.id);
+      for (const row of dealsOut ?? []) {
+        if (row?.id) void notifyDealPublished(row.id);
+      }
 
       const baseline = aiDraftBaselineRef.current;
       if (baseline) {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { STRONG_DEAL_ONLY_MESSAGE, validateStrongDealOnly } from "./strong-deal-guard";
+import {
+  STRONG_DEAL_ONLY_MESSAGE,
+  validateMenuOfferCanonicalSummary,
+  validateStrongDealOnly,
+} from "./strong-deal-guard";
 
 describe("validateStrongDealOnly", () => {
   // ── Existing passing cases ────────────────────────────────────────────────
@@ -119,6 +123,25 @@ describe("validateStrongDealOnly", () => {
   });
 
   // ── Misspelling tolerance (AI handles this, but guard should still work) ──
+  it("validateMenuOfferCanonicalSummary matches structured wizard lines", () => {
+    expect(
+      validateMenuOfferCanonicalSummary({
+        human_summary: "Buy Latte, get Croissant free.",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      validateMenuOfferCanonicalSummary({
+        human_summary: "50% off the second item — Bagel.",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      validateMenuOfferCanonicalSummary({
+        human_summary: "5% off Latte",
+        discount_percent: 5,
+      }),
+    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+  });
+
   it("accepts BOGO with typo in description (AI-generated output)", () => {
     // After AI rewrites "cofee + muffin" it outputs proper BOGO copy
     expect(

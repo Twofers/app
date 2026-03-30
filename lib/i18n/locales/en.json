@@ -432,6 +432,8 @@
     "errLoginBusiness": "Please log in to create a business.",
     "errNameRequired": "Business name required.",
     "errCreateFailed": "Create business failed.",
+    "menuDealFastTitle": "Menu deal (fast)",
+    "menuDealFastSubtitle": "Saved menu → pick store → items → 3 AI ads → publish. Best when your menu is set up.",
     "quickDealTitle": "Quick Deal",
     "quickDealSubtitle": "Fast manual deal creation with minimal fields.",
     "aiAdsTitle": "AI ad ideas",
@@ -448,7 +450,9 @@
     "scanMenuTitle": "Scan menu",
     "scanMenuSubtitle": "Photo of your menu → save items for faster offers.",
     "menuOfferTitle": "Offer from menu",
-    "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish."
+    "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
+    "menuManagerTitle": "Menu library",
+    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines."
   },
   "menuScan": {
     "title": "Scan menu",
@@ -462,12 +466,18 @@
     "emptyExtract": "No items found. Try a clearer photo or add lines manually.",
     "needBusiness": "Create a business first.",
     "buildOffer": "Build an offer",
+    "strongDealHint": "Deals must meet Twofer's strong-deal rule (40%+ off, BOGO, or a free item). You'll choose the exact offer on the next screen.",
     "errScan": "Could not read menu. Try again.",
     "saved": "Menu saved.",
     "namePlaceholder": "Item name",
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
-    "removeLine": "Remove"
+    "removeLine": "Remove",
+    "pickMore": "Add more photos (append)",
+    "multiHint": "Pick one or many photos — AI extracts lines from each.",
+    "skipDupLabel": "Skip lines already in your library",
+    "allDuplicatesInLibrary": "Every line matches something already saved. Turn off “skip duplicates” to add anyway, or edit names.",
+    "savedWithSkipped": "Saved {{count}} new lines ({{skipped}} skipped — already in library)."
   },
   "menuOffer": {
     "title": "Menu offer",
@@ -484,6 +494,12 @@
     "back": "Back",
     "generate": "Generate 3 ad ideas",
     "generating": "Generating…",
+    "generateStrongHeadline": "Generate 3 strong ad options",
+    "generateStrongSubtitle": "Twofer only allows strong deals — 40%+ off, BOGO, 2-for-1, or a free item with purchase.",
+    "generateStrongVariants": "Generate 3 Strong Variants",
+    "generatingStrongVariants": "Generating 3 strong variants…",
+    "adsOptionalRefine": "Optional: use Refine with AI on any card to tweak wording in chat.",
+    "errNeedPairedFree": "Pick what’s free (or tap Same menu item) — this offer type needs a paired item.",
     "pickTitle": "Pick an ad",
     "pickHelp": "Each option uses a different angle. Offer facts stay the same.",
     "useAiPublish": "Review & publish (full deal)",
@@ -494,7 +510,19 @@
     "visualNote": "Image idea: {{note}}",
     "errGenerate": "Could not generate ads. Try again.",
     "promoLineLabel": "Promo line",
-    "bodyCopyLabel": "Details"
+    "bodyCopyLabel": "Details",
+    "stepLocation": "Select location",
+    "locationHelp": "Each deal is tied to a store. Pro: one location. Premium: up to three.",
+    "pickLocation": "Choose a location to continue.",
+    "multiLocationToggle": "Apply this same deal to multiple locations?",
+    "pairPercent": "% off one menu item",
+    "pairFixed": "Fixed price special",
+    "sameItemPaired": "Same menu item (BOGO on one item)",
+    "percentOffLabel": "Discount (40% or more)",
+    "fixedPriceLabel": "Special price (USD)",
+    "fixedPricePlaceholder": "e.g. 3.50",
+    "errPercentWeak": "Twofer needs at least 40% off for this type — pick 40% or higher.",
+    "errFixedPrice": "Enter a valid dollar amount for the special price."
   },
   "menuWorkflow": {
     "errSchema": "Menu storage is not set up on this server yet. Ask your admin to run the latest database migration.",
@@ -899,7 +927,6 @@
     "errRegenClientLimit": "You’ve used both free refreshes for this draft. Tap “Generate 3 ad ideas” for a new batch, or edit the text below.",
     "errUploadPhoto": "Upload the photo before generating.",
     "errPriceNumber": "Price must be a number.",
-    "errGenerationFailed": "Generation failed",
     "errUnexpectedAi": "Unexpected response from AI. Try again.",
     "successBatchNew": "New batch ready — value, neighborhood, and quality angles. Pick one to load into your draft.",
     "successBatchFirst": "Three angles: value, neighborhood, and premium. Pick one—you can edit before publishing.",
@@ -1351,5 +1378,23 @@
     "periodAm": "AM",
     "periodPm": "PM",
     "errLoad": "Failed to load analytics."
+  },
+  "menuManager": {
+    "title": "Menu library",
+    "subtitle": "Edit, add, or archive saved lines from your menu.",
+    "empty": "No menu lines yet. Scan a menu or add items manually.",
+    "addManual": "Add item",
+    "save": "Save",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "showArchived": "Show archived",
+    "hideArchived": "Hide archived",
+    "namePlaceholder": "Item name",
+    "categoryPlaceholder": "Category (optional)",
+    "pricePlaceholder": "Price as shown (optional)",
+    "descPlaceholder": "Short note (optional)",
+    "saved": "Saved.",
+    "errSave": "Could not save. Try again.",
+    "edit": "Edit"
   }
 }

@@ -5,6 +5,7 @@ import type { BusinessContextPayload } from "../lib/ad-variants";
 
 type BusinessInfo = {
   id: string;
+  subscription_tier: "pro" | "premium";
   name: string;
   contact_name: string | null;
   business_email: string | null;
@@ -84,7 +85,7 @@ export function useBusiness() {
     const { data, error: bizError } = await supabase
       .from("businesses")
       .select(
-        "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
+        "id,subscription_tier,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
       )
       .eq("owner_id", uid)
       .maybeSingle();
@@ -101,6 +102,7 @@ export function useBusiness() {
       data
         ? {
             id: data.id,
+            subscription_tier: data.subscription_tier === "premium" ? "premium" : "pro",
             name: data.name,
             contact_name: data.contact_name ?? null,
             business_email: data.business_email ?? null,
@@ -139,6 +141,7 @@ export function useBusiness() {
     businessContextForAi,
     /** For AI output + deal-quality messages on publish (null → app locale) */
     businessPreferredLocale: business?.preferred_locale ?? null,
+    subscriptionTier: business?.subscription_tier ?? "pro",
     loading,
     refresh,
   };

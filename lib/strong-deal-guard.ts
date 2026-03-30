@@ -102,3 +102,16 @@ export function validateStrongDealOnly(input: {
 
   return { ok: true };
 }
+
+/** Menu wizard canonical line — same rules as publish, without importing StructuredOffer. */
+export function validateMenuOfferCanonicalSummary(input: {
+  human_summary: string;
+  discount_percent?: number | null;
+}): ReturnType<typeof validateStrongDealOnly> {
+  const s = (input.human_summary ?? "").trim();
+  return validateStrongDealOnly({
+    title: s,
+    description: s,
+    discountPercent: input.discount_percent ?? null,
+  });
+}
