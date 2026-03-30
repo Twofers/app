@@ -64,6 +64,7 @@ type TemplateRow = {
   days_of_week: number[] | null;
   window_start_minutes: number | null;
   window_end_minutes: number | null;
+  timezone?: string | null;
 };
 
 /** English weekday labels for `offer_schedule_summary` sent to the edge function (stable for the model). */
@@ -132,6 +133,7 @@ export default function AiDealScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const params = useLocalSearchParams<{
     templateId?: string;
+    dealId?: string;
     prefillTitle?: string;
     prefillPromoLine?: string;
     prefillCta?: string;
@@ -144,7 +146,7 @@ export default function AiDealScreen() {
     prefillLocationId?: string;
     prefillExtraLocationIds?: string;
   }>();
-  const { templateId } = params;
+  const { templateId, dealId: dealIdParam } = params;
   const { t, i18n } = useTranslation();
   const {
     isLoggedIn,
@@ -203,8 +205,8 @@ export default function AiDealScreen() {
   const [windowStart, setWindowStart] = useState(new Date());
   const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [timezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago"
+  const [timezone, setTimezone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
   );
   const [banner, setBanner] = useState<{
     message: string;
@@ -235,6 +237,12 @@ export default function AiDealScreen() {
   const [qaPanelOpen, setQaPanelOpen] = useState(false);
   const [devEdgeBusy, setDevEdgeBusy] = useState<"copy" | "create" | null>(null);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
+  const menuOfferScrollDoneRef = useRef(false);
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [dealLoadError, setDealLoadError] = useState<string | null>(null);
+  const [dealEditLoading, setDealEditLoading] = useState(false);
 
   const offerScheduleSummary = useMemo(
     () =>
@@ -261,6 +269,7 @@ export default function AiDealScreen() {
 
   const showDraftEditor =
     templateLoaded ||
+    editingDealId != null ||
     selectedAdIndex !== null ||
     title.trim().length > 0 ||
     promoLine.trim().length > 0 ||
@@ -313,8 +322,87 @@ export default function AiDealScreen() {
     ),
   );
 
+  const dealIdFromRoute = useMemo(() => {
+    const raw = dealIdParam;
+    const s = Array.isArray(raw) ? raw[0] : raw;
+    return typeof s === "string" ? s.trim() : "";
+  }, [dealIdParam]);
+
   useEffect(() => {
-    if (!templateId || !businessId) return;
+    if (!dealIdFromRoute || !businessId) return;
+    let cancelled = false;
+    setDealLoadError(null);
+    setDealEditLoading(true);
+    void (async () => {
+      try {
+      const { data, error } = await supabase
+        .from("deals")
+        .select(
+          "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
+        )
+        .eq("id", dealIdFromRoute)
+        .eq("business_id", businessId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setDealLoadError(error?.message ?? "Not found");
+        setEditingDealId(null);
+        return;
+      }
+      const row = data as Record<string, unknown>;
+      setEditingDealId(String(row.id));
+      setTitle(String(row.title ?? ""));
+      setDescription(String(row.description ?? ""));
+      setPromoLine("");
+      setCtaText("");
+      setPrice(row.price != null ? String(row.price) : "");
+      setPosterUrl((row.poster_url as string | null) ?? null);
+      const pPath = row.poster_storage_path as string | null | undefined;
+      if (pPath) setPhotoPath(pPath);
+      setMaxClaims(String(row.max_claims ?? 50));
+      setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
+      setValidityMode(row.is_recurring ? "recurring" : "one-time");
+      if (row.start_time) setStartTime(new Date(String(row.start_time)));
+      if (row.end_time) setEndTime(new Date(String(row.end_time)));
+      setDaysOfWeek(
+        Array.isArray(row.days_of_week) && row.days_of_week.length
+          ? (row.days_of_week as number[])
+          : [1, 2, 3, 4, 5],
+      );
+      if (row.window_start_minutes != null) {
+        const wm = Number(row.window_start_minutes);
+        const d = new Date();
+        d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
+        setWindowStart(d);
+      }
+      if (row.window_end_minutes != null) {
+        const wm = Number(row.window_end_minutes);
+        const d = new Date();
+        d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
+        setWindowEnd(d);
+      }
+      const tz = row.timezone;
+      if (typeof tz === "string" && tz.trim()) setTimezone(tz.trim());
+      else setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago");
+      const lid = row.location_id;
+      setPublishLocationIds(lid ? [String(lid)] : []);
+      setManualDraftUnlocked(true);
+      setGeneratedAds(null);
+      setSelectedAdIndex(null);
+      aiDraftBaselineRef.current = null;
+      setLastGenerationError(null);
+      setTemplateLoaded(false);
+      } finally {
+        if (!cancelled) setDealEditLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dealIdFromRoute, businessId]);
+
+  useEffect(() => {
+    if (dealIdFromRoute || !templateId || !businessId) return;
     (async () => {
       const { data, error } = await supabase
         .from("deal_templates")
@@ -344,6 +432,9 @@ export default function AiDealScreen() {
           d.setHours(Math.floor(row.window_end_minutes / 60), row.window_end_minutes % 60, 0, 0);
           setWindowEnd(d);
         }
+        if (typeof row.timezone === "string" && row.timezone.trim()) {
+          setTimezone(row.timezone.trim());
+        }
         setTemplateLoaded(true);
         setGeneratedAds(null);
         setSelectedAdIndex(null);
@@ -352,11 +443,11 @@ export default function AiDealScreen() {
         setLastGenerationError(null);
       }
     })();
-  }, [templateId, businessId]);
+  }, [dealIdFromRoute, templateId, businessId]);
 
   /** Deep-link prefill from AI Compose / menu-offer (full publish flow stays on this screen). */
   useEffect(() => {
-    if (templateId) return;
+    if (templateId || dealIdFromRoute) return;
 
     const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
     const pt = g(params.prefillTitle).trim();
@@ -404,8 +495,19 @@ export default function AiDealScreen() {
     params.fromMenuOffer,
     params.prefillLocationId,
     params.prefillExtraLocationIds,
+    dealIdFromRoute,
     t,
   ]);
+
+  useEffect(() => {
+    const fromMenu = String(params.fromMenuOffer ?? "") === "1";
+    if (!fromMenu || menuOfferScrollDoneRef.current || scheduleSectionY == null) return;
+    menuOfferScrollDoneRef.current = true;
+    const tid = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, scheduleSectionY - 16), animated: true });
+    }, 400);
+    return () => clearTimeout(tid);
+  }, [params.fromMenuOffer, scheduleSectionY]);
 
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -801,16 +903,29 @@ export default function AiDealScreen() {
         timezone: isRecurring ? timezone : null,
         quality_tier: quality.tier,
       };
-      const locTargets =
-        publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
-      const rows = locTargets.map((lid) => ({
-        ...baseRow,
-        location_id: lid,
-      }));
-      const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
-      if (error) throw error;
-      for (const row of dealsOut ?? []) {
-        if (row?.id) void notifyDealPublished(row.id);
+      if (editingDealId) {
+        const { error } = await supabase
+          .from("deals")
+          .update({
+            ...baseRow,
+            location_id: publishLocationIds[0] ?? null,
+          })
+          .eq("id", editingDealId)
+          .eq("business_id", businessId);
+        if (error) throw error;
+        void notifyDealPublished(editingDealId);
+      } else {
+        const locTargets =
+          publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
+        const rows = locTargets.map((lid) => ({
+          ...baseRow,
+          location_id: lid,
+        }));
+        const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
+        if (error) throw error;
+        for (const row of dealsOut ?? []) {
+          if (row?.id) void notifyDealPublished(row.id);
+        }
       }
 
       const baseline = aiDraftBaselineRef.current;
@@ -883,6 +998,7 @@ export default function AiDealScreen() {
         days_of_week: isRecurring ? daysOfWeek : null,
         window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
+        timezone: isRecurring ? timezone : null,
       });
       if (error) throw error;
       setBanner({ message: t("createAi.templateSaved"), tone: "success" });
@@ -916,9 +1032,27 @@ export default function AiDealScreen() {
     );
   }
 
+  if (dealIdFromRoute && dealEditLoading) {
+    return (
+      <View
+        style={{
+          paddingTop: top,
+          paddingHorizontal: horizontal,
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator />
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.loadingDeal")}</Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardScreen>
     <ScrollView
+      ref={scrollRef}
       style={{ flex: 1 }}
       {...FORM_SCROLL_KEYBOARD_PROPS}
       showsVerticalScrollIndicator={false}
@@ -928,7 +1062,9 @@ export default function AiDealScreen() {
         paddingBottom: scrollBottom,
       }}
     >
-      <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleMain")}</Text>
+      <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>
+        {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
+      </Text>
       <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
 
       {isDemoAiAccount ? (
@@ -1029,6 +1165,23 @@ export default function AiDealScreen() {
       </View>
 
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+      {dealLoadError ? (
+        <Banner message={dealLoadError} tone="error" />
+      ) : null}
+      {String(params.fromMenuOffer ?? "") === "1" && !editingDealId ? (
+        <View
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 14,
+            backgroundColor: "rgba(255,159,28,0.12)",
+            borderWidth: 1,
+            borderColor: "rgba(255,159,28,0.45)",
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("createAi.menuOfferScheduleHint")}</Text>
+        </View>
+      ) : null}
 
       {showCamera ? (
         <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
@@ -1135,6 +1288,7 @@ export default function AiDealScreen() {
           />
 
           <View
+            onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
             style={{
               marginTop: 16,
               borderRadius: 14,
@@ -1641,7 +1795,13 @@ export default function AiDealScreen() {
 
               <View style={{ marginTop: 16, gap: 8 }}>
                 <PrimaryButton
-                  title={publishing ? t("createAi.publishing") : t("createAi.publishDeal")}
+                  title={
+                    publishing
+                      ? t("createAi.publishing")
+                      : editingDealId
+                        ? t("createAi.saveDealChanges")
+                        : t("createAi.publishDeal")
+                  }
                   onPress={publishDeal}
                   disabled={publishing}
                   style={{ height: 66, borderRadius: 20 }}

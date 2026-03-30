@@ -317,7 +317,9 @@
     "prefillFromAiCompose": "AI에서 불러온 초안입니다. 확인 후 게시하세요.",
     "prefillFromMenuOffer": "메뉴 오퍼에서 불러온 초안입니다. 확인 후 게시하세요.",
     "prefillFromReuse": "이전 딜에서 불러왔습니다. 수정 후 게시하세요.",
-    "aiPosterAttached": "이 딜용 AI 포스터"
+    "aiPosterAttached": "이 딜용 AI 포스터",
+    "schedulingHint": "빠른 딜은 지금부터 선택한 종료 시각까지입니다. 미래 시작, 매주 반복, AI 광고는 AI 광고 화면을 사용하세요.",
+    "openAiScheduling": "AI 광고 열기(일정)"
   },
   "language": {
     "sectionApp": "앱 언어",
@@ -1159,7 +1161,16 @@
     "errFlyer": "전단지를 생성할 수 없습니다.",
     "flyerScanAtCounter": "카운터에서 스캔하세요",
     "flyerOpenInApp": "TWOFER 앱에서 이 딜 열기",
-    "flyerPoweredBy": "TWOFER 제공 — 지역 딜, 낭비 제로"
+    "flyerPoweredBy": "TWOFER 제공 — 지역 딜, 낭비 제로",
+    "statusScheduled": "예정",
+    "statusLive": "진행 중",
+    "statusEnded": "종료",
+    "statusRecurringOff": "시간 외",
+    "badgeRecurring": "반복",
+    "templatesReuseTitle": "템플릿 및 재사용",
+    "templatesReuseSubtitle": "저장한 템플릿, 반복 패턴, 지난 딜 — 여기서 불러와 시작하세요.",
+    "openTemplates": "템플릿 및 재사용 열기",
+    "editDeal": "딜 수정"
   },
   "consumerProfile": {
     "navTitle": "내 프로필",
@@ -1339,6 +1350,10 @@
     "detailsPlaceholder": "What’s included, times, fine print",
     "publishing": "Publishing...",
     "publishDeal": "Publish Deal",
+    "titleEdit": "딜 수정",
+    "saveDealChanges": "변경 저장",
+    "loadingDeal": "딜 불러오는 중…",
+    "menuOfferScheduleHint": "아래에서 언제 진행할지 설정하세요 — 일회성 날짜나 매주 반복 시간대 — 그다음 광고를 만들고 게시하세요.",
     "savingTemplate": "Saving...",
     "saveTemplate": "Save as Template",
     "templateSaved": "Template saved.",

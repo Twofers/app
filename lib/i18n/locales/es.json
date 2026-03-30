@@ -317,7 +317,9 @@
     "prefillFromAiCompose": "Borrador cargado desde la IA. Revísalo y publica.",
     "prefillFromMenuOffer": "Borrador desde tu oferta con menú. Revísalo y publica.",
     "prefillFromReuse": "Campos cargados desde una oferta anterior. Ajusta y publica.",
-    "aiPosterAttached": "Póster IA para esta oferta"
+    "aiPosterAttached": "Póster IA para esta oferta",
+    "schedulingHint": "La oferta rápida va desde ahora hasta la hora de fin. Para empezar en el futuro, horarios semanales o anuncios con IA, usa Anuncios con IA.",
+    "openAiScheduling": "Abrir anuncios con IA (horario)"
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -1159,7 +1161,16 @@
     "errFlyer": "No se pudo generar el volante.",
     "flyerScanAtCounter": "Escanea en el mostrador",
     "flyerOpenInApp": "Abre esta oferta en la app TWOFER",
-    "flyerPoweredBy": "Impulsado por TWOFER — ofertas locales, cero desperdicio"
+    "flyerPoweredBy": "Impulsado por TWOFER — ofertas locales, cero desperdicio",
+    "statusScheduled": "Programada",
+    "statusLive": "En vivo",
+    "statusEnded": "Finalizada",
+    "statusRecurringOff": "Fuera de horario",
+    "badgeRecurring": "Recurrente",
+    "templatesReuseTitle": "Plantillas y reutilizar",
+    "templatesReuseSubtitle": "Plantillas guardadas, patrones recurrentes y ofertas pasadas — ábrelas para empezar desde una.",
+    "openTemplates": "Abrir plantillas y reutilizar",
+    "editDeal": "Editar oferta"
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",
@@ -1339,6 +1350,10 @@
     "detailsPlaceholder": "What’s included, times, fine print",
     "publishing": "Publishing...",
     "publishDeal": "Publish Deal",
+    "titleEdit": "Editar oferta",
+    "saveDealChanges": "Guardar cambios",
+    "loadingDeal": "Cargando oferta…",
+    "menuOfferScheduleHint": "Define cuándo corre la oferta abajo — fechas puntuales o una ventana semanal recurrente — luego genera anuncios y publica.",
     "savingTemplate": "Saving...",
     "saveTemplate": "Save as Template",
     "templateSaved": "Template saved.",

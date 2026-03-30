@@ -25,7 +25,11 @@ import {
   DEFAULT_CLAIM_GRACE_MINUTES,
   isPastClaimRedeemDeadline,
 } from "@/lib/claim-redeem-deadline";
-import { formatValiditySummary } from "@/lib/deal-time";
+import {
+  formatValiditySummary,
+  getMerchantDealScheduleStatus,
+  type MerchantDealScheduleStatus,
+} from "@/lib/deal-time";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
 import { supabase } from "@/lib/supabase";
@@ -515,8 +519,25 @@ export default function BusinessDashboard() {
     }
   }
 
-  const dealActive = (item: DealRow) =>
-    item.is_active && new Date(item.end_time).getTime() > Date.now();
+  function dealScheduleStatus(item: DealRow): MerchantDealScheduleStatus {
+    return getMerchantDealScheduleStatus({
+      is_active: item.is_active,
+      start_time: item.start_time,
+      end_time: item.end_time,
+      is_recurring: item.is_recurring,
+      days_of_week: item.days_of_week,
+      window_start_minutes: item.window_start_minutes,
+      window_end_minutes: item.window_end_minutes,
+      timezone: item.timezone,
+    });
+  }
+
+  function statusBadgeLabel(status: MerchantDealScheduleStatus): string {
+    if (status === "scheduled") return t("offersDashboard.statusScheduled");
+    if (status === "live") return t("offersDashboard.statusLive");
+    if (status === "recurring_inactive") return t("offersDashboard.statusRecurringOff");
+    return t("offersDashboard.statusEnded");
+  }
 
   const listHeader = useMemo(
     () => (
@@ -601,6 +622,28 @@ export default function BusinessDashboard() {
 
         <MerchantInsightsPanel insights={insights} />
 
+        <Pressable
+          onPress={() => router.push("/create/reuse")}
+          style={[
+            premiumCardStyle(),
+            {
+              padding: Spacing.lg,
+              marginBottom: Spacing.lg,
+              marginTop: Spacing.sm,
+            },
+          ]}
+        >
+          <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
+            {t("offersDashboard.templatesReuseTitle")}
+          </Text>
+          <Text style={{ marginTop: 8, fontSize: 14, opacity: 0.65, lineHeight: 20 }}>
+            {t("offersDashboard.templatesReuseSubtitle")}
+          </Text>
+          <Text style={{ marginTop: 10, fontWeight: "800", fontSize: 14, color: primary }}>
+            {t("offersDashboard.openTemplates")} →
+          </Text>
+        </Pressable>
+
         <Text
           style={{
             fontWeight: "800",
@@ -614,19 +657,7 @@ export default function BusinessDashboard() {
         </Text>
       </View>
     ),
-    [
-      t,
-      monthViews,
-      dealsLaunchedMonth,
-      monthClaims,
-      monthRedeems,
-      uniqueRedeemers,
-      monthRedemptionPct,
-      primary,
-      weekLabels,
-      weekCounts,
-      insights,
-    ],
+    [t, primary, router, monthViews, dealsLaunchedMonth, monthClaims, monthRedeems, uniqueRedeemers, monthRedemptionPct, weekLabels, weekCounts, insights],
   );
 
   if (!modeReady) {
@@ -706,7 +737,8 @@ export default function BusinessDashboard() {
               }
               ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
               renderItem={({ item }) => {
-                const active = dealActive(item);
+                const sched = dealScheduleStatus(item);
+                const active = sched === "live";
                 const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
                 return (
                   <Animated.View entering={FadeInDown.duration(360).delay(60).springify()}>
@@ -733,10 +765,24 @@ export default function BusinessDashboard() {
                             />
                           )}
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
                               <Text style={{ fontWeight: "800", fontSize: 17, flex: 1 }} numberOfLines={2}>
                                 {item.title ?? t("offersDashboard.dealFallback")}
                               </Text>
+                              {item.is_recurring ? (
+                                <View
+                                  style={{
+                                    paddingHorizontal: Spacing.sm,
+                                    paddingVertical: 4,
+                                    borderRadius: 999,
+                                    backgroundColor: "rgba(17,17,17,0.08)",
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#333" }}>
+                                    {t("offersDashboard.badgeRecurring")}
+                                  </Text>
+                                </View>
+                              ) : null}
                               <View
                                 style={{
                                   paddingHorizontal: Spacing.sm,
@@ -752,7 +798,7 @@ export default function BusinessDashboard() {
                                     color: active ? "#c26100" : "#555",
                                   }}
                                 >
-                                  {active ? t("commonUi.live") : t("commonUi.ended")}
+                                  {statusBadgeLabel(sched)}
                                 </Text>
                               </View>
                             </View>
@@ -792,7 +838,32 @@ export default function BusinessDashboard() {
                       </HapticScalePressable>
 
                       <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-                        {active ? (
+                        {sched !== "ended" ? (
+                          <HapticScalePressable
+                            onPress={() => router.push({ pathname: "/create/ai", params: { dealId: item.id } })}
+                            style={{
+                              minHeight: 48,
+                              borderRadius: 20,
+                              borderWidth: 2,
+                              borderColor: Colors.light.border,
+                              backgroundColor: "#fff",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: Colors.light.text,
+                                fontWeight: "800",
+                                fontSize: 15,
+                                ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
+                              }}
+                            >
+                              {t("offersDashboard.editDeal")}
+                            </Text>
+                          </HapticScalePressable>
+                        ) : null}
+                        {sched !== "ended" ? (
                           endingDealId === item.id ? (
                             <View
                               style={{

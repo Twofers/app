@@ -96,6 +96,32 @@ export type FormatValiditySummaryOptions = {
   t?: TFunction;
 };
 
+/** Merchant dashboard: how this deal should be labeled (not identical to consumer "live"). */
+export type MerchantDealScheduleStatus =
+  | "ended"
+  | "scheduled"
+  | "live"
+  /** Recurring campaign active but outside the weekly window right now */
+  | "recurring_inactive";
+
+export function getMerchantDealScheduleStatus(
+  deal: RecurringInfo & { is_active?: boolean | null },
+): MerchantDealScheduleStatus {
+  const now = Date.now();
+  const endMs = deal.end_time ? new Date(deal.end_time).getTime() : 0;
+  if (deal.is_active === false || !Number.isFinite(endMs) || endMs <= now) {
+    return "ended";
+  }
+  const startMs = deal.start_time ? new Date(deal.start_time).getTime() : 0;
+  if (!deal.is_recurring && Number.isFinite(startMs) && startMs > now) {
+    return "scheduled";
+  }
+  if (deal.is_recurring) {
+    return isDealActiveNow(deal) ? "live" : "recurring_inactive";
+  }
+  return isDealActiveNow(deal) ? "live" : "ended";
+}
+
 export function formatValiditySummary(deal: RecurringInfo, options?: FormatValiditySummaryOptions) {
   const lang = options?.lang;
   const endsVerb = options?.endsVerb ?? "Ends";

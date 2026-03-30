@@ -317,7 +317,9 @@
     "prefillFromAiCompose": "Draft loaded from AI. Review and publish when ready.",
     "prefillFromMenuOffer": "Draft loaded from your menu offer. Review and publish when ready.",
     "prefillFromReuse": "Fields loaded from a past deal. Adjust and publish.",
-    "aiPosterAttached": "AI poster for this deal"
+    "aiPosterAttached": "AI poster for this deal",
+    "schedulingHint": "Quick Deal runs from now until the end time you pick. For a future start, recurring weekly hours, or AI ad variants, use AI ads.",
+    "openAiScheduling": "Open AI ads (scheduling)"
   },
   "language": {
     "sectionApp": "App language",
@@ -904,6 +906,10 @@
     "detailsPlaceholder": "What’s included, times, fine print",
     "publishing": "Publishing...",
     "publishDeal": "Publish Deal",
+    "titleEdit": "Edit deal",
+    "saveDealChanges": "Save changes",
+    "loadingDeal": "Loading deal…",
+    "menuOfferScheduleHint": "Set when this offer runs below — one-time dates or a recurring weekly window — then generate ads and publish.",
     "savingTemplate": "Saving...",
     "saveTemplate": "Save as Template",
     "templateSaved": "Template saved.",
@@ -1291,7 +1297,16 @@
     "errFlyer": "Could not generate flyer.",
     "flyerScanAtCounter": "Scan at counter",
     "flyerOpenInApp": "Open this deal in the TWOFER app",
-    "flyerPoweredBy": "Powered by TWOFER — local deals, zero waste"
+    "flyerPoweredBy": "Powered by TWOFER — local deals, zero waste",
+    "statusScheduled": "Scheduled",
+    "statusLive": "Live",
+    "statusEnded": "Ended",
+    "statusRecurringOff": "Off hours",
+    "badgeRecurring": "Recurring",
+    "templatesReuseTitle": "Templates & reuse",
+    "templatesReuseSubtitle": "Saved templates, recurring patterns, and past deals — open to start from one.",
+    "openTemplates": "Open templates & reuse",
+    "editDeal": "Edit deal"
   },
   "consumerProfile": {
     "navTitle": "Your profile",

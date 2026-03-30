@@ -4,7 +4,7 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { Image } from "expo-image";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -280,6 +280,15 @@ export default function QuickDealScreen() {
       <Text style={{ marginTop: 6, opacity: 0.7, lineHeight: 20 }}>
         {t("createQuick.subtitle")}
       </Text>
+      <Text style={{ marginTop: 10, opacity: 0.58, fontSize: 13, lineHeight: 18 }}>
+        {t("createQuick.schedulingHint")}
+      </Text>
+      <View style={{ marginTop: Spacing.sm }}>
+        <SecondaryButton
+          title={t("createQuick.openAiScheduling")}
+          onPress={() => router.push("/create/ai" as Href)}
+        />
+      </View>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
