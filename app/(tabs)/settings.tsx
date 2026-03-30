@@ -178,22 +178,6 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
-        <Pressable
-          onPress={() => router.push("/(tabs)/account")}
-          style={{
-            borderRadius: Radii.lg,
-            padding: Spacing.lg,
-            backgroundColor: "#111",
-            boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
-            elevation: 3,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.accountCta")}</Text>
-          <Text style={{ color: "rgba(255,255,255,0.75)", marginTop: Spacing.xs, fontSize: 14 }}>
-            {t("consumerSettings.accountCtaSub")}
-          </Text>
-        </Pressable>
-
         {consumerSession ? (
           <Pressable
             onPress={() => router.push("/consumer-profile-setup?edit=1" as Href)}

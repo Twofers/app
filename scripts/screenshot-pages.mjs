@@ -158,7 +158,6 @@ async function main() {
           "/(tabs)/map?e2e=1&mode=customer",
           "/(tabs)/wallet?e2e=1&mode=customer",
           "/(tabs)/settings?e2e=1&mode=customer",
-          "/(tabs)/favorites?e2e=1&mode=customer",
         ],
         "11-customer"
       ))

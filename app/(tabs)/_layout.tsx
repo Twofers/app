@@ -154,8 +154,6 @@ export default function TabLayout() {
             ...hideWhen(mode === 'customer'),
           }}
         />
-        <Tabs.Screen name="favorites" options={{ href: null }} />
-        <Tabs.Screen name="explore" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
     </TabAuthGate>
@@ -185,7 +183,7 @@ function TabModeRedirect() {
       if (tab === "index" || tab === "map" || tab === "wallet" || tab === "settings") {
         router.navigate("/(tabs)/create");
       }
-      if (tab === "create" || tab === "redeem" || tab === "dashboard") {
+      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "account") {
         if (forceBypass) return;
         let cancelled = false;
         setCheckingProfile(true);
@@ -207,6 +205,10 @@ function TabModeRedirect() {
         };
       }
     } else {
+      if (tab === "account") {
+        router.replace("/(tabs)/settings");
+        return;
+      }
       if (tab === "create" || tab === "redeem" || tab === "dashboard") {
         router.navigate("/(tabs)");
       }

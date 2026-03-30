@@ -69,7 +69,7 @@ export default function ResetPasswordScreen() {
         <Banner message={t("passwordRecovery.invalidSession")} tone="error" />
         <PrimaryButton
           title={t("passwordRecovery.backToSignIn")}
-          onPress={() => router.replace("/(tabs)/account")}
+          onPress={() => router.replace("/auth-landing")}
           style={{ marginTop: Spacing.lg }}
         />
         <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
