@@ -91,6 +91,11 @@ export default function RedeemScanner() {
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("redeem.title")}</Text>
+      {!success ? (
+        <Text style={{ marginTop: Spacing.sm, fontSize: 14, opacity: 0.72, lineHeight: 20 }}>
+          {mode === "scan" ? t("redeem.scanPrimaryHint") : t("redeem.manualFallbackHint")}
+        </Text>
+      ) : null}
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (

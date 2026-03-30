@@ -7,11 +7,15 @@ import { formatAppDateTime } from "../lib/i18n/format-datetime";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { Colors } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 
 type QrModalProps = {
   visible: boolean;
   token: string | null;
+  /** Concrete instance end from the server (`deal_claims.expires_at`). Countdown uses redeem-by = this + grace. */
   expiresAt: string | null;
+  shortCode?: string | null;
+  graceMinutes?: number;
   successToastNonce?: number;
   onHide: () => void;
   onRefresh?: () => void;
@@ -60,6 +64,8 @@ export function QrModal({
   visible,
   token,
   expiresAt,
+  shortCode = null,
+  graceMinutes = DEFAULT_CLAIM_GRACE_MINUTES,
   successToastNonce = 0,
   onHide,
   onRefresh,
@@ -95,20 +101,31 @@ export function QrModal({
     transform: [{ translateY: toastTranslateY.value }],
   }));
 
+  const redeemByIso = useMemo(() => {
+    if (!expiresAt) return null;
+    return getClaimRedeemDeadlineIso(expiresAt, graceMinutes);
+  }, [expiresAt, graceMinutes]);
+
+  const codeDisplay = shortCode
+    ? `${shortCode.slice(0, 3)} ${shortCode.slice(3)}`
+    : t("consumerWallet.codeLegacyQrOnly");
+
   useEffect(() => {
-    if (!expiresAt) {
+    if (!redeemByIso) {
       setRemaining(null);
       return;
     }
-    const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+    const tickRemaining = () => {
+      const diff = Math.max(0, Math.floor((new Date(redeemByIso).getTime() - Date.now()) / 1000));
       const mins = Math.floor(diff / 60);
       const secs = diff % 60;
       setRemaining(`${mins}:${secs.toString().padStart(2, "0")}`);
       setTick((prev) => !prev);
-    }, 1000);
+    };
+    tickRemaining();
+    const interval = setInterval(tickRemaining, 1000);
     return () => clearInterval(interval);
-  }, [expiresAt]);
+  }, [redeemByIso]);
 
   useEffect(() => {
     if (!visible) {
@@ -260,20 +277,64 @@ export function QrModal({
             {t("consumerWallet.qrModalTitle")}
           </Text>
           <View style={{ alignItems: "center", marginBottom: 10 }}>
-            {token ? <QRCode value={token} size={220} /> : null}
+            {token && redeemByIso && Date.now() < new Date(redeemByIso).getTime() ? (
+              <QRCode value={token} size={220} />
+            ) : token ? (
+              <View
+                style={{
+                  width: 220,
+                  height: 220,
+                  backgroundColor: "#f4f4f5",
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "#71717a", fontWeight: "700", textAlign: "center", padding: 16 }}>
+                  {t("consumerWallet.verifyQrDisabled")}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <Text style={{ opacity: 0.75, textAlign: "center" }}>
             {t("consumerWallet.qrValidUntil", {
               time: `${remaining ?? "--"}${tick ? " •" : " "}`,
             })}
           </Text>
-          {expiresAt ? (
+          {redeemByIso ? (
             <Text style={{ opacity: 0.6, textAlign: "center", marginTop: 4 }}>
-              {t("consumerWallet.qrExpiresAt", {
-                datetime: formatAppDateTime(expiresAt, i18n.language),
+              {t("consumerWallet.passRedeemByLine", {
+                datetime: formatAppDateTime(redeemByIso, i18n.language),
               })}
             </Text>
           ) : null}
+
+          <View
+            style={{
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 14,
+              backgroundColor: "#f8fafc",
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "800", opacity: 0.55, letterSpacing: 0.5, color: "#64748b" }}>
+              {t("consumerWallet.verifyCodeLabel")}
+            </Text>
+            <Text
+              style={{
+                fontSize: 26,
+                fontWeight: "900",
+                marginTop: 6,
+                letterSpacing: 3,
+                color: "#0f172a",
+                textAlign: "center",
+              }}
+            >
+              {codeDisplay}
+            </Text>
+          </View>
 
           <View style={{ marginTop: 14 }}>
             <HapticScalePressable

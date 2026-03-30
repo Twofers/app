@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
+import { isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,8 +64,49 @@ serve(async (req) => {
       });
     }
 
+    const nowMs = Date.now();
+    const { data: openClaims, error: openErr } = await supabase
+      .from("deal_claims")
+      .select("id, expires_at, grace_period_minutes, claim_status")
+      .eq("user_id", user.id)
+      .is("redeemed_at", null);
+
+    let expiredCount = 0;
+    if (!openErr && openClaims && openClaims.length > 0) {
+      const toExpire = openClaims.filter((r: {
+        id: string;
+        expires_at: string;
+        grace_period_minutes: number | null;
+        claim_status: string | null;
+      }) => {
+        if (r.claim_status === "canceled" || r.claim_status === "redeemed") return false;
+        const g = typeof r.grace_period_minutes === "number" ? r.grace_period_minutes : 10;
+        return isPastRedeemDeadline(nowMs, r.expires_at, g);
+      });
+      if (toExpire.length > 0) {
+        const ids = toExpire.map((r: { id: string }) => r.id);
+        const { data: expUpd, error: expErr } = await supabase
+          .from("deal_claims")
+          .update({ claim_status: "expired", redeem_started_at: null })
+          .in("id", ids)
+          .is("redeemed_at", null)
+          .select("id");
+        if (expErr) {
+          console.error(expErr);
+        } else {
+          expiredCount = (expUpd ?? []).length;
+        }
+      }
+    } else if (openErr) {
+      console.error(openErr);
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, finalized_count: (updated ?? []).length }),
+      JSON.stringify({
+        ok: true,
+        finalized_count: (updated ?? []).length,
+        expired_count: expiredCount,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

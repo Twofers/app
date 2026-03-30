@@ -216,27 +216,6 @@ serve(async (req) => {
       );
     }
 
-    // 🚫 Global business rule: one claim per hour across the app (all businesses/deals).
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: claimsLastHour, error: claimsLastHourError } = await supabaseAdmin
-      .from("deal_claims")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", oneHourAgo);
-    if (claimsLastHourError) {
-      console.error("hourly claim guard lookup:", claimsLastHourError);
-    } else if ((claimsLastHour ?? 0) >= 1) {
-      return new Response(
-        JSON.stringify({
-          error: "You can only claim one deal per hour. Please try again shortly.",
-        }),
-        {
-          status: 409,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
     // 🔍 Fetch and validate deal
     const { data: deal, error: dealError } = await supabase
       .from("deals")
@@ -400,73 +379,67 @@ serve(async (req) => {
       businessDealIds = [dealId];
     }
 
-    // 🚫 Check for existing active claim (one per user per deal)
-    const { data: existingClaims, error: existingError } = await supabase
-      .from("deal_claims")
-      .select("id,token,expires_at,redeemed_at,short_code,grace_period_minutes")
-      .eq("deal_id", dealId)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const nowMs = now.getTime();
 
-    if (existingClaims && existingClaims.length > 0) {
-      const existingClaim = existingClaims[0] as {
-        id: string;
-        token: string;
+    // 🚫 At most one active claim app-wide (unredeemed, before redeem-by deadline). Same deal → idempotent 200.
+    const { data: unredeemedRows, error: unredeemedErr } = await supabaseAdmin
+      .from("deal_claims")
+      .select("id, deal_id, token, expires_at, short_code, grace_period_minutes, claim_status")
+      .eq("user_id", user.id)
+      .is("redeemed_at", null);
+
+    if (unredeemedErr) {
+      console.error("unredeemed claims lookup:", unredeemedErr);
+    } else {
+      const notCanceled = (unredeemedRows ?? []).filter(
+        (row: { claim_status?: string | null }) => row.claim_status !== "canceled",
+      );
+      const activeRows = notCanceled.filter((row: {
         expires_at: string;
-        redeemed_at: string | null;
-        short_code: string | null;
         grace_period_minutes: number | null;
-      };
-      if (!existingClaim.redeemed_at) {
-        const grace = existingClaim.grace_period_minutes ?? REDEEM_GRACE_MINUTES;
-        if (!isPastRedeemDeadline(now.getTime(), existingClaim.expires_at, grace)) {
-          // Return existing active token
-          return new Response(
-            JSON.stringify({
-              claim_id: existingClaim.id,
-              token: existingClaim.token,
-              expires_at: existingClaim.expires_at,
-              short_code: existingClaim.short_code ?? null,
-              message: "You already have an active claim for this deal",
-            }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
+      }) => {
+        const grace = row.grace_period_minutes ?? REDEEM_GRACE_MINUTES;
+        return !isPastRedeemDeadline(nowMs, row.expires_at, grace);
+      });
+
+      const forThisDeal = activeRows.find((r: { deal_id: string }) => r.deal_id === dealId);
+      if (forThisDeal) {
+        const fc = forThisDeal as {
+          id: string;
+          token: string;
+          expires_at: string;
+          short_code: string | null;
+        };
+        return new Response(
+          JSON.stringify({
+            claim_id: fc.id,
+            token: fc.token,
+            expires_at: fc.expires_at,
+            short_code: fc.short_code ?? null,
+            message: "You already have an active claim for this deal",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-    }
 
-    // 🚫 At most one active (unredeemed, unexpired) claim per business at a time
-    const { data: activeBizClaims, error: activeBizError } = await supabaseAdmin
-      .from("deal_claims")
-      .select("id, deal_id, expires_at, redeemed_at")
-      .eq("user_id", user.id)
-      .in("deal_id", businessDealIds)
-      .is("redeemed_at", null)
-      .gt("expires_at", new Date(now.getTime() - REDEEM_GRACE_MINUTES * 60 * 1000).toISOString());
-
-    if (activeBizError) {
-      console.error("active biz claims:", activeBizError);
-    } else if (activeBizClaims && activeBizClaims.length > 0) {
-      const other = activeBizClaims.find((c: { deal_id: string }) => c.deal_id !== dealId);
-      if (other) {
+      if (activeRows.length > 0) {
         return new Response(
           JSON.stringify({
             error:
-              "You already have an active claim from this business. Redeem or wait for it to expire before claiming another offer.",
+              "You already have an active claim. Redeem it or wait until it expires before claiming another deal.",
           }),
           {
             status: 409,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
     }
 
-    // 🚫 One new claim per business per local calendar day (deal timezone, same default as recurring windows)
+    // 🚫 One redeemable claim per business per local calendar day (deal timezone)
     const businessTz =
       typeof deal.timezone === "string" && deal.timezone.trim().length > 0
         ? deal.timezone.trim()
@@ -475,27 +448,41 @@ serve(async (req) => {
     const lookbackIso = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recentClaims, error: todayErr } = await supabaseAdmin
       .from("deal_claims")
-      .select("id, deal_id, created_at")
+      .select("id, deal_id, created_at, expires_at, grace_period_minutes, claim_status")
       .eq("user_id", user.id)
       .in("deal_id", businessDealIds)
-      .gte("created_at", lookbackIso);
+      .gte("created_at", lookbackIso)
+      .is("redeemed_at", null);
 
     if (todayErr) {
       console.error("recent claims for daily limit:", todayErr);
     } else if (recentClaims && recentClaims.length > 0) {
-      const claimedThisLocalDay = recentClaims.some((row: { created_at: string }) => {
-        const key = calendarDateKeyInTimeZone(new Date(row.created_at), businessTz);
-        return key === todayKey;
-      });
-      if (claimedThisLocalDay) {
+      const hasRedeemableThisLocalDay = recentClaims.some(
+        (row: {
+          created_at: string;
+          expires_at: string;
+          grace_period_minutes: number | null;
+          claim_status: string | null;
+        }) => {
+          if (!row.expires_at) return false;
+          if (row.claim_status === "canceled") return false;
+          const grace = row.grace_period_minutes ?? REDEEM_GRACE_MINUTES;
+          if (isPastRedeemDeadline(nowMs, row.expires_at, grace)) return false;
+          const key = calendarDateKeyInTimeZone(new Date(row.created_at), businessTz);
+          return key === todayKey;
+        },
+      );
+
+      if (hasRedeemableThisLocalDay) {
         return new Response(
           JSON.stringify({
-            error: "You can only claim once per business per day. Try again the next local day.",
+            error:
+              "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.",
           }),
           {
             status: 409,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
     }

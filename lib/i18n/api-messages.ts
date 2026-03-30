@@ -29,6 +29,10 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "You already have an active claim for this deal": "apiErrors.claimDuplicateActive",
   "You already have an active claim from this business. Redeem or wait for it to expire before claiming another offer.":
     "apiErrors.claimActiveOtherDeal",
+  "You already have an active claim. Redeem it or wait until it expires before claiming another deal.":
+    "apiErrors.claimActiveAppWide",
+  "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.":
+    "apiErrors.claimDailyLimitBusiness",
   "You can only claim once per business per day. Try again tomorrow.": "apiErrors.claimDailyLimitBusiness",
   "You can only claim once per business per day. Try again the next local day.":
     "apiErrors.claimDailyLimitBusiness",

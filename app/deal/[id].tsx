@@ -53,6 +53,7 @@ export default function DealDetail() {
   const { isLoggedIn, userId, loading: authLoading } = useBusiness();
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
+  const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -141,6 +142,7 @@ export default function DealDetail() {
       }
       setQrToken(out.token);
       setQrExpires(out.expires_at);
+      setQrShortCode(out.short_code ?? null);
       setQrVisible(true);
     } catch (e: unknown) {
       const msg =
@@ -366,6 +368,7 @@ export default function DealDetail() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}

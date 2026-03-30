@@ -17,6 +17,27 @@ describe("translateKnownApiMessage", () => {
     expect(translateKnownApiMessage("This deal has expired", t)).toBe("Esta oferta ha caducado");
   });
 
+  it("maps app-wide active claim string in English", async () => {
+    await i18n.changeLanguage("en");
+    const t = i18n.t.bind(i18n);
+    expect(
+      translateKnownApiMessage(
+        "You already have an active claim. Redeem it or wait until it expires before claiming another deal.",
+        t,
+      ),
+    ).toBe(
+      "You already have an active claim. Redeem it or wait until it expires before claiming another deal.",
+    );
+  });
+
+  it("maps redeemable-only daily business limit string in English", async () => {
+    await i18n.changeLanguage("en");
+    const t = i18n.t.bind(i18n);
+    const raw =
+      "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.";
+    expect(translateKnownApiMessage(raw, t)).toBe(raw);
+  });
+
   it("maps cutoff prefix with interpolated time", async () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);

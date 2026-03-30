@@ -41,6 +41,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
@@ -89,20 +90,22 @@ function bizCoords(b: Deal["businesses"]): { lat: number; lng: number } | null {
 
 function dealStatusForUser(
   dealId: string,
-  map: Map<string, { redeemed_at: string | null; expires_at: string }>,
+  map: Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>,
   now: number,
 ): ConsumerDealStatusKey {
   const row = map.get(dealId);
   if (!row) return "live";
   if (row.redeemed_at) return "redeemed";
-  if (new Date(row.expires_at).getTime() <= now) return "expired";
+  const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
+  if (isPastClaimRedeemDeadline(row.expires_at, now, g)) return "expired";
   return "claimed";
 }
 
 function classifyClaimBlockReason(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes("one deal per hour") || m.includes("claim one deal per hour")) return "hourly_limit";
-  if (m.includes("once per business per day")) return "business_daily_limit";
+  if (m.includes("already have an active claim")) return "active_app_wide_claim";
+  if (m.includes("once per business per local day") && m.includes("redeemable")) return "business_daily_limit";
+  if (m.includes("once per business per day")) return "business_daily_limit"; // legacy fallback
   if (m.includes("active claim from this business")) return "active_business_claim";
   if (m.includes("active claim for this deal")) return "duplicate_deal_claim";
   if (m.includes("reached its claim limit") || m.includes("sold out")) return "deal_sold_out";
@@ -126,6 +129,7 @@ export default function HomeScreen() {
   const [userGeo, setUserGeo] = useState<{ lat: number; lng: number } | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
+  const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [claimingDealId, setClaimingDealId] = useState<string | null>(null);
@@ -138,7 +142,7 @@ export default function HomeScreen() {
   const [banner, setBanner] = useState<string | null>(null);
   const [claimStatus, setClaimStatus] = useState<Record<string, { message: string; tone: "success" | "error" | "info" }>>({});
   const [userClaimsByDeal, setUserClaimsByDeal] = useState<
-    Map<string, { redeemed_at: string | null; expires_at: string }>
+    Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>
   >(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
@@ -164,7 +168,7 @@ export default function HomeScreen() {
       }
       const { data, error } = await supabase
         .from("deal_claims")
-        .select("deal_id,redeemed_at,expires_at,created_at")
+        .select("deal_id,redeemed_at,expires_at,created_at,grace_period_minutes")
         .eq("user_id", userId)
         .in("deal_id", dealIds)
         .order("created_at", { ascending: false });
@@ -172,11 +176,18 @@ export default function HomeScreen() {
         setUserClaimsByDeal(new Map());
         return;
       }
-      const m = new Map<string, { redeemed_at: string | null; expires_at: string }>();
+      const m = new Map<
+        string,
+        { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }
+      >();
       for (const row of data ?? []) {
         const did = row.deal_id as string;
         if (!m.has(did)) {
-          m.set(did, { redeemed_at: row.redeemed_at as string | null, expires_at: row.expires_at as string });
+          m.set(did, {
+            redeemed_at: row.redeemed_at as string | null,
+            expires_at: row.expires_at as string,
+            grace_period_minutes: (row.grace_period_minutes as number | null) ?? null,
+          });
         }
       }
       setUserClaimsByDeal(m);
@@ -325,6 +336,7 @@ export default function HomeScreen() {
 
         setQrToken(out.token);
         setQrExpires(out.expires_at);
+        setQrShortCode(out.short_code ?? null);
         setLastClaimDealId(dealId);
         setQrVisible(true);
         setClaimStatus((prev) => ({
@@ -369,6 +381,7 @@ export default function HomeScreen() {
       const out = await claimDeal(lastClaimDealId);
       setQrToken(out.token);
       setQrExpires(out.expires_at);
+      setQrShortCode(out.short_code ?? null);
     } catch (e: unknown) {
       const msg =
         typeof (e as { message?: string })?.message === "string"
@@ -900,6 +913,7 @@ export default function HomeScreen() {
         visible={qrVisible}
         token={qrToken}
         expiresAt={qrExpires}
+        shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
