@@ -661,6 +661,12 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "Ofertas locales en vivo — inicia sesión para explorar, reclamar y canjear.",
+    "roleTitle": "¿Cómo usarás TWOFER?",
+    "roleSubtitle": "Elige antes de iniciar sesión o crear una cuenta. Puedes cambiarlo después en Cuenta.",
+    "roleCustomer": "Cliente",
+    "roleCustomerHint": "Explora ofertas, guarda favoritos y canjea.",
+    "roleBusiness": "Negocio",
+    "roleBusinessHint": "Crea ofertas y gestiona tu cafetería en el panel.",
     "createAccount": "Crear cuenta",
     "languageLabel": "Idioma",
     "heroA11y": "Mascota TWOFER",

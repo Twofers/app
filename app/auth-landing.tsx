@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
+import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
+import { useTabMode, type TabMode } from "@/lib/tab-mode";
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
@@ -62,16 +64,72 @@ function ScalePressable({
   );
 }
 
+function RoleCard({
+  theme,
+  colorScheme,
+  selected,
+  title,
+  hint,
+  onPress,
+  disabled,
+}: {
+  theme: (typeof Colors)["light"];
+  colorScheme: "light" | "dark";
+  selected: boolean;
+  title: string;
+  hint: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const fill =
+    selected && colorScheme === "dark"
+      ? "rgba(255,159,28,0.14)"
+      : selected
+        ? "rgba(255,159,28,0.1)"
+        : theme.surface;
+  return (
+    <View style={{ flex: 1 }}>
+      <ScalePressable
+        disabled={disabled}
+        onPress={onPress}
+        style={{
+          flex: 1,
+          minHeight: 112,
+          borderRadius: Radii.lg,
+          borderWidth: selected ? 2 : 1,
+          borderColor: selected ? theme.primary : theme.border,
+          backgroundColor: fill,
+          padding: Spacing.md,
+          justifyContent: "center",
+          boxShadow: selected ? "0px 6px 16px rgba(255,159,28,0.2)" : "0px 2px 8px rgba(0,0,0,0.06)",
+          elevation: selected ? 4 : 1,
+          opacity: disabled ? 0.55 : 1,
+        }}
+      >
+        <Text style={{ fontWeight: "900", fontSize: 16, color: theme.text, marginBottom: 4 }}>{title}</Text>
+        <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>{hint}</Text>
+      </ScalePressable>
+    </View>
+  );
+}
+
 const DEMO_MODE = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
+
+function firstQueryString(v: string | string[] | undefined): string | undefined {
+  if (typeof v === "string" && v.length > 0) return v;
+  if (Array.isArray(v) && typeof v[0] === "string" && v[0].length > 0) return v[0];
+  return undefined;
+}
 
 export default function AuthLandingScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const params = useLocalSearchParams<{ next?: string }>();
-  const nextHref = (typeof params.next === "string" && params.next.length > 0 ? params.next : "/(tabs)") as Href;
+  const params = useLocalSearchParams<{ next?: string | string[] }>();
   const insets = useSafeAreaInsets();
+  const { mode, setMode, ready: tabModeReady } = useTabMode();
+  const [roleBusy, setRoleBusy] = useState(false);
 
   const [email, setEmail] = useState(DEMO_MODE ? "demo@demo.com" : "");
   const [pw, setPw] = useState(DEMO_MODE ? "123456" : "");
@@ -86,7 +144,20 @@ export default function AuthLandingScreen() {
   }, []);
 
   const busy = busyAction !== null;
-  const canSubmit = !busy && email.trim().length > 0 && pw.length > 0;
+  const canSubmit = !busy && tabModeReady && email.trim().length > 0 && pw.length > 0;
+
+  async function selectRole(next: TabMode) {
+    if (!tabModeReady || roleBusy || mode === next) return;
+    setRoleBusy(true);
+    clearFeedback();
+    try {
+      await setMode(next);
+    } catch (e: unknown) {
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+    } finally {
+      setRoleBusy(false);
+    }
+  }
 
   function clearFeedback() {
     setAuthError(null);
@@ -117,7 +188,12 @@ export default function AuthLandingScreen() {
         setAuthError(friendlyAuthError(error, t));
         return;
       }
-      router.replace(nextHref);
+      await setMode(mode);
+      const href = await resolvePostAuthReplaceHref({
+        role: mode,
+        nextParam: firstQueryString(params.next),
+      });
+      router.replace(href);
     } catch (e: unknown) {
       setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
     } finally {
@@ -144,7 +220,13 @@ export default function AuthLandingScreen() {
         setSignUpAwaitingVerification(true);
         return;
       }
-      router.replace("/onboarding" as Href);
+      await setMode(mode);
+      if (mode === "customer") {
+        router.replace("/(tabs)" as Href);
+      } else {
+        const href = await resolvePostAuthReplaceHref({ role: "business", nextParam: undefined });
+        router.replace(href);
+      }
     } catch (e: unknown) {
       setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
     } finally {
@@ -221,6 +303,56 @@ export default function AuthLandingScreen() {
 
           {!signUpAwaitingVerification ? (
             <>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  fontSize: 17,
+                  color: theme.text,
+                  marginBottom: Spacing.xs,
+                  textAlign: "center",
+                }}
+              >
+                {t("authLanding.roleTitle")}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: theme.mutedText,
+                  textAlign: "center",
+                  marginBottom: Spacing.lg,
+                }}
+              >
+                {t("authLanding.roleSubtitle")}
+              </Text>
+
+              {!tabModeReady ? (
+                <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
+                  <ActivityIndicator color={theme.primary} />
+                </View>
+              ) : (
+                <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.xl }}>
+                  <RoleCard
+                    theme={theme}
+                    colorScheme={colorScheme}
+                    selected={mode === "customer"}
+                    title={t("authLanding.roleCustomer")}
+                    hint={t("authLanding.roleCustomerHint")}
+                    onPress={() => void selectRole("customer")}
+                    disabled={busy || roleBusy}
+                  />
+                  <RoleCard
+                    theme={theme}
+                    colorScheme={colorScheme}
+                    selected={mode === "business"}
+                    title={t("authLanding.roleBusiness")}
+                    hint={t("authLanding.roleBusinessHint")}
+                    onPress={() => void selectRole("business")}
+                    disabled={busy || roleBusy}
+                  />
+                </View>
+              )}
+
               <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
                 {t("authLanding.emailLabel")}
               </Text>

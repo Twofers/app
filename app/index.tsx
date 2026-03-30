@@ -3,6 +3,7 @@ import { Redirect, useGlobalSearchParams } from "expo-router";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTabMode } from "@/lib/tab-mode";
 
 export default function Index() {
   const params = useGlobalSearchParams<{ e2e?: string }>();
@@ -11,6 +12,7 @@ export default function Index() {
     ((params.e2e === "1") ||
       (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
   const { session, isInitialLoading } = useAuthSession();
+  const { mode, ready: tabModeReady } = useTabMode();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
@@ -18,7 +20,7 @@ export default function Index() {
     return <Redirect href="/(tabs)/account?e2e=1" />;
   }
 
-  if (isInitialLoading) {
+  if (isInitialLoading || (session?.user && !tabModeReady)) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator color={theme.primary} />
@@ -27,7 +29,7 @@ export default function Index() {
   }
 
   if (session?.user) {
-    return <Redirect href="/(tabs)" />;
+    return <Redirect href={mode === "business" ? "/(tabs)/create" : "/(tabs)"} />;
   }
 
   return <Redirect href="/auth-landing" />;

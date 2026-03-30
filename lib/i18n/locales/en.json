@@ -661,6 +661,12 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "Live local deals — sign in to browse, claim, and redeem.",
+    "roleTitle": "How will you use TWOFER?",
+    "roleSubtitle": "Choose before you sign in or create an account. You can change this later in Account.",
+    "roleCustomer": "Customer",
+    "roleCustomerHint": "Browse deals, save favorites, and redeem.",
+    "roleBusiness": "Business",
+    "roleBusinessHint": "Create offers and manage your café on the dashboard.",
     "createAccount": "Create account",
     "languageLabel": "Language",
     "heroA11y": "TWOFER mascot",

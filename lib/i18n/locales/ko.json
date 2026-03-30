@@ -661,6 +661,12 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "실시간 지역 딜 — 둘러보기, 클레임, 사용을 위해 로그인하세요.",
+    "roleTitle": "TWOFER를 어떻게 사용하시나요?",
+    "roleSubtitle": "로그인 또는 가입 전에 선택하세요. 나중에 계정에서 바꿀 수 있어요.",
+    "roleCustomer": "고객",
+    "roleCustomerHint": "딜 찾기, 즐겨찾기, 사용하기.",
+    "roleBusiness": "비즈니스",
+    "roleBusinessHint": "오퍼 만들기와 대시보드에서 카페 관리.",
     "createAccount": "계정 만들기",
     "languageLabel": "언어",
     "heroA11y": "TWOFER 마스코트",
