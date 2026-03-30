@@ -13,6 +13,7 @@ import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
+import { BillingDeepLinkHandler } from '@/components/billing-deeplink-handler';
 import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
 import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
@@ -38,6 +39,7 @@ function RootNavigationStack() {
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <DealDeepLinkHandler />
+      <BillingDeepLinkHandler />
       <AuthStackGate />
       <CreateMenuOfferWizardProvider>
       <Stack>

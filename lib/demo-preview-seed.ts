@@ -75,6 +75,7 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
   if (!session?.user?.id || !isDemoPreviewAccountEmail(email)) return;
 
   const uid = session.user.id;
+  const trialEndsAtIso = new Date(Date.now() + 30 * 86400000).toISOString();
 
   const { data: biz, error: bizReadErr } = await client
     .from("businesses")
@@ -100,16 +101,38 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
 
   if (!businessId) return;
 
+  const { data: existingProfileByUser } = await client
+    .from("business_profiles")
+    .select("subscription_status,subscription_tier,trial_ends_at,current_period_ends_at")
+    .eq("user_id", uid)
+    .maybeSingle();
+  const { data: existingProfileByOwner } = await client
+    .from("business_profiles")
+    .select("subscription_status,subscription_tier,trial_ends_at,current_period_ends_at")
+    .eq("owner_id", uid)
+    .maybeSingle();
+  const existingProfile = existingProfileByUser ?? existingProfileByOwner ?? null;
+
+  const billingDefaults: Record<string, unknown> = {};
+  if (!existingProfile?.subscription_status) billingDefaults.subscription_status = "trial";
+  if (!existingProfile?.subscription_tier) billingDefaults.subscription_tier = "pro";
+  if (!existingProfile?.trial_ends_at) billingDefaults.trial_ends_at = trialEndsAtIso;
+  if (!existingProfile?.current_period_ends_at) {
+    billingDefaults.current_period_ends_at = String(existingProfile?.trial_ends_at ?? trialEndsAtIso);
+  }
+
   // Keep demo business mode unblocked in new gating: ensure a complete business_profiles row.
   const profilePayloadByUser = {
     user_id: uid,
     ...CANONICAL_BUSINESS_PROFILE,
+    ...billingDefaults,
   };
   const upsertByUser = await client.from("business_profiles").upsert(profilePayloadByUser, { onConflict: "user_id" });
   if (upsertByUser.error) {
     const profilePayloadByOwner = {
       owner_id: uid,
       ...CANONICAL_BUSINESS_PROFILE,
+      ...billingDefaults,
     };
     await client.from("business_profiles").upsert(profilePayloadByOwner, { onConflict: "owner_id" });
   }

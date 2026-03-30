@@ -147,6 +147,14 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="billing"
+          options={{
+            title: t("tabs.billing"),
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
+            ...hideWhen(mode === "customer"),
+          }}
+        />
+        <Tabs.Screen
           name="account"
           options={{
             title: t('tabs.account'),
@@ -183,7 +191,7 @@ function TabModeRedirect() {
       if (tab === "index" || tab === "map" || tab === "wallet" || tab === "settings") {
         router.navigate("/(tabs)/create");
       }
-      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "account") {
+      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing" || tab === "account") {
         if (forceBypass) return;
         let cancelled = false;
         setCheckingProfile(true);
@@ -209,7 +217,7 @@ function TabModeRedirect() {
         router.replace("/(tabs)/settings");
         return;
       }
-      if (tab === "create" || tab === "redeem" || tab === "dashboard") {
+      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing") {
         router.navigate("/(tabs)");
       }
     }

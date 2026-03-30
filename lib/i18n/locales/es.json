@@ -9,6 +9,7 @@
     "create": "Crear",
     "redeem": "Canjear",
     "dashboard": "Mis ofertas",
+    "billing": "Facturación",
     "account": "Cuenta"
   },
   "tabMode": {
@@ -1415,5 +1416,39 @@
     "saved": "Saved.",
     "errSave": "Could not save. Try again.",
     "edit": "Edit"
+  },
+  "billing": {
+    "trialEndsIn": "Tu prueba de 30 días termina en {{days}} días",
+    "trialExpiredBanner": "Reactivar tu cuenta",
+    "reactivateMessage": "Reactivar tu cuenta",
+    "paywallExpiredMessage": "Tu prueba ha finalizado. Reactiva tu cuenta para seguir creando ofertas.",
+    "goToBilling": "Ir a Facturación",
+    "subscribeNow": "Suscribirse",
+    "manageSubscription": "Gestionar suscripción",
+    "simulateSubscribe": "Simular suscripción",
+    "simulateSubscribeOk": "Suscripción simulada correctamente.",
+    "errSimulateSubscribe": "No se pudo simular la suscripción.",
+    "errSubscribe": "No se pudo iniciar el pago. Inténtalo de nuevo.",
+    "errLoadPricing": "No se pudo cargar el precio de la suscripción. Inténtalo de nuevo.",
+    "checkoutLaunching": "Abriendo checkout seguro...",
+    "checkoutSyncing": "Pago completado — sincronizando tu suscripción...",
+    "checkoutSyncDelayed": "Pago completado — la actualización puede tardar un momento. Actualiza si no ves cambios.",
+    "syncingStatus": "Sincronizando estado de pago...",
+    "checkoutSuccess": "Pago correcto. Tu suscripción está activa.",
+    "checkoutCanceled": "Compra cancelada."
+  },
+  "billingManage": {
+    "title": "Gestionar suscripción",
+    "current": "Plan actual: {{tier}} (estado: {{status}})",
+    "actionsTitle": "Acciones de suscripción",
+    "openStripePortal": "Abrir portal de Stripe",
+    "upgradeToPremium": "Mejorar",
+    "cancelSubscription": "Cancelar suscripción",
+    "viewInvoices": "Ver facturas",
+    "cancelHint": "Usa el portal de Stripe para cancelar tu suscripción.",
+    "invoicesHint": "Usa el portal de Stripe para ver facturas e historial de pagos.",
+    "backToBilling": "Volver a Facturación",
+    "errPortal": "No se pudo abrir el portal de Stripe.",
+    "errUpgrade": "No se pudo iniciar la actualización."
   }
 }

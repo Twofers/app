@@ -10,6 +10,7 @@ const KNOWN_TAB_SEGMENTS = new Set([
   "create",
   "redeem",
   "dashboard",
+  "billing",
   "account",
 ]);
 

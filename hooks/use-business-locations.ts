@@ -33,10 +33,41 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
     setLoading(true);
     setError(null);
     try {
+      // Billing v4: locations are keyed off `business_profiles(id)` (not `businesses(id)`),
+      // so we first resolve the corresponding business_profiles row id.
+      const { data: bizOwner, error: bizOwnerErr } = await supabase
+        .from("businesses")
+        .select("owner_id")
+        .eq("id", businessId)
+        .maybeSingle();
+      if (bizOwnerErr || !bizOwner?.owner_id) throw new Error(bizOwnerErr?.message ?? "Missing business owner");
+
+      const ownerUid = String(bizOwner.owner_id);
+
+      let businessProfileId: string | null = null;
+      const { data: bpUserRow, error: bpUserErr } = await supabase
+        .from("business_profiles")
+        .select("id")
+        .eq("user_id", ownerUid)
+        .maybeSingle();
+      if (!bpUserErr && bpUserRow?.id) businessProfileId = String(bpUserRow.id);
+
+      // Backward-compatible fallback for schemas that key by owner_id.
+      if (!businessProfileId) {
+        const { data: bpOwnerRow, error: bpOwnerErr } = await supabase
+          .from("business_profiles")
+          .select("id")
+          .eq("owner_id", ownerUid)
+          .maybeSingle();
+        if (!bpOwnerErr && bpOwnerRow?.id) businessProfileId = String(bpOwnerRow.id);
+      }
+
+      if (!businessProfileId) throw new Error("Missing business profile for locations");
+
       const { data: rows, error: qErr } = await supabase
         .from("business_locations")
         .select("id,business_id,name,address,phone")
-        .eq("business_id", businessId)
+        .eq("business_id", businessProfileId)
         .order("created_at", { ascending: true });
       if (qErr) throw new Error(qErr.message);
       let list = (rows ?? []) as BusinessLocationRow[];
@@ -56,7 +87,7 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
         const { data: ins, error: iErr } = await supabase
           .from("business_locations")
           .insert({
-            business_id: businessId,
+            business_id: businessProfileId,
             name: label,
             address: addr,
             phone: typeof biz?.phone === "string" && biz.phone.trim() ? biz.phone.trim() : null,

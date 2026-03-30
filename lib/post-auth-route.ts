@@ -37,6 +37,9 @@ export async function resolvePostAuthReplaceHref(params: {
     if (!access.isComplete) {
       return "/business-setup" as Href;
     }
+    if (next.startsWith("/(tabs)/billing")) {
+      return next as Href;
+    }
     return "/(tabs)/create" as Href;
   }
 

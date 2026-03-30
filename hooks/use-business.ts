@@ -23,6 +23,13 @@ type BusinessInfo = {
   hours_text: string | null;
 };
 
+export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled";
+
+export type StripeIds = {
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+};
+
 function numOrNull(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -59,6 +66,10 @@ export function useBusiness() {
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [business, setBusiness] = useState<BusinessInfo | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("trial");
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [currentPeriodEndsAt, setCurrentPeriodEndsAt] = useState<string | null>(null);
+  const [stripeIds, setStripeIds] = useState<StripeIds>({ stripeCustomerId: null, stripeSubscriptionId: null });
   /** True when the businesses lookup failed (e.g. multiple rows) — fail-safe: treat as cannot self-delete in-app. */
   const [businessOwnershipAmbiguous, setBusinessOwnershipAmbiguous] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -73,6 +84,10 @@ export function useBusiness() {
       setUserId(null);
       setSessionEmail(null);
       setBusiness(null);
+      setSubscriptionStatus("trial");
+      setTrialEndsAt(null);
+      setCurrentPeriodEndsAt(null);
+      setStripeIds({ stripeCustomerId: null, stripeSubscriptionId: null });
       setBusinessOwnershipAmbiguous(false);
       setLoading(false);
       return;
@@ -98,6 +113,7 @@ export function useBusiness() {
     }
 
     setBusinessOwnershipAmbiguous(false);
+
     setBusiness(
       data
         ? {
@@ -119,6 +135,111 @@ export function useBusiness() {
           }
         : null,
     );
+
+    // Billing v4: subscription is canonical on `business_profiles`.
+    // Backward-safe fallback: if the row/columns aren't ready yet, use `businesses.subscription_tier`.
+    const billingSelect = "subscription_status,subscription_tier,trial_ends_at,current_period_ends_at,stripe_customer_id,stripe_subscription_id";
+    let bpRow:
+      | {
+          subscription_status?: string | null;
+          subscription_tier?: string | null;
+          trial_ends_at?: string | null;
+          current_period_ends_at?: string | null;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+        }
+      | null = null;
+
+    const { data: byUserRow, error: byUserErr } = await supabase
+      .from("business_profiles")
+      .select(billingSelect)
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (!byUserErr) {
+      bpRow = byUserRow as any;
+    } else if (byUserErr.code === "PGRST116") {
+      bpRow = null;
+    } else {
+      // Backward compatible fallback: some schemas key by owner_id.
+      const { data: byOwnerRow, error: byOwnerErr } = await supabase
+        .from("business_profiles")
+        .select(billingSelect)
+        .eq("owner_id", uid)
+        .maybeSingle();
+      if (!byOwnerErr) bpRow = byOwnerRow as any;
+    }
+
+    const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
+    const needsBillingInit =
+      !bpRow ||
+      !bpRow.subscription_status ||
+      !bpRow.subscription_tier ||
+      !bpRow.trial_ends_at ||
+      !bpRow.current_period_ends_at;
+
+    if (needsBillingInit) {
+      const repair: Record<string, unknown> = {};
+      if (!bpRow?.subscription_status) repair.subscription_status = "trial";
+      if (!bpRow?.subscription_tier) repair.subscription_tier = "pro";
+      if (!bpRow?.trial_ends_at) repair.trial_ends_at = trialEndsIso;
+      if (!bpRow?.current_period_ends_at) {
+        repair.current_period_ends_at = String(bpRow?.trial_ends_at ?? trialEndsIso);
+      }
+
+      if (bpRow) {
+        await supabase
+          .from("business_profiles")
+          .update(repair)
+          .or(`user_id.eq.${uid},owner_id.eq.${uid}`);
+        bpRow = { ...bpRow, ...repair };
+      } else if (data) {
+        const profileSeed = {
+          user_id: uid,
+          name: data.name ?? null,
+          address: data.address ?? null,
+          category: data.category ?? null,
+          ...repair,
+        };
+        const seedByUser = await supabase
+          .from("business_profiles")
+          .upsert(profileSeed, { onConflict: "user_id" });
+        if (seedByUser.error) {
+          await supabase
+            .from("business_profiles")
+            .upsert({ ...profileSeed, owner_id: uid }, { onConflict: "owner_id" });
+        }
+        bpRow = {
+          subscription_status: String(repair.subscription_status ?? "trial"),
+          subscription_tier: String(repair.subscription_tier ?? "pro"),
+          trial_ends_at: String(repair.trial_ends_at ?? trialEndsIso),
+          current_period_ends_at: String(repair.current_period_ends_at ?? trialEndsIso),
+          stripe_customer_id: null,
+          stripe_subscription_id: null,
+        };
+      }
+    }
+
+    const rawStatus = (bpRow?.subscription_status ?? null) || null;
+    const normalizedStatus: SubscriptionStatus =
+      rawStatus === "active" || rawStatus === "trial" || rawStatus === "past_due" || rawStatus === "canceled" ? rawStatus : "canceled";
+
+    // Keep the existing `subscriptionTier` contract for location limits.
+    const rawTier = (bpRow?.subscription_tier ?? null) || null;
+    const normalizedTier: "pro" | "premium" =
+      rawTier === "premium" ? "premium" : rawTier === "pro" ? "pro" : (data?.subscription_tier === "premium" ? "premium" : "pro");
+
+    setSubscriptionStatus(normalizedStatus);
+    setTrialEndsAt(bpRow?.trial_ends_at ? String(bpRow.trial_ends_at) : null);
+    setCurrentPeriodEndsAt(bpRow?.current_period_ends_at ? String(bpRow.current_period_ends_at) : null);
+    setStripeIds({
+      stripeCustomerId: bpRow?.stripe_customer_id ? String(bpRow.stripe_customer_id) : null,
+      stripeSubscriptionId: bpRow?.stripe_subscription_id ? String(bpRow.stripe_subscription_id) : null,
+    });
+
+    // Update the in-memory business subscription tier too, so downstream logic stays consistent.
+    setBusiness((prev) => (prev ? { ...prev, subscription_tier: normalizedTier } : prev));
+
     setLoading(false);
   }, [session]);
 
@@ -142,6 +263,11 @@ export function useBusiness() {
     /** For AI output + deal-quality messages on publish (null → app locale) */
     businessPreferredLocale: business?.preferred_locale ?? null,
     subscriptionTier: business?.subscription_tier ?? "pro",
+    subscriptionStatus,
+    trialEndsAt,
+    currentPeriodEndsAt,
+    stripeCustomerId: stripeIds.stripeCustomerId,
+    stripeSubscriptionId: stripeIds.stripeSubscriptionId,
     loading,
     refresh,
   };

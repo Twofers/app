@@ -9,6 +9,7 @@
     "create": "Create",
     "redeem": "Redeem",
     "dashboard": "My offers",
+    "billing": "Billing",
     "account": "Account"
   },
   "tabMode": {
@@ -1415,5 +1416,39 @@
     "saved": "Saved.",
     "errSave": "Could not save. Try again.",
     "edit": "Edit"
+  },
+  "billing": {
+    "trialEndsIn": "Your 30-day trial ends in {{days}} days",
+    "trialExpiredBanner": "Reactivate your account",
+    "reactivateMessage": "Reactivate your account",
+    "paywallExpiredMessage": "Your trial has ended. Reactivate your account to continue creating deals.",
+    "goToBilling": "Go to Billing",
+    "subscribeNow": "Subscribe Now",
+    "manageSubscription": "Manage Subscription",
+    "simulateSubscribe": "Simulate Subscribe",
+    "simulateSubscribeOk": "Subscription simulated successfully.",
+    "errSimulateSubscribe": "Unable to simulate subscription.",
+    "errSubscribe": "Unable to start checkout. Please try again.",
+    "errLoadPricing": "Unable to load subscription pricing. Please try again.",
+    "checkoutLaunching": "Opening secure checkout...",
+    "checkoutSyncing": "Payment completed — syncing your subscription...",
+    "checkoutSyncDelayed": "Payment completed — subscription update may take a moment. Pull to refresh if status does not update.",
+    "syncingStatus": "Syncing payment status...",
+    "checkoutSuccess": "Payment successful. Your subscription is active.",
+    "checkoutCanceled": "Subscription purchase canceled."
+  },
+  "billingManage": {
+    "title": "Manage Subscription",
+    "current": "Current plan: {{tier}} (status: {{status}})",
+    "actionsTitle": "Subscription actions",
+    "openStripePortal": "Open Stripe Portal",
+    "upgradeToPremium": "Upgrade",
+    "cancelSubscription": "Cancel Subscription",
+    "viewInvoices": "View Invoices",
+    "cancelHint": "Use Stripe Portal to cancel your subscription.",
+    "invoicesHint": "Use Stripe Portal to view invoices and payment history.",
+    "backToBilling": "Back to Billing",
+    "errPortal": "Unable to open Stripe portal.",
+    "errUpgrade": "Unable to start upgrade checkout."
   }
 }

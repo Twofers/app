@@ -12,21 +12,29 @@ import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
+import { canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateDeal() {
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
-  const { isLoggedIn, businessId, loading } = useBusiness();
+  const { isLoggedIn, businessId, loading, subscriptionStatus, trialEndsAt } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
   const [templates, setTemplates] = useState<{ id: string; title: string | null; description: string | null; poster_url: string | null; price: number | null }[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
 
+  const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
+  const blockedSubscription = !canCreateDeal({
+    isLoggedIn,
+    subscriptionStatus,
+    trialEndsAt,
+    bypass,
+  });
+
   useEffect(() => {
-    const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
     if (!isLoggedIn || bypass) {
       setHasBusinessProfileAccess(bypass);
       setProfileCheckLoading(false);
@@ -45,7 +53,7 @@ export default function CreateDeal() {
     return () => {
       cancelled = true;
     };
-  }, [isLoggedIn, params.skipSetup, params.e2e]);
+  }, [isLoggedIn, params.skipSetup, params.e2e, bypass]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -87,6 +95,25 @@ export default function CreateDeal() {
           <PrimaryButton
             title={t("account.startBusinessSetup")}
             onPress={() => router.push("/business-setup" as Href)}
+          />
+        </View>
+      ) : blockedSubscription ? (
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+          <Banner
+            tone="warning"
+            message={t("billing.paywallExpiredMessage", {
+              defaultValue:
+                "Your trial has ended. Reactivate your account to continue creating deals.",
+            })}
+          />
+          <PrimaryButton
+            title={t("billing.goToBilling", { defaultValue: "Go to Billing" })}
+            onPress={() =>
+              router.replace({
+                pathname: "/(tabs)/billing",
+                params: { reason: "reactivate" },
+              } as unknown as Href)
+            }
           />
         </View>
       ) : !businessId ? (

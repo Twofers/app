@@ -9,6 +9,7 @@
     "create": "만들기",
     "redeem": "사용",
     "dashboard": "내 오퍼",
+    "billing": "결제",
     "account": "계정"
   },
   "tabMode": {
@@ -1415,5 +1416,39 @@
     "saved": "Saved.",
     "errSave": "Could not save. Try again.",
     "edit": "Edit"
+  },
+  "billing": {
+    "trialEndsIn": "30일 무료 체험이 {{days}}일 후에 끝나요",
+    "trialExpiredBanner": "계정을 다시 활성화하세요",
+    "reactivateMessage": "계정을 다시 활성화하세요",
+    "paywallExpiredMessage": "체험 기간이 종료되었습니다. 계속 딜을 만들려면 계정을 다시 활성화하세요.",
+    "goToBilling": "결제로 이동",
+    "subscribeNow": "지금 구독하기",
+    "manageSubscription": "구독 관리",
+    "simulateSubscribe": "구독 시뮬레이션",
+    "simulateSubscribeOk": "구독을 성공적으로 시뮬레이션했습니다.",
+    "errSimulateSubscribe": "구독을 시뮬레이션할 수 없습니다.",
+    "errSubscribe": "결제를 시작하지 못했습니다. 다시 시도해 주세요.",
+    "errLoadPricing": "구독 가격을 불러오지 못했습니다. 다시 시도해 주세요.",
+    "checkoutLaunching": "보안 결제창을 여는 중...",
+    "checkoutSyncing": "결제가 완료되었습니다 — 구독 상태를 동기화하는 중...",
+    "checkoutSyncDelayed": "결제가 완료되었습니다. 상태 반영에 시간이 걸릴 수 있습니다. 갱신해 주세요.",
+    "syncingStatus": "결제 상태 동기화 중...",
+    "checkoutSuccess": "결제가 완료되었습니다. 구독이 활성화되었습니다.",
+    "checkoutCanceled": "구독 구매가 취소되었습니다."
+  },
+  "billingManage": {
+    "title": "구독 관리",
+    "current": "현재 플랜: {{tier}} (상태: {{status}})",
+    "actionsTitle": "구독 작업",
+    "openStripePortal": "Stripe 포털 열기",
+    "upgradeToPremium": "업그레이드",
+    "cancelSubscription": "구독 취소",
+    "viewInvoices": "청구서 보기",
+    "cancelHint": "Stripe 포털에서 구독을 취소할 수 있습니다.",
+    "invoicesHint": "Stripe 포털에서 청구서와 결제 내역을 볼 수 있습니다.",
+    "backToBilling": "결제로 돌아가기",
+    "errPortal": "Stripe 포털을 열 수 없습니다.",
+    "errUpgrade": "업그레이드를 시작할 수 없습니다."
   }
 }

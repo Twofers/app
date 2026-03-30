@@ -61,6 +61,7 @@ export default function BusinessSetupScreen() {
     setBusy(true);
     try {
       const addr = trimmed.address;
+      const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
       const { error } = await supabase
         .from("businesses")
         .upsert(
@@ -78,17 +79,53 @@ export default function BusinessSetupScreen() {
         .single();
       if (error) throw error;
 
-      const { error: profileError } = await supabase.from("business_profiles").upsert(
-        {
-          user_id: uid,
+      const selectCols =
+        "id,user_id,owner_id,subscription_status,subscription_tier,trial_ends_at,current_period_ends_at";
+      const { data: profileByUser } = await supabase
+        .from("business_profiles")
+        .select(selectCols)
+        .eq("user_id", uid)
+        .maybeSingle();
+      const { data: profileByOwner } = await supabase
+        .from("business_profiles")
+        .select(selectCols)
+        .eq("owner_id", uid)
+        .maybeSingle();
+
+      const existingProfile = profileByUser ?? profileByOwner ?? null;
+      const billingDefaults: Record<string, unknown> = {};
+      if (!existingProfile?.subscription_status) billingDefaults.subscription_status = "trial";
+      if (!existingProfile?.subscription_tier) billingDefaults.subscription_tier = "pro";
+      if (!existingProfile?.trial_ends_at) billingDefaults.trial_ends_at = trialEndsIso;
+      if (!existingProfile?.current_period_ends_at) {
+        billingDefaults.current_period_ends_at = String(existingProfile?.trial_ends_at ?? trialEndsIso);
+      }
+
+      const profilePayloadByUser = {
+        user_id: uid,
+        name: trimmed.businessName,
+        address: addr,
+        category: trimmed.shortDescription || trimmed.businessName || null,
+        setup_completed: true,
+        ...billingDefaults,
+      };
+      const upsertByUser = await supabase
+        .from("business_profiles")
+        .upsert(profilePayloadByUser, { onConflict: "user_id" });
+      if (upsertByUser.error) {
+        const profilePayloadByOwner = {
+          owner_id: uid,
           name: trimmed.businessName,
           address: addr,
           category: trimmed.shortDescription || trimmed.businessName || null,
           setup_completed: true,
-        },
-        { onConflict: "user_id" },
-      );
-      if (profileError) throw profileError;
+          ...billingDefaults,
+        };
+        const upsertByOwner = await supabase
+          .from("business_profiles")
+          .upsert(profilePayloadByOwner, { onConflict: "owner_id" });
+        if (upsertByOwner.error) throw upsertByOwner.error;
+      }
 
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
       setTimeout(() => {
