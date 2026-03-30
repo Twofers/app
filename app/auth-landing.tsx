@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   BackHandler,
@@ -19,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
-import { useTabMode, type TabMode } from "@/lib/tab-mode";
+import { TAB_MODE_ROLE_COMMITTED_KEY, useTabMode, type TabMode } from "@/lib/tab-mode";
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
@@ -28,6 +29,9 @@ import { LegalExternalLinks } from "@/components/legal-external-links";
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
+import i18n, { APP_LOCALES, type AppLocale } from "@/lib/i18n/config";
+import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { upsertAppTabModeForUser } from "@/lib/profiles-app-mode";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -129,6 +133,7 @@ export default function AuthLandingScreen() {
   const params = useLocalSearchParams<{ next?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const { mode, setMode, ready: tabModeReady } = useTabMode();
+  const [selectedMode, setSelectedMode] = useState<TabMode | null>(null);
   const [roleBusy, setRoleBusy] = useState(false);
 
   const [email, setEmail] = useState(DEMO_MODE ? "demo@demo.com" : "");
@@ -144,13 +149,32 @@ export default function AuthLandingScreen() {
   }, []);
 
   const busy = busyAction !== null;
-  const canSubmit = !busy && tabModeReady && email.trim().length > 0 && pw.length > 0;
+  const canSubmit = !busy && tabModeReady && selectedMode !== null && email.trim().length > 0 && pw.length > 0;
+
+  useEffect(() => {
+    if (!tabModeReady) return;
+    let cancelled = false;
+    void (async () => {
+      const committed = await AsyncStorage.getItem(TAB_MODE_ROLE_COMMITTED_KEY);
+      if (cancelled) return;
+      if (committed === "1") {
+        setSelectedMode(mode);
+      } else {
+        setSelectedMode(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tabModeReady, mode]);
 
   async function selectRole(next: TabMode) {
-    if (!tabModeReady || roleBusy || mode === next) return;
+    if (roleBusy) return;
     setRoleBusy(true);
+    setSelectedMode(next);
     clearFeedback();
     try {
+      await AsyncStorage.setItem(TAB_MODE_ROLE_COMMITTED_KEY, "1");
       await setMode(next);
     } catch (e: unknown) {
       setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
@@ -175,7 +199,7 @@ export default function AuthLandingScreen() {
   }
 
   async function handleLogIn() {
-    if (!canSubmit) return;
+    if (!canSubmit || !selectedMode) return;
     setBusyAction("login");
     clearFeedback();
     logAuthPath("normal_login", email.trim());
@@ -188,9 +212,13 @@ export default function AuthLandingScreen() {
         setAuthError(friendlyAuthError(error, t));
         return;
       }
-      await setMode(mode);
+      await setMode(selectedMode);
+      const uid = (await supabase.auth.getSession()).data.session?.user?.id;
+      if (uid) {
+        await upsertAppTabModeForUser(uid, selectedMode);
+      }
       const href = await resolvePostAuthReplaceHref({
-        role: mode,
+        role: selectedMode,
         nextParam: firstQueryString(params.next),
       });
       router.replace(href);
@@ -202,7 +230,7 @@ export default function AuthLandingScreen() {
   }
 
   async function handleSignUp() {
-    if (!canSubmit) return;
+    if (!canSubmit || !selectedMode) return;
     setBusyAction("signup");
     clearFeedback();
     setSignUpAwaitingVerification(false);
@@ -220,8 +248,10 @@ export default function AuthLandingScreen() {
         setSignUpAwaitingVerification(true);
         return;
       }
-      await setMode(mode);
-      if (mode === "customer") {
+      await setMode(selectedMode);
+      const uid = data.session.user.id;
+      await upsertAppTabModeForUser(uid, selectedMode);
+      if (selectedMode === "customer") {
         router.replace("/(tabs)" as Href);
       } else {
         const href = await resolvePostAuthReplaceHref({ role: "business", nextParam: undefined });
@@ -237,6 +267,11 @@ export default function AuthLandingScreen() {
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
   const mutedLegal = colorScheme === "dark" ? "rgba(236,237,238,0.55)" : "rgba(17,24,28,0.55)";
+
+  async function chooseLocale(locale: AppLocale) {
+    await setUiLocalePreference(locale, { manual: true });
+    await i18n.changeLanguage(locale);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -257,6 +292,7 @@ export default function AuthLandingScreen() {
               style={{ width: 240, height: 270, opacity: 0.88 }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
+              accessibilityLabel={t("authLanding.heroA11y")}
             />
             <Text
               style={{
@@ -269,6 +305,56 @@ export default function AuthLandingScreen() {
             >
               TWOFER
             </Text>
+            <Text
+              style={{
+                marginTop: Spacing.xs,
+                fontSize: 14,
+                lineHeight: 20,
+                color: theme.mutedText,
+                textAlign: "center",
+              }}
+            >
+              {t("authLanding.subtitle")}
+            </Text>
+            <View style={{ marginTop: Spacing.md, alignItems: "center" }}>
+              <Text style={{ fontSize: 12, color: theme.mutedText, marginBottom: Spacing.xs }}>
+                {t("authLanding.languageLabel")}
+              </Text>
+              <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+                {APP_LOCALES.map((locale) => {
+                  const active = i18n.language.startsWith(locale);
+                  return (
+                    <Pressable
+                      key={locale}
+                      onPress={() => void chooseLocale(locale)}
+                      style={{
+                        borderRadius: 999,
+                        paddingHorizontal: Spacing.md,
+                        paddingVertical: Spacing.xs,
+                        borderWidth: 1,
+                        borderColor: active ? theme.primary : theme.border,
+                        backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: active ? theme.primary : theme.text }}>
+                        {locale.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: theme.mutedText,
+                  marginTop: Spacing.xs,
+                  textAlign: "center",
+                  maxWidth: 280,
+                }}
+              >
+                {t("authLanding.languageHelp")}
+              </Text>
+            </View>
           </View>
 
           {authError ? <Banner message={authError} tone="error" /> : null}
@@ -326,32 +412,34 @@ export default function AuthLandingScreen() {
                 {t("authLanding.roleSubtitle")}
               </Text>
 
+              <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.xl }}>
+                <RoleCard
+                  theme={theme}
+                  colorScheme={colorScheme}
+                  selected={selectedMode === "customer"}
+                  title={t("authLanding.roleCustomer")}
+                  hint={t("authLanding.roleCustomerHint")}
+                  onPress={() => void selectRole("customer")}
+                  disabled={busy || roleBusy}
+                />
+                <RoleCard
+                  theme={theme}
+                  colorScheme={colorScheme}
+                  selected={selectedMode === "business"}
+                  title={t("authLanding.roleBusiness")}
+                  hint={t("authLanding.roleBusinessHint")}
+                  onPress={() => void selectRole("business")}
+                  disabled={busy || roleBusy}
+                />
+              </View>
               {!tabModeReady ? (
-                <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
-                  <ActivityIndicator color={theme.primary} />
+                <View style={{ alignItems: "center", marginTop: -Spacing.md, marginBottom: Spacing.lg }}>
+                  <ActivityIndicator color={theme.primary} accessibilityLabel={t("authLanding.loadingSavedRole")} />
+                  <Text style={{ marginTop: Spacing.sm, fontSize: 12, color: theme.mutedText, textAlign: "center" }}>
+                    {t("authLanding.loadingSavedRole")}
+                  </Text>
                 </View>
-              ) : (
-                <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.xl }}>
-                  <RoleCard
-                    theme={theme}
-                    colorScheme={colorScheme}
-                    selected={mode === "customer"}
-                    title={t("authLanding.roleCustomer")}
-                    hint={t("authLanding.roleCustomerHint")}
-                    onPress={() => void selectRole("customer")}
-                    disabled={busy || roleBusy}
-                  />
-                  <RoleCard
-                    theme={theme}
-                    colorScheme={colorScheme}
-                    selected={mode === "business"}
-                    title={t("authLanding.roleBusiness")}
-                    hint={t("authLanding.roleBusinessHint")}
-                    onPress={() => void selectRole("business")}
-                    disabled={busy || roleBusy}
-                  />
-                </View>
-              )}
+              ) : null}
 
               <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
                 {t("authLanding.emailLabel")}

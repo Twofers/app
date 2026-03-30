@@ -63,7 +63,7 @@ export default function ForgotPasswordScreen() {
             <Banner message={t("passwordRecovery.requestSuccess")} tone="success" />
             <PrimaryButton
               title={t("passwordRecovery.backToSignIn")}
-              onPress={() => router.replace("/(tabs)/account")}
+              onPress={() => router.replace("/auth-landing")}
             />
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.sectionTitle")}</Text>

@@ -1,15 +1,20 @@
 import * as Linking from "expo-linking";
+import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
 /** Minimum length for new passwords on the reset screen. */
 export const PASSWORD_MIN_LENGTH = 8;
 
 /**
- * Redirect URL for `resetPasswordForEmail`. Add this exact URL (and the `twoforone` variant if needed)
- * under Supabase → Authentication → URL Configuration → Redirect URLs.
+ * Redirect URL for `resetPasswordForEmail`.
+ * In Supabase → Authentication → URL Configuration, include both:
+ * - twoforone://reset-password
+ * - twofer://reset-password
  */
 export function getPasswordRecoveryRedirectUrl(): string {
-  return Linking.createURL("reset-password", { scheme: "twofer" });
+  const rawScheme = Constants.expoConfig?.scheme;
+  const primaryScheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+  return Linking.createURL("reset-password", { scheme: primaryScheme || "twoforone" });
 }
 
 /**

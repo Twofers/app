@@ -41,7 +41,7 @@ export default function BusinessSetupScreen() {
   useEffect(() => {
     if (authLoading) return;
     const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
-    if (!bypass && !session?.user?.id) router.replace("/(tabs)/account");
+    if (!bypass && !session?.user?.id) router.replace("/auth-landing");
   }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
 
 

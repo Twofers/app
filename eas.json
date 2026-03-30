@@ -26,6 +26,12 @@
     },
     "production": {
       "environment": "production"
+    },
+    "apk": {
+      "extends": "preview",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

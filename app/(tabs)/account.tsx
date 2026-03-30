@@ -264,7 +264,7 @@ export default function AccountScreen() {
     setBanner(null);
     try {
       await supabase.auth.signOut();
-      setBanner({ message: t("account.loggedOut"), tone: "info" });
+      router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
       setBanner({
         message: (e instanceof Error ? e.message : String(e)) || t("account.errLogoutFailed"),

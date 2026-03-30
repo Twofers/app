@@ -114,6 +114,10 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
     await client.from("business_profiles").upsert(profilePayloadByOwner, { onConflict: "owner_id" });
   }
 
+  await client
+    .from("profiles")
+    .upsert({ id: uid, app_tab_mode: "business", updated_at: new Date().toISOString() }, { onConflict: "id" });
+
   const { count, error: countErr } = await client
     .from("deals")
     .select("id", { count: "exact", head: true })

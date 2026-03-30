@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
@@ -584,21 +584,7 @@ export default function WalletScreen() {
   const passBegin = showPassModal ? useDealState.begin : null;
 
   if (!isLoggedIn) {
-    return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("consumerWallet.title")}</Text>
-        <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.65, fontSize: 15, lineHeight: 22 }}>
-          {t("consumerWallet.guestSubtitle")}
-        </Text>
-        <EmptyState title={t("consumerWallet.emptyLoginTitle")} message={t("consumerWallet.emptyLoginMessage")} />
-        <View style={{ marginTop: Spacing.lg }}>
-          <PrimaryButton
-            title={t("consumerWallet.guestSignInCta")}
-            onPress={() => router.push("/(tabs)/auth" as Href)}
-          />
-        </View>
-      </View>
-    );
+    return <Redirect href="/auth-landing" />;
   }
 
   return (

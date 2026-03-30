@@ -14,6 +14,7 @@ import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
 import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
+import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -37,6 +38,7 @@ function RootNavigationStack() {
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <DealDeepLinkHandler />
+      <AuthStackGate />
       <CreateMenuOfferWizardProvider>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />

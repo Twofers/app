@@ -1,9 +1,22 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { useAuthSession } from "@/components/providers/auth-session-provider";
+import { fetchAppTabModeForUser, upsertAppTabModeForUser } from "@/lib/profiles-app-mode";
 
 /** Primary store (cleared on uninstall; avoids iOS Keychain “ghost” state after reinstall). */
-const ASYNC_KEY = "twoforone_tab_mode_v2";
+export const TAB_MODE_ASYNC_KEY = "twoforone_tab_mode_v2";
+/** Auth screen uses this to know if user has intentionally chosen a role before. */
+export const TAB_MODE_ROLE_COMMITTED_KEY = "twoforone_role_committed_v1";
 /** Legacy SecureStore key from earlier builds. */
 const LEGACY_SECURE_KEY = "twoforone_tab_mode";
 /**
@@ -23,14 +36,7 @@ type TabModeContextValue = {
 const TabModeContext = createContext<TabModeContextValue | null>(null);
 
 async function loadStoredMode(): Promise<TabMode> {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    const qpMode = new URLSearchParams(window.location.search).get("mode");
-    if (qpMode === "business" || qpMode === "customer") {
-      return qpMode;
-    }
-  }
-
-  const asyncVal = await AsyncStorage.getItem(ASYNC_KEY);
+  const asyncVal = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
   if (asyncVal === "business" || asyncVal === "customer") {
     return asyncVal;
   }
@@ -53,7 +59,7 @@ async function loadStoredMode(): Promise<TabMode> {
 
     const legacy = await SecureStore.getItemAsync(LEGACY_SECURE_KEY);
     if (legacy === "business" || legacy === "customer") {
-      await AsyncStorage.setItem(ASYNC_KEY, legacy);
+      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, legacy);
       try {
         await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
       } catch {
@@ -65,21 +71,24 @@ async function loadStoredMode(): Promise<TabMode> {
     /* SecureStore unavailable */
   }
 
-  const after = await AsyncStorage.getItem(ASYNC_KEY);
+  const after = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
   if (after === "business" || after === "customer") return after;
   return "customer";
 }
 
 export function TabModeProvider({ children }: { children: ReactNode }) {
+  const { session, isInitialLoading: authLoading } = useAuthSession();
   const [mode, setModeState] = useState<TabMode>("customer");
   const [ready, setReady] = useState(false);
+  /** User picked Customer/Business before persisted mode finished loading — do not overwrite their choice. */
+  const userChoseModeRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const stored = await loadStoredMode();
-        if (!cancelled) {
+        if (!cancelled && !userChoseModeRef.current) {
           setModeState(stored);
         }
       } finally {
@@ -91,11 +100,39 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (authLoading) return;
+    const uid = session?.user?.id;
+    if (!uid) return;
+    let cancelled = false;
+    void (async () => {
+      const remote = await fetchAppTabModeForUser(uid);
+      if (!remote || cancelled) return;
+      userChoseModeRef.current = true;
+      setModeState(remote);
+      try {
+        await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, remote);
+      } catch {
+        /* noop */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, session?.user?.id]);
+
   const setMode = useCallback(async (next: TabMode) => {
+    userChoseModeRef.current = true;
+    setReady(true);
     const prev = mode;
     setModeState(next);
     try {
-      await AsyncStorage.setItem(ASYNC_KEY, next);
+      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, next);
+      await AsyncStorage.setItem(TAB_MODE_ROLE_COMMITTED_KEY, "1");
+      const uid = session?.user?.id;
+      if (uid) {
+        await upsertAppTabModeForUser(uid, next);
+      }
     } catch (e) {
       setModeState(prev);
       if (__DEV__) {
@@ -113,7 +150,7 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
         console.warn("[tab-mode] SecureStore legacy key cleanup failed", e);
       }
     }
-  }, [mode]);
+  }, [mode, session?.user?.id]);
 
   const value = useMemo(() => ({ mode, setMode, ready }), [mode, setMode, ready]);
 
