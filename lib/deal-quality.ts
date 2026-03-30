@@ -60,6 +60,17 @@ const CLEARANCE_PATTERNS: RegExp[] = [
   /\bremate\b/i,
 ];
 
+/**
+ * Phrases where a real free item is obvious (aligned with strong-deal guard free-item
+ * signals, but excluding bare “free surprise” / “free item” vagueness — those stay weak).
+ */
+const CLEAR_FREE_ITEM_PHRASE_PATTERNS: RegExp[] = [
+  /\bget\s+a\s+free\b/i,
+  /\bon\s+the\s+house\b/i,
+  /\bcomplimentary\b/i,
+  /\bbuy\s+[^,\n]{1,120},\s*get\s+a\s+free\b/i,
+];
+
 /** Meaningful free add-ons only (EN + ES). No generic “free thing with purchase”. */
 const MEANINGFUL_FREE_PATTERNS: RegExp[] = [
   /\bfree\s+drink\s+with\b/i,
@@ -127,6 +138,7 @@ const KOREAN_DEAL_PATTERNS: RegExp[] = [
 
 const STRONG_OFFER_PATTERNS: RegExp[] = [
   ...CORE_STRONG_PATTERNS,
+  ...CLEAR_FREE_ITEM_PHRASE_PATTERNS,
   ...MEANINGFUL_FREE_PATTERNS,
   ...KOREAN_DEAL_PATTERNS,
 ];
@@ -138,6 +150,7 @@ const STRONG_OFFER_PATTERNS: RegExp[] = [
  */
 const STRUCTURAL_PRIMARY_PATTERNS: RegExp[] = [
   ...MEANINGFUL_FREE_PATTERNS,
+  ...CLEAR_FREE_ITEM_PHRASE_PATTERNS,
   /\bbogo\b/i,
   /\bbuy\s*one\s*get\s*one\b/i,
   /\bbuy\s*1\s*get\s*1\b/i,

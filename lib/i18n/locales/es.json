@@ -555,7 +555,8 @@
     "errCameraPermission": "Permite acceso a la cámara para tomar una foto.",
     "quotaWarning": "{{remaining}} generaciones IA restantes este mes.",
     "stepOfTotal": "Paso {{current}} de {{total}}",
-    "aiPosterPreview": "Póster generado por IA"
+    "aiPosterPreview": "Póster generado por IA",
+    "posterImageUnavailable": "No pudimos generar un póster (API o almacenamiento). Añade una foto arriba y vuelve a generar, o sigue: podrás publicar con foto en la siguiente pantalla."
   },
   "reuseHub": {
     "title": "Reusar y repetir",
@@ -667,6 +668,7 @@
     "roleCustomerHint": "Explora ofertas, guarda favoritos y canjea.",
     "roleBusiness": "Negocio",
     "roleBusinessHint": "Crea ofertas y gestiona tu cafetería en el panel.",
+    "loadingSavedRole": "Cargando tu última selección…",
     "createAccount": "Crear cuenta",
     "languageLabel": "Idioma",
     "heroA11y": "Mascota TWOFER",

@@ -555,7 +555,8 @@
     "errCameraPermission": "사진을 찍으려면 카메라 접근을 허용하세요.",
     "quotaWarning": "이번 달 AI 생성 {{remaining}}회 남음.",
     "stepOfTotal": "{{total}}단계 중 {{current}}단계",
-    "aiPosterPreview": "AI 생성 포스터"
+    "aiPosterPreview": "AI 생성 포스터",
+    "posterImageUnavailable": "이번에는 포스터 이미지를 만들지 못했습니다(API 또는 저장소). 위에 사진을 넣고 다시 생성하거나 그대로 진행하세요. 다음 화면에서 사진과 함께 게시할 수 있습니다."
   },
   "reuseHub": {
     "title": "재사용·반복",
@@ -667,6 +668,7 @@
     "roleCustomerHint": "딜 찾기, 즐겨찾기, 사용하기.",
     "roleBusiness": "비즈니스",
     "roleBusinessHint": "오퍼 만들기와 대시보드에서 카페 관리.",
+    "loadingSavedRole": "저장된 선택을 불러오는 중…",
     "createAccount": "계정 만들기",
     "languageLabel": "언어",
     "heroA11y": "TWOFER 마스코트",

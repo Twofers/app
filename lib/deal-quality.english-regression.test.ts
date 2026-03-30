@@ -83,6 +83,15 @@ describe("deal quality — English regression", () => {
     expect(r.tier).toBe("strong");
   });
 
+  it('accepts "get a free …" (AI-style free add-on) as strong', () => {
+    const r = assessDealQuality({
+      title: "Latte · bakery pairing",
+      description: "Buy a latte, get a free muffin — today only.",
+    });
+    expect(r.blocked).toBe(false);
+    expect(r.tier).toBe("strong");
+  });
+
   it("blocks vague free item (not named drink/side/dessert/second)", () => {
     const r = assessDealQuality({
       title: "Free surprise with order",

@@ -96,18 +96,46 @@ async function tryGeneratePosterPng(openAiKey: string, prompt: string): Promise<
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
+      const errBody = await res.text();
       console.log(
-        JSON.stringify({ tag: "ai_compose", event: "image_gen_http", status: res.status }),
+        JSON.stringify({
+          tag: "ai_compose",
+          event: "image_gen_http",
+          status: res.status,
+          body: errBody.slice(0, 800),
+        }),
       );
       return null;
     }
     const j = await res.json();
-    const b64 = j?.data?.[0]?.b64_json;
-    if (typeof b64 !== "string" || !b64) return null;
-    const bin = atob(b64);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
+    const row = j?.data?.[0] as Record<string, unknown> | undefined;
+    const b64 = row?.b64_json;
+    if (typeof b64 === "string" && b64.length > 0) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    const imageUrl = typeof row?.url === "string" ? row.url : null;
+    if (imageUrl) {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) {
+        console.log(
+          JSON.stringify({
+            tag: "ai_compose",
+            event: "image_gen_url_fetch",
+            status: imgRes.status,
+          }),
+        );
+        return null;
+      }
+      const buf = new Uint8Array(await imgRes.arrayBuffer());
+      return buf.length > 0 ? buf : null;
+    }
+    console.log(
+      JSON.stringify({ tag: "ai_compose", event: "image_gen_no_data", model: IMAGE_MODEL }),
+    );
+    return null;
   } catch (e) {
     console.log(JSON.stringify({ tag: "ai_compose", event: "image_gen_error", err: String(e) }));
     return null;
@@ -632,6 +660,7 @@ serve(async (req) => {
     const logPayload = { ...parsed, input_type: input_mode } as Record<string, unknown>;
 
     let poster_storage_path: string | null = null;
+    let poster_image_unavailable = false;
     if (generate_poster_image && !hasImage && hasText) {
       const v0 = variants[0] as Record<string, unknown>;
       const headline = String(v0.headline_en ?? "");
@@ -655,8 +684,20 @@ serve(async (req) => {
         if (!upErr) {
           poster_storage_path = storagePath;
           logPayload.poster_storage_path = storagePath;
+        } else {
+          poster_image_unavailable = true;
+          console.log(
+            JSON.stringify({
+              tag: "ai_compose",
+              event: "poster_upload_failed",
+              err: String(upErr.message ?? upErr),
+            }),
+          );
         }
+      } else {
+        poster_image_unavailable = true;
       }
+      logPayload.poster_image_unavailable = poster_image_unavailable;
     }
 
     await admin.from("ai_generation_logs").insert({

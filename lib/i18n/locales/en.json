@@ -555,7 +555,8 @@
     "errCameraPermission": "Allow camera access to snap a photo.",
     "quotaWarning": "{{remaining}} AI generations remaining this month.",
     "stepOfTotal": "Step {{current}} of {{total}}",
-    "aiPosterPreview": "AI-generated poster"
+    "aiPosterPreview": "AI-generated poster",
+    "posterImageUnavailable": "We couldn’t generate a poster image this time (API or storage). Add a photo above and generate again, or continue — you can publish with a photo on the next screen."
   },
   "reuseHub": {
     "title": "Reuse & repeat",
@@ -667,6 +668,7 @@
     "roleCustomerHint": "Browse deals, save favorites, and redeem.",
     "roleBusiness": "Business",
     "roleBusinessHint": "Create offers and manage your café on the dashboard.",
+    "loadingSavedRole": "Loading your last choice…",
     "createAccount": "Create account",
     "languageLabel": "Language",
     "heroA11y": "TWOFER mascot",

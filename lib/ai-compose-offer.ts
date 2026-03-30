@@ -39,6 +39,8 @@ export type AiComposeResultPayload = {
   ad_variants: AiAdVariant[];
   /** Set when text-only compose requested an AI poster image (stored under deal-photos). */
   poster_storage_path?: string | null;
+  /** True when a poster was requested (text-only) but image generation or upload failed. */
+  poster_image_unavailable?: boolean;
 };
 
 export type AiComposeSuccess = {

@@ -394,6 +394,9 @@ export default function AiComposeOfferScreen() {
               {result.low_confidence ? (
                 <Banner message={t("aiCompose.lowConfidence", { reason: result.recommendation_reason ?? "" })} tone="info" />
               ) : null}
+              {result.poster_image_unavailable ? (
+                <Banner message={t("aiCompose.posterImageUnavailable")} tone="warning" />
+              ) : null}
               <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("aiCompose.offerSummary")}</Text>
               <Text style={{ opacity: 0.8, marginBottom: Spacing.md, lineHeight: 22 }}>
                 {result.recommended_offer?.display_offer}
