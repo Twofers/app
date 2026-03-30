@@ -1272,6 +1272,8 @@
     "needBusiness": "Create a business to unlock analytics.",
     "overview": "Performance",
     "metricViews": "Deal views",
+    "metricImpressions": "Impressions",
+    "metricOpens": "Opens",
     "metricDealsLaunched": "Deals launched",
     "metricTotalClaims": "Total claims",
     "metricRedemptions": "Redemptions",

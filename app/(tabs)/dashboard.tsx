@@ -299,7 +299,8 @@ export default function BusinessDashboard() {
   const [monthRedeems, setMonthRedeems] = useState(0);
   const [uniqueRedeemers, setUniqueRedeemers] = useState(0);
   const [monthRedemptionPct, setMonthRedemptionPct] = useState(0);
-  const [monthViews, setMonthViews] = useState(0);
+  const [monthImpressions, setMonthImpressions] = useState(0);
+  const [monthOpens, setMonthOpens] = useState(0);
   const [weekLabels, setWeekLabels] = useState<string[]>([]);
   const [weekCounts, setWeekCounts] = useState<number[]>([]);
 
@@ -390,13 +391,22 @@ export default function BusinessDashboard() {
       setDeals(hydrateDealRows(firstPage, perDealMap));
       setDealsHasMore(firstPage.length === DASHBOARD_DEALS_PAGE_SIZE);
 
-      const { count: viewsCount } = await supabase
+      const { count: impressionsCount } = await supabase
         .from("app_analytics_events")
         .select("id, deals!inner(business_id)", { count: "exact", head: true })
-        .in("event_name", ["deal_viewed", "deal_opened"])
+        .eq("event_name", "deal_viewed")
         .eq("deals.business_id", businessId)
         .gte("occurred_at", monthStart.toISOString());
-      setMonthViews(viewsCount ?? 0);
+
+      const { count: opensCount } = await supabase
+        .from("app_analytics_events")
+        .select("id, deals!inner(business_id)", { count: "exact", head: true })
+        .eq("event_name", "deal_opened")
+        .eq("deals.business_id", businessId)
+        .gte("occurred_at", monthStart.toISOString());
+
+      setMonthImpressions(impressionsCount ?? 0);
+      setMonthOpens(opensCount ?? 0);
 
       const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {
         p_business_id: businessId,
@@ -551,36 +561,41 @@ export default function BusinessDashboard() {
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, marginBottom: Spacing.md }}>
           <MetricTile
-            label={t("offersDashboard.metricViews")}
-            value={String(monthViews)}
+            label={t("offersDashboard.metricImpressions")}
+            value={String(monthImpressions)}
             delay={20}
           />
           <MetricTile
             label={t("offersDashboard.metricDealsLaunched")}
             value={String(dealsLaunchedMonth)}
+            delay={80}
+          />
+          <MetricTile
+            label={t("offersDashboard.metricOpens")}
+            value={String(monthOpens)}
             delay={40}
           />
           <MetricTile
             label={t("offersDashboard.metricTotalClaims")}
             value={String(monthClaims)}
-            delay={80}
+            delay={120}
           />
           <MetricTile
             label={t("offersDashboard.metricRedemptions")}
             value={String(monthRedeems)}
-            delay={120}
+            delay={160}
           />
           <MetricTile
             label={t("offersDashboard.metricNewCustomers")}
             value={String(uniqueRedeemers)}
             sublabel={t("offersDashboard.metricNewCustomersSub")}
-            delay={160}
+            delay={200}
           />
           <MetricTile
             label={t("offersDashboard.metricAvgRedemption")}
             value={monthClaims > 0 ? `${monthRedemptionPct}%` : "—"}
             sublabel={t("offersDashboard.metricAvgRedemptionSub")}
-            delay={200}
+            delay={240}
             fullWidth
           />
         </View>
@@ -657,7 +672,21 @@ export default function BusinessDashboard() {
         </Text>
       </View>
     ),
-    [t, primary, router, monthViews, dealsLaunchedMonth, monthClaims, monthRedeems, uniqueRedeemers, monthRedemptionPct, weekLabels, weekCounts, insights],
+    [
+      t,
+      primary,
+      router,
+      monthImpressions,
+      monthOpens,
+      dealsLaunchedMonth,
+      monthClaims,
+      monthRedeems,
+      uniqueRedeemers,
+      monthRedemptionPct,
+      weekLabels,
+      weekCounts,
+      insights,
+    ],
   );
 
   if (!modeReady) {

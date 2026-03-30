@@ -331,8 +331,14 @@ export default function HomeScreen() {
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
         const out = await claimDeal(dealId);
+        const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
-        trackAppAnalyticsEvent({ event_name: "deal_claimed", claim_id: out.claim_id ?? null, deal_id: dealId });
+        trackAppAnalyticsEvent({
+          event_name: "deal_claimed",
+          claim_id: out.claim_id ?? null,
+          deal_id: dealId,
+          business_id: businessIdForDeal,
+        });
 
         setQrToken(out.token);
         setQrExpires(out.expires_at);
@@ -351,9 +357,11 @@ export default function HomeScreen() {
             : typeof e === "string"
               ? e
               : JSON.stringify(e, null, 2);
+        const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         trackAppAnalyticsEvent({
           event_name: "claim_blocked",
           deal_id: dealId,
+          business_id: businessIdForDeal,
           context: { reason: classifyClaimBlockReason(msg) },
         });
         const mappedClaimErr = mapClaimError(msg);
@@ -430,6 +438,20 @@ export default function HomeScreen() {
       return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
     });
   }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo]);
+
+  // MVP impressions tracking: count deals whenever the visible list changes.
+  // This is an approximation of "shown" but stays simple/reliable for MVP.
+  useEffect(() => {
+    if (loadingDeals) return;
+    for (const d of liveDealsDisplay) {
+      trackAppAnalyticsEvent({
+        event_name: "deal_viewed",
+        deal_id: d.id,
+        business_id: d.business_id,
+        context: { source: "list" },
+      });
+    }
+  }, [loadingDeals, liveDealsDisplay]);
 
   const businessesDisplay = useMemo(() => {
     let list = businesses;

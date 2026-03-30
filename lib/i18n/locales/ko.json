@@ -1136,6 +1136,8 @@
     "needBusiness": "비즈니스를 만들면 분석을 볼 수 있습니다.",
     "overview": "성과",
     "metricViews": "딜 조회수",
+    "metricImpressions": "딜 노출",
+    "metricOpens": "딜 오픈",
     "metricDealsLaunched": "이번 달 출시 딜",
     "metricTotalClaims": "총 클레임",
     "metricRedemptions": "사용(리딤)",

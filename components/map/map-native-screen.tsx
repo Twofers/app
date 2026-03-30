@@ -16,6 +16,7 @@ import { isDealActiveNow } from "@/lib/deal-time";
 import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -195,6 +196,37 @@ export default function MapScreenNative() {
   const showUserLocationDot = showDeviceBlueDot && !!userPos;
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
+
+  // MVP impressions tracking for map:
+  // - In `live` mode, log active live deals (what the marker set represents).
+  // - Always log the specific deal shown in the bottom preview card.
+  useEffect(() => {
+    const liveDeals = mode === "live" ? deals.filter((d) => isDealActiveNow(d)) : [];
+    const seen = new Set<string>();
+    const previewId = previewDeal?.id;
+    const previewBusinessId = previewDeal?.business_id;
+
+    if (mode === "live") {
+      for (const d of liveDeals) {
+        seen.add(d.id);
+        trackAppAnalyticsEvent({
+          event_name: "deal_viewed",
+          deal_id: d.id,
+          business_id: d.business_id,
+          context: { source: "map", view: "live_markers" },
+        });
+      }
+    }
+
+    if (previewId && !seen.has(previewId)) {
+      trackAppAnalyticsEvent({
+        event_name: "deal_viewed",
+        deal_id: previewId,
+        business_id: previewBusinessId,
+        context: { source: "map", view: "preview_card" },
+      });
+    }
+  }, [mode, deals, previewDeal?.id, previewDeal?.business_id]);
 
   /** initialRegion only applies on first paint; nudge camera once when data + map are ready. */
   useEffect(() => {

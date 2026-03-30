@@ -68,6 +68,18 @@ function claimNotRedeemable(row: ClaimRow, now: number) {
   return isPastClaimRedeemDeadline(row.expires_at, now, grace);
 }
 
+function classifyClaimBlockReason(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("already have an active claim")) return "active_app_wide_claim";
+  if (m.includes("once per business per local day") && m.includes("redeemable")) return "business_daily_limit";
+  if (m.includes("once per business per day")) return "business_daily_limit"; // legacy fallback
+  if (m.includes("active claim from this business")) return "active_business_claim";
+  if (m.includes("active claim for this deal")) return "duplicate_deal_claim";
+  if (m.includes("reached its claim limit") || m.includes("sold out")) return "deal_sold_out";
+  if (m.includes("claiming has closed") || m.includes("expired")) return "deal_closed";
+  return "unknown";
+}
+
 type EndedKind = "redeemed" | "expired" | "canceled";
 
 type EndedListItem = { row: ClaimRow; kind: EndedKind };
@@ -173,13 +185,27 @@ export default function WalletScreen() {
     try {
       const telem = await buildClaimDealTelemetry("unknown");
       const out = await claimDeal(activeDealId, telem);
+      const businessIdForDeal = claims.find((c) => c.deal_id === activeDealId)?.deals?.business_id ?? null;
+      trackAppAnalyticsEvent({
+        event_name: "deal_claimed",
+        claim_id: out.claim_id ?? null,
+        deal_id: activeDealId,
+        business_id: businessIdForDeal,
+      });
       setQrToken(out.token);
       setQrExpires(getClaimRedeemDeadlineIso(out.expires_at, DEFAULT_CLAIM_GRACE_MINUTES));
       setQrShortCode(out.short_code ?? null);
       await loadClaims();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : t("consumerWallet.errRefreshQr");
-      setBanner(msg);
+      const businessIdForDeal = claims.find((c) => c.deal_id === activeDealId)?.deals?.business_id ?? null;
+      trackAppAnalyticsEvent({
+        event_name: "claim_blocked",
+        deal_id: activeDealId,
+        business_id: businessIdForDeal,
+        context: { reason: classifyClaimBlockReason(msg) },
+      });
+      setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);
     }
@@ -192,6 +218,12 @@ export default function WalletScreen() {
     try {
       const telem = await buildClaimDealTelemetry("unknown");
       const out = await claimDeal(row.deal_id, telem);
+      trackAppAnalyticsEvent({
+        event_name: "deal_claimed",
+        claim_id: out.claim_id ?? null,
+        deal_id: row.deal_id,
+        business_id: row.deals?.business_id ?? null,
+      });
       setQrToken(out.token);
       setQrExpires(getClaimRedeemDeadlineIso(out.expires_at, DEFAULT_CLAIM_GRACE_MINUTES));
       setQrShortCode(out.short_code ?? null);
@@ -203,7 +235,13 @@ export default function WalletScreen() {
       await loadClaims();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : t("consumerWallet.errRefreshQr");
-      setBanner(msg);
+      trackAppAnalyticsEvent({
+        event_name: "claim_blocked",
+        deal_id: row.deal_id,
+        business_id: row.deals?.business_id ?? null,
+        context: { reason: classifyClaimBlockReason(msg) },
+      });
+      setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setClaimingRefreshId(null);
     }

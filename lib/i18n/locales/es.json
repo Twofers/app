@@ -1136,6 +1136,8 @@
     "needBusiness": "Crea un negocio para desbloquear analíticas.",
     "overview": "Rendimiento",
     "metricViews": "Vistas de ofertas",
+    "metricImpressions": "Impresiones",
+    "metricOpens": "Aperturas",
     "metricDealsLaunched": "Ofertas lanzadas",
     "metricTotalClaims": "Reclamaciones totales",
     "metricRedemptions": "Canjes",

@@ -270,6 +270,21 @@ serve(async (req) => {
       );
     }
 
+    // Best-effort: record redemption analytics for MVP.
+    // This is intentionally fire-and-forget-ish (logged on failure only) to avoid breaking staff redemption.
+    try {
+      await supabase.from("app_analytics_events").insert({
+        event_name: "redeem_completed",
+        user_id: user.id,
+        business_id: deal.business_id ?? null,
+        deal_id: deal.id ?? null,
+        claim_id: claimId,
+        context: { method: "qr" },
+      });
+    } catch (err) {
+      console.error("[redeem-token] analytics insert failed", err);
+    }
+
     // ✅ Success
     return new Response(
       JSON.stringify({

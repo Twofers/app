@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -59,6 +59,7 @@ export default function DealDetail() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -119,6 +120,18 @@ export default function DealDetail() {
       setIsFavorite(!!fav);
     })();
   }, [userId, deal?.business_id]);
+
+  // MVP open tracking: count once per loaded deal detail view.
+  useEffect(() => {
+    if (!deal?.id || !deal.business_id) return;
+    if (openedDealIdRef.current === deal.id) return;
+    openedDealIdRef.current = deal.id;
+    trackAppAnalyticsEvent({
+      event_name: "deal_opened",
+      deal_id: deal.id,
+      business_id: deal.business_id,
+    });
+  }, [deal?.id, deal?.business_id]);
 
   async function doClaim() {
     try {
