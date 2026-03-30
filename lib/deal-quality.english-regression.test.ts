@@ -38,6 +38,15 @@ describe("deal quality — English regression", () => {
     expect(r.tier).toBe("strong");
   });
 
+  it('accepts "get one free" BOGO shorthand (e.g. typo buy on / AI headline)', () => {
+    const r = assessDealQuality({
+      title: "Buy on cola get one free",
+      description: "In-store today.",
+    });
+    expect(r.blocked).toBe(false);
+    expect(r.tier).toBe("strong");
+  });
+
   it("accepts two for one (English words) as strong", () => {
     const r = assessDealQuality({
       title: "Latte two for one special",

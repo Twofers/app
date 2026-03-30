@@ -1,17 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import type { GeneratedAd } from "@/lib/ad-variants";
@@ -168,12 +161,8 @@ export default function AdRefineScreen() {
   const previewSplit = splitSubheadlineForPromoAndBody(ad.subheadline ?? "");
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, paddingTop: top }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={64}
-    >
-      <View style={{ flex: 1, paddingHorizontal: horizontal }}>
+    <KeyboardScreen>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
         <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.sm }}>
           {t("adRefine.title")}
         </Text>
@@ -213,6 +202,7 @@ export default function AdRefineScreen() {
           data={displayMessages}
           keyExtractor={(_, i) => `u-${i}`}
           style={{ flex: 1, marginBottom: Spacing.sm }}
+          {...FORM_SCROLL_KEYBOARD_PROPS}
           renderItem={({ item }) => (
             <View
               style={{
@@ -254,6 +244,6 @@ export default function AdRefineScreen() {
         <SecondaryButton title={t("adRefine.reset")} onPress={onReset} />
         <View style={{ height: scrollBottom }} />
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }

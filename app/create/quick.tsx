@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { Image } from "expo-image";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -133,16 +134,27 @@ export default function QuickDealScreen() {
         price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
         business_name: businessName ?? null,
       });
-      setTitle(result.title.trim());
+      const proposed = result.title.trim();
+      /** Match publish-time checks: Quick deals store offer text in `description` on save (see publishDeal). */
+      const hintTrim = hint.trim();
       const quality = assessDealQuality({
-        title: result.title.trim(),
-        description: result.description,
+        title: proposed,
+        description: hintTrim.length > 0 ? hintTrim : null,
         price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
       });
       if (quality.blocked) {
         setBanner({ message: translateDealQualityBlock(quality, dealLang), tone: "error" });
         return;
       }
+      const strongGuard = validateStrongDealOnly({
+        title: proposed,
+        description: hintTrim.length > 0 ? hintTrim : null,
+      });
+      if (!strongGuard.ok) {
+        setBanner({ message: strongGuard.message, tone: "warning" });
+        return;
+      }
+      setTitle(proposed);
       setBanner({ message: t("createQuick.successAiTitle"), tone: "success" });
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : String(err);
@@ -194,9 +206,10 @@ export default function QuickDealScreen() {
         return;
       }
 
+      const offerBody = offerHint.trim();
       const quality = assessDealQuality({
         title: title.trim(),
-        description: null,
+        description: offerBody.length > 0 ? offerBody : null,
         price: priceNum,
       });
       if (quality.blocked) {
@@ -206,7 +219,7 @@ export default function QuickDealScreen() {
 
       const strongGuard = validateStrongDealOnly({
         title: title.trim(),
-        description: offerHint.trim() || null,
+        description: offerBody.length > 0 ? offerBody : null,
       });
       if (!strongGuard.ok) {
         setBanner({ message: strongGuard.message, tone: "warning" });
@@ -219,7 +232,7 @@ export default function QuickDealScreen() {
       const { data: deal, error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
-        description: null,
+        description: offerBody.length > 0 ? offerBody : null,
         price: priceNum,
         start_time: now.toISOString(),
         end_time: end.toISOString(),
@@ -244,6 +257,7 @@ export default function QuickDealScreen() {
   }
 
   return (
+    <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createQuick.title")}</Text>
       <Text style={{ marginTop: 6, opacity: 0.7, lineHeight: 20 }}>
@@ -261,7 +275,7 @@ export default function QuickDealScreen() {
         <ScrollView
           style={{ flex: 1, marginTop: Spacing.lg }}
           contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
-          keyboardShouldPersistTaps="handled"
+          {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
           {prefillPosterStoragePath ? (
@@ -445,5 +459,6 @@ export default function QuickDealScreen() {
         </ScrollView>
       )}
     </View>
+    </KeyboardScreen>
   );
 }

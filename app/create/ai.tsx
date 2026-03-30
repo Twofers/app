@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -129,7 +130,19 @@ export default function AiDealScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { templateId } = useLocalSearchParams<{ templateId?: string }>();
+  const params = useLocalSearchParams<{
+    templateId?: string;
+    prefillTitle?: string;
+    prefillPromoLine?: string;
+    prefillCta?: string;
+    prefillDescription?: string;
+    prefillHint?: string;
+    prefillPrice?: string;
+    prefillPosterPath?: string;
+    fromAiCompose?: string;
+    fromMenuOffer?: string;
+  }>();
+  const { templateId } = params;
   const { t, i18n } = useTranslation();
   const {
     isLoggedIn,
@@ -337,6 +350,53 @@ export default function AiDealScreen() {
       }
     })();
   }, [templateId, businessId]);
+
+  /** Deep-link prefill from AI Compose / menu-offer (full publish flow stays on this screen). */
+  useEffect(() => {
+    if (templateId) return;
+
+    const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+    const pt = g(params.prefillTitle).trim();
+    const pp = g(params.prefillPromoLine).trim();
+    const pc = g(params.prefillCta).trim();
+    const pd = g(params.prefillDescription).trim();
+    const ph = g(params.prefillHint).trim();
+    const price0 = g(params.prefillPrice).trim();
+    const posterPath = g(params.prefillPosterPath).trim();
+    const fromAi = g(params.fromAiCompose);
+    const fromMenu = g(params.fromMenuOffer);
+
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath) return;
+
+    if (pt) setTitle((prev) => prev || pt);
+    if (pp) setPromoLine((prev) => prev || pp);
+    if (pc) setCtaText((prev) => prev || pc);
+    if (pd) setDescription((prev) => prev || pd);
+    if (ph) setHintText((prev) => prev || ph);
+    if (price0) setPrice((prev) => prev || price0);
+    if (posterPath) {
+      setPhotoPath((prev) => prev || posterPath);
+      setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
+    }
+
+    if (fromAi === "1" && (pt || pp || pc || pd || ph || posterPath)) {
+      setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
+    } else if (fromMenu === "1" && (pt || pp || pc || pd || ph)) {
+      setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
+    }
+  }, [
+    templateId,
+    params.prefillTitle,
+    params.prefillPromoLine,
+    params.prefillCta,
+    params.prefillDescription,
+    params.prefillHint,
+    params.prefillPrice,
+    params.prefillPosterPath,
+    params.fromAiCompose,
+    params.fromMenuOffer,
+    t,
+  ]);
 
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -839,8 +899,10 @@ export default function AiDealScreen() {
   }
 
   return (
+    <KeyboardScreen>
     <ScrollView
-      keyboardShouldPersistTaps="handled"
+      style={{ flex: 1 }}
+      {...FORM_SCROLL_KEYBOARD_PROPS}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: top,
@@ -1328,6 +1390,12 @@ export default function AiDealScreen() {
                 const selected = selectedAdIndex === index;
                 const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
                 const laneTitle = laneUiTitle(laneKey);
+                const variantDraft = adToDealDraft(ad, hintText);
+                const variantListingBody = composeListingDescription(
+                  variantDraft.promo_line,
+                  variantDraft.cta_text,
+                  variantDraft.offer_details,
+                );
                 return (
                   <View
                     key={`${ad.creative_lane ?? index}-${index}`}
@@ -1344,10 +1412,27 @@ export default function AiDealScreen() {
                     {photoUri || posterUrl ? (
                       <Image
                         source={{ uri: photoUri ?? posterUrl ?? "" }}
-                        style={{ height: 128, width: "100%", borderRadius: 12, marginBottom: 10 }}
+                        style={{ height: 200, width: "100%", borderRadius: 12, marginBottom: 10 }}
                         contentFit="cover"
                       />
-                    ) : null}
+                    ) : (
+                      <View
+                        style={{
+                          height: 120,
+                          width: "100%",
+                          borderRadius: 12,
+                          marginBottom: 10,
+                          backgroundColor: "#eee",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          padding: 12,
+                        }}
+                      >
+                        <Text style={{ opacity: 0.55, textAlign: "center", fontSize: 13 }}>
+                          {t("createAi.variantNeedsPhotoForPreview")}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                       <Text
                         style={{
@@ -1387,9 +1472,29 @@ export default function AiDealScreen() {
                         {t("createAi.qaMetadata", { lane: ad.creative_lane })}
                       </Text>
                     ) : null}
+                    <Text style={{ fontSize: 12, fontWeight: "800", opacity: 0.5, marginBottom: 6 }}>
+                      {t("createAi.variantPublishedPreview")}
+                    </Text>
                     <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
                     <Text style={{ marginTop: 6, opacity: 0.85 }}>{ad.subheadline}</Text>
                     <Text style={{ marginTop: 8, fontWeight: "700" }}>{ad.cta}</Text>
+                    {variantListingBody.trim() ? (
+                      <View
+                        style={{
+                          marginTop: 12,
+                          padding: 12,
+                          borderRadius: 12,
+                          backgroundColor: "#f7f7f7",
+                          borderWidth: 1,
+                          borderColor: "#ececec",
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55, marginBottom: 6 }}>
+                          {t("createAi.variantListingBodyLabel")}
+                        </Text>
+                        <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.88 }}>{variantListingBody}</Text>
+                      </View>
+                    ) : null}
                     <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.65, fontStyle: "italic" }}>
                       {ad.rationale}
                     </Text>
@@ -1534,5 +1639,6 @@ export default function AiDealScreen() {
         </>
       )}
     </ScrollView>
+    </KeyboardScreen>
   );
 }

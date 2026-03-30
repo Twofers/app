@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +24,7 @@ import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { Banner } from "@/components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -158,12 +158,9 @@ export default function AuthLandingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardScreen>
         <ScrollView
-          keyboardShouldPersistTaps="handled"
+          {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
@@ -334,7 +331,7 @@ export default function AuthLandingScreen() {
             <LegalExternalLinks align="center" />
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardScreen>
     </View>
   );
 }

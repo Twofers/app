@@ -80,6 +80,9 @@ const CORE_STRONG_PATTERNS: RegExp[] = [
   /\bbogo\b/i,
   /\bbuy\s*one\s*get\s*one\b/i,
   /\bbuy\s*1\s*get\s*1\b/i,
+  /** BOGO shorthand; covers "…get one free" when "buy one get one" is missing (e.g. typo "buy on"). */
+  /\bget\s+one\s+free\b/i,
+  /\bget\s+1\s+free\b/i,
   /\b2\s*[- ]?\s*for\s*1\b/i,
   /\btwo\s*for\s*one\b/i,
   /\bhalf\s+off\b/i,
@@ -138,6 +141,8 @@ const STRUCTURAL_PRIMARY_PATTERNS: RegExp[] = [
   /\bbogo\b/i,
   /\bbuy\s*one\s*get\s*one\b/i,
   /\bbuy\s*1\s*get\s*1\b/i,
+  /\bget\s+one\s+free\b/i,
+  /\bget\s+1\s+free\b/i,
   /\b2\s*[- ]?\s*for\s*1\b/i,
   /\btwo\s*for\s*one\b/i,
   /\bbuy\s*2\s*,?\s*get\s*1\b/i,

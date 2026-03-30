@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -104,10 +105,7 @@ export default function BusinessSetupScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("businessSetup.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
@@ -118,7 +116,7 @@ export default function BusinessSetupScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
-        keyboardShouldPersistTaps="handled"
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
         <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={setBusinessName} />
@@ -144,7 +142,7 @@ export default function BusinessSetupScreen() {
         />
       </ScrollView>
     </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 

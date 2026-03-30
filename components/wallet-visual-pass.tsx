@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  AppState,
   Easing,
   Modal,
   Text,
@@ -65,11 +64,9 @@ export function WalletVisualPassModal({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const pulse = useRef(new Animated.Value(1)).current;
-  const [tick, setTick] = useState(0);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
   const completeOnce = useRef(false);
-  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     if (!visible) {
@@ -83,24 +80,8 @@ export function WalletVisualPassModal({
 
   const remainingSec = useMemo(() => {
     if (!visible) return 15;
-    return Math.max(0, Math.ceil((minCompleteMs - Date.now()) / 1000));
-  }, [visible, minCompleteMs, tick, nowMs]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const id = setInterval(() => setTick((x) => x + 1), 250);
-    return () => clearInterval(id);
-  }, [visible]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (next) => {
-      if (appState.current.match(/inactive|background/) && next === "active") {
-        setTick((x) => x + 1);
-      }
-      appState.current = next;
-    });
-    return () => sub.remove();
-  }, []);
+    return Math.max(0, Math.ceil((minCompleteMs - nowMs) / 1000));
+  }, [visible, minCompleteMs, nowMs]);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -155,11 +136,11 @@ export function WalletVisualPassModal({
 
   useEffect(() => {
     if (!visible || completeOnce.current || completingRef.current) return;
-    if (Date.now() >= minCompleteMs) {
+    if (nowMs >= minCompleteMs) {
       completeOnce.current = true;
       void runComplete();
     }
-  }, [visible, minCompleteMs, tick, runComplete]);
+  }, [visible, minCompleteMs, nowMs, runComplete]);
 
   const codeDisplay = shortCode
     ? `${shortCode.slice(0, 3)} ${shortCode.slice(3)}`

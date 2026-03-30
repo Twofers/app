@@ -8,6 +8,8 @@ const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\btwo\s*for\s*one\b/i,
   /\bbuy\s*one\s*get\s*one\b/i,
   /\bbuy\s*1\s*get\s*1\b/i,
+  /\bget\s+one\s+free\b/i,
+  /\bget\s+1\s+free\b/i,
   /\bsecond\s+item\s+free\b/i,
   /\bsecond\s+one\s+free\b/i,
   /\b2nd\s+item\s+free\b/i,

@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { Banner } from "@/components/ui/banner";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -137,6 +138,7 @@ export default function ConsumerProfileSetupScreen() {
   }
 
   return (
+    <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>
         {isEdit ? t("consumerProfile.editTitle") : t("consumerProfile.title")}
@@ -154,7 +156,7 @@ export default function ConsumerProfileSetupScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.lg }}
-        keyboardShouldPersistTaps="handled"
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
         <View>
@@ -219,5 +221,6 @@ export default function ConsumerProfileSetupScreen() {
         />
       </ScrollView>
     </View>
+    </KeyboardScreen>
   );
 }

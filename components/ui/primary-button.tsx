@@ -1,8 +1,8 @@
 import { Pressable, Text, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
-import { Colors, Fonts, Radii } from "@/constants/theme";
-import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
+import { Fonts, Radii } from "@/constants/theme";
+import { springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 

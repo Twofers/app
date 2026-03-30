@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase";
 import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import type { AppLocale } from "../../lib/i18n/config";
@@ -109,7 +110,7 @@ export default function AccountScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isLoggedIn, tabMode]);
+  }, [isLoggedIn, tabMode, t]);
 
   useEffect(() => {
     if (!businessProfile) {
@@ -456,10 +457,7 @@ export default function AccountScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("account.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
@@ -491,7 +489,13 @@ export default function AccountScreen() {
             </View>
           </View>
         ) : (
-        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+        <ScrollView
+          style={{ marginTop: Spacing.lg, flex: 1 }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          {...FORM_SCROLL_KEYBOARD_PROPS}
+          showsVerticalScrollIndicator={false}
+        >
+        <View style={{ gap: Spacing.md }}>
           <View>
             <Text>{t("auth.email")}</Text>
             <TextInput
@@ -554,12 +558,13 @@ export default function AccountScreen() {
             <LegalExternalLinks />
           </View>
         </View>
+        </ScrollView>
         )
       ) : (
         <ScrollView
           style={{ marginTop: Spacing.lg, flex: 1 }}
           contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
-          keyboardShouldPersistTaps="handled"
+          {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
           {tabMode === "business" ? (
@@ -1056,6 +1061,6 @@ export default function AccountScreen() {
         </ScrollView>
       )}
     </View>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }

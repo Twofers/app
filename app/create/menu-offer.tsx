@@ -123,17 +123,20 @@ export default function MenuOfferScreen() {
     }
   }, [businessId, structuredOffer, businessContextForAi, dealLang, setGenerationResult, t]);
 
-  const goQuickPublish = useCallback(
+  const goAiPublish = useCallback(
     (ad: GeneratedAd) => {
       if (!structuredOffer) return;
       const hint = buildOfferHintText(structuredOffer);
       const draft = adToDealDraft(ad, hint);
       clearWizard();
       router.push({
-        pathname: "/create/quick",
+        pathname: "/create/ai",
         params: {
           prefillTitle: draft.title,
-          prefillHint: draft.offer_details,
+          prefillPromoLine: draft.promo_line,
+          prefillCta: draft.cta_text,
+          prefillDescription: draft.offer_details,
+          prefillHint: hint,
           fromMenuOffer: "1",
         },
       } as Href);
@@ -352,8 +355,8 @@ export default function MenuOfferScreen() {
                   </Text>
                 ) : null}
                 <PrimaryButton
-                  title={t("menuOffer.useQuick")}
-                  onPress={() => goQuickPublish(ad)}
+                  title={t("menuOffer.useAiPublish")}
+                  onPress={() => goAiPublish(ad)}
                   style={{ marginTop: Spacing.sm }}
                 />
                 <SecondaryButton

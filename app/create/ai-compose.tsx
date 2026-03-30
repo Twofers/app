@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useBusiness } from "@/hooks/use-business";
 import { Banner } from "@/components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -295,10 +296,14 @@ export default function AiComposeOfferScreen() {
     const title = [copy.headline, ro?.item_name].filter(Boolean).join(" · ").slice(0, 120);
     const hint = [ro?.display_offer, copy.sub, copy.cta].filter(Boolean).join(" — ").slice(0, 500);
     const posterPath = result?.poster_storage_path?.trim();
+    const detail = (ro?.display_offer ?? "").trim();
     router.push({
-      pathname: "/create/quick",
+      pathname: "/create/ai",
       params: {
         prefillTitle: title,
+        prefillPromoLine: copy.sub,
+        prefillCta: copy.cta,
+        prefillDescription: detail,
         prefillHint: hint,
         fromAiCompose: "1",
         ...(posterPath ? { prefillPosterPath: posterPath } : {}),
@@ -343,6 +348,7 @@ export default function AiComposeOfferScreen() {
   const busy = phase === "generating" || phase === "transcribing";
 
   return (
+    <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={{ fontSize: 20, fontWeight: "700", letterSpacing: -0.3 }}>{t("aiCompose.title")}</Text>
@@ -367,7 +373,7 @@ export default function AiComposeOfferScreen() {
         <ScrollView
           style={{ flex: 1, marginTop: Spacing.md }}
           contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.sm }}
-          keyboardShouldPersistTaps="handled"
+          {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
           <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md, flexWrap: "wrap" }}>
@@ -571,5 +577,6 @@ export default function AiComposeOfferScreen() {
         </ScrollView>
       )}
     </View>
+    </KeyboardScreen>
   );
 }

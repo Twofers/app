@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { PASSWORD_MIN_LENGTH, validateNewPasswordPair } from "@/lib/auth-password-recovery";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -80,9 +81,11 @@ export default function ResetPasswordScreen() {
   }
 
   return (
+    <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       <ScrollView
-        keyboardShouldPersistTaps="handled"
+        style={{ flex: 1 }}
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
@@ -156,5 +159,6 @@ export default function ResetPasswordScreen() {
         )}
       </ScrollView>
     </View>
+    </KeyboardScreen>
   );
 }

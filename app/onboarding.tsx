@@ -8,6 +8,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -196,6 +197,7 @@ export default function OnboardingScreen() {
   const totalSteps = 5;
 
   return (
+    <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>{t("onboarding.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
@@ -224,7 +226,7 @@ export default function OnboardingScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
-        keyboardShouldPersistTaps="handled"
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
         {step === 0 ? (
@@ -381,5 +383,6 @@ export default function OnboardingScreen() {
         ) : null}
       </ScrollView>
     </View>
+    </KeyboardScreen>
   );
 }

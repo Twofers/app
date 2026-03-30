@@ -436,4 +436,3 @@ export default function MapScreenNative() {
     </View>
   );
 }
-

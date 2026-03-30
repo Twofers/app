@@ -27,6 +27,7 @@ import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
@@ -167,6 +168,7 @@ export default function SettingsScreen() {
   }
 
   return (
+    <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("settingsScreen.title")}</Text>
 
@@ -174,7 +176,7 @@ export default function SettingsScreen() {
         style={{ flex: 1, marginTop: Spacing.lg }}
         contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.lg }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        {...FORM_SCROLL_KEYBOARD_PROPS}
       >
         <Pressable
           onPress={() => router.push("/(tabs)/account")}
@@ -379,5 +381,6 @@ export default function SettingsScreen() {
         ) : null}
       </ScrollView>
     </View>
+    </KeyboardScreen>
   );
 }

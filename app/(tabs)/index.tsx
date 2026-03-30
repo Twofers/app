@@ -40,6 +40,7 @@ import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
@@ -813,7 +814,6 @@ export default function HomeScreen() {
       showDealsSkeleton,
       dealsFadeStyle,
       liveDealsDisplay,
-      loadingDeals,
       heroImageHeight,
       heroCardHeight,
       favoriteBusinessIds,
@@ -825,7 +825,6 @@ export default function HomeScreen() {
       claimingDealId,
       doClaim,
       claimStatus,
-      showAllLiveDeals,
       colorScheme,
       theme,
     ],
@@ -833,15 +832,18 @@ export default function HomeScreen() {
 
   if (loadingBiz && businesses.length === 0) {
     return (
+      <KeyboardScreen>
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
         {banner ? <Banner message={banner} tone="error" /> : null}
         {listHeader}
         <LoadingSkeleton rows={4} />
       </View>
+      </KeyboardScreen>
     );
   }
 
   return (
+    <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       {banner ? <Banner message={banner} tone="error" /> : null}
       <FlatList
@@ -850,6 +852,7 @@ export default function HomeScreen() {
         keyExtractor={(b) => b.id}
         ListHeaderComponent={listHeader}
         showsVerticalScrollIndicator={false}
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         removeClippedSubviews={Platform.OS === "android"}
         maxToRenderPerBatch={12}
         windowSize={7}
@@ -903,5 +906,6 @@ export default function HomeScreen() {
         refreshing={refreshingQr}
       />
     </View>
+    </KeyboardScreen>
   );
 }

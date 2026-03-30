@@ -616,6 +616,7 @@ export default function BusinessDashboard() {
     ),
     [
       t,
+      monthViews,
       dealsLaunchedMonth,
       monthClaims,
       monthRedeems,

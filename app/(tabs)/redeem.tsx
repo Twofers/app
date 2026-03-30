@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
@@ -12,6 +12,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { redeemToken } from "../../lib/functions";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 
 type RedeemMode = "scan" | "manual";
 
@@ -87,6 +88,7 @@ export default function RedeemScanner() {
   const cameraBlockHeight = Math.round(Math.min(420, Math.max(260, winH * 0.42)));
 
   return (
+    <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("redeem.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
@@ -157,7 +159,11 @@ export default function RedeemScanner() {
           </View>
 
           {mode === "manual" ? (
-            <View style={{ gap: Spacing.md }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+              {...FORM_SCROLL_KEYBOARD_PROPS}
+            >
               <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20 }}>{t("redeem.manualHelp")}</Text>
               <TextInput
                 value={claimCodeInput}
@@ -181,7 +187,7 @@ export default function RedeemScanner() {
                 onPress={() => void onManualRedeem()}
                 disabled={processing}
               />
-            </View>
+            </ScrollView>
           ) : !permission ? (
             <View>
               <Text style={{ opacity: 0.7 }}>{t("redeem.requestingCamera")}</Text>
@@ -238,5 +244,6 @@ export default function RedeemScanner() {
         </View>
       )}
     </View>
+    </KeyboardScreen>
   );
 }

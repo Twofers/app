@@ -64,7 +64,7 @@ export default function CreateDeal() {
       }
       setTemplatesLoading(false);
     })();
-  }, [businessId]);
+  }, [businessId, t]);
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>

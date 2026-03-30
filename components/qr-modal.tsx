@@ -235,7 +235,6 @@ export function QrModal({
                 <View style={{ position: "absolute", top: 2, width: 1, height: 1 }}>
                   {particles.map((p, idx) => (
                     <ConfettiParticle
-                      // eslint-disable-next-line react/no-array-index-key
                       key={idx}
                       p={p}
                       progress={confettiProgress}

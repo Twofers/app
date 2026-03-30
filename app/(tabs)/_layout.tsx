@@ -32,7 +32,7 @@ function TabAuthGate({ children }: { children: ReactNode }) {
       void registerPushTokenIfNeeded(user.id);
       void syncConsumerPrefsToServer(user.id);
     }
-  }, [forceBypass, session?.user?.id]);
+  }, [forceBypass, session?.user]);
 
   if (forceBypass) {
     return <>{children}</>;
@@ -211,7 +211,7 @@ function TabModeRedirect() {
         router.navigate("/(tabs)");
       }
     }
-  }, [ready, mode, segments, router, forceBypass, session?.user?.id]);
+  }, [ready, mode, segments, router, forceBypass, session?.user]);
 
   if (checkingProfile) {
     return (

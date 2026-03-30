@@ -13,6 +13,7 @@ import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
 import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
 import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
+import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -32,6 +33,7 @@ function RootNavigationStack() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <LegacyTabsDeepLinkHandler />
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <DealDeepLinkHandler />
