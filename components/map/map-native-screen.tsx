@@ -17,11 +17,13 @@ import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
+import { buildMapCameraFitSignature } from "@/lib/map-camera-fit";
 import {
   collectMappableBusinesses,
   deriveLiveBusinessIds,
   pickPreviewDeal,
   resolveMarkerTapOutcome,
+  shouldClearMapSelectionOnPress,
   type MappableBusiness,
 } from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
@@ -197,6 +199,9 @@ function renderMapCanvas({
     <View style={{ flex: 1 }}>
       <Pressable
         onPress={() => void loadMapData()}
+        accessibilityRole="button"
+        accessibilityLabel={t("consumerMap.a11yRefreshLabel")}
+        accessibilityHint={t("consumerMap.a11yRefreshHint")}
         style={{
           position: "absolute",
           top: 12,
@@ -224,7 +229,7 @@ function renderMapCanvas({
         showsUserLocation={showUserLocationDot}
         onMapReady={() => setMapReady(true)}
         onPress={(e) => {
-          if (e.nativeEvent.action === "marker-press") return;
+          if (!shouldClearMapSelectionOnPress(e.nativeEvent.action)) return;
           setSelectedBusinessId(null);
         }}
       >
@@ -477,7 +482,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [radiusMiles, setRadiusMiles] = useState(3);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
-  const cameraFittedRef = useRef(false);
+  const lastCameraFitSignatureRef = useRef<string | null>(null);
   const livePulse = useLiveDealPulse();
 
   const loadMapData = useCallback(async () => {
@@ -607,15 +612,19 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   /** initialRegion only applies on first paint; nudge camera once when data + map are ready. */
   useEffect(() => {
     if (!mapReady || !androidMapsOk) return;
-    if (cameraFittedRef.current) return;
     const hasUser = userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng);
     const hasMarkers = markers.length > 0;
     if (!hasUser && !hasMarkers) return;
+    const signature = buildMapCameraFitSignature({
+      userPos: hasUser && userPos ? userPos : null,
+      markers: markers.map((marker) => ({ id: marker.id, lat: marker.lat, lng: marker.lng })),
+    });
+    if (lastCameraFitSignatureRef.current === signature) return;
     const region = hasUser && userPos
       ? safeRegion({ lat: userPos.lat, lng: userPos.lng }, 0.12, 0.12)
       : safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
     mapRef.current?.animateToRegion(region, 480);
-    cameraFittedRef.current = true;
+    lastCameraFitSignatureRef.current = signature;
   }, [mapReady, androidMapsOk, userPos, markers]);
 
   return (
@@ -640,6 +649,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
             onPress={() => setMode("all")}
             accessibilityRole="button"
             accessibilityState={{ selected: mode === "all" }}
+            accessibilityLabel={t("consumerMap.toggleAll")}
+            accessibilityHint={t("consumerMap.a11yToggleAllHint")}
             style={{
               flex: 1,
               minHeight: 48,
@@ -661,6 +672,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
             onPress={() => setMode("live")}
             accessibilityRole="button"
             accessibilityState={{ selected: mode === "live" }}
+            accessibilityLabel={t("consumerMap.toggleLive")}
+            accessibilityHint={t("consumerMap.a11yToggleLiveHint")}
             style={{
               flex: 1,
               minHeight: 48,

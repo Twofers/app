@@ -20,6 +20,7 @@ export function resolveTabModeRedirectTarget({
   forceBypass,
   checkingProfile,
   businessProfileComplete,
+  businessBillingBlocked = false,
 }: {
   mode: TabMode;
   tab: string;
@@ -27,6 +28,7 @@ export function resolveTabModeRedirectTarget({
   forceBypass: boolean;
   checkingProfile: boolean;
   businessProfileComplete: boolean | null;
+  businessBillingBlocked?: boolean;
 }): string | null {
   const safeReturn = (target: string) => (target === currentPath ? null : target);
 
@@ -35,6 +37,7 @@ export function resolveTabModeRedirectTarget({
     if (BUSINESS_TABS.has(tab)) {
       if (forceBypass || checkingProfile || businessProfileComplete === null) return null;
       if (!businessProfileComplete) return safeReturn("/business-setup");
+      if (businessBillingBlocked && tab !== "billing") return safeReturn("/(tabs)/billing?reason=reactivate");
     }
     return null;
   }

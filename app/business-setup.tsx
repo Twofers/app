@@ -11,6 +11,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
+import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 
 type Tone = "error" | "success" | "info";
 
@@ -40,7 +41,11 @@ export default function BusinessSetupScreen() {
 
   useEffect(() => {
     if (authLoading) return;
-    const bypass = String(params.skipSetup ?? "") === "1" || String(params.e2e ?? "") === "1";
+    const bypass = isAuthBypassEnabled({
+      skipSetup: String(params.skipSetup ?? ""),
+      e2e: String(params.e2e ?? ""),
+      isDev: __DEV__,
+    });
     if (!bypass && !session?.user?.id) router.replace("/auth-landing");
   }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
 

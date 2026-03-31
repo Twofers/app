@@ -12,6 +12,9 @@ import { useTabMode } from "@/lib/tab-mode";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import { isAuthBypassEnabled } from "@/lib/auth-bypass";
+import { canCreateDeal } from "@/lib/billing/access";
+import { useBusiness } from "@/hooks/use-business";
 import {
   deriveTabFromSegments,
   resolveTabModeRedirectTarget,
@@ -41,12 +44,15 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const forceE2E =
-    Platform.OS === "web" &&
-    ((params.e2e === "1") ||
-      (globalThis.window !== undefined &&
-        new URLSearchParams(globalThis.window.location.search).get("e2e") === "1"));
-  const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
+  const browserE2EParam =
+    Platform.OS === "web" && globalThis.window !== undefined
+      ? new URLSearchParams(globalThis.window.location.search).get("e2e") ?? undefined
+      : undefined;
+  const forceBypass = isAuthBypassEnabled({
+    skipSetup: String(params.skipSetup ?? ""),
+    e2e: browserE2EParam ?? String(params.e2e ?? ""),
+    isDev: __DEV__,
+  });
 
   useEffect(() => {
     if (forceBypass) return;
@@ -197,6 +203,7 @@ export default function TabLayout() {
 function TabModeRedirect() {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
+  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading: billingLoading } = useBusiness();
   const segments = useSegments() as string[];
   const router = useRouter();
   const params = useGlobalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -204,12 +211,24 @@ function TabModeRedirect() {
   const [businessProfileComplete, setBusinessProfileComplete] = useState<boolean | null>(null);
   const profileCheckedUserRef = useRef<string | null>(null);
   const lastRedirectRef = useRef<string | null>(null);
-  const forceE2E =
-    String(params.e2e ?? "") === "1" ||
-    (Platform.OS === "web" &&
-      globalThis.window !== undefined &&
-      new URLSearchParams(globalThis.window.location.search).get("e2e") === "1");
-  const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
+  const browserE2EParam =
+    Platform.OS === "web" && globalThis.window !== undefined
+      ? new URLSearchParams(globalThis.window.location.search).get("e2e") ?? undefined
+      : undefined;
+  const forceBypass = isAuthBypassEnabled({
+    skipSetup: String(params.skipSetup ?? ""),
+    e2e: browserE2EParam ?? String(params.e2e ?? ""),
+    isDev: __DEV__,
+  });
+  const businessBillingBlocked =
+    mode === "business" &&
+    !billingLoading &&
+    !canCreateDeal({
+      isLoggedIn,
+      subscriptionStatus,
+      trialEndsAt,
+      bypass: forceBypass,
+    });
 
   const tab = useMemo(() => {
     return deriveTabFromSegments(segments.map(String));
@@ -260,11 +279,12 @@ function TabModeRedirect() {
       forceBypass,
       checkingProfile,
       businessProfileComplete,
+      businessBillingBlocked,
     });
     if (target) {
       redirectTo(target);
     }
-  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete]);
+  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked]);
 
   if (checkingProfile) {
     return (

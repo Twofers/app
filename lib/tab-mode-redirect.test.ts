@@ -102,4 +102,32 @@ describe("resolveTabModeRedirectTarget", () => {
       }),
     ).toBe("/(tabs)/settings");
   });
+
+  it("redirects blocked business tabs to billing", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: "dashboard",
+        currentPath: "/(tabs)/dashboard",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: true,
+        businessBillingBlocked: true,
+      }),
+    ).toBe("/(tabs)/billing?reason=reactivate");
+  });
+
+  it("does not redirect away from billing when blocked", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: "billing",
+        currentPath: "/(tabs)/billing",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: true,
+        businessBillingBlocked: true,
+      }),
+    ).toBeNull();
+  });
 });

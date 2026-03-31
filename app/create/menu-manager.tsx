@@ -31,6 +31,7 @@ type Row = {
 
 export default function MenuManagerScreen() {
   const { t } = useTranslation();
+  const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
 
@@ -52,11 +53,11 @@ export default function MenuManagerScreen() {
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
     if (error) {
-      setLoadErr(looksLikeMissingMenuTable(error.message) ? t("menuWorkflow.errSchema") : error.message);
+      setLoadErr(looksLikeMissingMenuTable(error.message) ? t("menuWorkflow.errSchema") : genericMenuError);
       return;
     }
     setRows((data ?? []) as Row[]);
-  }, [businessId, t]);
+  }, [businessId, genericMenuError, t]);
 
   useEffect(() => {
     void load();
@@ -88,7 +89,7 @@ export default function MenuManagerScreen() {
       })
       .eq("id", editingId);
     if (error) {
-      setBanner({ message: error.message, tone: "error" });
+      setBanner({ message: genericMenuError, tone: "error" });
       return;
     }
     setEditingId(null);
@@ -104,7 +105,7 @@ export default function MenuManagerScreen() {
       .update({ archived_at: next, updated_at: new Date().toISOString() })
       .eq("id", r.id);
     if (error) {
-      setBanner({ message: error.message, tone: "error" });
+      setBanner({ message: genericMenuError, tone: "error" });
       return;
     }
     void load();
@@ -123,7 +124,7 @@ export default function MenuManagerScreen() {
       source: "manual",
     });
     if (error) {
-      setBanner({ message: error.message, tone: "error" });
+      setBanner({ message: genericMenuError, tone: "error" });
       return;
     }
     setAdding(false);

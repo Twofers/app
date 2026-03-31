@@ -14,6 +14,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { loadSubscriptionPricingFromAppConfig, type SubscriptionPricing } from "@/lib/billing/subscription-pricing";
 import { devLog } from "@/lib/dev-log";
+import { isTrialExpired } from "@/lib/billing/access";
 
 function daysBetween(nowMs: number, targetIso: string | null): number | null {
   if (!targetIso) return null;
@@ -47,10 +48,7 @@ export default function BusinessBillingScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
 
   const trialExpired = useMemo(() => {
-    if (!trialEndsAt) return false;
-    const ms = new Date(trialEndsAt).getTime();
-    if (!Number.isFinite(ms)) return false;
-    return Date.now() > ms;
+    return isTrialExpired(trialEndsAt);
   }, [trialEndsAt]);
 
   const warningExpiredOrPastDue = useMemo(() => {
@@ -189,11 +187,9 @@ export default function BusinessBillingScreen() {
       const url = data?.checkout_url as string | undefined;
       if (!url) throw new Error("Missing checkout_url from checkout session function.");
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t("billing.errSubscribe", { defaultValue: "Unable to start checkout. Please try again." });
+    } catch {
       setBanner({
-        message,
+        message: t("billing.errSubscribe", { defaultValue: "Unable to start checkout. Please try again." }),
         tone: "error",
       });
     } finally {
@@ -292,10 +288,10 @@ export default function BusinessBillingScreen() {
                 </Text>
                 <View style={{ marginTop: 10, gap: 8 }}>
                   {[
-                    "Unlimited active deals",
-                    "Location limit: 1",
-                    "Basic AI deal features",
-                    "Analytics & essentials",
+                    t("billing.proFeatureUnlimitedDeals"),
+                    t("billing.proFeatureLocationLimit"),
+                    t("billing.proFeatureBasicAi"),
+                    t("billing.proFeatureAnalytics"),
                   ].map((feat) => (
                     <View key={feat} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                       <MaterialIcons name="check-circle" size={18} color={Colors.light.primary} />
@@ -308,6 +304,8 @@ export default function BusinessBillingScreen() {
                     title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
                     disabled={busy || subscriptionStatus === "active" && subscriptionTier === "pro"}
                     onPress={() => void subscribe("pro")}
+                    accessibilityLabel={t("billing.a11ySubscribeProLabel")}
+                    accessibilityHint={t("billing.a11ySubscribeProHint")}
                     style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
                   />
                 </View>
@@ -320,10 +318,10 @@ export default function BusinessBillingScreen() {
                 </Text>
                 <View style={{ marginTop: 10, gap: 8 }}>
                   {[
-                    "Unlimited active deals",
-                    "Location limit: up to 3",
-                    "Advanced AI deal features",
-                    "Full analytics + expanded tools",
+                    t("billing.premiumFeatureUnlimitedDeals"),
+                    t("billing.premiumFeatureLocationLimit"),
+                    t("billing.premiumFeatureAdvancedAi"),
+                    t("billing.premiumFeatureAnalytics"),
                   ].map((feat) => (
                     <View key={feat} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                       <MaterialIcons name="check-circle" size={18} color={Colors.light.primary} />
@@ -336,6 +334,8 @@ export default function BusinessBillingScreen() {
                     title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
                     disabled={busy || subscriptionStatus === "active" && subscriptionTier === "premium"}
                     onPress={() => void subscribe("premium")}
+                    accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
+                    accessibilityHint={t("billing.a11ySubscribePremiumHint")}
                     style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
                   />
                 </View>
@@ -347,6 +347,8 @@ export default function BusinessBillingScreen() {
                 title={t("billing.manageSubscription", { defaultValue: "Manage Subscription" })}
                 onPress={() => router.push("/(tabs)/billing/manage")}
                 disabled={busy}
+                accessibilityLabel={t("billing.a11yManageSubscriptionLabel")}
+                accessibilityHint={t("billing.a11yManageSubscriptionHint")}
               />
             </View>
 

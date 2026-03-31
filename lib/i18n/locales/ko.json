@@ -1437,7 +1437,27 @@
     "checkoutSyncDelayed": "결제가 완료되었습니다. 상태 반영에 시간이 걸릴 수 있습니다. 갱신해 주세요.",
     "syncingStatus": "결제 상태 동기화 중...",
     "checkoutSuccess": "결제가 완료되었습니다. 구독이 활성화되었습니다.",
-    "checkoutCanceled": "구독 구매가 취소되었습니다."
+    "checkoutCanceled": "구독 구매가 취소되었습니다.",
+    "proFeatureUnlimitedDeals": "활성 딜 무제한",
+    "proFeatureLocationLimit": "매장 위치 한도: 1개",
+    "proFeatureBasicAi": "기본 AI 딜 기능",
+    "proFeatureAnalytics": "분석 및 핵심 기능",
+    "premiumFeatureUnlimitedDeals": "활성 딜 무제한",
+    "premiumFeatureLocationLimit": "매장 위치 한도: 최대 3개",
+    "premiumFeatureAdvancedAi": "고급 AI 딜 기능",
+    "premiumFeatureAnalytics": "전체 분석 + 확장 도구",
+    "a11ySubscribeProLabel": "TWOFER Pro 구독하기",
+    "a11ySubscribeProHint": "Pro 월간 플랜의 보안 결제창을 엽니다",
+    "a11ySubscribePremiumLabel": "TWOFER Premium 구독하기",
+    "a11ySubscribePremiumHint": "Premium 월간 플랜의 보안 결제창을 엽니다",
+    "a11yManageSubscriptionLabel": "현재 구독 관리",
+    "a11yManageSubscriptionHint": "결제 관리 옵션을 엽니다"
+  },
+  "consumerMap": {
+    "a11yRefreshLabel": "지도 데이터 새로고침",
+    "a11yRefreshHint": "지도의 매장과 실시간 딜을 다시 불러옵니다",
+    "a11yToggleAllHint": "지도의 모든 매장 표시",
+    "a11yToggleLiveHint": "실시간 딜이 있는 매장만 표시"
   },
   "billingManage": {
     "title": "구독 관리",

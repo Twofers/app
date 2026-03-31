@@ -125,3 +125,11 @@ export function resolveMarkerTapOutcome({
     href: resolveMapTapHref({ businessId: tappedBusinessId, liveDealId }),
   };
 }
+
+export function shouldClearMapSelectionOnPress(action: string | undefined): boolean {
+  if (!action) return true;
+  const normalized = action.trim().toLowerCase();
+  if (!normalized) return true;
+  // Marker taps can bubble to map on some platforms; keep selection in that case.
+  return normalized !== "marker-press" && normalized !== "marker-click";
+}

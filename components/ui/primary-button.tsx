@@ -11,9 +11,11 @@ type PrimaryButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-export function PrimaryButton({ title, onPress, disabled, style }: PrimaryButtonProps) {
+export function PrimaryButton({ title, onPress, disabled, style, accessibilityLabel, accessibilityHint }: PrimaryButtonProps) {
   const scale = useSharedValue(1);
   const pressDepth = useSharedValue(0);
   const rStyle = useAnimatedStyle(() => ({
@@ -27,6 +29,8 @@ export function PrimaryButton({ title, onPress, disabled, style }: PrimaryButton
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       onPressIn={() => {
         if (disabled) return;
         triggerLightHaptic();

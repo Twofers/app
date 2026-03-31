@@ -1437,7 +1437,27 @@
     "checkoutSyncDelayed": "Payment completed — subscription update may take a moment. Pull to refresh if status does not update.",
     "syncingStatus": "Syncing payment status...",
     "checkoutSuccess": "Payment successful. Your subscription is active.",
-    "checkoutCanceled": "Subscription purchase canceled."
+    "checkoutCanceled": "Subscription purchase canceled.",
+    "proFeatureUnlimitedDeals": "Unlimited active deals",
+    "proFeatureLocationLimit": "Location limit: 1",
+    "proFeatureBasicAi": "Basic AI deal features",
+    "proFeatureAnalytics": "Analytics & essentials",
+    "premiumFeatureUnlimitedDeals": "Unlimited active deals",
+    "premiumFeatureLocationLimit": "Location limit: up to 3",
+    "premiumFeatureAdvancedAi": "Advanced AI deal features",
+    "premiumFeatureAnalytics": "Full analytics + expanded tools",
+    "a11ySubscribeProLabel": "Subscribe to TWOFER Pro",
+    "a11ySubscribeProHint": "Opens secure checkout for the Pro monthly plan",
+    "a11ySubscribePremiumLabel": "Subscribe to TWOFER Premium",
+    "a11ySubscribePremiumHint": "Opens secure checkout for the Premium monthly plan",
+    "a11yManageSubscriptionLabel": "Manage current subscription",
+    "a11yManageSubscriptionHint": "Open billing management options"
+  },
+  "consumerMap": {
+    "a11yRefreshLabel": "Refresh map data",
+    "a11yRefreshHint": "Reload businesses and live deals on the map",
+    "a11yToggleAllHint": "Show every business on the map",
+    "a11yToggleLiveHint": "Show only businesses with a live deal"
   },
   "billingManage": {
     "title": "Manage Subscription",

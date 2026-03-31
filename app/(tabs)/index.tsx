@@ -42,6 +42,7 @@ import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
+import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
@@ -224,17 +225,20 @@ export default function HomeScreen() {
 
   const loadBusinesses = useCallback(async () => {
     setLoadingBiz(true);
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("id,name,location,latitude,longitude")
-      .order("name", { ascending: true })
-      .limit(300);
-    if (error) {
-      logPostgrestError("home screen businesses", error);
+    try {
+      const rows = await collectBusinessesPageByPage(async ({ from, to }) => {
+        return await supabase
+          .from("businesses")
+          .select("id,name,location,latitude,longitude")
+          .order("name", { ascending: true })
+          .range(from, to);
+      });
+      setBusinesses(rows as BusinessRow[]);
+    } catch (error) {
+      const err = error instanceof Error ? { message: error.message } : { message: "Unknown businesses load error" };
+      logPostgrestError("home screen businesses", err);
       setBanner(t("consumerHome.loadBusinessesError"));
       setBusinesses([]);
-    } else {
-      setBusinesses((data ?? []) as BusinessRow[]);
     }
     setLoadingBiz(false);
   }, [t]);

@@ -11,9 +11,18 @@ type SecondaryButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-export function SecondaryButton({ title, onPress, disabled, style }: SecondaryButtonProps) {
+export function SecondaryButton({
+  title,
+  onPress,
+  disabled,
+  style,
+  accessibilityLabel,
+  accessibilityHint,
+}: SecondaryButtonProps) {
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -21,6 +30,8 @@ export function SecondaryButton({ title, onPress, disabled, style }: SecondaryBu
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       onPressIn={() => {
         if (disabled) return;
         triggerLightHaptic();

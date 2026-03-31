@@ -5,13 +5,18 @@ import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
+import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 
 export default function Index() {
   const params = useGlobalSearchParams<{ e2e?: string }>();
-  const forceE2E =
-    Platform.OS === "web" &&
-    ((params.e2e === "1") ||
-      (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
+  const browserE2EParam =
+    Platform.OS === "web" && globalThis.window !== undefined
+      ? new URLSearchParams(globalThis.window.location.search).get("e2e") ?? undefined
+      : undefined;
+  const forceE2E = isAuthBypassEnabled({
+    e2e: browserE2EParam ?? String(params.e2e ?? ""),
+    isDev: __DEV__,
+  });
   const { session, isInitialLoading } = useAuthSession();
   const { mode, ready: tabModeReady } = useTabMode();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";

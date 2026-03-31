@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import type { PostgrestError } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadSubscriptionPricingFromAppConfig } from "../_shared/subscription-pricing.ts";
+import { selectMonthlyTierPriceId } from "../_shared/stripe-price-selection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,14 +82,15 @@ serve(async (req) => {
     const targetCents = Math.round(targetMonthlyPrice * 100);
 
     const prices = await stripe.prices.list({ active: true, limit: 100 });
-    const matchingPrice = prices.data.find((p) => {
-      if (!p.recurring?.interval || p.recurring.interval !== "month") return false;
-      return p.unit_amount === targetCents;
+    const matchingPriceId = selectMonthlyTierPriceId({
+      tier,
+      targetCents,
+      prices: prices.data,
     });
-    if (!matchingPrice?.id) {
+    if (!matchingPriceId) {
       return new Response(
         JSON.stringify({
-          error: `No matching Stripe price found for tier=${tier} amountCents=${targetCents}.`,
+          error: `No unambiguous Stripe price found for tier=${tier} amountCents=${targetCents}. Configure lookup_key=twofer_${tier}_monthly or keep a single matching monthly price.`,
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -145,7 +147,7 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: stripeCustomerId,
-      line_items: [{ price: matchingPrice.id, quantity: 1 }],
+      line_items: [{ price: matchingPriceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {

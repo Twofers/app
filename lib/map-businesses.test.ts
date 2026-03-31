@@ -7,6 +7,7 @@ import {
   resolveMarkerTapOutcome,
   pickPreviewDeal,
   resolveMapTapHref,
+  shouldClearMapSelectionOnPress,
 } from "./map-businesses";
 
 describe("isValidCoordinate", () => {
@@ -113,5 +114,17 @@ describe("resolveMarkerTapOutcome", () => {
     });
     expect(out.nextSelectedBusinessId).toBe("biz-1");
     expect(out.href).toBe("/deal/deal-1");
+  });
+});
+
+describe("shouldClearMapSelectionOnPress", () => {
+  it("keeps selection on marker tap actions", () => {
+    expect(shouldClearMapSelectionOnPress("marker-press")).toBe(false);
+    expect(shouldClearMapSelectionOnPress("marker-click")).toBe(false);
+  });
+
+  it("clears selection for normal map taps or missing actions", () => {
+    expect(shouldClearMapSelectionOnPress(undefined)).toBe(true);
+    expect(shouldClearMapSelectionOnPress("press")).toBe(true);
   });
 });

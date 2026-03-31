@@ -7,6 +7,9 @@ describe("buildQuickPrefillFromMenuOffer", () => {
     const out = buildQuickPrefillFromMenuOffer(
       {
         creative_lane: "value",
+        style_label: "friendly",
+        rationale: "value-forward angle",
+        visual_direction: "Warm bakery counter shot",
         headline: "  BOGO Latte + Croissant  ",
         subheadline: "Buy one latte, get a croissant free. Perfect for morning commuters.",
         cta: "  Order before 11am  ",
@@ -25,6 +28,9 @@ describe("buildQuickPrefillFromMenuOffer", () => {
   it("omits location when not provided", () => {
     const out = buildQuickPrefillFromMenuOffer({
       creative_lane: "premium",
+      style_label: "premium",
+      rationale: "premium angle",
+      visual_direction: "Clean hero beverage visual",
       headline: "Afternoon tea special",
       subheadline: "Limited seats",
       cta: "Reserve now",

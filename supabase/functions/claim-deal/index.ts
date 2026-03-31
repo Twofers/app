@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
+import { hasClaimOnLocalBusinessDay } from "../_shared/claim-limits.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,25 +50,6 @@ function randomShortCode(): string {
   let s = "";
   for (let i = 0; i < 6; i++) s += SHORT_CODE_CHARS[buf[i]! % SHORT_CODE_CHARS.length];
   return s;
-}
-
-/** YYYY-MM-DD in `timeZone` (IANA), for same-calendar-day checks. */
-function calendarDateKeyInTimeZone(instant: Date, timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(instant);
-  } catch {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: DEFAULT_BUSINESS_TZ,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(instant);
-  }
 }
 
 function readZonedYmd(now: Date, tz: string) {
@@ -439,45 +421,32 @@ serve(async (req) => {
       }
     }
 
-    // 🚫 One redeemable claim per business per local calendar day (deal timezone)
+    // 🚫 One non-canceled claim per business per local calendar day (deal timezone)
     const businessTz =
       typeof deal.timezone === "string" && deal.timezone.trim().length > 0
         ? deal.timezone.trim()
         : DEFAULT_BUSINESS_TZ;
-    const todayKey = calendarDateKeyInTimeZone(now, businessTz);
     const lookbackIso = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recentClaims, error: todayErr } = await supabaseAdmin
       .from("deal_claims")
-      .select("id, deal_id, created_at, expires_at, grace_period_minutes, claim_status")
+      .select("id, deal_id, created_at, claim_status")
       .eq("user_id", user.id)
       .in("deal_id", businessDealIds)
-      .gte("created_at", lookbackIso)
-      .is("redeemed_at", null);
+      .gte("created_at", lookbackIso);
 
     if (todayErr) {
       console.error("recent claims for daily limit:", todayErr);
     } else if (recentClaims && recentClaims.length > 0) {
-      const hasRedeemableThisLocalDay = recentClaims.some(
-        (row: {
-          created_at: string;
-          expires_at: string;
-          grace_period_minutes: number | null;
-          claim_status: string | null;
-        }) => {
-          if (!row.expires_at) return false;
-          if (row.claim_status === "canceled") return false;
-          const grace = row.grace_period_minutes ?? REDEEM_GRACE_MINUTES;
-          if (isPastRedeemDeadline(nowMs, row.expires_at, grace)) return false;
-          const key = calendarDateKeyInTimeZone(new Date(row.created_at), businessTz);
-          return key === todayKey;
-        },
-      );
+      const hasClaimThisLocalDay = hasClaimOnLocalBusinessDay({
+        now,
+        businessTz,
+        claims: recentClaims as Array<{ created_at: string; claim_status: string | null }>,
+      });
 
-      if (hasRedeemableThisLocalDay) {
+      if (hasClaimThisLocalDay) {
         return new Response(
           JSON.stringify({
-            error:
-              "You can only claim once per business per local day while your claim is still redeemable. Redeem it or wait until it expires before claiming another deal from this business.",
+            error: "You can only claim once per business per local day.",
           }),
           {
             status: 409,

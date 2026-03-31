@@ -13,6 +13,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "typecheck:functions": "node scripts/typecheck-functions.cjs",
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
     "test:watch": "vitest",

@@ -1437,7 +1437,27 @@
     "checkoutSyncDelayed": "Pago completado — la actualización puede tardar un momento. Actualiza si no ves cambios.",
     "syncingStatus": "Sincronizando estado de pago...",
     "checkoutSuccess": "Pago correcto. Tu suscripción está activa.",
-    "checkoutCanceled": "Compra cancelada."
+    "checkoutCanceled": "Compra cancelada.",
+    "proFeatureUnlimitedDeals": "Ofertas activas ilimitadas",
+    "proFeatureLocationLimit": "Límite de ubicaciones: 1",
+    "proFeatureBasicAi": "Funciones básicas de IA para ofertas",
+    "proFeatureAnalytics": "Analíticas y esenciales",
+    "premiumFeatureUnlimitedDeals": "Ofertas activas ilimitadas",
+    "premiumFeatureLocationLimit": "Límite de ubicaciones: hasta 3",
+    "premiumFeatureAdvancedAi": "Funciones avanzadas de IA para ofertas",
+    "premiumFeatureAnalytics": "Analíticas completas y herramientas ampliadas",
+    "a11ySubscribeProLabel": "Suscribirse a TWOFER Pro",
+    "a11ySubscribeProHint": "Abre el checkout seguro para el plan Pro mensual",
+    "a11ySubscribePremiumLabel": "Suscribirse a TWOFER Premium",
+    "a11ySubscribePremiumHint": "Abre el checkout seguro para el plan Premium mensual",
+    "a11yManageSubscriptionLabel": "Gestionar suscripción actual",
+    "a11yManageSubscriptionHint": "Abrir opciones de gestión de facturación"
+  },
+  "consumerMap": {
+    "a11yRefreshLabel": "Actualizar datos del mapa",
+    "a11yRefreshHint": "Recarga los negocios y ofertas activas en el mapa",
+    "a11yToggleAllHint": "Mostrar todos los negocios en el mapa",
+    "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa"
   },
   "billingManage": {
     "title": "Gestionar suscripción",
