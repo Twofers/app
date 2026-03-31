@@ -456,6 +456,8 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 | Redeem (Merchant) | `app/(tabs)/redeem.tsx` | Working | Camera + manual short code entry. |
 | Deal Analytics | `app/deal-analytics/[id].tsx` | Working | `bestTime` period logic is simplistic (lines 117-129). |
 | Account | `app/(tabs)/account.tsx` | Working | 1035 lines. Many hardcoded English strings (lines 455-458, 567-582, 658-659, 848-880). `any` casts (lines 342, 390). |
+| Billing | `app/(tabs)/billing.tsx` | Working | Trial countdown + checkout start via edge `stripe-create-checkout-session`. Deal creation is gated by `app/create/_layout.tsx` (`canCreateDeal`) and redirects to `/billing` when subscription/trial invalid. Note: `canCreateDeal()` returns `true` when `isLoggedIn=false`, so ensure route protection (`AuthStackGate`) prevents unauth access to create screens. |
+| Billing Manage | `app/(tabs)/billing/manage.tsx` | Working | Stripe customer portal entry points (`stripe-customer-portal-session`), plus upgrade CTA via `stripe-create-checkout-session`. |
 
 ### Other
 
@@ -502,6 +504,7 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 3. Optional: **price**
 4. Choose **validity**: one-time (start/end datetime) or recurring (days of week + time window)
 5. Set **max claims** and **cutoff buffer**
+   - **Validation gap (as of 2026-03-30):** the AI screen input validation checks that `cutoffMins >= 0`, but does not enforce `cutoffMins < (deal end - now)` for one-time deals or `< (windowEnd - windowStart)` for recurring deals. Without this, publish can succeed but claiming may immediately be rejected by `supabase/functions/claim-deal` because the cutoff closes the deal.
 6. Tap **"Generate 3 AI Ad Ideas"** → calls `ai-generate-ad-variants` edge function
 7. Receive 3 ad variants (value/neighborhood/premium lanes)
 8. Select one → populates draft editor (title, promo line, CTA, description)
@@ -659,6 +662,8 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 
 **Known issues:** Hardcoded Dallas fallback coordinates (line 64). `console.warn` on line 130.
 
+**Analytics:** Map emits `deal_viewed` events inside a `useEffect` that re-runs whenever `mode`, `deals`, or `previewDeal` changes. The in-effect `seen` set is not persisted across focus/mode toggles, so the same deal can be double-counted in analytics when the data set is reloaded.
+
 ### Wallet and Claiming (`app/(tabs)/wallet.tsx`)
 
 **Claim flow:**
@@ -686,6 +691,19 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 3. `redeemToken({ short_code })` → edge `redeem-token` → validates ownership → marks redeemed
 
 **Countdown:** Real-time countdown on active claims using `useSecondTick()` (1-second interval). Urgent styling when <15 minutes remaining.
+
+**Stale finalize coupling (manual verification required):**
+1. Wallet load + pull-to-refresh both call `finalizeStaleRedeems()` before fetching `deal_claims` (`WalletScreen` → `loadClaims()`).
+2. Verify on Android: open Wallet, pull down to refresh, and confirm the edge function `finalize-stale-redeems` is invoked and `claim_status` transitions from `redeeming`/expired as expected.
+
+**Analytics gaps / consistency:**
+- Server-side `finalize-stale-redeems` logs `claim_expired` events, but (as of 2026-03-30) it does not attach `app_version` / `device_platform`, unlike `lib/app-analytics.ts`.
+- When stale visual redemptions auto-complete server-side, the client-side `redeem_completed` event may not be emitted (depending on which code path marks the claim `redeemed`), so redemption analytics could under-count.
+
+**Potential analytics double-counting on QR refresh:**
+- Wallet QR refresh calls `claimDeal(...)` and then always emits `deal_claimed`, even when `claim-deal` returns an existing active claim (idempotent 200).
+
+**Friction risk:** the QR modal refresh flow does not call `finalizeStaleRedeems()` (only the main Wallet refresh/focus does). If a claim is stuck in `redeeming`, the QR modal refresh may remain blocked until Wallet reloads.
 
 ### Favorites
 
@@ -819,6 +837,10 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 - **Hardcoded demo credentials** in `app/auth-landing.tsx` lines 73-74: `demo@demo.com` / `123456`. This is likely dev-only but is in production code.
 - **No RLS policies on `ai_generation_logs`**: Intentional (service role only), but a developer could accidentally query this table from the client.
 - **`deals` insert is direct from client**: The strong-deal guardrail trigger on the server catches weak deals, but the insert itself goes through the Supabase client (not an edge function). An attacker could potentially insert deals with manipulated fields (e.g., `quality_tier`, `poster_url`) if they have a valid session.
+- **`deal_claims` direct INSERT bypass risk**: `supabase/migrations/20250127000000_initial_schema.sql` includes a `deal_claims` client INSERT policy (`"Users can insert their own claims"`). If this legacy policy remains active, a malicious client could insert `deal_claims` rows without going through `supabase/functions/claim-deal`, bypassing claim rule enforcement and redeem-by deadline semantics.
+- **Stale visual redeem finalization can misclassify expired claims**: `supabase/functions/finalize-stale-redeems/index.ts` currently auto-finalizes `deal_claims` with `claim_status = "redeeming"` to `redeemed` after TTL without checking whether the claim is still redeemable by `expires_at + grace_period_minutes`. This can violate the “Wallet entries should expire when the deal window ends” requirement and skew redemption analytics.
+- **`claim_expired` analytics consistency**: `finalize-stale-redeems` writes `claim_expired` events into `app_analytics_events` but does not attach `app_version` and `device_platform`, unlike client events written via `lib/app-analytics.ts`.
+- **Guest-access bypass via `skipSetup` / `e2e` params**: `app/(tabs)/_layout.tsx` `TabAuthGate` sets `forceBypass` based on URL params (`skipSetup=1` or `e2e=1`) and can return `{children}` without checking `session?.user`. While `AuthStackGate` is the main unauth redirect authority, `TabAuthGate` can still briefly render protected tab UI in an unauthenticated state, violating the handoff “No open browsing without an account”.
 - **Signed URLs expire**: Poster URLs stored in `deal_templates.poster_url` and old `deals.poster_url` entries use 1-year signed URLs. There's a `poster_storage_path` column and `buildPublicDealPhotoUrl()` helper, but template URLs are still signed.
 
 ### TODO/FIXME/HACK Comments
@@ -845,7 +867,7 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 | AI poster generation (DALL-E) | 🔲 Not Built | `visual_direction` field exists but no DALL-E integration |
 | Discovery feed | ✅ Working | Location-based sorting, favorites, search, radius filter. Some i18n gaps. |
 | Map | ✅ Working | Business/deal markers, user location, DFW fallback |
-| Wallet/claiming | ✅ Working | Full claim → wallet → countdown → redeem flow |
+| Wallet/claiming | ⚠️ Partial | Full claim → wallet → countdown → redeem flow, but stale visual finalization and `claim_expired` analytics need hardening to match redeem-by deadline semantics |
 | Redemption (QR) | ✅ Working | Business scans QR or enters short code via `redeem-token` |
 | Redemption (visual) | ✅ Working | Slide-to-confirm → 15s timer → full-screen pass → auto-complete |
 | Favorites | ✅ Working | Toggle on business cards, affects feed sorting and notifications |

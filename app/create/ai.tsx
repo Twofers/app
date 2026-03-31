@@ -558,13 +558,28 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return false;
       }
+
+      const now = new Date();
+      const durationMinutes = Math.floor((endTime.getTime() - now.getTime()) / 60000);
+      if (cutoffNum >= durationMinutes) {
+        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
+        return false;
+      }
     } else {
       if (daysOfWeek.length === 0) {
         setBanner({ message: t("createAi.errRecurringDay"), tone: "error" });
         return false;
       }
-      if (minutesFromDate(windowStart) >= minutesFromDate(windowEnd)) {
+      const windowStartMinutes = minutesFromDate(windowStart);
+      const windowEndMinutes = minutesFromDate(windowEnd);
+      if (windowStartMinutes >= windowEndMinutes) {
         setBanner({ message: t("createAi.errRecurringWindow"), tone: "error" });
+        return false;
+      }
+
+      const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
+      if (cutoffNum >= windowDurationMinutes) {
+        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
         return false;
       }
     }

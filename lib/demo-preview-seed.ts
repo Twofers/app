@@ -299,24 +299,35 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
     .in("deal_id", seededDeals.map((d) => d.id));
 
   if (!hasSeedClaims) {
-    const claimRows = seededDeals.slice(0, 3).map((d, i) => {
-      const expiresAt = new Date(new Date(d.end_time).getTime() - 15 * 60 * 1000);
-      const redeemedAt = i < 2 ? new Date(now.getTime() - (i + 1) * 3 * 60 * 60 * 1000) : null;
-      const claimIdToken = `demo${Date.now()}${i}${Math.random().toString(36).slice(2, 8)}`.slice(0, 32);
-      return {
-        deal_id: d.id,
-        user_id: uid,
-        token: claimIdToken,
-        expires_at: expiresAt.toISOString(),
-        redeemed_at: redeemedAt ? redeemedAt.toISOString() : null,
-        claim_status: redeemedAt ? "redeemed" : "active",
-        redeem_method: redeemedAt ? "visual" : null,
-        grace_period_minutes: 10,
-        acquisition_source: "demo_seed",
-        device_platform_at_claim: "demo",
-      };
-    });
-    await client.from("deal_claims").insert(claimRows);
+    // Claims must be created via the `claim-deal` edge function so claim rules / expiration semantics are enforced.
+    // For demo: redeem the first two claims right away so the third claim can exist concurrently.
+    const dealsForSeed = seededDeals.slice(0, 3);
+    for (let i = 0; i < dealsForSeed.length; i += 1) {
+      const d = dealsForSeed[i];
+
+      const { data: claimOut, error: claimErr } = await client.functions.invoke("claim-deal", {
+        body: { deal_id: d.id },
+      });
+
+      if (claimErr || !claimOut || typeof claimOut !== "object") {
+        console.error("[demo-preview-seed] claim-deal failed:", claimErr);
+        return;
+      }
+
+      if (i < 2) {
+        const shortCode = (claimOut as { short_code?: string | null }).short_code ?? null;
+        const token = (claimOut as { token?: string | null }).token ?? null;
+
+        const { error: redeemErr } = await client.functions.invoke("redeem-token", {
+          body: shortCode ? { short_code: shortCode } : { token },
+        });
+
+        if (redeemErr) {
+          console.error("[demo-preview-seed] redeem-token failed:", redeemErr);
+          return;
+        }
+      }
+    }
   }
 
   const { count: existingSeedAnalytics } = await client

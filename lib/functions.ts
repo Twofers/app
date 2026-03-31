@@ -2,6 +2,8 @@ import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { devWarn } from "@/lib/dev-log";
 import type { BusinessContextPayload, GeneratedAd } from "./ad-variants";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = 45_000;
@@ -229,7 +231,11 @@ export async function cancelVisualRedeem(claimId: string) {
 export async function finalizeStaleRedeems(): Promise<void> {
   try {
     await supabase.functions.invoke("finalize-stale-redeems", {
-      body: {},
+      body: {
+        app_version:
+          Constants.expoConfig?.version ?? (Constants as { nativeAppVersion?: string }).nativeAppVersion ?? null,
+        device_platform: Platform.OS,
+      },
       timeout: EDGE_FUNCTION_TIMEOUT_QUICK_MS,
     });
   } catch (err) {

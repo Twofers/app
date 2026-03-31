@@ -33,7 +33,7 @@ function TabAuthGate({ children }: { children: ReactNode }) {
     }
   }, [forceBypass, session?.user]);
 
-  if (forceBypass) {
+  if (forceBypass && session?.user) {
     return <>{children}</>;
   }
 
