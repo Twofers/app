@@ -1,5 +1,5 @@
 import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
@@ -12,8 +12,31 @@ import { useTabMode } from "@/lib/tab-mode";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import {
+  deriveTabFromSegments,
+  resolveTabModeRedirectTarget,
+  shouldCheckBusinessProfileForTab,
+} from "@/lib/tab-mode-redirect";
 
-function TabAuthGate({ children }: { children: ReactNode }) {
+type TabIconName = ComponentProps<typeof IconSymbol>["name"];
+
+function createTabIconRenderer(name: TabIconName) {
+  const TabIconRenderer = ({ color }: { color: string }) => <IconSymbol size={28} name={name} color={color} />;
+  TabIconRenderer.displayName = `TabIcon(${name})`;
+  return TabIconRenderer;
+}
+
+const renderHomeTabIcon = createTabIconRenderer("house.fill");
+const renderMapTabIcon = createTabIconRenderer("map.fill");
+const renderWalletTabIcon = createTabIconRenderer("wallet.pass.fill");
+const renderSettingsTabIcon = createTabIconRenderer("gearshape.fill");
+const renderCreateTabIcon = createTabIconRenderer("plus.circle.fill");
+const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
+const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
+const renderBillingTabIcon = createTabIconRenderer("heart.fill");
+const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
+
+function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -21,7 +44,8 @@ function TabAuthGate({ children }: { children: ReactNode }) {
   const forceE2E =
     Platform.OS === "web" &&
     ((params.e2e === "1") ||
-      (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1"));
+      (globalThis.window !== undefined &&
+        new URLSearchParams(globalThis.window.location.search).get("e2e") === "1"));
   const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
 
   useEffect(() => {
@@ -96,7 +120,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: t('tabs.home'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+            tabBarIcon: renderHomeTabIcon,
             ...hideWhen(mode === 'business'),
           }}
         />
@@ -104,7 +128,7 @@ export default function TabLayout() {
           name="map"
           options={{
             title: t('tabs.map'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="map.fill" color={color} />,
+            tabBarIcon: renderMapTabIcon,
             ...hideWhen(mode === 'business'),
           }}
         />
@@ -112,7 +136,7 @@ export default function TabLayout() {
           name="wallet"
           options={{
             title: t('tabs.wallet'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="wallet.pass.fill" color={color} />,
+            tabBarIcon: renderWalletTabIcon,
             ...hideWhen(mode === 'business'),
           }}
         />
@@ -120,7 +144,7 @@ export default function TabLayout() {
           name="settings"
           options={{
             title: t('tabs.settings'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+            tabBarIcon: renderSettingsTabIcon,
             ...hideWhen(mode === 'business'),
           }}
         />
@@ -128,7 +152,7 @@ export default function TabLayout() {
           name="create"
           options={{
             title: t('tabs.create'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
+            tabBarIcon: renderCreateTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
         />
@@ -136,7 +160,7 @@ export default function TabLayout() {
           name="redeem"
           options={{
             title: t('tabs.redeem'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="qrcode.viewfinder" color={color} />,
+            tabBarIcon: renderRedeemTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
         />
@@ -144,7 +168,7 @@ export default function TabLayout() {
           name="dashboard"
           options={{
             title: t('tabs.dashboard'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+            tabBarIcon: renderDashboardTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
         />
@@ -152,7 +176,7 @@ export default function TabLayout() {
           name="billing"
           options={{
             title: t("tabs.billing"),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
+            tabBarIcon: renderBillingTabIcon,
             ...hideWhen(mode === "customer"),
           }}
         />
@@ -160,7 +184,7 @@ export default function TabLayout() {
           name="account"
           options={{
             title: t('tabs.account'),
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle.fill" color={color} />,
+            tabBarIcon: renderAccountTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
         />
@@ -182,13 +206,13 @@ function TabModeRedirect() {
   const lastRedirectRef = useRef<string | null>(null);
   const forceE2E =
     String(params.e2e ?? "") === "1" ||
-    (Platform.OS === "web" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1");
+    (Platform.OS === "web" &&
+      globalThis.window !== undefined &&
+      new URLSearchParams(globalThis.window.location.search).get("e2e") === "1");
   const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
 
   const tab = useMemo(() => {
-    const tabsIdx = segments.indexOf("(tabs)");
-    if (tabsIdx === -1) return "index";
-    return String(segments[tabsIdx + 1] ?? "index");
+    return deriveTabFromSegments(segments.map(String));
   }, [segments]);
 
   const currentPath = useMemo(() => {
@@ -204,8 +228,7 @@ function TabModeRedirect() {
     }
     const userId = session?.user?.id;
     if (!userId) return;
-    const needsBusinessCheck =
-      tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing" || tab === "account";
+    const needsBusinessCheck = shouldCheckBusinessProfileForTab(tab);
     if (!needsBusinessCheck) return;
     if (profileCheckedUserRef.current === userId && businessProfileComplete !== null) return;
 
@@ -230,25 +253,16 @@ function TabModeRedirect() {
       lastRedirectRef.current = target;
       router.replace(target as Href);
     };
-    if (mode === "business") {
-      if (tab === "index" || tab === "map" || tab === "wallet" || tab === "settings") {
-        redirectTo("/(tabs)/create");
-        return;
-      }
-      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing" || tab === "account") {
-        if (forceBypass || checkingProfile || businessProfileComplete === null) return;
-        if (!businessProfileComplete) {
-          redirectTo("/business-setup");
-        }
-      }
-    } else {
-      if (tab === "account") {
-        redirectTo("/(tabs)/settings");
-        return;
-      }
-      if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing") {
-        redirectTo("/(tabs)");
-      }
+    const target = resolveTabModeRedirectTarget({
+      mode,
+      tab,
+      currentPath,
+      forceBypass,
+      checkingProfile,
+      businessProfileComplete,
+    });
+    if (target) {
+      redirectTo(target);
     }
   }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete]);
 

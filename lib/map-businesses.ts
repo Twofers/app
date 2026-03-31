@@ -19,6 +19,12 @@ export type LiveDealRow = {
   live: boolean;
 };
 
+export type DealPreviewRow = {
+  id: string;
+  business_id: string;
+  end_time: string;
+};
+
 function toFinite(value: unknown): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : Number.NaN;
@@ -77,4 +83,45 @@ export function deriveLiveBusinessIds(rows: LiveDealRow[]): Set<string> {
     if (row.live && row.business_id) out.add(row.business_id);
   }
   return out;
+}
+
+export function pickPreviewDeal<T extends DealPreviewRow>(
+  deals: T[],
+  businessId: string,
+  isLive: (deal: T) => boolean,
+): T | null {
+  const businessDeals = deals.filter((deal) => deal.business_id === businessId);
+  if (businessDeals.length === 0) return null;
+  const liveDeal = businessDeals.find((deal) => isLive(deal));
+  if (liveDeal) return liveDeal;
+  const sortedByEnd = [...businessDeals].sort((a, b) => +new Date(a.end_time) - +new Date(b.end_time));
+  return sortedByEnd[0] ?? null;
+}
+
+export function resolveMapTapHref({
+  businessId,
+  liveDealId,
+}: {
+  businessId: string;
+  liveDealId: string | null;
+}): `/deal/${string}` | `/business/${string}` {
+  return liveDealId ? `/deal/${liveDealId}` : `/business/${businessId}`;
+}
+
+export function resolveMarkerTapOutcome({
+  tappedBusinessId,
+  selectedBusinessId,
+  liveDealId,
+}: {
+  tappedBusinessId: string;
+  selectedBusinessId: string | null;
+  liveDealId: string | null;
+}): { nextSelectedBusinessId: string; href: `/deal/${string}` | `/business/${string}` | null } {
+  if (selectedBusinessId !== tappedBusinessId) {
+    return { nextSelectedBusinessId: tappedBusinessId, href: null };
+  }
+  return {
+    nextSelectedBusinessId: tappedBusinessId,
+    href: resolveMapTapHref({ businessId: tappedBusinessId, liveDealId }),
+  };
 }

@@ -29,26 +29,26 @@ type LatLng = { latitude: number; longitude: number };
 /**
  * Pulsing blue rings under a live deal pin (native MapView circles, not inside Marker — keeps tracksViewChanges off).
  */
-export function LiveDealHaloCircles({ center, pulse }: { center: LatLng; pulse: Animated.Value }) {
-  const radiusOuter = pulse.interpolate({ inputRange: [0, 1], outputRange: [60, 112] });
-  const radiusInner = pulse.interpolate({ inputRange: [0, 1], outputRange: [36, 72] });
+export function LiveDealHaloCircles({ center, pulse }: Readonly<{ center: LatLng; pulse: Animated.Value }>) {
+  const radiusOuter = pulse.interpolate({ inputRange: [0, 1], outputRange: [66, 126] });
+  const radiusInner = pulse.interpolate({ inputRange: [0, 1], outputRange: [42, 82] });
 
   return (
     <>
       <AnimatedCircle
         center={center}
         radius={radiusOuter}
-        strokeColor="rgba(37, 99, 235, 0.66)"
-        fillColor="rgba(59, 130, 246, 0.20)"
-        strokeWidth={2}
+        strokeColor="rgba(37, 99, 235, 0.78)"
+        fillColor="rgba(59, 130, 246, 0.26)"
+        strokeWidth={3}
         zIndex={1}
       />
       <AnimatedCircle
         center={center}
         radius={radiusInner}
-        strokeColor="rgba(96, 165, 250, 0.6)"
-        fillColor="rgba(147, 197, 253, 0.18)"
-        strokeWidth={1}
+        strokeColor="rgba(147, 197, 253, 0.75)"
+        fillColor="rgba(191, 219, 254, 0.24)"
+        strokeWidth={2}
         zIndex={2}
       />
     </>

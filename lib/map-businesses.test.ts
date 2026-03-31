@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { collectMappableBusinesses, deriveLiveBusinessIds, isValidCoordinate } from "./map-businesses";
+import {
+  collectMappableBusinesses,
+  deriveLiveBusinessIds,
+  isValidCoordinate,
+  resolveMarkerTapOutcome,
+  pickPreviewDeal,
+  resolveMapTapHref,
+} from "./map-businesses";
 
 describe("isValidCoordinate", () => {
   it("accepts in-range coordinates", () => {
@@ -48,5 +55,63 @@ describe("deriveLiveBusinessIds", () => {
       { business_id: "c", live: true },
     ]);
     expect(Array.from(ids)).toEqual(["a", "c"]);
+  });
+});
+
+describe("pickPreviewDeal", () => {
+  it("prioritizes a live deal when one exists", () => {
+    const picked = pickPreviewDeal(
+      [
+        { id: "soon", business_id: "a", end_time: "2026-06-01T12:00:00.000Z" },
+        { id: "live", business_id: "a", end_time: "2026-06-01T13:00:00.000Z" },
+      ],
+      "a",
+      (deal) => deal.id === "live",
+    );
+    expect(picked?.id).toBe("live");
+  });
+
+  it("falls back to earliest end_time when no live deal exists", () => {
+    const picked = pickPreviewDeal(
+      [
+        { id: "late", business_id: "a", end_time: "2026-06-01T14:00:00.000Z" },
+        { id: "early", business_id: "a", end_time: "2026-06-01T11:00:00.000Z" },
+      ],
+      "a",
+      () => false,
+    );
+    expect(picked?.id).toBe("early");
+  });
+});
+
+describe("resolveMapTapHref", () => {
+  it("routes to deal detail when a live deal is present", () => {
+    expect(resolveMapTapHref({ businessId: "biz-1", liveDealId: "deal-9" })).toBe("/deal/deal-9");
+  });
+
+  it("routes to business profile when no live deal exists", () => {
+    expect(resolveMapTapHref({ businessId: "biz-1", liveDealId: null })).toBe("/business/biz-1");
+  });
+});
+
+describe("resolveMarkerTapOutcome", () => {
+  it("first tap selects marker for preview only", () => {
+    const out = resolveMarkerTapOutcome({
+      tappedBusinessId: "biz-1",
+      selectedBusinessId: null,
+      liveDealId: "deal-1",
+    });
+    expect(out.nextSelectedBusinessId).toBe("biz-1");
+    expect(out.href).toBeNull();
+  });
+
+  it("second tap on same marker opens destination", () => {
+    const out = resolveMarkerTapOutcome({
+      tappedBusinessId: "biz-1",
+      selectedBusinessId: "biz-1",
+      liveDealId: "deal-1",
+    });
+    expect(out.nextSelectedBusinessId).toBe("biz-1");
+    expect(out.href).toBe("/deal/deal-1");
   });
 });

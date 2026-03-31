@@ -20,6 +20,8 @@ import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import {
   collectMappableBusinesses,
   deriveLiveBusinessIds,
+  pickPreviewDeal,
+  resolveMarkerTapOutcome,
   type MappableBusiness,
 } from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
@@ -56,7 +58,406 @@ function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number,
 /** Dallas–Fort Worth service area fallback when GPS and markers are unavailable. */
 const DALLAS_FALLBACK = { lat: 32.7767, lng: -96.797 };
 
-export default function MapScreenNative() {
+type MapDataPayload = {
+  radiusMiles: number;
+  userPos: { lat: number; lng: number } | null;
+  showDeviceBlueDot: boolean;
+  businesses: MappableBusiness[];
+  deals: DealLite[];
+  dealsFetchFailed: boolean;
+};
+
+type MarkerWithLive = MappableBusiness & { live: boolean };
+
+async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataPayload> {
+  const prefs = await getConsumerPreferences();
+  const coords = await resolveConsumerCoordinates(prefs);
+  const userPos = coords ? { lat: coords.lat, lng: coords.lng } : null;
+  const showDeviceBlueDot = Boolean(coords?.showsDeviceLocationBlueDot);
+
+  const businesses = await collectMappableBusinesses(async (offset, limit) => {
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("id,name,location,latitude,longitude")
+      .order("name", { ascending: true })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []) as {
+      id: string;
+      name: string;
+      location: string | null;
+      latitude: number | string | null;
+      longitude: number | string | null;
+    }[];
+  }, 400);
+
+  const deals: DealLite[] = [];
+  let dealsFetchFailed = false;
+  const dealPageSize = 200;
+  let dealOffset = 0;
+  while (true) {
+    const { data: dz, error: ed } = await supabase
+      .from("deals")
+      .select(
+        "id,title,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+      )
+      .eq("is_active", true)
+      .gte("end_time", new Date().toISOString())
+      .range(dealOffset, dealOffset + dealPageSize - 1);
+    if (ed) {
+      logPostgrestError("map screen deals", ed);
+      // Keep existing deals on transient failures.
+      dealsFetchFailed = true;
+      break;
+    }
+    const page = (dz ?? []) as DealLite[];
+    deals.push(...page);
+    if (page.length < dealPageSize) break;
+    dealOffset += dealPageSize;
+  }
+
+  if (dealsFetchFailed) {
+    devWarn("[map] deals fetch failed; preserving previous deals", t("consumerMap.dataError"));
+  }
+
+  return {
+    radiusMiles: prefs.radiusMiles,
+    userPos,
+    showDeviceBlueDot,
+    businesses,
+    deals,
+    dealsFetchFailed,
+  };
+}
+
+function renderMapLoading(t: (key: string) => string) {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator size="large" color={Colors.light.primary} />
+      <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
+    </View>
+  );
+}
+
+function renderAndroidMapsUnavailable(t: (key: string) => string, horizontal: number) {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: horizontal }}>
+      <EmptyState
+        title={t("consumerMap.androidMapsUnavailableTitle")}
+        message={t("consumerMap.androidMapsUnavailableBody")}
+      />
+    </View>
+  );
+}
+
+function renderMapCanvas({
+  horizontal,
+  loadMapData,
+  mapRef,
+  initialRegion,
+  showUserLocationDot,
+  setMapReady,
+  setSelectedBusinessId,
+  userPos,
+  radiusKm,
+  markers,
+  livePulse,
+  selectedBusinessId,
+  deals,
+  router,
+  mapReady,
+  loading,
+  t,
+  selectedBusiness,
+  previewDeal,
+  previewPosterUri,
+}: {
+  horizontal: number;
+  loadMapData: () => Promise<void>;
+  mapRef: React.RefObject<MapView | null>;
+  initialRegion: Region;
+  showUserLocationDot: boolean;
+  setMapReady: (ready: boolean) => void;
+  setSelectedBusinessId: (id: string | null) => void;
+  userPos: { lat: number; lng: number } | null;
+  radiusKm: number;
+  markers: MarkerWithLive[];
+  livePulse: ReturnType<typeof useLiveDealPulse>;
+  selectedBusinessId: string | null;
+  deals: DealLite[];
+  router: ReturnType<typeof useRouter>;
+  mapReady: boolean;
+  loading: boolean;
+  t: (key: string) => string;
+  selectedBusiness: MarkerWithLive | null;
+  previewDeal: DealLite | null;
+  previewPosterUri: string | null;
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Pressable
+        onPress={() => void loadMapData()}
+        style={{
+          position: "absolute",
+          top: 12,
+          right: horizontal + 8,
+          zIndex: 999,
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: "#fff",
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+          elevation: 4,
+        }}
+      >
+        <MaterialIcons name="refresh" size={22} color="#333" />
+      </Pressable>
+      <MapView
+        ref={mapRef}
+        style={{ flex: 1 }}
+        initialRegion={initialRegion}
+        showsUserLocation={showUserLocationDot}
+        onMapReady={() => setMapReady(true)}
+        onPress={(e) => {
+          if (e.nativeEvent.action === "marker-press") return;
+          setSelectedBusinessId(null);
+        }}
+      >
+        {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) && radiusKm > 0 ? (
+          <Circle
+            center={{ latitude: userPos.lat, longitude: userPos.lng }}
+            radius={radiusKm * 1000}
+            strokeColor="rgba(17,17,17,0.35)"
+            fillColor="rgba(17,17,17,0.06)"
+          />
+        ) : null}
+        {markers
+          .filter((m) => m.live)
+          .map((m) => (
+            <LiveDealHaloCircles
+              key={`halo-${m.id}`}
+              center={{ latitude: m.lat, longitude: m.lng }}
+              pulse={livePulse}
+            />
+          ))}
+        {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) ? (
+          <Marker coordinate={{ latitude: userPos.lat, longitude: userPos.lng }} tracksViewChanges={false} zIndex={1000}>
+            <View
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: "#3b82f6",
+                borderWidth: 3,
+                borderColor: "#fff",
+              }}
+            />
+          </Marker>
+        ) : null}
+        {markers.map((m) =>
+          renderBusinessMarker({
+            marker: m,
+            selectedBusinessId,
+            deals,
+            setSelectedBusinessId,
+            router,
+          }),
+        )}
+      </MapView>
+      {mapReady ? null : (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,0.72)",
+          }}
+        >
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      )}
+
+      {loading || markers.length > 0 ? null : (
+        <View
+          style={{
+            position: "absolute",
+            left: horizontal,
+            right: horizontal,
+            top: "28%",
+            pointerEvents: "none",
+          }}
+        >
+          <EmptyState title={t("consumerMap.emptyMarkersTitle")} message={t("consumerMap.emptyMarkersBody")} />
+        </View>
+      )}
+      {selectedBusiness ? (
+        <View
+          style={{
+            position: "absolute",
+            left: horizontal,
+            right: horizontal,
+            bottom: Spacing.lg,
+          }}
+        >
+          <Pressable
+            onPress={() =>
+              router.push((previewDeal ? `/deal/${previewDeal.id}` : `/business/${selectedBusiness.id}`) as Href)
+            }
+            accessibilityRole="button"
+            style={{
+              borderRadius: 24,
+              backgroundColor: "#fff",
+              overflow: "hidden",
+              boxShadow: "0px 10px 20px rgba(0,0,0,0.16)",
+              elevation: 10,
+            }}
+          >
+            {previewPosterUri ? (
+              <Image
+                source={{ uri: previewPosterUri }}
+                style={{ width: "100%", height: 146 }}
+                contentFit="cover"
+                transition={250}
+              />
+            ) : (
+              <View style={{ width: "100%", height: 120, backgroundColor: "#f4f4f5" }} />
+            )}
+            <View style={{ padding: Spacing.lg }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.62, textTransform: "uppercase" }}>
+                {selectedBusiness.name}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24 }}>
+                {previewDeal?.title ?? selectedBusiness.name}
+              </Text>
+              {typeof previewDeal?.price === "number" ? (
+                <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.primary }}>
+                  ${previewDeal.price.toFixed(2)}
+                </Text>
+              ) : null}
+              {selectedBusiness.location ? (
+                <Text style={{ marginTop: 6, fontSize: 13, opacity: 0.6 }} numberOfLines={1}>
+                  {selectedBusiness.location}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function renderBusinessMarker({
+  marker,
+  selectedBusinessId,
+  deals,
+  setSelectedBusinessId,
+  router,
+}: {
+  marker: MarkerWithLive;
+  selectedBusinessId: string | null;
+  deals: DealLite[];
+  setSelectedBusinessId: (id: string | null) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const isSelected = selectedBusinessId === marker.id;
+  const markerBg = isSelected || marker.live ? Colors.light.primary : "#404040";
+  const markerBorderColor = getMarkerBorderColor(isSelected, marker.live);
+  return (
+    <Marker
+      key={marker.id}
+      coordinate={{ latitude: marker.lat, longitude: marker.lng }}
+      tracksViewChanges={false}
+      zIndex={marker.live ? 10 : 5}
+      stopPropagation={Platform.OS === "ios"}
+      onPress={() =>
+        handleBusinessMarkerPress({
+          markerId: marker.id,
+          selectedBusinessId,
+          deals,
+          setSelectedBusinessId,
+          router,
+        })
+      }
+    >
+      <View
+        style={{
+          minWidth: 28,
+          height: 28,
+          borderRadius: 14,
+          paddingHorizontal: 7,
+          backgroundColor: markerBg,
+          borderWidth: marker.live ? 2 : 1,
+          borderColor: markerBorderColor,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <MaterialIcons name={marker.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
+      </View>
+    </Marker>
+  );
+}
+
+function getMarkerBorderColor(isSelected: boolean, isLive: boolean) {
+  if (isSelected) return "#ffd9a8";
+  if (isLive) return "rgba(255,255,255,0.95)";
+  return "#a3a3a3";
+}
+
+function handleBusinessMarkerPress({
+  markerId,
+  selectedBusinessId,
+  deals,
+  setSelectedBusinessId,
+  router,
+}: {
+  markerId: string;
+  selectedBusinessId: string | null;
+  deals: DealLite[];
+  setSelectedBusinessId: (id: string | null) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const liveDeal = pickPreviewDeal(deals, markerId, isDealActiveNow);
+  const outcome = resolveMarkerTapOutcome({
+    tappedBusinessId: markerId,
+    selectedBusinessId,
+    liveDealId: liveDeal?.id ?? null,
+  });
+  setSelectedBusinessId(outcome.nextSelectedBusinessId);
+  if (outcome.href) {
+    router.push(outcome.href as Href);
+  }
+}
+
+function renderMapBody({
+  loading,
+  androidMapsOk,
+  t,
+  horizontal,
+  mapCanvas,
+}: {
+  loading: boolean;
+  androidMapsOk: boolean;
+  t: (key: string) => string;
+  horizontal: number;
+  mapCanvas: ReactNode;
+}) {
+  if (loading) return renderMapLoading(t);
+  if (!androidMapsOk) return renderAndroidMapsUnavailable(t, horizontal);
+  return mapCanvas;
+}
+
+export default function MapScreenNative() { // NOSONAR - orchestration screen coordinates fetch, map, overlays, and navigation.
   const { t } = useTranslation();
   const router = useRouter();
   const { top, horizontal } = useScreenInsets("tab");
@@ -84,60 +485,15 @@ export default function MapScreenNative() {
     setBanner(null);
     setDataError(null);
     try {
-      const prefs = await getConsumerPreferences();
-      setRadiusMiles(prefs.radiusMiles);
-      const coords = await resolveConsumerCoordinates(prefs);
-      if (coords) {
-        setUserPos({ lat: coords.lat, lng: coords.lng });
-        setShowDeviceBlueDot(coords.showsDeviceLocationBlueDot);
+      const payload = await fetchMapDataPayload(t);
+      setRadiusMiles(payload.radiusMiles);
+      setUserPos(payload.userPos);
+      setShowDeviceBlueDot(payload.showDeviceBlueDot);
+      setBusinesses(payload.businesses);
+      if (payload.dealsFetchFailed) {
+        setDataError(t("consumerMap.dataError"));
       } else {
-        setUserPos(null);
-        setShowDeviceBlueDot(false);
-      }
-
-      const nextBusinesses = await collectMappableBusinesses(async (offset, limit) => {
-        const { data, error } = await supabase
-          .from("businesses")
-          .select("id,name,location,latitude,longitude")
-          .order("name", { ascending: true })
-          .range(offset, offset + limit - 1);
-        if (error) throw error;
-        return (data ?? []) as {
-          id: string;
-          name: string;
-          location: string | null;
-          latitude: number | string | null;
-          longitude: number | string | null;
-        }[];
-      }, 400);
-      setBusinesses(nextBusinesses);
-
-      const allDeals: DealLite[] = [];
-      let dealsFetchFailed = false;
-      const dealPageSize = 200;
-      let dealOffset = 0;
-      while (true) {
-        const { data: dz, error: ed } = await supabase
-          .from("deals")
-          .select(
-            "id,title,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-          )
-          .eq("is_active", true)
-          .gte("end_time", new Date().toISOString())
-          .range(dealOffset, dealOffset + dealPageSize - 1);
-        if (ed) {
-          logPostgrestError("map screen deals", ed);
-          setDataError(t("consumerMap.dataError"));
-          dealsFetchFailed = true;
-          break;
-        }
-        const page = (dz ?? []) as DealLite[];
-        allDeals.push(...page);
-        if (page.length < dealPageSize) break;
-        dealOffset += dealPageSize;
-      }
-      if (!dealsFetchFailed) {
-        setDeals(allDeals);
+        setDeals(payload.deals);
       }
     } catch (error) {
       devWarn("[map] loadMapData failed", error);
@@ -176,10 +532,7 @@ export default function MapScreenNative() {
 
   const previewDeal = useMemo(() => {
     if (!selectedBusiness) return null;
-    const businessDeals = deals.filter((d) => d.business_id === selectedBusiness.id);
-    if (businessDeals.length === 0) return null;
-    const liveDeal = businessDeals.find((d) => isDealActiveNow(d)) ?? null;
-    return liveDeal ?? businessDeals.toSorted((a, b) => +new Date(a.end_time) - +new Date(b.end_time))[0];
+    return pickPreviewDeal(deals, selectedBusiness.id, isDealActiveNow);
   }, [deals, selectedBusiness]);
 
   const initialRegion = useMemo((): Region => {
@@ -197,7 +550,28 @@ export default function MapScreenNative() {
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
   const subtitleText = mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll");
-  let bodyContent: ReactNode;
+  const mapCanvas = renderMapCanvas({
+    horizontal,
+    loadMapData,
+    mapRef,
+    initialRegion,
+    showUserLocationDot,
+    setMapReady,
+    setSelectedBusinessId,
+    userPos,
+    radiusKm,
+    markers,
+    livePulse,
+    selectedBusinessId,
+    deals,
+    router,
+    mapReady,
+    loading,
+    t,
+    selectedBusiness,
+    previewDeal,
+    previewPosterUri,
+  });
 
   // MVP impressions tracking for map:
   // - In `live` mode, log active live deals (what the marker set represents).
@@ -307,214 +681,7 @@ export default function MapScreenNative() {
         </View>
       ) : null}
 
-      {(() => {
-        if (loading) {
-          bodyContent = (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <ActivityIndicator size="large" color={Colors.light.primary} />
-              <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
-            </View>
-          );
-          return bodyContent;
-        }
-        if (!androidMapsOk) {
-          bodyContent = (
-            <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: horizontal }}>
-              <EmptyState
-                title={t("consumerMap.androidMapsUnavailableTitle")}
-                message={t("consumerMap.androidMapsUnavailableBody")}
-              />
-            </View>
-          );
-          return bodyContent;
-        }
-        bodyContent = (
-          <View style={{ flex: 1 }}>
-          <Pressable
-            onPress={() => void loadMapData()}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: horizontal + 8,
-              zIndex: 999,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: "#fff",
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
-          >
-            <MaterialIcons name="refresh" size={22} color="#333" />
-          </Pressable>
-          <MapView
-            ref={mapRef}
-            style={{ flex: 1 }}
-            initialRegion={initialRegion}
-            showsUserLocation={showUserLocationDot}
-            onMapReady={() => setMapReady(true)}
-            onPress={(e) => {
-              if (e.nativeEvent.action === "marker-press") return;
-              setSelectedBusinessId(null);
-            }}
-          >
-            {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) && radiusKm > 0 ? (
-              <Circle
-                center={{ latitude: userPos.lat, longitude: userPos.lng }}
-                radius={radiusKm * 1000}
-                strokeColor="rgba(17,17,17,0.35)"
-                fillColor="rgba(17,17,17,0.06)"
-              />
-            ) : null}
-            {markers
-              .filter((m) => m.live)
-              .map((m) => (
-                <LiveDealHaloCircles
-                  key={`halo-${m.id}`}
-                  center={{ latitude: m.lat, longitude: m.lng }}
-                  pulse={livePulse}
-                />
-              ))}
-            {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) ? (
-              <Marker coordinate={{ latitude: userPos.lat, longitude: userPos.lng }} tracksViewChanges={false} zIndex={1000}>
-                <View
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: "#3b82f6",
-                    borderWidth: 3,
-                    borderColor: "#fff",
-                  }}
-                />
-              </Marker>
-            ) : null}
-            {markers.map((m) => {
-              const isSelected = selectedBusinessId === m.id;
-              const markerBg = isSelected || m.live ? Colors.light.primary : "#404040";
-              let markerBorderColor = "#a3a3a3";
-              if (isSelected) markerBorderColor = "#ffd9a8";
-              else if (m.live) markerBorderColor = "rgba(255,255,255,0.95)";
-              return (
-                <Marker
-                  key={m.id}
-                  coordinate={{ latitude: m.lat, longitude: m.lng }}
-                  tracksViewChanges={false}
-                  zIndex={m.live ? 10 : 5}
-                  stopPropagation={Platform.OS === "ios"}
-                  onPress={() => setSelectedBusinessId(m.id)}
-                >
-                  <View
-                    style={{
-                      minWidth: 28,
-                      height: 28,
-                      borderRadius: 14,
-                      paddingHorizontal: 7,
-                      backgroundColor: markerBg,
-                      borderWidth: m.live ? 2 : 1,
-                      borderColor: markerBorderColor,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <MaterialIcons name={m.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
-                  </View>
-                </Marker>
-              );
-            })}
-          </MapView>
-          {mapReady ? null : (
-            <View
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.72)",
-              }}
-            >
-              <ActivityIndicator size="large" color={Colors.light.primary} />
-            </View>
-          ) : null}
-
-          {loading || markers.length > 0 ? null : (
-            <View
-              style={{
-                position: "absolute",
-                left: horizontal,
-                right: horizontal,
-                top: "28%",
-                pointerEvents: "none",
-              }}
-            >
-              <EmptyState title={t("consumerMap.emptyMarkersTitle")} message={t("consumerMap.emptyMarkersBody")} />
-            </View>
-          ) : null}
-          {selectedBusiness ? (
-            <View
-              style={{
-                position: "absolute",
-                left: horizontal,
-                right: horizontal,
-                bottom: Spacing.lg,
-              }}
-            >
-              <Pressable
-                onPress={() =>
-                  router.push((previewDeal ? `/deal/${previewDeal.id}` : `/business/${selectedBusiness.id}`) as Href)
-                }
-                accessibilityRole="button"
-                style={{
-                  borderRadius: 24,
-                  backgroundColor: "#fff",
-                  overflow: "hidden",
-                  boxShadow: "0px 10px 20px rgba(0,0,0,0.16)",
-                  elevation: 10,
-                }}
-              >
-                {previewPosterUri ? (
-                  <Image
-                    source={{ uri: previewPosterUri }}
-                    style={{ width: "100%", height: 146 }}
-                    contentFit="cover"
-                    transition={250}
-                  />
-                ) : (
-                  <View style={{ width: "100%", height: 120, backgroundColor: "#f4f4f5" }} />
-                )}
-                <View style={{ padding: Spacing.lg }}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.62, textTransform: "uppercase" }}>
-                    {selectedBusiness.name}
-                  </Text>
-                  <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24 }}>
-                    {previewDeal?.title ?? selectedBusiness.name}
-                  </Text>
-                  {previewDeal?.price != null ? (
-                    <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.primary }}>
-                      ${previewDeal.price.toFixed(2)}
-                    </Text>
-                  ) : null}
-                  {selectedBusiness.location ? (
-                    <Text style={{ marginTop: 6, fontSize: 13, opacity: 0.6 }} numberOfLines={1}>
-                      {selectedBusiness.location}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            </View>
-          ) : null}
-          </View>
-        );
-        return bodyContent;
-      })()}
+      {renderMapBody({ loading, androidMapsOk, t, horizontal, mapCanvas })}
     </View>
   );
 }

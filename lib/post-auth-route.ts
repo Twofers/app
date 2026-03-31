@@ -1,8 +1,7 @@
 import type { Href } from "expo-router";
-import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
-import type { TabMode } from "@/lib/tab-mode";
+import type { TabMode } from "./tab-mode";
 
-const BUSINESS_ONLY_TABS = new Set(["create", "redeem", "dashboard"]);
+const BUSINESS_ONLY_TABS = new Set(["create", "redeem", "dashboard", "billing", "account"]);
 
 /**
  * `next` from TabAuthGate is a path like "/(tabs)/wallet". For customer post-auth,
@@ -10,6 +9,9 @@ const BUSINESS_ONLY_TABS = new Set(["create", "redeem", "dashboard"]);
  */
 export function consumerSafeHrefFromNext(next: string): Href {
   const trimmed = next.trim();
+  if (trimmed.startsWith("/deal/") || trimmed.startsWith("/business/")) {
+    return trimmed as Href;
+  }
   if (!trimmed.startsWith("/(tabs)")) {
     return "/(tabs)" as Href;
   }
@@ -17,8 +19,8 @@ export function consumerSafeHrefFromNext(next: string): Href {
   if (withoutQuery === "/(tabs)") {
     return "/(tabs)" as Href;
   }
-  const m = withoutQuery.match(/\/\(tabs\)\/([^/]+)/);
-  const seg = m?.[1];
+  const match = /\/\(tabs\)\/([^/]+)/.exec(withoutQuery);
+  const seg = match?.[1];
   if (!seg || BUSINESS_ONLY_TABS.has(seg)) {
     return "/(tabs)" as Href;
   }
@@ -33,6 +35,7 @@ export async function resolvePostAuthReplaceHref(params: {
   const next = typeof nextParam === "string" && nextParam.length > 0 ? nextParam : "/(tabs)";
 
   if (role === "business") {
+    const { getBusinessProfileAccessForCurrentUser } = await import("./business-profile-access");
     const access = await getBusinessProfileAccessForCurrentUser();
     if (!access.isComplete) {
       return "/business-setup" as Href;
