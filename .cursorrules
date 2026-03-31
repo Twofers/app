@@ -1,0 +1,38 @@
+# Twofer App - Founder Handoff Rules (March 30, 2026) - NON-NEGOTIABLE
+
+## Core Product Guardrails (Always Enforce)
+- No guest/anonymous browsing: Consumers must be fully logged in.
+- One active claim per user app-wide + one claim per business per day.
+- Wallet entries must expire when the deal time window ends; show visible countdown.
+- Redemption: Prefer fast QR code scan; always provide visual fallback. Keep total taps under 3.
+- Deals must be meaningful and strong — reject weak discounts.
+- Business side must feel AI-first and low-friction: Menu photo upload → AI extraction → editable menu library → dropdown selections from saved menu → AI-generated ad variants → light chat editing. Goal: publish a deal in under 60 seconds.
+- Map: Show ALL businesses with Twofer accounts. Live/active deals must visually stand out (e.g., pulsing blue halo or animated glow).
+- Billing: If trial expired or subscription inactive, redirect to Billing tab. Read all pricing/tiers from Supabase config (never hardcode). Use Stripe test mode for now.
+- Role-based routing: Business vs Consumer mode chosen clearly at login.
+
+## Technical & Code Standards
+- Expo React Native app with TypeScript, Supabase (auth + RLS + database), Stripe, react-native-maps.
+- Use React Hook Form + Zod for all forms.
+- Prefer NativeWind/Tailwind for styling consistency.
+- Performance: Use FlashList for any feeds/lists, lazy loading on map markers, useNativeDriver for animations.
+- Accessibility: Add proper accessibility labels and hints.
+- Folder structure: Keep feature-based organization (e.g., consumer/, business/, shared/, components/).
+- Always minimize typing and taps on the business side.
+
+## Superpowers Workflow (Mandatory)
+- For any non-trivial change or new feature: First use planning / writing-plans skill.
+- Then apply test-driven-development (TDD) skill.
+- Implement with executing-plans + subagent-driven-development if multi-file.
+- After implementation: Use requesting-code-review or code-reviewer subagent.
+- Finally: verification-before-completion.
+- Never skip planning or review steps.
+
+Priorities from handoff (in order):
+1. Stabilize auth + role routing + no guest access.
+2. Stable map with live deal visuals.
+3. Finish/polish AI menu capture and menu-driven deal builder.
+4. Enforce claim/wallet rules end-to-end.
+5. Scheduling & recurring deals.
+6. Billing integration + redirects.
+7. Analytics events + demo account polish.

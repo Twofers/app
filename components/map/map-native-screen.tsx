@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Platform, Text, View } from "react-native";
 import Constants from "expo-constants";
 import MapView, { Circle, Marker, type Region } from "react-native-maps";
@@ -17,18 +17,15 @@ import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
+import {
+  collectMappableBusinesses,
+  deriveLiveBusinessIds,
+  type MappableBusiness,
+} from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
-
-type Biz = {
-  id: string;
-  name: string;
-  location: string | null;
-  latitude: number | string | null;
-  longitude: number | string | null;
-};
 
 type DealLite = {
   id: string;
@@ -48,14 +45,6 @@ type DealLite = {
   timezone: string | null;
 };
 
-function parseCoord(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
-  const la = typeof lat === "number" ? lat : lat != null ? Number(lat) : NaN;
-  const ln = typeof lng === "number" ? lng : lng != null ? Number(lng) : NaN;
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
-  if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
-  return { lat: la, lng: ln };
-}
-
 function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number, longitudeDelta: number): Region {
   const lat = Math.min(90, Math.max(-90, center.lat));
   const lng = Math.min(180, Math.max(-180, center.lng));
@@ -74,7 +63,7 @@ export default function MapScreenNative() {
   const androidMapsOk =
     Platform.OS !== "android" || Boolean(Constants.expoConfig?.extra?.androidMapsKeyConfigured);
   const [mode, setMode] = useState<"all" | "live">("all");
-  const [businesses, setBusinesses] = useState<Biz[]>([]);
+  const [businesses, setBusinesses] = useState<MappableBusiness[]>([]);
   const [deals, setDeals] = useState<DealLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
@@ -106,33 +95,49 @@ export default function MapScreenNative() {
         setShowDeviceBlueDot(false);
       }
 
-      const { data: bz, error: eb } = await supabase
-        .from("businesses")
-        .select("id,name,location,latitude,longitude")
-        .order("name", { ascending: true })
-        .limit(400);
-      if (eb) {
-        logPostgrestError("map screen businesses", eb);
-        setBusinesses([]);
-        setDataError(t("consumerMap.dataError"));
-      } else {
-        setBusinesses((bz ?? []) as Biz[]);
-      }
+      const nextBusinesses = await collectMappableBusinesses(async (offset, limit) => {
+        const { data, error } = await supabase
+          .from("businesses")
+          .select("id,name,location,latitude,longitude")
+          .order("name", { ascending: true })
+          .range(offset, offset + limit - 1);
+        if (error) throw error;
+        return (data ?? []) as {
+          id: string;
+          name: string;
+          location: string | null;
+          latitude: number | string | null;
+          longitude: number | string | null;
+        }[];
+      }, 400);
+      setBusinesses(nextBusinesses);
 
-      const { data: dz, error: ed } = await supabase
-        .from("deals")
-        .select(
-          "id,title,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-        )
-        .eq("is_active", true)
-        .gte("end_time", new Date().toISOString())
-        .limit(200);
-      if (ed) {
-        logPostgrestError("map screen deals", ed);
-        setDeals([]);
-        setDataError(t("consumerMap.dataError"));
-      } else {
-        setDeals((dz ?? []) as DealLite[]);
+      const allDeals: DealLite[] = [];
+      let dealsFetchFailed = false;
+      const dealPageSize = 200;
+      let dealOffset = 0;
+      while (true) {
+        const { data: dz, error: ed } = await supabase
+          .from("deals")
+          .select(
+            "id,title,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+          )
+          .eq("is_active", true)
+          .gte("end_time", new Date().toISOString())
+          .range(dealOffset, dealOffset + dealPageSize - 1);
+        if (ed) {
+          logPostgrestError("map screen deals", ed);
+          setDataError(t("consumerMap.dataError"));
+          dealsFetchFailed = true;
+          break;
+        }
+        const page = (dz ?? []) as DealLite[];
+        allDeals.push(...page);
+        if (page.length < dealPageSize) break;
+        dealOffset += dealPageSize;
+      }
+      if (!dealsFetchFailed) {
+        setDeals(allDeals);
       }
     } catch (error) {
       devWarn("[map] loadMapData failed", error);
@@ -149,24 +154,19 @@ export default function MapScreenNative() {
   );
 
   const liveByBusiness = useMemo(() => {
-    const m = new Set<string>();
-    for (const d of deals) {
-      if (isDealActiveNow(d)) m.add(d.business_id);
-    }
-    return m;
+    return deriveLiveBusinessIds(
+      deals.map((deal) => ({ business_id: deal.business_id, live: isDealActiveNow(deal) })),
+    );
   }, [deals]);
 
   const markers = useMemo(() => {
-    const withCoords = businesses
+    return businesses
       .map((b) => {
-        const c = parseCoord(b.latitude, b.longitude);
-        if (!c) return null;
         const live = liveByBusiness.has(b.id);
         if (mode === "live" && !live) return null;
-        return { ...b, ...c, live };
+        return { ...b, live };
       })
-      .filter(Boolean) as (Biz & { lat: number; lng: number; live: boolean })[];
-    return withCoords;
+      .filter(Boolean) as (MappableBusiness & { live: boolean })[];
   }, [businesses, liveByBusiness, mode]);
 
   const selectedBusiness = useMemo(
@@ -179,7 +179,7 @@ export default function MapScreenNative() {
     const businessDeals = deals.filter((d) => d.business_id === selectedBusiness.id);
     if (businessDeals.length === 0) return null;
     const liveDeal = businessDeals.find((d) => isDealActiveNow(d)) ?? null;
-    return liveDeal ?? businessDeals.sort((a, b) => +new Date(a.end_time) - +new Date(b.end_time))[0];
+    return liveDeal ?? businessDeals.toSorted((a, b) => +new Date(a.end_time) - +new Date(b.end_time))[0];
   }, [deals, selectedBusiness]);
 
   const initialRegion = useMemo((): Region => {
@@ -196,6 +196,8 @@ export default function MapScreenNative() {
   const showUserLocationDot = showDeviceBlueDot && !!userPos;
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
+  const subtitleText = mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll");
+  let bodyContent: ReactNode;
 
   // MVP impressions tracking for map:
   // - In `live` mode, log active live deals (what the marker set represents).
@@ -235,9 +237,9 @@ export default function MapScreenNative() {
     const hasUser = userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng);
     const hasMarkers = markers.length > 0;
     if (!hasUser && !hasMarkers) return;
-    const region = hasUser
-      ? safeRegion({ lat: userPos!.lat, lng: userPos!.lng }, 0.12, 0.12)
-      : safeRegion({ lat: markers[0]!.lat, lng: markers[0]!.lng }, 0.25, 0.25);
+    const region = hasUser && userPos
+      ? safeRegion({ lat: userPos.lat, lng: userPos.lng }, 0.12, 0.12)
+      : safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
     mapRef.current?.animateToRegion(region, 480);
     cameraFittedRef.current = true;
   }, [mapReady, androidMapsOk, userPos, markers]);
@@ -256,9 +258,7 @@ export default function MapScreenNative() {
       ) : null}
       <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
         <Text style={{ fontSize: 22, fontWeight: "800", letterSpacing: -0.2 }}>{t("consumerMap.title")}</Text>
-        <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.58, lineHeight: 18 }}>
-          {mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll")}
-        </Text>
+        <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.58, lineHeight: 18 }}>{subtitleText}</Text>
       </View>
       {androidMapsOk ? (
         <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.md, flexDirection: "row", gap: Spacing.sm }}>
@@ -307,20 +307,29 @@ export default function MapScreenNative() {
         </View>
       ) : null}
 
-      {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
-          <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
-        </View>
-      ) : !androidMapsOk ? (
-        <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: horizontal }}>
-          <EmptyState
-            title={t("consumerMap.androidMapsUnavailableTitle")}
-            message={t("consumerMap.androidMapsUnavailableBody")}
-          />
-        </View>
-      ) : (
-        <View style={{ flex: 1 }}>
+      {(() => {
+        if (loading) {
+          bodyContent = (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator size="large" color={Colors.light.primary} />
+              <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
+            </View>
+          );
+          return bodyContent;
+        }
+        if (!androidMapsOk) {
+          bodyContent = (
+            <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: horizontal }}>
+              <EmptyState
+                title={t("consumerMap.androidMapsUnavailableTitle")}
+                message={t("consumerMap.androidMapsUnavailableBody")}
+              />
+            </View>
+          );
+          return bodyContent;
+        }
+        bodyContent = (
+          <View style={{ flex: 1 }}>
           <Pressable
             onPress={() => void loadMapData()}
             style={{
@@ -385,36 +394,41 @@ export default function MapScreenNative() {
                 />
               </Marker>
             ) : null}
-            {markers.map((m) => (
-              <Marker
-                key={m.id}
-                coordinate={{ latitude: m.lat, longitude: m.lng }}
-                tracksViewChanges={false}
-                zIndex={m.live ? 10 : 5}
-                stopPropagation={Platform.OS === "ios"}
-                onPress={() => setSelectedBusinessId(m.id)}
-              >
-                <View
-                  style={{
-                    minWidth: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    paddingHorizontal: 7,
-                    backgroundColor:
-                      selectedBusinessId === m.id ? Colors.light.primary : m.live ? Colors.light.primary : "#404040",
-                    borderWidth: m.live ? 2 : 1,
-                    borderColor:
-                      selectedBusinessId === m.id ? "#ffd9a8" : m.live ? "rgba(255,255,255,0.95)" : "#a3a3a3",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+            {markers.map((m) => {
+              const isSelected = selectedBusinessId === m.id;
+              const markerBg = isSelected || m.live ? Colors.light.primary : "#404040";
+              let markerBorderColor = "#a3a3a3";
+              if (isSelected) markerBorderColor = "#ffd9a8";
+              else if (m.live) markerBorderColor = "rgba(255,255,255,0.95)";
+              return (
+                <Marker
+                  key={m.id}
+                  coordinate={{ latitude: m.lat, longitude: m.lng }}
+                  tracksViewChanges={false}
+                  zIndex={m.live ? 10 : 5}
+                  stopPropagation={Platform.OS === "ios"}
+                  onPress={() => setSelectedBusinessId(m.id)}
                 >
-                  <MaterialIcons name={m.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
-                </View>
-              </Marker>
-            ))}
+                  <View
+                    style={{
+                      minWidth: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      paddingHorizontal: 7,
+                      backgroundColor: markerBg,
+                      borderWidth: m.live ? 2 : 1,
+                      borderColor: markerBorderColor,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <MaterialIcons name={m.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
+                  </View>
+                </Marker>
+              );
+            })}
           </MapView>
-          {!mapReady ? (
+          {mapReady ? null : (
             <View
               style={{
                 position: "absolute",
@@ -431,7 +445,7 @@ export default function MapScreenNative() {
             </View>
           ) : null}
 
-          {!loading && markers.length === 0 ? (
+          {loading || markers.length > 0 ? null : (
             <View
               style={{
                 position: "absolute",
@@ -497,8 +511,10 @@ export default function MapScreenNative() {
               </Pressable>
             </View>
           ) : null}
-        </View>
-      )}
+          </View>
+        );
+        return bodyContent;
+      })()}
     </View>
   );
 }

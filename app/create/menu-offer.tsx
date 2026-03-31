@@ -17,10 +17,11 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
-import { adToDealDraft, CREATIVE_LANE_ORDER, type CreativeLane, type GeneratedAd } from "@/lib/ad-variants";
+import { CREATIVE_LANE_ORDER, type CreativeLane, type GeneratedAd } from "@/lib/ad-variants";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
 import { aiGenerateAdVariantsStructured, getErrorCode } from "@/lib/functions";
 import { splitSubheadlineForPromoAndBody } from "@/lib/menu-ad-copy";
+import { buildQuickPrefillFromMenuOffer } from "@/lib/menu-offer-prefill";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import {
   loadLastMenuOfferPairingType,
@@ -57,6 +58,29 @@ function laneUiTitle(lane: CreativeLane, t: (k: string) => string): string {
   if (lane === "value") return t("menuOffer.laneValue");
   if (lane === "neighborhood") return t("menuOffer.laneNeighborhood");
   return t("menuOffer.lanePremium");
+}
+
+function resolveCreativeLane(ad: GeneratedAd, index: number): CreativeLane {
+  if (ad.creative_lane === "value" || ad.creative_lane === "neighborhood" || ad.creative_lane === "premium") {
+    return ad.creative_lane;
+  }
+  return CREATIVE_LANE_ORDER[index] ?? "value";
+}
+
+function getPairingValidationError(params: {
+  pairingType: MenuOfferPairingType;
+  discountPercent: number;
+  fixedPriceText: string;
+  pairedItem: DbMenuItem | null;
+}): "menuOffer.errPercentWeak" | "menuOffer.errFixedPrice" | "menuOffer.errNeedPairedFree" | null {
+  const { pairingType, discountPercent, fixedPriceText, pairedItem } = params;
+  if (pairingType === "percent_off" && discountPercent < 40) return "menuOffer.errPercentWeak";
+  if (pairingType === "fixed_price_special") {
+    const n = Number(fixedPriceText.trim());
+    if (!Number.isFinite(n) || n <= 0) return "menuOffer.errFixedPrice";
+  }
+  if (pairingType === "free_with_purchase" && !pairedItem) return "menuOffer.errNeedPairedFree";
+  return null;
 }
 
 export default function MenuOfferScreen() {
@@ -185,23 +209,12 @@ export default function MenuOfferScreen() {
   const goAiPublish = useCallback(
     (ad: GeneratedAd) => {
       if (!structuredOffer) return;
-      const hint = buildOfferHintText(structuredOffer);
-      const draft = adToDealDraft(ad, hint);
-      const locPrimary = dealLocationIds[0] ?? "";
-      const locExtra = dealLocationIds.slice(1).join(",");
+      const locPrimary = dealLocationIds[0];
+      const params = buildQuickPrefillFromMenuOffer(ad, locPrimary);
       clearWizard();
       router.push({
-        pathname: "/create/ai",
-        params: {
-          prefillTitle: draft.title,
-          prefillPromoLine: draft.promo_line,
-          prefillCta: draft.cta_text,
-          prefillDescription: draft.offer_details,
-          prefillHint: hint,
-          prefillLocationId: locPrimary,
-          ...(locExtra ? { prefillExtraLocationIds: locExtra } : {}),
-          fromMenuOffer: "1",
-        },
+        pathname: "/create/quick",
+        params,
       } as Href);
     },
     [structuredOffer, dealLocationIds, clearWizard, router],
@@ -220,19 +233,14 @@ export default function MenuOfferScreen() {
 
   const onPairingNext = useCallback(() => {
     if (!mainItem) return;
-    if (pairingType === "percent_off" && discountPercent < 40) {
-      setBanner({ message: t("menuOffer.errPercentWeak"), tone: "error" });
-      return;
-    }
-    if (pairingType === "fixed_price_special") {
-      const n = Number(fixedPriceText.trim());
-      if (!Number.isFinite(n) || n <= 0) {
-        setBanner({ message: t("menuOffer.errFixedPrice"), tone: "error" });
-        return;
-      }
-    }
-    if (pairingType === "free_with_purchase" && !pairedItem) {
-      setBanner({ message: t("menuOffer.errNeedPairedFree"), tone: "error" });
+    const validationError = getPairingValidationError({
+      pairingType,
+      discountPercent,
+      fixedPriceText,
+      pairedItem,
+    });
+    if (validationError) {
+      setBanner({ message: t(validationError), tone: "error" });
       return;
     }
     setBanner(null);
@@ -550,13 +558,13 @@ export default function MenuOfferScreen() {
         </View>
       ) : null}
 
-      {step === "ads" && adsWorking && adsWorking.length === 3 ? (
+      {step === "ads" && adsWorking?.length === 3 ? (
         <View style={{ gap: Spacing.md }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.pickTitle")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("menuOffer.pickHelp")}</Text>
           <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuOffer.adsOptionalRefine")}</Text>
           {adsWorking.map((ad, index) => {
-            const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
+            const laneKey = resolveCreativeLane(ad, index);
             const subSplit = splitSubheadlineForPromoAndBody(ad.subheadline ?? "");
             return (
               <View

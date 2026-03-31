@@ -25,6 +25,14 @@ import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { buildPublicDealPhotoUrl } from "../../lib/deal-poster-url";
 
+function parseOptionalPrice(rawPrice: string): { ok: true; value: number | null } | { ok: false } {
+  const trimmed = rawPrice.trim();
+  if (!trimmed) return { ok: true, value: null };
+  const n = Number(trimmed);
+  if (Number.isNaN(n)) return { ok: false };
+  return { ok: true, value: n };
+}
+
 export default function QuickDealScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -33,6 +41,7 @@ export default function QuickDealScreen() {
     prefillHint?: string;
     prefillPrice?: string;
     prefillPosterPath?: string;
+    prefillLocationId?: string;
     fromAiCompose?: string;
     fromReuse?: string;
     fromMenuOffer?: string;
@@ -75,6 +84,11 @@ export default function QuickDealScreen() {
   }, [visibleLocations, selectedLocationId]);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
+  const showLoginPrompt = !isLoggedIn;
+  const showLoadingPrompt = isLoggedIn && (loading || locLoading);
+  const showCreateBusinessPrompt = isLoggedIn && !loading && !locLoading && !businessId;
+  const showForm = isLoggedIn && !loading && !locLoading && !!businessId;
+  const heroPosterUri = prefillPosterStoragePath ? (buildPublicDealPhotoUrl(prefillPosterStoragePath) ?? "") : "";
 
   useEffect(() => {
     const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -82,6 +96,7 @@ export default function QuickDealScreen() {
     const h0 = (g(prefill.prefillHint) ?? "").trim();
     const p0 = (g(prefill.prefillPrice) ?? "").trim();
     const posterPath = (g(prefill.prefillPosterPath) ?? "").trim();
+    const locationId = (g(prefill.prefillLocationId) ?? "").trim();
     const fromAi = g(prefill.fromAiCompose);
     const fromReuse = g(prefill.fromReuse);
     const fromMenu = g(prefill.fromMenuOffer);
@@ -89,6 +104,7 @@ export default function QuickDealScreen() {
     if (h0) setOfferHint((prev) => prev || h0);
     if (p0) setPrice((prev) => prev || p0);
     if (posterPath) setPrefillPosterStoragePath(posterPath);
+    if (locationId) setSelectedLocationId(locationId);
     if (t0 || h0 || p0 || posterPath) setDirty(true);
     if (fromAi === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
@@ -104,6 +120,7 @@ export default function QuickDealScreen() {
     prefill.prefillHint,
     prefill.prefillPrice,
     prefill.prefillPosterPath,
+    prefill.prefillLocationId,
     prefill.fromAiCompose,
     prefill.fromReuse,
     prefill.fromMenuOffer,
@@ -140,14 +157,14 @@ export default function QuickDealScreen() {
     setSuggestingAi(true);
     setBanner(null);
     try {
-      const priceNum = price.trim() ? Number(price) : null;
-      if (price.trim() && Number.isNaN(priceNum)) {
+      const parsedPrice = parseOptionalPrice(price);
+      if (!parsedPrice.ok) {
         setBanner({ message: t("createQuick.errPriceNumber"), tone: "error" });
         return;
       }
       const result = await aiGenerateDealCopy({
         hint_text: hint,
-        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+        price: parsedPrice.value,
         business_name: businessName ?? null,
       });
       const proposed = result.title.trim();
@@ -156,7 +173,7 @@ export default function QuickDealScreen() {
       const quality = assessDealQuality({
         title: proposed,
         description: hintTrim.length > 0 ? hintTrim : null,
-        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+        price: parsedPrice.value,
       });
       if (quality.blocked) {
         setBanner({ message: translateDealQualityBlock(quality, dealLang), tone: "error" });
@@ -216,8 +233,8 @@ export default function QuickDealScreen() {
     setPublishing(true);
     setBanner(null);
     try {
-      const priceNum = price.trim() ? Number(price) : null;
-      if (price.trim() && Number.isNaN(priceNum)) {
+      const parsedPrice = parseOptionalPrice(price);
+      if (!parsedPrice.ok) {
         setBanner({ message: t("createQuick.errPriceNumber"), tone: "error" });
         return;
       }
@@ -226,7 +243,7 @@ export default function QuickDealScreen() {
       const quality = assessDealQuality({
         title: title.trim(),
         description: offerBody.length > 0 ? offerBody : null,
-        price: priceNum,
+        price: parsedPrice.value,
       });
       if (quality.blocked) {
         setBanner({ message: translateDealQualityBlock(quality, dealLang), tone: "error" });
@@ -249,7 +266,7 @@ export default function QuickDealScreen() {
         business_id: businessId,
         title: title.trim(),
         description: offerBody.length > 0 ? offerBody : null,
-        price: priceNum,
+        price: parsedPrice.value,
         start_time: now.toISOString(),
         end_time: end.toISOString(),
         claim_cutoff_buffer_minutes: cutoffNum,
@@ -291,13 +308,12 @@ export default function QuickDealScreen() {
       </View>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
-      {!isLoggedIn ? (
-        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text>
-      ) : loading || locLoading ? (
-        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loading")}</Text>
-      ) : !businessId ? (
+      {showLoginPrompt ? <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text> : null}
+      {showLoadingPrompt ? <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loading")}</Text> : null}
+      {showCreateBusinessPrompt ? (
         <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.createBusinessFirst")}</Text>
-      ) : (
+      ) : null}
+      {showForm ? (
         <ScrollView
           style={{ flex: 1, marginTop: Spacing.lg }}
           contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
@@ -310,7 +326,7 @@ export default function QuickDealScreen() {
                 {t("createQuick.aiPosterAttached")}
               </Text>
               <Image
-                source={{ uri: buildPublicDealPhotoUrl(prefillPosterStoragePath) ?? "" }}
+                source={{ uri: heroPosterUri }}
                 style={{
                   width: "100%",
                   aspectRatio: 1,
@@ -462,6 +478,27 @@ export default function QuickDealScreen() {
 
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>
+            <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: 6, marginBottom: 6 }}>
+              {[25, 50, 100].map((count) => (
+                <Pressable
+                  key={count}
+                  onPress={() => {
+                    markDirty();
+                    setMaxClaims(String(count));
+                  }}
+                  style={{
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: Spacing.xs,
+                    borderRadius: Radii.md,
+                    borderWidth: maxClaims === String(count) ? 2 : 1,
+                    borderColor: maxClaims === String(count) ? Colors.light.primary : Colors.light.border,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700" }}>{count}</Text>
+                </Pressable>
+              ))}
+            </View>
             <TextInput
               value={maxClaims}
               onChangeText={(v) => {
@@ -484,6 +521,27 @@ export default function QuickDealScreen() {
 
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldCutoff")}</Text>
+            <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: 6, marginBottom: 6 }}>
+              {[10, 15, 30].map((mins) => (
+                <Pressable
+                  key={mins}
+                  onPress={() => {
+                    markDirty();
+                    setCutoffMins(String(mins));
+                  }}
+                  style={{
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: Spacing.xs,
+                    borderRadius: Radii.md,
+                    borderWidth: cutoffMins === String(mins) ? 2 : 1,
+                    borderColor: cutoffMins === String(mins) ? Colors.light.primary : Colors.light.border,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700" }}>{mins}m</Text>
+                </Pressable>
+              ))}
+            </View>
             <TextInput
               value={cutoffMins}
               onChangeText={(v) => {
@@ -511,7 +569,7 @@ export default function QuickDealScreen() {
             style={{ height: 66, borderRadius: 20, marginTop: 4 }}
           />
         </ScrollView>
-      )}
+      ) : null}
     </View>
     </KeyboardScreen>
   );
