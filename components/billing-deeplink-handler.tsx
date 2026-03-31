@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 
+import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
+
 type BillingCheckout = "success" | "cancel";
 
 function parseBillingDeepLink(url: string | null): { checkout?: BillingCheckout } | null {
@@ -57,7 +59,7 @@ export function BillingDeepLinkHandler() {
       if (initialDone.current) return;
       initialDone.current = true;
       const initial = await Linking.getInitialURL();
-      navigate(initial);
+      runWhenBridgeSettled(() => navigate(initial));
     })();
 
     return () => sub.remove();

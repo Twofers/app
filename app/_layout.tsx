@@ -83,18 +83,20 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AppI18nGate>
-      <SafeAreaProvider>
-        <AuthSessionProvider>
-          <TabModeProvider>
-            <DiagnosticBootLog />
-            <AppErrorBoundary>
-              <RootNavigationStack />
-            </AppErrorBoundary>
-            <ConsumerOnboardingGate />
-          </TabModeProvider>
-        </AuthSessionProvider>
-      </SafeAreaProvider>
-    </AppI18nGate>
+    <AppErrorBoundary>
+      <AppI18nGate>
+        <SafeAreaProvider>
+          <AuthSessionProvider>
+            <TabModeProvider>
+              <DiagnosticBootLog />
+              <AppErrorBoundary>
+                <RootNavigationStack />
+              </AppErrorBoundary>
+              <ConsumerOnboardingGate />
+            </TabModeProvider>
+          </AuthSessionProvider>
+        </SafeAreaProvider>
+      </AppI18nGate>
+    </AppErrorBoundary>
   );
 }

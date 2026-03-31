@@ -1,5 +1,5 @@
-import { Redirect, Tabs, useGlobalSearchParams, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useState, type ReactNode } from "react";
+import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
@@ -16,7 +16,6 @@ import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 function TabAuthGate({ children }: { children: ReactNode }) {
   const { session, isInitialLoading } = useAuthSession();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
-  const segments = useSegments() as string[];
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const forceE2E =
@@ -45,11 +44,14 @@ function TabAuthGate({ children }: { children: ReactNode }) {
       </View>
     );
   }
+  // Root AuthStackGate is the single authority for unauth redirects.
+  // Keep tabs surface inert while root gate resolves navigation.
   if (!session?.user) {
-    const tabsIdx = segments.indexOf("(tabs)");
-    const tail = tabsIdx >= 0 ? segments.slice(tabsIdx + 1).filter(Boolean) : [];
-    const nextPath = tail.length > 0 ? `/(tabs)/${tail.join("/")}` : "/(tabs)";
-    return <Redirect href={{ pathname: "/auth-landing", params: { next: nextPath } }} />;
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
   }
   return <>{children}</>;
 }
@@ -171,57 +173,84 @@ export default function TabLayout() {
 function TabModeRedirect() {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
-  const segments = useSegments();
+  const segments = useSegments() as string[];
   const router = useRouter();
   const params = useGlobalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const [checkingProfile, setCheckingProfile] = useState(false);
+  const [businessProfileComplete, setBusinessProfileComplete] = useState<boolean | null>(null);
+  const profileCheckedUserRef = useRef<string | null>(null);
+  const lastRedirectRef = useRef<string | null>(null);
   const forceE2E =
     String(params.e2e ?? "") === "1" ||
     (Platform.OS === "web" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("e2e") === "1");
   const forceBypass = forceE2E || String(params.skipSetup ?? "") === "1";
 
+  const tab = useMemo(() => {
+    const tabsIdx = segments.indexOf("(tabs)");
+    if (tabsIdx === -1) return "index";
+    return String(segments[tabsIdx + 1] ?? "index");
+  }, [segments]);
+
+  const currentPath = useMemo(() => {
+    return tab === "index" ? "/(tabs)" : `/(tabs)/${tab}`;
+  }, [tab]);
+
+  useEffect(() => {
+    if (!ready || mode !== "business" || forceBypass) {
+      setCheckingProfile(false);
+      setBusinessProfileComplete(null);
+      profileCheckedUserRef.current = null;
+      return;
+    }
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const needsBusinessCheck =
+      tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing" || tab === "account";
+    if (!needsBusinessCheck) return;
+    if (profileCheckedUserRef.current === userId && businessProfileComplete !== null) return;
+
+    let cancelled = false;
+    setCheckingProfile(true);
+    void (async () => {
+      const access = await getBusinessProfileAccessForCurrentUser();
+      if (cancelled) return;
+      profileCheckedUserRef.current = userId;
+      setBusinessProfileComplete(access.isComplete);
+      setCheckingProfile(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, mode, forceBypass, session?.user?.id, tab, businessProfileComplete]);
+
   useEffect(() => {
     if (!ready) return;
-    const segs = segments as string[];
-    const tabsIdx = segs.indexOf("(tabs)");
-    if (tabsIdx === -1) return;
-    const tab = String(segs[tabsIdx + 1] ?? "index");
-
+    const redirectTo = (target: string) => {
+      if (target === currentPath || lastRedirectRef.current === target) return;
+      lastRedirectRef.current = target;
+      router.replace(target as Href);
+    };
     if (mode === "business") {
       if (tab === "index" || tab === "map" || tab === "wallet" || tab === "settings") {
-        router.navigate("/(tabs)/create");
+        redirectTo("/(tabs)/create");
+        return;
       }
       if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing" || tab === "account") {
-        if (forceBypass) return;
-        let cancelled = false;
-        setCheckingProfile(true);
-        const user = session?.user;
-        if (!user) {
-          setCheckingProfile(false);
-          return;
+        if (forceBypass || checkingProfile || businessProfileComplete === null) return;
+        if (!businessProfileComplete) {
+          redirectTo("/business-setup");
         }
-        void (async () => {
-          const access = await getBusinessProfileAccessForCurrentUser();
-          if (cancelled) return;
-          if (!access.isComplete) {
-            router.replace("/business-setup");
-          }
-          setCheckingProfile(false);
-        })();
-        return () => {
-          cancelled = true;
-        };
       }
     } else {
       if (tab === "account") {
-        router.replace("/(tabs)/settings");
+        redirectTo("/(tabs)/settings");
         return;
       }
       if (tab === "create" || tab === "redeem" || tab === "dashboard" || tab === "billing") {
-        router.navigate("/(tabs)");
+        redirectTo("/(tabs)");
       }
     }
-  }, [ready, mode, segments, router, forceBypass, session?.user]);
+  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete]);
 
   if (checkingProfile) {
     return (

@@ -16,6 +16,8 @@ function resolveGitCommitShort() {
 /** Merges env-based EAS project id with static app.json (Expo loads both). */
 module.exports = ({ config }) => ({
   ...config,
+  /** Prebuild: keep Fabric off; dev launcher is less stable with New Arch on some RN/Expo combos. */
+  newArchEnabled: false,
   name: "TWOFER",
   ios: {
     ...config.ios,
@@ -26,6 +28,7 @@ module.exports = ({ config }) => ({
   },
   android: {
     ...config.android,
+    newArchEnabled: false,
     config: {
       ...config.android?.config,
       googleMaps: {

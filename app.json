@@ -10,7 +10,7 @@
       "twofer"
     ],
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "bundleIdentifier": "com.twofer.app",
       "supportsTablet": true,
@@ -40,6 +40,18 @@
         {
           "action": "VIEW",
           "autoVerify": false,
+          "data": [{ "scheme": "twoforone" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [{ "scheme": "twofer" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": false,
           "data": [
             {
               "scheme": "https",
@@ -64,6 +76,7 @@
     "plugins": [
       "expo-asset",
       "expo-router",
+      "expo-dev-client",
       [
         "expo-splash-screen",
         {

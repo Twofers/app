@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "start:go": "expo start",
+    "start:dev-client": "expo start --dev-client",
+    "android:dev-client": "expo start --dev-client --android",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -30,6 +33,7 @@
     "expo-audio": "~1.1.1",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.20",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
@@ -71,7 +75,6 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "expo-dev-client": "~6.0.20",
     "playwright": "^1.54.2",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"

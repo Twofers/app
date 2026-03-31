@@ -15,6 +15,7 @@
       }
     },
     "preview": {
+      "developmentClient": true,
       "distribution": "internal",
       "environment": "preview",
       "env": {

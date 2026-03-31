@@ -4,6 +4,8 @@ import * as Linking from "expo-linking";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
+import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -58,7 +60,7 @@ export function DealDeepLinkHandler() {
       if (initialDone.current) return;
       initialDone.current = true;
       const initial = await Linking.getInitialURL();
-      navigate(initial);
+      runWhenBridgeSettled(() => navigate(initial));
     })();
 
     return () => {

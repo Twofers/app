@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { consumeSupabaseAuthDeepLink } from "@/lib/auth-password-recovery";
+import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 
 /**
  * Parses recovery deep links into a session and opens the reset-password screen.
@@ -39,7 +40,9 @@ export function AuthRecoveryLinkHandler() {
       if (initialDone.current) return;
       initialDone.current = true;
       const initial = await Linking.getInitialURL();
-      await handleUrl(initial);
+      runWhenBridgeSettled(() => {
+        void handleUrl(initial);
+      });
     })();
 
     return () => {

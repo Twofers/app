@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { devLog, devWarn } from "@/lib/dev-log";
 import { normalizeLegacyTabsDeepLink } from "@/lib/normalize-legacy-tabs-deep-link";
+import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 
 /**
  * Accepts `scheme://tabs/<segment>` and `scheme:///tabs/<segment>` style URLs that
@@ -36,7 +37,7 @@ export function LegacyTabsDeepLinkHandler() {
     void Linking.getInitialURL().then((url) => {
       if (!url || initialDone.current) return;
       initialDone.current = true;
-      handle(url);
+      runWhenBridgeSettled(() => handle(url));
     });
 
     const sub = Linking.addEventListener("url", ({ url }) => handle(url));

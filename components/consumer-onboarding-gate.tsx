@@ -23,10 +23,10 @@ export function ConsumerOnboardingGate() {
   const router = useRouter();
   const segments = useSegments();
   const { mode, ready } = useTabMode();
-  const { session } = useAuthSession();
+  const { session, isInitialLoading } = useAuthSession();
 
   useEffect(() => {
-    if (!ready) return;
+    if (isInitialLoading || !ready) return;
     const root = String(segments[0] ?? "");
     if (SKIP_ROOTS.has(root)) return;
     if (mode !== "customer") return;
@@ -56,7 +56,7 @@ export function ConsumerOnboardingGate() {
     return () => {
       cancelled = true;
     };
-  }, [ready, mode, segments, router, session?.user?.id]);
+  }, [isInitialLoading, ready, mode, segments, router, session?.user?.id]);
 
   return null;
 }
