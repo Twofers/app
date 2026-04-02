@@ -20,7 +20,12 @@ import { useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
-import { TAB_MODE_ROLE_COMMITTED_KEY, useTabMode, type TabMode } from "@/lib/tab-mode";
+import {
+  TAB_MODE_ROLE_COMMITTED_KEY,
+  skipNextRemoteTabModeFetchForUser,
+  useTabMode,
+  type TabMode,
+} from "@/lib/tab-mode";
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
@@ -32,6 +37,9 @@ import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-f
 import i18n, { APP_LOCALES, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { upsertAppTabModeForUser } from "@/lib/profiles-app-mode";
+import { DEMO_PREVIEW_EMAIL, DEMO_PREVIEW_PASSWORD } from "@/lib/demo-account";
+import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
+import { isDemoAuthHelperEnabled } from "@/lib/runtime-env";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -117,8 +125,6 @@ function RoleCard({
   );
 }
 
-const DEMO_MODE = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
-
 function firstQueryString(v: string | string[] | undefined): string | undefined {
   if (typeof v === "string" && v.length > 0) return v;
   if (Array.isArray(v) && typeof v[0] === "string" && v[0].length > 0) return v[0];
@@ -136,8 +142,8 @@ export default function AuthLandingScreen() {
   const [selectedMode, setSelectedMode] = useState<TabMode | null>(null);
   const [roleBusy, setRoleBusy] = useState(false);
 
-  const [email, setEmail] = useState(DEMO_MODE ? "demo@demo.com" : "");
-  const [pw, setPw] = useState(DEMO_MODE ? "123456" : "");
+  const [email, setEmail] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_EMAIL : ""));
+  const [pw, setPw] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_PASSWORD : ""));
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
@@ -204,7 +210,7 @@ export default function AuthLandingScreen() {
     clearFeedback();
     logAuthPath("normal_login", email.trim());
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: pw,
       });
@@ -212,11 +218,14 @@ export default function AuthLandingScreen() {
         setAuthError(friendlyAuthError(error, t));
         return;
       }
-      await setMode(selectedMode);
-      const uid = (await supabase.auth.getSession()).data.session?.user?.id;
-      if (uid) {
-        await upsertAppTabModeForUser(uid, selectedMode);
+      const uid = signInData.session?.user?.id;
+      if (!uid) {
+        setAuthError(t("authLanding.errGeneric"));
+        return;
       }
+      skipNextRemoteTabModeFetchForUser(uid);
+      await upsertAppTabModeForUser(uid, selectedMode);
+      await setMode(selectedMode);
       const href = await resolvePostAuthReplaceHref({
         role: selectedMode,
         nextParam: firstQueryString(params.next),
@@ -239,6 +248,9 @@ export default function AuthLandingScreen() {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
+        options: {
+          emailRedirectTo: getEmailAuthRedirectUrl(),
+        },
       });
       if (error) {
         setAuthError(friendlyAuthError(error, t));
@@ -248,9 +260,10 @@ export default function AuthLandingScreen() {
         setSignUpAwaitingVerification(true);
         return;
       }
-      await setMode(selectedMode);
       const uid = data.session.user.id;
+      skipNextRemoteTabModeFetchForUser(uid);
       await upsertAppTabModeForUser(uid, selectedMode);
+      await setMode(selectedMode);
       if (selectedMode === "customer") {
         router.replace("/(tabs)" as Href);
       } else {
@@ -439,6 +452,23 @@ export default function AuthLandingScreen() {
                     {t("authLanding.loadingSavedRole")}
                   </Text>
                 </View>
+              ) : null}
+
+              {isDemoAuthHelperEnabled() ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 17,
+                    color: theme.mutedText,
+                    marginBottom: Spacing.md,
+                    textAlign: "center",
+                  }}
+                >
+                  {t("authLanding.demoCredentialsHint", {
+                    email: DEMO_PREVIEW_EMAIL,
+                    password: DEMO_PREVIEW_PASSWORD,
+                  })}
+                </Text>
               ) : null}
 
               <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>

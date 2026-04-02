@@ -27,6 +27,16 @@ const LEGACY_IMPORT_DONE_SECURE_KEY = "twoforone_tab_mode_legacy_import_done";
 
 export type TabMode = "customer" | "business";
 
+/**
+ * Skip the next remote `profiles.app_tab_mode` fetch for this user (e.g. auth-landing just upserted).
+ * Prevents a race where the fetch reads stale "business" and overwrites a fresh "customer" selection.
+ */
+let skipNextRemoteTabModeFetchForUserId: string | null = null;
+
+export function skipNextRemoteTabModeFetchForUser(userId: string) {
+  skipNextRemoteTabModeFetchForUserId = userId;
+}
+
 type TabModeContextValue = {
   mode: TabMode;
   setMode: (next: TabMode) => Promise<void>;
@@ -105,19 +115,28 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     const uid = session?.user?.id;
     if (!uid) return;
     let cancelled = false;
-    void (async () => {
-      const remote = await fetchAppTabModeForUser(uid);
-      if (!remote || cancelled) return;
-      userChoseModeRef.current = true;
-      setModeState(remote);
-      try {
-        await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, remote);
-      } catch {
-        /* noop */
-      }
-    })();
+    /** Delay so auth-landing can upsert `app_tab_mode` before we read it. */
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (cancelled) return;
+        if (skipNextRemoteTabModeFetchForUserId === uid) {
+          skipNextRemoteTabModeFetchForUserId = null;
+          return;
+        }
+        const remote = await fetchAppTabModeForUser(uid);
+        if (!remote || cancelled) return;
+        userChoseModeRef.current = true;
+        setModeState(remote);
+        try {
+          await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, remote);
+        } catch {
+          /* noop */
+        }
+      })();
+    }, 280);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [authLoading, session?.user?.id]);
 

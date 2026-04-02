@@ -71,6 +71,12 @@
     "noLiveDeal": "No live deal"
   },
   "consumerHome": {
+    "segmentDeals": "Deals",
+    "segmentShops": "Shops",
+    "shopsSubtitle": "Browse cafés and bakeries near you.",
+    "locationChipWithRadius": "Within {{miles}} mi · tap to change",
+    "locationChipNoLocation": "Set location · tap",
+    "shopInfoLink": "Shop info",
     "tagline": "Live local deals · claim in one tap · redeem with QR",
     "favoritesOnlyActive": "Showing saved places only",
     "liveNearYou": "Live deals near you",
@@ -321,7 +327,10 @@
     "prefillFromReuse": "Fields loaded from a past deal. Adjust and publish.",
     "aiPosterAttached": "AI poster for this deal",
     "schedulingHint": "Quick Deal runs from now until the end time you pick. For a future start, recurring weekly hours, or AI ad variants, use AI ads.",
-    "openAiScheduling": "Open AI ads (scheduling)"
+    "openAiScheduling": "Open AI ads (scheduling)",
+    "sectionBasics": "Deal basics",
+    "sectionLimits": "Limits & timing",
+    "sectionAdvanced": "Advanced scheduling"
   },
   "language": {
     "sectionApp": "App language",
@@ -335,11 +344,16 @@
   },
   "account": {
     "title": "Account",
+    "expandBizProfile": "Show all business fields",
+    "collapseBizProfile": "Hide business fields",
+    "advancedOptions": "Advanced",
+    "switchToConsumerShort": "Browse as customer",
     "alertsEnableHint": "Enable notifications to receive deal alerts.",
     "alertsOn": "Deal alerts enabled.",
     "alertsOff": "Deal alerts disabled.",
     "languageSaved": "Language updated.",
     "loggedInAsLabel": "Logged in as",
+    "sessionSectionTitle": "Session",
     "dealAlertsTitle": "Deal alerts",
     "dealAlertsSubtitle": "Notify me when favorites post new deals.",
     "bizProfileHeader": "Business profile",
@@ -411,7 +425,9 @@
     "bizSetupFinish": "Finish your setup to unlock create, redeem, and dashboard.",
     "bizSetupStart": "Complete your one-time setup to start launching deals.",
     "createNewDeal": "Create New Deal",
-    "editProfile": "Edit Profile"
+    "editProfile": "Edit Profile",
+    "billingRowTitle": "Billing & plan",
+    "billingRowSubtitle": "Subscription, trial, and payments"
   },
   "settingsScreen": {
     "title": "Settings",
@@ -456,7 +472,11 @@
     "menuOfferTitle": "Offer from menu",
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
-    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines."
+    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
+    "subtitle": "Start fast or open more tools below.",
+    "moreToolsTitle": "More ways to create",
+    "moreToolsShow": "Show more",
+    "moreToolsHide": "Hide"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -708,6 +728,7 @@
     "languageHelp": "English by default. Spanish and Korean available.",
     "heroA11y": "TWOFER penguin",
     "demoHint": "Preview / development only",
+    "demoCredentialsHint": "Seeded demo login: {{email}} · password {{password}}",
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "forgotPassword": "Forgot password",
@@ -1313,7 +1334,16 @@
     "templatesReuseTitle": "Templates & reuse",
     "templatesReuseSubtitle": "Saved templates, recurring patterns, and past deals — open to start from one.",
     "openTemplates": "Open templates & reuse",
-    "editDeal": "Edit deal"
+    "editDeal": "Edit deal",
+    "createDealCta": "New deal",
+    "monthlyStatsSummary": "{{claims}} claims · {{redeems}} redeems · {{opens}} opens",
+    "monthlyStatsExpand": "Show full monthly stats",
+    "monthlyStatsCollapse": "Hide monthly stats",
+    "insightsExpand": "Show detailed insights",
+    "insightsCollapse": "Hide detailed insights",
+    "templatesBrowseLink": "Browse templates & reuse",
+    "manageDeal": "Manage",
+    "billingHintShort": "Billing & subscription"
   },
   "consumerProfile": {
     "navTitle": "Your profile",

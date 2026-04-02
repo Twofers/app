@@ -71,6 +71,12 @@
     "noLiveDeal": "Sin oferta en vivo"
   },
   "consumerHome": {
+    "segmentDeals": "Ofertas",
+    "segmentShops": "Locales",
+    "shopsSubtitle": "Explora cafeterías y panaderías cerca de ti.",
+    "locationChipWithRadius": "Dentro de {{miles}} mi · toca para cambiar",
+    "locationChipNoLocation": "Ubicación · toca",
+    "shopInfoLink": "Ver local",
     "tagline": "Ofertas locales en vivo · reclama en un toque · canje con QR",
     "favoritesOnlyActive": "Mostrando solo tus guardados",
     "liveNearYou": "Ofertas en vivo cerca de ti",
@@ -321,7 +327,10 @@
     "prefillFromReuse": "Campos cargados desde una oferta anterior. Ajusta y publica.",
     "aiPosterAttached": "Póster IA para esta oferta",
     "schedulingHint": "La oferta rápida va desde ahora hasta la hora de fin. Para empezar en el futuro, horarios semanales o anuncios con IA, usa Anuncios con IA.",
-    "openAiScheduling": "Abrir anuncios con IA (horario)"
+    "openAiScheduling": "Abrir anuncios con IA (horario)",
+    "sectionBasics": "Datos de la oferta",
+    "sectionLimits": "Límites y tiempo",
+    "sectionAdvanced": "Programación avanzada"
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -340,6 +349,7 @@
     "alertsOff": "Alertas de ofertas desactivadas.",
     "languageSaved": "Idioma actualizado.",
     "loggedInAsLabel": "Sesión iniciada como",
+    "sessionSectionTitle": "Sesión",
     "dealAlertsTitle": "Alertas de ofertas",
     "dealAlertsSubtitle": "Avísame cuando mis favoritos publiquen ofertas nuevas.",
     "bizProfileHeader": "Perfil del negocio",
@@ -411,7 +421,9 @@
     "bizSetupFinish": "Completa tu configuración para desbloquear crear, canjear y panel.",
     "bizSetupStart": "Completa la configuración inicial para empezar a lanzar ofertas.",
     "createNewDeal": "Crear nueva oferta",
-    "editProfile": "Editar perfil"
+    "editProfile": "Editar perfil",
+    "billingRowTitle": "Facturación y plan",
+    "billingRowSubtitle": "Suscripción, prueba y pagos"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -456,7 +468,11 @@
     "menuOfferTitle": "Offer from menu",
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
-    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines."
+    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
+    "subtitle": "Empieza rápido u abre más herramientas abajo.",
+    "moreToolsTitle": "Más formas de crear",
+    "moreToolsShow": "Ver más",
+    "moreToolsHide": "Ocultar"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -708,6 +724,7 @@
     "languageHelp": "Inglés por defecto. Español y coreano disponibles.",
     "heroA11y": "Pingüino de TWOFER",
     "demoHint": "Solo vista previa / desarrollo",
+    "demoCredentialsHint": "Cuenta demo sembrada: {{email}} · contraseña {{password}}",
     "emailLabel": "Correo electrónico",
     "passwordLabel": "Contraseña",
     "forgotPassword": "Olvidé mi contraseña",
@@ -1177,7 +1194,16 @@
     "templatesReuseTitle": "Plantillas y reutilizar",
     "templatesReuseSubtitle": "Plantillas guardadas, patrones recurrentes y ofertas pasadas — ábrelas para empezar desde una.",
     "openTemplates": "Abrir plantillas y reutilizar",
-    "editDeal": "Editar oferta"
+    "editDeal": "Editar oferta",
+    "createDealCta": "Nueva oferta",
+    "monthlyStatsSummary": "{{claims}} reclamaciones · {{redeems}} canjes · {{opens}} aperturas",
+    "monthlyStatsExpand": "Ver estadísticas mensuales completas",
+    "monthlyStatsCollapse": "Ocultar estadísticas mensuales",
+    "insightsExpand": "Ver información detallada",
+    "insightsCollapse": "Ocultar información detallada",
+    "templatesBrowseLink": "Plantillas y reutilizar",
+    "manageDeal": "Gestionar",
+    "billingHintShort": "Facturación y suscripción"
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",

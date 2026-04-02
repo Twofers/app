@@ -32,10 +32,13 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useTabMode } from "@/lib/tab-mode";
+import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { session } = useAuthSession();
+  const { setMode: setTabMode } = useTabMode();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
@@ -45,6 +48,7 @@ export default function SettingsScreen() {
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
   const [notifMode, setNotifModeState] = useState<ConsumerNotificationMode>("all_nearby");
   const [consumerSession, setConsumerSession] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -147,6 +151,33 @@ export default function SettingsScreen() {
   async function chooseAppLocale(locale: AppLocale) {
     await setUiLocalePreference(locale, { manual: true });
     await i18n.changeLanguage(locale);
+  }
+
+  async function performSignOut() {
+    setLogoutBusy(true);
+    try {
+      const result = await signOutAndRedirectToAuthLanding({
+        userId: session?.user?.id,
+        setTabMode,
+        replace: router.replace,
+      });
+      if (!result.ok) {
+        Alert.alert(t("account.errLogoutFailed"), result.message);
+      }
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
+
+  function confirmLogout() {
+    Alert.alert(t("account.logoutConfirmTitle"), t("account.logoutConfirmBody"), [
+      { text: t("commonUi.cancel"), style: "cancel" },
+      {
+        text: t("account.logoutConfirmCta"),
+        style: "destructive",
+        onPress: () => void performSignOut(),
+      },
+    ]);
   }
 
   function chip(active: boolean, label: string, onPress: () => void) {
@@ -331,6 +362,25 @@ export default function SettingsScreen() {
             })}
           </View>
         </View>
+
+        {consumerSession ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: Colors.light.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("account.sessionSectionTitle")}</Text>
+            <SecondaryButton
+              title={t("account.logOut")}
+              onPress={confirmLogout}
+              disabled={loading || logoutBusy}
+            />
+          </View>
+        ) : null}
 
         <View
           style={{

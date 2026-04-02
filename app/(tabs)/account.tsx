@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase";
 import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
+import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
@@ -26,7 +27,10 @@ import { logAuthPath } from "../../lib/auth-path-log";
 import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Radii } from "@/constants/theme";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
+import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -35,6 +39,7 @@ export default function AccountScreen() {
   const { t, i18n } = useTranslation();
   const {
     isLoggedIn,
+    userId,
     sessionEmail,
     businessId,
     businessOwnershipAmbiguous,
@@ -73,6 +78,10 @@ export default function AccountScreen() {
     address: string | null;
     category: string | null;
   } | null>(null);
+  const [bizProfileExpanded, setBizProfileExpanded] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   useEffect(() => {
     if (!isLoggedIn || tabMode !== "business") {
@@ -263,13 +272,17 @@ export default function AccountScreen() {
     setBusy(true);
     setBanner(null);
     try {
-      await supabase.auth.signOut();
-      router.replace("/auth-landing" as Href);
-    } catch (e: unknown) {
-      setBanner({
-        message: (e instanceof Error ? e.message : String(e)) || t("account.errLogoutFailed"),
-        tone: "error",
+      const result = await signOutAndRedirectToAuthLanding({
+        userId,
+        setTabMode,
+        replace: router.replace,
       });
+      if (!result.ok) {
+        setBanner({
+          message: result.message || t("account.errLogoutFailed"),
+          tone: "error",
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -458,8 +471,8 @@ export default function AccountScreen() {
 
   return (
     <KeyboardScreen>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("account.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <ScreenHeader title={t("account.title")} />
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
@@ -567,56 +580,159 @@ export default function AccountScreen() {
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
+          <View
+            style={{
+              flexDirection: "row",
+              borderRadius: Radii.pill,
+              backgroundColor: theme.surfaceMuted,
+              padding: 4,
+              gap: 4,
+            }}
+          >
+            <Pressable
+              onPress={async () => {
+                await setTabMode("customer");
+                router.replace("/(tabs)");
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: tabMode === "customer" }}
+              style={{
+                flex: 1,
+                paddingVertical: Spacing.sm + 2,
+                borderRadius: Radii.md,
+                backgroundColor: tabMode === "customer" ? theme.primary : "transparent",
+              }}
+            >
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontWeight: "800",
+                  fontSize: 14,
+                  color: tabMode === "customer" ? theme.primaryText : theme.text,
+                }}
+              >
+                {t("tabMode.customer")}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                await setTabMode("business");
+                router.replace("/(tabs)/create");
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: tabMode === "business" }}
+              style={{
+                flex: 1,
+                paddingVertical: Spacing.sm + 2,
+                borderRadius: Radii.md,
+                backgroundColor: tabMode === "business" ? theme.primary : "transparent",
+              }}
+            >
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontWeight: "800",
+                  fontSize: 14,
+                  color: tabMode === "business" ? theme.primaryText : theme.text,
+                }}
+              >
+                {t("tabMode.business")}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+            }}
+          >
+            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
+            <Text style={{ fontWeight: "700", marginTop: 4, color: theme.text }}>{sessionEmail}</Text>
+          </View>
+
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("account.sessionSectionTitle")}</Text>
+            <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
+          </View>
+
           {tabMode === "business" ? (
             <View
               style={{
                 borderRadius: Radii.lg,
                 padding: Spacing.md,
-                backgroundColor: Colors.light.surface,
+                backgroundColor: theme.surface,
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 gap: Spacing.sm,
               }}
             >
-              <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
+              <Text style={{ fontWeight: "700", fontSize: 18, color: theme.text }}>{t("account.bizCardTitle")}</Text>
               {businessProfileCheckLoading ? (
-                <Text style={{ opacity: 0.7 }}>{t("createHub.loading")}</Text>
+                <Text style={{ opacity: 0.7, color: theme.text }}>{t("createHub.loading")}</Text>
               ) : (
                 <>
-                  <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+                  <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
                     {businessProfileSnapshot?.name ?? businessName ?? t("account.bizYourBusiness")}
                   </Text>
-                  <Text style={{ opacity: 0.7, lineHeight: 20 }}>{businessProfileSnapshot?.address ?? t("account.bizNoAddress")}</Text>
+                  <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                    {businessProfileSnapshot?.address ?? t("account.bizNoAddress")}
+                  </Text>
                   {businessProfileSnapshot?.category ? (
-                    <Text style={{ opacity: 0.7, lineHeight: 20 }}>{t("account.bizCategory")}: {businessProfileSnapshot.category}</Text>
+                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                      {t("account.bizCategory")}: {businessProfileSnapshot.category}
+                    </Text>
                   ) : null}
-                  <Text style={{ opacity: 0.75, lineHeight: 20 }}>
+                  <Text style={{ opacity: 0.75, lineHeight: 20, color: theme.text }}>
                     {businessSetupMessage ?? t("account.bizSetupComplete")}
                   </Text>
-                  <PrimaryButton
-                    title={t("account.createNewDeal")}
-                    onPress={goToCreateDeal}
-                    style={{
-                      backgroundColor: "#FF9F1C",
-                      borderRadius: Radii.lg,
-                    }}
-                  />
+                  <PrimaryButton title={t("account.createNewDeal")} onPress={goToCreateDeal} />
                   {!businessProfileComplete ? (
                     <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
-                  ) : null}
-                  {businessProfileComplete ? (
-                    <SecondaryButton title={t("account.editProfile")} onPress={goToBusinessSetup} />
-                  ) : null}
-                  <SecondaryButton
-                    title={t("account.switchToConsumer")}
+                  ) : (
+                    <Pressable onPress={goToBusinessSetup} style={{ paddingVertical: Spacing.sm, alignItems: "center" }}>
+                      <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
                     onPress={async () => {
                       await setTabMode("customer");
                       router.replace("/(tabs)");
                     }}
-                  />
+                    style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
+                  >
+                    <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 14 }}>{t("account.switchToConsumerShort")}</Text>
+                  </Pressable>
                 </>
               )}
             </View>
+          ) : null}
+
+          {tabMode === "business" && businessId ? (
+            <Pressable
+              onPress={() => router.push("/(tabs)/billing" as Href)}
+              accessibilityRole="button"
+            >
+              <CardShell variant="elevated">
+                <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>{t("account.billingRowTitle")}</Text>
+                <Text style={{ marginTop: 6, opacity: 0.7, fontSize: 14, lineHeight: 20, color: theme.text }}>
+                  {t("account.billingRowSubtitle")}
+                </Text>
+                <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.primary }}>
+                  {t("billing.goToBilling", { defaultValue: "Go to Billing" })} →
+                </Text>
+              </CardShell>
+            </Pressable>
           ) : null}
 
           <View
@@ -640,45 +756,9 @@ export default function AccountScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#eee",
-              borderRadius: 12,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
               padding: Spacing.md,
-              gap: Spacing.sm,
-            }}
-          >
-            <Text style={{ fontWeight: "700" }}>{t("tabMode.title")}</Text>
-            <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("tabMode.subtitle")}</Text>
-            <View style={{ gap: Spacing.sm }}>
-              <PrimaryButton
-                title={t("tabMode.customer")}
-                onPress={async () => {
-                  await setTabMode("customer");
-                  router.replace("/(tabs)");
-                }}
-              />
-              <SecondaryButton
-                title={t("tabMode.business")}
-                onPress={async () => {
-                  await setTabMode("business");
-                  router.replace("/(tabs)/create");
-                }}
-              />
-            </View>
-            <Text style={{ fontSize: 12, opacity: 0.55 }}>
-              {tabMode === "business" ? t("tabMode.currentBusiness") : t("tabMode.currentCustomer")}
-            </Text>
-          </View>
-          <View>
-            <Text style={{ opacity: 0.7 }}>{t("account.loggedInAsLabel")}</Text>
-            <Text style={{ fontWeight: "700", marginTop: 4 }}>{sessionEmail}</Text>
-          </View>
-
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#eee",
-              borderRadius: 12,
-              padding: 12,
               flexDirection: "row",
               justifyContent: "space-between",
               alignItems: "center",
@@ -760,8 +840,15 @@ export default function AccountScreen() {
 
               <Text style={{ fontWeight: "700", marginTop: 8 }}>{t("account.bizProfileHeader")}</Text>
               <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("account.bizProfileHelp")}</Text>
-              <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldBusinessName")}</Text>
+              <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: Spacing.sm }}>
+                <Text style={{ color: theme.primary, fontWeight: "800" }}>
+                  {bizProfileExpanded ? t("account.collapseBizProfile") : t("account.expandBizProfile")}
+                </Text>
+              </Pressable>
+              {bizProfileExpanded ? (
+                <>
+                  <View>
+                    <Text style={{ fontSize: 13 }}>{t("account.fieldBusinessName")}</Text>
                 <TextInput
                   value={profileBusinessName}
                   onChangeText={setProfileBusinessName}
@@ -958,11 +1045,13 @@ export default function AccountScreen() {
                   }}
                 />
               </View>
-              <PrimaryButton
-                title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
-                onPress={saveBusinessProfile}
-                disabled={savingProfile}
-              />
+                  <PrimaryButton
+                    title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
+                    onPress={saveBusinessProfile}
+                    disabled={savingProfile}
+                  />
+                </>
+              ) : null}
             </View>
           ) : null}
 
@@ -984,16 +1073,28 @@ export default function AccountScreen() {
             </View>
           )}
 
+          <Pressable
+            onPress={() => setAdvancedOpen((v) => !v)}
+            style={{ paddingVertical: Spacing.sm, alignSelf: "flex-start" }}
+          >
+            <Text style={{ fontWeight: "800", color: theme.primary, fontSize: 15 }}>
+              {advancedOpen ? "− " : "+ "}
+              {t("account.advancedOptions")}
+            </Text>
+          </Pressable>
+
+          {advancedOpen ? (
+            <>
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#eee",
-              borderRadius: 12,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
               padding: Spacing.md,
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "700" }}>{t("legal.sectionTitle")}</Text>
+            <Text style={{ fontWeight: "700", color: theme.text }}>{t("legal.sectionTitle")}</Text>
             <LegalExternalLinks />
           </View>
 
@@ -1001,7 +1102,7 @@ export default function AccountScreen() {
             style={{
               borderWidth: 1,
               borderColor: blockInAppSelfDelete ? "#e5e5e5" : "#f3d4d4",
-              borderRadius: 12,
+              borderRadius: Radii.lg,
               padding: Spacing.md,
               gap: Spacing.sm,
               backgroundColor: blockInAppSelfDelete ? "#fafafa" : "#fffafa",
@@ -1056,8 +1157,8 @@ export default function AccountScreen() {
               </>
             )}
           </View>
-
-          <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
+            </>
+          ) : null}
         </ScrollView>
       )}
     </View>

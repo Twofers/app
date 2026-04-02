@@ -71,6 +71,12 @@
     "noLiveDeal": "진행 중 딜 없음"
   },
   "consumerHome": {
+    "segmentDeals": "딜",
+    "segmentShops": "매장",
+    "shopsSubtitle": "주변 카페·베이커리를 둘러보세요.",
+    "locationChipWithRadius": "{{miles}}마일 이내 · 탭하여 변경",
+    "locationChipNoLocation": "위치 설정 · 탭",
+    "shopInfoLink": "매장 정보",
     "tagline": "실시간 지역 딜 · 한 번에 받기 · QR로 사용",
     "favoritesOnlyActive": "저장한 매장만 표시 중",
     "liveNearYou": "주변 라이브 딜",
@@ -321,7 +327,10 @@
     "prefillFromReuse": "이전 딜에서 불러왔습니다. 수정 후 게시하세요.",
     "aiPosterAttached": "이 딜용 AI 포스터",
     "schedulingHint": "빠른 딜은 지금부터 선택한 종료 시각까지입니다. 미래 시작, 매주 반복, AI 광고는 AI 광고 화면을 사용하세요.",
-    "openAiScheduling": "AI 광고 열기(일정)"
+    "openAiScheduling": "AI 광고 열기(일정)",
+    "sectionBasics": "딜 기본 정보",
+    "sectionLimits": "한도 및 시간",
+    "sectionAdvanced": "고급 일정"
   },
   "language": {
     "sectionApp": "앱 언어",
@@ -340,6 +349,7 @@
     "alertsOff": "딜 알림이 꺼졌습니다.",
     "languageSaved": "언어가 변경되었습니다.",
     "loggedInAsLabel": "로그인 계정",
+    "sessionSectionTitle": "세션",
     "dealAlertsTitle": "딜 알림",
     "dealAlertsSubtitle": "즐겨찾기 매장이 새 딜을 올리면 알려줍니다.",
     "bizProfileHeader": "비즈니스 프로필",
@@ -411,7 +421,9 @@
     "bizSetupFinish": "설정을 완료하여 만들기, 사용, 대시보드를 잠금 해제하세요.",
     "bizSetupStart": "초기 설정을 완료하여 딜을 시작하세요.",
     "createNewDeal": "새 딜 만들기",
-    "editProfile": "프로필 수정"
+    "editProfile": "프로필 수정",
+    "billingRowTitle": "결제 및 요금제",
+    "billingRowSubtitle": "구독, 무료 체험 및 결제"
   },
   "settingsScreen": {
     "title": "설정",
@@ -456,7 +468,11 @@
     "menuOfferTitle": "Offer from menu",
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
-    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines."
+    "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
+    "subtitle": "빠르게 시작하거나 아래에서 더 많은 도구를 여세요.",
+    "moreToolsTitle": "다른 만들기 방법",
+    "moreToolsShow": "더 보기",
+    "moreToolsHide": "접기"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -708,6 +724,7 @@
     "languageHelp": "기본은 영어입니다. 스페인어와 한국어를 사용할 수 있어요.",
     "heroA11y": "TWOFER 펭귄",
     "demoHint": "미리보기/개발 전용",
+    "demoCredentialsHint": "시드 데모 로그인: {{email}} · 비밀번호 {{password}}",
     "emailLabel": "이메일",
     "passwordLabel": "비밀번호",
     "forgotPassword": "비밀번호 찾기",
@@ -1177,7 +1194,16 @@
     "templatesReuseTitle": "템플릿 및 재사용",
     "templatesReuseSubtitle": "저장한 템플릿, 반복 패턴, 지난 딜 — 여기서 불러와 시작하세요.",
     "openTemplates": "템플릿 및 재사용 열기",
-    "editDeal": "딜 수정"
+    "editDeal": "딜 수정",
+    "createDealCta": "새 딜",
+    "monthlyStatsSummary": "클레임 {{claims}} · 사용 {{redeems}} · 오픈 {{opens}}",
+    "monthlyStatsExpand": "이번 달 전체 통계 보기",
+    "monthlyStatsCollapse": "이번 달 통계 접기",
+    "insightsExpand": "상세 인사이트 보기",
+    "insightsCollapse": "상세 인사이트 접기",
+    "templatesBrowseLink": "템플릿 및 재사용",
+    "manageDeal": "관리",
+    "billingHintShort": "결제 및 구독"
   },
   "consumerProfile": {
     "navTitle": "내 프로필",
