@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -34,10 +34,14 @@ export default function RedeemScanner() {
   const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string } | null>(null);
   const [claimCodeInput, setClaimCodeInput] = useState("");
 
-  useEffect(() => {
-    if (!permission) return;
-    if (permission.granted) return;
-  }, [permission]);
+  // Clear stale success/error state when tab regains focus
+  useFocusEffect(
+    useCallback(() => {
+      setSuccess(null);
+      setBanner(null);
+      setScanned(false);
+    }, []),
+  );
 
   useEffect(() => {
     setBanner(null);
