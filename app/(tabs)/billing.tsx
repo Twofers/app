@@ -267,6 +267,31 @@ export default function BusinessBillingScreen() {
 
   const simulateVisible = __DEV__;
 
+  const resetTrial = async () => {
+    if (busy) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      const trialEnd = new Date(Date.now() + 30 * 86400000).toISOString();
+      const { error } = await supabase
+        .from("business_profiles")
+        .update({
+          subscription_status: "trial",
+          subscription_tier: "pro",
+          trial_ends_at: trialEnd,
+          current_period_ends_at: trialEnd,
+        })
+        .or(`user_id.eq.${userId},owner_id.eq.${userId}`);
+      if (error) throw error;
+      await refresh();
+      setBanner({ message: "Trial reset to 30 days.", tone: "success" });
+    } catch {
+      setBanner({ message: "Unable to reset trial. Run npm run seed:demo with SUPABASE_SERVICE_ROLE_KEY.", tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const simulateSubscribe = async () => {
     if (busy) return;
     setBusy(true);
@@ -447,11 +472,18 @@ export default function BusinessBillingScreen() {
                 <Text style={{ opacity: 0.72, marginBottom: 10 }}>
                   Current status: {subscriptionStatus} ({subscriptionTier})
                 </Text>
-                <SecondaryButton
-                  title={t("billing.simulateSubscribe", { defaultValue: "Simulate Subscribe" })}
-                  onPress={() => void simulateSubscribe()}
-                  disabled={busy}
-                />
+                <View style={{ gap: 8 }}>
+                  <SecondaryButton
+                    title={t("billing.simulateSubscribe", { defaultValue: "Simulate Subscribe" })}
+                    onPress={() => void simulateSubscribe()}
+                    disabled={busy}
+                  />
+                  <SecondaryButton
+                    title="Reset Trial (30 days)"
+                    onPress={() => void resetTrial()}
+                    disabled={busy}
+                  />
+                </View>
               </View>
             ) : null}
 

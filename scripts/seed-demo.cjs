@@ -160,6 +160,14 @@ async function main() {
   }
 
   const trialEndsAtIso = new Date(Date.now() + 30 * 86400000).toISOString();
+  const profilePayload = {
+    business_id: bid,
+    setup_completed: true,
+    subscription_status: "trial",
+    subscription_tier: "pro",
+    trial_ends_at: trialEndsAtIso,
+    current_period_ends_at: trialEndsAtIso,
+  };
   const { data: profileByUser } = await supabase
     .from("business_profiles")
     .select("id")
@@ -168,50 +176,17 @@ async function main() {
   if (profileByUser?.id) {
     const { error: pErr } = await supabase
       .from("business_profiles")
-      .update({
-        name: BUSINESS.name,
-        address: BUSINESS.address,
-        category: "Coffee Shop",
-        setup_completed: true,
-        subscription_status: "trial",
-        subscription_tier: "pro",
-        trial_ends_at: trialEndsAtIso,
-        current_period_ends_at: trialEndsAtIso,
-      })
+      .update(profilePayload)
       .eq("id", profileByUser.id);
     if (pErr) throw pErr;
+    console.log("Updated business_profiles", profileByUser.id);
   } else {
-    const { error: upUserErr } = await supabase.from("business_profiles").upsert(
-      {
-        user_id: userId,
-        name: BUSINESS.name,
-        address: BUSINESS.address,
-        category: "Coffee Shop",
-        setup_completed: true,
-        subscription_status: "trial",
-        subscription_tier: "pro",
-        trial_ends_at: trialEndsAtIso,
-        current_period_ends_at: trialEndsAtIso,
-      },
+    const { error: insProfileErr } = await supabase.from("business_profiles").upsert(
+      { user_id: userId, ...profilePayload },
       { onConflict: "user_id" },
     );
-    if (upUserErr) {
-      const { error: upOwnerErr } = await supabase.from("business_profiles").upsert(
-        {
-          owner_id: userId,
-          name: BUSINESS.name,
-          address: BUSINESS.address,
-          category: "Coffee Shop",
-          setup_completed: true,
-          subscription_status: "trial",
-          subscription_tier: "pro",
-          trial_ends_at: trialEndsAtIso,
-          current_period_ends_at: trialEndsAtIso,
-        },
-        { onConflict: "owner_id" },
-      );
-      if (upOwnerErr) throw upOwnerErr;
-    }
+    if (insProfileErr) throw insProfileErr;
+    console.log("Inserted business_profiles for user", userId);
   }
 
   let locationId = null;
