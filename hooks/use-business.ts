@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "../lib/supabase";
 import type { BusinessContextPayload } from "../lib/ad-variants";
@@ -73,6 +73,7 @@ export function useBusiness() {
   /** True when the businesses lookup failed (e.g. multiple rows) — fail-safe: treat as cannot self-delete in-app. */
   const [businessOwnershipAmbiguous, setBusinessOwnershipAmbiguous] = useState(false);
   const [loading, setLoading] = useState(true);
+  const hasEverFetchedRef = useRef(false);
 
   const businessContextForAi = useMemo(() => businessRowToAiContext(business), [business]);
 
@@ -84,14 +85,17 @@ export function useBusiness() {
       setUserId(null);
       setSessionEmail(null);
       setBusiness(null);
-      setSubscriptionStatus("trial");
-      setTrialEndsAt(null);
-      setCurrentPeriodEndsAt(null);
-      setStripeIds({ stripeCustomerId: null, stripeSubscriptionId: null });
+      // Only reset billing state to defaults if we've never fetched real data.
+      // This prevents the stale-default window that triggers premature billing redirects.
+      if (!hasEverFetchedRef.current) {
+        setSubscriptionStatus("trial");
+        setTrialEndsAt(null);
+        setCurrentPeriodEndsAt(null);
+        setStripeIds({ stripeCustomerId: null, stripeSubscriptionId: null });
+      }
       setBusinessOwnershipAmbiguous(false);
-      // Only mark loading as done when auth has finished resolving.
-      // While auth is still loading, keep loading=true so billing gates
-      // don't fire with stale default values.
+      // Keep loading=true until auth fully resolves to prevent billing gates
+      // from firing with stale defaults during the auth handshake.
       if (!authLoading) setLoading(false);
       return;
     }
@@ -103,7 +107,7 @@ export function useBusiness() {
     const { data, error: bizError } = await supabase
       .from("businesses")
       .select(
-        "id,subscription_tier,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
+        "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
       )
       .eq("owner_id", uid)
       .maybeSingle();
@@ -121,7 +125,7 @@ export function useBusiness() {
       data
         ? {
             id: data.id,
-            subscription_tier: data.subscription_tier === "premium" ? "premium" : "pro",
+            subscription_tier: "pro", // canonical tier lives on business_profiles now
             name: data.name,
             contact_name: data.contact_name ?? null,
             business_email: data.business_email ?? null,
@@ -231,7 +235,7 @@ export function useBusiness() {
     // Keep the existing `subscriptionTier` contract for location limits.
     const rawTier = (bpRow?.subscription_tier ?? null) || null;
     const normalizedTier: "pro" | "premium" =
-      rawTier === "premium" ? "premium" : rawTier === "pro" ? "pro" : (data?.subscription_tier === "premium" ? "premium" : "pro");
+      rawTier === "premium" ? "premium" : "pro";
 
     setSubscriptionStatus(normalizedStatus);
     setTrialEndsAt(bpRow?.trial_ends_at ? String(bpRow.trial_ends_at) : null);
@@ -244,6 +248,7 @@ export function useBusiness() {
     // Update the in-memory business subscription tier too, so downstream logic stays consistent.
     setBusiness((prev) => (prev ? { ...prev, subscription_tier: normalizedTier } : prev));
 
+    hasEverFetchedRef.current = true;
     setLoading(false);
   }, [session, authLoading]);
 
