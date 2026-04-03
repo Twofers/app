@@ -1136,5 +1136,10 @@
     "periodAm": "a. m.",
     "periodPm": "p. m.",
     "errLoad": "No se pudieron cargar las analíticas."
+  },
+  "crashScreen": {
+    "title": "Algo salió mal",
+    "body": "La app tuvo un error inesperado. Reiniciar debería solucionarlo.",
+    "restart": "Reiniciar"
   }
 }
