@@ -171,12 +171,13 @@ export function useBusiness() {
     }
 
     const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
+    const isActiveSubscription = bpRow?.subscription_status === "active";
     const needsBillingInit =
       !bpRow ||
       !bpRow.subscription_status ||
       !bpRow.subscription_tier ||
-      !bpRow.trial_ends_at ||
-      !bpRow.current_period_ends_at;
+      (!isActiveSubscription && !bpRow.trial_ends_at) ||
+      (!isActiveSubscription && !bpRow.current_period_ends_at);
 
     if (needsBillingInit) {
       const repair: Record<string, unknown> = {};
