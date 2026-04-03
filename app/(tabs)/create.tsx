@@ -123,7 +123,7 @@ export default function CreateDeal() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: "#1e3a5f",
+              backgroundColor: Colors.light.secondary,
               boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
               elevation: 2,
             }}

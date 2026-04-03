@@ -541,7 +541,7 @@ export default function WalletScreen() {
               title={isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
-              style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
+              style={{ backgroundColor: Colors.light.success, borderRadius: Radii.lg }}
             />
             <SecondaryButton
               title={`QR fallback - ${t("consumerWallet.qrFallbackCta")}`}

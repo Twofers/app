@@ -134,7 +134,7 @@ serve(async (req) => {
       {
         global: {
           headers: {
-            Authorization: req.headers.get("Authorization")!,
+            Authorization: req.headers.get("Authorization") ?? "",
           },
         },
       }
@@ -225,6 +225,7 @@ serve(async (req) => {
       .gte("created_at", oneHourAgo);
     if (claimsLastHourError) {
       console.error("hourly claim guard lookup:", claimsLastHourError);
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable. Please try again." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } else if ((claimsLastHour ?? 0) >= 1) {
       return new Response(
         JSON.stringify({
@@ -394,6 +395,7 @@ serve(async (req) => {
       .eq("business_id", businessId);
     if (bizDealsError) {
       console.error("biz deals lookup:", bizDealsError);
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable. Please try again." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     let businessDealIds = (bizDealRows ?? []).map((r: { id: string }) => r.id);
     if (businessDealIds.length === 0) {
@@ -450,6 +452,7 @@ serve(async (req) => {
 
     if (activeBizError) {
       console.error("active biz claims:", activeBizError);
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable. Please try again." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } else if (activeBizClaims && activeBizClaims.length > 0) {
       const other = activeBizClaims.find((c: { deal_id: string }) => c.deal_id !== dealId);
       if (other) {
@@ -482,6 +485,7 @@ serve(async (req) => {
 
     if (todayErr) {
       console.error("recent claims for daily limit:", todayErr);
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable. Please try again." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } else if (recentClaims && recentClaims.length > 0) {
       const claimedThisLocalDay = recentClaims.some((row: { created_at: string }) => {
         const key = calendarDateKeyInTimeZone(new Date(row.created_at), businessTz);
@@ -509,6 +513,7 @@ serve(async (req) => {
 
       if (countError) {
         console.error("Error counting claims:", countError);
+        return new Response(JSON.stringify({ error: "Service temporarily unavailable. Please try again." }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } else if (count !== null && count >= deal.max_claims) {
         return new Response(
           JSON.stringify({ error: "This deal has reached its claim limit." }),

@@ -96,11 +96,11 @@ export default function AccountScreen() {
             : null,
         );
         if (access.isComplete) {
-          setBusinessSetupMessage("Setup complete - ready to launch BOGO deals!");
+          setBusinessSetupMessage(t("accountSetup.setupComplete"));
         } else if (access.hasProfileRow) {
-          setBusinessSetupMessage("Finish your setup to unlock create, redeem, and dashboard.");
+          setBusinessSetupMessage(t("accountSetup.finishSetup"));
         } else {
-          setBusinessSetupMessage("Complete your one-time setup to start launching deals.");
+          setBusinessSetupMessage(t("accountSetup.completeSetup"));
         }
       })
       .finally(() => {

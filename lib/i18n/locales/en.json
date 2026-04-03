@@ -1266,5 +1266,23 @@
     "periodAm": "AM",
     "periodPm": "PM",
     "errLoad": "Failed to load analytics."
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "body": "An unexpected error occurred. Try again or restart the app.",
+    "retry": "Try again"
+  },
+  "offline": {
+    "banner": "You're offline. Some features may not work."
+  },
+  "accountSetup": {
+    "setupComplete": "Setup complete — ready to launch BOGO deals!",
+    "finishSetup": "Finish your setup to unlock create, redeem, and dashboard.",
+    "completeSetup": "Complete your one-time setup to start launching deals."
+  },
+  "mapError": {
+    "title": "Map unavailable",
+    "body": "The map could not load. Try again or browse deals from the Home tab.",
+    "retry": "Retry"
   }
 }

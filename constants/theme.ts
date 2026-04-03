@@ -24,6 +24,8 @@ export const Colors = {
     tabIconDefault: '#687076',
     tabIconSelected: '#FF9F1C',
     cardShadow: '#000000',
+    success: '#16a34a',
+    successBg: '#e8f5e9',
   },
   dark: {
     text: '#ECEDEE',
@@ -40,6 +42,8 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: '#FF9F1C',
     cardShadow: '#000000',
+    success: '#16a34a',
+    successBg: '#1a3a2a',
   },
 };
 
