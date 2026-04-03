@@ -26,6 +26,7 @@ const MAPPING = {
   'person.crop.circle.fill': 'person',
   'wallet.pass.fill': 'account-balance-wallet',
   'map.fill': 'map',
+  'creditcard.fill': 'credit-card',
 } as IconMapping;
 
 /**

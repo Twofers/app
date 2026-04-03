@@ -49,21 +49,30 @@ export default function CreateDeal() {
 
   useEffect(() => {
     if (!businessId) return;
+    let cancelled = false;
     (async () => {
       setTemplatesLoading(true);
-      const { data, error } = await supabase
-        .from("deal_templates")
-        .select("id,title,description,poster_url,price")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (error) {
-        setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
-      } else {
-        setTemplates(data ?? []);
+      try {
+        const { data, error } = await supabase
+          .from("deal_templates")
+          .select("id,title,description,poster_url,price")
+          .eq("business_id", businessId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (cancelled) return;
+        if (error) {
+          setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+        } else {
+          setTemplates(data ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+        }
       }
-      setTemplatesLoading(false);
+      if (!cancelled) setTemplatesLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [businessId]);
 
   return (
@@ -119,7 +128,7 @@ export default function CreateDeal() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/create/ai-compose")}
+            onPress={() => router.push("/create/menu-manager")}
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
@@ -128,8 +137,24 @@ export default function CreateDeal() {
               elevation: 2,
             }}
           >
-            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
+            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.menuTitle")}</Text>
             <Text style={{ color: "white", opacity: 0.88, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+              {t("createHub.menuSubtitle")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/create/ai-compose")}
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              backgroundColor: Colors.light.surfaceMuted,
+              boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
+              elevation: 2,
+            }}
+          >
+            <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
+            <Text style={{ color: "#111", opacity: 0.72, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
               {t("createHub.aiComposeSubtitle")}
             </Text>
           </Pressable>

@@ -4,6 +4,8 @@ import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { format } from "date-fns";
+import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { supabase } from "../../lib/supabase";
 import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
@@ -19,6 +21,12 @@ import {
 } from "../../lib/translate-deal-quality";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
+import { MenuItemPicker } from "../../components/menu-item-picker";
+import type { MenuItem } from "../../lib/menu-items";
+
+function minutesFromDate(date: Date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
 
 export default function QuickDealScreen() {
   const router = useRouter();
@@ -42,6 +50,14 @@ export default function QuickDealScreen() {
   const [maxClaims, setMaxClaims] = useState("50");
   const [cutoffMins, setCutoffMins] = useState("15");
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [validityMode, setValidityMode] = useState<"one-time" | "recurring">("one-time");
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [windowStart, setWindowStart] = useState(new Date());
+  const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [showWindowStartPicker, setShowWindowStartPicker] = useState(false);
+  const [showWindowEndPicker, setShowWindowEndPicker] = useState(false);
+  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const [showMenuPicker, setShowMenuPicker] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [banner, setBanner] = useState<{
     message: string;
@@ -49,6 +65,35 @@ export default function QuickDealScreen() {
   } | null>(null);
 
   const canPublish = useMemo(() => title.trim().length > 0, [title]);
+
+  const dayOptionsUi = useMemo(
+    () => [
+      { label: t("createAi.dayMon"), value: 1 },
+      { label: t("createAi.dayTue"), value: 2 },
+      { label: t("createAi.dayWed"), value: 3 },
+      { label: t("createAi.dayThu"), value: 4 },
+      { label: t("createAi.dayFri"), value: 5 },
+      { label: t("createAi.daySat"), value: 6 },
+      { label: t("createAi.daySun"), value: 7 },
+    ],
+    [t],
+  );
+
+  function formatPickerTime(date: Date) {
+    return format(date, "p", { locale: dateFnsLocaleFor(i18n.language) });
+  }
+
+  function handleMenuItemsSelected(items: MenuItem[]) {
+    if (items.length === 2) {
+      const [a, b] = items;
+      setTitle(`Buy ${a.name}, get ${b.name} free`);
+      if (a.price != null) setPrice(String(a.price));
+    } else if (items.length === 1) {
+      setTitle(`BOGO ${items[0].name}`);
+      if (items[0].price != null) setPrice(String(items[0].price));
+    }
+    setBanner({ message: t("createQuick.menuItemsSelected"), tone: "success" });
+  }
 
   useEffect(() => {
     const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -119,8 +164,8 @@ export default function QuickDealScreen() {
       return;
     }
 
-    const end = endTime;
     const now = new Date();
+    const isRecurring = validityMode === "recurring";
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
 
@@ -132,14 +177,27 @@ export default function QuickDealScreen() {
       setBanner({ message: t("createQuick.errCutoff"), tone: "error" });
       return;
     }
-    if (now >= end) {
-      setBanner({ message: t("createQuick.errEndFuture"), tone: "error" });
-      return;
-    }
-    const durationMinutes = Math.floor((end.getTime() - now.getTime()) / 60000);
-    if (cutoffNum >= durationMinutes) {
-      setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
-      return;
+
+    if (isRecurring) {
+      if (daysOfWeek.length === 0) {
+        setBanner({ message: t("createAi.errRecurringDay"), tone: "error" });
+        return;
+      }
+      if (minutesFromDate(windowStart) >= minutesFromDate(windowEnd)) {
+        setBanner({ message: t("createQuick.errWindowOrder"), tone: "error" });
+        return;
+      }
+    } else {
+      const end = endTime;
+      if (now >= end) {
+        setBanner({ message: t("createQuick.errEndFuture"), tone: "error" });
+        return;
+      }
+      const durationMinutes = Math.floor((end.getTime() - now.getTime()) / 60000);
+      if (cutoffNum >= durationMinutes) {
+        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
+        return;
+      }
     }
 
     setPublishing(true);
@@ -170,18 +228,28 @@ export default function QuickDealScreen() {
         return;
       }
 
+      const start = isRecurring ? now : now;
+      const end = isRecurring
+        ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+        : endTime;
+
       const { error } = await supabase.from("deals").insert({
         business_id: businessId,
         title: title.trim(),
         description: null,
         price: priceNum,
-        start_time: now.toISOString(),
+        start_time: start.toISOString(),
         end_time: end.toISOString(),
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
         poster_url: null,
         quality_tier: quality.tier,
+        is_recurring: isRecurring,
+        days_of_week: isRecurring ? daysOfWeek : null,
+        window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
+        window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
+        timezone: isRecurring ? timezone : null,
       });
 
       if (error) throw error;
@@ -214,6 +282,41 @@ export default function QuickDealScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {businessId ? (
+            <>
+              <Pressable
+                onPress={() => setShowMenuPicker(true)}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  backgroundColor: "#FFF5E6",
+                  borderWidth: 1,
+                  borderColor: Colors.light.primary,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.sm,
+                }}
+              >
+                <Text style={{ fontSize: 20 }}>📋</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: Colors.light.primary }}>
+                    {t("createQuick.selectFromMenu")}
+                  </Text>
+                  <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>
+                    {t("createQuick.selectFromMenuHint")}
+                  </Text>
+                </View>
+              </Pressable>
+              <MenuItemPicker
+                businessId={businessId}
+                visible={showMenuPicker}
+                onClose={() => setShowMenuPicker(false)}
+                onSelect={handleMenuItemsSelected}
+                maxSelect={2}
+              />
+            </>
+          ) : null}
+
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldOfferHint")}</Text>
             <TextInput
@@ -283,31 +386,151 @@ export default function QuickDealScreen() {
           </View>
 
           <View>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
-            <Pressable
-              onPress={() => setShowEndPicker(true)}
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                marginTop: 6,
-                backgroundColor: Colors.light.surface,
-              }}
-            >
-              <Text style={{ fontSize: 16 }}>{formatAppDateTime(endTime, i18n.language)}</Text>
-            </Pressable>
-            {showEndPicker ? (
-              <DateTimePicker
-                value={endTime}
-                mode="datetime"
-                onChange={(_event, date) => {
-                  setShowEndPicker(false);
-                  if (date) setEndTime(date);
+            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createAi.validity")}</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+              <Pressable
+                onPress={() => setValidityMode("one-time")}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: validityMode === "one-time" ? Colors.light.primary : "#eee",
                 }}
-              />
-            ) : null}
+              >
+                <Text style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}>
+                  {t("createAi.oneTime")}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setValidityMode("recurring")}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: validityMode === "recurring" ? Colors.light.primary : "#eee",
+                }}
+              >
+                <Text style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}>
+                  {t("createAi.recurring")}
+                </Text>
+              </Pressable>
+            </View>
           </View>
+
+          {validityMode === "one-time" ? (
+            <View>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
+              <Pressable
+                onPress={() => setShowEndPicker(true)}
+                style={{
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  marginTop: 6,
+                  backgroundColor: Colors.light.surface,
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>{formatAppDateTime(endTime, i18n.language)}</Text>
+              </Pressable>
+              {showEndPicker ? (
+                <DateTimePicker
+                  value={endTime}
+                  mode="datetime"
+                  onChange={(_event, date) => {
+                    setShowEndPicker(false);
+                    if (date) setEndTime(date);
+                  }}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View style={{ gap: Spacing.md }}>
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createAi.days")}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                  {dayOptionsUi.map((day) => {
+                    const selected = daysOfWeek.includes(day.value);
+                    return (
+                      <Pressable
+                        key={day.value}
+                        onPress={() => {
+                          setDaysOfWeek((prev) =>
+                            selected ? prev.filter((d) => d !== day.value) : [...prev, day.value]
+                          );
+                        }}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 999,
+                          backgroundColor: selected ? Colors.light.primary : "#eee",
+                        }}
+                      >
+                        <Text style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}>
+                          {day.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createAi.timeWindow")}</Text>
+                <Pressable
+                  onPress={() => setShowWindowStartPicker(true)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>
+                    {t("createAi.windowStart")} {formatPickerTime(windowStart)}
+                  </Text>
+                </Pressable>
+                {showWindowStartPicker ? (
+                  <DateTimePicker
+                    value={windowStart}
+                    mode="time"
+                    onChange={(_event, date) => {
+                      setShowWindowStartPicker(false);
+                      if (date) setWindowStart(date);
+                    }}
+                  />
+                ) : null}
+
+                <Pressable
+                  onPress={() => setShowWindowEndPicker(true)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>
+                    {t("createAi.windowEnd")} {formatPickerTime(windowEnd)}
+                  </Text>
+                </Pressable>
+                {showWindowEndPicker ? (
+                  <DateTimePicker
+                    value={windowEnd}
+                    mode="time"
+                    onChange={(_event, date) => {
+                      setShowWindowEndPicker(false);
+                      if (date) setWindowEnd(date);
+                    }}
+                  />
+                ) : null}
+              </View>
+            </View>
+          )}
 
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>

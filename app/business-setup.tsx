@@ -93,6 +93,37 @@ export default function BusinessSetupScreen() {
       );
       if (profileError) throw profileError;
 
+      // Create trial billing subscription
+      if (business?.id) {
+        await supabase.from("billing_subscriptions").upsert(
+          {
+            business_id: business.id,
+            plan_tier: "trial",
+            status: "trialing",
+            trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+          { onConflict: "business_id", ignoreDuplicates: true },
+        ).catch(() => {
+          // Non-critical
+        });
+      }
+
+      // Create primary location from the business address
+      if (business?.id && addr) {
+        await supabase.from("business_locations").upsert(
+          {
+            business_id: business.id,
+            name: trimmed.businessName,
+            address: addr,
+            phone: trimmed.phone || null,
+            is_primary: true,
+          },
+          { onConflict: "business_id,is_primary", ignoreDuplicates: true },
+        ).catch(() => {
+          // Non-critical: location creation failure shouldn't block setup
+        });
+      }
+
       setBanner({ message: "Setup complete - ready to launch BOGO deals!", tone: "success" });
       setTimeout(() => {
         router.replace("/create/quick");
