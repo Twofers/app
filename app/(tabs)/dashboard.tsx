@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   Text,
@@ -15,9 +16,14 @@ import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } fr
 import { format, startOfDay, startOfMonth, subDays } from "date-fns";
 
 import { Banner } from "@/components/ui/banner";
+import { CardShell } from "@/components/ui/card-shell";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
-import { Colors, Fonts } from "@/constants/theme";
+import { PrimaryButton } from "@/components/ui/primary-button";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import { Colors, Fonts, Radii } from "@/constants/theme";
+import { canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useTabMode } from "@/lib/tab-mode";
@@ -170,18 +176,6 @@ function hydrateDealRows(
   });
 }
 
-function premiumCardStyle(extra?: object) {
-  return {
-    backgroundColor: Colors.light.surface,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    boxShadow: "0px 4px 12px rgba(0,0,0,0.08)",
-    elevation: 4,
-    ...extra,
-  };
-}
-
 function WeeklyClaimsChart({
   labels,
   values,
@@ -241,11 +235,9 @@ function MetricTile({
   return (
     <Animated.View
       entering={FadeInDown.duration(420).delay(delay).springify()}
-      style={[
-        { flexBasis: fullWidth ? "100%" : "47%", flexGrow: 1, padding: Spacing.lg },
-        premiumCardStyle(),
-      ]}
+      style={[{ flexBasis: fullWidth ? "100%" : "47%", flexGrow: 1 }]}
     >
+      <CardShell style={{ flex: 1 }}>
       <Text
         style={{
           fontSize: 12,
@@ -272,6 +264,7 @@ function MetricTile({
       {sublabel ? (
         <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.5, fontWeight: "600" }}>{sublabel}</Text>
       ) : null}
+      </CardShell>
     </Animated.View>
   );
 }
@@ -281,7 +274,7 @@ export default function BusinessDashboard() {
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { mode, ready: modeReady } = useTabMode();
-  const { isLoggedIn, businessId, businessName, loading } = useBusiness();
+  const { isLoggedIn, businessId, businessName, loading, subscriptionStatus, trialEndsAt } = useBusiness();
 
   const [banner, setBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -303,8 +296,21 @@ export default function BusinessDashboard() {
   const [monthOpens, setMonthOpens] = useState(0);
   const [weekLabels, setWeekLabels] = useState<string[]>([]);
   const [weekCounts, setWeekCounts] = useState<number[]>([]);
+  const [monthlyStatsOpen, setMonthlyStatsOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [dealManageFor, setDealManageFor] = useState<DealRow | null>(null);
 
   const primary = Colors.light.primary;
+
+  const billingBlocked = Boolean(
+    businessId &&
+      !canCreateDeal({
+        isLoggedIn,
+        subscriptionStatus,
+        trialEndsAt,
+        bypass: false,
+      }),
+  );
 
   const loadMetrics = useCallback(async () => {
     if (!businessId) return;
@@ -549,127 +555,157 @@ export default function BusinessDashboard() {
     return t("offersDashboard.statusEnded");
   }
 
-  const listHeader = useMemo(
+  const listTop = useMemo(
     () => (
-      <View style={{ marginBottom: Spacing.lg }}>
-        <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16, letterSpacing: -0.2 }}>
-          {t("offersDashboard.overview")}
-        </Text>
-        <Text style={{ fontSize: 13, opacity: 0.55, marginBottom: Spacing.lg, lineHeight: 18 }}>
-          {t("offersDashboard.periodHint")}
-        </Text>
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, marginBottom: Spacing.md }}>
-          <MetricTile
-            label={t("offersDashboard.metricImpressions")}
-            value={String(monthImpressions)}
-            delay={20}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricDealsLaunched")}
-            value={String(dealsLaunchedMonth)}
-            delay={80}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricOpens")}
-            value={String(monthOpens)}
-            delay={40}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricTotalClaims")}
-            value={String(monthClaims)}
-            delay={120}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricRedemptions")}
-            value={String(monthRedeems)}
-            delay={160}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricNewCustomers")}
-            value={String(uniqueRedeemers)}
-            sublabel={t("offersDashboard.metricNewCustomersSub")}
-            delay={200}
-          />
-          <MetricTile
-            label={t("offersDashboard.metricAvgRedemption")}
-            value={monthClaims > 0 ? `${monthRedemptionPct}%` : "—"}
-            sublabel={t("offersDashboard.metricAvgRedemptionSub")}
-            delay={240}
-            fullWidth
-          />
-        </View>
-
-        <Animated.View
-          entering={FadeInDown.duration(440).delay(220).springify()}
-          style={[{ padding: Spacing.lg, marginBottom: Spacing.lg }, premiumCardStyle()]}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
-            <View
-              style={{
-                width: 4,
-                height: 22,
-                borderRadius: 2,
-                backgroundColor: primary,
-              }}
-            />
-            <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text, flex: 1 }}>
-              {t("offersDashboard.inventorySaved")}
-            </Text>
-          </View>
-          <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600" }}>
-            {t("offersDashboard.inventoryPlaceholder")}
-          </Text>
-        </Animated.View>
-
-        <Animated.View
-          entering={FadeInDown.duration(440).delay(260).springify()}
-          style={[{ padding: Spacing.lg, marginBottom: Spacing.lg }, premiumCardStyle()]}
-        >
-          <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: Colors.light.text }}>
-            {t("offersDashboard.chartTitle")}
-          </Text>
-          <WeeklyClaimsChart labels={weekLabels} values={weekCounts} primary={primary} />
-          <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600" }}>
-            {t("offersDashboard.chartFooter")}
-          </Text>
-        </Animated.View>
-
-        <MerchantInsightsPanel insights={insights} />
-
-        <Pressable
-          onPress={() => router.push("/create/reuse")}
-          style={[
-            premiumCardStyle(),
-            {
-              padding: Spacing.lg,
-              marginBottom: Spacing.lg,
-              marginTop: Spacing.sm,
-            },
-          ]}
-        >
-          <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
-            {t("offersDashboard.templatesReuseTitle")}
-          </Text>
-          <Text style={{ marginTop: 8, fontSize: 14, opacity: 0.65, lineHeight: 20 }}>
-            {t("offersDashboard.templatesReuseSubtitle")}
-          </Text>
-          <Text style={{ marginTop: 10, fontWeight: "800", fontSize: 14, color: primary }}>
-            {t("offersDashboard.openTemplates")} →
-          </Text>
-        </Pressable>
-
+      <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+        <PrimaryButton
+          title={t("offersDashboard.createDealCta")}
+          onPress={() => router.push("/create/quick")}
+        />
+        {billingBlocked ? (
+          <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
+            <CardShell variant="muted">
+              <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
+                {t("offersDashboard.billingHintShort")}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 14, opacity: 0.65, fontWeight: "600" }}>
+                {t("billing.goToBilling", { defaultValue: "Go to Billing" })} →
+              </Text>
+            </CardShell>
+          </Pressable>
+        ) : null}
         <Text
           style={{
             fontWeight: "800",
-            marginBottom: Spacing.md,
-            fontSize: 16,
+            fontSize: 17,
             letterSpacing: -0.2,
-            marginTop: Spacing.sm,
+            color: Colors.light.text,
           }}
         >
-          {t("offersDashboard.recentDeals")}
+          {t("offersDashboard.yourDeals")}
         </Text>
+      </View>
+    ),
+    [t, router, billingBlocked],
+  );
+
+  const listFooter = useMemo(
+    () => (
+      <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
+        <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: Colors.light.text }}>
+          {t("offersDashboard.overview")}
+        </Text>
+        <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18 }}>{t("offersDashboard.periodHint")}</Text>
+
+        <CardShell variant="muted">
+          <Text style={{ fontSize: 15, fontWeight: "600", color: Colors.light.text, opacity: 0.88 }}>
+            {t("offersDashboard.monthlyStatsSummary", {
+              claims: monthClaims,
+              redeems: monthRedeems,
+              opens: monthOpens,
+            })}
+          </Text>
+          <Pressable
+            onPress={() => setMonthlyStatsOpen((v) => !v)}
+            style={{ marginTop: Spacing.sm, paddingVertical: Spacing.xs }}
+            accessibilityRole="button"
+          >
+            <Text style={{ fontWeight: "800", fontSize: 14, color: primary }}>
+              {monthlyStatsOpen ? t("offersDashboard.monthlyStatsCollapse") : t("offersDashboard.monthlyStatsExpand")}
+            </Text>
+          </Pressable>
+        </CardShell>
+
+        {monthlyStatsOpen ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md }}>
+            <MetricTile
+              label={t("offersDashboard.metricImpressions")}
+              value={String(monthImpressions)}
+              delay={20}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricDealsLaunched")}
+              value={String(dealsLaunchedMonth)}
+              delay={80}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricOpens")}
+              value={String(monthOpens)}
+              delay={40}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricTotalClaims")}
+              value={String(monthClaims)}
+              delay={120}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricRedemptions")}
+              value={String(monthRedeems)}
+              delay={160}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricNewCustomers")}
+              value={String(uniqueRedeemers)}
+              sublabel={t("offersDashboard.metricNewCustomersSub")}
+              delay={200}
+            />
+            <MetricTile
+              label={t("offersDashboard.metricAvgRedemption")}
+              value={monthClaims > 0 ? `${monthRedemptionPct}%` : "—"}
+              sublabel={t("offersDashboard.metricAvgRedemptionSub")}
+              delay={240}
+              fullWidth
+            />
+          </View>
+        ) : null}
+
+        <Animated.View entering={FadeInDown.duration(440).delay(120).springify()}>
+          <CardShell>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
+              <View
+                style={{
+                  width: 4,
+                  height: 22,
+                  borderRadius: 2,
+                  backgroundColor: primary,
+                }}
+              />
+              <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text, flex: 1 }}>
+                {t("offersDashboard.inventorySaved")}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600" }}>
+              {t("offersDashboard.inventoryPlaceholder")}
+            </Text>
+          </CardShell>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.duration(440).delay(160).springify()}>
+          <CardShell>
+            <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: Colors.light.text }}>
+              {t("offersDashboard.chartTitle")}
+            </Text>
+            <WeeklyClaimsChart labels={weekLabels} values={weekCounts} primary={primary} />
+            <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600" }}>
+              {t("offersDashboard.chartFooter")}
+            </Text>
+          </CardShell>
+        </Animated.View>
+
+        <CardShell variant="muted">
+          <Pressable onPress={() => setInsightsOpen((v) => !v)} accessibilityRole="button">
+            <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
+              {insightsOpen ? t("offersDashboard.insightsCollapse") : t("offersDashboard.insightsExpand")}
+            </Text>
+          </Pressable>
+        </CardShell>
+        {insightsOpen ? <MerchantInsightsPanel insights={insights} /> : null}
+
+        <Pressable onPress={() => router.push("/create/reuse")} accessibilityRole="button">
+          <Text style={{ fontWeight: "800", fontSize: 15, color: primary }}>
+            {t("offersDashboard.templatesBrowseLink")} →
+          </Text>
+        </Pressable>
       </View>
     ),
     [
@@ -686,6 +722,8 @@ export default function BusinessDashboard() {
       weekLabels,
       weekCounts,
       insights,
+      monthlyStatsOpen,
+      insightsOpen,
     ],
   );
 
@@ -700,36 +738,14 @@ export default function BusinessDashboard() {
     return <Redirect href="/(tabs)" />;
   }
 
+  const dashboardSubtitle = businessName
+    ? `${t("businessDashboard.welcomeBack")} ${businessName}\n${t("offersDashboard.subtitle")}`
+    : t("offersDashboard.subtitle");
+
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
       <Animated.View entering={FadeInDown.duration(400).springify()}>
-        <Text
-          style={{
-            fontSize: 28,
-            fontWeight: "800",
-            letterSpacing: -0.6,
-            color: Colors.light.text,
-          }}
-        >
-          {t("tabs.dashboard")}
-        </Text>
-        {businessName ? (
-          <Text style={{ marginTop: Spacing.xs, fontSize: 15, opacity: 0.55, fontWeight: "600" }}>
-            {t("businessDashboard.welcomeBack")} {businessName}
-          </Text>
-        ) : null}
-        <Text
-          style={{
-            marginTop: businessName ? Spacing.sm : Spacing.xs,
-            opacity: 0.62,
-            fontSize: 15,
-            marginBottom: Spacing.md,
-            lineHeight: 20,
-            fontWeight: "500",
-          }}
-        >
-          {t("offersDashboard.subtitle")}
-        </Text>
+        <ScreenHeader title={t("tabs.dashboard")} subtitle={dashboardSubtitle} />
       </Animated.View>
 
       {!isLoggedIn ? (
@@ -751,18 +767,21 @@ export default function BusinessDashboard() {
               style={{ flex: 1 }}
               data={deals}
               keyExtractor={(item) => item.id}
-              ListHeaderComponent={listHeader}
+              ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
               onEndReachedThreshold={0.35}
               onEndReached={() => void loadMoreDeals()}
               ListFooterComponent={
-                dealsLoadingMore ? (
-                  <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
-                    <ActivityIndicator color={primary} />
-                  </View>
-                ) : null
+                <View>
+                  {listFooter}
+                  {dealsLoadingMore ? (
+                    <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
+                      <ActivityIndicator color={primary} />
+                    </View>
+                  ) : null}
+                </View>
               }
               ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
               renderItem={({ item }) => {
@@ -771,7 +790,7 @@ export default function BusinessDashboard() {
                 const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
                 return (
                   <Animated.View entering={FadeInDown.duration(360).delay(60).springify()}>
-                    <View style={[{ padding: Spacing.lg, overflow: "hidden" }, premiumCardStyle()]}>
+                    <CardShell>
                       <HapticScalePressable
                         onPress={() => router.push(`/deal-analytics/${item.id}`)}
                         style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1 })}
@@ -866,85 +885,13 @@ export default function BusinessDashboard() {
                         </View>
                       </HapticScalePressable>
 
-                      <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-                        {sched !== "ended" ? (
-                          <HapticScalePressable
-                            onPress={() => router.push({ pathname: "/create/ai", params: { dealId: item.id } })}
-                            style={{
-                              minHeight: 48,
-                              borderRadius: 20,
-                              borderWidth: 2,
-                              borderColor: Colors.light.border,
-                              backgroundColor: "#fff",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text
-                              style={{
-                                color: Colors.light.text,
-                                fontWeight: "800",
-                                fontSize: 15,
-                                ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
-                              }}
-                            >
-                              {t("offersDashboard.editDeal")}
-                            </Text>
-                          </HapticScalePressable>
-                        ) : null}
-                        {sched !== "ended" ? (
-                          endingDealId === item.id ? (
-                            <View
-                              style={{
-                                minHeight: 48,
-                                borderRadius: 20,
-                                borderWidth: 2,
-                                borderColor: "rgba(198,40,40,0.35)",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <ActivityIndicator color="#c62828" />
-                            </View>
-                          ) : (
-                            <EndEarlyButton
-                              title={t("offersDashboard.endDealEarly")}
-                              onPress={() => endDealEarly(item.id)}
-                            />
-                          )
-                        ) : null}
-
-                        <HapticScalePressable
-                          onPress={() => generateFlyer(item)}
-                          disabled={generatingFlyerId === item.id}
-                          style={{
-                            minHeight: 48,
-                            borderRadius: 20,
-                            borderWidth: 2,
-                            borderColor: Colors.light.primary,
-                            backgroundColor: "#fff",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            opacity: generatingFlyerId === item.id ? 0.6 : 1,
-                          }}
-                        >
-                          {generatingFlyerId === item.id ? (
-                            <ActivityIndicator color={Colors.light.primary} />
-                          ) : (
-                            <Text
-                              style={{
-                                color: Colors.light.primary,
-                                fontWeight: "800",
-                                fontSize: 15,
-                                ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
-                              }}
-                            >
-                              {t("offersDashboard.printFlyer")}
-                            </Text>
-                          )}
-                        </HapticScalePressable>
+                      <View style={{ marginTop: Spacing.md }}>
+                        <SecondaryButton
+                          title={t("offersDashboard.manageDeal")}
+                          onPress={() => setDealManageFor(item)}
+                        />
                       </View>
-                    </View>
+                    </CardShell>
                   </Animated.View>
                 );
               }}
@@ -972,6 +919,71 @@ export default function BusinessDashboard() {
           )}
         </View>
       )}
+
+      <Modal
+        visible={dealManageFor !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDealManageFor(null)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+            onPress={() => setDealManageFor(null)}
+          />
+          {dealManageFor ? (
+            <View
+              style={{
+                backgroundColor: Colors.light.background,
+                borderTopLeftRadius: Radii.card,
+                borderTopRightRadius: Radii.card,
+                padding: Spacing.lg,
+                paddingBottom: Spacing.xl,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "800", fontSize: 17, color: Colors.light.text }} numberOfLines={2}>
+                {dealManageFor.title ?? t("offersDashboard.dealFallback")}
+              </Text>
+              {dealScheduleStatus(dealManageFor) !== "ended" ? (
+                <SecondaryButton
+                  title={t("offersDashboard.editDeal")}
+                  onPress={() => {
+                    const id = dealManageFor.id;
+                    setDealManageFor(null);
+                    router.push({ pathname: "/create/ai", params: { dealId: id } });
+                  }}
+                />
+              ) : null}
+              <SecondaryButton
+                title={t("offersDashboard.printFlyer")}
+                onPress={() => {
+                  const d = dealManageFor;
+                  setDealManageFor(null);
+                  void generateFlyer(d);
+                }}
+              />
+              {dealScheduleStatus(dealManageFor) !== "ended" ? (
+                endingDealId === dealManageFor.id ? (
+                  <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                    <ActivityIndicator color="#c62828" />
+                  </View>
+                ) : (
+                  <EndEarlyButton
+                    title={t("offersDashboard.endDealEarly")}
+                    onPress={() => {
+                      const id = dealManageFor.id;
+                      setDealManageFor(null);
+                      endDealEarly(id);
+                    }}
+                  />
+                )
+              ) : null}
+              <SecondaryButton title={t("commonUi.cancel")} onPress={() => setDealManageFor(null)} />
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }

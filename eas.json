@@ -28,8 +28,14 @@
     "production": {
       "environment": "production"
     },
-    "apk": {
+    "dev-client-apk": {
       "extends": "preview",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "apk": {
+      "extends": "production",
       "android": {
         "buildType": "apk"
       }

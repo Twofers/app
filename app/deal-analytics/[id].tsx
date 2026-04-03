@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Banner } from "@/components/ui/banner";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { SecondaryButton } from "@/components/ui/secondary-button";
 import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
 import { formatValiditySummary } from "@/lib/deal-time";
@@ -46,6 +48,7 @@ function dayKey(dateStr: string) {
 
 export default function DealAnalyticsDetail() {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [deal, setDeal] = useState<DealRow | null>(null);
@@ -157,39 +160,41 @@ export default function DealAnalyticsDetail() {
 
   if (loading) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>
-          {t("dealAnalytics.title")}
-        </Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+        <ScreenHeader title={t("dealAnalytics.title")} />
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("dealAnalytics.loading")}</Text>
       </View>
     );
   }
 
+  const headerSubtitle = deal
+    ? `${deal.title ?? t("offersDashboard.dealFallback")}\n${formatValiditySummary(deal, {
+        lang: i18n.language,
+        endsVerb: t("commonUi.dealEndsVerb"),
+        t,
+      })}`
+    : undefined;
+
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealAnalytics.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+      <ScreenHeader title={t("dealAnalytics.title")} subtitle={headerSubtitle} />
+      {deal ? (
+        <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs }}>
+          <SecondaryButton
+            title={t("offersDashboard.editDeal")}
+            onPress={() =>
+              router.push({ pathname: "/create/ai", params: { dealId: deal.id } } as Href)
+            }
+          />
+        </View>
+      ) : null}
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
-        style={{ flex: 1, marginTop: Spacing.md }}
+        style={{ flex: 1, marginTop: Spacing.sm }}
         contentContainerStyle={{ paddingBottom: scrollBottom }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {deal ? (
-          <View style={{ marginBottom: Spacing.lg }}>
-            <Text style={{ fontWeight: "700", fontSize: 20 }}>
-              {deal.title ?? t("offersDashboard.dealFallback")}
-            </Text>
-            <Text style={{ opacity: 0.68, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
-              {formatValiditySummary(deal, {
-                lang: i18n.language,
-                endsVerb: t("commonUi.dealEndsVerb"),
-                t,
-              })}
-            </Text>
-          </View>
-        ) : null}
 
         <MerchantInsightsPanel insights={insights} />
 

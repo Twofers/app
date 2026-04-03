@@ -7,6 +7,8 @@ import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal, beginVisualRedeem, finalizeStaleRedeems } from "@/lib/functions";
 import {
@@ -22,7 +24,6 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { SecondaryButton } from "@/components/ui/secondary-button";
 import { WalletRedeemModal } from "@/components/wallet-redeem-modal";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
@@ -99,7 +100,9 @@ export default function WalletScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
-  const { isLoggedIn, sessionEmail, userId } = useBusiness();
+  const { isLoggedIn, userId } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const nowMs = useSecondTick();
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -410,7 +413,7 @@ export default function WalletScreen() {
               ? urgent
                 ? "#fff7ed"
                 : "#f8fafc"
-              : Colors.light.surface,
+              : theme.surface,
           padding: Spacing.md,
           marginBottom: Spacing.md,
           borderWidth: 1.5,
@@ -419,7 +422,7 @@ export default function WalletScreen() {
               ? urgent
                 ? "#fb923c"
                 : "#86efac"
-              : Colors.light.border,
+              : theme.border,
           boxShadow: "0px 3px 8px rgba(0,0,0,0.06)",
           elevation: 2,
         }}
@@ -581,12 +584,16 @@ export default function WalletScreen() {
               disabled={useDealBusy}
               style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
             />
-            <SecondaryButton
-              title={t("consumerWallet.qrFallbackLabel")}
+            <Pressable
               onPress={() => openVerifyForClaim(row)}
               disabled={isRedeeming}
-              style={{ opacity: isRedeeming ? 0.45 : 1 }}
-            />
+              accessibilityRole="button"
+              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: isRedeeming ? 0.45 : 1 }}
+            >
+              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>
+                {t("consumerWallet.qrFallbackLabel")}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
         {bucket === "active" && tokenDead && !redeemed ? (
@@ -626,21 +633,20 @@ export default function WalletScreen() {
   }
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("consumerWallet.title")}</Text>
-      <Text style={{ marginTop: Spacing.xs, opacity: 0.62, fontSize: 15, lineHeight: 22 }}>{t("consumerWallet.subtitle")}</Text>
-      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14 }}>{sessionEmail ?? ""}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <ScreenHeader title={t("consumerWallet.title")} subtitle={t("consumerWallet.subtitle")} />
 
       <View
         style={{
           flexDirection: "row",
           gap: Spacing.md,
+          marginTop: Spacing.md,
           marginBottom: Spacing.lg,
           borderRadius: Radii.lg,
           borderWidth: 1,
-          borderColor: Colors.light.border,
+          borderColor: theme.border,
           padding: Spacing.md,
-          backgroundColor: Colors.light.surfaceMuted,
+          backgroundColor: theme.surfaceMuted,
         }}
       >
         <View style={{ flex: 1 }}>

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { CardShell } from "@/components/ui/card-shell";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { Colors, Radii } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -25,6 +28,9 @@ export default function CreateDeal() {
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const blockedSubscription = !canCreateDeal({
@@ -75,8 +81,8 @@ export default function CreateDeal() {
   }, [businessId, t]);
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createHub.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <ScreenHeader title={t("createHub.title")} subtitle={t("createHub.subtitle")} />
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
@@ -166,82 +172,99 @@ export default function CreateDeal() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/create/ai-compose")}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.lg,
-              backgroundColor: "#1e3a5f",
-              boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
-              elevation: 2,
-            }}
+            onPress={() => setMoreToolsOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: moreToolsOpen }}
           >
-            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
-            <Text style={{ color: "white", opacity: 0.88, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
-              {t("createHub.aiComposeSubtitle")}
-            </Text>
+            <CardShell variant="muted">
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "800" }}>{t("createHub.moreToolsTitle")}</Text>
+              <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14, fontWeight: "600" }}>
+                {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
+              </Text>
+            </CardShell>
           </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/create/menu-scan" as Href)}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              backgroundColor: Colors.light.surface,
-              borderWidth: 1,
-              borderColor: Colors.light.border,
-            }}
-          >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.scanMenuTitle")}</Text>
-            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-              {t("createHub.scanMenuSubtitle")}
-            </Text>
-          </Pressable>
+          {moreToolsOpen ? (
+            <View style={{ gap: Spacing.md }}>
+              <Pressable
+                onPress={() => router.push("/create/ai-compose")}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.lg,
+                  backgroundColor: "#1e3a5f",
+                  boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
+                  elevation: 2,
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
+                <Text style={{ color: "white", opacity: 0.88, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+                  {t("createHub.aiComposeSubtitle")}
+                </Text>
+              </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/create/menu-manager" as Href)}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              backgroundColor: Colors.light.surfaceMuted,
-              borderWidth: 1,
-              borderColor: Colors.light.border,
-            }}
-          >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuManagerTitle")}</Text>
-            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-              {t("createHub.menuManagerSubtitle")}
-            </Text>
-          </Pressable>
+              <Pressable
+                onPress={() => router.push("/create/menu-scan" as Href)}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  backgroundColor: Colors.light.surface,
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                }}
+              >
+                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.scanMenuTitle")}</Text>
+                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+                  {t("createHub.scanMenuSubtitle")}
+                </Text>
+              </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/create/reuse")}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              backgroundColor: Colors.light.surface,
-              borderWidth: 1,
-              borderColor: Colors.light.border,
-            }}
-          >
-            <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.reuseTitle")}</Text>
-            <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-              {t("createHub.reuseSubtitle")}
-            </Text>
-          </Pressable>
+              <Pressable
+                onPress={() => router.push("/create/menu-manager" as Href)}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  backgroundColor: Colors.light.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                }}
+              >
+                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuManagerTitle")}</Text>
+                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+                  {t("createHub.menuManagerSubtitle")}
+                </Text>
+              </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/create/ai")}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.lg,
-              backgroundColor: Colors.light.surfaceMuted,
-            }}
-          >
-            <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
-            <Text style={{ color: "#111", opacity: 0.72, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
-              {t("createHub.aiAdsSubtitle")}
-            </Text>
-          </Pressable>
+              <Pressable
+                onPress={() => router.push("/create/reuse")}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.md,
+                  backgroundColor: Colors.light.surface,
+                  borderWidth: 1,
+                  borderColor: Colors.light.border,
+                }}
+              >
+                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.reuseTitle")}</Text>
+                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+                  {t("createHub.reuseSubtitle")}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push("/create/ai")}
+                style={{
+                  borderRadius: Radii.lg,
+                  padding: Spacing.lg,
+                  backgroundColor: Colors.light.surfaceMuted,
+                }}
+              >
+                <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
+                <Text style={{ color: "#111", opacity: 0.72, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+                  {t("createHub.aiAdsSubtitle")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={{ marginTop: Spacing.sm }}>
             <Text style={{ fontSize: 17, fontWeight: "700", marginBottom: Spacing.md }}>{t("createHub.templatesTitle")}</Text>

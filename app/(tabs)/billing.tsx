@@ -5,15 +5,17 @@ import { useTranslation } from "react-i18next";
 import { MaterialIcons } from "@expo/vector-icons";
 import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser";
 
+import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
+
 import { useBusiness } from "@/hooks/use-business";
 import { supabase } from "@/lib/supabase";
 import { Colors, Spacing } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
-import { loadSubscriptionPricingFromAppConfig, type SubscriptionPricing } from "@/lib/billing/subscription-pricing";
-import { devLog } from "@/lib/dev-log";
+import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
+import type { SubscriptionPricing } from "@/lib/billing/subscription-pricing";
+import { devError, devLog } from "@/lib/dev-log";
 import { isTrialExpired } from "@/lib/billing/access";
 
 function daysBetween(nowMs: number, targetIso: string | null): number | null {
@@ -62,11 +64,68 @@ export default function BusinessBillingScreen() {
     (async () => {
       setPricingLoading(true);
       setPricing(null);
+      const fnName = "billing-pricing";
+      const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+      const fnUrl = baseUrl ? `${baseUrl.replace(/\/$/, "")}/functions/v1/${fnName}` : "(unset EXPO_PUBLIC_SUPABASE_URL)";
       try {
-        const data = await loadSubscriptionPricingFromAppConfig(supabase);
+        if (__DEV__) {
+          devLog("[billing-pricing] invoke start", {
+            fnUrl,
+            hasExpoPublicSupabaseUrl: Boolean(baseUrl),
+            hasExpoPublicSupabaseAnonKey: Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim()),
+          });
+        }
+
+        const { data, error } = await supabase.functions.invoke(fnName, {
+          body: {},
+          timeout: EDGE_FUNCTION_TIMEOUT_MS,
+        });
+
+        if (__DEV__) {
+          if (error instanceof FunctionsHttpError) {
+            const res = error.context as Response;
+            let bodyText = "";
+            try {
+              bodyText = await res.clone().text();
+            } catch (e) {
+              bodyText = `(could not read body: ${e instanceof Error ? e.message : String(e)})`;
+            }
+            devLog("[billing-pricing] non-2xx from edge function", {
+              status: res.status,
+              statusText: res.statusText,
+              url: res.url,
+              body: bodyText,
+            });
+          } else if (error instanceof FunctionsFetchError) {
+            devLog("[billing-pricing] fetch error context", error.context);
+          } else if (error) {
+            devLog("[billing-pricing] invoke error", {
+              name: error.name,
+              message: error.message,
+              context: (error as { context?: unknown }).context,
+            });
+          }
+          if (data != null) {
+            devLog("[billing-pricing] response data", typeof data === "object" ? JSON.stringify(data) : String(data));
+          }
+        }
+
+        if (error) throw error;
+        if (data && typeof data === "object" && "error" in data && typeof (data as { error?: unknown }).error === "string") {
+          throw new Error((data as { error: string }).error);
+        }
+        if (!data) throw new Error("Missing pricing payload.");
         if (cancelled) return;
-        setPricing(data);
-      } catch {
+        setPricing({
+          proMonthlyPrice: Number(data.proMonthlyPrice),
+          premiumMonthlyPrice: Number(data.premiumMonthlyPrice),
+          extraLocationPrice: Number(data.extraLocationPrice),
+        });
+      } catch (e) {
+        if (__DEV__) {
+          devError("[billing-pricing] caught error:", e);
+          devError("[billing-pricing] parseFunctionError:", parseFunctionError(e));
+        }
         if (cancelled) return;
         setBanner({
           message: t("billing.errLoadPricing", { defaultValue: "Unable to load subscription pricing. Please try again." }),

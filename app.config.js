@@ -16,8 +16,19 @@ function resolveGitCommitShort() {
 /** Merges env-based EAS project id with static app.json (Expo loads both). */
 module.exports = ({ config }) => ({
   ...config,
-  /** Prebuild: keep Fabric off; dev launcher is less stable with New Arch on some RN/Expo combos. */
-  newArchEnabled: false,
+  plugins: [
+    ...(config.plugins || []),
+    [
+      "@sentry/react-native/expo",
+      {
+        url: "https://sentry.io/",
+        organization: "dan-e4",
+        project: "react-native",
+      },
+    ],
+  ],
+  /** Prebuild: keep New Architecture enabled across native regeneration. */
+  newArchEnabled: true,
   name: "TWOFER",
   ios: {
     ...config.ios,
@@ -28,7 +39,7 @@ module.exports = ({ config }) => ({
   },
   android: {
     ...config.android,
-    newArchEnabled: false,
+    newArchEnabled: true,
     config: {
       ...config.android?.config,
       googleMaps: {

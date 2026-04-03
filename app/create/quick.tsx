@@ -12,7 +12,9 @@ import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
 import { useBusinessLocations } from "../../hooks/use-business-locations";
 import { Banner } from "../../components/ui/banner";
+import { CardShell } from "@/components/ui/card-shell";
 import { PrimaryButton } from "../../components/ui/primary-button";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { aiGenerateDealCopy, notifyDealPublished } from "../../lib/functions";
@@ -292,20 +294,8 @@ export default function QuickDealScreen() {
 
   return (
     <KeyboardScreen>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createQuick.title")}</Text>
-      <Text style={{ marginTop: 6, opacity: 0.7, lineHeight: 20 }}>
-        {t("createQuick.subtitle")}
-      </Text>
-      <Text style={{ marginTop: 10, opacity: 0.58, fontSize: 13, lineHeight: 18 }}>
-        {t("createQuick.schedulingHint")}
-      </Text>
-      <View style={{ marginTop: Spacing.sm }}>
-        <SecondaryButton
-          title={t("createQuick.openAiScheduling")}
-          onPress={() => router.push("/create/ai" as Href)}
-        />
-      </View>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+      <ScreenHeader title={t("createQuick.title")} subtitle={t("createQuick.subtitle")} />
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {showLoginPrompt ? <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("createQuick.loginPrompt")}</Text> : null}
@@ -316,10 +306,13 @@ export default function QuickDealScreen() {
       {showForm ? (
         <ScrollView
           style={{ flex: 1, marginTop: Spacing.lg }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          contentContainerStyle={{ gap: Spacing.lg, paddingBottom: scrollBottom }}
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
+          <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text, letterSpacing: -0.2 }}>
+            {t("createQuick.sectionBasics")}
+          </Text>
           {prefillPosterStoragePath ? (
             <View style={{ marginBottom: Spacing.sm }}>
               <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C", marginBottom: 6 }}>
@@ -443,6 +436,18 @@ export default function QuickDealScreen() {
             />
           </View>
 
+          <Text
+            style={{
+              marginTop: Spacing.sm,
+              fontWeight: "800",
+              fontSize: 15,
+              color: Colors.light.text,
+              letterSpacing: -0.2,
+            }}
+          >
+            {t("createQuick.sectionLimits")}
+          </Text>
+
           <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
             <Pressable
@@ -561,6 +566,16 @@ export default function QuickDealScreen() {
               }}
             />
           </View>
+
+          <CardShell variant="muted">
+            <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>{t("createQuick.sectionAdvanced")}</Text>
+            <Text style={{ marginTop: Spacing.sm, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>
+              {t("createQuick.schedulingHint")}
+            </Text>
+            <View style={{ marginTop: Spacing.md }}>
+              <SecondaryButton title={t("createQuick.openAiScheduling")} onPress={() => router.push("/create/ai" as Href)} />
+            </View>
+          </CardShell>
 
           <PrimaryButton
             title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}

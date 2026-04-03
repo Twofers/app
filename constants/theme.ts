@@ -5,6 +5,9 @@
 
 import { Platform } from 'react-native';
 
+/** Canonical spacing — single source: re-exported from `lib/screen-layout`. */
+export { Spacing } from '@/lib/screen-layout';
+
 /**
  * Twofer visual tokens — 2026 delivery-app polish.
  */
@@ -48,6 +51,8 @@ export const Radii = {
   md: 12,
   lg: 16,
   xl: 20,
+  /** Hero / marketing cards (brand: 24px corners). */
+  card: 24,
   pill: 999,
 };
 
@@ -68,15 +73,6 @@ export const Shadows = {
   },
 };
 
-export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-};
-
 export const Typography = {
   titleXl: {
     fontSize: 32,
@@ -89,6 +85,13 @@ export const Typography = {
     lineHeight: 34,
     fontWeight: '700' as const,
     color: '#11181C',
+  },
+  /** Tab / stack screen titles — pair with `theme.text` for color. */
+  screenTitle: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '700' as const,
+    letterSpacing: -0.3,
   },
   heading: {
     fontSize: 22,

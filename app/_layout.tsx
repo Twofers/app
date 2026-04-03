@@ -45,6 +45,7 @@ function RootNavigationStack() {
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="consumer-profile-setup" options={{ title: t('consumerProfile.navTitle') }} />
         <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />

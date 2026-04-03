@@ -8,6 +8,7 @@ import { fetchConsumerProfile, isConsumerProfileComplete } from "@/lib/consumer-
 const SKIP_ROOTS = new Set([
   "index",
   "auth-landing",
+  "auth-callback",
   "onboarding",
   "consumer-profile-setup",
   "business-setup",

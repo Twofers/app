@@ -41,6 +41,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 
@@ -119,7 +120,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { height: windowHeight } = useWindowDimensions();
-  const { isLoggedIn, sessionEmail, userId } = useBusiness();
+  const { isLoggedIn, userId } = useBusiness();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
@@ -148,6 +149,7 @@ export default function HomeScreen() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(3);
+  const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
@@ -486,6 +488,18 @@ export default function HomeScreen() {
     return list;
   }, [businesses, favoritesOnly, favoriteBusinessIds, userGeo]);
 
+  const shopsForList = useMemo(() => {
+    let list = businessesDisplay;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (b) =>
+          b.name.toLowerCase().includes(q) || (b.location ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [businessesDisplay, searchQuery]);
+
   const liveDealIds = useMemo(() => {
     const s = new Set<string>();
     for (const d of deals) {
@@ -535,315 +549,389 @@ export default function HomeScreen() {
     [nowTick, t],
   );
 
+  const renderDealItem = useCallback(
+    ({ item }: { item: Deal }) => {
+      const coords = bizCoords(item.businesses);
+      const distanceLabel =
+        userGeo && coords
+          ? t("dealsBrowse.distanceAwayMiles", {
+              distance: haversineMiles(userGeo.lat, userGeo.lng, coords.lat, coords.lng).toFixed(1),
+            })
+          : undefined;
+      const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
+      const offerText = item.title ?? t("dealDetail.dealFallback");
+      const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
+      return (
+        <View
+          style={{
+            marginBottom: Spacing.xl,
+            borderRadius: Radii.card,
+            backgroundColor: theme.surface,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...Shadows.soft,
+          }}
+        >
+          <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
+            <Image
+              source={{
+                uri:
+                  resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path) ??
+                  "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
+              }}
+              style={{ width: "100%", height: heroImageHeight }}
+              resizeMode="cover"
+            />
+          </Pressable>
+          <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
+              <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
+                {item.businesses?.name ?? t("dealDetail.localBusiness")}
+              </Text>
+              <Pressable
+                onPress={() => void toggleFavorite(item.business_id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+              >
+                <MaterialIcons
+                  name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}
+                  size={24}
+                  color={favoriteBusinessIds.includes(item.business_id) ? "#e0245e" : theme.icon}
+                />
+              </Pressable>
+            </View>
+            <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2}>
+              {bogoText}
+            </Text>
+            <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
+              {item.description || t("consumerHome.tagline")}
+            </Text>
+            <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md, flexWrap: "wrap" }}>
+              {distanceLabel ? (
+                <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
+              ) : null}
+              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>
+                {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
+              </Text>
+            </View>
+            {claimStatus[item.id]?.message ? (
+              <Text style={{ marginTop: Spacing.sm, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+                {claimStatus[item.id]?.message}
+              </Text>
+            ) : null}
+            <View style={{ marginTop: Spacing.sm }}>
+              <PrimaryButton
+                title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claimButton")}
+                onPress={() => void doClaim(item.id)}
+                disabled={claimingDealId === item.id || st !== "live"}
+              />
+            </View>
+            <Pressable
+              onPress={() => router.push(`/business/${item.business_id}` as Href)}
+              accessibilityRole="button"
+              accessibilityLabel={t("consumerHome.shopInfoLink")}
+              style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
+            >
+              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    },
+    [
+      t,
+      router,
+      userGeo,
+      userClaimsByDeal,
+      nowTick,
+      favoriteBusinessIds,
+      theme,
+      heroImageHeight,
+      heroCardHeight,
+      toggleFavorite,
+      formatTimeLeft,
+      claimStatus,
+      claimingDealId,
+      doClaim,
+    ],
+  );
+
   const listHeader = useMemo(
     () => (
-    <View style={{ marginBottom: Spacing.md }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("tabs.home")}</Text>
-      <Text style={{ marginTop: 6, fontSize: 15, opacity: 0.62, lineHeight: 22, color: theme.text }}>
-        {t("consumerHome.tagline")}
-      </Text>
-      {sessionEmail ? (
-        <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.55, fontSize: 14, color: theme.text }}>
-          {t("dealsBrowse.loggedInAs", { email: sessionEmail })}
-        </Text>
-      ) : null}
+      <View style={{ marginBottom: Spacing.md }}>
+        <ScreenHeader title={t("tabs.home")} subtitle={t("consumerHome.tagline")} />
 
-      <View style={{ marginBottom: Spacing.md, gap: Spacing.sm }}>
-        <View
-          style={{
-            borderWidth: 1.2,
-            borderColor: theme.border,
-            borderRadius: Radii.lg,
-            paddingVertical: Spacing.sm + 1,
-            paddingHorizontal: Spacing.md,
-            backgroundColor: theme.surface,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: Spacing.sm,
-          }}
-        >
-          <MaterialIcons name="search" size={22} color={theme.mutedText} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={t("dealsBrowse.searchPlaceholder")}
-            placeholderTextColor={theme.mutedText}
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-            style={{ flex: 1, fontSize: 16, color: theme.text, paddingVertical: 2 }}
-          />
-        </View>
-        <Pressable
-          onPress={() => router.push("/(tabs)/settings" as Href)}
-          accessibilityRole="button"
-        >
-          <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18, color: theme.text }} numberOfLines={2}>
-            {userGeo
-              ? t("consumerHome.sortingHintWithLocation", { miles: radiusMiles })
-              : t("consumerHome.sortingHintNoLocation")}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: Spacing.md,
-          gap: Spacing.md,
-        }}
-      >
-        <Text style={{ fontSize: 22, fontWeight: "800", flex: 1, color: theme.text }}>{t("consumerHome.liveNearYou")}</Text>
-        <Pressable
-          onPress={() => setFavoritesOnly(!favoritesOnly)}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: favoritesOnly }}
-          accessibilityLabel={favoritesOnly ? t("consumerHome.favoritesOn") : t("consumerHome.favoritesOff")}
-          style={({ pressed }) => ({
-            padding: Spacing.sm,
-            borderRadius: 22,
-            backgroundColor: favoritesOnly
-              ? colorScheme === "dark"
-                ? "rgba(236,72,153,0.2)"
-                : "rgba(224,36,94,0.12)"
-              : pressed
-                ? theme.surfaceMuted
-                : "transparent",
-          })}
-        >
-          <MaterialIcons
-            name={favoritesOnly ? "favorite" : "favorite-border"}
-            size={26}
-            color={favoritesOnly ? "#e0245e" : theme.mutedText}
-          />
-        </Pressable>
-      </View>
-
-      {favoritesOnly ? (
-        <Text style={{ fontSize: 13, opacity: 0.55, marginBottom: Spacing.md, lineHeight: 18, color: theme.text }}>
-          {t("consumerHome.favoritesOnlyActive")}
-        </Text>
-      ) : null}
-
-      {emptyNearbyLive ? (
-        <View
-          style={{
-            borderRadius: Radii.lg,
-            backgroundColor: theme.surface,
-            padding: Spacing.xxl,
-            marginBottom: Spacing.xxl,
-            borderWidth: 1,
-            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
-            gap: Spacing.md,
-            alignItems: "center",
-          }}
-        >
+        <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, gap: Spacing.sm }}>
           <View
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
+              borderWidth: 1.2,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              paddingVertical: Spacing.sm + 1,
+              paddingHorizontal: Spacing.md,
+              backgroundColor: theme.surface,
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              marginTop: 2,
+              gap: Spacing.sm,
             }}
           >
-            <Image
-              source={require("../../assets/images/splash-icon.png")}
-              style={{ width: 30, height: 30, opacity: 0.95 }}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
+            <MaterialIcons name="search" size={22} color={theme.mutedText} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t("dealsBrowse.searchPlaceholder")}
+              placeholderTextColor={theme.mutedText}
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+              style={{ flex: 1, fontSize: 16, color: theme.text, paddingVertical: 2 }}
             />
           </View>
-          <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>{t("consumerHome.emptyNearbyTitle")}</Text>
-          <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
-            {t("consumerHome.emptyNearbyBodySub")}
-          </Text>
-          <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
-            {t("consumerHome.emptyNearbyPenguinHint")}
-          </Text>
-          <PrimaryButton
-            title={t("consumerHome.ctaWidenRadius")}
-            onPress={() => router.push("/(tabs)/settings")}
-            style={{ alignSelf: "stretch" }}
-          />
-          <SecondaryButton
-            title={t("consumerHome.ctaViewAllDeals")}
-            onPress={() => setShowAllLiveDeals(true)}
-            style={{ alignSelf: "stretch" }}
-          />
-          <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20, color: theme.text }}>
-            {t("consumerHome.ctaFavoriteHint")}
-          </Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/settings" as Href)}
+            accessibilityRole="button"
+            style={{
+              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.pill,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
+              backgroundColor: theme.surfaceMuted,
+              gap: Spacing.xs,
+            }}
+          >
+            <MaterialIcons name="place" size={18} color={theme.primary} />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }} numberOfLines={1}>
+              {userGeo
+                ? t("consumerHome.locationChipWithRadius", { miles: radiusMiles })
+                : t("consumerHome.locationChipNoLocation")}
+            </Text>
+          </Pressable>
         </View>
-      ) : showDealsSkeleton ? (
-        <LoadingSkeleton rows={2} />
-      ) : (
-        <Animated.View style={dealsFadeStyle}>
-          {liveDealsDisplay.length === 0 ? (
-            <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
-          ) : (
-            liveDealsDisplay.map((item) => {
-              const coords = bizCoords(item.businesses);
-              const distanceLabel =
-                userGeo && coords
-                  ? t("dealsBrowse.distanceAwayMiles", {
-                      distance: haversineMiles(userGeo.lat, userGeo.lng, coords.lat, coords.lng).toFixed(1),
-                    })
-                  : undefined;
-              const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
-              const offerText = item.title ?? t("dealDetail.dealFallback");
-              const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
-              return (
-                <Pressable
-                  key={item.id}
-                  onPress={() => router.push(`/deal/${item.id}`)}
+
+        <View
+          style={{
+            flexDirection: "row",
+            borderRadius: Radii.pill,
+            backgroundColor: theme.surfaceMuted,
+            padding: 4,
+            marginBottom: Spacing.md,
+            gap: 4,
+          }}
+        >
+          <Pressable
+            onPress={() => setFeedSegment("deals")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: feedSegment === "deals" }}
+            style={{
+              flex: 1,
+              paddingVertical: Spacing.sm + 2,
+              borderRadius: Radii.md,
+              backgroundColor: feedSegment === "deals" ? theme.primary : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                textAlign: "center",
+                fontWeight: "800",
+                fontSize: 15,
+                color: feedSegment === "deals" ? theme.primaryText : theme.text,
+              }}
+            >
+              {t("consumerHome.segmentDeals")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setFeedSegment("shops")}
+            accessibilityRole="button"
+            accessibilityState={{ selected: feedSegment === "shops" }}
+            style={{
+              flex: 1,
+              paddingVertical: Spacing.sm + 2,
+              borderRadius: Radii.md,
+              backgroundColor: feedSegment === "shops" ? theme.primary : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                textAlign: "center",
+                fontWeight: "800",
+                fontSize: 15,
+                color: feedSegment === "shops" ? theme.primaryText : theme.text,
+              }}
+            >
+              {t("consumerHome.segmentShops")}
+            </Text>
+          </Pressable>
+        </View>
+
+        {feedSegment === "shops" ? (
+          <Text style={{ marginBottom: Spacing.md, fontSize: 15, opacity: 0.62, lineHeight: 22, color: theme.text }}>
+            {t("consumerHome.shopsSubtitle")}
+          </Text>
+        ) : null}
+
+        {feedSegment === "deals" ? (
+          <>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: Spacing.md,
+                gap: Spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 22, fontWeight: "800", flex: 1, color: theme.text }}>
+                {t("consumerHome.liveNearYou")}
+              </Text>
+              <Pressable
+                onPress={() => setFavoritesOnly(!favoritesOnly)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: favoritesOnly }}
+                accessibilityLabel={favoritesOnly ? t("consumerHome.favoritesOn") : t("consumerHome.favoritesOff")}
+                style={({ pressed }) => ({
+                  padding: Spacing.sm,
+                  borderRadius: 22,
+                  backgroundColor: favoritesOnly
+                    ? colorScheme === "dark"
+                      ? "rgba(236,72,153,0.2)"
+                      : "rgba(224,36,94,0.12)"
+                    : pressed
+                      ? theme.surfaceMuted
+                      : "transparent",
+                })}
+              >
+                <MaterialIcons
+                  name={favoritesOnly ? "favorite" : "favorite-border"}
+                  size={26}
+                  color={favoritesOnly ? "#e0245e" : theme.mutedText}
+                />
+              </Pressable>
+            </View>
+
+            {favoritesOnly ? (
+              <Text style={{ fontSize: 13, opacity: 0.55, marginBottom: Spacing.md, lineHeight: 18, color: theme.text }}>
+                {t("consumerHome.favoritesOnlyActive")}
+              </Text>
+            ) : null}
+
+            {emptyNearbyLive ? (
+              <View
+                style={{
+                  borderRadius: Radii.card,
+                  backgroundColor: theme.surface,
+                  padding: Spacing.xxxl,
+                  marginBottom: Spacing.xxxl,
+                  borderWidth: 1,
+                  borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
+                  gap: Spacing.md,
+                  alignItems: "center",
+                }}
+              >
+                <View
                   style={{
-                    marginBottom: Spacing.xl,
-                    borderRadius: Radii.lg,
-                    backgroundColor: theme.surface,
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    ...Shadows.soft,
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 2,
                   }}
                 >
                   <Image
-                    source={{
-                      uri:
-                        resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path) ??
-                        "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
-                    }}
-                    style={{ width: "100%", height: heroImageHeight }}
-                    resizeMode="cover"
+                    source={require("../../assets/images/splash-icon.png")}
+                    style={{ width: 30, height: 30, opacity: 0.95 }}
+                    resizeMode="contain"
+                    accessibilityIgnoresInvertColors
                   />
-                  <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
-                      <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
-                        {item.businesses?.name ?? t("dealDetail.localBusiness")}
-                      </Text>
-                      <Pressable
-                        onPress={() => void toggleFavorite(item.business_id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                      >
-                        <MaterialIcons
-                          name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}
-                          size={24}
-                          color={favoriteBusinessIds.includes(item.business_id) ? "#e0245e" : theme.icon}
-                        />
-                      </Pressable>
-                    </View>
-                    <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2}>
-                      {bogoText}
-                    </Text>
-                    <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
-                      {item.description || t("consumerHome.tagline")}
-                    </Text>
-                    <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
-                      {distanceLabel ? (
-                        <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
-                      ) : null}
-                      <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>
-                        {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
-                      </Text>
-                    </View>
-                    {claimStatus[item.id]?.message ? (
-                      <Text
-                        style={{
-                          marginTop: Spacing.sm,
-                          fontSize: 13,
-                          lineHeight: 18,
-                          color: theme.mutedText,
-                        }}
-                      >
-                        {claimStatus[item.id]?.message}
-                      </Text>
-                    ) : null}
-                    <View style={{ marginTop: Spacing.sm, flexDirection: "row", gap: Spacing.sm }}>
-                      <PrimaryButton
-                        title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claimButton")}
-                        onPress={() => void doClaim(item.id)}
-                        disabled={claimingDealId === item.id || st !== "live"}
-                        style={{ flex: 1 }}
-                      />
-                      <SecondaryButton title={t("dealDetail.viewBusiness")} onPress={() => router.push(`/business/${item.business_id}` as Href)} />
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </Animated.View>
-      )}
+                </View>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>{t("consumerHome.emptyNearbyTitle")}</Text>
+                <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
+                  {t("consumerHome.emptyNearbyBodySub")}
+                </Text>
+                <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
+                  {t("consumerHome.emptyNearbyPenguinHint")}
+                </Text>
+                <PrimaryButton
+                  title={t("consumerHome.ctaWidenRadius")}
+                  onPress={() => router.push("/(tabs)/settings")}
+                  style={{ alignSelf: "stretch" }}
+                />
+                <SecondaryButton
+                  title={t("consumerHome.ctaViewAllDeals")}
+                  onPress={() => setShowAllLiveDeals(true)}
+                  style={{ alignSelf: "stretch" }}
+                />
+                <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20, color: theme.text }}>
+                  {t("consumerHome.ctaFavoriteHint")}
+                </Text>
+              </View>
+            ) : showDealsSkeleton ? (
+              <LoadingSkeleton rows={2} />
+            ) : null}
+          </>
+        ) : (
+          <View style={{ marginBottom: Spacing.md, paddingTop: Spacing.xs }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>{t("consumerHome.nearbyBusinesses")}</Text>
+          </View>
+        )}
 
-      {favoriteBusinessIds.length > 0 ? (
-        <View
-          style={{
-            marginBottom: Spacing.lg,
-            ...(favoritesOnly
-              ? {
-                  backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
-                  borderRadius: 16,
-                  padding: Spacing.md,
-                  borderWidth: 1,
-                  borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
-                }
-              : {}),
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "700", opacity: 0.55, marginBottom: Spacing.sm, color: theme.text }}>
-            {t("consumerHome.favoritesStripTitle")}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-            {favoriteBusinessIds.map((fid) => {
-              const b = businesses.find((x) => x.id === fid);
-              if (!b) return null;
-              return (
-                <Pressable
-                  key={fid}
-                  onPress={() => router.push(`/business/${fid}` as Href)}
-                  style={{
-                    paddingVertical: Spacing.sm,
-                    paddingHorizontal: Spacing.md,
-                    borderRadius: Radii.md,
-                    backgroundColor: theme.surface,
+        {favoriteBusinessIds.length > 0 ? (
+          <View
+            style={{
+              marginBottom: Spacing.lg,
+              ...(favoritesOnly
+                ? {
+                    backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
+                    borderRadius: Radii.card,
+                    padding: Spacing.md,
                     borderWidth: 1,
-                    borderColor: theme.border,
-                    maxWidth: 160,
-                  }}
-                >
-                  <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-                    {b.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      ) : null}
-
-      <View
-        style={{
-          marginTop: Spacing.md,
-          paddingTop: Spacing.lg,
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "800", marginBottom: Spacing.sm, color: theme.text }}>
-          {t("consumerHome.nearbyBusinesses")}
-        </Text>
+                    borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
+                  }
+                : {}),
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "700", opacity: 0.55, marginBottom: Spacing.sm, color: theme.text }}>
+              {t("consumerHome.favoritesStripTitle")}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
+              {favoriteBusinessIds.map((fid) => {
+                const b = businesses.find((x) => x.id === fid);
+                if (!b) return null;
+                return (
+                  <Pressable
+                    key={fid}
+                    onPress={() => router.push(`/business/${fid}` as Href)}
+                    style={{
+                      paddingVertical: Spacing.sm,
+                      paddingHorizontal: Spacing.md,
+                      borderRadius: Radii.md,
+                      backgroundColor: theme.surface,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      maxWidth: 160,
+                    }}
+                  >
+                    <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
+                      {b.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
       </View>
-    </View>
     ),
     [
       t,
-      sessionEmail,
       searchQuery,
       router,
       userGeo,
@@ -851,89 +939,86 @@ export default function HomeScreen() {
       favoritesOnly,
       emptyNearbyLive,
       showDealsSkeleton,
-      dealsFadeStyle,
-      liveDealsDisplay,
-      heroImageHeight,
-      heroCardHeight,
+      feedSegment,
       favoriteBusinessIds,
       businesses,
-      toggleFavorite,
-      formatTimeLeft,
-      userClaimsByDeal,
-      nowTick,
-      claimingDealId,
-      doClaim,
-      claimStatus,
       colorScheme,
       theme,
     ],
   );
 
-  if (loadingBiz && businesses.length === 0) {
-    return (
-      <KeyboardScreen>
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-        {banner ? <Banner message={banner} tone="error" /> : null}
-        {listHeader}
-        <LoadingSkeleton rows={4} />
-      </View>
-      </KeyboardScreen>
-    );
-  }
-
   return (
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       {banner ? <Banner message={banner} tone="error" /> : null}
-      <FlatList
-        style={{ flex: 1 }}
-        data={businessesDisplay}
-        keyExtractor={(b) => b.id}
-        ListHeaderComponent={listHeader}
-        showsVerticalScrollIndicator={false}
-        {...FORM_SCROLL_KEYBOARD_PROPS}
-        removeClippedSubviews={Platform.OS === "android"}
-        maxToRenderPerBatch={12}
-        windowSize={7}
-        initialNumToRender={8}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshingFeed}
-            onRefresh={onPullToRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-          />
-        }
-        contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
-        renderItem={({ item }) => {
-          const la = typeof item.latitude === "number" ? item.latitude : item.latitude != null ? Number(item.latitude) : NaN;
-          const ln = typeof item.longitude === "number" ? item.longitude : item.longitude != null ? Number(item.longitude) : NaN;
-          const distanceLabel =
-            userGeo && Number.isFinite(la) && Number.isFinite(ln)
-              ? t("dealsBrowse.distanceAwayMiles", {
-                  distance: haversineMiles(userGeo.lat, userGeo.lng, la, ln).toFixed(1),
-                })
-              : undefined;
-          return (
-            <BusinessRowCard
-              name={item.name}
-              address={item.location}
-              hasLiveDeal={liveDealIds.has(item.id)}
-              isFavorite={favoriteBusinessIds.includes(item.id)}
-              distanceLabel={distanceLabel}
-              onPress={() => router.push(`/business/${item.id}` as Href)}
-              onToggleFavorite={() => void toggleFavorite(item.id)}
+      <Animated.View style={[{ flex: 1 }, feedSegment === "deals" ? dealsFadeStyle : undefined]}>
+        <FlatList<Deal | BusinessRow>
+          style={{ flex: 1 }}
+          data={feedSegment === "deals" ? liveDealsDisplay : shopsForList}
+          extraData={{ feedSegment, dealsLen: liveDealsDisplay.length, shopsLen: shopsForList.length }}
+          keyExtractor={(row) => row.id}
+          ListHeaderComponent={listHeader}
+          showsVerticalScrollIndicator={false}
+          {...FORM_SCROLL_KEYBOARD_PROPS}
+          removeClippedSubviews={Platform.OS === "android"}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          initialNumToRender={8}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshingFeed}
+              onRefresh={onPullToRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
             />
-          );
-        }}
-        ListEmptyComponent={
-          favoritesOnly ? (
-            <EmptyState title={t("favorites.emptyTitle")} message={t("favorites.emptyMessage")} />
-          ) : (
-            <EmptyState title={t("consumerHome.emptyBusinessesTitle")} message={t("consumerHome.emptyBusinessesBody")} />
-          )
-        }
-      />
+          }
+          contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
+          renderItem={({ item }) => {
+            if (feedSegment === "deals") {
+              return renderDealItem({ item: item as Deal });
+            }
+            const b = item as BusinessRow;
+            const la = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
+            const ln = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
+            const distanceLabel =
+              userGeo && Number.isFinite(la) && Number.isFinite(ln)
+                ? t("dealsBrowse.distanceAwayMiles", {
+                    distance: haversineMiles(userGeo.lat, userGeo.lng, la, ln).toFixed(1),
+                  })
+                : undefined;
+            return (
+              <BusinessRowCard
+                name={b.name}
+                address={b.location}
+                hasLiveDeal={liveDealIds.has(b.id)}
+                isFavorite={favoriteBusinessIds.includes(b.id)}
+                distanceLabel={distanceLabel}
+                onPress={() => router.push(`/business/${b.id}` as Href)}
+                onToggleFavorite={() => void toggleFavorite(b.id)}
+              />
+            );
+          }}
+          ListEmptyComponent={
+            feedSegment === "deals"
+              ? emptyNearbyLive || showDealsSkeleton
+                ? null
+                : (
+                    <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
+                  )
+              : loadingBiz && businesses.length === 0
+                ? (
+                    <LoadingSkeleton rows={4} />
+                  )
+                : favoritesOnly
+                  ? (
+                      <EmptyState title={t("favorites.emptyTitle")} message={t("favorites.emptyMessage")} />
+                    )
+                  : (
+                      <EmptyState title={t("consumerHome.emptyBusinessesTitle")} message={t("consumerHome.emptyBusinessesBody")} />
+                    )
+          }
+        />
+      </Animated.View>
 
       <QrModal
         visible={qrVisible}

@@ -37,18 +37,19 @@ serve(async (req) => {
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: {
           Authorization: authHeader,
         },
       },
     });
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabaseUser.auth.getUser();
 
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized. Please log in." }), {
@@ -77,7 +78,7 @@ serve(async (req) => {
     }
 
     // Pricing -> select Stripe price by matching unit_amount to app_config dollars.
-    const pricing = await loadSubscriptionPricingFromAppConfig(supabase);
+    const pricing = await loadSubscriptionPricingFromAppConfig(supabaseAdmin);
     const targetMonthlyPrice = tier === "premium" ? pricing.premiumMonthlyPrice : pricing.proMonthlyPrice;
     const targetCents = Math.round(targetMonthlyPrice * 100);
 
@@ -98,7 +99,7 @@ serve(async (req) => {
 
     // Find/create business_profiles row for this user and ensure we have a Stripe customer id.
     const selectBillingRow = async (col: "user_id" | "owner_id") => {
-      return await supabase
+      return await supabaseUser
         .from("business_profiles")
         .select("id, stripe_customer_id")
         .eq(col, user.id)
@@ -132,7 +133,7 @@ serve(async (req) => {
       });
       stripeCustomerId = customer.id;
 
-      await supabase
+      await supabaseUser
         .from("business_profiles")
         .update({ stripe_customer_id: stripeCustomerId })
         .eq("id", bp.id);

@@ -12,8 +12,11 @@ import { trackAppAnalyticsEvent } from "../../lib/app-analytics";
 import { Banner } from "../../components/ui/banner";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import { ScreenHeader } from "../../components/ui/screen-header";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
+import { useColorScheme } from "../../hooks/use-color-scheme";
+import { Colors, Radii } from "../../constants/theme";
 import { formatValiditySummary } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
@@ -46,6 +49,8 @@ export default function DealDetail() {
   const router = useRouter();
   const { height: winH } = useWindowDimensions();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
   const id = typeof idParam === "string" ? idParam : idParam?.[0] ?? "";
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -234,8 +239,8 @@ export default function DealDetail() {
   if (loadStatus === "loading") {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealDetail.title")}</Text>
-        <Text style={{ marginTop: Spacing.md, opacity: 0.8 }}>{t("dealDetail.loading")}</Text>
+        <ScreenHeader title={t("dealDetail.title")} />
+        <Text style={{ marginTop: Spacing.md, opacity: 0.8, color: theme.text }}>{t("dealDetail.loading")}</Text>
       </View>
     );
   }
@@ -243,9 +248,9 @@ export default function DealDetail() {
   if (loadStatus === "failed" || !deal) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("dealDetail.title")}</Text>
+        <ScreenHeader title={t("dealDetail.title")} />
         {banner ? <Banner message={banner} tone="error" /> : null}
-        <Text style={{ opacity: 0.78, fontSize: 16, lineHeight: 24 }}>{t("dealDetail.couldNotLoad")}</Text>
+        <Text style={{ opacity: 0.78, fontSize: 16, lineHeight: 24, color: theme.text }}>{t("dealDetail.couldNotLoad")}</Text>
         <SecondaryButton
           title={t("commonUi.goBack")}
           onPress={() => {
@@ -261,13 +266,14 @@ export default function DealDetail() {
   const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
+        <ScreenHeader title={t("dealDetail.title")} />
         <Pressable
           onPress={toggleFavorite}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -277,15 +283,16 @@ export default function DealDetail() {
             alignItems: "center",
             gap: Spacing.sm,
             marginBottom: Spacing.md,
+            marginTop: Spacing.sm,
             minHeight: 44,
           }}
         >
           <MaterialIcons
             name={isFavorite ? "favorite" : "favorite-border"}
             size={22}
-            color={isFavorite ? "#e0245e" : "#666"}
+            color={isFavorite ? "#e0245e" : theme.mutedText}
           />
-          <Text style={{ color: "#444", fontSize: 16, fontWeight: "600" }}>
+          <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>
             {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
           </Text>
         </Pressable>
@@ -294,20 +301,20 @@ export default function DealDetail() {
           return posterUri ? (
             <Image
               source={{ uri: posterUri }}
-              style={{ height: heroHeight, width: "100%", borderRadius: 18 }}
+              style={{ height: heroHeight, width: "100%", borderRadius: Radii.card }}
               contentFit="cover"
             />
           ) : (
             <View
               style={{
                 height: heroHeight,
-                borderRadius: 18,
-                backgroundColor: "#e8e8e8",
+                borderRadius: Radii.card,
+                backgroundColor: theme.surfaceMuted,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ color: "#666", fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+              <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
             </View>
           );
         })()}
@@ -320,34 +327,45 @@ export default function DealDetail() {
               opacity: 0.55,
               textTransform: "uppercase",
               letterSpacing: 0.4,
+              color: theme.text,
+              flex: 1,
             }}
           >
             {deal.businesses?.name ?? t("dealDetail.localBusiness")}
           </Text>
-          <SecondaryButton
-            title={t("dealDetail.viewBusiness")}
-            onPress={() => router.push(`/business/${deal.business_id}` as Href)}
-          />
         </View>
-        <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30 }}>
+        <Pressable
+          onPress={() => router.push(`/business/${deal.business_id}` as Href)}
+          accessibilityRole="button"
+          style={{ marginTop: Spacing.xs, marginBottom: Spacing.sm, alignSelf: "flex-start" }}
+        >
+          <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
+        </Pressable>
+        <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
           {deal.title ?? t("dealDetail.dealFallback")}
         </Text>
         {deal.price != null ? (
-          <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20 }}>${deal.price.toFixed(2)}</Text>
+          <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20, color: theme.text }}>
+            ${deal.price.toFixed(2)}
+          </Text>
         ) : null}
         {deal.description ? (
-          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24 }}>{deal.description}</Text>
+          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24, color: theme.text }}>{deal.description}</Text>
         ) : null}
         <View
           style={{
             marginTop: Spacing.lg,
-            borderRadius: 16,
-            backgroundColor: "#f6f6f6",
+            borderRadius: Radii.lg,
+            backgroundColor: theme.surfaceMuted,
             padding: Spacing.lg,
+            borderWidth: 1,
+            borderColor: theme.border,
           }}
         >
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16 }}>{t("dealDetail.finePrint")}</Text>
-          <Text style={{ opacity: 0.78, fontSize: 15, lineHeight: 22 }}>
+          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16, color: theme.text }}>
+            {t("dealDetail.finePrint")}
+          </Text>
+          <Text style={{ opacity: 0.78, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {t("dealDetail.validityPrefix")}{" "}
             {formatValiditySummary(deal, {
               lang: i18n.language,
@@ -355,10 +373,10 @@ export default function DealDetail() {
               t,
             })}
           </Text>
-          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}
           </Text>
-          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
+          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {t("dealDetail.claimsRemaining")} {remaining} / {deal.max_claims}
           </Text>
         </View>
@@ -369,11 +387,16 @@ export default function DealDetail() {
             onPress={doClaim}
             disabled={isClaiming}
           />
-          <SecondaryButton
-            title={refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
+          <Pressable
             onPress={refreshQr}
             disabled={refreshingQr}
-          />
+            accessibilityRole="button"
+            style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: refreshingQr ? 0.6 : 1 }}
+          >
+            <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>
+              {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
 

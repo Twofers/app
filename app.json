@@ -10,7 +10,7 @@
       "twofer"
     ],
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.twofer.app",
       "supportsTablet": true,

@@ -1,4 +1,10 @@
-const PUBLIC_ROOTS = new Set(["index", "auth-landing", "forgot-password", "reset-password"]);
+const PUBLIC_ROOTS = new Set([
+  "index",
+  "auth-landing",
+  "auth-callback",
+  "forgot-password",
+  "reset-password",
+]);
 
 export function shouldBypassAuthStackGate({ root, isDev }: { root: string; isDev: boolean }) {
   if (PUBLIC_ROOTS.has(root)) return true;

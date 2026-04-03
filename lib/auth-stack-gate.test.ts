@@ -8,6 +8,7 @@ describe("shouldBypassAuthStackGate", () => {
     expect(shouldBypassAuthStackGate({ root: "auth-landing", isDev: false })).toBe(true);
     expect(shouldBypassAuthStackGate({ root: "forgot-password", isDev: false })).toBe(true);
     expect(shouldBypassAuthStackGate({ root: "reset-password", isDev: false })).toBe(true);
+    expect(shouldBypassAuthStackGate({ root: "auth-callback", isDev: false })).toBe(true);
   });
 
   it("allows debug diagnostics only in dev", () => {
