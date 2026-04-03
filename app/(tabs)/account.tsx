@@ -738,13 +738,13 @@ export default function AccountScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#eee",
-              borderRadius: 12,
-              padding: 12,
-              gap: 8,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "700" }}>{t("language.sectionApp")}</Text>
+            <Text style={{ fontWeight: "700", color: theme.text }}>{t("language.sectionApp")}</Text>
             <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("language.sectionAppHelp")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
               {localeChip(t("language.english"), "en", i18n.language === "en", () => chooseAppLocale("en"))}
@@ -774,12 +774,12 @@ export default function AccountScreen() {
           {businessId ? (
             <View
               style={{
-                backgroundColor: "#fafafa",
-                borderRadius: 12,
-                padding: 12,
+                backgroundColor: theme.surface,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
                 borderWidth: 1,
-                borderColor: "#eee",
-                gap: 10,
+                borderColor: theme.border,
+                gap: Spacing.sm,
               }}
             >
               <Text style={{ fontWeight: "700" }}>{t("language.sectionBusiness")}</Text>
@@ -856,7 +856,7 @@ export default function AccountScreen() {
                   autoCapitalize="words"
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -872,7 +872,7 @@ export default function AccountScreen() {
                   autoCapitalize="words"
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -889,7 +889,7 @@ export default function AccountScreen() {
                   keyboardType="email-address"
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -905,7 +905,7 @@ export default function AccountScreen() {
                   autoCapitalize="words"
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -921,7 +921,7 @@ export default function AccountScreen() {
                   keyboardType="phone-pad"
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -936,7 +936,7 @@ export default function AccountScreen() {
                   placeholder={t("account.phCategory")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -952,7 +952,7 @@ export default function AccountScreen() {
                   multiline
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -969,7 +969,7 @@ export default function AccountScreen() {
                   placeholder={t("account.phTone")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -984,7 +984,7 @@ export default function AccountScreen() {
                   placeholder={t("account.phLocation")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -1005,7 +1005,7 @@ export default function AccountScreen() {
                   autoCorrect={false}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 6,
@@ -1020,7 +1020,7 @@ export default function AccountScreen() {
                   autoCorrect={false}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 8,
@@ -1036,7 +1036,7 @@ export default function AccountScreen() {
                   multiline
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
@@ -1060,9 +1060,9 @@ export default function AccountScreen() {
           ) : (
             <View
               style={{
-                backgroundColor: "#f8f8f8",
-                borderRadius: 12,
-                padding: 12,
+                backgroundColor: theme.surface,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
               }}
             >
               <Text style={{ fontWeight: "700" }}>{t("account.createBizCardTitle")}</Text>

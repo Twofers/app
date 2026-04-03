@@ -636,30 +636,32 @@ export default function WalletScreen() {
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <ScreenHeader title={t("consumerWallet.title")} subtitle={t("consumerWallet.subtitle")} />
 
-      <View
-        style={{
-          flexDirection: "row",
-          gap: Spacing.md,
-          marginTop: Spacing.md,
-          marginBottom: Spacing.lg,
-          borderRadius: Radii.lg,
-          borderWidth: 1,
-          borderColor: theme.border,
-          padding: Spacing.md,
-          backgroundColor: theme.surfaceMuted,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statRedeemed")}</Text>
-          <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>{stats.redeemedCount}</Text>
+      {claims.length > 0 ? (
+        <View
+          style={{
+            flexDirection: "row",
+            gap: Spacing.md,
+            marginTop: Spacing.md,
+            marginBottom: Spacing.lg,
+            borderRadius: Radii.lg,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: Spacing.md,
+            backgroundColor: theme.surfaceMuted,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statRedeemed")}</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>{stats.redeemedCount}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statSaved")}</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>
+              {t("consumerWallet.statSavedValue", { amount: stats.savedTotal.toFixed(2) })}
+            </Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statSaved")}</Text>
-          <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>
-            {t("consumerWallet.statSavedValue", { amount: stats.savedTotal.toFixed(2) })}
-          </Text>
-        </View>
-      </View>
+      ) : null}
 
       {banner ? <Banner message={banner} tone="error" /> : null}
 
