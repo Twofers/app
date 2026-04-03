@@ -48,6 +48,7 @@ export default function BusinessBillingScreen() {
   const [syncingCheckout, setSyncingCheckout] = useState(false);
   const [lastSyncMessage, setLastSyncMessage] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const trialExpired = useMemo(() => {
     return isTrialExpired(trialEndsAt);
@@ -127,10 +128,18 @@ export default function BusinessBillingScreen() {
           devError("[billing-pricing] parseFunctionError:", parseFunctionError(e));
         }
         if (cancelled) return;
-        setBanner({
-          message: t("billing.errLoadPricing", { defaultValue: "Unable to load subscription pricing. Please try again." }),
-          tone: "error",
-        });
+        if (__DEV__) {
+          setPricing({
+            proMonthlyPrice: 49,
+            premiumMonthlyPrice: 99,
+            extraLocationPrice: 19,
+          });
+        } else {
+          setBanner({
+            message: t("billing.errLoadPricing", { defaultValue: "Unable to load subscription pricing. Please try again." }),
+            tone: "error",
+          });
+        }
       } finally {
         if (!cancelled) setPricingLoading(false);
       }
@@ -138,7 +147,7 @@ export default function BusinessBillingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, retryKey]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
@@ -305,20 +314,30 @@ export default function BusinessBillingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 40 }}>
+        <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text, marginTop: 6 }}>
+          {t("tabs.billing", { defaultValue: "Billing" })}
+        </Text>
+
         {bizLoading || pricingLoading ? (
           <View style={{ paddingTop: 24 }}>
             <ActivityIndicator color={Colors.light.primary} />
           </View>
         ) : !pricing ? (
-          <View style={{ paddingTop: 24 }}>
+          <View style={{ paddingTop: 16 }}>
             {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+            <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700" }}>
+              {t("billing.currentStatus", { defaultValue: "Status" })}: {subscriptionStatus} ({subscriptionTier})
+            </Text>
+            <View style={{ marginTop: 16 }}>
+              <PrimaryButton
+                title={t("billing.retryLoadPricing", { defaultValue: "Retry" })}
+                onPress={() => { setBanner(null); setRetryKey((k) => k + 1); }}
+                style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+              />
+            </View>
           </View>
         ) : (
           <>
-            <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text, marginTop: 6 }}>
-              {t("tabs.billing", { defaultValue: "Billing" })}
-            </Text>
-
             <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
               {trialLine}
             </Text>

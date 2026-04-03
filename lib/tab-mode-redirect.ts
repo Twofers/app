@@ -3,13 +3,14 @@ import type { TabMode } from "./tab-mode";
 const BUSINESS_TABS = new Set(["create", "redeem", "dashboard", "billing", "account"]);
 const CONSUMER_TABS = new Set(["index", "map", "wallet", "settings"]);
 
-export function deriveTabFromSegments(segments: string[]): string {
+export function deriveTabFromSegments(segments: string[]): string | null {
   const tabsIdx = segments.indexOf("(tabs)");
-  if (tabsIdx === -1) return "index";
+  if (tabsIdx === -1) return null;
   return String(segments[tabsIdx + 1] ?? "index");
 }
 
-export function shouldCheckBusinessProfileForTab(tab: string): boolean {
+export function shouldCheckBusinessProfileForTab(tab: string | null): boolean {
+  if (tab === null) return false;
   return BUSINESS_TABS.has(tab);
 }
 
@@ -23,13 +24,15 @@ export function resolveTabModeRedirectTarget({
   businessBillingBlocked = false,
 }: {
   mode: TabMode;
-  tab: string;
+  tab: string | null;
   currentPath: string;
   forceBypass: boolean;
   checkingProfile: boolean;
   businessProfileComplete: boolean | null;
   businessBillingBlocked?: boolean;
 }): string | null {
+  if (tab === null) return null;
+
   const safeReturn = (target: string) => (target === currentPath ? null : target);
 
   if (mode === "business") {

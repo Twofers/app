@@ -7,8 +7,8 @@ import {
 } from "./tab-mode-redirect";
 
 describe("deriveTabFromSegments", () => {
-  it("returns index when tabs segment is absent", () => {
-    expect(deriveTabFromSegments(["auth-landing"])).toBe("index");
+  it("returns null when tabs segment is absent", () => {
+    expect(deriveTabFromSegments(["auth-landing"])).toBeNull();
   });
 
   it("returns index when tabs root has no child", () => {
@@ -115,6 +115,20 @@ describe("resolveTabModeRedirectTarget", () => {
         businessBillingBlocked: true,
       }),
     ).toBe("/(tabs)/billing?reason=reactivate");
+  });
+
+  it("returns null (no redirect) when tab is null (non-tabs route)", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: null,
+        currentPath: "/create/quick",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: true,
+        businessBillingBlocked: true,
+      }),
+    ).toBeNull();
   });
 
   it("does not redirect away from billing when blocked", () => {

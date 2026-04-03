@@ -239,8 +239,9 @@ function TabModeRedirect() {
   }, [segments]);
 
   const currentPath = useMemo(() => {
+    if (tab === null) return segments.join("/");
     return tab === "index" ? "/(tabs)" : `/(tabs)/${tab}`;
-  }, [tab]);
+  }, [tab, segments]);
 
   useEffect(() => {
     if (!ready || mode !== "business" || forceBypass) {
