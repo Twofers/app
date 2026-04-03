@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { Colors } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { captureError } from "@/lib/sentry";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -16,6 +17,7 @@ export class MapErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error) {
     console.warn("[MapErrorBoundary]", error);
+    captureError(error, { boundary: "map" });
   }
 
   render() {

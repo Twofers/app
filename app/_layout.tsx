@@ -1,3 +1,5 @@
+import '@/lib/sentry';
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -5,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
 
+import { GlobalErrorBoundary } from '@/components/global-error-boundary';
 import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
 import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
@@ -55,14 +58,16 @@ function RootNavigationStack() {
 
 export default function RootLayout() {
   return (
-    <AppI18nGate>
-      <SafeAreaProvider>
-        <TabModeProvider>
-          <DiagnosticBootLog />
-          <RootNavigationStack />
-          <ConsumerOnboardingGate />
-        </TabModeProvider>
-      </SafeAreaProvider>
-    </AppI18nGate>
+    <GlobalErrorBoundary>
+      <AppI18nGate>
+        <SafeAreaProvider>
+          <TabModeProvider>
+            <DiagnosticBootLog />
+            <RootNavigationStack />
+            <ConsumerOnboardingGate />
+          </TabModeProvider>
+        </SafeAreaProvider>
+      </AppI18nGate>
+    </GlobalErrorBoundary>
   );
 }

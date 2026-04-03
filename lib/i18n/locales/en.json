@@ -1266,5 +1266,10 @@
     "periodAm": "AM",
     "periodPm": "PM",
     "errLoad": "Failed to load analytics."
+  },
+  "crashScreen": {
+    "title": "Something went wrong",
+    "body": "The app ran into an unexpected error. Restarting should fix things.",
+    "restart": "Restart"
   }
 }

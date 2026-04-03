@@ -75,7 +75,14 @@
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to suggest nearby deals using your area and business locations in profiles."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "twofer-app",
+          "project": "twofer"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
