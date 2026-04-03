@@ -158,8 +158,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen name="favorites" options={{ href: null }} />
-        <Tabs.Screen name="explore" options={{ href: null }} />
-        <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
     </TabAuthGate>
   );
@@ -185,7 +183,7 @@ function TabModeRedirect() {
 
     if (mode === "business") {
       if (tab === "index" || tab === "map" || tab === "wallet" || tab === "settings") {
-        router.navigate("/(tabs)/create");
+        router.replace("/(tabs)/create");
       }
       if (tab === "create" || tab === "redeem" || tab === "dashboard") {
         if (forceBypass) return;
@@ -211,7 +209,7 @@ function TabModeRedirect() {
       }
     } else {
       if (tab === "create" || tab === "redeem" || tab === "dashboard") {
-        router.navigate("/(tabs)");
+        router.replace("/(tabs)");
       }
     }
   }, [ready, mode, segments, router, forceBypass]);

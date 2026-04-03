@@ -801,6 +801,7 @@ export default function AiDealScreen() {
         </View>
       ) : null}
 
+      {__DEV__ ? (
       <View style={{ marginTop: 12 }}>
         <Pressable
           onPress={() => setQaPanelOpen((o) => !o)}
@@ -864,6 +865,7 @@ export default function AiDealScreen() {
           </View>
         ) : null}
       </View>
+      ) : null}
 
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 

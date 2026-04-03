@@ -1136,5 +1136,23 @@
     "periodAm": "a. m.",
     "periodPm": "p. m.",
     "errLoad": "No se pudieron cargar las analíticas."
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "body": "Ocurrió un error inesperado. Inténtalo de nuevo o reinicia la app.",
+    "retry": "Reintentar"
+  },
+  "offline": {
+    "banner": "Estás sin conexión. Algunas funciones podrían no funcionar."
+  },
+  "accountSetup": {
+    "setupComplete": "¡Configuración completa — listo para lanzar ofertas BOGO!",
+    "finishSetup": "Termina tu configuración para desbloquear crear, canjear y panel.",
+    "completeSetup": "Completa tu configuración inicial para empezar a lanzar ofertas."
+  },
+  "mapError": {
+    "title": "Mapa no disponible",
+    "body": "No se pudo cargar el mapa. Intenta de nuevo o busca ofertas desde Inicio.",
+    "retry": "Reintentar"
   }
 }

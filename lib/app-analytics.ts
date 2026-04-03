@@ -39,11 +39,11 @@ export function trackAppAnalyticsEvent(payload: Payload): void {
         },
       });
       if (error) {
-        console.warn("[analytics]", error.message ?? error);
+        if (__DEV__) console.warn("[analytics]", error.message ?? error);
         return;
       }
       if (data && typeof data === "object" && "error" in data) {
-        console.warn("[analytics]", (data as { error?: string }).error);
+        if (__DEV__) console.warn("[analytics]", (data as { error?: string }).error);
       }
     } catch {
       /* ignore */

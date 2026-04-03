@@ -64,7 +64,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
-        headers: { Authorization: req.headers.get("Authorization")! },
+        headers: { Authorization: req.headers.get("Authorization") ?? "" },
       },
     });
 

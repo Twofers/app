@@ -127,7 +127,7 @@ export default function MapScreenNative() {
         setDeals((dz ?? []) as DealLite[]);
       }
     } catch (error) {
-      console.warn("[map] loadMapData failed", error);
+      if (__DEV__) console.warn("[map] loadMapData failed", error);
       setDataError(t("consumerMap.dataError"));
     } finally {
       setLoading(false);

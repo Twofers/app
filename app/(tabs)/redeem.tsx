@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { Colors } from "@/constants/theme";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -36,7 +37,8 @@ export default function RedeemScanner() {
   useEffect(() => {
     if (!permission) return;
     if (permission.granted) return;
-  }, [permission]);
+    if (permission.canAskAgain) void requestPermission();
+  }, [permission, requestPermission]);
 
   useEffect(() => {
     setBanner(null);
@@ -107,7 +109,7 @@ export default function RedeemScanner() {
             style={{
               borderRadius: 18,
               padding: Spacing.lg,
-              backgroundColor: "#e8f5e9",
+              backgroundColor: Colors.light.successBg,
             }}
           >
             <Text style={{ fontWeight: "700", fontSize: 17 }}>{t("redeem.redeemed")}</Text>

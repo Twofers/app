@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
 
+import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { OfflineBanner } from '@/components/offline-banner';
 import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
 import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
 import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
@@ -24,6 +26,7 @@ function RootNavigationStack() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <OfflineBanner />
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />
       <Stack>
@@ -55,14 +58,16 @@ function RootNavigationStack() {
 
 export default function RootLayout() {
   return (
-    <AppI18nGate>
-      <SafeAreaProvider>
-        <TabModeProvider>
-          <DiagnosticBootLog />
-          <RootNavigationStack />
-          <ConsumerOnboardingGate />
-        </TabModeProvider>
-      </SafeAreaProvider>
-    </AppI18nGate>
+    <AppErrorBoundary>
+      <AppI18nGate>
+        <SafeAreaProvider>
+          <TabModeProvider>
+            <DiagnosticBootLog />
+            <RootNavigationStack />
+            <ConsumerOnboardingGate />
+          </TabModeProvider>
+        </SafeAreaProvider>
+      </AppI18nGate>
+    </AppErrorBoundary>
   );
 }
