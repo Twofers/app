@@ -26,6 +26,7 @@ import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Radii } from "@/constants/theme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
+import { LocationEditor, type BusinessLocation } from "@/components/location-editor";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -67,6 +68,10 @@ export default function AccountScreen() {
   const [businessProfileCheckLoading, setBusinessProfileCheckLoading] = useState(false);
   const [businessProfileComplete, setBusinessProfileComplete] = useState(false);
   const [businessSetupMessage, setBusinessSetupMessage] = useState<string | null>(null);
+  const [locations, setLocations] = useState<BusinessLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [showLocationEditor, setShowLocationEditor] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<BusinessLocation | null>(null);
   const [businessProfileSnapshot, setBusinessProfileSnapshot] = useState<{
     name: string | null;
     address: string | null;
@@ -406,6 +411,28 @@ export default function AccountScreen() {
     router.push("/create/quick");
   }
 
+  async function loadLocations() {
+    if (!businessId) return;
+    setLocationsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("business_locations")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("is_primary", { ascending: false })
+        .order("name");
+      setLocations((data ?? []) as BusinessLocation[]);
+    } catch {
+      // silent
+    } finally {
+      setLocationsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (businessId) void loadLocations();
+  }, [businessId]);
+
   async function chooseAppLocale(locale: AppLocale) {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
@@ -586,6 +613,72 @@ export default function AccountScreen() {
                   />
                 </>
               )}
+            </View>
+          ) : null}
+
+          {/* Locations Section */}
+          {businessId ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: "#eee",
+                borderRadius: 12,
+                padding: Spacing.md,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>{t("locations.sectionTitle")}</Text>
+              <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>
+                {t("locations.sectionHelp")}
+              </Text>
+              {locationsLoading ? (
+                <Text style={{ opacity: 0.5 }}>{t("locations.loading")}</Text>
+              ) : locations.length === 0 ? (
+                <Text style={{ opacity: 0.5 }}>{t("locations.empty")}</Text>
+              ) : (
+                locations.map((loc) => (
+                  <Pressable
+                    key={loc.id}
+                    onPress={() => {
+                      setEditingLocation(loc);
+                      setShowLocationEditor(true);
+                    }}
+                    style={{
+                      borderRadius: Radii.lg,
+                      padding: Spacing.md,
+                      backgroundColor: Colors.light.surfaceMuted,
+                      gap: 2,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ fontWeight: "700", fontSize: 15 }}>{loc.name}</Text>
+                      {loc.is_primary ? (
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.light.primary }}>
+                          {t("locations.primary")}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ fontSize: 13, opacity: 0.6 }}>{loc.address}</Text>
+                    {loc.phone ? (
+                      <Text style={{ fontSize: 13, opacity: 0.6 }}>{loc.phone}</Text>
+                    ) : null}
+                  </Pressable>
+                ))
+              )}
+              <SecondaryButton
+                title={t("locations.addLocation")}
+                onPress={() => {
+                  setEditingLocation(null);
+                  setShowLocationEditor(true);
+                }}
+              />
+              <LocationEditor
+                businessId={businessId}
+                location={editingLocation}
+                visible={showLocationEditor}
+                onClose={() => setShowLocationEditor(false)}
+                onSaved={() => void loadLocations()}
+              />
             </View>
           ) : null}
 

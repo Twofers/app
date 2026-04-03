@@ -150,6 +150,14 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="billing"
+          options={{
+            title: t('tabs.billing'),
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="creditcard.fill" color={color} />,
+            ...hideWhen(mode === 'customer'),
+          }}
+        />
+        <Tabs.Screen
           name="account"
           options={{
             title: t('tabs.account'),
@@ -158,7 +166,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen name="favorites" options={{ href: null }} />
-        <Tabs.Screen name="explore" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
     </TabAuthGate>
