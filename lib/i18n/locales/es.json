@@ -138,7 +138,7 @@
     "locationGps": "GPS en vivo",
     "locationZip": "Código postal",
     "zipLabel": "Código postal",
-    "saveZip": "Guardar código postal",
+    "saveZip": "Guardar ZIP",
     "zipSaveFailTitle": "Código postal",
     "zipEmpty": "Introduce un código postal.",
     "zipInvalid": "Usa un código postal válido de 5 dígitos en EE. UU. (opcional +4).",
@@ -276,6 +276,7 @@
     "operationFailedTryAgain": "Algo salió mal. Inténtalo de nuevo."
   },
   "dealQuality": {
+    "strongDealMessage": "Cada oferta TWOFER debe ser al menos 40% de descuento o incluir algo gratis — p. ej. \"Compra un café, llévate un muffin gratis\" o \"2x1 en lattes.\"",
     "blocks": {
       "TITLE_SHORT": "El título es demasiado corto para mostrar el valor. TWOFER solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más claro.",
       "MULTI_PERCENT": "Esta oferta muestra más de un porcentaje de descuento y no está clara. Simplifica a un titular (40%+, BOGO, 2x1 o compra 2 y llévate 1), o quita porcentajes extra de la letra pequeña si tu oferta principal ya es una de esas.",
@@ -635,6 +636,8 @@
     "claimsRemaining": "Reclamos restantes:",
     "claiming": "Reclamando...",
     "claim": "Reclamar",
+    "claimButton": "Reclamar oferta",
+    "expired": "Expirada",
     "refreshingQr": "Actualizando...",
     "refreshQr": "Actualizar QR",
     "errLoginClaim": "Inicia sesión para reclamar ofertas.",
@@ -833,8 +836,16 @@
     "resetGenericError": "No pudimos actualizar la contraseña. Inténtalo de nuevo o pide un enlace nuevo.",
     "checkingSession": "Comprobando el enlace…",
     "invalidSession": "Este enlace no es válido o caducó. Solicita uno nuevo desde el inicio de sesión.",
-    "backToSignIn": "Volver al inicio de sesión",
+    "backToSignIn": "Volver a entrar",
     "continueToApp": "Continuar"
+  },
+  "errorBoundary": {
+    "appTitle": "Algo salió mal",
+    "appBody": "La app tuvo un error inesperado. Puedes intentar de nuevo.",
+    "appRetry": "Reintentar",
+    "mapTitle": "Mapa no disponible",
+    "mapBody": "El mapa no se pudo cargar. Intenta de nuevo o busca ofertas en Inicio.",
+    "mapRetry": "Reintentar"
   },
   "commonUi": {
     "ok": "OK",

@@ -148,7 +148,14 @@ export default function DealDetail() {
       if (isClaiming) return;
       setIsClaiming(true);
       const telem = await buildClaimDealTelemetry(isFavorite ? "favorite" : "direct");
-      const out = await claimDeal(deal.id, telem);
+      // FIX: Add a 15s client-side timeout so the UI never gets stuck on
+      // "Claiming..." indefinitely if the Edge Function hangs or the network
+      // drops. The server-side timeout is 45s which is too long for UX.
+      const claimPromise = claimDeal(deal.id, telem);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Claim timed out — please try again.")), 15_000),
+      );
+      const out = await Promise.race([claimPromise, timeoutPromise]);
       if (out.claim_id) {
         trackAppAnalyticsEvent({
           event_name: "deal_claimed",

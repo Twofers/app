@@ -4,6 +4,8 @@ import { Colors } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { devWarn } from "@/lib/dev-log";
+// FIX: Import i18n directly for class component (can't use useTranslation hook)
+import i18n from "@/lib/i18n/config";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -34,13 +36,13 @@ export class AppErrorBoundary extends Component<Props, State> {
           }}
         >
           <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md, color: theme.text }}>
-            Something went wrong
+            {i18n.t("errorBoundary.appTitle")}
           </Text>
           <Text style={{ opacity: 0.65, textAlign: "center", lineHeight: 22, marginBottom: Spacing.lg, color: theme.text }}>
-            The app hit an unexpected error. You can try again.
+            {i18n.t("errorBoundary.appBody")}
           </Text>
           <PrimaryButton
-            title="Try again"
+            title={i18n.t("errorBoundary.appRetry")}
             onPress={() => this.setState({ hasError: false })}
             style={{ backgroundColor: theme.primary }}
           />

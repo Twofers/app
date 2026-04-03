@@ -180,9 +180,11 @@ export default function SettingsScreen() {
     ]);
   }
 
-  function chip(active: boolean, label: string, onPress: () => void) {
+  // FIX: Added key parameter to fix React "unique key" warning on radius pills
+  function chip(active: boolean, label: string, onPress: () => void, key?: string) {
     return (
       <Pressable
+        key={key}
         onPress={onPress}
         style={{
           paddingVertical: Spacing.sm,
@@ -279,7 +281,7 @@ export default function SettingsScreen() {
           <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.radiusHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {CONSUMER_RADIUS_MILES_OPTIONS.map((m) =>
-              chip(radius === m, t("onboarding.radiusMiles", { miles: m }), () => void applyRadius(m)),
+              chip(radius === m, t("onboarding.radiusMiles", { miles: m }), () => void applyRadius(m), String(m)),
             )}
           </View>
         </View>

@@ -895,7 +895,8 @@ export default function AiDealScreen() {
         description: composedDescription,
       });
       if (!strongGuard.ok) {
-        setBanner({ message: strongGuard.message, tone: "warning" });
+        // FIX: Use translated message instead of hardcoded English
+        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
         return;
       }
 

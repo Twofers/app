@@ -186,7 +186,8 @@ export default function QuickDealScreen() {
         description: hintTrim.length > 0 ? hintTrim : null,
       });
       if (!strongGuard.ok) {
-        setBanner({ message: strongGuard.message, tone: "warning" });
+        // FIX: Use translated message instead of hardcoded English
+        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
         return;
       }
       setTitle(proposed);
@@ -257,7 +258,7 @@ export default function QuickDealScreen() {
         description: offerBody.length > 0 ? offerBody : null,
       });
       if (!strongGuard.ok) {
-        setBanner({ message: strongGuard.message, tone: "warning" });
+        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
         return;
       }
 

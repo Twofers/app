@@ -284,8 +284,10 @@ export default function OnboardingScreen() {
               })}
             </View>
 
+            {/* FIX: Was hardcoded "Continue" — now uses i18n so it translates
+                when user picks Spanish or Korean before tapping this button. */}
             <PrimaryButton
-              title="Continue"
+              title={t("onboarding.next")}
               onPress={() => {
                 void i18n.changeLanguage(lang).then(() => goToStep(1));
               }}
@@ -311,9 +313,9 @@ export default function OnboardingScreen() {
               value={zip}
               onChangeText={(value) => setZip(sanitizeZipInput(value))}
               placeholder={t("onboarding.zipPlaceholder")}
-              autoCapitalize="characters"
+              autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="numbers-and-punctuation"
+              keyboardType="number-pad"
               maxLength={10}
               style={{
                 borderWidth: 1,
@@ -363,7 +365,8 @@ export default function OnboardingScreen() {
               })}
             </View>
             <PrimaryButton title={t("onboarding.next")} onPress={() => goToStep(4)} />
-            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(1)} disabled={busy} />
+            {/* FIX: Was goToStep(1), skipping the ZIP step. Linear back = step 2. */}
+            <SecondaryButton title={t("onboarding.back")} onPress={() => goToStep(2)} disabled={busy} />
           </>
         ) : null}
 

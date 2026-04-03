@@ -276,6 +276,7 @@
     "operationFailedTryAgain": "문제가 발생했습니다. 다시 시도하세요."
   },
   "dealQuality": {
+    "strongDealMessage": "모든 TWOFER 딜은 40% 이상 할인이거나 무료 증정이어야 해요 — 예: \"커피 사면 머핀 무료\" 또는 \"라떼 1+1.\"",
     "blocks": {
       "TITLE_SHORT": "제목이 너무 짧아 혜택이 드러나지 않습니다. TWOFER는 가치 높은 딜만 허용합니다. 40% 이상 할인, 1+1, 2개 사면 1개, 또는 더 분명한 번들을 시도해 보세요.",
       "MULTI_PERCENT": "서로 다른 할인율이 여러 개 있어 메인 혜택이 불분명합니다. 하나로 정리하세요(40% 이상, 1+1, 2개 사면 1개 등). 메인이 이미 그런 유형이면 작은 글씨의 % 설명을 줄이세요.",
@@ -635,6 +636,8 @@
     "claimsRemaining": "남은 사용:",
     "claiming": "받는 중…",
     "claim": "받기",
+    "claimButton": "딜 받기",
+    "expired": "만료됨",
     "refreshingQr": "새로고침 중…",
     "refreshQr": "QR 새로고침",
     "errLoginClaim": "딜을 받으려면 로그인하세요.",
@@ -835,6 +838,14 @@
     "invalidSession": "이 재설정 링크는 유효하지 않거나 만료되었습니다. 로그인 화면에서 다시 요청하세요.",
     "backToSignIn": "로그인으로 돌아가기",
     "continueToApp": "계속"
+  },
+  "errorBoundary": {
+    "appTitle": "문제가 발생했어요",
+    "appBody": "앱에 예기치 않은 오류가 생겼어요. 다시 시도해 보세요.",
+    "appRetry": "다시 시도",
+    "mapTitle": "지도 사용 불가",
+    "mapBody": "지도를 불러올 수 없어요. 다시 시도하거나 홈에서 딜을 확인하세요.",
+    "mapRetry": "다시 시도"
   },
   "commonUi": {
     "ok": "확인",

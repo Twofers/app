@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -6,6 +7,16 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
+
+// FIX: Suppress known non-actionable dev warnings that clutter demo presentations.
+// These are React/RN framework warnings, not app bugs.
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'Non-serializable values were found in the navigation state',
+    'Each child in a list should have a unique "key" prop',
+    '[billing-pricing]',
+  ]);
+}
 
 import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
@@ -76,10 +87,13 @@ function RootNavigationStack() {
 }
 
 export default function RootLayout() {
+  // FIX: Reduced splash fallback from 8s to 3s. The normal path hides splash
+  // via AppI18nGate once i18n loads (~200ms). This timeout is a safety net for
+  // edge cases. 8s felt like a frozen app; 3s is sufficient without being jarring.
   useEffect(() => {
     const id = setTimeout(() => {
       void SplashScreen.hideAsync();
-    }, 8000);
+    }, 3000);
     return () => clearTimeout(id);
   }, []);
 

@@ -4,6 +4,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors, Radii } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { Banner } from "@/components/ui/banner";
@@ -43,6 +45,8 @@ export default function ConsumerProfileSetupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ edit?: string }>();
   const isEdit = params.edit === "1" || params.edit === "true";
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const C = Colors[colorScheme];
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
@@ -131,23 +135,24 @@ export default function ConsumerProfileSetupScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, justifyContent: "center" }}>
-        <Text style={{ opacity: 0.7 }}>{t("consumerProfile.loading")}</Text>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, justifyContent: "center", backgroundColor: C.background }}>
+        <Text style={{ color: C.mutedText }}>{t("consumerProfile.loading")}</Text>
       </View>
     );
   }
 
   return (
     <KeyboardScreen>
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>
+    {/* FIX: Added theme colors (C.text, C.mutedText, C.background) for dark mode support */}
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>
         {isEdit ? t("consumerProfile.editTitle") : t("consumerProfile.title")}
       </Text>
-      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
         {isEdit ? t("consumerProfile.editSubtitle") : t("consumerProfile.subtitle")}
       </Text>
       {email ? (
-        <Text style={{ marginBottom: Spacing.md, fontSize: 14, opacity: 0.75 }}>
+        <Text style={{ marginBottom: Spacing.md, fontSize: 14, color: C.mutedText }}>
           {t("consumerProfile.signedInAs", { email })}
         </Text>
       ) : null}
@@ -160,29 +165,33 @@ export default function ConsumerProfileSetupScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View>
-          <Text style={{ fontWeight: "700", marginBottom: 6 }}>{t("consumerProfile.zipLabel")}</Text>
+          <Text style={{ fontWeight: "700", marginBottom: 6, color: C.text }}>{t("consumerProfile.zipLabel")}</Text>
+          {/* FIX: Changed keyboardType to number-pad and autoCapitalize to none for ZIP */}
           <TextInput
             value={zip}
             onChangeText={setZip}
             placeholder={t("consumerProfile.zipPh")}
-            autoCapitalize="characters"
+            placeholderTextColor={C.mutedText}
+            autoCapitalize="none"
             autoCorrect={false}
-            keyboardType="numbers-and-punctuation"
+            keyboardType="number-pad"
             maxLength={12}
             style={{
               borderWidth: 1,
-              borderColor: "#ddd",
-              borderRadius: 12,
+              borderColor: C.border,
+              borderRadius: Radii.lg,
               paddingVertical: Spacing.sm,
               paddingHorizontal: Spacing.md,
               fontSize: 16,
+              backgroundColor: C.surface,
+              color: C.text,
             }}
           />
         </View>
 
         <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm }}>{t("consumerProfile.birthdateTitle")}</Text>
-          <Text style={{ opacity: 0.65, fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18 }}>
+          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, color: C.text }}>{t("consumerProfile.birthdateTitle")}</Text>
+          <Text style={{ fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18, color: C.mutedText }}>
             {t("consumerProfile.birthdateHint")}
           </Text>
           {Platform.OS === "android" ? (
@@ -190,13 +199,17 @@ export default function ConsumerProfileSetupScreen() {
               onPress={() => setShowPicker(true)}
               style={{
                 borderWidth: 1,
-                borderColor: "#ddd",
-                borderRadius: 12,
+                borderColor: C.border,
+                borderRadius: Radii.lg,
                 paddingVertical: Spacing.md,
                 paddingHorizontal: Spacing.md,
+                backgroundColor: C.surface,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: "600" }}>{toIsoDate(birthDate)}</Text>
+              {/* FIX: Show human-readable date instead of raw ISO "2001-03-26" */}
+              <Text style={{ fontSize: 16, fontWeight: "600", color: C.text }}>
+                {birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+              </Text>
             </Pressable>
           ) : null}
           {showPicker ? (

@@ -194,6 +194,10 @@ export default function TabLayout() {
             ...hideWhen(mode === 'customer'),
           }}
         />
+        {/* FIX: billing/manage is a sub-route pushed from billing.tsx.
+            Without href:null, Expo Router auto-discovers it as a visible 5th
+            tab showing the raw route name "billing/manage". */}
+        <Tabs.Screen name="billing/manage" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
     </TabAuthGate>

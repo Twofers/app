@@ -106,7 +106,7 @@ function RoleCard({
         onPress={onPress}
         style={{
           flex: 1,
-          minHeight: 112,
+          minHeight: 90,
           borderRadius: Radii.lg,
           borderWidth: selected ? 2 : 1,
           borderColor: selected ? theme.primary : theme.border,
@@ -139,7 +139,10 @@ export default function AuthLandingScreen() {
   const params = useLocalSearchParams<{ next?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const { mode, setMode, ready: tabModeReady } = useTabMode();
-  const [selectedMode, setSelectedMode] = useState<TabMode | null>(null);
+  // FIX: Default to "customer" so Login/Create buttons are active immediately.
+  // Most users are consumers; business owners can switch before signing in.
+  // Previously null → buttons showed at 50% opacity, confusing first-time users.
+  const [selectedMode, setSelectedMode] = useState<TabMode | null>("customer");
   const [roleBusy, setRoleBusy] = useState(false);
 
   const [email, setEmail] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_EMAIL : ""));
@@ -166,7 +169,9 @@ export default function AuthLandingScreen() {
       if (committed === "1") {
         setSelectedMode(mode);
       } else {
-        setSelectedMode(null);
+        // FIX: Default to "customer" instead of null so buttons are never
+        // stuck at 50% opacity on a fresh install. Matches initial state above.
+        setSelectedMode("customer");
       }
     })();
     return () => {
@@ -294,26 +299,33 @@ export default function AuthLandingScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
-            paddingTop: Math.max(insets.top, Spacing.md),
+            // FIX: Reduced top padding from xxl to sm to push penguin up.
+            // Keeps content higher so Login button is visible without scrolling.
+            paddingTop: Math.max(insets.top, Spacing.xs),
             paddingBottom: insets.bottom + Spacing.xxl,
             paddingHorizontal: Spacing.xxl,
           }}
         >
-          <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
-            <Image
-              source={require("../assets/images/splash-icon.png")}
-              style={{ width: 240, height: 270, opacity: 0.88 }}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-              accessibilityLabel={t("authLanding.heroA11y")}
-            />
+          <View style={{ alignItems: "center", marginBottom: Spacing.sm }}>
+            {/* FIX: Penguin enlarged significantly. Container clips the "TWOFER"
+                text baked into splash-icon.png so it doesn't duplicate the
+                orange Text below. Penguin is now the dominant hero element. */}
+            <View style={{ width: 360, height: 220, overflow: "hidden", alignItems: "center" }}>
+              <Image
+                source={require("../assets/images/splash-icon.png")}
+                style={{ width: 360, height: 400 }}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={t("authLanding.heroA11y")}
+              />
+            </View>
             <Text
               style={{
-                fontSize: 32,
+                fontSize: 36,
                 fontWeight: "900",
                 color: theme.primary,
                 letterSpacing: 2,
-                marginTop: 8,
+                marginTop: 2,
               }}
             >
               TWOFER
@@ -329,7 +341,7 @@ export default function AuthLandingScreen() {
             >
               {t("authLanding.subtitle")}
             </Text>
-            <View style={{ marginTop: Spacing.md, alignItems: "center" }}>
+            <View style={{ marginTop: Spacing.xs, alignItems: "center" }}>
               <Text style={{ fontSize: 12, color: theme.mutedText, marginBottom: Spacing.xs }}>
                 {t("authLanding.languageLabel")}
               </Text>
@@ -405,9 +417,9 @@ export default function AuthLandingScreen() {
               <Text
                 style={{
                   fontWeight: "800",
-                  fontSize: 17,
+                  fontSize: 16,
                   color: theme.text,
-                  marginBottom: Spacing.xs,
+                  marginBottom: 2,
                   textAlign: "center",
                 }}
               >
@@ -419,13 +431,13 @@ export default function AuthLandingScreen() {
                   lineHeight: 20,
                   color: theme.mutedText,
                   textAlign: "center",
-                  marginBottom: Spacing.lg,
+                  marginBottom: Spacing.sm,
                 }}
               >
                 {t("authLanding.roleSubtitle")}
               </Text>
 
-              <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.xl }}>
+              <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md }}>
                 <RoleCard
                   theme={theme}
                   colorScheme={colorScheme}

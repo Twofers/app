@@ -276,6 +276,7 @@
     "operationFailedTryAgain": "Something went wrong. Try again."
   },
   "dealQuality": {
+    "strongDealMessage": "Every TWOFER deal must be at least 40% off or give something free (e.g. BOGO coffee, 2-for-1 lattes). Conditional discounts don't qualify.",
     "blocks": {
       "TITLE_SHORT": "Your title is too short to show the value. TWOFER only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.",
       "MULTI_PERCENT": "This deal lists more than one discount percentage and the main offer isn’t clear. Simplify to one headline (40%+ off, BOGO, 2-for-1, or buy-2-get-1), or trim extra % lines from the fine print when your main offer is already one of those.",
@@ -639,6 +640,8 @@
     "claimsRemaining": "Claims remaining:",
     "claiming": "Claiming...",
     "claim": "Claim",
+    "claimButton": "Claim Deal",
+    "expired": "Expired",
     "refreshingQr": "Refreshing...",
     "refreshQr": "Refresh QR",
     "errLoginClaim": "Log in to claim deals.",
@@ -975,6 +978,14 @@
     "friendlyUnknown": "Something went wrong. Try again.",
     "friendlyGenerationRateLimit": "We couldn’t generate ads right now. You can still finish this offer manually. The service may be busy — try again shortly or fill in the fields below.",
     "friendlyGenerationLongError": "We couldn’t generate ads right now. You can still finish this offer manually. Try again in a moment, or fill in the fields below."
+  },
+  "errorBoundary": {
+    "appTitle": "Something went wrong",
+    "appBody": "The app hit an unexpected error. You can try again.",
+    "appRetry": "Try again",
+    "mapTitle": "Map unavailable",
+    "mapBody": "The map could not load. Try again or browse deals from the Home tab.",
+    "mapRetry": "Retry"
   },
   "commonUi": {
     "ok": "OK",

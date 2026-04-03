@@ -12,6 +12,10 @@
  *  5. Otherwise → REJECT
  */
 
+/**
+ * Default English fallback. Callers with i18n access should pass
+ * t("dealQuality.strongDealMessage") as the `message` parameter instead.
+ */
 export const STRONG_DEAL_ONLY_MESSAGE =
   "Every Twofer deal must be at least 40% off or give something free — " +
   'e.g. "Buy a coffee, get a muffin free" or "2-for-1 lattes". ' +

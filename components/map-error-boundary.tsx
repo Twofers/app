@@ -4,6 +4,8 @@ import { Colors } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { devWarn } from "@/lib/dev-log";
+// FIX: Import i18n directly for class component (can't use useTranslation hook)
+import i18n from "@/lib/i18n/config";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -24,13 +26,13 @@ export class MapErrorBoundary extends Component<Props, State> {
       return (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxl }}>
           <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md }}>
-            Map unavailable
+            {i18n.t("errorBoundary.mapTitle")}
           </Text>
           <Text style={{ opacity: 0.65, textAlign: "center", lineHeight: 22, marginBottom: Spacing.lg }}>
-            The map could not load. Try again or browse deals from the Home tab.
+            {i18n.t("errorBoundary.mapBody")}
           </Text>
           <PrimaryButton
-            title="Retry"
+            title={i18n.t("errorBoundary.mapRetry")}
             onPress={() => this.setState({ hasError: false })}
             style={{ backgroundColor: Colors.light.primary }}
           />
