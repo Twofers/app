@@ -89,7 +89,10 @@ export function useBusiness() {
       setCurrentPeriodEndsAt(null);
       setStripeIds({ stripeCustomerId: null, stripeSubscriptionId: null });
       setBusinessOwnershipAmbiguous(false);
-      setLoading(false);
+      // Only mark loading as done when auth has finished resolving.
+      // While auth is still loading, keep loading=true so billing gates
+      // don't fire with stale default values.
+      if (!authLoading) setLoading(false);
       return;
     }
 
@@ -242,7 +245,7 @@ export function useBusiness() {
     setBusiness((prev) => (prev ? { ...prev, subscription_tier: normalizedTier } : prev));
 
     setLoading(false);
-  }, [session]);
+  }, [session, authLoading]);
 
   useEffect(() => {
     if (authLoading) return;

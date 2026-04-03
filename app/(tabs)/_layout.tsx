@@ -271,7 +271,7 @@ function TabModeRedirect() {
   }, [ready, mode, forceBypass, session?.user?.id, tab, businessProfileComplete]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || billingLoading) return;
     const redirectTo = (target: string) => {
       if (target === currentPath || lastRedirectRef.current === target) return;
       lastRedirectRef.current = target;
@@ -289,7 +289,7 @@ function TabModeRedirect() {
     if (target) {
       redirectTo(target);
     }
-  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked]);
+  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked, billingLoading]);
 
   if (checkingProfile) {
     return (
