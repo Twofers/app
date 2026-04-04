@@ -1,4 +1,17 @@
 const { execSync } = require("child_process");
+const { withAppBuildGradle } = require("@expo/config-plugins");
+
+/** Wraps the sentry.gradle apply in a token guard so EAS builds without
+ *  SENTRY_AUTH_TOKEN don't fail on the source-map upload task. */
+function withSentryOptional(config) {
+  return withAppBuildGradle(config, (c) => {
+    c.modResults.contents = c.modResults.contents.replace(
+      /^apply from:.*sentry\.gradle.*$/m,
+      `if (System.getenv("SENTRY_AUTH_TOKEN")) { apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle") }`
+    );
+    return c;
+  });
+}
 
 function resolveGitCommitShort() {
   const fromEnv =
@@ -26,6 +39,7 @@ module.exports = ({ config }) => ({
         project: "react-native",
       },
     ],
+    withSentryOptional,
   ],
   /** Prebuild: keep New Architecture enabled across native regeneration. */
   newArchEnabled: true,

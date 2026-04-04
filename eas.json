@@ -38,9 +38,6 @@
       "extends": "production",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },
