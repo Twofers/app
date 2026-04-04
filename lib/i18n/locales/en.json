@@ -1524,5 +1524,27 @@
     "backToBilling": "Back to Billing",
     "errPortal": "Unable to open Stripe portal.",
     "errUpgrade": "Unable to start upgrade checkout."
+  },
+  "aiInsights": {
+    "title": "AI Insights",
+    "refresh": "Refresh",
+    "loading": "Analyzing your deals...",
+    "noSuggestions": "No suggestions available yet — create a deal first!"
+  },
+  "walkthrough": {
+    "dashboardTitle": "Your Dashboard",
+    "dashboardBody": "This is your home base. See all your deals, track claims and redemptions, and monitor how your business is doing at a glance.",
+    "createTitle": "Create a Deal",
+    "createBody": "Launch BOGO deals in seconds. Set the offer, pick a schedule, and your deal goes live to nearby customers instantly.",
+    "trackTitle": "Track Performance",
+    "trackBody": "Watch redemptions roll in, see which deals work best, and use insights to keep customers coming back.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip tour",
+    "createFirstDeal": "Create Your First Deal",
+    "useAiDeal": "Use This Deal Idea",
+    "exploreDashboard": "Explore Dashboard First",
+    "aiSuggestionLabel": "AI deal idea for you",
+    "aiLoading": "Generating a deal idea for you..."
   }
 }
