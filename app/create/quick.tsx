@@ -16,6 +16,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { DealPreviewModal } from "../../components/deal-preview-modal";
 import { aiGenerateDealCopy, notifyDealPublished } from "../../lib/functions";
 import { Colors, Radii } from "../../constants/theme";
 import {
@@ -105,6 +106,7 @@ export default function QuickDealScreen() {
     () => businessProfile ? getScheduleSuggestion(businessProfile.category) : null,
     [businessProfile],
   );
+  const [showPreview, setShowPreview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [banner, setBanner] = useState<{
     message: string;
@@ -302,7 +304,8 @@ export default function QuickDealScreen() {
         description: offerBody.length > 0 ? offerBody : null,
       });
       if (!strongGuard.ok) {
-        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
+        const key = `dealQuality.strongGuard.${strongGuard.reason}`;
+        setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
         return;
       }
 
@@ -928,13 +931,30 @@ export default function QuickDealScreen() {
           </View>
 
           <PrimaryButton
-            title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
-            onPress={confirmAndPublish}
+            title={publishing ? t("createQuick.publishing") : t("createQuick.previewAsCustomer")}
+            onPress={() => setShowPreview(true)}
             disabled={publishing || !canPublish}
             style={{ height: 66, borderRadius: 20, marginTop: 4 }}
           />
         </ScrollView>
       ) : null}
+
+      <DealPreviewModal
+        visible={showPreview}
+        onDismiss={() => setShowPreview(false)}
+        onPublish={() => {
+          setShowPreview(false);
+          confirmAndPublish();
+        }}
+        publishing={publishing}
+        title={title}
+        description={offerHint}
+        businessName={businessName ?? null}
+        posterUrl={heroPosterUri || null}
+        price={(() => { const p = parseOptionalPrice(price); return p.ok ? p.value : null; })()}
+        endTime={isRecurring ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : endTime.toISOString()}
+        remainingClaims={Number(maxClaims) || null}
+      />
     </View>
     </KeyboardScreen>
   );

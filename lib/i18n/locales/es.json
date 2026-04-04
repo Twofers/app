@@ -280,12 +280,17 @@
     "operationFailedTryAgain": "Algo salió mal. Inténtalo de nuevo."
   },
   "dealQuality": {
-    "strongDealMessage": "Cada oferta TWOFER debe ser al menos 40% de descuento o incluir algo gratis — p. ej. \"Compra un café, llévate un muffin gratis\" o \"2x1 en lattes.\"",
+    "strongDealMessage": "Las ofertas TWOFER deben ser al menos 40% de descuento o incluir algo gratis. Prueba 2x1 o compra un café, muffin gratis.",
     "blocks": {
-      "TITLE_SHORT": "El título es demasiado corto para mostrar el valor. TWOFER solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más claro.",
-      "MULTI_PERCENT": "Esta oferta muestra más de un porcentaje de descuento y no está clara. Simplifica a un titular (40%+, BOGO, 2x1 o compra 2 y llévate 1), o quita porcentajes extra de la letra pequeña si tu oferta principal ya es una de esas.",
-      "BELOW_THRESHOLD": "TWOFER solo permite ofertas de alto valor. Prueba 40% o más de descuento, BOGO, 2x1 o un combo más fuerte.",
-      "CLARIFY_VALUE": "Haz obvio el valor: indica un regalo claro (bebida, guarnición o postre gratis con la compra) o un combo concreto (artículos + un precio, p. ej. “2 por $10” o “almuerzo $8: 2 porciones + bebida”)."
+      "TITLE_SHORT": "Título muy corto — los clientes necesitan ver el valor de inmediato. Prueba 2x1 en lattes o Muffin gratis con cualquier café.",
+      "MULTI_PERCENT": "Varios descuentos pueden confundir. Elige un titular claro: 2x1, BOGO o un solo porcentaje fuerte.",
+      "BELOW_THRESHOLD": "Ofertas con menos del 40% no destacan. Prueba 2x1, BOGO o sube el descuento a 40%+.",
+      "CLARIFY_VALUE": "Deja claro el valor — p. ej. bebida gratis con cualquier sándwich o 2 por $10. El cliente debe entenderlo al instante."
+    },
+    "strongGuard": {
+      "conditional": "Las ofertas compra X + % de descuento en Y no califican. Prueba hacer el segundo artículo gratis!",
+      "low_percent": "Descuentos menores al 40% no atraen suficientes clientes. Prueba 2x1, BOGO o al menos 40% de descuento.",
+      "no_strong_language": "Haz la oferta irresistible! Prueba 2x1, BOGO, compra uno y lleva otro gratis, o 40%+ de descuento."
     }
   },
   "dealDraft": {
@@ -342,7 +347,12 @@
     "sectionAdvanced": "Programación avanzada",
     "scheduleSuggestionUse": "Usar este horario",
     "scheduleSuggestionCustomize": "Personalizar",
-    "prefillFromCreateHub": "IA preparó tu oferta. Revisa los detalles y publica cuando estés listo."
+    "prefillFromCreateHub": "IA preparó tu oferta. Revisa los detalles y publica cuando estés listo.",
+    "previewAsCustomer": "Vista previa como cliente",
+    "previewTitle": "Vista previa del cliente",
+    "previewPublish": "Se ve bien — Publicar",
+    "previewGoBack": "Volver y editar",
+    "previewHint": "Así verán los clientes tu oferta."
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -435,7 +445,20 @@
     "createNewDeal": "Crear nueva oferta",
     "editProfile": "Editar perfil",
     "billingRowTitle": "Facturación y plan",
-    "billingRowSubtitle": "Suscripción, prueba y pagos"
+    "billingRowSubtitle": "Suscripción, prueba y pagos",
+    "profileHintCategory": "Agrega tu categoría para que los clientes te encuentren",
+    "profileHintHours": "Agrega tu horario para que los clientes planifiquen su visita",
+    "profileHintDescription": "Agrega una breve descripción para presentar tu negocio",
+    "profileHintPhone": "Agrega tu teléfono para que los clientes te contacten",
+    "profileHintContact": "Agrega un nombre de contacto para un toque personal",
+    "profileHintEmail": "Agrega tu correo de negocio para comunicación profesional",
+    "profileHintAddress": "Agrega tu dirección para que los clientes te encuentren",
+    "profileHintName": "Agrega el nombre de tu negocio para comenzar",
+    "aiDescGenerate": "Sugerir descripción (IA)",
+    "aiDescGenerating": "Generando...",
+    "aiDescGenerated": "Descripción generada por IA. Revisa y guarda.",
+    "aiDescFailed": "No se pudo generar la descripción.",
+    "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero."
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -1239,7 +1262,15 @@
     "insightsCollapse": "Ocultar información detallada",
     "templatesBrowseLink": "Plantillas y reutilizar",
     "manageDeal": "Gestionar",
-    "billingHintShort": "Facturación y suscripción"
+    "billingHintShort": "Facturación y suscripción",
+    "filterAll": "Todas",
+    "filterLive": "Activas",
+    "filterEnded": "Finalizadas",
+    "filterRecurring": "Recurrentes",
+    "sortNewest": "Más recientes",
+    "sortClaims": "Más reclamos",
+    "sortConversion": "Mejor conversión",
+    "showingFiltered": "Mostrando {{shown}} de {{total}} ofertas"
   },
   "consumerProfile": {
     "navTitle": "Tu perfil",
@@ -1379,8 +1410,8 @@
     "generateCta": "Generate 3 ad ideas",
     "regenerate": "Regenerate (new wording)",
     "regenerating": "Regenerating…",
-    "refreshLimitReached": "Refresh limit reached — tap Generate 3 ad ideas for a new batch.",
-    "refreshesLeft": "Free refreshes left: {{count}}",
+    "refreshLimitReached": "Sin regeneraciones — inicia un nuevo lote o edita abajo.",
+    "refreshesLeft": "Regeneraciones restantes: {{remaining}} de {{total}}",
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
     "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
     "errGenerationFailed": "Generation failed",
