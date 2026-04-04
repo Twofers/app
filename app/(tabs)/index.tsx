@@ -660,7 +660,7 @@ export default function HomeScreen() {
   const listHeader = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.md }}>
-        <ScreenHeader title={t("tabs.home")} subtitle={t("consumerHome.tagline")} />
+        <ScreenHeader title="TWOFER" subtitle={t("consumerHome.tagline")} />
 
         <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, gap: Spacing.sm }}>
           <View

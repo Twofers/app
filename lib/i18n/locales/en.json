@@ -84,7 +84,7 @@
     "sortingHintNoLocation": "Set location in Settings to sort by distance.",
     "radiusHint": "Notifications & sorting use a {{miles}} mi radius (change in Settings).",
     "emptyNearbyTitle": "No live deals near you right now",
-    "emptyNearbyBody": "Try widening your radius or browse all live deals and nearby businesses below.",
+    "emptyNearbyBody": "No live deals nearby right now — check back soon!",
     "ctaWidenRadius": "Widen radius in Settings",
     "ctaViewAllDeals": "Show deals beyond your radius",
     "ctaFavoriteHint": "Favorite places you love — you can get alerts even when they’re outside your radius.",

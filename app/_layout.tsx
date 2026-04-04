@@ -63,7 +63,7 @@ function RootNavigationStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
         <Stack.Screen name="reset-password" options={{ title: t('passwordRecovery.resetTitle') }} />
-        <Stack.Screen name="create/quick" options={{ title: t('createQuick.title') }} />
+        <Stack.Screen name="create/quick" options={{ headerShown: false }} />
         <Stack.Screen name="create/ai" options={{ title: t('createAi.titleScreen') }} />
         <Stack.Screen name="create/ai-compose" options={{ title: t('aiCompose.title') }} />
         <Stack.Screen name="create/reuse" options={{ title: t('reuseHub.title') }} />
@@ -77,7 +77,7 @@ function RootNavigationStack() {
           name="modal"
           options={{ presentation: 'modal', title: t('commonUi.modalTitle') }}
         />
-        <Stack.Screen name="deal-analytics/[id]" options={{ title: t('dealAnalytics.title') }} />
+        <Stack.Screen name="deal-analytics/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
       </Stack>
       </CreateMenuOfferWizardProvider>

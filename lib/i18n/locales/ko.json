@@ -84,7 +84,7 @@
     "sortingHintNoLocation": "거리순 정렬은 설정에서 위치를 켜 주세요.",
     "radiusHint": "알림·정렬에 {{miles}}마일 반경을 씁니다(설정에서 변경).",
     "emptyNearbyTitle": "지금 주변에 라이브 딜이 없습니다",
-    "emptyNearbyBody": "반경을 넓히거나 아래에서 모든 라이브 딜·매장을 보세요.",
+    "emptyNearbyBody": "주변에 라이브 딜이 없어요 — 곧 다시 확인해 보세요!",
     "ctaWidenRadius": "설정에서 반경 넓히기",
     "ctaViewAllDeals": "반경 밖 딜 보기",
     "ctaFavoriteHint": "좋아하는 매장을 즐겨찾기하면 반경 밖이어도 알림을 받을 수 있어요.",

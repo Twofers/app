@@ -84,7 +84,7 @@
     "sortingHintNoLocation": "Configura ubicación en Ajustes para ordenar por distancia.",
     "radiusHint": "Alertas y orden usan {{miles}} mi (cámbialo en Ajustes).",
     "emptyNearbyTitle": "No hay ofertas en vivo cerca ahora",
-    "emptyNearbyBody": "Amplía el radio o mira todas las ofertas y negocios abajo.",
+    "emptyNearbyBody": "No hay ofertas cerca ahora — ¡vuelve pronto!",
     "ctaWidenRadius": "Ampliar radio en Ajustes",
     "ctaViewAllDeals": "Mostrar ofertas fuera de tu radio",
     "ctaFavoriteHint": "Guarda tus lugares favoritos — puedes recibir alertas aunque estén fuera del radio.",
