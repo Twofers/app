@@ -502,11 +502,11 @@ export default function HomeScreen() {
 
   const liveDealIds = useMemo(() => {
     const s = new Set<string>();
-    for (const d of deals) {
+    for (const d of dealsWithinRadius) {
       s.add(d.business_id);
     }
     return s;
-  }, [deals]);
+  }, [dealsWithinRadius]);
 
   const emptyNearbyLive =
     !loadingDeals && liveDealsDisplay.length === 0 && searchFilteredDeals.length > 0 && !showAllLiveDeals;

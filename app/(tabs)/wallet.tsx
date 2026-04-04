@@ -711,14 +711,16 @@ export default function WalletScreen() {
         />
       )}
 
-      <WalletUseDealSlideModal
-        visible={showSlideModal && !!useDealState}
-        dealTitle={useDealState ? dealTitle(useDealState.row) : ""}
-        businessName={useDealState ? businessName(useDealState.row) : ""}
-        busy={useDealBusy}
-        onConfirmSlide={() => void onSlideConfirmed()}
-        onClose={() => !useDealBusy && closeUseDealFlow()}
-      />
+      {showSlideModal && useDealState ? (
+        <WalletUseDealSlideModal
+          visible
+          dealTitle={dealTitle(useDealState.row)}
+          businessName={businessName(useDealState.row)}
+          busy={useDealBusy}
+          onConfirmSlide={() => void onSlideConfirmed()}
+          onClose={() => !useDealBusy && closeUseDealFlow()}
+        />
+      ) : null}
 
       {passRow && passBegin ? (
         <WalletVisualPassModal
@@ -762,19 +764,21 @@ export default function WalletScreen() {
         />
       ) : null}
 
-      <WalletRedeemModal
-        visible={qrVisible}
-        token={qrToken}
-        shortCode={qrShortCode}
-        expiresAt={qrExpires}
-        claimedAt={qrClaimedAt}
-        businessName={qrBusinessName}
-        dealTitle={qrDealTitle}
-        nowMs={nowMs}
-        onHide={() => setQrVisible(false)}
-        onRefresh={refreshQr}
-        refreshing={refreshingQr}
-      />
+      {qrVisible ? (
+        <WalletRedeemModal
+          visible
+          token={qrToken}
+          shortCode={qrShortCode}
+          expiresAt={qrExpires}
+          claimedAt={qrClaimedAt}
+          businessName={qrBusinessName}
+          dealTitle={qrDealTitle}
+          nowMs={nowMs}
+          onHide={() => setQrVisible(false)}
+          onRefresh={refreshQr}
+          refreshing={refreshingQr}
+        />
+      ) : null}
     </View>
   );
 }
