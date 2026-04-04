@@ -221,6 +221,22 @@ export default function BusinessProfileScreen() {
         contentContainerStyle={{ paddingBottom: scrollBottom }}
         keyboardShouldPersistTaps="handled"
       >
+        <View
+          style={{
+            height: 80,
+            borderRadius: 16,
+            marginBottom: Spacing.lg,
+            backgroundColor: "rgba(255,159,28,0.10)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Image
+            source={require("../assets/images/splash-icon.png")}
+            style={{ width: 56, height: 56, opacity: 0.45 }}
+            contentFit="contain"
+          />
+        </View>
         <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{biz.name}</Text>
 
         <Pressable
