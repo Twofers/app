@@ -315,6 +315,10 @@
     "errCutoffDuration": "El corte debe ser menor que la duración de la oferta.",
     "errPriceNumber": "El precio debe ser un número.",
     "errPublishFailed": "Error al publicar.",
+    "confirmPublishTitle": "¿Publicar esta oferta?",
+    "confirmPublishBody": "\"{{title}}\" se activará de inmediato y será visible para los clientes.",
+    "confirmPublishYes": "Publicar",
+    "confirmPublishNo": "Volver",
     "subtitle": "Diseñado para velocidad: completa en menos de un minuto.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
@@ -719,6 +723,7 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "Primer paso — ofertas locales en vivo. Inicia sesión o crea una cuenta para explorar, reclamar y canjear.",
+    "subtitleBusiness": "Primer paso — ofertas locales en vivo. Inicia sesión o crea una cuenta para publicar ofertas y hacer crecer tu clientela.",
     "roleTitle": "Elige negocio o consumidor, luego inicia sesión.",
     "roleSubtitle": "Usaremos esto para la incorporación correcta después de iniciar sesión o crear una cuenta.",
     "roleCustomer": "Consumidor",
@@ -749,7 +754,10 @@
     "signUpFailedTitle": "Error al registrarse",
     "verifyEmailTitle": "Revisa tu correo",
     "verifyEmailBody": "Enviamos un enlace de confirmación a {{email}}. Ábrelo para verificar tu cuenta e inicia sesión.",
-    "backToSignIn": "Volver a iniciar sesión"
+    "backToSignIn": "Volver a iniciar sesión",
+    "hintEnterEmail": "Ingresa tu correo para continuar.",
+    "hintEnterPassword": "Ingresa tu contraseña para continuar.",
+    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar."
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -1183,6 +1191,9 @@
     "chartFooter": "Por hora local del dispositivo.",
     "recentDeals": "Ofertas recientes",
     "yourDeals": "Tus ofertas",
+    "yourDealsCount": "Tus ofertas ({{count}})",
+    "loadMoreDeals": "Cargar más ofertas",
+    "showingAllDeals": "Mostrando las {{count}} ofertas",
     "dealFallback": "Oferta",
     "rowClaims": "Reclamaciones {{count}}",
     "rowRedeems": "Canjes {{count}}",

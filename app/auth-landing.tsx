@@ -339,7 +339,9 @@ export default function AuthLandingScreen() {
                 textAlign: "center",
               }}
             >
-              {t("authLanding.subtitle")}
+              {selectedMode === "business"
+                ? t("authLanding.subtitleBusiness")
+                : t("authLanding.subtitle")}
             </Text>
             <View style={{ marginTop: Spacing.xs, alignItems: "center" }}>
               <Text style={{ fontSize: 12, color: theme.mutedText, marginBottom: Spacing.xs }}>
@@ -466,7 +468,7 @@ export default function AuthLandingScreen() {
                 </View>
               ) : null}
 
-              {isDemoAuthHelperEnabled() ? (
+              {isDemoAuthHelperEnabled() && DEMO_PREVIEW_EMAIL && DEMO_PREVIEW_PASSWORD ? (
                 <Text
                   style={{
                     fontSize: 12,
@@ -531,12 +533,29 @@ export default function AuthLandingScreen() {
               <Pressable
                 onPress={() => router.push("/forgot-password" as Href)}
                 disabled={busy}
-                style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.xl, paddingVertical: 4 }}
+                style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
                   {t("authLanding.forgotPassword")}
                 </Text>
               </Pressable>
+
+              {!canSubmit && !busy ? (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: theme.mutedText,
+                    textAlign: "center",
+                    marginBottom: Spacing.md,
+                  }}
+                >
+                  {email.trim().length === 0 && pw.length === 0
+                    ? t("authLanding.hintEnterBoth")
+                    : email.trim().length === 0
+                      ? t("authLanding.hintEnterEmail")
+                      : t("authLanding.hintEnterPassword")}
+                </Text>
+              ) : null}
 
               <ScalePressable
                 disabled={!canSubmit}
