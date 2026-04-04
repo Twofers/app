@@ -901,8 +901,8 @@ export default function AiDealScreen() {
         description: composedDescription,
       });
       if (!strongGuard.ok) {
-        // FIX: Use translated message instead of hardcoded English
-        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
+        const key = `dealQuality.strongGuard.${strongGuard.reason}`;
+        setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
         return;
       }
 
@@ -1584,11 +1584,12 @@ export default function AiDealScreen() {
                   onPress={() => void generateAdVariants("regenerate")}
                   disabled={generating || regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT}
                 />
-                <Text style={{ fontSize: 12, opacity: 0.6 }}>
+                <Text style={{ fontSize: 14, opacity: 0.8, fontWeight: "600", textAlign: "center" }}>
                   {regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT
                     ? t("createAi.refreshLimitReached")
                     : t("createAi.refreshesLeft", {
-                        count: MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed,
+                        remaining: MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed,
+                        total: MAX_REGENERATIONS_PER_DRAFT,
                       })}
                 </Text>
               </>

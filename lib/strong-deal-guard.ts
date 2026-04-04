@@ -71,12 +71,14 @@ function extractPercents(text: string): number[] {
   return values;
 }
 
+export type StrongDealRejectReason = "conditional" | "low_percent" | "no_strong_language";
+
 export function validateStrongDealOnly(input: {
   title: string;
   description?: string | null;
   /** Optional explicit percentage for future percentage-based offer types. */
   discountPercent?: number | null;
-}): { ok: true } | { ok: false; message: string } {
+}): { ok: true } | { ok: false; reason: StrongDealRejectReason; message: string } {
   const title = (input.title ?? "").trim();
   const description = (input.description ?? "").trim();
   const text = `${title}\n${description}`.toLowerCase();
@@ -87,21 +89,21 @@ export function validateStrongDealOnly(input: {
 
   // ── 2. CONDITIONAL DISCOUNT — reject when no free item ────────────────────
   const hasConditional = CONDITIONAL_DISCOUNT_PATTERNS.some((p) => p.test(text));
-  if (hasConditional) return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+  if (hasConditional) return { ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE };
 
   // ── 3. PERCENT FLOOR ───────────────────────────────────────────────────────
   if (typeof input.discountPercent === "number" && input.discountPercent < 40) {
-    return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+    return { ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE };
   }
   const percents = extractPercents(text);
   if (percents.some((p) => p < 40)) {
-    return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+    return { ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE };
   }
 
   // ── 4. STRONG LANGUAGE ────────────────────────────────────────────────────
   const hasStrongLanguage = STRONG_LANGUAGE_PATTERNS.some((pattern) => pattern.test(text));
   if (!hasStrongLanguage) {
-    return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+    return { ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE };
   }
 
   return { ok: true };

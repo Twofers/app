@@ -16,6 +16,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { DealPreviewModal } from "../../components/deal-preview-modal";
 import { aiGenerateDealCopy, notifyDealPublished } from "../../lib/functions";
 import { Colors, Radii } from "../../constants/theme";
 import {
@@ -25,6 +26,7 @@ import {
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { buildPublicDealPhotoUrl } from "../../lib/deal-poster-url";
+import { getScheduleSuggestion } from "../../lib/schedule-suggestions";
 
 function minutesFromDate(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
@@ -58,6 +60,7 @@ export default function QuickDealScreen() {
     fromAiCompose?: string;
     fromReuse?: string;
     fromMenuOffer?: string;
+    fromCreateHub?: string;
   }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { t, i18n } = useTranslation();
@@ -69,6 +72,7 @@ export default function QuickDealScreen() {
     businessPreferredLocale,
     businessName,
     subscriptionTier,
+    businessProfile,
   } = useBusiness();
   const { visibleLocations, loading: locLoading } = useBusinessLocations(businessId, subscriptionTier);
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
@@ -97,6 +101,12 @@ export default function QuickDealScreen() {
   const [timezone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
   );
+  const [scheduleSuggestionDismissed, setScheduleSuggestionDismissed] = useState(false);
+  const scheduleSuggestion = useMemo(
+    () => businessProfile ? getScheduleSuggestion(businessProfile.category) : null,
+    [businessProfile],
+  );
+  const [showPreview, setShowPreview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [banner, setBanner] = useState<{
     message: string;
@@ -130,19 +140,20 @@ export default function QuickDealScreen() {
     const fromAi = g(prefill.fromAiCompose);
     const fromReuse = g(prefill.fromReuse);
     const fromMenu = g(prefill.fromMenuOffer);
+    const fromHub = g(prefill.fromCreateHub);
     if (t0) setTitle((prev) => prev || t0);
     if (h0) setOfferHint((prev) => prev || h0);
     if (p0) setPrice((prev) => prev || p0);
     if (posterPath) setPrefillPosterStoragePath(posterPath);
     if (locationId) setSelectedLocationId(locationId);
     if (t0 || h0 || p0 || posterPath) setDirty(true);
-    if (fromAi === "1" && (t0 || h0)) {
+    if (fromHub === "1" && (t0 || h0)) {
+      setBanner({ message: t("createQuick.prefillFromCreateHub"), tone: "success" });
+    } else if (fromAi === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
-    }
-    if (fromReuse === "1" && (t0 || h0)) {
+    } else if (fromReuse === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromReuse"), tone: "success" });
-    }
-    if (fromMenu === "1" && (t0 || h0)) {
+    } else if (fromMenu === "1" && (t0 || h0)) {
       setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
     }
   }, [
@@ -154,6 +165,7 @@ export default function QuickDealScreen() {
     prefill.fromAiCompose,
     prefill.fromReuse,
     prefill.fromMenuOffer,
+    prefill.fromCreateHub,
     t,
   ]);
 
@@ -292,7 +304,8 @@ export default function QuickDealScreen() {
         description: offerBody.length > 0 ? offerBody : null,
       });
       if (!strongGuard.ok) {
-        setBanner({ message: t("dealQuality.strongDealMessage"), tone: "warning" });
+        const key = `dealQuality.strongGuard.${strongGuard.reason}`;
+        setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
         return;
       }
 
@@ -500,6 +513,66 @@ export default function QuickDealScreen() {
           >
             {t("createQuick.sectionSchedule")}
           </Text>
+
+          {/* ── AI schedule suggestion ──────────────────── */}
+          {scheduleSuggestion && !scheduleSuggestionDismissed && !prefill.fromReuse ? (
+            <View
+              style={{
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                backgroundColor: "#FFF7ED",
+                borderWidth: 1,
+                borderColor: Colors.light.primary,
+              }}
+            >
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#111", marginBottom: 4 }}>
+                {scheduleSuggestion.rationale}
+              </Text>
+              <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm }}>
+                <Pressable
+                  onPress={() => {
+                    markDirty();
+                    setIsRecurring(true);
+                    setDaysOfWeek([...scheduleSuggestion.daysOfWeek]);
+                    const wsDate = new Date();
+                    wsDate.setHours(Math.floor(scheduleSuggestion.windowStartMinutes / 60), scheduleSuggestion.windowStartMinutes % 60, 0, 0);
+                    setWindowStart(wsDate);
+                    const weDate = new Date();
+                    weDate.setHours(Math.floor(scheduleSuggestion.windowEndMinutes / 60), scheduleSuggestion.windowEndMinutes % 60, 0, 0);
+                    setWindowEnd(weDate);
+                    setScheduleSuggestionDismissed(true);
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: Spacing.sm,
+                    borderRadius: Radii.md,
+                    backgroundColor: Colors.light.primary,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                    {t("createQuick.scheduleSuggestionUse")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setScheduleSuggestionDismissed(true)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: Spacing.sm,
+                    borderRadius: Radii.md,
+                    backgroundColor: Colors.light.surface,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", fontSize: 14, color: "#111" }}>
+                    {t("createQuick.scheduleSuggestionCustomize")}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           {!isRecurring ? (
             <>
@@ -858,13 +931,30 @@ export default function QuickDealScreen() {
           </View>
 
           <PrimaryButton
-            title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
-            onPress={confirmAndPublish}
+            title={publishing ? t("createQuick.publishing") : t("createQuick.previewAsCustomer")}
+            onPress={() => setShowPreview(true)}
             disabled={publishing || !canPublish}
             style={{ height: 66, borderRadius: 20, marginTop: 4 }}
           />
         </ScrollView>
       ) : null}
+
+      <DealPreviewModal
+        visible={showPreview}
+        onDismiss={() => setShowPreview(false)}
+        onPublish={() => {
+          setShowPreview(false);
+          confirmAndPublish();
+        }}
+        publishing={publishing}
+        title={title}
+        description={offerHint}
+        businessName={businessName ?? null}
+        posterUrl={heroPosterUri || null}
+        price={(() => { const p = parseOptionalPrice(price); return p.ok ? p.value : null; })()}
+        endTime={isRecurring ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : endTime.toISOString()}
+        remainingClaims={Number(maxClaims) || null}
+      />
     </View>
     </KeyboardScreen>
   );

@@ -177,7 +177,8 @@ export default function MenuOfferScreen() {
       discount_percent: structuredOffer.discount_percent,
     });
     if (!strong.ok) {
-      setBanner({ message: strong.message, tone: "error" });
+      const key = `dealQuality.strongGuard.${strong.reason}`;
+      setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
     setGenerating(true);
@@ -257,7 +258,8 @@ export default function MenuOfferScreen() {
       discount_percent: offer.discount_percent,
     });
     if (!strong.ok) {
-      setBanner({ message: strong.message, tone: "error" });
+      const key = `dealQuality.strongGuard.${strong.reason}`;
+      setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
     setStructuredOffer(offer);
