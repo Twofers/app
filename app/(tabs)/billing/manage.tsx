@@ -68,7 +68,7 @@ export default function ManageSubscriptionScreen() {
     setBusy(true);
     setBanner(null);
     try {
-      const targetTier = subscriptionTier === "pro" ? "premium" : "premium";
+      const targetTier = "premium";
       const { data, error } = await supabase.functions.invoke("stripe-create-checkout-session", {
         body: { tier: targetTier },
         timeout: EDGE_FUNCTION_TIMEOUT_MS,

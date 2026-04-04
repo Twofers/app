@@ -62,6 +62,11 @@ export async function scheduleLocalNotificationSafe(request: ScheduleRequest): P
   try {
     const Notifications = await getNotifications();
     if (!Notifications) return null;
+    // Ensure Android local notifications use the registered channel.
+    // When trigger is null (immediate), replace with a ChannelAwareTriggerInput.
+    if (Platform.OS === "android" && request.trigger === null) {
+      request = { ...request, trigger: { channelId: "deal-alerts" } };
+    }
     return await Notifications.scheduleNotificationAsync(request);
   } catch (e) {
     devWarn("[notifications] scheduleNotificationAsync skipped (non-fatal):", e);

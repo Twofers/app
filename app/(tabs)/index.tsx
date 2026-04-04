@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import Animated, { useSharedValue, withTiming, useAnimatedStyle } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -581,7 +581,7 @@ export default function HomeScreen() {
                   "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
               }}
               style={{ width: "100%", height: heroImageHeight }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           </Pressable>
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
@@ -655,6 +655,35 @@ export default function HomeScreen() {
       claimingDealId,
       doClaim,
     ],
+  );
+
+  const renderFeedItem = useCallback(
+    ({ item }: { item: Deal | BusinessRow }) => {
+      if (feedSegment === "deals") {
+        return renderDealItem({ item: item as Deal });
+      }
+      const b = item as BusinessRow;
+      const la = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
+      const ln = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
+      const distanceLabel =
+        userGeo && Number.isFinite(la) && Number.isFinite(ln)
+          ? t("dealsBrowse.distanceAwayMiles", {
+              distance: haversineMiles(userGeo.lat, userGeo.lng, la, ln).toFixed(1),
+            })
+          : undefined;
+      return (
+        <BusinessRowCard
+          name={b.name}
+          address={b.location}
+          hasLiveDeal={liveDealIds.has(b.id)}
+          isFavorite={favoriteBusinessIds.includes(b.id)}
+          distanceLabel={distanceLabel}
+          onPress={() => router.push(`/business/${b.id}` as Href)}
+          onToggleFavorite={() => void toggleFavorite(b.id)}
+        />
+      );
+    },
+    [feedSegment, renderDealItem, userGeo, t, liveDealIds, favoriteBusinessIds, router, toggleFavorite],
   );
 
   const listHeader = useMemo(
@@ -848,8 +877,7 @@ export default function HomeScreen() {
                   <Image
                     source={require("../../assets/images/splash-icon.png")}
                     style={{ width: 30, height: 30, opacity: 0.95 }}
-                    resizeMode="contain"
-                    accessibilityIgnoresInvertColors
+                    contentFit="contain"
                   />
                 </View>
                 <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>{t("consumerHome.emptyNearbyTitle")}</Text>
@@ -973,31 +1001,7 @@ export default function HomeScreen() {
             />
           }
           contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
-          renderItem={({ item }) => {
-            if (feedSegment === "deals") {
-              return renderDealItem({ item: item as Deal });
-            }
-            const b = item as BusinessRow;
-            const la = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
-            const ln = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
-            const distanceLabel =
-              userGeo && Number.isFinite(la) && Number.isFinite(ln)
-                ? t("dealsBrowse.distanceAwayMiles", {
-                    distance: haversineMiles(userGeo.lat, userGeo.lng, la, ln).toFixed(1),
-                  })
-                : undefined;
-            return (
-              <BusinessRowCard
-                name={b.name}
-                address={b.location}
-                hasLiveDeal={liveDealIds.has(b.id)}
-                isFavorite={favoriteBusinessIds.includes(b.id)}
-                distanceLabel={distanceLabel}
-                onPress={() => router.push(`/business/${b.id}` as Href)}
-                onToggleFavorite={() => void toggleFavorite(b.id)}
-              />
-            );
-          }}
+          renderItem={renderFeedItem}
           ListEmptyComponent={
             feedSegment === "deals"
               ? emptyNearbyLive || showDealsSkeleton

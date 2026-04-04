@@ -44,8 +44,8 @@ export function SecondaryButton({
         {
           width: "100%",
           alignSelf: "stretch",
-          height: 58,
           minHeight: 58,
+          paddingVertical: 14,
           paddingHorizontal: 22,
           borderRadius: Radii.lg,
           backgroundColor: "#ffffff",
@@ -60,6 +60,9 @@ export function SecondaryButton({
       ]}
     >
       <Text
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
         style={{
           color: Colors.light.text,
           fontSize: 17,

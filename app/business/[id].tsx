@@ -232,7 +232,7 @@ export default function BusinessProfileScreen() {
           }}
         >
           <Image
-            source={require("../assets/images/splash-icon.png")}
+            source={require("../../assets/images/splash-icon.png")}
             style={{ width: 56, height: 56, opacity: 0.45 }}
             contentFit="contain"
           />

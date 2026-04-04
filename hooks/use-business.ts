@@ -177,7 +177,6 @@ export function useBusiness() {
       if (!byOwnerErr) bpRow = byOwnerRow as any;
     }
 
-    const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
     const isActiveSubscription = bpRow?.subscription_status === "active";
     const needsBillingInit =
       !bpRow ||
@@ -187,12 +186,19 @@ export function useBusiness() {
       (!isActiveSubscription && !bpRow.current_period_ends_at);
 
     if (needsBillingInit) {
+      // Only compute a new trial end date when we truly need to write one for the
+      // first time.  Previously this was calculated on every refresh, which silently
+      // extended trials each time the hook ran.
+      const newTrialEndsIso = !bpRow?.trial_ends_at
+        ? new Date(Date.now() + 30 * 86400000).toISOString()
+        : null;
+
       const repair: Record<string, unknown> = {};
       if (!bpRow?.subscription_status) repair.subscription_status = "trial";
       if (!bpRow?.subscription_tier) repair.subscription_tier = "pro";
-      if (!bpRow?.trial_ends_at) repair.trial_ends_at = trialEndsIso;
+      if (newTrialEndsIso) repair.trial_ends_at = newTrialEndsIso;
       if (!bpRow?.current_period_ends_at) {
-        repair.current_period_ends_at = String(bpRow?.trial_ends_at ?? trialEndsIso);
+        repair.current_period_ends_at = String(bpRow?.trial_ends_at ?? newTrialEndsIso);
       }
 
       if (bpRow) {
@@ -220,8 +226,8 @@ export function useBusiness() {
         bpRow = {
           subscription_status: String(repair.subscription_status ?? "trial"),
           subscription_tier: String(repair.subscription_tier ?? "pro"),
-          trial_ends_at: String(repair.trial_ends_at ?? trialEndsIso),
-          current_period_ends_at: String(repair.current_period_ends_at ?? trialEndsIso),
+          trial_ends_at: String(repair.trial_ends_at ?? newTrialEndsIso),
+          current_period_ends_at: String(repair.current_period_ends_at ?? newTrialEndsIso),
           stripe_customer_id: null,
           stripe_subscription_id: null,
         };

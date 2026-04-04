@@ -45,8 +45,8 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
         {
           width: "100%",
           alignSelf: "stretch",
-          height: 58,
           minHeight: 58,
+          paddingVertical: 14,
           paddingHorizontal: 22,
           borderRadius: Radii.lg,
           backgroundColor: Colors.light.primary,
@@ -61,6 +61,9 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
       ]}
     >
       <Text
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
         style={{
           color: "white",
           fontSize: 17,

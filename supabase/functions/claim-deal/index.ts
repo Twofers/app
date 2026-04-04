@@ -513,7 +513,7 @@ serve(async (req) => {
     let newClaimId: string | null = null;
     for (let attempt = 0; attempt < 14; attempt++) {
       const code = randomShortCode();
-      const { data: inserted, error: err } = await supabase
+      const { data: inserted, error: err } = await supabaseAdmin
         .from("deal_claims")
         .insert({
           deal_id: dealId,

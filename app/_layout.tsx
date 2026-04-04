@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,6 +7,34 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
+
+// N-2 FIX: Register foreground notification handler at module level so
+// notifications received while the app is open are displayed to the user.
+// This MUST run before any component mounts.
+if (Platform.OS !== 'web') {
+  void import('expo-notifications').then((Notifications) => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    // N-1 FIX: Create the Android notification channel. Without this,
+    // all push notifications on Android 8+ are silently dropped.
+    if (Platform.OS === 'android') {
+      void Notifications.setNotificationChannelAsync('deal-alerts', {
+        name: 'Deal Alerts',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF9F1C',
+      });
+    }
+  }).catch(() => {});
+}
 
 // FIX: Suppress known non-actionable dev warnings that clutter demo presentations.
 // These are React/RN framework warnings, not app bugs.
@@ -73,10 +101,7 @@ function RootNavigationStack() {
         <Stack.Screen name="create/ad-refine" options={{ title: t('adRefine.title') }} />
         <Stack.Screen name="deal/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: 'modal', title: t('commonUi.modalTitle') }}
-        />
+
         <Stack.Screen name="deal-analytics/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
       </Stack>
