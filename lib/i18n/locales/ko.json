@@ -339,7 +339,10 @@
     "openAiScheduling": "AI 광고 열기(일정)",
     "sectionBasics": "딜 기본 정보",
     "sectionLimits": "한도 및 시간",
-    "sectionAdvanced": "고급 일정"
+    "sectionAdvanced": "고급 일정",
+    "scheduleSuggestionUse": "이 일정 사용",
+    "scheduleSuggestionCustomize": "맞춤 설정",
+    "prefillFromCreateHub": "AI가 딜을 작성했습니다. 내용을 확인하고 준비되면 게시하세요."
   },
   "language": {
     "sectionApp": "앱 언어",
@@ -478,7 +481,14 @@
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
     "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
-    "subtitle": "빠르게 시작하거나 아래에서 더 많은 도구를 여세요.",
+    "subtitle": "딜을 설명하면 나머지는 저희가 처리합니다.",
+    "offerInputPlaceholder": "예: 라떼 1잔 사면 1잔 무료",
+    "offerInputLabel": "무엇을 제공하시나요?",
+    "createDealButton": "딜 만들기",
+    "creatingDeal": "AI가 딜을 작성 중…",
+    "errOfferEmpty": "먼저 제공할 내용을 설명해 주세요.",
+    "errAiCreateFailed": "딜을 생성할 수 없습니다. 다시 시도하거나 수동으로 만드세요.",
+    "createManually": "수동으로 만들기",
     "moreToolsTitle": "다른 만들기 방법",
     "moreToolsShow": "더 보기",
     "moreToolsHide": "접기"

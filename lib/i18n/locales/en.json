@@ -352,7 +352,10 @@
     "dayThu": "T",
     "dayFri": "F",
     "daySat": "S",
-    "daySun": "S"
+    "daySun": "S",
+    "scheduleSuggestionUse": "Use this schedule",
+    "scheduleSuggestionCustomize": "Customize",
+    "prefillFromCreateHub": "AI drafted your deal. Review the details and publish when ready."
   },
   "language": {
     "sectionApp": "App language",
@@ -495,7 +498,14 @@
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
     "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
-    "subtitle": "Start fast or open more tools below.",
+    "subtitle": "Describe your deal and we'll handle the rest.",
+    "offerInputPlaceholder": "e.g. Buy one latte, get one free",
+    "offerInputLabel": "What are you offering?",
+    "createDealButton": "Create Deal",
+    "creatingDeal": "AI is drafting your deal…",
+    "errOfferEmpty": "Describe what you're offering first.",
+    "errAiCreateFailed": "Couldn't generate your deal. Try again or create manually.",
+    "createManually": "Create manually",
     "moreToolsTitle": "More ways to create",
     "moreToolsShow": "Show more",
     "moreToolsHide": "Hide"

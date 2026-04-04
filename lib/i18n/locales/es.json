@@ -339,7 +339,10 @@
     "openAiScheduling": "Abrir anuncios con IA (horario)",
     "sectionBasics": "Datos de la oferta",
     "sectionLimits": "Límites y tiempo",
-    "sectionAdvanced": "Programación avanzada"
+    "sectionAdvanced": "Programación avanzada",
+    "scheduleSuggestionUse": "Usar este horario",
+    "scheduleSuggestionCustomize": "Personalizar",
+    "prefillFromCreateHub": "IA preparó tu oferta. Revisa los detalles y publica cuando estés listo."
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -478,7 +481,14 @@
     "menuOfferSubtitle": "Pick items → 3 AI ad ideas → publish.",
     "menuManagerTitle": "Menu library",
     "menuManagerSubtitle": "View, edit, add, or archive saved menu lines.",
-    "subtitle": "Empieza rápido u abre más herramientas abajo.",
+    "subtitle": "Describe tu oferta y nosotros nos encargamos.",
+    "offerInputPlaceholder": "ej. Compra un café, llévate otro gratis",
+    "offerInputLabel": "¿Qué estás ofreciendo?",
+    "createDealButton": "Crear oferta",
+    "creatingDeal": "IA está preparando tu oferta…",
+    "errOfferEmpty": "Describe lo que estás ofreciendo primero.",
+    "errAiCreateFailed": "No se pudo generar tu oferta. Intenta de nuevo o crea manualmente.",
+    "createManually": "Crear manualmente",
     "moreToolsTitle": "Más formas de crear",
     "moreToolsShow": "Ver más",
     "moreToolsHide": "Ocultar"
