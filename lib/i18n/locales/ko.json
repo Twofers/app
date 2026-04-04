@@ -315,6 +315,10 @@
     "errCutoffDuration": "마감 여유는 딜 기간보다 짧아야 합니다.",
     "errPriceNumber": "가격은 숫자여야 합니다.",
     "errPublishFailed": "게시에 실패했습니다.",
+    "confirmPublishTitle": "이 딜을 게시할까요?",
+    "confirmPublishBody": "\"{{title}}\"이(가) 즉시 활성화되어 고객에게 표시됩니다.",
+    "confirmPublishYes": "게시",
+    "confirmPublishNo": "돌아가기",
     "subtitle": "속도를 위해 설계됨: 1분 안에 완료하세요.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
@@ -719,6 +723,7 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "첫 화면 — 실시간 지역 딜. 로그인 또는 계정 만들기로 둘러보기, 클레임, 사용하세요.",
+    "subtitleBusiness": "첫 화면 — 실시간 지역 딜. 로그인 또는 계정 만들기로 오퍼를 게시하고 고객을 늘려 보세요.",
     "roleTitle": "비즈니스 또는 소비자를 선택한 뒤 로그인하세요.",
     "roleSubtitle": "로그인 또는 계정 만들기 후 올바른 온보딩에 사용합니다.",
     "roleCustomer": "소비자",
@@ -749,7 +754,10 @@
     "signUpFailedTitle": "가입 실패",
     "verifyEmailTitle": "이메일을 확인하세요",
     "verifyEmailBody": "{{email}}로 인증 링크를 보냈습니다. 링크를 열어 계정을 확인한 뒤 로그인하세요.",
-    "backToSignIn": "로그인으로 돌아가기"
+    "backToSignIn": "로그인으로 돌아가기",
+    "hintEnterEmail": "계속하려면 이메일을 입력하세요.",
+    "hintEnterPassword": "계속하려면 비밀번호를 입력하세요.",
+    "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요."
   },
   "legal": {
     "sectionTitle": "법적 고지",
@@ -1183,6 +1191,9 @@
     "chartFooter": "기기 시간대 기준 클레임 시각입니다.",
     "recentDeals": "최근 딜",
     "yourDeals": "내 딜",
+    "yourDealsCount": "내 딜 ({{count}})",
+    "loadMoreDeals": "더 많은 딜 불러오기",
+    "showingAllDeals": "전체 {{count}}개 딜 표시 중",
     "dealFallback": "딜",
     "rowClaims": "클레임 {{count}}",
     "rowRedeems": "사용 {{count}}",

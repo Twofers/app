@@ -332,6 +332,18 @@ export default function QuickDealScreen() {
     }
   }
 
+  function confirmAndPublish() {
+    const dealTitle = title.trim() || t("createQuick.placeholderTitle");
+    Alert.alert(
+      t("createQuick.confirmPublishTitle"),
+      t("createQuick.confirmPublishBody", { title: dealTitle }),
+      [
+        { text: t("createQuick.confirmPublishNo"), style: "cancel" },
+        { text: t("createQuick.confirmPublishYes"), onPress: () => void publishDeal() },
+      ],
+    );
+  }
+
   return (
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
@@ -847,7 +859,7 @@ export default function QuickDealScreen() {
 
           <PrimaryButton
             title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
-            onPress={publishDeal}
+            onPress={confirmAndPublish}
             disabled={publishing || !canPublish}
             style={{ height: 66, borderRadius: 20, marginTop: 4 }}
           />

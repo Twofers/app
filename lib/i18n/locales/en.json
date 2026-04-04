@@ -316,6 +316,10 @@
     "errNoDays": "Pick at least one day.",
     "errPriceNumber": "Price must be a number.",
     "errPublishFailed": "Publish failed.",
+    "confirmPublishTitle": "Publish this deal?",
+    "confirmPublishBody": "\"{{title}}\" will go live immediately and be visible to customers.",
+    "confirmPublishYes": "Publish",
+    "confirmPublishNo": "Go back",
     "subtitle": "Built for speed: complete this flow in under a minute.",
     "placeholderPrice": "5.99",
     "placeholderMaxClaims": "50",
@@ -736,6 +740,7 @@
   "authLanding": {
     "title": "TWOFER",
     "subtitle": "First entry — live local deals. Log in or create an account to browse, claim, and redeem.",
+    "subtitleBusiness": "First entry — live local deals. Log in or create an account to publish offers and grow your customer base.",
     "roleTitle": "Choose business or consumer, then sign in.",
     "roleSubtitle": "We’ll use this for the right onboarding after you log in or create an account.",
     "roleCustomer": "Consumer",
@@ -766,7 +771,10 @@
     "signUpFailedTitle": "Sign Up Failed",
     "verifyEmailTitle": "Check your email",
     "verifyEmailBody": "We sent a confirmation link to {{email}}. Open it to verify your account, then log in.",
-    "backToSignIn": "Back to sign in"
+    "backToSignIn": "Back to sign in",
+    "hintEnterEmail": "Enter your email to continue.",
+    "hintEnterPassword": "Enter your password to continue.",
+    "hintEnterBoth": "Enter your email and password to continue."
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -1336,6 +1344,9 @@
     "chartFooter": "Based on claim time in your time zone.",
     "recentDeals": "Recent deals",
     "yourDeals": "Your deals",
+    "yourDealsCount": "Your deals ({{count}})",
+    "loadMoreDeals": "Load more deals",
+    "showingAllDeals": "Showing all {{count}} deals",
     "dealFallback": "Deal",
     "rowClaims": "Claims {{count}}",
     "rowRedeems": "Redeems {{count}}",

@@ -582,11 +582,13 @@ export default function BusinessDashboard() {
             color: Colors.light.text,
           }}
         >
-          {t("offersDashboard.yourDeals")}
+          {deals.length > 0
+            ? t("offersDashboard.yourDealsCount", { count: deals.length })
+            : t("offersDashboard.yourDeals")}
         </Text>
       </View>
     ),
-    [t, router, billingBlocked],
+    [t, router, billingBlocked, deals.length],
   );
 
   const listFooter = useMemo(
@@ -775,12 +777,30 @@ export default function BusinessDashboard() {
               onEndReached={() => void loadMoreDeals()}
               ListFooterComponent={
                 <View>
-                  {listFooter}
                   {dealsLoadingMore ? (
                     <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
                       <ActivityIndicator color={primary} />
                     </View>
+                  ) : dealsHasMore ? (
+                    <SecondaryButton
+                      title={t("offersDashboard.loadMoreDeals")}
+                      onPress={() => void loadMoreDeals()}
+                      style={{ marginTop: Spacing.md, marginBottom: Spacing.sm }}
+                    />
+                  ) : deals.length > 0 ? (
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 13,
+                        color: Colors.light.mutedText,
+                        marginTop: Spacing.md,
+                        marginBottom: Spacing.sm,
+                      }}
+                    >
+                      {t("offersDashboard.showingAllDeals", { count: deals.length })}
+                    </Text>
                   ) : null}
+                  {listFooter}
                 </View>
               }
               ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
