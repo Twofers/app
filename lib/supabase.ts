@@ -33,7 +33,8 @@ const StorageAdapter = {
       if (!hasWindow) return memory.get(key) ?? null;
       try {
         return window.localStorage.getItem(key);
-      } catch {
+      } catch (err) {
+        if (__DEV__) console.warn("[StorageAdapter] getItem fallback:", err);
         return memory.get(key) ?? null;
       }
     }
@@ -48,7 +49,8 @@ const StorageAdapter = {
       }
       try {
         window.localStorage.setItem(key, value);
-      } catch {
+      } catch (err) {
+        if (__DEV__) console.warn("[StorageAdapter] setItem fallback:", err);
         memory.set(key, value);
       }
       return;
@@ -64,7 +66,8 @@ const StorageAdapter = {
       }
       try {
         window.localStorage.removeItem(key);
-      } catch {
+      } catch (err) {
+        if (__DEV__) console.warn("[StorageAdapter] removeItem fallback:", err);
         memory.delete(key);
       }
       return;
@@ -74,19 +77,12 @@ const StorageAdapter = {
   },
 };
 
-/** Avoids some RN fetch polyfill crashes (invalid Response status) surfacing as opaque "status 0" errors. */
+/** Catches RN fetch polyfill crashes and network failures so Supabase.js never tries to JSON.parse an empty body. */
 function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const run = globalThis.fetch.bind(globalThis);
   return run(input, init).catch((err: unknown) => {
-    const m = err instanceof Error ? err.message : String(err);
-    if (
-      m.includes("status provided (0)") ||
-      m.includes("outside the range") ||
-      m.includes("Failed to construct 'Response'")
-    ) {
-      throw new Error("Network request failed. Check your connection and try again.");
-    }
-    throw err;
+    if (__DEV__) console.warn("[supabaseFetch] Network error:", err);
+    throw new Error("Network request failed. Check your connection and try again.");
   });
 }
 

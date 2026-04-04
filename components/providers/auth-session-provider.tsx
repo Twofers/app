@@ -15,11 +15,18 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setSession(data.session ?? null);
-      setIsInitialLoading(false);
-    });
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setSession(data.session ?? null);
+        setIsInitialLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSession(null);
+        setIsInitialLoading(false);
+      });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {

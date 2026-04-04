@@ -137,8 +137,9 @@ export default function BusinessSetupScreen() {
         router.replace("/(tabs)/dashboard");
       }, 250);
     } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Save error:", e);
       setBanner({
-        message: (e instanceof Error ? e.message : String(e)) || t("businessSetup.errSave"),
+        message: t("businessSetup.errSave"),
         tone: "error",
       });
     } finally {

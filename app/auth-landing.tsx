@@ -48,17 +48,20 @@ function ScalePressable({
   disabled,
   style,
   children,
+  accessibilityLabel,
 }: {
   onPress: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
+  accessibilityLabel?: string;
 }) {
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <AnimatedPressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       disabled={disabled}
       onPressIn={() => {
@@ -354,6 +357,9 @@ export default function AuthLandingScreen() {
                     <Pressable
                       key={locale}
                       onPress={() => void chooseLocale(locale)}
+                      accessibilityRole="button"
+                      accessibilityLabel={locale.toUpperCase()}
+                      accessibilityState={{ selected: active }}
                       style={{
                         borderRadius: 999,
                         paddingHorizontal: Spacing.md,
@@ -495,7 +501,8 @@ export default function AuthLandingScreen() {
                 keyboardType="email-address"
                 autoCorrect={false}
                 editable={!busy}
-                placeholder="you@example.com"
+                accessibilityLabel={t("authLanding.emailLabel")}
+                placeholder={t("authLanding.emailPlaceholder")}
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
@@ -517,7 +524,8 @@ export default function AuthLandingScreen() {
                 onChangeText={onPwChange}
                 secureTextEntry
                 editable={!busy}
-                placeholder="••••••••"
+                accessibilityLabel={t("authLanding.passwordLabel")}
+                placeholder={t("authLanding.passwordPlaceholder")}
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
@@ -533,6 +541,8 @@ export default function AuthLandingScreen() {
               <Pressable
                 onPress={() => router.push("/forgot-password" as Href)}
                 disabled={busy}
+                accessibilityRole="link"
+                accessibilityLabel={t("authLanding.forgotPassword")}
                 style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
@@ -560,6 +570,7 @@ export default function AuthLandingScreen() {
               <ScalePressable
                 disabled={!canSubmit}
                 onPress={() => void handleLogIn()}
+                accessibilityLabel={busyAction === "login" ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,
@@ -583,6 +594,7 @@ export default function AuthLandingScreen() {
               <ScalePressable
                 disabled={!canSubmit}
                 onPress={() => void handleSignUp()}
+                accessibilityLabel={t("authLanding.createAccount")}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,

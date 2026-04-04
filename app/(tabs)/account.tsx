@@ -385,8 +385,8 @@ export default function AccountScreen() {
       setProfileShortDescription(result.description);
       setBanner({ message: t("account.aiDescGenerated"), tone: "success" });
     } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      setBanner({ message: m || t("account.aiDescFailed"), tone: "error" });
+      if (__DEV__) console.warn("[account] AI description error:", err);
+      setBanner({ message: t("account.aiDescFailed"), tone: "error" });
     } finally {
       setGeneratingDescription(false);
     }

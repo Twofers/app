@@ -312,13 +312,13 @@ export default function HomeScreen() {
         const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", businessId);
         if (error) {
           setFavoriteBusinessIds(favoriteBusinessIds);
-          setBanner(error.message);
+          setBanner(t("consumerHome.errFavoriteToggle"));
         }
       } else {
         const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: businessId });
         if (error) {
           setFavoriteBusinessIds(favoriteBusinessIds);
-          setBanner(error.message);
+          setBanner(t("consumerHome.errFavoriteToggle"));
         }
       }
     },

@@ -34,23 +34,26 @@ export function ConsumerOnboardingGate() {
 
     let cancelled = false;
     void (async () => {
-      if (cancelled) return;
+      try {
+        if (cancelled) return;
 
-      const userId = session?.user?.id;
-      if (!userId) {
-        return;
-      }
+        const userId = session?.user?.id;
+        if (!userId) return;
 
-      const profile = await fetchConsumerProfile(userId);
-      if (!isConsumerProfileComplete(profile)) {
-        router.replace("/consumer-profile-setup");
-        return;
-      }
+        const profile = await fetchConsumerProfile(userId);
+        if (cancelled) return;
+        if (!isConsumerProfileComplete(profile)) {
+          router.replace("/consumer-profile-setup");
+          return;
+        }
 
-      const prefs = await getConsumerPreferences();
-      if (cancelled) return;
-      if (!prefs.onboardingComplete) {
-        router.replace("/onboarding");
+        const prefs = await getConsumerPreferences();
+        if (cancelled) return;
+        if (!prefs.onboardingComplete) {
+          router.replace("/onboarding");
+        }
+      } catch (err) {
+        if (__DEV__) console.warn("[ConsumerOnboardingGate]", err);
       }
     })();
 

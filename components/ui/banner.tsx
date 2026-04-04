@@ -16,6 +16,8 @@ export function Banner({ message, tone = "info" }: BannerProps) {
 
   return (
     <View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
       style={{
         borderWidth: 1,
         borderColor: stylesByTone.borderColor,

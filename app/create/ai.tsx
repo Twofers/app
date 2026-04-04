@@ -970,9 +970,9 @@ export default function AiDealScreen() {
 
       router.replace("/(tabs)");
     } catch (err: unknown) {
+      if (__DEV__) console.warn("[ai] Publish error:", err);
       setBanner({
-        message:
-          (err instanceof Error ? err.message : String(err)) || t("createAi.errPublishFailed"),
+        message: t("createAi.errPublishFailed"),
         tone: "error",
       });
     } finally {
@@ -1025,10 +1025,9 @@ export default function AiDealScreen() {
       if (error) throw error;
       setBanner({ message: t("createAi.templateSaved"), tone: "success" });
     } catch (err: unknown) {
+      if (__DEV__) console.warn("[ai] Save template error:", err);
       setBanner({
-        message:
-          (err instanceof Error ? err.message : String(err)) ||
-          t("createAi.errSaveTemplateFailed"),
+        message: t("createAi.errSaveTemplateFailed"),
         tone: "error",
       });
     } finally {

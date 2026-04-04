@@ -234,8 +234,8 @@ export default function QuickDealScreen() {
       setTitle(proposed);
       setBanner({ message: t("createQuick.successAiTitle"), tone: "success" });
     } catch (err: unknown) {
-      const m = err instanceof Error ? err.message : String(err);
-      setBanner({ message: m || t("createQuick.errAiSuggestFailed"), tone: "error" });
+      if (__DEV__) console.warn("[quick] AI suggest error:", err);
+      setBanner({ message: t("createQuick.errAiSuggestFailed"), tone: "error" });
     } finally {
       setSuggestingAi(false);
     }
@@ -338,8 +338,8 @@ export default function QuickDealScreen() {
       setDirty(false);
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
-      const m = err instanceof Error ? err.message : String(err);
-      setBanner({ message: m || t("createQuick.errPublishFailed"), tone: "error" });
+      if (__DEV__) console.warn("[quick] Publish error:", err);
+      setBanner({ message: t("createQuick.errPublishFailed"), tone: "error" });
     } finally {
       setPublishing(false);
     }
