@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
@@ -31,6 +31,9 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
+import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
+import { aiGenerateDealCopy } from "@/lib/functions";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -80,8 +83,14 @@ export default function AccountScreen() {
   } | null>(null);
   const [bizProfileExpanded, setBizProfileExpanded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [generatingDescription, setGeneratingDescription] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+
+  const completeness = useMemo(
+    () => calculateProfileCompleteness(businessProfile),
+    [businessProfile],
+  );
 
   useEffect(() => {
     if (!isLoggedIn || tabMode !== "business") {
@@ -355,6 +364,32 @@ export default function AccountScreen() {
       throw new Error(tr("account.errLngRange"));
     }
     return n;
+  }
+
+  async function generateAiDescription() {
+    if (!businessId || generatingDescription) return;
+    const name = profileBusinessName.trim();
+    const cat = profileCategory.trim();
+    if (!name || !cat) {
+      setBanner({ message: t("account.aiDescNeedsNameCategory"), tone: "error" });
+      return;
+    }
+    setGeneratingDescription(true);
+    setBanner(null);
+    try {
+      const result = await aiGenerateDealCopy({
+        hint_text: `Write a 1-2 sentence description for a ${cat} called "${name}". Focus on what makes it appealing to local customers.`,
+        business_name: name,
+        business_id: businessId,
+      });
+      setProfileShortDescription(result.description);
+      setBanner({ message: t("account.aiDescGenerated"), tone: "success" });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      setBanner({ message: m || t("account.aiDescFailed"), tone: "error" });
+    } finally {
+      setGeneratingDescription(false);
+    }
   }
 
   async function saveBusinessProfile() {
@@ -690,9 +725,10 @@ export default function AccountScreen() {
                       {t("account.bizCategory")}: {businessProfileSnapshot.category}
                     </Text>
                   ) : null}
-                  <Text style={{ opacity: 0.75, lineHeight: 20, color: theme.text }}>
-                    {businessSetupMessage ?? t("account.bizSetupComplete")}
-                  </Text>
+                  <ProfileCompletenessBar
+                    percentage={completeness.percentage}
+                    hint={completeness.nextHint ? t(completeness.nextHint) : null}
+                  />
                   {!businessProfileComplete ? (
                     <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
                   ) : (
@@ -1039,6 +1075,11 @@ export default function AccountScreen() {
                     minHeight: 72,
                     textAlignVertical: "top",
                   }}
+                />
+                <SecondaryButton
+                  title={generatingDescription ? t("account.aiDescGenerating") : t("account.aiDescGenerate")}
+                  onPress={() => void generateAiDescription()}
+                  disabled={generatingDescription}
                 />
               </View>
                   <PrimaryButton

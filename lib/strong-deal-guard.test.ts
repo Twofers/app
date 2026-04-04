@@ -16,13 +16,13 @@ describe("validateStrongDealOnly", () => {
   it("rejects unclear value language", () => {
     expect(
       validateStrongDealOnly({ title: "Fresh coffee special", description: "Great quality and vibes." }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   it("rejects percentages below 40", () => {
     expect(
       validateStrongDealOnly({ title: "35% off coffee", description: "Limited time only" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   // ── Free-item cases (Rule 1 — always PASS) ────────────────────────────────
@@ -75,32 +75,32 @@ describe("validateStrongDealOnly", () => {
   it("does NOT accept 'sugar-free latte' alone as a deal", () => {
     expect(
       validateStrongDealOnly({ title: "Sugar-free latte special" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   it("does NOT accept 'dairy-free option available' alone", () => {
     expect(
       validateStrongDealOnly({ title: "Dairy-free option available today" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   // ── Conditional discount (Rule 2 — always REJECT) ────────────────────────
   it("rejects 'buy a coffee + 40% off muffin'", () => {
     expect(
       validateStrongDealOnly({ title: "Buy a coffee + 40% off muffin" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   it("rejects 'buy a latte + 50% off pastry'", () => {
     expect(
       validateStrongDealOnly({ title: "Buy a latte + 50% off any pastry" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   it("rejects 'buy espresso + 60% off second drink'", () => {
     expect(
       validateStrongDealOnly({ title: "Buy an espresso + 60% off second drink" }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   // ── Strong-language cases (Rule 4 — PASS) ────────────────────────────────
@@ -139,7 +139,7 @@ describe("validateStrongDealOnly", () => {
         human_summary: "5% off Latte",
         discount_percent: 5,
       }),
-    ).toEqual({ ok: false, message: STRONG_DEAL_ONLY_MESSAGE });
+    ).toEqual({ ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
   it("accepts BOGO with typo in description (AI-generated output)", () => {

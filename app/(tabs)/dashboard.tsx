@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   Text,
   View,
 } from "react-native";
@@ -272,6 +273,46 @@ function MetricTile({
   );
 }
 
+function ScrollFilterRow({
+  items,
+  selected,
+  onSelect,
+}: {
+  items: { key: string; label: string }[];
+  selected: string;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: Spacing.xs }}
+    >
+      {items.map((item) => {
+        const active = item.key === selected;
+        return (
+          <Pressable
+            key={item.key}
+            onPress={() => onSelect(item.key)}
+            style={{
+              paddingHorizontal: Spacing.md,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: active ? 2 : 1,
+              borderColor: active ? Colors.light.primary : Colors.light.border,
+              backgroundColor: active ? "rgba(255,159,28,0.12)" : Colors.light.surface,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.primary : Colors.light.text }}>
+              {item.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export default function BusinessDashboard() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -303,6 +344,8 @@ export default function BusinessDashboard() {
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [dealManageFor, setDealManageFor] = useState<DealRow | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [dealFilter, setDealFilter] = useState<"all" | "live" | "ended" | "recurring">("all");
+  const [dealSort, setDealSort] = useState<"newest" | "claims" | "conversion">("newest");
 
   const primary = Colors.light.primary;
 
@@ -578,6 +621,25 @@ export default function BusinessDashboard() {
     return t("offersDashboard.statusEnded");
   }
 
+  const filteredDeals = useMemo(() => {
+    let result = deals;
+    if (dealFilter !== "all") {
+      result = result.filter((d) => {
+        if (dealFilter === "recurring") return d.is_recurring;
+        const status = dealScheduleStatus(d);
+        if (dealFilter === "live") return status === "live" || status === "scheduled";
+        if (dealFilter === "ended") return status === "ended";
+        return true;
+      });
+    }
+    if (dealSort === "claims") {
+      result = [...result].sort((a, b) => b.claims - a.claims);
+    } else if (dealSort === "conversion") {
+      result = [...result].sort((a, b) => b.conversion - a.conversion);
+    }
+    return result;
+  }, [deals, dealFilter, dealSort]);
+
   const listTop = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
@@ -609,9 +671,37 @@ export default function BusinessDashboard() {
             ? t("offersDashboard.yourDealsCount", { count: deals.length })
             : t("offersDashboard.yourDeals")}
         </Text>
+        {deals.length > 0 ? (
+          <View style={{ gap: Spacing.xs }}>
+            <ScrollFilterRow
+              items={[
+                { key: "all", label: t("offersDashboard.filterAll") },
+                { key: "live", label: t("offersDashboard.filterLive") },
+                { key: "ended", label: t("offersDashboard.filterEnded") },
+                { key: "recurring", label: t("offersDashboard.filterRecurring") },
+              ]}
+              selected={dealFilter}
+              onSelect={(k) => setDealFilter(k as typeof dealFilter)}
+            />
+            <ScrollFilterRow
+              items={[
+                { key: "newest", label: t("offersDashboard.sortNewest") },
+                { key: "claims", label: t("offersDashboard.sortClaims") },
+                { key: "conversion", label: t("offersDashboard.sortConversion") },
+              ]}
+              selected={dealSort}
+              onSelect={(k) => setDealSort(k as typeof dealSort)}
+            />
+            {dealFilter !== "all" ? (
+              <Text style={{ fontSize: 13, color: Colors.light.mutedText }}>
+                {t("offersDashboard.showingFiltered", { shown: filteredDeals.length, total: deals.length })}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     ),
-    [t, router, billingBlocked, deals.length],
+    [t, router, billingBlocked, deals.length, dealFilter, dealSort, filteredDeals.length],
   );
 
   const listFooter = useMemo(
@@ -814,7 +904,7 @@ export default function BusinessDashboard() {
           ) : (
             <FlatList
               style={{ flex: 1 }}
-              data={deals}
+              data={filteredDeals}
               keyExtractor={(item) => item.id}
               ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
