@@ -42,6 +42,9 @@ import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { triggerLightHaptic } from "@/lib/press-feedback";
 import { printDealFlyer } from "@/lib/deal-flyer";
+import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
+import { AiInsightsCard } from "@/components/ai-insights-card";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -274,7 +277,7 @@ export default function BusinessDashboard() {
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { mode, ready: modeReady } = useTabMode();
-  const { isLoggedIn, businessId, businessName, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
 
   const [banner, setBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -299,6 +302,7 @@ export default function BusinessDashboard() {
   const [monthlyStatsOpen, setMonthlyStatsOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [dealManageFor, setDealManageFor] = useState<DealRow | null>(null);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   const primary = Colors.light.primary;
 
@@ -466,6 +470,25 @@ export default function BusinessDashboard() {
     if (!businessId) return;
     void loadMetrics();
   }, [businessId, loadMetrics]);
+
+  // Show walkthrough for first-time business owners
+  const WALKTHROUGH_KEY = "twoforone_walkthrough_complete";
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    (async () => {
+      const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
+      if (!cancelled && !done) {
+        setShowWalkthrough(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [businessId]);
+
+  const dismissWalkthrough = useCallback(async () => {
+    setShowWalkthrough(false);
+    await AsyncStorage.setItem(WALKTHROUGH_KEY, "1");
+  }, []);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -661,6 +684,19 @@ export default function BusinessDashboard() {
           </View>
         ) : null}
 
+        {deals.length > 0 && businessId ? (
+          <AiInsightsCard
+            businessId={businessId}
+            businessName={businessName}
+            businessCategory={businessProfile?.category ?? null}
+            weekCounts={weekCounts}
+            dealTitles={deals.slice(0, 5).map((d) => d.title ?? "")}
+            totalClaims={monthClaims}
+            totalRedeems={monthRedeems}
+            dealsLaunched={dealsLaunchedMonth}
+          />
+        ) : null}
+
         <Animated.View entering={FadeInDown.duration(440).delay(120).springify()}>
           <CardShell>
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
@@ -726,6 +762,10 @@ export default function BusinessDashboard() {
       insights,
       monthlyStatsOpen,
       insightsOpen,
+      deals,
+      businessId,
+      businessName,
+      businessProfile,
     ],
   );
 
@@ -746,6 +786,13 @@ export default function BusinessDashboard() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+      <WelcomeWalkthrough
+        visible={showWalkthrough}
+        onDismiss={dismissWalkthrough}
+        businessCategory={businessProfile?.category ?? null}
+        businessName={businessName}
+        businessId={businessId}
+      />
       <Animated.View entering={FadeInDown.duration(400).springify()}>
         <ScreenHeader title={t("tabs.dashboard")} subtitle={dashboardSubtitle} />
       </Animated.View>

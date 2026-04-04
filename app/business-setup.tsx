@@ -134,7 +134,7 @@ export default function BusinessSetupScreen() {
 
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
       setTimeout(() => {
-        router.replace("/create/quick");
+        router.replace("/(tabs)/dashboard");
       }, 250);
     } catch (e: unknown) {
       setBanner({
