@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
@@ -12,6 +12,8 @@ import { formatValiditySummary } from "@/lib/deal-time";
 import { formatAppDateFromDayKey } from "@/lib/i18n/format-datetime";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -51,12 +53,15 @@ export default function DealAnalyticsDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [bestTime, setBestTime] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -160,11 +165,37 @@ export default function DealAnalyticsDetail() {
 
   if (loading) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
         <ScreenHeader title={t("dealAnalytics.title")} />
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("dealAnalytics.loading")}</Text>
       </View>
     );
+  }
+
+  async function handleExport(format: "csv" | "pdf") {
+    if (!deal) return;
+    setExporting(true);
+    try {
+      const totalClaims = claims.length;
+      const totalRedeems = claims.filter((c) => c.redeemed_at).length;
+      const row: ExportRow = {
+        dealTitle: deal.title ?? t("offersDashboard.dealFallback"),
+        startDate: new Date(deal.start_time).toLocaleDateString(),
+        endDate: new Date(deal.end_time).toLocaleDateString(),
+        claims: totalClaims,
+        redemptions: totalRedeems,
+        conversionRate: totalClaims > 0 ? Math.round((totalRedeems / totalClaims) * 100) : 0,
+      };
+      if (format === "csv") {
+        await exportAnalyticsCsv([row], "");
+      } else {
+        await exportAnalyticsPdf([row], "");
+      }
+    } catch {
+      setBanner(t("dealAnalytics.errExport", "Could not generate export."));
+    } finally {
+      setExporting(false);
+    }
   }
 
   const headerSubtitle = deal
@@ -176,15 +207,36 @@ export default function DealAnalyticsDetail() {
     : undefined;
 
   return (
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <ScreenHeader title={t("dealAnalytics.title")} subtitle={headerSubtitle} />
       {deal ? (
-        <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs }}>
+        <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs, gap: Spacing.xs }}>
           <SecondaryButton
             title={t("offersDashboard.editDeal")}
             onPress={() =>
               router.push({ pathname: "/create/ai", params: { dealId: deal.id } } as Href)
             }
+          />
+          <SecondaryButton
+            title={exporting ? t("dealAnalytics.exporting", "Exporting...") : t("dealAnalytics.exportTitle", "Export analytics")}
+            disabled={exporting}
+            onPress={() => {
+              Alert.alert(
+                t("dealAnalytics.exportTitle", "Export analytics"),
+                t("dealAnalytics.exportChoose", "Choose export format"),
+                [
+                  { text: t("commonUi.cancel"), style: "cancel" },
+                  {
+                    text: t("dealAnalytics.exportCsv", "CSV"),
+                    onPress: () => void handleExport("csv"),
+                  },
+                  {
+                    text: t("dealAnalytics.exportPdf", "PDF"),
+                    onPress: () => void handleExport("pdf"),
+                  },
+                ],
+              );
+            }}
           />
         </View>
       ) : null}
@@ -211,7 +263,7 @@ export default function DealAnalyticsDetail() {
                 style={{
                   paddingVertical: Spacing.md,
                   borderBottomWidth: 1,
-                  borderBottomColor: Colors.light.border,
+                  borderBottomColor: theme.border,
                 }}
               >
                 <Text style={{ fontWeight: "700", fontSize: 16 }}>
