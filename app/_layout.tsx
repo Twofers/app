@@ -71,7 +71,7 @@ function RootNavigationStack() {
         <Stack.Screen name="create/menu-manager" options={{ title: t('menuManager.title') }} />
         <Stack.Screen name="create/menu-offer" options={{ title: t('menuOffer.title') }} />
         <Stack.Screen name="create/ad-refine" options={{ title: t('adRefine.title') }} />
-        <Stack.Screen name="deal/[id]" options={{ title: t('dealDetail.title') }} />
+        <Stack.Screen name="deal/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
         <Stack.Screen
           name="modal"

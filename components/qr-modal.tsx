@@ -117,9 +117,14 @@ export function QrModal({
     }
     const tickRemaining = () => {
       const diff = Math.max(0, Math.floor((new Date(redeemByIso).getTime() - Date.now()) / 1000));
-      const mins = Math.floor(diff / 60);
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
       const secs = diff % 60;
-      setRemaining(`${mins}:${secs.toString().padStart(2, "0")}`);
+      if (hrs > 0) {
+        setRemaining(`${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
+      } else {
+        setRemaining(`${mins}:${secs.toString().padStart(2, "0")}`);
+      }
       setTick((prev) => !prev);
     };
     tickRemaining();
