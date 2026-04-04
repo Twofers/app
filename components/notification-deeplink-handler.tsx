@@ -28,14 +28,22 @@ export function NotificationDeepLinkHandler() {
       // Avoid SSR crashes: expo-notifications expects browser APIs.
       return;
     }
-    let subscription: { remove: () => void } | null = null;
-    try {
-      const navigate = (data: Record<string, unknown> | undefined) => {
-        const href = readPath(data);
-        if (href) router.push(href);
-      };
 
-      void import("expo-notifications").then((Notifications) => {
+    // N-3 FIX: The previous async `.then()` pattern created a race condition
+    // where the cleanup function could run before the subscription was assigned.
+    // Use a `cancelled` flag so the async callback skips setup if already unmounted.
+    let cancelled = false;
+    let subscription: { remove: () => void } | null = null;
+
+    const navigate = (data: Record<string, unknown> | undefined) => {
+      const href = readPath(data);
+      if (href) router.push(href);
+    };
+
+    void import("expo-notifications")
+      .then((Notifications) => {
+        if (cancelled) return;
+
         subscription = Notifications.addNotificationResponseReceivedListener((response) => {
           navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
         });
@@ -44,19 +52,20 @@ export function NotificationDeepLinkHandler() {
           coldStartHandled.current = true;
           void Notifications.getLastNotificationResponseAsync()
             .then((response) => {
-              if (!response) return;
+              if (!response || cancelled) return;
               navigate(response.notification.request.content.data as Record<string, unknown> | undefined);
             })
             .catch((e) => {
               devWarn("[notifications] getLastNotificationResponseAsync failed (non-fatal):", e);
             });
         }
+      })
+      .catch((e) => {
+        devWarn("[notifications] Deep link listener setup skipped (non-fatal):", e);
       });
-    } catch (e) {
-      devWarn("[notifications] Deep link listener setup skipped (non-fatal):", e);
-    }
 
     return () => {
+      cancelled = true;
       try {
         subscription?.remove();
       } catch {
