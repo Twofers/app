@@ -128,7 +128,11 @@
     "emptyMarkersTitle": "No map pins yet",
     "emptyMarkersBody": "Businesses need coordinates on their profile to appear on the map. You can still browse on Home.",
     "androidMapsUnavailableTitle": "Map isn’t available in this build",
-    "androidMapsUnavailableBody": "This Android install was built without a Google Maps key, so the map can’t open safely. Browse deals on Home, or install an update after maps are configured for builds."
+    "androidMapsUnavailableBody": "This Android install was built without a Google Maps key, so the map can’t open safely. Browse deals on Home, or install an update after maps are configured for builds.",
+    "a11yRefreshLabel": "Refresh map data",
+    "a11yRefreshHint": "Reload businesses and live deals on the map",
+    "a11yToggleAllHint": "Show every business on the map",
+    "a11yToggleLiveHint": "Show only businesses with a live deal"
   },
   "consumerSettings": {
     "accountCta": "Account & sign in",
@@ -1493,12 +1497,6 @@
     "a11ySubscribePremiumHint": "Opens secure checkout for the Premium monthly plan",
     "a11yManageSubscriptionLabel": "Manage current subscription",
     "a11yManageSubscriptionHint": "Open billing management options"
-  },
-  "consumerMap": {
-    "a11yRefreshLabel": "Refresh map data",
-    "a11yRefreshHint": "Reload businesses and live deals on the map",
-    "a11yToggleAllHint": "Show every business on the map",
-    "a11yToggleLiveHint": "Show only businesses with a live deal"
   },
   "billingManage": {
     "title": "Manage Subscription",

@@ -128,7 +128,11 @@
     "emptyMarkersTitle": "Aún no hay pins en el mapa",
     "emptyMarkersBody": "Los negocios necesitan coordenadas en su perfil para aparecer aquí. Sigue explorando en Inicio.",
     "androidMapsUnavailableTitle": "El mapa no está disponible en esta versión",
-    "androidMapsUnavailableBody": "Esta instalación de Android se generó sin clave de Google Maps, así que el mapa no puede abrirse de forma segura. Usa Inicio para ver ofertas o instala una actualización cuando el mapa esté configurado en el build."
+    "androidMapsUnavailableBody": "Esta instalación de Android se generó sin clave de Google Maps, así que el mapa no puede abrirse de forma segura. Usa Inicio para ver ofertas o instala una actualización cuando el mapa esté configurado en el build.",
+    "a11yRefreshLabel": "Actualizar datos del mapa",
+    "a11yRefreshHint": "Recarga los negocios y ofertas activas en el mapa",
+    "a11yToggleAllHint": "Mostrar todos los negocios en el mapa",
+    "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa"
   },
   "consumerSettings": {
     "accountCta": "Cuenta e inicio de sesión",
@@ -1489,12 +1493,6 @@
     "a11ySubscribePremiumHint": "Abre el checkout seguro para el plan Premium mensual",
     "a11yManageSubscriptionLabel": "Gestionar suscripción actual",
     "a11yManageSubscriptionHint": "Abrir opciones de gestión de facturación"
-  },
-  "consumerMap": {
-    "a11yRefreshLabel": "Actualizar datos del mapa",
-    "a11yRefreshHint": "Recarga los negocios y ofertas activas en el mapa",
-    "a11yToggleAllHint": "Mostrar todos los negocios en el mapa",
-    "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa"
   },
   "billingManage": {
     "title": "Gestionar suscripción",
