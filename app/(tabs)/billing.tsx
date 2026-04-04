@@ -255,9 +255,10 @@ export default function BusinessBillingScreen() {
       const url = data?.checkout_url as string | undefined;
       if (!url) throw new Error("Missing checkout_url from checkout session function.");
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : parseFunctionError(err);
       setBanner({
-        message: t("billing.errSubscribe", { defaultValue: "Unable to start checkout. Please try again." }),
+        message: detail || t("billing.errSubscribe", { defaultValue: "Unable to start checkout. Please try again." }),
         tone: "error",
       });
     } finally {
@@ -265,7 +266,8 @@ export default function BusinessBillingScreen() {
     }
   };
 
-  const simulateVisible = __DEV__;
+  /** Show simulate buttons until real Stripe is configured. Flip to `__DEV__` when going live. */
+  const simulateVisible = true;
 
   const resetTrial = async () => {
     if (busy) return;

@@ -299,12 +299,14 @@ export async function aiGenerateDealCopy(body: {
   hint_text: string;
   price?: number | null;
   business_name?: string | null;
+  business_id?: string | null;
 }): Promise<AiDealCopyResult> {
   const { data, error } = await supabase.functions.invoke("ai-generate-deal-copy", {
     body: {
       hint_text: body.hint_text,
       price: body.price ?? undefined,
       business_name: body.business_name ?? undefined,
+      business_id: body.business_id ?? undefined,
     },
     timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });

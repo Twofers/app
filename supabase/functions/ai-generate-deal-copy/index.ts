@@ -73,7 +73,7 @@ serve(async (req) => {
       );
     }
 
-    const { hint_text, price, business_name } = body ?? {};
+    const { hint_text, price, business_name, business_id: bodyBusinessId } = body ?? {};
 
     if (!hint_text) {
       return new Response(
@@ -95,23 +95,38 @@ serve(async (req) => {
       );
     }
 
+    // Look up business for logging/quota (optional body param or fallback to owner lookup)
+    let resolvedBusinessId: string | null = typeof bodyBusinessId === "string" ? bodyBusinessId : null;
+    if (!resolvedBusinessId) {
+      const { data: biz } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("owner_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      resolvedBusinessId = biz?.id ?? null;
+    }
+
     const CHAT_MODEL = resolveOpenAiChatModel();
 
     const DEFAULT_MONTHLY_LIMIT = Number(Deno.env.get("AI_COPY_MONTHLY_LIMIT") ?? "60");
     const monthStart = new Date();
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
-    const { count: usedThisMonth } = await supabase
-      .from("ai_generation_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("request_type", "deal_copy")
-      .gte("created_at", monthStart.toISOString());
-    if (usedThisMonth !== null && usedThisMonth >= DEFAULT_MONTHLY_LIMIT) {
-      return new Response(
-        JSON.stringify({ error: "Monthly AI copy limit reached. Try again next month." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+
+    if (resolvedBusinessId) {
+      const { count: usedThisMonth } = await supabase
+        .from("ai_generation_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", resolvedBusinessId)
+        .eq("request_type", "deal_copy")
+        .gte("created_at", monthStart.toISOString());
+      if (usedThisMonth !== null && usedThisMonth >= DEFAULT_MONTHLY_LIMIT) {
+        return new Response(
+          JSON.stringify({ error: "Monthly AI copy limit reached. Try again next month." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const prompt = [
@@ -180,16 +195,21 @@ serve(async (req) => {
     try {
       result = JSON.parse(content);
     } catch {
-      void supabase.from("ai_generation_logs").insert({
-        user_id: user.id,
-        request_type: "deal_copy",
-        model: CHAT_MODEL,
-        success: false,
-        failure_reason: "PARSE_ERROR",
-        openai_called: true,
-        input_token_count: usage?.prompt_tokens ?? null,
-        output_token_count: usage?.completion_tokens ?? null,
-      });
+      if (resolvedBusinessId) {
+        void supabase.from("ai_generation_logs").insert({
+          business_id: resolvedBusinessId,
+          user_id: user.id,
+          request_type: "deal_copy",
+          request_hash: `deal_copy:parse_error`,
+          input_mode: "text",
+          model: CHAT_MODEL,
+          success: false,
+          failure_reason: "PARSE_ERROR",
+          openai_called: true,
+          input_token_count: usage?.prompt_tokens ?? null,
+          output_token_count: usage?.completion_tokens ?? null,
+        });
+      }
       return new Response(
         JSON.stringify({ error: "AI response was invalid." }),
         {
@@ -199,15 +219,20 @@ serve(async (req) => {
       );
     }
 
-    void supabase.from("ai_generation_logs").insert({
-      user_id: user.id,
-      request_type: "deal_copy",
-      model: CHAT_MODEL,
-      success: true,
-      openai_called: true,
-      input_token_count: usage?.prompt_tokens ?? null,
-      output_token_count: usage?.completion_tokens ?? null,
-    });
+    if (resolvedBusinessId) {
+      void supabase.from("ai_generation_logs").insert({
+        business_id: resolvedBusinessId,
+        user_id: user.id,
+        request_type: "deal_copy",
+        request_hash: `deal_copy:${hint_text.slice(0, 60)}`,
+        input_mode: "text",
+        model: CHAT_MODEL,
+        success: true,
+        openai_called: true,
+        input_token_count: usage?.prompt_tokens ?? null,
+        output_token_count: usage?.completion_tokens ?? null,
+      });
+    }
 
     return new Response(
       JSON.stringify(result),

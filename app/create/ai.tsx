@@ -200,6 +200,11 @@ export default function AiDealScreen() {
   const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  /** Android needs two-step datetime: date picker first, then time picker. */
+  const [androidStartPickerMode, setAndroidStartPickerMode] = useState<"date" | "time">("date");
+  const androidStartDateRef = useRef<Date | null>(null);
+  const [androidEndPickerMode, setAndroidEndPickerMode] = useState<"date" | "time">("date");
+  const androidEndDateRef = useRef<Date | null>(null);
   const [showWindowStartPicker, setShowWindowStartPicker] = useState(false);
   const [showWindowEndPicker, setShowWindowEndPicker] = useState(false);
   const [windowStart, setWindowStart] = useState(new Date());
@@ -789,6 +794,7 @@ export default function AiDealScreen() {
         hint_text: hintText.trim(),
         price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
         business_name: businessName ?? null,
+        business_id: businessId ?? null,
       });
       const body = [`title: ${out.title}`, `promo_line: ${out.promo_line}`, `description: ${out.description}`].join(
         "\n\n",
@@ -1364,14 +1370,41 @@ export default function AiDealScreen() {
                 <Text>{startTime.toLocaleString()}</Text>
               </Pressable>
               {showStartPicker ? (
-                <DateTimePicker
-                  value={startTime}
-                  mode="datetime"
-                  onChange={(_event, date) => {
-                    setShowStartPicker(false);
-                    if (date) setStartTime(date);
-                  }}
-                />
+                Platform.OS === "android" ? (
+                  <DateTimePicker
+                    value={androidStartDateRef.current ?? startTime}
+                    mode={androidStartPickerMode}
+                    onChange={(event, date) => {
+                      if (event.type === "dismissed" || !date) {
+                        setShowStartPicker(false);
+                        setAndroidStartPickerMode("date");
+                        androidStartDateRef.current = null;
+                        return;
+                      }
+                      if (androidStartPickerMode === "date") {
+                        androidStartDateRef.current = date;
+                        setAndroidStartPickerMode("time");
+                      } else {
+                        const picked = androidStartDateRef.current ?? startTime;
+                        const merged = new Date(picked);
+                        merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                        setStartTime(merged);
+                        setShowStartPicker(false);
+                        setAndroidStartPickerMode("date");
+                        androidStartDateRef.current = null;
+                      }
+                    }}
+                  />
+                ) : (
+                  <DateTimePicker
+                    value={startTime}
+                    mode="datetime"
+                    onChange={(_event, date) => {
+                      setShowStartPicker(false);
+                      if (date) setStartTime(date);
+                    }}
+                  />
+                )
               ) : null}
 
               <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
@@ -1388,14 +1421,41 @@ export default function AiDealScreen() {
                 <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
               </Pressable>
               {showEndPicker ? (
-                <DateTimePicker
-                  value={endTime}
-                  mode="datetime"
-                  onChange={(_event, date) => {
-                    setShowEndPicker(false);
-                    if (date) setEndTime(date);
-                  }}
-                />
+                Platform.OS === "android" ? (
+                  <DateTimePicker
+                    value={androidEndDateRef.current ?? endTime}
+                    mode={androidEndPickerMode}
+                    onChange={(event, date) => {
+                      if (event.type === "dismissed" || !date) {
+                        setShowEndPicker(false);
+                        setAndroidEndPickerMode("date");
+                        androidEndDateRef.current = null;
+                        return;
+                      }
+                      if (androidEndPickerMode === "date") {
+                        androidEndDateRef.current = date;
+                        setAndroidEndPickerMode("time");
+                      } else {
+                        const picked = androidEndDateRef.current ?? endTime;
+                        const merged = new Date(picked);
+                        merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                        setEndTime(merged);
+                        setShowEndPicker(false);
+                        setAndroidEndPickerMode("date");
+                        androidEndDateRef.current = null;
+                      }
+                    }}
+                  />
+                ) : (
+                  <DateTimePicker
+                    value={endTime}
+                    mode="datetime"
+                    onChange={(_event, date) => {
+                      setShowEndPicker(false);
+                      if (date) setEndTime(date);
+                    }}
+                  />
+                )
               ) : null}
             </>
           ) : (

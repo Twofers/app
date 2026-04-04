@@ -437,9 +437,6 @@ export default function AccountScreen() {
     router.push("/business-setup" as Href);
   }
 
-  function goToCreateDeal() {
-    router.push("/create/quick");
-  }
 
   async function chooseAppLocale(locale: AppLocale) {
     setBanner(null);
@@ -696,7 +693,6 @@ export default function AccountScreen() {
                   <Text style={{ opacity: 0.75, lineHeight: 20, color: theme.text }}>
                     {businessSetupMessage ?? t("account.bizSetupComplete")}
                   </Text>
-                  <PrimaryButton title={t("account.createNewDeal")} onPress={goToCreateDeal} />
                   {!businessProfileComplete ? (
                     <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
                   ) : (

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { Image } from "expo-image";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -12,7 +12,6 @@ import { assessDealQuality } from "../../lib/deal-quality";
 import { useBusiness } from "../../hooks/use-business";
 import { useBusinessLocations } from "../../hooks/use-business-locations";
 import { Banner } from "../../components/ui/banner";
-import { CardShell } from "@/components/ui/card-shell";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "../../components/ui/secondary-button";
@@ -26,6 +25,18 @@ import {
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { buildPublicDealPhotoUrl } from "../../lib/deal-poster-url";
+
+function minutesFromDate(date: Date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function formatMinutes(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  const ampm = h < 12 ? "AM" : "PM";
+  return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
 
 function parseOptionalPrice(rawPrice: string): { ok: true; value: number | null } | { ok: false } {
   const trimmed = rawPrice.trim();
@@ -65,10 +76,27 @@ export default function QuickDealScreen() {
   const [offerHint, setOfferHint] = useState("");
   const [suggestingAi, setSuggestingAi] = useState(false);
   const [price, setPrice] = useState("");
+  const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [maxClaims, setMaxClaims] = useState("50");
   const [cutoffMins, setCutoffMins] = useState("15");
+  const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  /** Android needs two-step datetime: date picker first, then time picker. */
+  const [androidStartPickerMode, setAndroidStartPickerMode] = useState<"date" | "time">("date");
+  const androidStartDateRef = useRef<Date | null>(null);
+  const [androidEndPickerMode, setAndroidEndPickerMode] = useState<"date" | "time">("date");
+  const androidEndDateRef = useRef<Date | null>(null);
+  // Recurring scheduling
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [windowStart, setWindowStart] = useState(new Date());
+  const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [showWindowStartPicker, setShowWindowStartPicker] = useState(false);
+  const [showWindowEndPicker, setShowWindowEndPicker] = useState(false);
+  const [timezone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+  );
   const [publishing, setPublishing] = useState(false);
   const [banner, setBanner] = useState<{
     message: string;
@@ -168,6 +196,7 @@ export default function QuickDealScreen() {
         hint_text: hint,
         price: parsedPrice.value,
         business_name: businessName ?? null,
+        business_id: businessId ?? null,
       });
       const proposed = result.title.trim();
       /** Match publish-time checks: Quick deals store offer text in `description` on save (see publishDeal). */
@@ -210,8 +239,6 @@ export default function QuickDealScreen() {
       return;
     }
 
-    const end = endTime;
-    const now = new Date();
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
 
@@ -223,14 +250,21 @@ export default function QuickDealScreen() {
       setBanner({ message: t("createQuick.errCutoff"), tone: "error" });
       return;
     }
-    if (now >= end) {
-      setBanner({ message: t("createQuick.errEndFuture"), tone: "error" });
-      return;
-    }
-    const durationMinutes = Math.floor((end.getTime() - now.getTime()) / 60000);
-    if (cutoffNum >= durationMinutes) {
-      setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
-      return;
+    if (!isRecurring) {
+      if (startTime >= endTime) {
+        setBanner({ message: t("createQuick.errEndFuture"), tone: "error" });
+        return;
+      }
+      const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
+      if (cutoffNum >= durationMinutes) {
+        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
+        return;
+      }
+    } else {
+      if (daysOfWeek.length === 0) {
+        setBanner({ message: t("createQuick.errNoDays"), tone: "error" });
+        return;
+      }
     }
 
     setPublishing(true);
@@ -270,8 +304,8 @@ export default function QuickDealScreen() {
         title: title.trim(),
         description: offerBody.length > 0 ? offerBody : null,
         price: parsedPrice.value,
-        start_time: now.toISOString(),
-        end_time: end.toISOString(),
+        start_time: isRecurring ? new Date().toISOString() : startTime.toISOString(),
+        end_time: isRecurring ? null : endTime.toISOString(),
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
@@ -279,6 +313,11 @@ export default function QuickDealScreen() {
         poster_storage_path: posterPath,
         quality_tier: quality.tier,
         location_id: selectedLocationId,
+        is_recurring: isRecurring,
+        days_of_week: isRecurring ? [...daysOfWeek].sort((a, b) => a - b) : null,
+        window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
+        window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
+        timezone: isRecurring ? timezone : null,
       }).select("id").single();
 
       if (error) throw error;
@@ -437,6 +476,291 @@ export default function QuickDealScreen() {
             />
           </View>
 
+          {/* ── Schedule ─────────────────────────────────── */}
+          <Text
+            style={{
+              marginTop: Spacing.sm,
+              fontWeight: "800",
+              fontSize: 15,
+              color: Colors.light.text,
+              letterSpacing: -0.2,
+            }}
+          >
+            {t("createQuick.sectionSchedule")}
+          </Text>
+
+          {!isRecurring ? (
+            <>
+              {/* Start time */}
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldStartTime")}</Text>
+                <Pressable
+                  onPress={() => { markDirty(); setShowStartPicker(true); }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{formatAppDateTime(startTime, i18n.language)}</Text>
+                </Pressable>
+                {showStartPicker ? (
+                  Platform.OS === "android" ? (
+                    <DateTimePicker
+                      value={androidStartDateRef.current ?? startTime}
+                      mode={androidStartPickerMode}
+                      onChange={(event, date) => {
+                        if (event.type === "dismissed" || !date) {
+                          setShowStartPicker(false);
+                          setAndroidStartPickerMode("date");
+                          androidStartDateRef.current = null;
+                          return;
+                        }
+                        if (androidStartPickerMode === "date") {
+                          androidStartDateRef.current = date;
+                          setAndroidStartPickerMode("time");
+                        } else {
+                          const picked = androidStartDateRef.current ?? startTime;
+                          const merged = new Date(picked);
+                          merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                          markDirty();
+                          setStartTime(merged);
+                          setShowStartPicker(false);
+                          setAndroidStartPickerMode("date");
+                          androidStartDateRef.current = null;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <DateTimePicker
+                      value={startTime}
+                      mode="datetime"
+                      onChange={(_event, date) => {
+                        setShowStartPicker(false);
+                        if (date) { markDirty(); setStartTime(date); }
+                      }}
+                    />
+                  )
+                ) : null}
+              </View>
+
+              {/* End time */}
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
+                <Pressable
+                  onPress={() => { markDirty(); setShowEndPicker(true); }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{formatAppDateTime(endTime, i18n.language)}</Text>
+                </Pressable>
+                {showEndPicker ? (
+                  Platform.OS === "android" ? (
+                    <DateTimePicker
+                      value={androidEndDateRef.current ?? endTime}
+                      mode={androidEndPickerMode}
+                      onChange={(event, date) => {
+                        if (event.type === "dismissed" || !date) {
+                          setShowEndPicker(false);
+                          setAndroidEndPickerMode("date");
+                          androidEndDateRef.current = null;
+                          return;
+                        }
+                        if (androidEndPickerMode === "date") {
+                          androidEndDateRef.current = date;
+                          setAndroidEndPickerMode("time");
+                        } else {
+                          const picked = androidEndDateRef.current ?? endTime;
+                          const merged = new Date(picked);
+                          merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                          markDirty();
+                          setEndTime(merged);
+                          setShowEndPicker(false);
+                          setAndroidEndPickerMode("date");
+                          androidEndDateRef.current = null;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <DateTimePicker
+                      value={endTime}
+                      mode="datetime"
+                      onChange={(_event, date) => {
+                        setShowEndPicker(false);
+                        if (date) { markDirty(); setEndTime(date); }
+                      }}
+                    />
+                  )
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <>
+              {/* Recurring: day presets + individual toggles */}
+              <View style={{ gap: Spacing.sm }}>
+                <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+                  <Pressable
+                    onPress={() => { markDirty(); setDaysOfWeek([1, 2, 3, 4, 5, 6, 7]); }}
+                    style={{
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.xs,
+                      borderRadius: Radii.md,
+                      borderWidth: daysOfWeek.length === 7 ? 2 : 1,
+                      borderColor: daysOfWeek.length === 7 ? Colors.light.primary : Colors.light.border,
+                      backgroundColor: Colors.light.surface,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700" }}>{t("createQuick.presetEveryDay")}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { markDirty(); setDaysOfWeek([1, 2, 3, 4, 5]); }}
+                    style={{
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.xs,
+                      borderRadius: Radii.md,
+                      borderWidth: daysOfWeek.length === 5 && !daysOfWeek.includes(6) ? 2 : 1,
+                      borderColor: daysOfWeek.length === 5 && !daysOfWeek.includes(6) ? Colors.light.primary : Colors.light.border,
+                      backgroundColor: Colors.light.surface,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700" }}>{t("createQuick.presetWeekdays")}</Text>
+                  </Pressable>
+                </View>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {([
+                    { label: t("createQuick.dayMon"), value: 1 },
+                    { label: t("createQuick.dayTue"), value: 2 },
+                    { label: t("createQuick.dayWed"), value: 3 },
+                    { label: t("createQuick.dayThu"), value: 4 },
+                    { label: t("createQuick.dayFri"), value: 5 },
+                    { label: t("createQuick.daySat"), value: 6 },
+                    { label: t("createQuick.daySun"), value: 7 },
+                  ] as const).map((day) => {
+                    const on = daysOfWeek.includes(day.value);
+                    return (
+                      <Pressable
+                        key={day.value}
+                        onPress={() => {
+                          markDirty();
+                          setDaysOfWeek((prev) =>
+                            on ? prev.filter((d) => d !== day.value) : [...prev, day.value],
+                          );
+                        }}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: on ? Colors.light.primary : Colors.light.surface,
+                          borderWidth: on ? 0 : 1,
+                          borderColor: Colors.light.border,
+                        }}
+                      >
+                        <Text style={{ fontWeight: "800", fontSize: 13, color: on ? "#fff" : Colors.light.text }}>
+                          {day.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Recurring: daily time window */}
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.windowStart")}</Text>
+                <Pressable
+                  onPress={() => { markDirty(); setShowWindowStartPicker(true); }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{formatMinutes(minutesFromDate(windowStart))}</Text>
+                </Pressable>
+                {showWindowStartPicker ? (
+                  <DateTimePicker
+                    value={windowStart}
+                    mode="time"
+                    onChange={(_event, date) => {
+                      setShowWindowStartPicker(false);
+                      if (date) { markDirty(); setWindowStart(date); }
+                    }}
+                  />
+                ) : null}
+              </View>
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.windowEnd")}</Text>
+                <Pressable
+                  onPress={() => { markDirty(); setShowWindowEndPicker(true); }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    marginTop: 6,
+                    backgroundColor: Colors.light.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{formatMinutes(minutesFromDate(windowEnd))}</Text>
+                </Pressable>
+                {showWindowEndPicker ? (
+                  <DateTimePicker
+                    value={windowEnd}
+                    mode="time"
+                    onChange={(_event, date) => {
+                      setShowWindowEndPicker(false);
+                      if (date) { markDirty(); setWindowEnd(date); }
+                    }}
+                  />
+                ) : null}
+              </View>
+            </>
+          )}
+
+          {/* Recurring toggle */}
+          <Pressable
+            onPress={() => { markDirty(); setIsRecurring((v) => !v); }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: Spacing.sm,
+              paddingVertical: Spacing.sm,
+            }}
+          >
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: isRecurring ? Colors.light.primary : Colors.light.border,
+                backgroundColor: isRecurring ? Colors.light.primary : "transparent",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isRecurring ? <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>✓</Text> : null}
+            </View>
+            <Text style={{ fontWeight: "700", fontSize: 15, color: Colors.light.text }}>
+              {t("createQuick.recurringToggle")}
+            </Text>
+          </Pressable>
+
+          {/* ── Limits ───────────────────────────────────── */}
           <Text
             style={{
               marginTop: Spacing.sm,
@@ -450,48 +774,12 @@ export default function QuickDealScreen() {
           </Text>
 
           <View>
-            <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldEndTime")}</Text>
-            <Pressable
-              onPress={() => {
-                markDirty();
-                setShowEndPicker(true);
-              }}
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                marginTop: 6,
-                backgroundColor: Colors.light.surface,
-              }}
-            >
-              <Text style={{ fontSize: 16 }}>{formatAppDateTime(endTime, i18n.language)}</Text>
-            </Pressable>
-            {showEndPicker ? (
-              <DateTimePicker
-                value={endTime}
-                mode="datetime"
-                onChange={(_event, date) => {
-                  setShowEndPicker(false);
-                  if (date) {
-                    markDirty();
-                    setEndTime(date);
-                  }
-                }}
-              />
-            ) : null}
-          </View>
-
-          <View>
             <Text style={{ fontWeight: "700", fontSize: 14, color: "#11181C" }}>{t("createQuick.fieldMaxClaims")}</Text>
             <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: 6, marginBottom: 6 }}>
               {[25, 50, 100].map((count) => (
                 <Pressable
                   key={count}
-                  onPress={() => {
-                    markDirty();
-                    setMaxClaims(String(count));
-                  }}
+                  onPress={() => { markDirty(); setMaxClaims(String(count)); }}
                   style={{
                     paddingHorizontal: Spacing.md,
                     paddingVertical: Spacing.xs,
@@ -507,10 +795,7 @@ export default function QuickDealScreen() {
             </View>
             <TextInput
               value={maxClaims}
-              onChangeText={(v) => {
-                markDirty();
-                setMaxClaims(v);
-              }}
+              onChangeText={(v) => { markDirty(); setMaxClaims(v); }}
               keyboardType="number-pad"
               placeholder={t("createQuick.placeholderMaxClaims")}
               style={{
@@ -518,7 +803,6 @@ export default function QuickDealScreen() {
                 borderColor: Colors.light.border,
                 borderRadius: Radii.lg,
                 padding: Spacing.md,
-                marginTop: 6,
                 fontSize: 16,
                 backgroundColor: Colors.light.surface,
               }}
@@ -531,10 +815,7 @@ export default function QuickDealScreen() {
               {[10, 15, 30].map((mins) => (
                 <Pressable
                   key={mins}
-                  onPress={() => {
-                    markDirty();
-                    setCutoffMins(String(mins));
-                  }}
+                  onPress={() => { markDirty(); setCutoffMins(String(mins)); }}
                   style={{
                     paddingHorizontal: Spacing.md,
                     paddingVertical: Spacing.xs,
@@ -550,10 +831,7 @@ export default function QuickDealScreen() {
             </View>
             <TextInput
               value={cutoffMins}
-              onChangeText={(v) => {
-                markDirty();
-                setCutoffMins(v);
-              }}
+              onChangeText={(v) => { markDirty(); setCutoffMins(v); }}
               keyboardType="number-pad"
               placeholder={t("createQuick.placeholderCutoff")}
               style={{
@@ -561,22 +839,11 @@ export default function QuickDealScreen() {
                 borderColor: Colors.light.border,
                 borderRadius: Radii.lg,
                 padding: Spacing.md,
-                marginTop: 6,
                 fontSize: 16,
                 backgroundColor: Colors.light.surface,
               }}
             />
           </View>
-
-          <CardShell variant="muted">
-            <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>{t("createQuick.sectionAdvanced")}</Text>
-            <Text style={{ marginTop: Spacing.sm, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>
-              {t("createQuick.schedulingHint")}
-            </Text>
-            <View style={{ marginTop: Spacing.md }}>
-              <SecondaryButton title={t("createQuick.openAiScheduling")} onPress={() => router.push("/create/ai" as Href)} />
-            </View>
-          </CardShell>
 
           <PrimaryButton
             title={publishing ? t("createQuick.publishing") : t("createQuick.publish")}
