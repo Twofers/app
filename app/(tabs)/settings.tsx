@@ -397,16 +397,18 @@ export default function SettingsScreen() {
           <LegalExternalLinks />
         </View>
 
-        <SecondaryButton
-          title={t("settingsScreen.checkStatus")}
-          onPress={async () => {
-            const enabled = await getAlertsEnabled();
-            Alert.alert(
-              t("settingsScreen.statusAlertTitle"),
-              enabled ? t("settingsScreen.statusOn") : t("settingsScreen.statusOff"),
-            );
-          }}
-        />
+        {isDebugPanelEnabled() ? (
+          <SecondaryButton
+            title={t("settingsScreen.checkStatus")}
+            onPress={async () => {
+              const enabled = await getAlertsEnabled();
+              Alert.alert(
+                t("settingsScreen.statusAlertTitle"),
+                enabled ? t("settingsScreen.statusOn") : t("settingsScreen.statusOff"),
+              );
+            }}
+          />
+        ) : null}
 
         {isDebugPanelEnabled() ? (
           <PrimaryButton

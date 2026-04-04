@@ -10,7 +10,7 @@ const CANONICAL_BUSINESS = {
   latitude: 32.7831,
   longitude: -96.8067,
   phone: "(214) 555-0100",
-  hours_text: "Mon–Fri 7:00–19:00 · Sat–Sun 8:00–18:00",
+  hours_text: "Mon–Fri 7 AM – 7 PM · Sat–Sun 8 AM – 6 PM",
   short_description: "Neighborhood espresso bar for Twofer preview testers.",
   category: "Coffee shop",
   contact_name: "Demo Owner",
