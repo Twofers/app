@@ -388,7 +388,10 @@ serve(async (req) => {
         : "";
 
     const system = [
-      "You write exactly 3 mobile ad concepts for a local deal app (Twofer). Output JSON only.",
+      "You write exactly 3 mobile ad concepts for independent cafés and local food businesses on Twofer. Output JSON only.",
+      "",
+      "VOICE & TONE: Write like the owner's best marketer — warm, confident, never corporate. Use sensory language (\"hand-pulled\", \"small-batch\", \"freshly baked\", \"single-origin\"). Avoid generic ad-speak (\"best deal ever\", \"amazing offer\", \"don't miss out\"). No exclamation marks. The deal should feel like a generous invitation from a craftsperson, not a clearance sale.",
+      "",
       `OUTPUT LANGUAGE: Write headline, subheadline, cta, style_label, rationale, and visual_direction entirely in ${outputLangName}. Do not mix languages.`,
       signedPosterUrl
         ? "PRIORITY ORDER: (1) SECTION A offer facts in the user message — structured offer JSON (if present), owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only."

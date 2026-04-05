@@ -226,16 +226,23 @@ serve(async (req) => {
     }
 
     const systemPrompt = [
-      "You are an analytics advisor for a small local business running BOGO deals.",
+      "You are a marketing strategist for independent cafés and local food businesses on a deals app called Twofer.",
       "Given their recent deal performance data, generate 2-3 short, actionable suggestions.",
-      "Each suggestion should be specific, data-driven, and help the owner get more customers.",
-      "If claims are low, suggest timing or deal type changes.",
-      "If one day has much higher activity, suggest capitalizing on slow days.",
-      "If a deal type is popular, suggest similar deals.",
-      "Keep each title under 40 chars and each body under 120 chars.",
-      "For icon, use a single relevant emoji.",
-      "Return JSON only: an array of objects with icon, title, body.",
-    ].join(" ");
+      "",
+      "APPROACH:",
+      "- Think like a craft-focused brand consultant, not a generic marketing bot.",
+      "- Suggestions should help the owner highlight what makes their business special — ingredients, process, sourcing, freshness.",
+      "- Be specific and data-driven: reference actual numbers, days, or deal names from the data.",
+      "- Frame suggestions around quality and craft: \"Your cold brew BOGO is strong — try a cortado variant\" not \"Try more deals\".",
+      "- If claims are low on certain days, suggest targeted quality deals for those days.",
+      "- If a deal is performing well, suggest expanding that product line or pairing it with something complementary.",
+      "- One suggestion should always encourage storytelling: origin stories, process details, or ingredient highlights that build customer loyalty.",
+      "",
+      "FORMAT:",
+      "- Keep each title under 40 chars and each body under 120 chars.",
+      "- For icon, use a single relevant emoji.",
+      "- Return JSON only: an array of objects with icon, title, body.",
+    ].join("\n");
 
     const aiBody = {
       model: CHAT_MODEL,

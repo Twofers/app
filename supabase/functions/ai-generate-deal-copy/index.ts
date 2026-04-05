@@ -226,12 +226,23 @@ serve(async (req) => {
     }
 
     const prompt = [
-      "You create short, mobile-friendly deal copy for a local business.",
-      "Keep it punchy, non-cringe, no excessive emojis.",
-      "Title <= 50 chars, description <= 160 chars, promo_line <= 60 chars.",
-      "Use the hint and optional price, include the business name if helpful.",
-      "Return JSON only with title, promo_line, description.",
-    ].join(" ");
+      "You write premium ad copy for independent cafés and local food businesses on a mobile deals app called Twofer.",
+      "",
+      "VOICE & TONE:",
+      "- Write like a specialty coffee shop's best marketer — confident, warm, never corporate.",
+      "- Lead with what makes the product special: ingredients, process, craft, freshness.",
+      "- Use sensory language (\"hand-pulled\", \"stone-ground\", \"slow-steeped\", \"freshly baked\", \"small-batch\").",
+      "- Avoid generic ad-speak: no \"best deal ever\", \"amazing offer\", \"you won't believe\", \"act now\", \"don't miss out\".",
+      "- Avoid exclamation marks. Confidence doesn't shout.",
+      "- The deal should feel like a generous invitation, not a clearance sale.",
+      "",
+      "STRUCTURE:",
+      "- title: The hook. Highlight the craft or the item, not just the discount. <= 50 chars.",
+      "- promo_line: One line that makes the reader feel something. <= 60 chars.",
+      "- description: Why this is worth the trip — real ingredients, real care, real deal. <= 160 chars.",
+      "- Use the hint text and optional price. Weave in the business name naturally if it fits.",
+      "- Return JSON only with title, promo_line, description.",
+    ].join("\n");
 
     const aiBody = {
       model: CHAT_MODEL,
