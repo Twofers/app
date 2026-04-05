@@ -18,7 +18,7 @@ type ScreenVariant = "tab" | "stack";
  * Adding `safe area bottom + fixed tab height` here double-counted insets and diverged on Android
  * edge-to-edge / Expo Go vs native release. Use modest scroll padding only.
  */
-const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl + Spacing.md;
+const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl * 2 + Spacing.md;
 
 export function useScreenInsets(variant: ScreenVariant = "tab") {
   const insets = useSafeAreaInsets();

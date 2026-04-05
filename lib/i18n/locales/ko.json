@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "모든 딜 보기",
     "ctaFavoriteHint": "좋아하는 매장을 즐겨찾기하면 반경 밖이어도 알림을 받을 수 있어요.",
     "emptyLiveTitle": "라이브 딜 없음",
-    "emptyLiveBody": "잠시 후 다시 확인하거나 아래 매장을 둘러보세요.",
+    "emptyLiveBody": "잠시 후 다시 확인하거나 매장 탭으로 전환하여 둘러보세요.",
     "favoritesFilter": "즐겨찾기",
     "favoritesOn": "즐겨찾기만 · 켜짐",
     "favoritesOff": "즐겨찾기만 보기",
@@ -1517,6 +1517,8 @@
   },
   "billing": {
     "trialEndsIn": "30일 무료 체험이 {{days}}일 후에 끝나요",
+    "trialExpired": "무료 체험이 종료되었습니다",
+    "currentPlan": "현재 플랜",
     "trialExpiredBanner": "계정을 다시 활성화하세요",
     "reactivateMessage": "계정을 다시 활성화하세요",
     "paywallExpiredMessage": "체험 기간이 종료되었습니다. 계속 딜을 만들려면 계정을 다시 활성화하세요.",

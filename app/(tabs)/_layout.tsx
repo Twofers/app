@@ -1,6 +1,6 @@
 import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { HapticTab } from "@/components/haptic-tab";
@@ -63,6 +63,13 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, [forceBypass, session?.user]);
 
+  // Prevent Android back button from exiting the app while on a tab screen.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => sub.remove();
+  }, []);
+
   if (forceBypass && session?.user) {
     return <>{children}</>;
   }
@@ -120,8 +127,8 @@ export default function TabLayout() {
           tabBarStyle: { backgroundColor: theme.background },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
-          detachInactiveScreens: true,
-          freezeOnBlur: true,
+          detachInactiveScreens: false,
+          freezeOnBlur: false,
         }}
       >
         <Tabs.Screen

@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "Ver todas las ofertas",
     "ctaFavoriteHint": "Guarda tus lugares favoritos — puedes recibir alertas aunque estén fuera del radio.",
     "emptyLiveTitle": "Sin ofertas en vivo",
-    "emptyLiveBody": "Vuelve pronto o explora negocios abajo.",
+    "emptyLiveBody": "Vuelve pronto o cambia a la pestaña Tiendas para explorar.",
     "favoritesFilter": "Favoritos",
     "favoritesOn": "Solo favoritos · activo",
     "favoritesOff": "Ver solo favoritos",
@@ -1517,6 +1517,8 @@
   },
   "billing": {
     "trialEndsIn": "Tu prueba de 30 días termina en {{days}} días",
+    "trialExpired": "Tu prueba gratuita ha terminado",
+    "currentPlan": "Plan actual",
     "trialExpiredBanner": "Reactivar tu cuenta",
     "reactivateMessage": "Reactivar tu cuenta",
     "paywallExpiredMessage": "Tu prueba ha finalizado. Reactiva tu cuenta para seguir creando ofertas.",

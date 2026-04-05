@@ -266,8 +266,8 @@ export default function BusinessBillingScreen() {
     }
   };
 
-  /** Show simulate buttons until real Stripe is configured. Flip to `__DEV__` when going live. */
-  const simulateVisible = true;
+  /** Show simulate buttons only in dev builds. */
+  const simulateVisible = __DEV__;
 
   const resetTrial = async () => {
     if (busy) return;
@@ -320,8 +320,9 @@ export default function BusinessBillingScreen() {
   };
 
   const trialLine = useMemo(() => {
-    if (trialDaysRemaining === null) {
-      return t("billing.trialEndsIn", { days: 0, defaultValue: "Your 30-day trial ends in {{days}} days" });
+    if (trialDaysRemaining === null) return null;
+    if (trialDaysRemaining === 0) {
+      return t("billing.trialExpired", { defaultValue: "Your free trial has ended" });
     }
     return t("billing.trialEndsIn", {
       days: trialDaysRemaining,
@@ -365,9 +366,11 @@ export default function BusinessBillingScreen() {
           </View>
         ) : (
           <>
-            <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
-              {trialLine}
-            </Text>
+            {trialLine ? (
+              <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
+                {trialLine}
+              </Text>
+            ) : null}
 
             {syncingCheckout ? (
               <Text style={{ marginTop: 8, color: Colors.light.primary, fontWeight: "800", fontSize: 13 }}>
@@ -405,14 +408,22 @@ export default function BusinessBillingScreen() {
                   ))}
                 </View>
                 <View style={{ marginTop: 14 }}>
-                  <PrimaryButton
-                    title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
-                    disabled={busy || subscriptionStatus === "active" && subscriptionTier === "pro"}
-                    onPress={() => void subscribe("pro")}
-                    accessibilityLabel={t("billing.a11ySubscribeProLabel")}
-                    accessibilityHint={t("billing.a11ySubscribeProHint")}
-                    style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
-                  />
+                  {subscriptionStatus === "active" && subscriptionTier === "pro" ? (
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                        {t("billing.currentPlan", { defaultValue: "Current plan" })}
+                      </Text>
+                    </View>
+                  ) : (
+                    <PrimaryButton
+                      title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
+                      disabled={busy}
+                      onPress={() => void subscribe("pro")}
+                      accessibilityLabel={t("billing.a11ySubscribeProLabel")}
+                      accessibilityHint={t("billing.a11ySubscribeProHint")}
+                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                    />
+                  )}
                 </View>
               </View>
 
@@ -435,14 +446,22 @@ export default function BusinessBillingScreen() {
                   ))}
                 </View>
                 <View style={{ marginTop: 14 }}>
-                  <PrimaryButton
-                    title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
-                    disabled={busy || subscriptionStatus === "active" && subscriptionTier === "premium"}
-                    onPress={() => void subscribe("premium")}
-                    accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
-                    accessibilityHint={t("billing.a11ySubscribePremiumHint")}
-                    style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
-                  />
+                  {subscriptionStatus === "active" && subscriptionTier === "premium" ? (
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                        {t("billing.currentPlan", { defaultValue: "Current plan" })}
+                      </Text>
+                    </View>
+                  ) : (
+                    <PrimaryButton
+                      title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
+                      disabled={busy}
+                      onPress={() => void subscribe("premium")}
+                      accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
+                      accessibilityHint={t("billing.a11ySubscribePremiumHint")}
+                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                    />
+                  )}
                 </View>
               </View>
             </View>

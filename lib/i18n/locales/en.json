@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "View all deals",
     "ctaFavoriteHint": "Favorite places you love — you can get alerts even when they’re outside your radius.",
     "emptyLiveTitle": "No live deals",
-    "emptyLiveBody": "Check back soon or explore businesses below.",
+    "emptyLiveBody": "Check back soon or switch to the Shops tab to browse.",
     "favoritesFilter": "Favorites",
     "favoritesOn": "Favorites only · on",
     "favoritesOff": "Show favorites only",
@@ -1543,6 +1543,8 @@
   },
   "billing": {
     "trialEndsIn": "Your 30-day trial ends in {{days}} days",
+    "trialExpired": "Your free trial has ended",
+    "currentPlan": "Current plan",
     "trialExpiredBanner": "Reactivate your account",
     "reactivateMessage": "Reactivate your account",
     "paywallExpiredMessage": "Your trial has ended. Reactivate your account to continue creating deals.",
