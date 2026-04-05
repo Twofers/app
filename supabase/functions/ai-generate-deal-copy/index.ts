@@ -14,6 +14,87 @@ type AiResult = {
   description: string;
 };
 
+// ── Demo deal-copy engine (quality/craft tone) ─────────────
+type ItemType = "latte" | "cortado" | "cold_brew" | "matcha" | "croissant" | "muffin" | "pastry" | "combo" | "generic";
+
+const ITEM_PATTERNS: [ItemType, RegExp][] = [
+  ["latte", /oat\s*milk\s*latte|latte/i],
+  ["cortado", /cortado|espresso/i],
+  ["cold_brew", /cold\s*brew|iced\s*coffee|nitro/i],
+  ["matcha", /matcha|green\s*tea/i],
+  ["croissant", /croissant/i],
+  ["muffin", /muffin|blueberry/i],
+  ["pastry", /pastry|baked|scone|cookie/i],
+  ["combo", /combo|pair|bundle|\+|and a|with a/i],
+];
+
+function detectItem(hint: string): ItemType {
+  for (const [t, rx] of ITEM_PATTERNS) {
+    if (rx.test(hint)) return t;
+  }
+  return "generic";
+}
+
+function clipField(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length <= max ? t : t.slice(0, max - 1).trimEnd() + "\u2026";
+}
+
+function buildDemoDealCopyResult(hint: string, price: unknown, bizName: string): AiResult {
+  const itemType = detectItem(hint);
+  const pTag = price != null && price !== "" ? ` \u00B7 $${price}` : "";
+
+  const bank: Record<ItemType, AiResult> = {
+    latte: {
+      title: clipField(`Handcrafted lattes, twice the joy${pTag}`, 50),
+      promo_line: clipField(`Every latte at ${bizName} is made fresh with care`, 60),
+      description: clipField(`Two hand-pulled lattes for the price of one. Made with single-origin beans and steamed oat milk — the way a latte should be.`, 160),
+    },
+    cortado: {
+      title: clipField(`Crafted cortado, doubled${pTag}`, 50),
+      promo_line: clipField(`Precision-pulled at ${bizName}`, 60),
+      description: clipField(`A properly balanced cortado deserves a second pour. Two for one — same care in every cup, no shortcuts.`, 160),
+    },
+    cold_brew: {
+      title: clipField(`Small-batch cold brew 2-for-1${pTag}`, 50),
+      promo_line: clipField(`Steeped 18 hours at ${bizName}`, 60),
+      description: clipField(`Our single-origin cold brew is steeped low and slow for a clean, smooth finish. Bring a friend and split the chill.`, 160),
+    },
+    matcha: {
+      title: clipField(`Ceremonial matcha, on us${pTag}`, 50),
+      promo_line: clipField(`Stone-ground and whisked fresh at ${bizName}`, 60),
+      description: clipField(`Real ceremonial-grade matcha, not the powdered stuff. Buy one, get one — bright, earthy, and made to order.`, 160),
+    },
+    croissant: {
+      title: clipField(`Freshly baked croissant, doubled${pTag}`, 50),
+      promo_line: clipField(`Warm from the oven at ${bizName}`, 60),
+      description: clipField(`Buttery, flaky, and laminated by hand every morning. Take two — one for now and one for later.`, 160),
+    },
+    muffin: {
+      title: clipField(`Blueberry muffins, buy one get one${pTag}`, 50),
+      promo_line: clipField(`Baked fresh daily at ${bizName}`, 60),
+      description: clipField(`Bursting with real blueberries and topped with a crunchy streusel. Grab a pair and share the morning.`, 160),
+    },
+    pastry: {
+      title: clipField(`Artisan pastry, two for one${pTag}`, 50),
+      promo_line: clipField(`From our bakery case at ${bizName}`, 60),
+      description: clipField(`Every pastry is shaped and proofed by hand. Pick your favorite, and the second one's on us.`, 160),
+    },
+    combo: {
+      title: clipField(`The perfect pairing${pTag}`, 50),
+      promo_line: clipField(`Crafted together at ${bizName}`, 60),
+      description: clipField(`Some things are better in pairs. Enjoy a drink and a bite — the second item is free when you order both.`, 160),
+    },
+    generic: {
+      title: clipField(`Crafted with care, doubled for you${pTag}`, 50),
+      promo_line: clipField(`Made fresh at ${bizName}`, 60),
+      description: clipField(`Quality ingredients, honest portions, and now twice the reason to visit. Buy one, get one — no catch, no rush.`, 160),
+    },
+  };
+
+  return bank[itemType];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -91,13 +172,8 @@ serve(async (req) => {
     if (isDemoUserEmail(user.email) && !demoWantsLive) {
       const ms = 600 + Math.floor(Math.random() * 400);
       await new Promise((r) => setTimeout(r, ms));
-      const bizName = business_name ?? "Local business";
-      const priceBit = price != null && price !== "" ? ` ($${price})` : "";
-      const result: AiResult = {
-        title: `BOGO ${String(hint_text).slice(0, 30)}${priceBit}`.slice(0, 50),
-        promo_line: `Buy one, get one free at ${bizName}`.slice(0, 60),
-        description: `Grab a friend and enjoy ${String(hint_text).slice(0, 60)} — two for the price of one at ${bizName}. Walk-ins welcome!`.slice(0, 160),
-      };
+      const bizName = business_name ?? "Demo Roasted Bean Coffee";
+      const result = buildDemoDealCopyResult(String(hint_text), price, bizName);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

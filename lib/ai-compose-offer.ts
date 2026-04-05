@@ -96,42 +96,75 @@ export async function aiComposeOfferTranscribe(body: {
   return { transcript: d.transcript };
 }
 
-/** Client-side demo fallback for compose offer. */
+/** Client-side demo fallback for compose offer (quality/craft tone). */
 function buildDemoComposeResult(prompt?: string): AiComposeSuccess {
-  const hint = prompt?.slice(0, 40) ?? "deal";
+  const raw = (prompt ?? "").toLowerCase();
+
+  // Detect item from prompt
+  type CI = { item: string; display: string };
+  const patterns: [RegExp, CI][] = [
+    [/oat\s*milk\s*latte|latte/, { item: "oat milk latte", display: "Buy one oat milk latte, get one free" }],
+    [/cortado|espresso/, { item: "vanilla cortado", display: "Buy one vanilla cortado, get one free" }],
+    [/cold\s*brew|iced/, { item: "single-origin cold brew", display: "Buy one cold brew, get one free" }],
+    [/matcha|green\s*tea/, { item: "matcha latte", display: "Buy one matcha latte, get one free" }],
+    [/croissant/, { item: "butter croissant", display: "Buy one butter croissant, get one free" }],
+    [/muffin|blueberry/, { item: "blueberry muffin", display: "Buy one blueberry muffin, get one free" }],
+    [/pastry|baked/, { item: "pastry", display: "Buy one pastry, get one free" }],
+  ];
+  let m: CI = { item: "oat milk latte", display: "Buy one oat milk latte, get one free" };
+  for (const [rx, ci] of patterns) { if (rx.test(raw)) { m = ci; break; } }
+
   return {
     ok: true,
     result: {
       input_type: "text",
-      detected_items: [hint],
-      confidence: 0.95,
-      recommendation_reason: "Demo mode — template response",
+      detected_items: [m.item],
+      confidence: 0.92,
+      recommendation_reason: `A quality ${m.item} BOGO highlights your craft and brings new faces through the door.`,
       recommended_offer: {
-        offer_type: "BOGO",
-        item_name: hint,
-        display_offer: `Buy one ${hint}, get one free`,
+        offer_type: "bogo_same_item",
+        item_name: m.item,
+        display_offer: m.display,
       },
       ad_variants: [
         {
           variant_id: "demo-v1",
-          headline_en: `BOGO ${hint}`, subheadline_en: "Buy one, get one free", cta_en: "Grab Yours",
-          headline_es: `BOGO ${hint}`, subheadline_es: "Compra uno, lleva otro gratis", cta_es: "Aprovecha",
-          headline_ko: `BOGO ${hint}`, subheadline_ko: "하나 사면 하나 무료", cta_ko: "지금 바로",
-          style_label: "Value", rationale: "Clear savings", visual_direction: "Bold",
+          headline_en: `Handcrafted ${m.item}, doubled`,
+          headline_es: `${m.item} artesanal, por partida doble`,
+          headline_ko: `정성 담은 ${m.item} 1+1`,
+          subheadline_en: `Every ${m.item} is made fresh with single-origin beans and real ingredients. Two for the price of one.`,
+          subheadline_es: `Cada ${m.item} se prepara con ingredientes reales. Dos por el precio de uno.`,
+          subheadline_ko: `신선한 재료로 만든 ${m.item}. 하나 가격에 둘.`,
+          cta_en: "Taste the craft", cta_es: "Prueba la calidad", cta_ko: "장인의 맛 경험하기",
+          style_label: "Quality-led",
+          rationale: "Leads with craftsmanship to position the deal as a premium experience.",
+          visual_direction: "Tight crop on product texture, natural light, minimal text overlay.",
         },
         {
           variant_id: "demo-v2",
-          headline_en: `Neighbors Love This ${hint}`, subheadline_en: "Bring a friend", cta_en: "Visit Us",
-          headline_es: `Los vecinos aman ${hint}`, subheadline_es: "Trae a un amigo", cta_es: "Visítanos",
-          headline_ko: `이웃이 사랑하는 ${hint}`, subheadline_ko: "친구와 함께", cta_ko: "방문하기",
-          style_label: "Community", rationale: "Local feel", visual_direction: "Warm",
+          headline_en: `Made with care at Demo Roasted Bean`,
+          headline_es: `Hecho con cariño en Demo Roasted Bean`,
+          headline_ko: `Demo Roasted Bean의 정성`,
+          subheadline_en: `Small-batch, no shortcuts. Bring a friend and share two ${m.item}s — second one's on us.`,
+          subheadline_es: `Lotes pequeños, sin atajos. El segundo ${m.item} va por la casa.`,
+          subheadline_ko: `소량 생산, 타협 없는 맛. 두 번째 ${m.item}는 무료.`,
+          cta_en: "Visit us today", cta_es: "Visítanos hoy", cta_ko: "오늘 방문하세요",
+          style_label: "Artisan warmth",
+          rationale: "Combines craft messaging with neighborly warmth.",
+          visual_direction: "Warm café interior, barista at work, soft golden hour light.",
         },
         {
           variant_id: "demo-v3",
-          headline_en: `Crafted ${hint}`, subheadline_en: "Two for one, made with care", cta_en: "Discover",
-          headline_es: `${hint} artesanal`, subheadline_es: "Dos por uno, hecho con cariño", cta_es: "Descubrir",
-          headline_ko: `정성 가득 ${hint}`, subheadline_ko: "투포원 특별 혜택", cta_ko: "알아보기",
-          style_label: "Premium", rationale: "Quality focus", visual_direction: "Clean",
+          headline_en: `Two for one — real ingredients, real craft`,
+          headline_es: `Dos por uno — ingredientes reales, verdadera calidad`,
+          headline_ko: `1+1 — 진짜 재료, 진짜 정성`,
+          subheadline_en: `We don't cut corners on our ${m.item}. Twice the reason to stop by.`,
+          subheadline_es: `No escatimamos en nuestro ${m.item}. El doble de razones para visitarnos.`,
+          subheadline_ko: `${m.item}에는 타협이 없습니다. 방문할 이유가 두 배.`,
+          cta_en: "Discover the difference", cta_es: "Descubre la diferencia", cta_ko: "차이를 느껴보세요",
+          style_label: "Premium simplicity",
+          rationale: "Clean, confident tone that trusts the product quality to sell.",
+          visual_direction: "Clean layout, single product hero shot, restrained serif typography.",
         },
       ],
     },

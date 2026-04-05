@@ -389,13 +389,33 @@ export type AiDealCopyResult = {
 
 /** Client-side demo fallback for deal copy generation. */
 function buildDemoDealCopy(hint: string, price?: number | null, bizName?: string | null): AiDealCopyResult {
-  const biz = bizName ?? "Local business";
-  const priceBit = price != null ? ` ($${price})` : "";
-  return {
-    title: `BOGO ${hint.slice(0, 30)}${priceBit}`.slice(0, 50),
-    promo_line: `Buy one, get one free at ${biz}`.slice(0, 60),
-    description: `Grab a friend and enjoy ${hint.slice(0, 60)} — two for the price of one at ${biz}. Walk-ins welcome!`.slice(0, 160),
+  const biz = bizName ?? "Demo Roasted Bean Coffee";
+  const pTag = price != null ? ` \u00B7 $${price}` : "";
+  const h = hint.toLowerCase();
+
+  type ItemKey = "latte" | "cortado" | "cold_brew" | "matcha" | "croissant" | "muffin" | "pastry" | "combo" | "generic";
+  const patterns: [ItemKey, RegExp][] = [
+    ["latte", /latte/], ["cortado", /cortado|espresso/], ["cold_brew", /cold\s*brew|iced\s*coffee/],
+    ["matcha", /matcha|green\s*tea/], ["croissant", /croissant/], ["muffin", /muffin|blueberry/],
+    ["pastry", /pastry|baked|scone/], ["combo", /combo|pair|bundle|\+|and a/],
+  ];
+  let itemKey: ItemKey = "generic";
+  for (const [k, rx] of patterns) { if (rx.test(h)) { itemKey = k; break; } }
+
+  const cl = (s: string, m: number) => { const t = s.replace(/\s+/g, " ").trim(); return t.length <= m ? t : t.slice(0, m - 1).trimEnd() + "\u2026"; };
+
+  const bank: Record<ItemKey, AiDealCopyResult> = {
+    latte: { title: cl(`Handcrafted lattes, twice the joy${pTag}`, 50), promo_line: cl(`Every latte at ${biz} is made fresh with care`, 60), description: cl("Two hand-pulled lattes for the price of one. Made with single-origin beans and steamed oat milk.", 160) },
+    cortado: { title: cl(`Crafted cortado, doubled${pTag}`, 50), promo_line: cl(`Precision-pulled at ${biz}`, 60), description: cl("A properly balanced cortado deserves a second pour. Two for one — same care in every cup.", 160) },
+    cold_brew: { title: cl(`Small-batch cold brew 2-for-1${pTag}`, 50), promo_line: cl(`Steeped 18 hours at ${biz}`, 60), description: cl("Our single-origin cold brew is steeped low and slow for a clean, smooth finish. Bring a friend.", 160) },
+    matcha: { title: cl(`Ceremonial matcha, on us${pTag}`, 50), promo_line: cl(`Stone-ground and whisked fresh at ${biz}`, 60), description: cl("Real ceremonial-grade matcha, not the powdered stuff. Buy one, get one — bright, earthy, and made to order.", 160) },
+    croissant: { title: cl(`Freshly baked croissant, doubled${pTag}`, 50), promo_line: cl(`Warm from the oven at ${biz}`, 60), description: cl("Buttery, flaky, and laminated by hand every morning. Take two — one for now and one for later.", 160) },
+    muffin: { title: cl(`Blueberry muffins, buy one get one${pTag}`, 50), promo_line: cl(`Baked fresh daily at ${biz}`, 60), description: cl("Bursting with real blueberries and topped with a crunchy streusel. Grab a pair and share the morning.", 160) },
+    pastry: { title: cl(`Artisan pastry, two for one${pTag}`, 50), promo_line: cl(`From our bakery case at ${biz}`, 60), description: cl("Every pastry is shaped and proofed by hand. Pick your favorite, and the second one's on us.", 160) },
+    combo: { title: cl(`The perfect pairing${pTag}`, 50), promo_line: cl(`Crafted together at ${biz}`, 60), description: cl("Some things are better in pairs. Enjoy a drink and a bite — the second item is free.", 160) },
+    generic: { title: cl(`Crafted with care, doubled for you${pTag}`, 50), promo_line: cl(`Made fresh at ${biz}`, 60), description: cl("Quality ingredients, honest portions, and now twice the reason to visit. Buy one, get one — no catch.", 160) },
   };
+  return bank[itemKey];
 }
 
 /** Text-only GPT deal copy (Edge: `ai-generate-deal-copy`). Does not write to the database. */

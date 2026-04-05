@@ -10,9 +10,9 @@ import { parseFunctionError, EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions
 import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
 
 const DEMO_SUGGESTIONS: Suggestion[] = [
-  { icon: "\u{1F4C5}", title: "Try weekday deals", body: "Most claims happen Tue\u2013Thu. Launch a midweek BOGO to fill slow afternoons." },
-  { icon: "\u{1F4F8}", title: "Add photos", body: "Deals with photos get 2\u00D7 more claims. Snap a quick pic of your best seller." },
-  { icon: "\u23F0", title: "Time it right", body: "Post deals by 10 AM \u2014 early birds drive the most redemptions before lunch." },
+  { icon: "\u2615", title: "Expand your latte lineup", body: "Your oat milk latte BOGO is your strongest deal. Consider a vanilla cortado variant to capture espresso lovers." },
+  { icon: "\u{1F4C8}", title: "Weekend pastry pairing", body: "Your weekday deals are solid. Try a Saturday croissant + latte bundle to capture brunch traffic." },
+  { icon: "\u{1F31F}", title: "Tell your origin story", body: "Add a line about your single-origin beans or hand-laminated croissants \u2014 it builds trust and repeat visits." },
 ];
 
 type Suggestion = {

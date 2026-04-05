@@ -95,23 +95,65 @@ serve(async (req) => {
     if (isDemoUserEmail(user.email) && !demoWantsLive) {
       const ms = 500 + Math.floor(Math.random() * 400);
       await new Promise((r) => setTimeout(r, ms));
-      const demoSuggestions: Suggestion[] = [
-        {
-          icon: "📅",
-          title: "Try a weekday BOGO",
-          body: "Slow midweek? A Tuesday or Wednesday deal can bring in new regulars who avoid weekend crowds.",
-        },
-        {
-          icon: "📸",
-          title: "Add a photo to your next deal",
-          body: "Deals with photos get up to 2x more claims. Snap a quick pic of your best seller!",
-        },
-        {
-          icon: "⏰",
-          title: "Post before the lunch rush",
-          body: "Deals posted between 10–11 AM tend to get claimed faster. Time your next one early.",
-        },
-      ];
+
+      const biz = typeof business_name === "string" && business_name.trim() ? business_name.trim() : "Demo Roasted Bean Coffee";
+      const claims = Array.isArray(weekly_claims_by_day) ? (weekly_claims_by_day as number[]) : [];
+      const titles = Array.isArray(top_deal_titles) ? (top_deal_titles as string[]) : [];
+      const redeems = typeof total_redeems === "number" ? total_redeems : 0;
+      const claimsTotal = typeof total_claims === "number" ? total_claims : 0;
+
+      // Build contextual suggestions from metrics
+      const pool: Suggestion[] = [];
+
+      // Check if oat milk latte is a top deal
+      if (titles.some((t: string) => /oat milk latte/i.test(t))) {
+        pool.push({
+          icon: "\u2615",
+          title: "Expand your latte lineup",
+          body: `Your oat milk latte BOGO is your strongest performer at ${biz}. Consider adding a vanilla cortado variant to capture espresso lovers too.`,
+        });
+      }
+
+      // Check weekday vs weekend claims
+      const weekday = claims.slice(1, 6).reduce((a: number, b: number) => a + b, 0);
+      const weekend = (claims[0] ?? 0) + (claims[6] ?? 0);
+      if (weekday < weekend && weekend > 0) {
+        pool.push({
+          icon: "\uD83D\uDCC5",
+          title: "Boost your midweek traffic",
+          body: `${biz} sees more claims on weekends. A Tuesday cold brew BOGO could pull in remote workers looking for a midweek treat.`,
+        });
+      } else {
+        pool.push({
+          icon: "\uD83D\uDCC8",
+          title: "Weekend pastry pairing",
+          body: `Your weekday deals are solid. Try a Saturday morning croissant + latte bundle to capture weekend brunch traffic at ${biz}.`,
+        });
+      }
+
+      // Redemption rate insight
+      if (claimsTotal > 0 && redeems / claimsTotal < 0.5) {
+        pool.push({
+          icon: "\uD83C\uDFAF",
+          title: "Improve your redemption rate",
+          body: `People are claiming deals but not always redeeming. Consider a shorter window or a reminder push — making the deal feel time-sensitive can lift redemptions.`,
+        });
+      } else {
+        pool.push({
+          icon: "\u2728",
+          title: "Quality photos drive claims",
+          body: `A well-lit photo of your ${titles[0] ?? "best seller"} can double engagement. Shoot near the window with natural light for the best result.`,
+        });
+      }
+
+      // Always include a craft-focused suggestion
+      pool.push({
+        icon: "\uD83C\uDF1F",
+        title: "Tell your origin story",
+        body: `Customers at ${biz} connect with craft. Add a line about your single-origin beans or hand-laminated croissants — it builds trust and repeat visits.`,
+      });
+
+      const demoSuggestions = pool.slice(0, 3);
       return new Response(JSON.stringify({ suggestions: demoSuggestions }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

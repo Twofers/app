@@ -172,15 +172,15 @@ serve(async (req) => {
         JSON.stringify({
           ok: true,
           items: [
-            { name: "Classic Latte", category: "Coffee", price_text: "$4.50", readable: true },
-            { name: "Iced Americano", category: "Coffee", price_text: "$3.75", readable: true },
-            { name: "Blueberry Muffin", category: "Bakery", price_text: "$3.25", readable: true },
-            { name: "Avocado Toast", category: "Breakfast", price_text: "$8.50", readable: true },
-            { name: "Matcha Latte", category: "Coffee", price_text: "$5.00", readable: true },
-            { name: "Croissant", category: "Bakery", price_text: "$2.75", readable: true },
+            { name: "Oat Milk Latte", category: "Coffee", price_text: "$6.50", readable: true },
+            { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", readable: true },
+            { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "$5.75", readable: true },
+            { name: "Matcha Latte", category: "Tea", price_text: "$6.00", readable: true },
+            { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
+            { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
           ],
           low_legibility: false,
-          menu_notes: "",
+          menu_notes: "6 items extracted. All prices clearly legible.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
