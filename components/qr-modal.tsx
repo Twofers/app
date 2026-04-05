@@ -173,7 +173,7 @@ export function QrModal({
   }, [successToastNonce, visible, toastOpacity, toastTranslateY, confettiProgress]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" accessibilityViewIsModal>
       <View
         style={{
           flex: 1,

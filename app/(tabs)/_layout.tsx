@@ -120,6 +120,8 @@ export default function TabLayout() {
           tabBarStyle: { backgroundColor: theme.background },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
+          detachInactiveScreens: true,
+          freezeOnBlur: true,
         }}
       >
         <Tabs.Screen
@@ -293,7 +295,11 @@ function TabModeRedirect() {
 
   if (checkingProfile) {
     return (
-      <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" }}>
+      <View
+        pointerEvents="box-none"
+        importantForAccessibility="no"
+        style={{ ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" }}
+      >
         <ActivityIndicator />
       </View>
     );
