@@ -163,7 +163,7 @@ export function WalletVisualPassModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={confirmClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={confirmClose} accessibilityViewIsModal>
       <View
         style={{
           flex: 1,

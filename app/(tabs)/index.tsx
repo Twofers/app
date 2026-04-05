@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import Animated, { useSharedValue, withTiming, useAnimatedStyle } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii, Shadows } from "@/constants/theme";
@@ -118,6 +119,7 @@ function classifyClaimBlockReason(message: string): string {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { height: windowHeight } = useWindowDimensions();
   const { isLoggedIn, userId } = useBusiness();
@@ -977,8 +979,8 @@ export default function HomeScreen() {
 
   return (
     <KeyboardScreen>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      {banner ? <Banner message={banner} tone="error" /> : null}
+    <View pointerEvents={isFocused ? "auto" : "none"} style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      {banner ? <Banner message={banner} tone="error" onRetry={() => { setBanner(null); void onPullToRefresh(); }} /> : null}
       <Animated.View style={[{ flex: 1 }, feedSegment === "deals" ? dealsFadeStyle : undefined]}>
         <FlatList<Deal | BusinessRow>
           style={{ flex: 1 }}
