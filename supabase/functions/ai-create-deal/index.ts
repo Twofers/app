@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,6 +136,67 @@ serve(async (req) => {
       .map((seg: string) => encodeURIComponent(seg))
       .join("/");
     const posterPublicUrl = `${baseUrl}/storage/v1/object/public/deal-photos/${encodedPath}`;
+
+    // Demo account: generate template copy without calling OpenAI
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const ms = 600 + Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, ms));
+      const priceBit = price != null && price !== "" ? ` ($${price})` : "";
+      const demoResult: AiResult = {
+        title: `BOGO ${String(hint_text).slice(0, 30)}${priceBit}`.slice(0, 50),
+        promo_line: `Buy one, get one free — today only!`.slice(0, 60),
+        description: `Grab a friend and enjoy ${String(hint_text).slice(0, 60)} — two for the price of one. Walk-ins welcome!`.slice(0, 160),
+      };
+
+      const strongCheck = validateStrongDealOnly({
+        title: demoResult.title,
+        description: `${demoResult.promo_line}\n${demoResult.description}`,
+      });
+      if (!strongCheck.ok) {
+        return new Response(JSON.stringify({ error: strongCheck.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: deal, error: insertError } = await supabase
+        .from("deals")
+        .insert({
+          business_id,
+          title: demoResult.title,
+          description: demoResult.description,
+          price: price ?? null,
+          start_time: new Date().toISOString(),
+          end_time,
+          claim_cutoff_buffer_minutes: claim_cutoff_buffer_minutes ?? 15,
+          max_claims,
+          is_active: true,
+          poster_url: posterPublicUrl,
+          poster_storage_path: photo_path,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        return new Response(JSON.stringify({ error: "Failed to create deal." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          deal_id: deal.id,
+          title: demoResult.title,
+          description: demoResult.description,
+          promo_line: demoResult.promo_line,
+          poster_url: posterPublicUrl,
+          poster_storage_path: photo_path,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (!openAiKey?.trim()) {
       return new Response(

@@ -17,13 +17,24 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void supabase.auth
       .getSession()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (cancelled) return;
+        if (error) {
+          // Stale/invalid refresh token — clear it so the user lands on login
+          void supabase.auth.signOut().finally(() => {
+            if (!cancelled) {
+              setSession(null);
+              setIsInitialLoading(false);
+            }
+          });
+          return;
+        }
         setSession(data.session ?? null);
         setIsInitialLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
+        void supabase.auth.signOut().catch(() => {});
         setSession(null);
         setIsInitialLoading(false);
       });

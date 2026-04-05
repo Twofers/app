@@ -288,6 +288,61 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
   }
 }
 
+export type BusinessLookupResult = {
+  name: string;
+  formatted_address: string;
+  phone: string;
+  lat: number | null;
+  lng: number | null;
+  category: string;
+  hours_text: string;
+  website: string;
+  source: "google_places" | "ai_estimate";
+};
+
+/** Look up a business by name using Google Places + AI fallback. */
+export async function aiBusinessLookup(body: {
+  business_name: string;
+  lat?: number | null;
+  lng?: number | null;
+}): Promise<BusinessLookupResult[]> {
+  const { data, error } = await supabase.functions.invoke("ai-business-lookup", {
+    body: {
+      business_name: body.business_name,
+      lat: body.lat ?? undefined,
+      lng: body.lng ?? undefined,
+    },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+
+  if (error) {
+    throw new Error(parseFunctionError(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error(String((data as { error?: string }).error ?? "Lookup failed"));
+  }
+  const d = data as { results?: BusinessLookupResult[] };
+  return Array.isArray(d.results) ? d.results : [];
+}
+
+/**
+ * Fire-and-forget: translate deal title/description into es + ko.
+ * Never throws — translations arrive asynchronously.
+ */
+export async function translateDeal(dealId: string): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke("ai-translate-deal", {
+      body: { deal_id: dealId },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
+    if (error) {
+      devWarn("[translateDeal] Translation failed:", parseFunctionError(error));
+    }
+  } catch (err) {
+    devWarn("[translateDeal] Non-fatal error:", err);
+  }
+}
+
 export type AiDealCopyResult = {
   title: string;
   promo_line: string;

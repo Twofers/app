@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -159,6 +160,29 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Missing image_url or image_base64.", error_code: "INVALID_INPUT" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Demo account: return sample menu items without calling OpenAI
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const ms = 700 + Math.floor(Math.random() * 500);
+      await new Promise((r) => setTimeout(r, ms));
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            { name: "Classic Latte", category: "Coffee", price_text: "$4.50", readable: true },
+            { name: "Iced Americano", category: "Coffee", price_text: "$3.75", readable: true },
+            { name: "Blueberry Muffin", category: "Bakery", price_text: "$3.25", readable: true },
+            { name: "Avocado Toast", category: "Breakfast", price_text: "$8.50", readable: true },
+            { name: "Matcha Latte", category: "Coffee", price_text: "$5.00", readable: true },
+            { name: "Croissant", category: "Bakery", price_text: "$2.75", readable: true },
+          ],
+          low_legibility: false,
+          menu_notes: "",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

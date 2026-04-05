@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
+import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 
 type Tone = "error" | "success" | "info";
 
@@ -28,6 +31,8 @@ export default function BusinessSetupScreen() {
   const [shortDescription, setShortDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
 
   const trimmed = useMemo(
     () => ({
@@ -49,6 +54,43 @@ export default function BusinessSetupScreen() {
     if (!bypass && !session?.user?.id) router.replace("/auth-landing");
   }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
 
+
+  async function onLookup() {
+    if (!businessName.trim()) {
+      setBanner({ message: t("businessSetup.errEnterName"), tone: "error" });
+      return;
+    }
+    setSearching(true);
+    setLookupResults(null);
+    setBanner(null);
+    try {
+      const results = await aiBusinessLookup({ business_name: businessName.trim() });
+      if (results.length === 0) {
+        setBanner({ message: t("businessSetup.noResults"), tone: "info" });
+      }
+      setLookupResults(results.length > 0 ? results : null);
+    } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Lookup error:", e);
+      setBanner({ message: t("businessSetup.lookupError"), tone: "error" });
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function applyLookupResult(result: BusinessLookupResult) {
+    setBusinessName(result.name);
+    setAddress(result.formatted_address);
+    if (result.phone) setPhone(result.phone);
+    if (result.category) setShortDescription(result.category);
+    setLookupResults(null);
+    const isEstimate = result.source === "ai_estimate";
+    setBanner({
+      message: isEstimate
+        ? t("businessSetup.estimatedInfo")
+        : t("businessSetup.infoFilled"),
+      tone: isEstimate ? "info" : "success",
+    });
+  }
 
   async function onSubmit() {
     setBanner(null);
@@ -162,7 +204,52 @@ export default function BusinessSetupScreen() {
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
-        <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={setBusinessName} />
+        <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={(s) => { setBusinessName(s); setLookupResults(null); }} />
+
+        <SecondaryButton
+          title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+          onPress={() => void onLookup()}
+          disabled={searching || !businessName.trim()}
+        />
+
+        {searching && (
+          <View style={{ alignItems: "center", paddingVertical: Spacing.sm }}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        )}
+
+        {lookupResults && lookupResults.length > 0 && (
+          <View style={{ gap: Spacing.sm }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6 }}>
+              {t("businessSetup.selectResult")}
+            </Text>
+            {lookupResults.map((r, i) => (
+              <Pressable key={i} onPress={() => applyLookupResult(r)}>
+                <View
+                  style={{
+                    backgroundColor: Colors.light.surface,
+                    borderRadius: Radii.lg,
+                    padding: Spacing.md,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    ...Shadows.sm,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", fontSize: 15 }}>{r.name}</Text>
+                  <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>{r.formatted_address}</Text>
+                  {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
+                  {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
+                  {r.source === "ai_estimate" && (
+                    <Text style={{ fontSize: 11, color: Colors.primary, marginTop: 4 }}>
+                      {t("businessSetup.aiEstimate")}
+                    </Text>
+                  )}
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         <Field label={t("businessSetup.address")} value={address} onChangeText={setAddress} />
         <Field label={t("businessSetup.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <Field

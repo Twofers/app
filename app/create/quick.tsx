@@ -17,7 +17,7 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { DealPreviewModal } from "../../components/deal-preview-modal";
-import { aiGenerateDealCopy, notifyDealPublished } from "../../lib/functions";
+import { aiGenerateDealCopy, notifyDealPublished, translateDeal } from "../../lib/functions";
 import { Colors, Radii } from "../../constants/theme";
 import {
   resolveDealFlowLanguage,
@@ -334,7 +334,10 @@ export default function QuickDealScreen() {
       }).select("id").single();
 
       if (error) throw error;
-      if (deal?.id) void notifyDealPublished(deal.id);
+      if (deal?.id) {
+        void notifyDealPublished(deal.id);
+        void translateDeal(deal.id);
+      }
       setDirty(false);
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {

@@ -28,6 +28,7 @@ import {
   aiGenerateDealCopy,
   EDGE_FUNCTION_TIMEOUT_AI_MS,
   notifyDealPublished,
+  translateDeal,
   parseFunctionError,
 } from "../../lib/functions";
 import {
@@ -843,6 +844,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
       });
       void notifyDealPublished(out.deal_id);
+      void translateDeal(out.deal_id);
       Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
         { text: t("commonUi.ok"), onPress: () => router.replace("/(tabs)/dashboard") },
       ]);
@@ -936,6 +938,7 @@ export default function AiDealScreen() {
           .eq("business_id", businessId);
         if (error) throw error;
         void notifyDealPublished(editingDealId);
+        void translateDeal(editingDealId);
       } else {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
@@ -946,7 +949,10 @@ export default function AiDealScreen() {
         const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
         if (error) throw error;
         for (const row of dealsOut ?? []) {
-          if (row?.id) void notifyDealPublished(row.id);
+          if (row?.id) {
+            void notifyDealPublished(row.id);
+            void translateDeal(row.id);
+          }
         }
       }
 

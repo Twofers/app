@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,6 +88,34 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
+    }
+
+    // Demo account: return template suggestions without calling OpenAI
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const ms = 500 + Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, ms));
+      const demoSuggestions: Suggestion[] = [
+        {
+          icon: "📅",
+          title: "Try a weekday BOGO",
+          body: "Slow midweek? A Tuesday or Wednesday deal can bring in new regulars who avoid weekend crowds.",
+        },
+        {
+          icon: "📸",
+          title: "Add a photo to your next deal",
+          body: "Deals with photos get up to 2x more claims. Snap a quick pic of your best seller!",
+        },
+        {
+          icon: "⏰",
+          title: "Post before the lunch rush",
+          body: "Deals posted between 10–11 AM tend to get claimed faster. Time your next one early.",
+        },
+      ];
+      return new Response(JSON.stringify({ suggestions: demoSuggestions }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!openAiKey) {

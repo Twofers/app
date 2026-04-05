@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -260,6 +261,77 @@ serve(async (req) => {
     const audioBase64 = typeof body.audio_base64 === "string" ? body.audio_base64.trim() : "";
     const transcribeOnly = body.transcribe_only === true;
     const generate_poster_image = body.generate_poster_image === true;
+
+    // Demo account: return template results without calling OpenAI
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const ms = 800 + Math.floor(Math.random() * 600);
+      await new Promise((r) => setTimeout(r, ms));
+
+      if (transcribeOnly) {
+        return new Response(
+          JSON.stringify({ ok: true, transcript: promptTextRaw || "BOGO latte special today" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const itemGuess = promptTextRaw || voiceTranscriptIn || "latte";
+      const demoResult = {
+        detected_items: [itemGuess],
+        confidence: 0.9,
+        low_confidence: false,
+        recommendation_reason: "Classic BOGO drives foot traffic for local cafés.",
+        recommended_offer: {
+          offer_type: "bogo_same_item",
+          item_name: itemGuess,
+          display_offer: `Buy one ${itemGuess}, get one free`,
+        },
+        ad_variants: [
+          {
+            variant_id: "A",
+            headline_en: `Two ${itemGuess}s, one price`,
+            headline_es: `Dos ${itemGuess}s por uno`,
+            headline_ko: `${itemGuess} 1+1`,
+            subheadline_en: `Grab a friend and split the best ${itemGuess} in town`,
+            subheadline_es: `Trae a un amigo y disfruten juntos`,
+            subheadline_ko: `친구와 함께 즐기세요`,
+            cta_en: "Claim now",
+            cta_es: "Reclamar ahora",
+            cta_ko: "지금 받기",
+            style_label: "Value-first",
+            rationale: "Straightforward savings message for price-conscious customers.",
+            visual_direction: "Bold price callout, warm tones, product front and center.",
+          },
+          {
+            variant_id: "B",
+            headline_en: `Your next ${itemGuess} is on us`,
+            headline_es: `Tu próximo ${itemGuess} va por la casa`,
+            headline_ko: `다음 ${itemGuess}는 무료`,
+            subheadline_en: `Walk in, order one, walk out with two`,
+            subheadline_es: `Entra, pide uno, llévate dos`,
+            subheadline_ko: `하나 주문하면 하나 더`,
+            cta_en: "Get yours",
+            cta_es: "Consigue el tuyo",
+            cta_ko: "받으러 가기",
+            style_label: "Neighborhood charm",
+            rationale: "Friendly, inviting tone that builds local loyalty.",
+            visual_direction: "Warm light, cozy café interior, casual feel.",
+          },
+        ],
+        input_type: hasImage && hasText ? "mixed" : hasImage ? "image_only" : "text_only",
+      };
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          duplicate_cached: false,
+          result: demoResult,
+          poster_storage_path: null,
+          quota: { used: 0, limit: 30, remaining: 30 },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     if (transcribeOnly) {
       if (!openAiKey) {

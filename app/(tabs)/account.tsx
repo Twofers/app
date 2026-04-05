@@ -33,7 +33,7 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
-import { aiGenerateDealCopy } from "@/lib/functions";
+import { aiGenerateDealCopy, aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -84,6 +84,8 @@ export default function AccountScreen() {
   const [bizProfileExpanded, setBizProfileExpanded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [lookupSearching, setLookupSearching] = useState(false);
+  const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
@@ -895,6 +897,77 @@ export default function AccountScreen() {
                   }}
                 />
               </View>
+
+              <SecondaryButton
+                title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+                onPress={async () => {
+                  const name = profileBusinessName.trim();
+                  if (!name) { setBanner({ message: t("businessSetup.errEnterName") }); return; }
+                  setLookupSearching(true);
+                  setLookupResults(null);
+                  setBanner(null);
+                  try {
+                    const results = await aiBusinessLookup({ business_name: name });
+                    if (results.length === 0) setBanner({ message: t("businessSetup.noResults"), tone: "info" });
+                    setLookupResults(results.length > 0 ? results : null);
+                  } catch {
+                    setBanner({ message: t("businessSetup.lookupError") });
+                  } finally {
+                    setLookupSearching(false);
+                  }
+                }}
+                disabled={lookupSearching || !profileBusinessName.trim()}
+              />
+
+              {lookupResults && lookupResults.length > 0 && (
+                <View style={{ gap: Spacing.sm }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6 }}>
+                    {t("businessSetup.selectResult")}
+                  </Text>
+                  {lookupResults.map((r, i) => (
+                    <Pressable
+                      key={i}
+                      onPress={() => {
+                        setProfileBusinessName(r.name);
+                        setProfileAddress(r.formatted_address);
+                        setProfileLocation(r.formatted_address);
+                        if (r.phone) setProfilePhone(r.phone);
+                        if (r.category) setProfileCategory(r.category);
+                        if (r.hours_text) setProfileHours(r.hours_text);
+                        if (r.lat != null) setProfileLatitude(String(r.lat));
+                        if (r.lng != null) setProfileLongitude(String(r.lng));
+                        setLookupResults(null);
+                        setBanner({
+                          message: r.source === "ai_estimate"
+                            ? t("businessSetup.estimatedInfo")
+                            : t("businessSetup.infoFilled"),
+                          tone: r.source === "ai_estimate" ? "info" : "success",
+                        });
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: theme.surface,
+                          borderRadius: Radii.lg,
+                          padding: Spacing.md,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                        }}
+                      >
+                        <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
+                        <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
+                        {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
+                        {r.source === "ai_estimate" && (
+                          <Text style={{ fontSize: 11, color: Colors.primary, marginTop: 4 }}>
+                            {t("businessSetup.aiEstimate")}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
               <View>
                 <Text style={{ fontSize: 13 }}>{t("account.fieldContactName")}</Text>
                 <TextInput
