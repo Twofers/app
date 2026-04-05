@@ -91,14 +91,7 @@ function RootNavigationStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
         <Stack.Screen name="reset-password" options={{ title: t('passwordRecovery.resetTitle') }} />
-        <Stack.Screen name="create/quick" options={{ headerShown: false }} />
-        <Stack.Screen name="create/ai" options={{ title: t('createAi.titleScreen') }} />
-        <Stack.Screen name="create/ai-compose" options={{ title: t('aiCompose.title') }} />
-        <Stack.Screen name="create/reuse" options={{ title: t('reuseHub.title') }} />
-        <Stack.Screen name="create/menu-scan" options={{ title: t('menuScan.title') }} />
-        <Stack.Screen name="create/menu-manager" options={{ title: t('menuManager.title') }} />
-        <Stack.Screen name="create/menu-offer" options={{ title: t('menuOffer.title') }} />
-        <Stack.Screen name="create/ad-refine" options={{ title: t('adRefine.title') }} />
+        <Stack.Screen name="create" options={{ headerShown: false }} />
         <Stack.Screen name="deal/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
 
