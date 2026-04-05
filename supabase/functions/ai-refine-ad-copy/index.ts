@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,6 +97,49 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Business not found or access denied.", error_code: "FORBIDDEN" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const demoWantsLive =
+      Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const delay = 500 + Math.floor(Math.random() * 500);
+      await new Promise((r) => setTimeout(r, delay));
+
+      const draft = selected_draft as Record<string, unknown>;
+      const refined = {
+        creative_lane: draft.creative_lane ?? "value",
+        headline: typeof draft.headline === "string" ? draft.headline : "Demo Headline",
+        subheadline: typeof draft.subheadline === "string" ? draft.subheadline : "Demo subheadline",
+        cta: typeof draft.cta === "string" ? draft.cta : "Try It Now",
+        style_label: typeof draft.style_label === "string" ? draft.style_label : "Value",
+        rationale: `Refined per your request: "${instruction.slice(0, 80)}"`,
+        visual_direction:
+          typeof draft.visual_direction === "string"
+            ? draft.visual_direction
+            : "Clean, inviting design",
+      };
+
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_refine",
+        input_mode: "chat",
+        request_hash: "demo",
+        prompt_version: "v1",
+        model: "demo-refine",
+        success: true,
+        openai_called: false,
+      });
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          draft: refined,
+          usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

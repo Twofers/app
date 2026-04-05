@@ -552,30 +552,48 @@ export async function aiRefineAdCopy(body: {
   conversation_history: Array<{ role: string; content: string }>;
   output_language?: string;
 }): Promise<{ ok: true; draft: GeneratedAd; usage: AiRefineAdCopyUsage }> {
-  const { data, error } = await supabase.functions.invoke("ai-refine-ad-copy", {
-    body: {
-      business_id: body.business_id,
-      structured_offer: body.structured_offer,
-      selected_draft: body.selected_draft,
-      instruction: body.instruction,
-      conversation_history: body.conversation_history,
-      output_language: body.output_language ?? "en",
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
-  if (error) {
-    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-refine-ad-copy", {
+      body: {
+        business_id: body.business_id,
+        structured_offer: body.structured_offer,
+        selected_draft: body.selected_draft,
+        instruction: body.instruction,
+        conversation_history: body.conversation_history,
+        output_language: body.output_language ?? "en",
+      },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
+    if (error) {
+      throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+    }
+    throwIfEdgeResponseError(data);
+    const d = data as {
+      ok?: boolean;
+      draft?: GeneratedAd;
+      usage?: AiRefineAdCopyUsage;
+    };
+    if (!d?.ok || !d.draft || typeof d.draft.headline !== "string") {
+      throw new Error("Unexpected response from ai-refine-ad-copy.");
+    }
+    return { ok: true, draft: d.draft, usage: d.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
+  } catch (err) {
+    if (await isCurrentUserDemo()) {
+      devWarn("aiRefineAdCopy: edge failed for demo user, returning fallback", err);
+      const sel = body.selected_draft as GeneratedAd;
+      const draft: GeneratedAd = {
+        creative_lane: sel.creative_lane ?? ("value" as CreativeLane),
+        headline: sel.headline ?? "Demo Headline",
+        subheadline: sel.subheadline ?? "Demo subheadline",
+        cta: sel.cta ?? "Try It Now",
+        style_label: sel.style_label ?? "Value",
+        rationale: `Refined per your request: "${body.instruction.slice(0, 80)}"`,
+        visual_direction: sel.visual_direction ?? "Clean, inviting design",
+      };
+      return { ok: true, draft, usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
+    }
+    throw err;
   }
-  throwIfEdgeResponseError(data);
-  const d = data as {
-    ok?: boolean;
-    draft?: GeneratedAd;
-    usage?: AiRefineAdCopyUsage;
-  };
-  if (!d?.ok || !d.draft || typeof d.draft.headline !== "string") {
-    throw new Error("Unexpected response from ai-refine-ad-copy.");
-  }
-  return { ok: true, draft: d.draft, usage: d.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
 }
 
 export type AdVariantsQuota = { used: number; limit: number; remaining: number };
