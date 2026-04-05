@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
-import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
+import { isDemoUserEmail, type AdVariant, type CreativeLane } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +16,175 @@ type ChatTurn = { role: string; content: string };
 function utcMonthStartIso(): string {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString();
+}
+
+// ── Demo refinement engine ─────────────────────────────────
+// Detects the user's intent from the instruction and rewrites copy accordingly.
+
+type ToneKey = "fun" | "urgent" | "short" | "formal" | "casual" | "emoji" | "spanish" | "korean" | "savings" | "quality" | "community" | "generic";
+
+const TONE_PATTERNS: [ToneKey, RegExp][] = [
+  ["fun", /\b(fun|playful|silly|witty|humor|humour|funny|energetic|lively|cheerful|upbeat)\b/i],
+  ["urgent", /\b(urgen|hurry|limited|rush|fast|quick|now|fomo|scarcity|don'?t miss|act fast|last chance)\b/i],
+  ["short", /\b(short|brief|concise|trim|fewer words|less text|simpler|minimal|tighter)\b/i],
+  ["formal", /\b(formal|professional|polished|elegant|sophisticated|refined|business|classy)\b/i],
+  ["casual", /\b(casual|chill|relaxed|laid.?back|friendly|conversational|warm|cozy)\b/i],
+  ["emoji", /\b(emoji|emojis|icons|emoticon)\b/i],
+  ["spanish", /\b(spanish|español|espanol|en español)\b/i],
+  ["korean", /\b(korean|한국어|한글)\b/i],
+  ["savings", /\b(saving|value|price|deal|cheap|afford|discount|money|budget|bang for)\b/i],
+  ["quality", /\b(quality|craft|artisan|premium|handmade|fresh|ingredient|small.?batch|specialty)\b/i],
+  ["community", /\b(community|local|neighbor|neighbourhood|neighborhood|block|corner|regulars|family)\b/i],
+];
+
+function detectTone(instruction: string): ToneKey {
+  for (const [key, rx] of TONE_PATTERNS) {
+    if (rx.test(instruction)) return key;
+  }
+  return "generic";
+}
+
+function clip(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length <= max ? t : t.slice(0, max - 1).trimEnd() + "…";
+}
+
+function extractOfferItem(offer: Record<string, unknown>): string {
+  const item =
+    (offer.buy_item as string) ||
+    (offer.free_item as string) ||
+    (offer.item_name as string) ||
+    (offer.hint_text as string) ||
+    "";
+  return item.trim() || "your favorite";
+}
+
+function buildDemoRefinedDraft(
+  draft: Record<string, unknown>,
+  instruction: string,
+  offer: Record<string, unknown>,
+): AdVariant {
+  const tone = detectTone(instruction);
+  const lane = (draft.creative_lane as CreativeLane) || "value";
+  const origHead = typeof draft.headline === "string" ? draft.headline : "";
+  const origSub = typeof draft.subheadline === "string" ? draft.subheadline : "";
+  const origCta = typeof draft.cta === "string" ? draft.cta : "";
+  const item = extractOfferItem(offer);
+
+  const rewrites: Record<ToneKey, { headline: string; subheadline: string; cta: string; style_label: string; rationale: string; visual_direction: string }> = {
+    fun: {
+      headline: clip(`Double the ${item}, double the smiles`, 40),
+      subheadline: clip(`Bring a friend and treat yourselves — life's too short for just one ${item}!`, 88),
+      cta: clip("Let's Go!", 26),
+      style_label: "Playful & bright",
+      rationale: "Lighthearted energy makes the deal feel like a treat, not a transaction.",
+      visual_direction: "Bright colors, candid smiles, hand-drawn accents.",
+    },
+    urgent: {
+      headline: clip(`Today only — BOGO ${item}`, 40),
+      subheadline: clip(`Spots are filling up. Grab yours before they're gone.`, 88),
+      cta: clip("Claim Now", 26),
+      style_label: "Time-sensitive",
+      rationale: "Clear urgency drives immediate action without feeling pushy.",
+      visual_direction: "Bold countdown feel, high contrast, warm tones.",
+    },
+    short: {
+      headline: clip(`2-for-1 ${item}`, 40),
+      subheadline: clip(`Buy one, get one. Simple as that.`, 88),
+      cta: clip("Get Yours", 26),
+      style_label: "Minimal",
+      rationale: "Stripped to the essentials — the offer speaks for itself.",
+      visual_direction: "Clean whitespace, bold type, single product shot.",
+    },
+    formal: {
+      headline: clip(`Complimentary ${item} with purchase`, 40),
+      subheadline: clip(`We invite you to experience our craftsmanship — enjoy a second ${item} on us.`, 88),
+      cta: clip("Redeem Offer", 26),
+      style_label: "Polished & refined",
+      rationale: "Professional tone elevates the brand without losing warmth.",
+      visual_direction: "Serif accents, muted palette, elegant product photography.",
+    },
+    casual: {
+      headline: clip(`Hey, free ${item} on us`, 40),
+      subheadline: clip(`Grab a friend, swing by, and enjoy two for the price of one. No catch.`, 88),
+      cta: clip("Come On In", 26),
+      style_label: "Friendly & relaxed",
+      rationale: "Feels like a friend telling you about a deal, not an ad.",
+      visual_direction: "Warm lighting, approachable vibe, handwritten feel.",
+    },
+    emoji: {
+      headline: clip(`Buy 1 Get 1 ${item}`, 40),
+      subheadline: clip(`Treat yourself and a friend — two ${item}s, one price. What's not to love?`, 88),
+      cta: clip("Grab the Deal", 26),
+      style_label: "Eye-catching",
+      rationale: "Visual flair draws the eye in a busy feed.",
+      visual_direction: "Colorful accents, product close-up, pop of orange.",
+    },
+    spanish: {
+      headline: clip(`2x1 en ${item}`, 40),
+      subheadline: clip(`Compra uno y llévate otro gratis. Ven con alguien especial.`, 88),
+      cta: clip("Canjear ahora", 26),
+      style_label: "Oferta directa",
+      rationale: "Mensaje claro en español para alcanzar más vecinos.",
+      visual_direction: "Colores cálidos, tipografía legible, producto al frente.",
+    },
+    korean: {
+      headline: clip(`${item} 1+1 혜택`, 40),
+      subheadline: clip(`하나 사면 하나 더! 친구와 함께 방문하세요.`, 88),
+      cta: clip("지금 받기", 26),
+      style_label: "깔끔한 혜택",
+      rationale: "한국어로 명확하게 전달하여 더 많은 이웃에게 도달합니다.",
+      visual_direction: "깔끔한 배경, 제품 강조, 따뜻한 톤.",
+    },
+    savings: {
+      headline: clip(`Save on ${item} — BOGO deal`, 40),
+      subheadline: clip(`Why pay for two when you can get one free? Real savings, no strings.`, 88),
+      cta: clip("See the Savings", 26),
+      style_label: "Value-forward",
+      rationale: "Leads with the financial benefit to attract deal-seekers.",
+      visual_direction: "Price badge overlay, warm product shot, bold numbers.",
+    },
+    quality: {
+      headline: clip(`Handcrafted ${item}, twice the joy`, 40),
+      subheadline: clip(`Every ${item} is made fresh with care. Now enjoy two for the price of one.`, 88),
+      cta: clip("Taste the Craft", 26),
+      style_label: "Artisan quality",
+      rationale: "Highlights the craft behind the product to justify the visit.",
+      visual_direction: "Tight crop on texture and detail, natural light, minimal text.",
+    },
+    community: {
+      headline: clip(`Your neighborhood ${item} spot`, 40),
+      subheadline: clip(`We're proud to be part of this community. Bring a neighbor — BOGO today.`, 88),
+      cta: clip("Stop By", 26),
+      style_label: "Local favorite",
+      rationale: "Neighborhood warmth turns the deal into a community moment.",
+      visual_direction: "Storefront or street context, warm tones, real people.",
+    },
+    generic: {
+      headline: clip(origHead || `BOGO ${item}`, 40),
+      subheadline: clip(
+        origSub
+          ? `${origSub.split(".")[0]}. Freshly updated to match your vision.`
+          : `Buy one ${item}, get one free. Updated just for you.`,
+        88,
+      ),
+      cta: clip(origCta || "Claim Yours", 26),
+      style_label: "Refreshed",
+      rationale: "Applied your feedback while keeping the core offer front and center.",
+      visual_direction: "Balanced layout, product hero, clean typography.",
+    },
+  };
+
+  const r = rewrites[tone];
+  return {
+    creative_lane: lane,
+    headline: r.headline,
+    subheadline: r.subheadline,
+    cta: r.cta,
+    style_label: r.style_label,
+    rationale: r.rationale,
+    visual_direction: r.visual_direction,
+  };
 }
 
 serve(async (req) => {
@@ -107,19 +276,11 @@ serve(async (req) => {
       const delay = 500 + Math.floor(Math.random() * 500);
       await new Promise((r) => setTimeout(r, delay));
 
-      const draft = selected_draft as Record<string, unknown>;
-      const refined = {
-        creative_lane: draft.creative_lane ?? "value",
-        headline: typeof draft.headline === "string" ? draft.headline : "Demo Headline",
-        subheadline: typeof draft.subheadline === "string" ? draft.subheadline : "Demo subheadline",
-        cta: typeof draft.cta === "string" ? draft.cta : "Try It Now",
-        style_label: typeof draft.style_label === "string" ? draft.style_label : "Value",
-        rationale: `Refined per your request: "${instruction.slice(0, 80)}"`,
-        visual_direction:
-          typeof draft.visual_direction === "string"
-            ? draft.visual_direction
-            : "Clean, inviting design",
-      };
+      const refined = buildDemoRefinedDraft(
+        selected_draft as Record<string, unknown>,
+        instruction,
+        structured_offer as Record<string, unknown>,
+      );
 
       await admin.from("ai_generation_logs").insert({
         business_id,
