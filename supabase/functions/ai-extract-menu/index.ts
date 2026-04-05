@@ -112,7 +112,7 @@ serve(async (req) => {
 
     const { data: biz, error: bizErr } = await admin
       .from("businesses")
-      .select("id,owner_id")
+      .select("id,owner_id,category,name")
       .eq("id", business_id)
       .maybeSingle();
 
@@ -163,25 +163,70 @@ serve(async (req) => {
       );
     }
 
-    // Demo account: return sample menu items without calling OpenAI
+    // Category-aware sample menus for demo/no-key fallback
+    const bizCategory = ((biz as { category?: string }).category ?? "").toLowerCase();
+    type MenuItem = { name: string; category: string; price_text: string; readable: true };
+
+    function sampleMenuForCategory(cat: string): MenuItem[] {
+      if (/bakery|bake|pastry|bread/i.test(cat)) return [
+        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
+        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
+        { name: "Sourdough Loaf", category: "Bread", price_text: "$7.00", readable: true },
+        { name: "Cinnamon Roll", category: "Pastry", price_text: "$5.25", readable: true },
+        { name: "Almond Bear Claw", category: "Pastry", price_text: "$4.75", readable: true },
+        { name: "Chocolate Chip Cookie", category: "Cookie", price_text: "$3.50", readable: true },
+      ];
+      if (/taco|mexican|tex.?mex/i.test(cat)) return [
+        { name: "Al Pastor Taco", category: "Tacos", price_text: "$4.50", readable: true },
+        { name: "Carnitas Taco", category: "Tacos", price_text: "$4.50", readable: true },
+        { name: "Chicken Tinga Taco", category: "Tacos", price_text: "$4.25", readable: true },
+        { name: "Queso Fundido", category: "Sides", price_text: "$6.00", readable: true },
+        { name: "Chips & Guacamole", category: "Sides", price_text: "$5.50", readable: true },
+        { name: "Horchata", category: "Drinks", price_text: "$3.75", readable: true },
+      ];
+      if (/pizza|italian/i.test(cat)) return [
+        { name: "Margherita Pizza", category: "Pizza", price_text: "$14.00", readable: true },
+        { name: "Pepperoni Pizza", category: "Pizza", price_text: "$15.00", readable: true },
+        { name: "Caesar Salad", category: "Salads", price_text: "$9.50", readable: true },
+        { name: "Garlic Knots", category: "Sides", price_text: "$6.00", readable: true },
+        { name: "Tiramisu", category: "Dessert", price_text: "$8.00", readable: true },
+        { name: "Italian Soda", category: "Drinks", price_text: "$4.00", readable: true },
+      ];
+      if (/juice|smoothie|acai/i.test(cat)) return [
+        { name: "Green Machine Smoothie", category: "Smoothies", price_text: "$8.50", readable: true },
+        { name: "Acai Bowl", category: "Bowls", price_text: "$12.00", readable: true },
+        { name: "Fresh Orange Juice", category: "Juices", price_text: "$6.50", readable: true },
+        { name: "Mango Pineapple Smoothie", category: "Smoothies", price_text: "$8.00", readable: true },
+        { name: "Avocado Toast", category: "Food", price_text: "$9.00", readable: true },
+        { name: "Protein Ball Pack", category: "Snacks", price_text: "$5.50", readable: true },
+      ];
+      if (/sandwich|deli|sub/i.test(cat)) return [
+        { name: "Turkey Club", category: "Sandwiches", price_text: "$10.50", readable: true },
+        { name: "Caprese Panini", category: "Sandwiches", price_text: "$9.75", readable: true },
+        { name: "Chicken Salad Wrap", category: "Wraps", price_text: "$9.00", readable: true },
+        { name: "Tomato Basil Soup", category: "Soups", price_text: "$5.50", readable: true },
+        { name: "Garden Salad", category: "Salads", price_text: "$7.50", readable: true },
+        { name: "Iced Tea", category: "Drinks", price_text: "$3.00", readable: true },
+      ];
+      // Default: coffee shop
+      return [
+        { name: "Oat Milk Latte", category: "Coffee", price_text: "$6.50", readable: true },
+        { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", readable: true },
+        { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "$5.75", readable: true },
+        { name: "Matcha Latte", category: "Tea", price_text: "$6.00", readable: true },
+        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
+        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
+      ];
+    }
+
+    // Demo account: return category-appropriate sample menu
     const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
     if (isDemoUserEmail(user.email) && !demoWantsLive) {
       const ms = 700 + Math.floor(Math.random() * 500);
       await new Promise((r) => setTimeout(r, ms));
+      const items = sampleMenuForCategory(bizCategory);
       return new Response(
-        JSON.stringify({
-          ok: true,
-          items: [
-            { name: "Oat Milk Latte", category: "Coffee", price_text: "$6.50", readable: true },
-            { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", readable: true },
-            { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "$5.75", readable: true },
-            { name: "Matcha Latte", category: "Tea", price_text: "$6.00", readable: true },
-            { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
-            { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
-          ],
-          low_legibility: false,
-          menu_notes: "6 items extracted. All prices clearly legible.",
-        }),
+        JSON.stringify({ ok: true, items, low_legibility: false, menu_notes: `${items.length} items extracted. All prices clearly legible.` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -189,26 +234,17 @@ serve(async (req) => {
     if (!openAiKey) {
       const ms = 700 + Math.floor(Math.random() * 500);
       await new Promise((r) => setTimeout(r, ms));
+      const items = sampleMenuForCategory(bizCategory);
       return new Response(
-        JSON.stringify({
-          ok: true,
-          items: [
-            { name: "Oat Milk Latte", category: "Coffee", price_text: "$6.50", readable: true },
-            { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", readable: true },
-            { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "$5.75", readable: true },
-            { name: "Matcha Latte", category: "Tea", price_text: "$6.00", readable: true },
-            { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
-            { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
-          ],
-          low_legibility: false,
-          menu_notes: "6 items extracted. All prices clearly legible.",
-        }),
+        JSON.stringify({ ok: true, items, low_legibility: false, menu_notes: `${items.length} items extracted. All prices clearly legible.` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
+    const bizCategoryLabel = ((biz as { category?: string }).category ?? "").trim() || "local business";
     const instructionText = [
-      "You extract menu line items from the attached menu image for a small local cafe app.",
+      `You extract menu line items from the attached menu image for a ${bizCategoryLabel} on a local deals app.`,
+      "",
       "Rules:",
       "- Only include items whose text is clearly readable in the image. Set readable=true only for legible lines.",
       "- Do NOT invent dishes, prices, or items not visible. Prefer an empty items list over guessing.",
@@ -216,6 +252,7 @@ serve(async (req) => {
       "- price_text = price as printed (e.g. $4.50) or empty if none on that line.",
       "- If the image is blurry or mostly unreadable, set low_legibility=true and keep items minimal.",
       "- menu_notes: brief note for the owner (e.g. 'corner cropped') or empty string.",
+      "- Extract EVERY distinct item you can read — the owner will select which ones to use for deals.",
     ].join("\n");
 
     const menuSchema = {
