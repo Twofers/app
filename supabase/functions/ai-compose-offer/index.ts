@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
@@ -9,8 +10,8 @@ const corsHeaders = {
 };
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
-const DEFAULT_MONTHLY = Number(Deno.env.get("AI_MONTHLY_LIMIT") ?? "30");
-const DEFAULT_COOLDOWN_SEC = Number(Deno.env.get("AI_COOLDOWN_SECONDS") ?? "60");
+const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
+const DEFAULT_COOLDOWN_SEC = SHARED_COOLDOWN;
 const DEFAULT_DEDUP_SEC = Number(Deno.env.get("AI_DEDUP_WINDOW_SECONDS") ?? "600");
 
 /** Compose + vision JSON uses OPENAI_MODEL from Edge secrets (allowlisted in _shared). */
@@ -417,6 +418,7 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       } catch (e) {
+        console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error", err: String(e) }));
         return new Response(
           JSON.stringify({
             error: e instanceof Error ? e.message : "Voice transcription failed.",
@@ -907,6 +909,7 @@ serve(async (req) => {
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", err: msg }));
     return new Response(
       JSON.stringify({ error: msg || "Unexpected error", error_code: "INTERNAL" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

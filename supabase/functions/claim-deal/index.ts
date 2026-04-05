@@ -225,6 +225,16 @@ serve(async (req) => {
       );
     }
 
+    if (!deal.end_time) {
+      return new Response(
+        JSON.stringify({ error: "Deal is misconfigured (missing end time)" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const now = new Date();
     const startTime = deal.start_time ? new Date(deal.start_time) : null;
     const endTime = new Date(deal.end_time);

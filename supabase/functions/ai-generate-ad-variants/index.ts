@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
 
 const corsHeaders = {
@@ -32,8 +33,8 @@ type AdsResult = { ads: AdVariant[] };
 const LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
 
 const CHAT_MODEL = resolveOpenAiChatModel();
-const DEFAULT_MONTHLY = Number(Deno.env.get("AI_MONTHLY_LIMIT") ?? "30");
-const COOLDOWN_SEC = Number(Deno.env.get("AI_COOLDOWN_SECONDS") ?? "60");
+const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
+const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
 
 function utcMonthStartIso(): string {
   const d = new Date();
