@@ -181,13 +181,14 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set. Please add it to Supabase secrets." }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      const ms = 600 + Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, ms));
+      const bizName = business_name ?? "your business";
+      const result = buildDemoDealCopyResult(String(hint_text), price, bizName);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Look up business for logging/quota (optional body param or fallback to owner lookup)

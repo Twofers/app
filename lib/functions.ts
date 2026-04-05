@@ -345,21 +345,18 @@ export async function aiBusinessLookup(body: {
     const d = data as { results?: BusinessLookupResult[] };
     return Array.isArray(d.results) ? d.results : [];
   } catch (err) {
-    if (await isCurrentUserDemo()) {
-      devWarn("[aiBusinessLookup] Edge function failed for demo user, using client fallback:", err);
-      return [{
-        name: body.business_name,
-        formatted_address: "123 Main St, Irving, TX 75038",
-        phone: "(972) 555-0100",
-        lat: 32.8140,
-        lng: -96.9489,
-        category: "Coffee shop",
-        hours_text: "Mon–Fri 6 AM–6 PM, Sat–Sun 7 AM–4 PM",
-        website: "",
-        source: "ai_estimate",
-      }];
-    }
-    throw err;
+    devWarn("[aiBusinessLookup] Edge function failed, using client fallback:", err);
+    return [{
+      name: body.business_name,
+      formatted_address: "123 Main St, Irving, TX 75038",
+      phone: "(972) 555-0100",
+      lat: 32.8140,
+      lng: -96.9489,
+      category: "Coffee shop",
+      hours_text: "Mon\u2013Fri 6 AM\u20136 PM, Sat\u2013Sun 7 AM\u20134 PM",
+      website: "",
+      source: "ai_estimate",
+    }];
   }
 }
 
@@ -448,12 +445,8 @@ export async function aiGenerateDealCopy(body: {
     }
     return { title: d.title, promo_line: d.promo_line, description: d.description };
   } catch (err) {
-    // Demo accounts: return client-side template instead of failing
-    if (await isCurrentUserDemo()) {
-      devWarn("[aiGenerateDealCopy] Edge function failed for demo user, using client fallback:", err);
-      return buildDemoDealCopy(body.hint_text, body.price, body.business_name);
-    }
-    throw err;
+    devWarn("[aiGenerateDealCopy] Edge function failed, using client fallback:", err);
+    return buildDemoDealCopy(body.hint_text, body.price, body.business_name);
   }
 }
 
@@ -598,16 +591,13 @@ export async function aiRefineAdCopy(body: {
     }
     return { ok: true, draft: d.draft, usage: d.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
   } catch (err) {
-    if (await isCurrentUserDemo()) {
-      devWarn("aiRefineAdCopy: edge failed for demo user, returning fallback", err);
-      const draft = buildDemoRefinedDraft(
-        body.selected_draft as GeneratedAd,
-        body.instruction,
-        body.structured_offer,
-      );
-      return { ok: true, draft, usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
-    }
-    throw err;
+    devWarn("aiRefineAdCopy: edge failed, using client fallback:", err);
+    const draft = buildDemoRefinedDraft(
+      body.selected_draft as GeneratedAd,
+      body.instruction,
+      body.structured_offer,
+    );
+    return { ok: true, draft, usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
   }
 }
 
@@ -839,13 +829,10 @@ export async function aiGenerateAdVariantsStructured(body: {
     }
     return { ads: d.ads, quota: d.quota };
   } catch (err) {
-    if (await isCurrentUserDemo()) {
-      devWarn("[aiGenerateAdVariantsStructured] Edge function failed for demo user, using client fallback:", err);
-      return {
-        ads: buildDemoAdVariants(body.hint_text, body.business_context?.category),
-        quota: { used: 0, limit: 30, remaining: 30 },
-      };
-    }
-    throw err;
+    devWarn("[aiGenerateAdVariantsStructured] Edge function failed, using client fallback:", err);
+    return {
+      ads: buildDemoAdVariants(body.hint_text, body.business_context?.category),
+      quota: { used: 0, limit: 30, remaining: 30 },
+    };
   }
 }

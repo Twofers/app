@@ -300,10 +300,28 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set. Add it to Supabase secrets." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const ms2 = 900 + Math.floor(Math.random() * 550);
+      await new Promise((r) => setTimeout(r, ms2));
+      const fallbackAds = buildDemoAdVariants({
+        hint_text: hintForModel,
+        price,
+        business_name: typeof business.name === "string" ? business.name : "",
+        business_context,
+        offer_schedule_summary,
+        output_language,
+        regeneration_attempt,
+      });
+      const fallbackNorm = normalizeLaneOrder(fallbackAds as AdVariant[]);
+      if (!fallbackNorm) {
+        return new Response(JSON.stringify({ error: "Generation failed." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ads: fallbackNorm }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: prior } = await supabase

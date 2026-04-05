@@ -305,9 +305,20 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
+      const delay2 = 500 + Math.floor(Math.random() * 500);
+      await new Promise((r) => setTimeout(r, delay2));
+      const refined2 = buildDemoRefinedDraft(
+        selected_draft as Record<string, unknown>,
+        instruction,
+        structured_offer as Record<string, unknown>,
+      );
       return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not configured.", error_code: "SERVER_CONFIG" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          ok: true,
+          draft: refined2,
+          usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

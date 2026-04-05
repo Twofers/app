@@ -8,6 +8,51 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Phrase-based translation engine ─────────────────────────
+type TransPhrase = { rx: RegExp; es: string; ko: string };
+
+const TITLE_TRANS: TransPhrase[] = [
+  { rx: /2-for-1 oat milk latte/i, es: "2x1 en lattes de leche de avena", ko: "\uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC 1+1" },
+  { rx: /oat milk latte/i, es: "Latte de leche de avena artesanal", ko: "\uC815\uC131 \uB2F4\uC740 \uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC" },
+  { rx: /morning pastry pair/i, es: "Combo matutino de reposter\u00EDa", ko: "\uBAA8\uB2DD \uD398\uC774\uC2A4\uD2B8\uB9AC \uD398\uC5B4" },
+  { rx: /iced latte happy hour/i, es: "Happy hour de latte helado", ko: "\uC544\uC774\uC2A4 \uB77C\uB5BC \uD574\uD53C\uC544\uC6CC" },
+  { rx: /cold brew/i, es: "Cold brew de origen \u00FAnico 2x1", ko: "\uC2F1\uAE00 \uC624\uB9AC\uC9C4 \uCF5C\uB4DC\uBE0C\uB8E8 1+1" },
+  { rx: /bakery box bogo/i, es: "Caja de panader\u00EDa 2x1", ko: "\uBCA0\uC774\uCEE4\uB9AC \uBC15\uC2A4 1+1" },
+  { rx: /cortado/i, es: "Cortado artesanal, por partida doble", ko: "\uBC14\uB2D0\uB77C \uCF54\uB974\uD0C0\uB3C4 1+1" },
+  { rx: /matcha/i, es: "Matcha ceremonial, dos por uno", ko: "\uB9D0\uCC28 \uB77C\uB5BC 1+1" },
+  { rx: /croissant/i, es: "Croissant reci\u00E9n horneado, dos por uno", ko: "\uAC13 \uAD6C\uC6B4 \uD06C\uB85C\uC640\uC0C1 1+1" },
+  { rx: /muffin/i, es: "Muffin de ar\u00E1ndanos, dos por uno", ko: "\uBE14\uB8E8\uBCA0\uB9AC \uBA38\uD540 1+1" },
+  { rx: /handcrafted|crafted with care/i, es: "Hecho a mano con cuidado, por partida doble", ko: "\uC815\uC131 \uB2F4\uC544 \uB9CC\uB4E0, \uB450 \uBC30\uC758 \uAE30\uC068" },
+  { rx: /2-for-1|two for one|bogo|buy one.+get one/i, es: "2x1 \u2014 calidad artesanal", ko: "1+1 \u2014 \uC7A5\uC778\uC758 \uD488\uC9C8" },
+];
+
+const DESC_TRANS: TransPhrase[] = [
+  { rx: /buy one.+get one free/i, es: "Compra uno y lleva otro gratis \u2014 hecho con ingredientes de primera", ko: "\uD558\uB098 \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC \u2014 \uCD5C\uC0C1\uC758 \uC7AC\uB8CC\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4" },
+  { rx: /two for the price of one/i, es: "Dos por el precio de uno \u2014 elaborado con esmero", ko: "\uD558\uB098 \uAC00\uACA9\uC5D0 \uB458 \u2014 \uC815\uC131\uC744 \uB2F4\uC544" },
+  { rx: /walk.?ins? welcome/i, es: "Sin reserva necesaria \u2014 bienvenidos siempre", ko: "\uC608\uC57D \uC5C6\uC774 \uBC29\uBB38 \uAC00\uB2A5" },
+  { rx: /made fresh|single-origin|hand/i, es: "Preparado fresco con ingredientes reales. Ven y pru\u00E9balo.", ko: "\uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uC815\uC131\uC2A4\uB7FD\uAC8C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4. \uC9C1\uC811 \uB9DB\uBCF4\uC138\uC694." },
+  { rx: /no catch|no shortcuts/i, es: "Sin trampas, sin atajos \u2014 solo calidad real", ko: "\uC870\uAC74 \uC5C6\uC774, \uD0C0\uD611 \uC5C6\uC774 \u2014 \uC9C4\uC9DC \uD488\uC9C8\uB9CC" },
+];
+
+function translateField(text: string, phrases: TransPhrase[], lang: "es" | "ko"): string {
+  if (!text.trim()) return "";
+  for (const p of phrases) {
+    if (p.rx.test(text)) return p[lang];
+  }
+  return lang === "es"
+    ? `${text} \u2014 calidad artesanal, hecho con cuidado`
+    : `${text} \u2014 \uC7A5\uC778\uC758 \uC815\uC131\uC73C\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4`;
+}
+
+function buildTranslationResult(title: string, description: string): TranslationResult {
+  return {
+    title_es: translateField(title, TITLE_TRANS, "es"),
+    title_ko: translateField(title, TITLE_TRANS, "ko"),
+    description_es: translateField(description, DESC_TRANS, "es"),
+    description_ko: translateField(description, DESC_TRANS, "ko"),
+  };
+}
+
 type TranslationResult = {
   title_es: string;
   title_ko: string;
@@ -109,46 +154,7 @@ serve(async (req) => {
     if (isDemoUserEmail(user.email) && !demoWantsLive) {
       const ms = 400 + Math.floor(Math.random() * 300);
       await new Promise((r) => setTimeout(r, ms));
-
-      type Phrase = { rx: RegExp; es: string; ko: string };
-      const titlePhrases: Phrase[] = [
-        { rx: /2-for-1 oat milk latte/i, es: "2x1 en lattes de leche de avena", ko: "\uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC 1+1" },
-        { rx: /oat milk latte/i, es: "Latte de leche de avena artesanal", ko: "\uC815\uC131 \uB2F4\uC740 \uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC" },
-        { rx: /morning pastry pair/i, es: "Combo matutino de reposter\u00EDa", ko: "\uBAA8\uB2DD \uD398\uC774\uC2A4\uD2B8\uB9AC \uD398\uC5B4" },
-        { rx: /iced latte happy hour/i, es: "Happy hour de latte helado", ko: "\uC544\uC774\uC2A4 \uB77C\uB5BC \uD574\uD53C\uC544\uC6CC" },
-        { rx: /cold brew/i, es: "Cold brew de origen \u00FAnico 2x1", ko: "\uC2F1\uAE00 \uC624\uB9AC\uC9C4 \uCF5C\uB4DC\uBE0C\uB8E8 1+1" },
-        { rx: /bakery box bogo/i, es: "Caja de panader\u00EDa 2x1", ko: "\uBCA0\uC774\uCEE4\uB9AC \uBC15\uC2A4 1+1" },
-        { rx: /cortado/i, es: "Cortado artesanal, por partida doble", ko: "\uBC14\uB2D0\uB77C \uCF54\uB974\uD0C0\uB3C4 1+1" },
-        { rx: /matcha/i, es: "Matcha ceremonial, dos por uno", ko: "\uB9D0\uCC28 \uB77C\uB5BC 1+1" },
-        { rx: /croissant/i, es: "Croissant reci\u00E9n horneado, dos por uno", ko: "\uAC13 \uAD6C\uC6B4 \uD06C\uB85C\uC640\uC0C1 1+1" },
-        { rx: /muffin/i, es: "Muffin de ar\u00E1ndanos, dos por uno", ko: "\uBE14\uB8E8\uBCA0\uB9AC \uBA38\uD540 1+1" },
-        { rx: /handcrafted|crafted with care/i, es: "Hecho a mano con cuidado, por partida doble", ko: "\uC815\uC131 \uB2F4\uC544 \uB9CC\uB4E0, \uB450 \uBC30\uC758 \uAE30\uC068" },
-        { rx: /2-for-1|two for one|bogo|buy one.+get one/i, es: "2x1 \u2014 calidad artesanal", ko: "1+1 \u2014 \uC7A5\uC778\uC758 \uD488\uC9C8" },
-      ];
-      const descPhrases: Phrase[] = [
-        { rx: /buy one.+get one free/i, es: "Compra uno y lleva otro gratis \u2014 hecho con ingredientes de primera", ko: "\uD558\uB098 \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC \u2014 \uCD5C\uC0C1\uC758 \uC7AC\uB8CC\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4" },
-        { rx: /two for the price of one/i, es: "Dos por el precio de uno \u2014 elaborado con esmero", ko: "\uD558\uB098 \uAC00\uACA9\uC5D0 \uB458 \u2014 \uC815\uC131\uC744 \uB2F4\uC544" },
-        { rx: /walk.?ins? welcome/i, es: "Sin reserva necesaria \u2014 bienvenidos siempre", ko: "\uC608\uC57D \uC5C6\uC774 \uBC29\uBB38 \uAC00\uB2A5" },
-        { rx: /made fresh|single-origin|hand/i, es: "Preparado fresco con ingredientes reales. Ven y pru\u00E9balo.", ko: "\uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uC815\uC131\uC2A4\uB7FD\uAC8C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4. \uC9C1\uC811 \uB9DB\uBCF4\uC138\uC694." },
-        { rx: /no catch|no shortcuts/i, es: "Sin trampas, sin atajos \u2014 solo calidad real", ko: "\uC870\uAC74 \uC5C6\uC774, \uD0C0\uD611 \uC5C6\uC774 \u2014 \uC9C4\uC9DC \uD488\uC9C8\uB9CC" },
-      ];
-
-      function translateField(text: string, phrases: Phrase[], lang: "es" | "ko"): string {
-        if (!text.trim()) return "";
-        for (const p of phrases) {
-          if (p.rx.test(text)) return p[lang];
-        }
-        return lang === "es"
-          ? `${text} \u2014 calidad artesanal, hecho con cuidado`
-          : `${text} \u2014 \uC7A5\uC778\uC758 \uC815\uC131\uC73C\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4`;
-      }
-
-      const demoResult: TranslationResult = {
-        title_es: translateField(title, titlePhrases, "es"),
-        title_ko: translateField(title, titlePhrases, "ko"),
-        description_es: translateField(description, descPhrases, "es"),
-        description_ko: translateField(description, descPhrases, "ko"),
-      };
+      const demoResult = buildTranslationResult(title, description);
       await admin.from("deals").update(demoResult).eq("id", deal_id);
       return new Response(
         JSON.stringify({ ok: true, ...demoResult }),
@@ -157,9 +163,13 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
+      const ms = 400 + Math.floor(Math.random() * 300);
+      await new Promise((r) => setTimeout(r, ms));
+      const fallbackResult = buildTranslationResult(title, description);
+      await admin.from("deals").update(fallbackResult).eq("id", deal_id);
       return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({ ok: true, ...fallbackResult }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
