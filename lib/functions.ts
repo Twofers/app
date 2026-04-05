@@ -1,9 +1,29 @@
 import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { devWarn } from "@/lib/dev-log";
-import type { BusinessContextPayload, GeneratedAd } from "./ad-variants";
+import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
+import type { BusinessContextPayload, CreativeLane, GeneratedAd } from "./ad-variants";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+
+// ── Client-side demo session helper ──────────────────────────
+let _cachedDemoEmail: string | null | undefined;
+
+async function isCurrentUserDemo(): Promise<boolean> {
+  if (_cachedDemoEmail !== undefined) return isDemoPreviewAccountEmail(_cachedDemoEmail);
+  try {
+    const { data } = await supabase.auth.getUser();
+    _cachedDemoEmail = data?.user?.email ?? null;
+  } catch {
+    _cachedDemoEmail = null;
+  }
+  return isDemoPreviewAccountEmail(_cachedDemoEmail);
+}
+
+/** Invalidate cached demo status (call on sign-out). */
+export function clearDemoEmailCache() {
+  _cachedDemoEmail = undefined;
+}
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = 45_000;
@@ -306,23 +326,41 @@ export async function aiBusinessLookup(body: {
   lat?: number | null;
   lng?: number | null;
 }): Promise<BusinessLookupResult[]> {
-  const { data, error } = await supabase.functions.invoke("ai-business-lookup", {
-    body: {
-      business_name: body.business_name,
-      lat: body.lat ?? undefined,
-      lng: body.lng ?? undefined,
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-business-lookup", {
+      body: {
+        business_name: body.business_name,
+        lat: body.lat ?? undefined,
+        lng: body.lng ?? undefined,
+      },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
 
-  if (error) {
-    throw new Error(parseFunctionError(error));
+    if (error) {
+      throw new Error(parseFunctionError(error));
+    }
+    if (data && typeof data === "object" && "error" in data) {
+      throw new Error(String((data as { error?: string }).error ?? "Lookup failed"));
+    }
+    const d = data as { results?: BusinessLookupResult[] };
+    return Array.isArray(d.results) ? d.results : [];
+  } catch (err) {
+    if (await isCurrentUserDemo()) {
+      devWarn("[aiBusinessLookup] Edge function failed for demo user, using client fallback:", err);
+      return [{
+        name: body.business_name,
+        formatted_address: "123 Main St, Irving, TX 75038",
+        phone: "(972) 555-0100",
+        lat: 32.8140,
+        lng: -96.9489,
+        category: "Coffee shop",
+        hours_text: "Mon–Fri 6 AM–6 PM, Sat–Sun 7 AM–4 PM",
+        website: "",
+        source: "ai_estimate",
+      }];
+    }
+    throw err;
   }
-  if (data && typeof data === "object" && "error" in data) {
-    throw new Error(String((data as { error?: string }).error ?? "Lookup failed"));
-  }
-  const d = data as { results?: BusinessLookupResult[] };
-  return Array.isArray(d.results) ? d.results : [];
 }
 
 /**
@@ -349,6 +387,17 @@ export type AiDealCopyResult = {
   description: string;
 };
 
+/** Client-side demo fallback for deal copy generation. */
+function buildDemoDealCopy(hint: string, price?: number | null, bizName?: string | null): AiDealCopyResult {
+  const biz = bizName ?? "Local business";
+  const priceBit = price != null ? ` ($${price})` : "";
+  return {
+    title: `BOGO ${hint.slice(0, 30)}${priceBit}`.slice(0, 50),
+    promo_line: `Buy one, get one free at ${biz}`.slice(0, 60),
+    description: `Grab a friend and enjoy ${hint.slice(0, 60)} — two for the price of one at ${biz}. Walk-ins welcome!`.slice(0, 160),
+  };
+}
+
 /** Text-only GPT deal copy (Edge: `ai-generate-deal-copy`). Does not write to the database. */
 export async function aiGenerateDealCopy(body: {
   hint_text: string;
@@ -356,27 +405,36 @@ export async function aiGenerateDealCopy(body: {
   business_name?: string | null;
   business_id?: string | null;
 }): Promise<AiDealCopyResult> {
-  const { data, error } = await supabase.functions.invoke("ai-generate-deal-copy", {
-    body: {
-      hint_text: body.hint_text,
-      price: body.price ?? undefined,
-      business_name: body.business_name ?? undefined,
-      business_id: body.business_id ?? undefined,
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-generate-deal-copy", {
+      body: {
+        hint_text: body.hint_text,
+        price: body.price ?? undefined,
+        business_name: body.business_name ?? undefined,
+        business_id: body.business_id ?? undefined,
+      },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
 
-  if (error) {
-    throw new Error(parseFunctionError(error));
+    if (error) {
+      throw new Error(parseFunctionError(error));
+    }
+    if (data && typeof data === "object" && "error" in data) {
+      throw new Error(String((data as { error?: string }).error ?? "Server returned an error"));
+    }
+    const d = data as Partial<AiDealCopyResult>;
+    if (typeof d.title !== "string" || typeof d.promo_line !== "string" || typeof d.description !== "string") {
+      throw new Error("Unexpected response from ai-generate-deal-copy.");
+    }
+    return { title: d.title, promo_line: d.promo_line, description: d.description };
+  } catch (err) {
+    // Demo accounts: return client-side template instead of failing
+    if (await isCurrentUserDemo()) {
+      devWarn("[aiGenerateDealCopy] Edge function failed for demo user, using client fallback:", err);
+      return buildDemoDealCopy(body.hint_text, body.price, body.business_name);
+    }
+    throw err;
   }
-  if (data && typeof data === "object" && "error" in data) {
-    throw new Error(String((data as { error?: string }).error ?? "Server returned an error"));
-  }
-  const d = data as Partial<AiDealCopyResult>;
-  if (typeof d.title !== "string" || typeof d.promo_line !== "string" || typeof d.description !== "string") {
-    throw new Error("Unexpected response from ai-generate-deal-copy.");
-  }
-  return { title: d.title, promo_line: d.promo_line, description: d.description };
 }
 
 export type AiCreateDealResult = {
@@ -522,6 +580,40 @@ export async function aiRefineAdCopy(body: {
 
 export type AdVariantsQuota = { used: number; limit: number; remaining: number };
 
+/** Client-side demo fallback for ad variants. */
+function buildDemoAdVariants(hint: string, bizName?: string): GeneratedAd[] {
+  const biz = bizName ?? "Local business";
+  return [
+    {
+      creative_lane: "value" as CreativeLane,
+      headline: `BOGO at ${biz}`.slice(0, 50),
+      subheadline: `${hint.slice(0, 40)} — buy one, get one free`,
+      cta: "Grab Yours Today",
+      style_label: "Value",
+      rationale: "Clear savings message",
+      visual_direction: "Bold price-led design",
+    },
+    {
+      creative_lane: "neighborhood" as CreativeLane,
+      headline: `Your Neighbors Love ${biz}`.slice(0, 50),
+      subheadline: `Come try ${hint.slice(0, 40)} and bring a friend`,
+      cta: "Visit Us",
+      style_label: "Community",
+      rationale: "Local community tone",
+      visual_direction: "Warm, inviting neighborhood feel",
+    },
+    {
+      creative_lane: "premium" as CreativeLane,
+      headline: `Crafted with Care at ${biz}`.slice(0, 50),
+      subheadline: `Two for one — ${hint.slice(0, 40)}`,
+      cta: "Discover the Difference",
+      style_label: "Premium",
+      rationale: "Quality-focused messaging",
+      visual_direction: "Clean, refined aesthetic",
+    },
+  ];
+}
+
 /** Three ad lanes from structured offer (optional photo). Edge: `ai-generate-ad-variants`. */
 export async function aiGenerateAdVariantsStructured(body: {
   business_id: string;
@@ -534,27 +626,38 @@ export async function aiGenerateAdVariantsStructured(body: {
   regeneration_attempt?: number;
   offer_schedule_summary?: string;
 }): Promise<{ ads: GeneratedAd[]; quota?: AdVariantsQuota }> {
-  const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
-    body: {
-      business_id: body.business_id,
-      structured_offer: body.structured_offer,
-      hint_text: body.hint_text,
-      business_context: body.business_context,
-      output_language: body.output_language,
-      regeneration_attempt: body.regeneration_attempt ?? 0,
-      ...(body.photo_path ? { photo_path: body.photo_path } : {}),
-      ...(body.price != null ? { price: body.price } : {}),
-      ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
-  if (error) {
-    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
+      body: {
+        business_id: body.business_id,
+        structured_offer: body.structured_offer,
+        hint_text: body.hint_text,
+        business_context: body.business_context,
+        output_language: body.output_language,
+        regeneration_attempt: body.regeneration_attempt ?? 0,
+        ...(body.photo_path ? { photo_path: body.photo_path } : {}),
+        ...(body.price != null ? { price: body.price } : {}),
+        ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+      },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
+    if (error) {
+      throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+    }
+    throwIfEdgeResponseError(data);
+    const d = data as { ads?: GeneratedAd[]; quota?: AdVariantsQuota };
+    if (!Array.isArray(d.ads) || d.ads.length !== 3) {
+      throw new Error("Unexpected response from ai-generate-ad-variants.");
+    }
+    return { ads: d.ads, quota: d.quota };
+  } catch (err) {
+    if (await isCurrentUserDemo()) {
+      devWarn("[aiGenerateAdVariantsStructured] Edge function failed for demo user, using client fallback:", err);
+      return {
+        ads: buildDemoAdVariants(body.hint_text, body.business_context?.category),
+        quota: { used: 0, limit: 30, remaining: 30 },
+      };
+    }
+    throw err;
   }
-  throwIfEdgeResponseError(data);
-  const d = data as { ads?: GeneratedAd[]; quota?: AdVariantsQuota };
-  if (!Array.isArray(d.ads) || d.ads.length !== 3) {
-    throw new Error("Unexpected response from ai-generate-ad-variants.");
-  }
-  return { ads: d.ads, quota: d.quota };
 }

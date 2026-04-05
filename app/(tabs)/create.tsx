@@ -199,8 +199,13 @@ export default function CreateDeal() {
                         fromCreateHub: "1",
                       },
                     });
-                  } catch (_err) {
-                    setBanner({ message: t("createHub.errAiCreateFailed"), tone: "error" });
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : "";
+                    const isNetwork = msg.includes("Network") || msg.includes("timed out") || msg.includes("fetch");
+                    const friendly = isNetwork
+                      ? t("createHub.errAiNetwork", { defaultValue: "Network error — check your connection and try again." })
+                      : msg || t("createHub.errAiCreateFailed");
+                    setBanner({ message: friendly, tone: "error" });
                   } finally {
                     setAiLoading(false);
                   }

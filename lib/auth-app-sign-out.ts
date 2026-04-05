@@ -1,6 +1,7 @@
 import type { Href } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { removePushTokensForUser } from "@/lib/push-token";
+import { clearDemoEmailCache } from "@/lib/functions";
 import type { TabMode } from "@/lib/tab-mode";
 
 /**
@@ -30,6 +31,7 @@ export async function signOutAndRedirectToAuthLanding(params: {
     await setTabMode("customer").catch(() => {});
 
     // This is the critical step — always attempt sign-out
+    clearDemoEmailCache();
     await supabase.auth.signOut();
     replace("/auth-landing" as Href);
     return { ok: true };

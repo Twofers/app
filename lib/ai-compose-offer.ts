@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 import { EDGE_FUNCTION_TIMEOUT_AI_MS, parseFunctionError } from "./functions";
+import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
+import { devWarn } from "@/lib/dev-log";
 
 export type AiComposeQuota = {
   used: number;
@@ -94,6 +96,49 @@ export async function aiComposeOfferTranscribe(body: {
   return { transcript: d.transcript };
 }
 
+/** Client-side demo fallback for compose offer. */
+function buildDemoComposeResult(prompt?: string): AiComposeSuccess {
+  const hint = prompt?.slice(0, 40) ?? "deal";
+  return {
+    ok: true,
+    result: {
+      input_type: "text",
+      detected_items: [hint],
+      confidence: 0.95,
+      recommendation_reason: "Demo mode — template response",
+      recommended_offer: {
+        offer_type: "BOGO",
+        item_name: hint,
+        display_offer: `Buy one ${hint}, get one free`,
+      },
+      ad_variants: [
+        {
+          variant_id: "demo-v1",
+          headline_en: `BOGO ${hint}`, subheadline_en: "Buy one, get one free", cta_en: "Grab Yours",
+          headline_es: `BOGO ${hint}`, subheadline_es: "Compra uno, lleva otro gratis", cta_es: "Aprovecha",
+          headline_ko: `BOGO ${hint}`, subheadline_ko: "하나 사면 하나 무료", cta_ko: "지금 바로",
+          style_label: "Value", rationale: "Clear savings", visual_direction: "Bold",
+        },
+        {
+          variant_id: "demo-v2",
+          headline_en: `Neighbors Love This ${hint}`, subheadline_en: "Bring a friend", cta_en: "Visit Us",
+          headline_es: `Los vecinos aman ${hint}`, subheadline_es: "Trae a un amigo", cta_es: "Visítanos",
+          headline_ko: `이웃이 사랑하는 ${hint}`, subheadline_ko: "친구와 함께", cta_ko: "방문하기",
+          style_label: "Community", rationale: "Local feel", visual_direction: "Warm",
+        },
+        {
+          variant_id: "demo-v3",
+          headline_en: `Crafted ${hint}`, subheadline_en: "Two for one, made with care", cta_en: "Discover",
+          headline_es: `${hint} artesanal`, subheadline_es: "Dos por uno, hecho con cariño", cta_es: "Descubrir",
+          headline_ko: `정성 가득 ${hint}`, subheadline_ko: "투포원 특별 혜택", cta_ko: "알아보기",
+          style_label: "Premium", rationale: "Quality focus", visual_direction: "Clean",
+        },
+      ],
+    },
+    quota: { used: 0, limit: 30, remaining: 30 },
+  };
+}
+
 export async function aiComposeOfferGenerate(body: {
   business_id: string;
   prompt_text?: string;
@@ -101,40 +146,50 @@ export async function aiComposeOfferGenerate(body: {
   /** When true and request is text-only, edge function generates a poster via OpenAI Images and uploads it. */
   generate_poster_image?: boolean;
 }): Promise<AiComposeSuccess> {
-  const { data, error } = await supabase.functions.invoke("ai-compose-offer", {
-    body: {
-      business_id: body.business_id,
-      prompt_text: body.prompt_text?.trim() || undefined,
-      image_base64: body.image_base64,
-      generate_poster_image: body.generate_poster_image === true,
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-compose-offer", {
+      body: {
+        business_id: body.business_id,
+        prompt_text: body.prompt_text?.trim() || undefined,
+        image_base64: body.image_base64,
+        generate_poster_image: body.generate_poster_image === true,
+      },
+      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+    });
 
-  if (error) {
-    const e = new Error(parseFunctionError(error)) as Error & { code?: string; quota?: AiComposeQuota };
-    const ctx = (error as { context?: { body?: unknown } }).context;
-    attachComposeErrorMeta(e, ctx?.body);
-    try {
-      const parsed = JSON.parse(String((error as { message?: string }).message ?? ""));
-      attachComposeErrorMeta(e, parsed);
-    } catch {
-      /* ignore */
+    if (error) {
+      const e = new Error(parseFunctionError(error)) as Error & { code?: string; quota?: AiComposeQuota };
+      const ctx = (error as { context?: { body?: unknown } }).context;
+      attachComposeErrorMeta(e, ctx?.body);
+      try {
+        const parsed = JSON.parse(String((error as { message?: string }).message ?? ""));
+        attachComposeErrorMeta(e, parsed);
+      } catch {
+        /* ignore */
+      }
+      throw e;
     }
-    throw e;
-  }
 
-  const d = data as AiComposeSuccess & AiComposeErrorBody;
-  if (d && typeof d === "object" && "error" in d && d.error) {
-    const err = new Error(d.error) as Error & { code?: string; quota?: AiComposeQuota };
-    err.code = d.error_code;
-    err.quota = d.quota;
+    const d = data as AiComposeSuccess & AiComposeErrorBody;
+    if (d && typeof d === "object" && "error" in d && d.error) {
+      const err = new Error(d.error) as Error & { code?: string; quota?: AiComposeQuota };
+      err.code = d.error_code;
+      err.quota = d.quota;
+      throw err;
+    }
+    if (!d?.ok || !d.result?.recommended_offer || !Array.isArray(d.result.ad_variants)) {
+      throw new Error("Unexpected AI compose response.");
+    }
+    return d as AiComposeSuccess;
+  } catch (err) {
+    // Demo accounts: return client-side template instead of failing
+    const { data } = await supabase.auth.getUser();
+    if (isDemoPreviewAccountEmail(data?.user?.email)) {
+      devWarn("[aiComposeOfferGenerate] Edge function failed for demo user, using client fallback:", err);
+      return buildDemoComposeResult(body.prompt_text);
+    }
     throw err;
   }
-  if (!d?.ok || !d.result?.recommended_offer || !Array.isArray(d.result.ad_variants)) {
-    throw new Error("Unexpected AI compose response.");
-  }
-  return d as AiComposeSuccess;
 }
 
 export async function fetchAiComposeQuota(businessId: string): Promise<AiComposeQuota | null> {

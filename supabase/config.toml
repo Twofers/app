@@ -385,7 +385,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.claim-deal]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/claim-deal/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -396,7 +396,7 @@ entrypoint = "./functions/claim-deal/index.ts"
 
 [functions.redeem-token]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/redeem-token/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -407,69 +407,69 @@ entrypoint = "./functions/redeem-token/index.ts"
 
 [functions.ai-create-deal]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-create-deal/deno.json"
 entrypoint = "./functions/ai-create-deal/index.ts"
 
 [functions.ai-generate-deal-copy]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-generate-deal-copy/deno.json"
 entrypoint = "./functions/ai-generate-deal-copy/index.ts"
 
 [functions.ai-generate-ad-variants]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-generate-ad-variants/deno.json"
 entrypoint = "./functions/ai-generate-ad-variants/index.ts"
 
 [functions.ai-compose-offer]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-compose-offer/deno.json"
 entrypoint = "./functions/ai-compose-offer/index.ts"
 
 [functions.ai-extract-menu]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-extract-menu/deno.json"
 entrypoint = "./functions/ai-extract-menu/index.ts"
 
 [functions.ai-refine-ad-copy]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/ai-refine-ad-copy/deno.json"
 entrypoint = "./functions/ai-refine-ad-copy/index.ts"
 
 [functions.delete-user-account]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/delete-user-account/deno.json"
 entrypoint = "./functions/delete-user-account/index.ts"
 
 [functions.ingest-analytics-event]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/ingest-analytics-event/index.ts"
 
 [functions.begin-visual-redeem]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/begin-visual-redeem/index.ts"
 
 [functions.complete-visual-redeem]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/complete-visual-redeem/index.ts"
 
 [functions.cancel-visual-redeem]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/cancel-visual-redeem/index.ts"
 
 [functions.finalize-stale-redeems]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/finalize-stale-redeems/deno.json"
 entrypoint = "./functions/finalize-stale-redeems/index.ts"
 
@@ -480,5 +480,5 @@ entrypoint = "./functions/deal-link/index.ts"
 
 [functions.send-deal-push]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/send-deal-push/index.ts"
