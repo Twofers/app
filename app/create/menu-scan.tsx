@@ -85,7 +85,7 @@ export default function MenuScanScreen() {
       }
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        setBanner({ message: "Photo library access is needed to pick a menu image.", tone: "error" });
+        setBanner({ message: t("menuScan.photoPermissionDenied"), tone: "error" });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({

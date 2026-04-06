@@ -536,6 +536,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "Se necesita acceso a la galería para elegir una imagen del menú.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Omitir líneas ya guardadas",
@@ -602,7 +603,8 @@
     "errInvalidVariant": "Esta opción de anuncio no está disponible. Vuelve y abre Refinar de nuevo desde la pantalla de oferta del menú.",
     "goBack": "Volver",
     "promoLineLabel": "Línea promocional",
-    "bodyCopyLabel": "Detalles"
+    "bodyCopyLabel": "Detalles",
+    "yourEdits": "Tus ediciones"
   },
   "aiCompose": {
     "title": "Oferta con IA",

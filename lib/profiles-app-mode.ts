@@ -30,9 +30,9 @@ export async function upsertAppTabModeForUser(userId: string, mode: TabMode): Pr
     if (error) {
       // Log but don't throw — stale schema cache or missing table shouldn't
       // block auth flows like sign-out or sign-in
-      console.warn("[profiles-app-mode] upsert failed:", error.message);
+      if (__DEV__) console.warn("[profiles-app-mode] upsert failed:", error.message);
     }
   } catch (e) {
-    console.warn("[profiles-app-mode] upsert exception:", e);
+    if (__DEV__) console.warn("[profiles-app-mode] upsert exception:", e);
   }
 }

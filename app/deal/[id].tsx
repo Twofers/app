@@ -114,16 +114,18 @@ export default function DealDetail() {
   }, [loadDeal, authLoading, isLoggedIn, router]);
 
   useEffect(() => {
+    if (!userId || !deal?.business_id) return;
+    let cancelled = false;
     (async () => {
-      if (!userId || !deal?.business_id) return;
       const { data: fav } = await supabase
         .from("favorites")
         .select("business_id")
         .eq("user_id", userId)
         .eq("business_id", deal.business_id)
         .maybeSingle();
-      setIsFavorite(!!fav);
+      if (!cancelled) setIsFavorite(!!fav);
     })();
+    return () => { cancelled = true; };
   }, [userId, deal?.business_id]);
 
   // MVP open tracking: count once per loaded deal detail view.

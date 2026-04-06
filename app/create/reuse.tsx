@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useBusiness } from "@/hooks/use-business";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -54,11 +55,13 @@ export default function ReuseDealScreen() {
         .order("created_at", { ascending: false })
         .limit(25),
     ]);
-    if (tpl.error) setErr(tpl.error.message);
+    const errors: string[] = [];
+    if (tpl.error) errors.push(translateKnownApiMessage(tpl.error.message, t));
     else setTemplates((tpl.data ?? []) as TemplateRow[]);
-    if (dl.error) setErr(dl.error.message);
+    if (dl.error) errors.push(translateKnownApiMessage(dl.error.message, t));
     else setDeals((dl.data ?? []) as DealRow[]);
-  }, [businessId]);
+    if (errors.length) setErr(errors.join(" "));
+  }, [businessId, t]);
 
   useFocusEffect(
     useCallback(() => {

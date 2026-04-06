@@ -557,6 +557,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "Photo library access is needed to pick a menu image.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Skip lines already in your library",
@@ -623,7 +624,8 @@
     "errInvalidVariant": "This ad option is unavailable. Go back and open Refine from the menu offer screen again.",
     "goBack": "Go back",
     "promoLineLabel": "Promo line",
-    "bodyCopyLabel": "Details"
+    "bodyCopyLabel": "Details",
+    "yourEdits": "Your edits"
   },
   "aiCompose": {
     "title": "AI offer",

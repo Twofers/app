@@ -127,7 +127,6 @@ export default function TabLayout() {
           tabBarStyle: { backgroundColor: theme.background },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
-          detachInactiveScreens: false,
           freezeOnBlur: false,
         }}
       >

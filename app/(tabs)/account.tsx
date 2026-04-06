@@ -958,7 +958,7 @@ export default function AccountScreen() {
                         <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
                         {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
                         {r.source === "ai_estimate" && (
-                          <Text style={{ fontSize: 11, color: Colors.primary, marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
                             {t("businessSetup.aiEstimate")}
                           </Text>
                         )}

@@ -214,7 +214,7 @@ export default function BusinessSetupScreen() {
 
         {searching && (
           <View style={{ alignItems: "center", paddingVertical: Spacing.sm }}>
-            <ActivityIndicator color={Colors.primary} />
+            <ActivityIndicator color={Colors.light.primary} />
           </View>
         )}
 
@@ -232,7 +232,7 @@ export default function BusinessSetupScreen() {
                     padding: Spacing.md,
                     borderWidth: 1,
                     borderColor: Colors.light.border,
-                    ...Shadows.sm,
+                    ...Shadows.soft,
                   }}
                 >
                   <Text style={{ fontWeight: "700", fontSize: 15 }}>{r.name}</Text>
@@ -240,7 +240,7 @@ export default function BusinessSetupScreen() {
                   {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
                   {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
                   {r.source === "ai_estimate" && (
-                    <Text style={{ fontSize: 11, color: Colors.primary, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
                       {t("businessSetup.aiEstimate")}
                     </Text>
                   )}

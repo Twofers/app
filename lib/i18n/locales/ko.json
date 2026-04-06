@@ -536,6 +536,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "메뉴 이미지를 선택하려면 사진 라이브러리 접근이 필요합니다.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "라이브러리에 있는 항목은 건너뛰기",
@@ -602,7 +603,8 @@
     "errInvalidVariant": "이 광고 옵션을 사용할 수 없습니다. 메뉴 오퍼 화면에서 다시 다듬기를 열어 주세요.",
     "goBack": "돌아가기",
     "promoLineLabel": "프로모 문구",
-    "bodyCopyLabel": "상세"
+    "bodyCopyLabel": "상세",
+    "yourEdits": "수정 내역"
   },
   "aiCompose": {
     "title": "AI 오퍼",

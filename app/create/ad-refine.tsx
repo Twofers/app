@@ -197,7 +197,7 @@ export default function AdRefineScreen() {
           <Text style={{ fontWeight: "700" }}>{ad.cta}</Text>
         </View>
 
-        <Text style={{ fontWeight: "600", marginBottom: 6 }}>Your edits</Text>
+        <Text style={{ fontWeight: "600", marginBottom: 6 }}>{t("adRefine.yourEdits")}</Text>
         <FlatList
           data={displayMessages}
           keyExtractor={(_, i) => `u-${i}`}
