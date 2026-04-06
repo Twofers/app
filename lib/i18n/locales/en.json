@@ -530,9 +530,13 @@
     "errOfferEmpty": "Describe what you're offering first.",
     "errAiCreateFailed": "Couldn't generate your deal. Try again or create manually.",
     "createManually": "Create manually",
-    "moreToolsTitle": "More ways to create",
+    "moreToolsTitle": "More tools",
     "moreToolsShow": "Show more",
-    "moreToolsHide": "Hide"
+    "moreToolsHide": "Hide",
+    "newDeal": "New Deal",
+    "newDealSub": "Photo, voice, or text \u2014 AI creates your ad",
+    "reuseDeal": "Reuse Past Deal",
+    "reuseDealSub": "Relaunch a template or past offer"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -678,7 +682,8 @@
     "untitled": "Untitled",
     "openInAiAds": "Opens in AI Deal",
     "repeatCta": "Repeat in Quick Deal →",
-    "backToAiCompose": "← Back to AI offer"
+    "backToAiCompose": "← Back to AI offer",
+    "backToCreate": "← Back to Create"
   },
   "dealDetail": {
     "title": "Deal",
@@ -962,6 +967,16 @@
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "Generating unique images for each ad...",
     "generatingPhaseFinishing": "Almost there \u2014 finishing up...",
+    "errMicPermission": "Microphone permission is required for voice input.",
+    "errRecordingStart": "Could not start recording. Try again.",
+    "transcribeDone": "Voice transcribed and added to your description.",
+    "transcribeEmpty": "No speech detected. Try again.",
+    "transcribeCooldown": "Please wait a moment before recording again.",
+    "transcribeFailed": "Transcription failed. Try again.",
+    "quotaRemaining": "{{remaining}} of {{limit}} AI uses left this month",
+    "quotaWarning": "Only {{remaining}} AI uses remaining this month.",
+    "prefillFromReuse": "Deal prefilled from your past deals.",
+    "prefillFromHub": "Deal prefilled. Add a photo and generate your ad!",
     "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
     "errGenerationFailed": "Generation failed",
     "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",

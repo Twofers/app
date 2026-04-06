@@ -107,14 +107,14 @@ export function WelcomeWalkthrough({
     onDismiss();
     if (aiSuggestion) {
       router.push({
-        pathname: "/create/quick",
+        pathname: "/create/ai",
         params: {
           prefillTitle: aiSuggestion.title,
           prefillHint: aiSuggestion.hint,
         },
       });
     } else {
-      router.push("/create/quick");
+      router.push("/create/ai");
     }
   }, [onDismiss, router, aiSuggestion]);
 

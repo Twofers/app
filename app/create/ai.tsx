@@ -11,10 +11,17 @@ import {
 import { File as ExpoFsFile } from "expo-file-system";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -53,6 +60,11 @@ import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
 import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
+import {
+  aiComposeOfferTranscribe,
+  fetchAiComposeQuota,
+  type AiComposeQuota,
+} from "../../lib/ai-compose-offer";
 
 type TemplateRow = {
   id: string;
@@ -153,6 +165,19 @@ const AD_LANE_STYLES: Record<CreativeLane, {
   },
 };
 
+async function fileUriToBase64(uri: string): Promise<string> {
+  if (Platform.OS !== "web") {
+    return new ExpoFsFile(uri).base64();
+  }
+  const res = await fetch(uri);
+  const buf = await res.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+const QUOTA_FOCUS_MIN_MS = 30_000;
 const MAX_REGENERATIONS_PER_DRAFT = 2;
 
 /** Manual QA tags for validation runs — see docs/ai-ad-validation/ */
@@ -184,6 +209,8 @@ export default function AiDealScreen() {
     prefillPosterPath?: string;
     fromAiCompose?: string;
     fromMenuOffer?: string;
+    fromReuse?: string;
+    fromCreateHub?: string;
     prefillLocationId?: string;
     prefillExtraLocationIds?: string;
   }>();
@@ -200,6 +227,30 @@ export default function AiDealScreen() {
   } = useBusiness();
   const isDemoAiAccount = isDemoPreviewAccountEmail(sessionEmail);
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+
+  // Voice input
+  const recorder = useAudioRecorder(
+    Platform.OS === "android" ? RecordingPresets.HIGH_QUALITY : RecordingPresets.LOW_QUALITY,
+  );
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+
+  // AI quota
+  const [quota, setQuota] = useState<AiComposeQuota | null>(null);
+  const lastQuotaFetchRef = useRef(0);
+  const reloadQuota = useCallback(async () => {
+    if (!businessId) return;
+    const q = await fetchAiComposeQuota(businessId);
+    setQuota(q);
+  }, [businessId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!businessId) return;
+      const now = Date.now();
+      if (quota !== null && now - lastQuotaFetchRef.current < QUOTA_FOCUS_MIN_MS) return;
+      void reloadQuota().then(() => { lastQuotaFetchRef.current = Date.now(); });
+    }, [businessId, reloadQuota, quota]),
+  );
 
   const dayOptionsUi = useMemo(
     () => [
@@ -522,6 +573,8 @@ export default function AiDealScreen() {
     const posterPath = g(params.prefillPosterPath).trim();
     const fromAi = g(params.fromAiCompose);
     const fromMenu = g(params.fromMenuOffer);
+    const fromReuse = g(params.fromReuse);
+    const fromHub = g(params.fromCreateHub);
     const pl = g(params.prefillLocationId).trim();
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
@@ -544,6 +597,12 @@ export default function AiDealScreen() {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
     } else if (fromMenu === "1" && (pt || pp || pc || pd || ph)) {
       setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
+    } else if (fromReuse === "1" && (pt || ph || price0)) {
+      setBanner({ message: t("createAi.prefillFromReuse"), tone: "success" });
+      setManualDraftUnlocked(true);
+    } else if (fromHub === "1" && (pt || ph)) {
+      setBanner({ message: t("createAi.prefillFromHub"), tone: "success" });
+      setManualDraftUnlocked(true);
     }
   }, [
     templateId,
@@ -556,6 +615,8 @@ export default function AiDealScreen() {
     params.prefillPosterPath,
     params.fromAiCompose,
     params.fromMenuOffer,
+    params.fromReuse,
+    params.fromCreateHub,
     params.prefillLocationId,
     params.prefillExtraLocationIds,
     dealIdFromRoute,
@@ -602,6 +663,58 @@ export default function AiDealScreen() {
       setPosterUrl(null);
       setPhotoPath(null);
       setShowCamera(false);
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) {
+        setBanner({ message: t("createAi.errMicPermission"), tone: "error" });
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRecording(true);
+      setBanner(null);
+    } catch {
+      setBanner({ message: t("createAi.errRecordingStart"), tone: "error" });
+    }
+  }
+
+  async function stopRecordingAndTranscribe() {
+    if (!businessId || !isRecording) return;
+    setIsRecording(false);
+    setTranscribing(true);
+    setBanner(null);
+    try {
+      await recorder.stop();
+      const uri = recorder.uri;
+      if (!uri) throw new Error("no_uri");
+      const b64 = await fileUriToBase64(uri);
+      const { transcript } = await aiComposeOfferTranscribe({
+        business_id: businessId,
+        audio_base64: b64,
+      });
+      if (transcript) {
+        setHintText((prev) => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript));
+        setBanner({ message: t("createAi.transcribeDone"), tone: "success" });
+      } else {
+        setBanner({ message: t("createAi.transcribeEmpty"), tone: "info" });
+      }
+    } catch (e: unknown) {
+      const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : undefined;
+      if (code === "COOLDOWN_ACTIVE") {
+        setBanner({ message: t("createAi.transcribeCooldown"), tone: "info" });
+      } else {
+        setBanner({
+          message: e instanceof Error ? e.message : t("createAi.transcribeFailed"),
+          tone: "error",
+        });
+      }
+    } finally {
+      setTranscribing(false);
     }
   }
 
@@ -746,6 +859,13 @@ export default function AiDealScreen() {
       return;
     }
 
+    // Validate price before clearing state (so existing ads aren't wiped on bad input)
+    const priceNumPreCheck = parseOptionalPriceInput(price);
+    if (priceNumPreCheck !== null && Number.isNaN(priceNumPreCheck)) {
+      setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      return;
+    }
+
     const attemptForApi = mode === "initial" ? 0 : regenerationsUsed + 1;
 
     const tagForLog = manualValidationTag.trim().slice(0, 80);
@@ -777,11 +897,7 @@ export default function AiDealScreen() {
         throw new Error(t("createAi.errUploadPhotoBeforeGenerate"));
       }
       await ensurePosterUrl(path);
-      const priceNum = parseOptionalPriceInput(price);
-      if (priceNum !== null && Number.isNaN(priceNum)) {
-        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
-        return;
-      }
+      const priceNum = priceNumPreCheck;
       const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
         body: {
           business_id: businessId,
@@ -955,6 +1071,13 @@ export default function AiDealScreen() {
       return;
     }
 
+    // Validate end_time is in the future for one-time deals (before setPublishing)
+    const isRecurring = validityMode === "recurring";
+    if (!isRecurring && endTime.getTime() <= Date.now()) {
+      setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
+      return;
+    }
+
     setPublishing(true);
     setBanner(null);
     try {
@@ -964,15 +1087,8 @@ export default function AiDealScreen() {
       const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
-      const isRecurring = validityMode === "recurring";
       const start = isRecurring ? new Date() : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
-
-      // Validate end_time is in the future for one-time deals
-      if (!isRecurring && end.getTime() <= Date.now()) {
-        setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
-        return;
-      }
 
       // Prefer AI-generated image from selected variant over user's uploaded photo
       const selectedAd = selectedAdIndex != null ? generatedAds?.[selectedAdIndex] : null;
@@ -1375,19 +1491,46 @@ export default function AiDealScreen() {
             </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
-          <TextInput
-            value={hintText}
-            onChangeText={setHintText}
-            placeholder={t("createAi.hintPlaceholder")}
-            style={{
-              borderWidth: 1,
-              borderColor: "#cfd3de",
-              borderRadius: 14,
-              padding: 14,
-              marginTop: 6,
-              backgroundColor: "#fff",
-            }}
-          />
+          <View style={{ marginTop: 6 }}>
+            <TextInput
+              value={hintText}
+              onChangeText={setHintText}
+              placeholder={t("createAi.hintPlaceholder")}
+              multiline
+              style={{
+                borderWidth: 1,
+                borderColor: isRecording ? "#e0245e" : "#cfd3de",
+                borderRadius: 14,
+                padding: 14,
+                paddingRight: Platform.OS !== "web" ? 56 : 14,
+                minHeight: 56,
+                backgroundColor: "#fff",
+              }}
+            />
+            {Platform.OS !== "web" ? (
+              <Pressable
+                onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                disabled={transcribing}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  bottom: 8,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: isRecording ? "#e0245e" : "#111",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {transcribing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
+                )}
+              </Pressable>
+            ) : null}
+          </View>
 
           <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
           <TextInput
@@ -1665,7 +1808,16 @@ export default function AiDealScreen() {
             }}
           />
 
+          {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
+            <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
+          ) : null}
+
           <View style={{ marginTop: 16, gap: 10 }}>
+            {quota ? (
+              <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center" }}>
+                {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
+              </Text>
+            ) : null}
             <PrimaryButton
               title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
               onPress={() => void generateAdVariants("initial")}

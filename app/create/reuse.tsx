@@ -75,7 +75,7 @@ export default function ReuseDealScreen() {
     const hint = row.description?.trim() ?? "";
     const price = row.price != null && Number.isFinite(Number(row.price)) ? String(row.price) : "";
     router.push({
-      pathname: "/create/quick",
+      pathname: "/create/ai",
       params: {
         prefillTitle: title,
         prefillHint: hint || title,
@@ -192,8 +192,8 @@ export default function ReuseDealScreen() {
             )}
           </View>
 
-          <Pressable onPress={() => router.push("/create/ai-compose" as Href)} style={{ paddingVertical: Spacing.md }}>
-            <Text style={{ fontWeight: "700", color: "#2563eb" }}>{t("reuseHub.backToAiCompose")}</Text>
+          <Pressable onPress={() => router.push("/create/ai" as Href)} style={{ paddingVertical: Spacing.md }}>
+            <Text style={{ fontWeight: "700", color: "#2563eb" }}>{t("reuseHub.backToCreate")}</Text>
           </Pressable>
         </ScrollView>
       )}

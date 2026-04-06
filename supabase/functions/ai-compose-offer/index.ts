@@ -21,7 +21,7 @@ const MODEL = resolveOpenAiChatModel();
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
 
-/* IMAGE_MODEL, buildPosterImagePrompt, tryGeneratePosterPng imported from _shared/dalle-image.ts */
+/** Poster image model resolved inside _shared/dalle-image.ts. */
 
 const OFFER_TYPES = [
   "bogo_same_item",
@@ -52,7 +52,6 @@ function normalizePrompt(parts: (string | null | undefined)[]): string {
     .slice(0, 8000);
 }
 
-/* buildPosterImagePrompt and tryGeneratePosterPng imported from _shared/dalle-image.ts */
 
 async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<string> {
   const raw = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));

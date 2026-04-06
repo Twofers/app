@@ -645,7 +645,7 @@ export default function BusinessDashboard() {
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
         <PrimaryButton
           title={t("offersDashboard.createDealCta")}
-          onPress={() => router.push("/create/quick")}
+          onPress={() => router.push("/create/ai")}
         />
         {billingBlocked ? (
           <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
@@ -1058,7 +1058,7 @@ export default function BusinessDashboard() {
                     {t("offersDashboard.emptyDeals")}
                   </Text>
                   <HapticScalePressable
-                    onPress={() => router.push("/create/quick")}
+                    onPress={() => router.push("/create/ai")}
                     style={{
                       borderRadius: 16,
                       padding: Spacing.lg,
