@@ -13,6 +13,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -112,6 +113,45 @@ function buildOfferScheduleSummary(
     minutesFromDate(windowEnd),
   )} (${timezone})`;
 }
+
+/** Visual style per creative lane — gives each ad a distinct look. */
+const AD_LANE_STYLES: Record<CreativeLane, {
+  gradient: [string, string, string];
+  accent: string;
+  bg: string;
+  badge: string;
+  badgeText: string;
+  ctaBg: string;
+  ctaText: string;
+}> = {
+  value: {
+    gradient: ["transparent", "rgba(255,159,28,0.45)", "rgba(255,100,0,0.92)"],
+    accent: "#FF9F1C",
+    bg: "#FFF8F0",
+    badge: "#FF9F1C",
+    badgeText: "#fff",
+    ctaBg: "#FF9F1C",
+    ctaText: "#fff",
+  },
+  neighborhood: {
+    gradient: ["transparent", "rgba(16,85,60,0.4)", "rgba(10,65,45,0.90)"],
+    accent: "#0B8457",
+    bg: "#F0FAF5",
+    badge: "#0B8457",
+    badgeText: "#fff",
+    ctaBg: "#0B8457",
+    ctaText: "#fff",
+  },
+  premium: {
+    gradient: ["transparent", "rgba(25,20,55,0.45)", "rgba(15,10,40,0.92)"],
+    accent: "#6C3FC5",
+    bg: "#F5F0FF",
+    badge: "#6C3FC5",
+    badgeText: "#fff",
+    ctaBg: "#6C3FC5",
+    ctaText: "#fff",
+  },
+};
 
 const MAX_REGENERATIONS_PER_DRAFT = 2;
 
@@ -219,6 +259,8 @@ export default function AiDealScreen() {
     tone?: "error" | "success" | "info" | "warning";
   } | null>(null);
   const [generating, setGenerating] = useState(false);
+  /** Phase-based progress: 0=copy, 1=images, 2=finishing */
+  const [generatingPhase, setGeneratingPhase] = useState(0);
   const [generatedAds, setGeneratedAds] = useState<GeneratedAd[] | null>(null);
   const [selectedAdIndex, setSelectedAdIndex] = useState<number | null>(null);
   /** After "Use this ad", snapshot for detecting edits before publish */
@@ -310,6 +352,20 @@ export default function AiDealScreen() {
     manualDraftUnlocked,
     templateLoaded,
   ]);
+
+  // Phase-based progress message while generating (copy ~8s, images ~20s)
+  useEffect(() => {
+    if (!generating) {
+      setGeneratingPhase(0);
+      return;
+    }
+    const t1 = setTimeout(() => setGeneratingPhase(1), 8000);
+    const t2 = setTimeout(() => setGeneratingPhase(2), 22000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [generating]);
 
   usePreventRemove(
     composeDirty,
@@ -865,6 +921,39 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPublishDraft"), tone: "error" });
       return;
     }
+
+    // Pre-flight validations (before setPublishing) so the button doesn't flash
+    const priceNum = parseOptionalPriceInput(price);
+    if (priceNum !== null && Number.isNaN(priceNum)) {
+      setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      return;
+    }
+
+    const composedDescription = composeListingDescription(promoLine, ctaText, description);
+
+    const quality = assessDealQuality({
+      title: title.trim(),
+      description: composedDescription,
+      price: priceNum,
+    });
+    if (quality.blocked) {
+      setBanner({
+        message: translateDealQualityBlock(quality, dealOutputLang),
+        tone: "error",
+      });
+      return;
+    }
+
+    const strongGuard = validateStrongDealOnly({
+      title: title.trim(),
+      description: composedDescription,
+    });
+    if (!strongGuard.ok) {
+      const key = `dealQuality.strongGuard.${strongGuard.reason}`;
+      setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
+      return;
+    }
+
     setPublishing(true);
     setBanner(null);
     try {
@@ -872,41 +961,23 @@ export default function AiDealScreen() {
       const signedPoster = await ensurePosterUrl(path);
       const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
-      const priceNum = parseOptionalPriceInput(price);
-      if (priceNum !== null && Number.isNaN(priceNum)) {
-        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
-        return;
-      }
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
       const isRecurring = validityMode === "recurring";
       const start = isRecurring ? new Date() : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
 
-      const composedDescription = composeListingDescription(promoLine, ctaText, description);
-
-      const quality = assessDealQuality({
-        title: title.trim(),
-        description: composedDescription,
-        price: priceNum,
-      });
-      if (quality.blocked) {
-        setBanner({
-          message: translateDealQualityBlock(quality, dealOutputLang),
-          tone: "error",
-        });
+      // Validate end_time is in the future for one-time deals
+      if (!isRecurring && end.getTime() <= Date.now()) {
+        setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return;
       }
 
-      const strongGuard = validateStrongDealOnly({
-        title: title.trim(),
-        description: composedDescription,
-      });
-      if (!strongGuard.ok) {
-        const key = `dealQuality.strongGuard.${strongGuard.reason}`;
-        setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
-        return;
-      }
+      // Prefer AI-generated image from selected variant over user's uploaded photo
+      const selectedAd = selectedAdIndex != null ? generatedAds?.[selectedAdIndex] : null;
+      const aiPosterPath = selectedAd?.poster_storage_path ?? null;
+      const finalStoragePath = aiPosterPath ?? storagePath;
+      const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
 
       const baseRow = {
         business_id: businessId,
@@ -918,8 +989,8 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: publicPoster ?? signedPoster ?? posterUrl ?? null,
-        poster_storage_path: storagePath ?? null,
+        poster_url: finalPublicPoster ?? signedPoster ?? posterUrl ?? null,
+        poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
         window_start_minutes: isRecurring ? minutesFromDate(windowStart) : null,
@@ -977,8 +1048,26 @@ export default function AiDealScreen() {
       router.replace("/(tabs)");
     } catch (err: unknown) {
       if (__DEV__) console.warn("[ai] Publish error:", err);
+      // Surface a helpful error message, not just "Publish failed"
+      let detail = "";
+      if (err instanceof Error) {
+        const m = err.message.toLowerCase();
+        if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) {
+          detail = t("createAi.errPublishPermission");
+        } else if (m.includes("duplicate") || m.includes("unique")) {
+          detail = t("createAi.errPublishDuplicate");
+        } else if (m.includes("storage") || m.includes("upload")) {
+          detail = t("createAi.errPublishPhoto");
+        } else if (m.includes("network") || m.includes("fetch")) {
+          detail = t("createAi.errPublishNetwork");
+        } else if (err.message.length <= 120) {
+          detail = err.message;
+        }
+      }
       setBanner({
-        message: t("createAi.errPublishFailed"),
+        message: detail
+          ? `${t("createAi.errPublishFailed")} ${detail}`
+          : t("createAi.errPublishFailed"),
         tone: "error",
       });
     } finally {
@@ -1603,7 +1692,13 @@ export default function AiDealScreen() {
               <View style={{ marginTop: 4, gap: 6 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <ActivityIndicator />
-                  <Text style={{ opacity: 0.75, flex: 1 }}>{t("createAi.generatingHint")}</Text>
+                  <Text style={{ opacity: 0.75, flex: 1 }}>
+                    {generatingPhase === 0
+                      ? t("createAi.generatingPhaseCopy")
+                      : generatingPhase === 1
+                        ? t("createAi.generatingPhaseImages")
+                        : t("createAi.generatingPhaseFinishing")}
+                  </Text>
                 </View>
               </View>
             ) : null}
@@ -1637,144 +1732,177 @@ export default function AiDealScreen() {
           ) : null}
 
           {generatedAds && generatedAds.length === 3 ? (
-            <View style={{ marginTop: 20, gap: 12 }}>
+            <View style={{ marginTop: 20, gap: 16 }}>
               <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createAi.pickAdTitle")}</Text>
               <Text style={{ opacity: 0.7, marginBottom: 4 }}>{t("createAi.pickAdHelp")}</Text>
               {generatedAds.map((ad, index) => {
                 const selected = selectedAdIndex === index;
                 const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
                 const laneTitle = laneUiTitle(laneKey);
-                const variantDraft = adToDealDraft(ad, hintText);
-                const variantListingBody = composeListingDescription(
-                  variantDraft.promo_line,
-                  variantDraft.cta_text,
-                  variantDraft.offer_details,
-                );
+                const ls = AD_LANE_STYLES[laneKey] ?? AD_LANE_STYLES.value;
+                // AI-generated image takes priority over user's uploaded photo
+                const aiImageUri = ad.poster_storage_path
+                  ? buildPublicDealPhotoUrl(ad.poster_storage_path)
+                  : null;
+                const cardImageUri = aiImageUri ?? photoUri ?? posterUrl ?? null;
                 return (
-                  <View
+                  <Pressable
                     key={`${ad.creative_lane ?? index}-${index}`}
+                    onPress={() => {
+                      setSelectedAdIndex(index);
+                      applyAdToDraft(ad);
+                      trackEvent(AiAdsEvents.AD_SELECTED, {
+                        screen: "create_ai",
+                        creative_lane: ad.creative_lane ?? CREATIVE_LANE_ORDER[index],
+                        regeneration_attempt: lastSuccessfulGenAttempt,
+                        ...(manualValidationTag.trim()
+                          ? { manual_validation_tag: manualValidationTag.trim().slice(0, 80) }
+                          : {}),
+                      });
+                    }}
                     style={{
-                      borderRadius: 16,
-                      padding: 14,
-                      backgroundColor: "#fff",
-                      borderWidth: selected ? 2 : 1,
-                      borderColor: selected ? "#111" : "#e5e5e5",
-                      boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
-                      elevation: 2,
+                      borderRadius: 24,
+                      overflow: "hidden",
+                      borderWidth: selected ? 3 : 0,
+                      borderColor: selected ? ls.accent : "transparent",
+                      elevation: selected ? 6 : 3,
+                      shadowColor: "#000",
+                      shadowOpacity: selected ? 0.15 : 0.08,
+                      shadowRadius: selected ? 14 : 8,
+                      shadowOffset: { width: 0, height: selected ? 6 : 3 },
                     }}
                   >
-                    {photoUri || posterUrl ? (
-                      <Image
-                        source={{ uri: photoUri ?? posterUrl ?? "" }}
-                        style={{ height: 200, width: "100%", borderRadius: 12, marginBottom: 10 }}
-                        contentFit="cover"
+                    {/* Hero image with gradient overlay and headline */}
+                    <View style={{ height: 260, width: "100%", backgroundColor: "#222" }}>
+                      {cardImageUri ? (
+                        <Image
+                          source={{ uri: cardImageUri }}
+                          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                          contentFit="cover"
+                        />
+                      ) : null}
+                      <LinearGradient
+                        colors={ls.gradient}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
                       />
-                    ) : (
+                      {/* Lane badge — top left */}
+                      <View style={{ position: "absolute", top: 14, left: 14, flexDirection: "row", gap: 6 }}>
+                        <View
+                          style={{
+                            backgroundColor: ls.badge,
+                            paddingHorizontal: 12,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: "800", color: ls.badgeText, letterSpacing: 0.4 }}>
+                            {laneTitle.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: "rgba(255,255,255,0.22)",
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>
+                            {ad.style_label}
+                          </Text>
+                        </View>
+                      </View>
+                      {/* Headline overlay — bottom of image */}
+                      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 18 }}>
+                        <Text
+                          style={{
+                            fontSize: 22,
+                            fontWeight: "900",
+                            color: "#fff",
+                            letterSpacing: -0.4,
+                            lineHeight: 28,
+                            textShadowColor: "rgba(0,0,0,0.5)",
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 4,
+                          }}
+                        >
+                          {ad.headline}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Ad body section */}
+                    <View style={{ backgroundColor: ls.bg, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18 }}>
+                      <Text style={{ fontSize: 15, lineHeight: 22, color: "#333", fontWeight: "500" }}>
+                        {ad.subheadline}
+                      </Text>
+                      {/* CTA button */}
                       <View
                         style={{
-                          height: 120,
-                          width: "100%",
-                          borderRadius: 12,
-                          marginBottom: 10,
-                          backgroundColor: "#eee",
-                          justifyContent: "center",
+                          marginTop: 14,
+                          backgroundColor: ls.ctaBg,
+                          paddingVertical: 12,
+                          paddingHorizontal: 20,
+                          borderRadius: 14,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        <Text style={{ fontSize: 15, fontWeight: "800", color: ls.ctaText, letterSpacing: 0.2 }}>
+                          {ad.cta}
+                        </Text>
+                      </View>
+                      {/* Branding line */}
+                      <View
+                        style={{
+                          marginTop: 14,
+                          flexDirection: "row",
                           alignItems: "center",
-                          padding: 12,
+                          gap: 6,
+                          opacity: 0.5,
                         }}
                       >
-                        <Text style={{ opacity: 0.55, textAlign: "center", fontSize: 13 }}>
-                          {t("createAi.variantNeedsPhotoForPreview")}
+                        <View
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: 8,
+                            backgroundColor: ls.accent,
+                          }}
+                        />
+                        <Text style={{ fontSize: 11, fontWeight: "700", letterSpacing: 0.8, color: "#555" }}>
+                          TWOFER
                         </Text>
                       </View>
-                    )}
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                      {manualValidationTag.trim() ? (
+                        <Text
+                          style={{ fontSize: 10, color: "#888", marginTop: 8 }}
+                          accessibilityLabel={`Creative lane ${ad.creative_lane}`}
+                        >
+                          {t("createAi.qaMetadata", { lane: ad.creative_lane })}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {/* Selection indicator */}
+                    <View
+                      style={{
+                        backgroundColor: selected ? ls.accent : "#f5f5f5",
+                        paddingVertical: 14,
+                        alignItems: "center",
+                      }}
+                    >
                       <Text
                         style={{
-                          alignSelf: "flex-start",
-                          fontSize: 11,
+                          fontSize: 14,
                           fontWeight: "800",
-                          color: "#fff",
-                          backgroundColor: "#111",
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 999,
-                          overflow: "hidden",
+                          color: selected ? "#fff" : "#555",
+                          letterSpacing: 0.3,
                         }}
                       >
-                        {laneTitle}
-                      </Text>
-                      <Text
-                        style={{
-                          alignSelf: "flex-start",
-                          fontSize: 12,
-                          fontWeight: "700",
-                          color: "#444",
-                          backgroundColor: "#f0f0f0",
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 999,
-                        }}
-                      >
-                        {ad.style_label}
+                        {selected ? t("createAi.selectedEditBelow") : t("createAi.useThisAd")}
                       </Text>
                     </View>
-                    {manualValidationTag.trim() ? (
-                      <Text
-                        style={{ fontSize: 10, color: "#888", marginBottom: 6 }}
-                        accessibilityLabel={`Creative lane ${ad.creative_lane}`}
-                      >
-                        {t("createAi.qaMetadata", { lane: ad.creative_lane })}
-                      </Text>
-                    ) : null}
-                    <Text style={{ fontSize: 12, fontWeight: "800", opacity: 0.5, marginBottom: 6 }}>
-                      {t("createAi.variantPublishedPreview")}
-                    </Text>
-                    <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
-                    <Text style={{ marginTop: 6, opacity: 0.85 }}>{ad.subheadline}</Text>
-                    <Text style={{ marginTop: 8, fontWeight: "700" }}>{ad.cta}</Text>
-                    {variantListingBody.trim() ? (
-                      <View
-                        style={{
-                          marginTop: 12,
-                          padding: 12,
-                          borderRadius: 12,
-                          backgroundColor: "#f7f7f7",
-                          borderWidth: 1,
-                          borderColor: "#ececec",
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55, marginBottom: 6 }}>
-                          {t("createAi.variantListingBodyLabel")}
-                        </Text>
-                        <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.88 }}>{variantListingBody}</Text>
-                      </View>
-                    ) : null}
-                    <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.65, fontStyle: "italic" }}>
-                      {ad.rationale}
-                    </Text>
-                    {ad.visual_direction?.trim() ? (
-                      <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.55 }}>
-                        {t("createAi.visualNote", { note: ad.visual_direction })}
-                      </Text>
-                    ) : null}
-                    <View style={{ marginTop: 12 }}>
-                      <SecondaryButton
-                        title={selected ? t("createAi.selectedEditBelow") : t("createAi.useThisAd")}
-                        onPress={() => {
-                          setSelectedAdIndex(index);
-                          applyAdToDraft(ad);
-                          trackEvent(AiAdsEvents.AD_SELECTED, {
-                            screen: "create_ai",
-                            creative_lane: ad.creative_lane ?? CREATIVE_LANE_ORDER[index],
-                            regeneration_attempt: lastSuccessfulGenAttempt,
-                            ...(manualValidationTag.trim()
-                              ? { manual_validation_tag: manualValidationTag.trim().slice(0, 80) }
-                              : {}),
-                          });
-                        }}
-                      />
-                    </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
@@ -1793,15 +1921,23 @@ export default function AiDealScreen() {
                   elevation: 2,
                 }}
               >
-                {photoUri || posterUrl ? (
-                  <Image
-                    source={{ uri: photoUri ?? posterUrl ?? "" }}
-                    style={{ height: 200, width: "100%" }}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={{ height: 200, backgroundColor: "#eee" }} />
-                )}
+                {(() => {
+                  // Show AI-generated image from selected variant if available
+                  const selectedAd = selectedAdIndex != null ? generatedAds?.[selectedAdIndex] : null;
+                  const selectedAiUri = selectedAd?.poster_storage_path
+                    ? buildPublicDealPhotoUrl(selectedAd.poster_storage_path)
+                    : null;
+                  const previewUri = selectedAiUri ?? photoUri ?? posterUrl ?? null;
+                  return previewUri ? (
+                    <Image
+                      source={{ uri: previewUri }}
+                      style={{ height: 200, width: "100%" }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={{ height: 200, backgroundColor: "#eee" }} />
+                  );
+                })()}
                 <View style={{ padding: 12 }}>
                   <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || t("createAi.placeholderDealTitle")}</Text>
                   {promoLine ? (

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
+import { buildPosterImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,8 +21,7 @@ const MODEL = resolveOpenAiChatModel();
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
 
-/** Poster image for text-only compose (DALL·E / configured image model). */
-const IMAGE_MODEL = Deno.env.get("OPENAI_IMAGE_MODEL")?.trim() || "dall-e-3";
+/* IMAGE_MODEL, buildPosterImagePrompt, tryGeneratePosterPng imported from _shared/dalle-image.ts */
 
 const OFFER_TYPES = [
   "bogo_same_item",
@@ -52,97 +52,7 @@ function normalizePrompt(parts: (string | null | undefined)[]): string {
     .slice(0, 8000);
 }
 
-function buildPosterImagePrompt(params: {
-  businessName: string;
-  displayOffer: string;
-  headline: string;
-  sub: string;
-  visualDirection: string;
-}): string {
-  const { businessName, displayOffer, headline, sub, visualDirection } = params;
-  const esc = (s: string) => s.replace(/"/g, "'");
-  return [
-    "Square promotional graphic for a local café deal mobile app (TWOFER).",
-    "Clean, modern, appetizing — illustration or stylized food art. No photorealistic human faces.",
-    `Venue: ${esc(businessName)}.`,
-    `Offer: ${esc(displayOffer)}.`,
-    `Large readable headline on image: "${esc(headline || displayOffer)}".`,
-    sub.trim() ? `Smaller subline: "${esc(sub)}".` : "",
-    visualDirection.trim() ? `Mood: ${esc(visualDirection)}` : "",
-    "Accent color bright orange #FF9F1C; light background. English text only. No QR codes.",
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .slice(0, 3800);
-}
-
-async function tryGeneratePosterPng(openAiKey: string, prompt: string): Promise<Uint8Array | null> {
-  try {
-    const payload: Record<string, unknown> = {
-      model: IMAGE_MODEL,
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "b64_json",
-    };
-    if (IMAGE_MODEL.includes("dall-e-3")) {
-      payload.quality = "standard";
-      payload.style = "vivid";
-    }
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.log(
-        JSON.stringify({
-          tag: "ai_compose",
-          event: "image_gen_http",
-          status: res.status,
-          body: errBody.slice(0, 800),
-        }),
-      );
-      return null;
-    }
-    const j = await res.json();
-    const row = j?.data?.[0] as Record<string, unknown> | undefined;
-    const b64 = row?.b64_json;
-    if (typeof b64 === "string" && b64.length > 0) {
-      const bin = atob(b64);
-      const out = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-      return out;
-    }
-    const imageUrl = typeof row?.url === "string" ? row.url : null;
-    if (imageUrl) {
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) {
-        console.log(
-          JSON.stringify({
-            tag: "ai_compose",
-            event: "image_gen_url_fetch",
-            status: imgRes.status,
-          }),
-        );
-        return null;
-      }
-      const buf = new Uint8Array(await imgRes.arrayBuffer());
-      return buf.length > 0 ? buf : null;
-    }
-    console.log(
-      JSON.stringify({ tag: "ai_compose", event: "image_gen_no_data", model: IMAGE_MODEL }),
-    );
-    return null;
-  } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_compose", event: "image_gen_error", err: String(e) }));
-    return null;
-  }
-}
+/* buildPosterImagePrompt and tryGeneratePosterPng imported from _shared/dalle-image.ts */
 
 async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<string> {
   const raw = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));

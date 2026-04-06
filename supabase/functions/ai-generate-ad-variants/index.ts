@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
+import { buildAdVariantImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,8 @@ type AdVariant = {
   style_label: string;
   rationale: string;
   visual_direction: string;
+  /** AI-generated ad image in deal-photos bucket; set after DALL-E generation */
+  poster_storage_path?: string | null;
 };
 
 type AdsResult = { ads: AdVariant[] };
@@ -626,6 +629,73 @@ serve(async (req) => {
       prompt_tokens: usage?.prompt_tokens ?? null,
       completion_tokens: usage?.completion_tokens ?? null,
     });
+
+    // --- DALL-E image generation (3 images in parallel) ---
+    const businessNameForImage = typeof business.name === "string" ? business.name : "Local Café";
+    let imageSuccessCount = 0;
+    try {
+      const imageResults = await Promise.allSettled(
+        normalized.map((ad) => {
+          const prompt = buildAdVariantImagePrompt({
+            lane: ad.creative_lane,
+            businessName: businessNameForImage,
+            headline: ad.headline,
+            subheadline: ad.subheadline,
+            visualDirection: ad.visual_direction,
+          });
+          return tryGeneratePosterPng(openAiKey!, prompt, "ai_ads");
+        }),
+      );
+      const ts = Date.now();
+      for (let i = 0; i < normalized.length; i++) {
+        const result = imageResults[i];
+        const png =
+          result.status === "fulfilled" ? result.value : null;
+        if (!png || png.length < 100) {
+          normalized[i].poster_storage_path = null;
+          continue;
+        }
+        const imgPath = `${business_id}/ai_ad_${normalized[i].creative_lane}_${ts}_${i}.png`;
+        const { error: upErr } = await admin.storage
+          .from("deal-photos")
+          .upload(imgPath, png, { contentType: "image/png", upsert: false });
+        if (upErr) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads",
+              event: "image_upload_error",
+              lane: normalized[i].creative_lane,
+              err: upErr.message?.slice(0, 200),
+            }),
+          );
+          normalized[i].poster_storage_path = null;
+        } else {
+          normalized[i].poster_storage_path = imgPath;
+          imageSuccessCount++;
+        }
+      }
+    } catch (imgErr) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads",
+          event: "image_gen_batch_error",
+          err: String(imgErr).slice(0, 200),
+        }),
+      );
+      // Text variants are still valid — return them without images
+      for (const ad of normalized) ad.poster_storage_path = null;
+    }
+
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads",
+        event: "image_gen_summary",
+        user_id: user.id,
+        business_id,
+        images_generated: imageSuccessCount,
+        images_total: normalized.length,
+      }),
+    );
 
     const updatedUsed = (monthCount ?? 0) + 1;
     const quota = { used: updatedUsed, limit: monthlyLimit, remaining: Math.max(0, monthlyLimit - updatedUsed) };

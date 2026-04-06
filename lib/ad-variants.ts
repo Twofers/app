@@ -15,6 +15,8 @@ export type GeneratedAd = {
   rationale: string;
   /** Notes for future image gen; may be empty */
   visual_direction: string;
+  /** AI-generated ad image path in deal-photos bucket; null if generation failed */
+  poster_storage_path?: string | null;
 };
 
 export const CREATIVE_LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
