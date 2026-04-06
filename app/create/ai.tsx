@@ -196,6 +196,7 @@ export default function AiDealScreen() {
     businessPreferredLocale,
     sessionEmail,
     businessName,
+    businessProfile,
   } = useBusiness();
   const isDemoAiAccount = isDemoPreviewAccountEmail(sessionEmail);
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
@@ -1851,10 +1852,34 @@ export default function AiDealScreen() {
                           {ad.cta}
                         </Text>
                       </View>
+                      {/* Business info + deal timing */}
+                      <View
+                        style={{
+                          marginTop: 16,
+                          paddingTop: 14,
+                          borderTopWidth: 1,
+                          borderTopColor: "rgba(0,0,0,0.08)",
+                          gap: 6,
+                        }}
+                      >
+                        {businessName ? (
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#222" }}>
+                            {businessName}
+                          </Text>
+                        ) : null}
+                        {businessProfile?.address || businessProfile?.location ? (
+                          <Text style={{ fontSize: 13, color: "#555", lineHeight: 18 }}>
+                            {businessProfile.address ?? businessProfile.location}
+                          </Text>
+                        ) : null}
+                        <Text style={{ fontSize: 12, color: "#777", lineHeight: 17 }}>
+                          {offerScheduleSummary}
+                        </Text>
+                      </View>
                       {/* Branding line */}
                       <View
                         style={{
-                          marginTop: 14,
+                          marginTop: 12,
                           flexDirection: "row",
                           alignItems: "center",
                           gap: 6,
