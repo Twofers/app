@@ -157,7 +157,11 @@
     "notifFavoritesOnly": "Favorites only",
     "gpsErrorTitle": "Location unavailable",
     "gpsErrorBody": "Could not get your current position. Try again or switch to ZIP code.",
-    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius."
+    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius.",
+    "switchModeTitle": "App mode",
+    "switchModeHelp": "Switch between consumer and business views without logging out.",
+    "switchToBusiness": "Switch to Business mode",
+    "switchToConsumer": "Switch to Consumer mode"
   },
   "onboarding": {
     "title": "Welcome to TWOFER",
@@ -709,7 +713,8 @@
     "errLoginClaim": "Log in to claim deals.",
     "errLoginFavorite": "Log in to save favorites.",
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
-    "viewBusiness": "Business profile"
+    "viewBusiness": "Business profile",
+    "claimTimedOut": "Claim timed out \u2014 please try again."
   },
   "redeem": {
     "title": "Redeem",

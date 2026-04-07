@@ -6,14 +6,19 @@ import ko from "./locales/ko.json";
 import esCreateAiOverrides from "./locales/es.createAi.overrides.json";
 import koCreateAiOverrides from "./locales/ko.createAi.overrides.json";
 
-/** ES/KO merge English createAi keys, then apply overrides (missing override → English). */
+/**
+ * ES/KO createAi merge: English defaults → base locale keys → overrides.
+ * Previously base locale translations (es.createAi / ko.createAi) were
+ * clobbered because only overrides layered on English. Now all three layers
+ * merge so keys translated in es.json/ko.json are preserved.
+ */
 const esTranslation = {
   ...es,
-  createAi: { ...en.createAi, ...esCreateAiOverrides },
+  createAi: { ...en.createAi, ...es.createAi, ...esCreateAiOverrides },
 };
 const koTranslation = {
   ...ko,
-  createAi: { ...en.createAi, ...koCreateAiOverrides },
+  createAi: { ...en.createAi, ...ko.createAi, ...koCreateAiOverrides },
 };
 
 export const APP_LOCALES = ["en", "es", "ko"] as const;

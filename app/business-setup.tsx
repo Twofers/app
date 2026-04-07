@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
@@ -178,7 +178,7 @@ export default function BusinessSetupScreen() {
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
       setTimeout(async () => {
         const pending = await consumePendingDeepLink();
-        router.replace((pending ?? "/(tabs)/dashboard") as any);
+        router.replace((pending ?? "/(tabs)/dashboard") as Href);
       }, 250);
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);

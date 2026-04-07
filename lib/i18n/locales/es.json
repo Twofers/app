@@ -157,7 +157,11 @@
     "notifFavoritesOnly": "Solo favoritos",
     "gpsErrorTitle": "Ubicación no disponible",
     "gpsErrorBody": "No se pudo obtener tu posición. Intenta de nuevo o usa código postal.",
-    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio."
+    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio.",
+    "switchModeTitle": "Modo de la app",
+    "switchModeHelp": "Cambia entre vista de consumidor y negocio sin cerrar sesión.",
+    "switchToBusiness": "Cambiar a modo Negocio",
+    "switchToConsumer": "Cambiar a modo Consumidor"
   },
   "onboarding": {
     "title": "Bienvenido a TWOFER",
@@ -709,7 +713,8 @@
     "errLoginClaim": "Inicia sesión para reclamar ofertas.",
     "errLoginFavorite": "Inicia sesión para guardar favoritos.",
     "couldNotLoad": "No pudimos cargar esta oferta. Puede haber terminado o ya no estar disponible.",
-    "viewBusiness": "Perfil del negocio"
+    "viewBusiness": "Perfil del negocio",
+    "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo."
   },
   "redeem": {
     "title": "Canjear",

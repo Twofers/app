@@ -157,7 +157,11 @@
     "notifFavoritesOnly": "즐겨찾기만",
     "gpsErrorTitle": "위치를 사용할 수 없음",
     "gpsErrorBody": "현재 위치를 가져올 수 없습니다. 다시 시도하거나 우편번호로 전환하세요.",
-    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요."
+    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요.",
+    "switchModeTitle": "앱 모드",
+    "switchModeHelp": "로그아웃 없이 소비자와 비즈니스 보기를 전환하세요.",
+    "switchToBusiness": "비즈니스 모드로 전환",
+    "switchToConsumer": "소비자 모드로 전환"
   },
   "onboarding": {
     "title": "TWOFER에 오신 것을 환영해요",
@@ -709,7 +713,8 @@
     "errLoginClaim": "딜을 받으려면 로그인하세요.",
     "errLoginFavorite": "즐겨찾기를 쓰려면 로그인하세요.",
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
-    "viewBusiness": "매장 프로필"
+    "viewBusiness": "매장 프로필",
+    "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요."
   },
   "redeem": {
     "title": "사용",

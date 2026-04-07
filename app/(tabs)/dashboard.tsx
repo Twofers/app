@@ -50,6 +50,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+function DealListSeparator() {
+  return <View style={{ height: Spacing.md }} />;
+}
+
 function EndEarlyButton({
   title,
   onPress,
@@ -942,7 +946,9 @@ export default function BusinessDashboard() {
                   {listFooter}
                 </View>
               }
-              ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              ItemSeparatorComponent={DealListSeparator}
               renderItem={({ item }) => {
                 const sched = dealScheduleStatus(item);
                 const active = sched === "live";

@@ -1025,7 +1025,7 @@ export default function HomeScreen() {
           renderItem={renderFeedItem}
           ListEmptyComponent={
             feedSegment === "deals"
-              ? emptyNearbyLive || showDealsSkeleton
+              ? emptyNearbyLive || showDealsSkeleton || banner
                 ? null
                 : (
                     <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />

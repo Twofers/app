@@ -185,7 +185,9 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
 
   const setMode = useCallback(
     (next: TabMode): Promise<void> => {
-      const p = modeQueue.then(() => doSetMode(next)).catch(() => {});
+      const p = modeQueue.then(() => doSetMode(next)).catch((e) => {
+        if (__DEV__) console.warn("[tab-mode] setMode failed:", e);
+      });
       modeQueue = p;
       return p;
     },

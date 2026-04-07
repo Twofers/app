@@ -14,6 +14,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import i18n from "@/lib/i18n/config";
 import type { AppLocale } from "@/lib/i18n/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -64,9 +65,18 @@ export default function OnboardingScreen() {
   }, []);
 
   useEffect(() => {
-    void getOnboardingStepIndex().then((s) => {
-      if (s !== null) goToStep(s);
-    });
+    void (async () => {
+      const savedStep = await getOnboardingStepIndex();
+      if (savedStep !== null) {
+        goToStep(savedStep);
+        return;
+      }
+      // Skip language step if user already chose one on auth landing
+      const manual = await AsyncStorage.getItem("twoforone.locale_manual_override");
+      if (manual === "1") {
+        goToStep(1);
+      }
+    })();
   }, [goToStep]);
 
   useEffect(() => {

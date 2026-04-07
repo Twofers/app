@@ -365,6 +365,26 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: Colors.light.border,
+            borderRadius: Radii.lg,
+            padding: Spacing.lg,
+            gap: Spacing.sm,
+          }}
+        >
+          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.switchModeTitle")}</Text>
+          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.switchModeHelp")}</Text>
+          <SecondaryButton
+            title={t("consumerSettings.switchToBusiness")}
+            onPress={async () => {
+              await setTabMode("business");
+              router.replace("/(tabs)/dashboard" as Href);
+            }}
+          />
+        </View>
+
         {consumerSession ? (
           <View
             style={{

@@ -92,7 +92,7 @@ export function validateStrongDealOnly(input: {
   if (hasConditional) return { ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE };
 
   // ── 3. PERCENT FLOOR ───────────────────────────────────────────────────────
-  if (typeof input.discountPercent === "number" && input.discountPercent < 40) {
+  if (typeof input.discountPercent === "number" && input.discountPercent < 39.5) {
     return { ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE };
   }
   const percents = extractPercents(text);
