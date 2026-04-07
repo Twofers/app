@@ -89,7 +89,7 @@ export function WalletRedeemModal({
     : t("consumerWallet.codeLegacyQrOnly");
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" accessibilityViewIsModal>
       <View
         style={{
           flex: 1,

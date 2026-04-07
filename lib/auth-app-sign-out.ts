@@ -1,6 +1,7 @@
 import type { Href } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { removePushTokensForUser } from "@/lib/push-token";
+import { clearDemoEmailCache } from "@/lib/functions";
 import type { TabMode } from "@/lib/tab-mode";
 
 /**
@@ -21,15 +22,20 @@ export async function signOutAndRedirectToAuthLanding(params: {
   try {
     // Best-effort: remove push tokens (don't block sign-out on failure)
     if (userId) {
-      await removePushTokensForUser(userId).catch(() => {});
+      await removePushTokensForUser(userId).catch((e) => {
+        if (__DEV__) console.warn("[sign-out] removePushTokens failed:", e);
+      });
     }
 
     // Best-effort: reset tab mode to customer (don't block sign-out on failure).
     // This can fail if the profiles table hasn't been created yet or if the
     // PostgREST schema cache is stale.
-    await setTabMode("customer").catch(() => {});
+    await setTabMode("customer").catch((e) => {
+      if (__DEV__) console.warn("[sign-out] setTabMode reset failed:", e);
+    });
 
     // This is the critical step — always attempt sign-out
+    clearDemoEmailCache();
     await supabase.auth.signOut();
     replace("/auth-landing" as Href);
     return { ok: true };

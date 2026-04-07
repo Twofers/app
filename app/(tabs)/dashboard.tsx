@@ -16,6 +16,7 @@ import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { format, startOfDay, startOfMonth, subDays } from "date-fns";
 
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { Banner } from "@/components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -49,6 +50,10 @@ import { AiInsightsCard } from "@/components/ai-insights-card";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function DealListSeparator() {
+  return <View style={{ height: Spacing.md }} />;
+}
 
 function EndEarlyButton({
   title,
@@ -866,7 +871,7 @@ export default function BusinessDashboard() {
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
         <PrimaryButton
           title={t("offersDashboard.createDealCta")}
-          onPress={() => router.push("/create/quick")}
+          onPress={() => router.push("/create/ai")}
         />
         {billingBlocked ? (
           <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
@@ -1130,8 +1135,8 @@ export default function BusinessDashboard() {
 
   if (!modeReady) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator color={primary} />
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <LoadingSkeleton rows={2} />
       </View>
     );
   }
@@ -1144,6 +1149,7 @@ export default function BusinessDashboard() {
     : t("offersDashboard.subtitle");
 
   return (
+    <AppErrorBoundary>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
       <WelcomeWalkthrough
         visible={showWalkthrough}
@@ -1166,7 +1172,7 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
-          {banner ? <Banner message={banner} tone="error" /> : null}
+          {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={4} />
@@ -1209,7 +1215,9 @@ export default function BusinessDashboard() {
                   {listFooter}
                 </View>
               }
-              ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              ItemSeparatorComponent={DealListSeparator}
               renderItem={({ item }) => {
                 const sched = dealScheduleStatus(item);
                 const active = sched === "live";
@@ -1353,7 +1361,7 @@ export default function BusinessDashboard() {
                     {t("offersDashboard.emptyDeals")}
                   </Text>
                   <HapticScalePressable
-                    onPress={() => router.push("/create/quick")}
+                    onPress={() => router.push("/create/ai")}
                     style={{
                       borderRadius: 16,
                       padding: Spacing.lg,
@@ -1546,5 +1554,6 @@ export default function BusinessDashboard() {
         </View>
       </Modal>
     </View>
+    </AppErrorBoundary>
   );
 }

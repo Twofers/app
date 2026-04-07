@@ -214,7 +214,7 @@ export default function MenuOfferScreen() {
       const params = buildQuickPrefillFromMenuOffer(ad, locPrimary);
       clearWizard();
       router.push({
-        pathname: "/create/quick",
+        pathname: "/create/ai",
         params,
       } as Href);
     },

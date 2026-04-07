@@ -136,7 +136,7 @@ export default function BusinessBillingScreen() {
           });
         } else {
           setBanner({
-            message: t("billing.errLoadPricing", { defaultValue: "Unable to load subscription pricing. Please try again." }),
+            message: t("billing.errLoadPricing"),
             tone: "error",
           });
         }
@@ -162,7 +162,7 @@ export default function BusinessBillingScreen() {
     if (!checkout) return;
     if (checkout === "cancel") {
       setBanner({
-        message: t("billing.checkoutCanceled", { defaultValue: "Subscription purchase canceled." }),
+        message: t("billing.checkoutCanceled"),
         tone: "info",
       });
       return;
@@ -175,7 +175,7 @@ export default function BusinessBillingScreen() {
       setSyncingCheckout(true);
       setLastSyncMessage(null);
       setBanner({
-        message: t("billing.checkoutSyncing", { defaultValue: "Payment completed — syncing your subscription..." }),
+        message: t("billing.checkoutSyncing"),
         tone: "info",
       });
       if (__DEV__) devLog("[billing] checkout=success, starting sync refresh loop");
@@ -193,7 +193,7 @@ export default function BusinessBillingScreen() {
         if (latest === "active") {
           setSyncingCheckout(false);
           setBanner({
-            message: t("billing.checkoutSuccess", { defaultValue: "Payment successful. Your subscription is active." }),
+            message: t("billing.checkoutSuccess"),
             tone: "success",
           });
           return;
@@ -204,16 +204,10 @@ export default function BusinessBillingScreen() {
       if (!cancelled) {
         setSyncingCheckout(false);
         setLastSyncMessage(
-          t("billing.checkoutSyncDelayed", {
-            defaultValue:
-              "Payment completed — subscription update may take a moment. Pull to refresh if status does not update.",
-          }),
+          t("billing.checkoutSyncDelayed"),
         );
         setBanner({
-          message: t("billing.checkoutSyncDelayed", {
-            defaultValue:
-              "Payment completed — subscription update may take a moment. Pull to refresh if status does not update.",
-          }),
+          message: t("billing.checkoutSyncDelayed"),
           tone: "warning",
         });
       }
@@ -227,9 +221,7 @@ export default function BusinessBillingScreen() {
   useEffect(() => {
     if (reason === "reactivate") {
       setBanner({
-        message: t("billing.paywallExpiredMessage", {
-          defaultValue: "Your trial has ended. Reactivate your account to continue creating deals.",
-        }),
+        message: t("billing.paywallExpiredMessage"),
         tone: "warning",
       });
     }
@@ -244,7 +236,7 @@ export default function BusinessBillingScreen() {
     setBanner(null);
     try {
       setBanner({
-        message: t("billing.checkoutLaunching", { defaultValue: "Opening secure checkout..." }),
+        message: t("billing.checkoutLaunching"),
         tone: "info",
       });
       const { data, error } = await supabase.functions.invoke("stripe-create-checkout-session", {
@@ -258,7 +250,7 @@ export default function BusinessBillingScreen() {
     } catch (err) {
       const detail = err instanceof Error ? err.message : parseFunctionError(err);
       setBanner({
-        message: detail || t("billing.errSubscribe", { defaultValue: "Unable to start checkout. Please try again." }),
+        message: detail || t("billing.errSubscribe"),
         tone: "error",
       });
     } finally {
@@ -266,8 +258,8 @@ export default function BusinessBillingScreen() {
     }
   };
 
-  /** Show simulate buttons until real Stripe is configured. Flip to `__DEV__` when going live. */
-  const simulateVisible = true;
+  /** Show simulate buttons only in dev builds. */
+  const simulateVisible = __DEV__;
 
   const resetTrial = async () => {
     if (busy) return;
@@ -306,12 +298,12 @@ export default function BusinessBillingScreen() {
       if (error) throw error;
       await refresh();
       setBanner({
-        message: t("billing.simulateSubscribeOk", { defaultValue: "Subscription simulated successfully." }),
+        message: t("billing.simulateSubscribeOk"),
         tone: "success",
       });
     } catch {
       setBanner({
-        message: t("billing.errSimulateSubscribe", { defaultValue: "Unable to simulate subscription." }),
+        message: t("billing.errSimulateSubscribe"),
         tone: "error",
       });
     } finally {
@@ -320,13 +312,11 @@ export default function BusinessBillingScreen() {
   };
 
   const trialLine = useMemo(() => {
-    if (trialDaysRemaining === null) {
-      return t("billing.trialEndsIn", { days: 0, defaultValue: "Your 30-day trial ends in {{days}} days" });
+    if (trialDaysRemaining === null) return null;
+    if (trialDaysRemaining === 0) {
+      return t("billing.trialExpired");
     }
-    return t("billing.trialEndsIn", {
-      days: trialDaysRemaining,
-      defaultValue: "Your 30-day trial ends in {{days}} days",
-    });
+    return t("billing.trialEndsIn", { days: trialDaysRemaining });
   }, [t, trialDaysRemaining]);
 
   const cardShadow = {
@@ -342,7 +332,7 @@ export default function BusinessBillingScreen() {
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 40 }}>
         <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text, marginTop: 6 }}>
-          {t("tabs.billing", { defaultValue: "Billing" })}
+          {t("tabs.billing")}
         </Text>
 
         {bizLoading || pricingLoading ? (
@@ -351,13 +341,13 @@ export default function BusinessBillingScreen() {
           </View>
         ) : !pricing ? (
           <View style={{ paddingTop: 16 }}>
-            {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+            {banner ? <Banner message={banner.message} tone={banner.tone} onRetry={banner.tone === "error" ? () => { setBanner(null); setRetryKey((k) => k + 1); } : undefined} /> : null}
             <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700" }}>
-              {t("billing.currentStatus", { defaultValue: "Status" })}: {subscriptionStatus} ({subscriptionTier})
+              {t("billing.currentStatus")}: {subscriptionStatus} ({subscriptionTier})
             </Text>
             <View style={{ marginTop: 16 }}>
               <PrimaryButton
-                title={t("billing.retryLoadPricing", { defaultValue: "Retry" })}
+                title={t("billing.retryLoadPricing")}
                 onPress={() => { setBanner(null); setRetryKey((k) => k + 1); }}
                 style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
               />
@@ -365,24 +355,26 @@ export default function BusinessBillingScreen() {
           </View>
         ) : (
           <>
-            <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
-              {trialLine}
-            </Text>
+            {trialLine ? (
+              <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
+                {trialLine}
+              </Text>
+            ) : null}
 
             {syncingCheckout ? (
               <Text style={{ marginTop: 8, color: Colors.light.primary, fontWeight: "800", fontSize: 13 }}>
-                {t("billing.syncingStatus", { defaultValue: "Syncing payment status..." })}
+                {t("billing.syncingStatus")}
               </Text>
             ) : null}
 
             {warningExpiredOrPastDue ? (
               <Banner
                 tone="warning"
-                message={t("billing.trialExpiredBanner", { defaultValue: "Reactivate your account" })}
+                message={t("billing.trialExpiredBanner")}
               />
             ) : null}
 
-            {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+            {banner ? <Banner message={banner.message} tone={banner.tone} onRetry={banner.tone === "error" ? () => { setBanner(null); setRetryKey((k) => k + 1); } : undefined} /> : null}
             {lastSyncMessage ? <Banner message={lastSyncMessage} tone="warning" /> : null}
 
             <View style={{ marginTop: 16, gap: 16 }}>
@@ -405,14 +397,22 @@ export default function BusinessBillingScreen() {
                   ))}
                 </View>
                 <View style={{ marginTop: 14 }}>
-                  <PrimaryButton
-                    title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
-                    disabled={busy || subscriptionStatus === "active" && subscriptionTier === "pro"}
-                    onPress={() => void subscribe("pro")}
-                    accessibilityLabel={t("billing.a11ySubscribeProLabel")}
-                    accessibilityHint={t("billing.a11ySubscribeProHint")}
-                    style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
-                  />
+                  {subscriptionStatus === "active" && subscriptionTier === "pro" ? (
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                        {t("billing.currentPlan")}
+                      </Text>
+                    </View>
+                  ) : (
+                    <PrimaryButton
+                      title={t("billing.subscribeNow")}
+                      disabled={busy}
+                      onPress={() => void subscribe("pro")}
+                      accessibilityLabel={t("billing.a11ySubscribeProLabel")}
+                      accessibilityHint={t("billing.a11ySubscribeProHint")}
+                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                    />
+                  )}
                 </View>
               </View>
 
@@ -435,21 +435,29 @@ export default function BusinessBillingScreen() {
                   ))}
                 </View>
                 <View style={{ marginTop: 14 }}>
-                  <PrimaryButton
-                    title={t("billing.subscribeNow", { defaultValue: "Subscribe Now" })}
-                    disabled={busy || subscriptionStatus === "active" && subscriptionTier === "premium"}
-                    onPress={() => void subscribe("premium")}
-                    accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
-                    accessibilityHint={t("billing.a11ySubscribePremiumHint")}
-                    style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
-                  />
+                  {subscriptionStatus === "active" && subscriptionTier === "premium" ? (
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                        {t("billing.currentPlan")}
+                      </Text>
+                    </View>
+                  ) : (
+                    <PrimaryButton
+                      title={t("billing.subscribeNow")}
+                      disabled={busy}
+                      onPress={() => void subscribe("premium")}
+                      accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
+                      accessibilityHint={t("billing.a11ySubscribePremiumHint")}
+                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                    />
+                  )}
                 </View>
               </View>
             </View>
 
             <View style={{ marginTop: 16, gap: 12 }}>
               <SecondaryButton
-                title={t("billing.manageSubscription", { defaultValue: "Manage Subscription" })}
+                title={t("billing.manageSubscription")}
                 onPress={() => router.push("/(tabs)/billing/manage")}
                 disabled={busy}
                 accessibilityLabel={t("billing.a11yManageSubscriptionLabel")}
@@ -476,7 +484,7 @@ export default function BusinessBillingScreen() {
                 </Text>
                 <View style={{ gap: 8 }}>
                   <SecondaryButton
-                    title={t("billing.simulateSubscribe", { defaultValue: "Simulate Subscribe" })}
+                    title={t("billing.simulateSubscribe")}
                     onPress={() => void simulateSubscribe()}
                     disabled={busy}
                   />

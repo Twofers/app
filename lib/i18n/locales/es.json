@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "Ver todas las ofertas",
     "ctaFavoriteHint": "Guarda tus lugares favoritos — puedes recibir alertas aunque estén fuera del radio.",
     "emptyLiveTitle": "Sin ofertas en vivo",
-    "emptyLiveBody": "Vuelve pronto o explora negocios abajo.",
+    "emptyLiveBody": "Vuelve pronto o cambia a la pestaña Tiendas para explorar.",
     "favoritesFilter": "Favoritos",
     "favoritesOn": "Solo favoritos · activo",
     "favoritesOff": "Ver solo favoritos",
@@ -98,6 +98,7 @@
     "emptyBusinessesTitle": "Aún no hay negocios",
     "emptyBusinessesBody": "Cuando se unan a TWOFER, aparecerán aquí.",
     "loadDealsError": "No pudimos cargar las ofertas en vivo. Inténtalo de nuevo en un momento.",
+    "errFavoriteToggle": "No se pudo actualizar tus favoritos. Inténtalo de nuevo.",
     "loadBusinessesError": "No pudimos cargar los negocios. Desliza para actualizar o inténtalo de nuevo en un momento.",
     "guestBannerTitle": "Navegando sin cuenta",
     "guestBannerBody": "Inicia sesión para reclamar, usar la billetera y guardar códigos QR. Aún puedes explorar listados.",
@@ -156,7 +157,11 @@
     "notifFavoritesOnly": "Solo favoritos",
     "gpsErrorTitle": "Ubicación no disponible",
     "gpsErrorBody": "No se pudo obtener tu posición. Intenta de nuevo o usa código postal.",
-    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio."
+    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio.",
+    "switchModeTitle": "Modo de la app",
+    "switchModeHelp": "Cambia entre vista de consumidor y negocio sin cerrar sesión.",
+    "switchToBusiness": "Cambiar a modo Negocio",
+    "switchToConsumer": "Cambiar a modo Consumidor"
   },
   "onboarding": {
     "title": "Bienvenido a TWOFER",
@@ -340,11 +345,8 @@
     "prefillFromMenuOffer": "Borrador desde tu oferta con menú. Revísalo y publica.",
     "prefillFromReuse": "Campos cargados desde una oferta anterior. Ajusta y publica.",
     "aiPosterAttached": "Póster IA para esta oferta",
-    "schedulingHint": "La oferta rápida va desde ahora hasta la hora de fin. Para empezar en el futuro, horarios semanales o anuncios con IA, usa Anuncios con IA.",
-    "openAiScheduling": "Abrir anuncios con IA (horario)",
     "sectionBasics": "Datos de la oferta",
     "sectionLimits": "Límites y tiempo",
-    "sectionAdvanced": "Programación avanzada",
     "scheduleSuggestionUse": "Usar este horario",
     "scheduleSuggestionCustomize": "Personalizar",
     "prefillFromCreateHub": "IA preparó tu oferta. Revisa los detalles y publica cuando estés listo.",
@@ -352,7 +354,23 @@
     "previewTitle": "Vista previa del cliente",
     "previewPublish": "Se ve bien — Publicar",
     "previewGoBack": "Volver y editar",
-    "previewHint": "Así verán los clientes tu oferta."
+    "previewHint": "Así verán los clientes tu oferta.",
+    "errNoDays": "Pick at least one day.",
+    "sectionSchedule": "Schedule",
+    "fieldStartTime": "Start",
+    "recurringToggle": "Make this recurring",
+    "presetEveryDay": "Every day",
+    "presetWeekdays": "Weekdays",
+    "presetCustom": "Custom",
+    "windowStart": "Daily start",
+    "windowEnd": "Daily end",
+    "dayMon": "M",
+    "dayTue": "T",
+    "dayWed": "W",
+    "dayThu": "T",
+    "dayFri": "F",
+    "daySat": "S",
+    "daySun": "S"
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -458,7 +476,11 @@
     "aiDescGenerating": "Generando...",
     "aiDescGenerated": "Descripción generada por IA. Revisa y guarda.",
     "aiDescFailed": "No se pudo generar la descripción.",
-    "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero."
+    "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero.",
+    "expandBizProfile": "Show all business fields",
+    "collapseBizProfile": "Hide business fields",
+    "advancedOptions": "Advanced",
+    "switchToConsumerShort": "Browse as customer"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -514,7 +536,11 @@
     "createManually": "Crear manualmente",
     "moreToolsTitle": "Más formas de crear",
     "moreToolsShow": "Ver más",
-    "moreToolsHide": "Ocultar"
+    "moreToolsHide": "Ocultar",
+    "newDeal": "New Deal",
+    "newDealSub": "Photo, voice, or text — AI creates your ad",
+    "reuseDeal": "Reuse Past Deal",
+    "reuseDealSub": "Relaunch a template or past offer"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -535,6 +561,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "Se necesita acceso a la galería para elegir una imagen del menú.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Omitir líneas ya guardadas",
@@ -601,7 +628,8 @@
     "errInvalidVariant": "Esta opción de anuncio no está disponible. Vuelve y abre Refinar de nuevo desde la pantalla de oferta del menú.",
     "goBack": "Volver",
     "promoLineLabel": "Línea promocional",
-    "bodyCopyLabel": "Detalles"
+    "bodyCopyLabel": "Detalles",
+    "yourEdits": "Tus ediciones"
   },
   "aiCompose": {
     "title": "Oferta con IA",
@@ -660,7 +688,8 @@
     "untitled": "Sin título",
     "openInAiAds": "Abre en Oferta IA",
     "repeatCta": "Repetir en Oferta rápida →",
-    "backToAiCompose": "← Volver a oferta IA"
+    "backToAiCompose": "← Volver a oferta IA",
+    "backToCreate": "← Back to Create"
   },
   "dealDetail": {
     "title": "Oferta",
@@ -684,7 +713,8 @@
     "errLoginClaim": "Inicia sesión para reclamar ofertas.",
     "errLoginFavorite": "Inicia sesión para guardar favoritos.",
     "couldNotLoad": "No pudimos cargar esta oferta. Puede haber terminado o ya no estar disponible.",
-    "viewBusiness": "Perfil del negocio"
+    "viewBusiness": "Perfil del negocio",
+    "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo."
   },
   "redeem": {
     "title": "Canjear",
@@ -771,7 +801,9 @@
     "demoHint": "Solo vista previa / desarrollo",
     "demoCredentialsHint": "Cuenta demo sembrada: {{email}} · contraseña {{password}}",
     "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "tu@ejemplo.com",
     "passwordLabel": "Contraseña",
+    "passwordPlaceholder": "••••••••",
     "forgotPassword": "Olvidé mi contraseña",
     "logIn": "Iniciar sesión",
     "pleaseWait": "Por favor espera…",
@@ -910,7 +942,8 @@
     "browseMoreDeals": "Ver más ofertas",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Termina",
-    "modalTitle": "Modal"
+    "modalTitle": "Modal",
+    "tapToRetry": "Toca para reintentar"
   },
   "debugDiagnostics": {
     "title": "Diagnósticos"
@@ -1367,7 +1400,16 @@
       "weekends": "Fines de semana",
       "late_night": "Abierto tarde",
       "custom_prompt": "Personalizado…"
-    }
+    },
+    "errEnterName": "Enter a business name first.",
+    "lookupButton": "Look up my business",
+    "searching": "Searching…",
+    "selectResult": "Tap to auto-fill your info:",
+    "noResults": "No results found. Enter your info manually.",
+    "lookupError": "Lookup failed. Enter your info manually.",
+    "infoFilled": "Info filled! Review and edit if needed.",
+    "estimatedInfo": "Info is estimated — please verify before saving.",
+    "aiEstimate": "Estimated by AI"
   },
   "settingsConsumer": {
     "editTitle": "Perfil de comprador",
@@ -1446,6 +1488,19 @@
     "refreshLimitReached": "Sin regeneraciones — inicia un nuevo lote o edita abajo.",
     "refreshesLeft": "Regeneraciones restantes: {{remaining}} de {{total}}",
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
+    "generatingPhaseCopy": "Crafting your ad copy...",
+    "generatingPhaseImages": "Generating unique images for each ad...",
+    "generatingPhaseFinishing": "Almost there — finishing up...",
+    "errMicPermission": "Microphone permission is required for voice input.",
+    "errRecordingStart": "Could not start recording. Try again.",
+    "transcribeDone": "Voice transcribed and added to your description.",
+    "transcribeEmpty": "No speech detected. Try again.",
+    "transcribeCooldown": "Please wait a moment before recording again.",
+    "transcribeFailed": "Transcription failed. Try again.",
+    "quotaRemaining": "{{remaining}} of {{limit}} AI uses left this month",
+    "quotaWarning": "Only {{remaining}} AI uses remaining this month.",
+    "prefillFromReuse": "Deal prefilled from your past deals.",
+    "prefillFromHub": "Deal prefilled. Add a photo and generate your ad!",
     "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
     "errGenerationFailed": "Generation failed",
     "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",
@@ -1517,6 +1572,10 @@
     "errPublishDraft": "Please generate or enter title and description.",
     "errPublishDraftFirst": "Please generate or enter title and description first.",
     "errPublishFailed": "Publish failed.",
+    "errPublishPermission": "Permission denied. Make sure you own this business.",
+    "errPublishDuplicate": "This deal already exists.",
+    "errPublishPhoto": "Photo upload failed. Try picking a new photo.",
+    "errPublishNetwork": "Network error. Check your connection and try again.",
     "errSaveTemplateFailed": "Saving template failed.",
     "friendlyOpenaiConfig": "AI isn’t configured on the server yet. You can still write your deal below.",
     "friendlySession": "Session expired. Log in again, then try generating.",
@@ -1546,7 +1605,11 @@
     "edit": "Edit"
   },
   "billing": {
-    "trialEndsIn": "Tu prueba de 30 días termina en {{days}} días",
+    "currentStatus": "Estado",
+    "retryLoadPricing": "Reintentar",
+    "trialEndsIn": "Tu prueba de 30 dias termina en {{days}} dias",
+    "trialExpired": "Tu prueba gratuita ha terminado",
+    "currentPlan": "Plan actual",
     "trialExpiredBanner": "Reactivar tu cuenta",
     "reactivateMessage": "Reactivar tu cuenta",
     "paywallExpiredMessage": "Tu prueba ha finalizado. Reactiva tu cuenta para seguir creando ofertas.",
@@ -1592,5 +1655,27 @@
     "backToBilling": "Volver a Facturación",
     "errPortal": "No se pudo abrir el portal de Stripe.",
     "errUpgrade": "No se pudo iniciar la actualización."
+  },
+  "aiInsights": {
+    "title": "AI Insights",
+    "refresh": "Refresh",
+    "loading": "Analyzing your deals...",
+    "noSuggestions": "No suggestions available yet — create a deal first!"
+  },
+  "walkthrough": {
+    "dashboardTitle": "Your Dashboard",
+    "dashboardBody": "This is your home base. See all your deals, track claims and redemptions, and monitor how your business is doing at a glance.",
+    "createTitle": "Create a Deal",
+    "createBody": "Launch BOGO deals in seconds. Set the offer, pick a schedule, and your deal goes live to nearby customers instantly.",
+    "trackTitle": "Track Performance",
+    "trackBody": "Watch redemptions roll in, see which deals work best, and use insights to keep customers coming back.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip tour",
+    "createFirstDeal": "Create Your First Deal",
+    "useAiDeal": "Use This Deal Idea",
+    "exploreDashboard": "Explore Dashboard First",
+    "aiSuggestionLabel": "AI deal idea for you",
+    "aiLoading": "Generating a deal idea for you..."
   }
 }

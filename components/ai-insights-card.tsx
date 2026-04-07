@@ -7,6 +7,13 @@ import { CardShell } from "@/components/ui/card-shell";
 import { Colors, Spacing, Radii } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { parseFunctionError, EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
+import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
+
+const DEMO_SUGGESTIONS: Suggestion[] = [
+  { icon: "\u2615", title: "Expand your latte lineup", body: "Your oat milk latte BOGO is your strongest deal. Consider a vanilla cortado variant to capture espresso lovers." },
+  { icon: "\u{1F4C8}", title: "Weekend pastry pairing", body: "Your weekday deals are solid. Try a Saturday croissant + latte bundle to capture brunch traffic." },
+  { icon: "\u{1F31F}", title: "Tell your origin story", body: "Add a line about your single-origin beans or hand-laminated croissants \u2014 it builds trust and repeat visits." },
+];
 
 type Suggestion = {
   icon: string;
@@ -63,6 +70,12 @@ export function AiInsightsCard({
       );
 
       if (fnError) {
+        // Demo accounts: return template suggestions instead of showing error
+        const { data: userData } = await supabase.auth.getUser();
+        if (isDemoPreviewAccountEmail(userData?.user?.email)) {
+          setSuggestions(DEMO_SUGGESTIONS);
+          return;
+        }
         setError(parseFunctionError(fnError));
         return;
       }
@@ -73,6 +86,14 @@ export function AiInsightsCard({
         setError(t("aiInsights.noSuggestions"));
       }
     } catch (err) {
+      // Demo accounts: return template suggestions instead of showing error
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (isDemoPreviewAccountEmail(userData?.user?.email)) {
+          setSuggestions(DEMO_SUGGESTIONS);
+          return;
+        }
+      } catch { /* continue with error */ }
       setError(parseFunctionError(err));
     } finally {
       setLoading(false);

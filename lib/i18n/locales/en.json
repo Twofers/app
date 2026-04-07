@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "View all deals",
     "ctaFavoriteHint": "Favorite places you love — you can get alerts even when they’re outside your radius.",
     "emptyLiveTitle": "No live deals",
-    "emptyLiveBody": "Check back soon or explore businesses below.",
+    "emptyLiveBody": "Check back soon or switch to the Shops tab to browse.",
     "favoritesFilter": "Favorites",
     "favoritesOn": "Favorites only · on",
     "favoritesOff": "Show favorites only",
@@ -98,6 +98,7 @@
     "emptyBusinessesTitle": "No businesses yet",
     "emptyBusinessesBody": "When businesses join TWOFER, they’ll show up here.",
     "loadDealsError": "We couldn’t load live deals. Try again in a moment.",
+    "errFavoriteToggle": "Couldn’t update your favorites. Please try again.",
     "loadBusinessesError": "We couldn’t load businesses. Pull to refresh or try again in a moment.",
     "guestBannerTitle": "Browsing without an account",
     "guestBannerBody": "Sign in to claim deals, use your wallet, and keep QR tickets. You can still browse listings.",
@@ -156,7 +157,11 @@
     "notifFavoritesOnly": "Favorites only",
     "gpsErrorTitle": "Location unavailable",
     "gpsErrorBody": "Could not get your current position. Try again or switch to ZIP code.",
-    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius."
+    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius.",
+    "switchModeTitle": "App mode",
+    "switchModeHelp": "Switch between consumer and business views without logging out.",
+    "switchToBusiness": "Switch to Business mode",
+    "switchToConsumer": "Switch to Consumer mode"
   },
   "onboarding": {
     "title": "Welcome to TWOFER",
@@ -529,9 +534,13 @@
     "errOfferEmpty": "Describe what you're offering first.",
     "errAiCreateFailed": "Couldn't generate your deal. Try again or create manually.",
     "createManually": "Create manually",
-    "moreToolsTitle": "More ways to create",
+    "moreToolsTitle": "More tools",
     "moreToolsShow": "Show more",
-    "moreToolsHide": "Hide"
+    "moreToolsHide": "Hide",
+    "newDeal": "New Deal",
+    "newDealSub": "Photo, voice, or text \u2014 AI creates your ad",
+    "reuseDeal": "Reuse Past Deal",
+    "reuseDealSub": "Relaunch a template or past offer"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -552,6 +561,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "Photo library access is needed to pick a menu image.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Skip lines already in your library",
@@ -618,7 +628,8 @@
     "errInvalidVariant": "This ad option is unavailable. Go back and open Refine from the menu offer screen again.",
     "goBack": "Go back",
     "promoLineLabel": "Promo line",
-    "bodyCopyLabel": "Details"
+    "bodyCopyLabel": "Details",
+    "yourEdits": "Your edits"
   },
   "aiCompose": {
     "title": "AI offer",
@@ -677,7 +688,8 @@
     "untitled": "Untitled",
     "openInAiAds": "Opens in AI Deal",
     "repeatCta": "Repeat in Quick Deal →",
-    "backToAiCompose": "← Back to AI offer"
+    "backToAiCompose": "← Back to AI offer",
+    "backToCreate": "← Back to Create"
   },
   "dealDetail": {
     "title": "Deal",
@@ -701,7 +713,8 @@
     "errLoginClaim": "Log in to claim deals.",
     "errLoginFavorite": "Log in to save favorites.",
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
-    "viewBusiness": "Business profile"
+    "viewBusiness": "Business profile",
+    "claimTimedOut": "Claim timed out \u2014 please try again."
   },
   "redeem": {
     "title": "Redeem",
@@ -788,7 +801,9 @@
     "demoHint": "Preview / development only",
     "demoCredentialsHint": "Seeded demo login: {{email}} · password {{password}}",
     "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
     "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
     "forgotPassword": "Forgot password",
     "logIn": "Login",
     "pleaseWait": "Please wait…",
@@ -956,6 +971,19 @@
     "refreshLimitReached": "No regenerations left — start a new batch or edit below.",
     "refreshesLeft": "Regenerations remaining: {{remaining}} of {{total}}",
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
+    "generatingPhaseCopy": "Crafting your ad copy...",
+    "generatingPhaseImages": "Generating unique images for each ad...",
+    "generatingPhaseFinishing": "Almost there \u2014 finishing up...",
+    "errMicPermission": "Microphone permission is required for voice input.",
+    "errRecordingStart": "Could not start recording. Try again.",
+    "transcribeDone": "Voice transcribed and added to your description.",
+    "transcribeEmpty": "No speech detected. Try again.",
+    "transcribeCooldown": "Please wait a moment before recording again.",
+    "transcribeFailed": "Transcription failed. Try again.",
+    "quotaRemaining": "{{remaining}} of {{limit}} AI uses left this month",
+    "quotaWarning": "Only {{remaining}} AI uses remaining this month.",
+    "prefillFromReuse": "Deal prefilled from your past deals.",
+    "prefillFromHub": "Deal prefilled. Add a photo and generate your ad!",
     "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
     "errGenerationFailed": "Generation failed",
     "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",
@@ -1027,6 +1055,10 @@
     "errPublishDraft": "Please generate or enter title and description.",
     "errPublishDraftFirst": "Please generate or enter title and description first.",
     "errPublishFailed": "Publish failed.",
+    "errPublishPermission": "Permission denied. Make sure you own this business.",
+    "errPublishDuplicate": "This deal already exists.",
+    "errPublishPhoto": "Photo upload failed. Try picking a new photo.",
+    "errPublishNetwork": "Network error. Check your connection and try again.",
     "errSaveTemplateFailed": "Saving template failed.",
     "friendlyOpenaiConfig": "AI isn’t configured on the server yet. You can still write your deal below.",
     "friendlySession": "Session expired. Log in again, then try generating.",
@@ -1063,7 +1095,8 @@
     "browseMoreDeals": "Browse More Deals",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Ends",
-    "modalTitle": "Modal"
+    "modalTitle": "Modal",
+    "tapToRetry": "Tap to retry"
   },
   "debugDiagnostics": {
     "title": "Diagnostics"
@@ -1502,6 +1535,15 @@
     "errNameAddress": "Business name and address are required.",
     "errEmail": "Enter a valid email.",
     "errSave": "Could not create business. Try again.",
+    "errEnterName": "Enter a business name first.",
+    "lookupButton": "Look up my business",
+    "searching": "Searching…",
+    "selectResult": "Tap to auto-fill your info:",
+    "noResults": "No results found. Enter your info manually.",
+    "lookupError": "Lookup failed. Enter your info manually.",
+    "infoFilled": "Info filled! Review and edit if needed.",
+    "estimatedInfo": "Info is estimated — please verify before saving.",
+    "aiEstimate": "Estimated by AI",
     "setupComplete": "Setup complete — ready to launch BOGO deals!",
     "city": "City",
     "cat": {
@@ -1563,7 +1605,11 @@
     "edit": "Edit"
   },
   "billing": {
+    "currentStatus": "Status",
+    "retryLoadPricing": "Retry",
     "trialEndsIn": "Your 30-day trial ends in {{days}} days",
+    "trialExpired": "Your free trial has ended",
+    "currentPlan": "Current plan",
     "trialExpiredBanner": "Reactivate your account",
     "reactivateMessage": "Reactivate your account",
     "paywallExpiredMessage": "Your trial has ended. Reactivate your account to continue creating deals.",

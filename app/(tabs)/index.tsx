@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import Animated, { useSharedValue, withTiming, useAnimatedStyle } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii, Shadows } from "@/constants/theme";
@@ -44,13 +45,18 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
+import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
-const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
+const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
 type Deal = {
   id: string;
   title: string | null;
   description: string | null;
+  title_es: string | null;
+  title_ko: string | null;
+  description_es: string | null;
+  description_ko: string | null;
   end_time: string;
   is_active: boolean;
   poster_url: string | null;
@@ -72,6 +78,20 @@ type Deal = {
   window_end_minutes: number | null;
   timezone: string | null;
 };
+
+function localizedTitle(deal: Deal, lang: string): string {
+  const l = lang.split("-")[0]?.toLowerCase() ?? "en";
+  if (l === "es" && deal.title_es) return deal.title_es;
+  if (l === "ko" && deal.title_ko) return deal.title_ko;
+  return deal.title ?? "";
+}
+
+function localizedDescription(deal: Deal, lang: string): string {
+  const l = lang.split("-")[0]?.toLowerCase() ?? "en";
+  if (l === "es" && deal.description_es) return deal.description_es;
+  if (l === "ko" && deal.description_ko) return deal.description_ko;
+  return deal.description ?? "";
+}
 
 type BusinessRow = {
   id: string;
@@ -116,8 +136,9 @@ function classifyClaimBlockReason(message: string): string {
 }
 
 export default function HomeScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { height: windowHeight } = useWindowDimensions();
   const { isLoggedIn, userId } = useBusiness();
@@ -203,7 +224,7 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
@@ -312,13 +333,13 @@ export default function HomeScreen() {
         const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", businessId);
         if (error) {
           setFavoriteBusinessIds(favoriteBusinessIds);
-          setBanner(error.message);
+          setBanner(t("consumerHome.errFavoriteToggle"));
         }
       } else {
         const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: businessId });
         if (error) {
           setFavoriteBusinessIds(favoriteBusinessIds);
-          setBanner(error.message);
+          setBanner(t("consumerHome.errFavoriteToggle"));
         }
       }
     },
@@ -559,7 +580,7 @@ export default function HomeScreen() {
             })
           : undefined;
       const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
-      const offerText = item.title ?? t("dealDetail.dealFallback");
+      const offerText = localizedTitle(item, i18n.language) || t("dealDetail.dealFallback");
       const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
       return (
         <View
@@ -605,7 +626,7 @@ export default function HomeScreen() {
               {bogoText}
             </Text>
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
-              {item.description || t("consumerHome.tagline")}
+              {localizedDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
             <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md, flexWrap: "wrap" }}>
               {distanceLabel ? (
@@ -977,8 +998,8 @@ export default function HomeScreen() {
 
   return (
     <KeyboardScreen>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      {banner ? <Banner message={banner} tone="error" /> : null}
+    <View pointerEvents={isFocused ? "auto" : "none"} style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      {banner ? <Banner message={banner} tone="error" onRetry={() => { setBanner(null); void onPullToRefresh(); }} /> : null}
       <Animated.View style={[{ flex: 1 }, feedSegment === "deals" ? dealsFadeStyle : undefined]}>
         <FlatList<Deal | BusinessRow>
           style={{ flex: 1 }}
@@ -1004,7 +1025,7 @@ export default function HomeScreen() {
           renderItem={renderFeedItem}
           ListEmptyComponent={
             feedSegment === "deals"
-              ? emptyNearbyLive || showDealsSkeleton
+              ? emptyNearbyLive || showDealsSkeleton || banner
                 ? null
                 : (
                     <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />

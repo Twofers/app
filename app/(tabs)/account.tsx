@@ -33,7 +33,7 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
-import { aiGenerateDealCopy } from "@/lib/functions";
+import { aiGenerateDealCopy, aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -84,6 +84,8 @@ export default function AccountScreen() {
   const [bizProfileExpanded, setBizProfileExpanded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [lookupSearching, setLookupSearching] = useState(false);
+  const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
@@ -385,8 +387,8 @@ export default function AccountScreen() {
       setProfileShortDescription(result.description);
       setBanner({ message: t("account.aiDescGenerated"), tone: "success" });
     } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      setBanner({ message: m || t("account.aiDescFailed"), tone: "error" });
+      if (__DEV__) console.warn("[account] AI description error:", err);
+      setBanner({ message: t("account.aiDescFailed"), tone: "error" });
     } finally {
       setGeneratingDescription(false);
     }
@@ -821,6 +823,9 @@ export default function AccountScreen() {
               <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                 <Pressable
                   onPress={() => setProfilePreferredLocale(null)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityLabel={t("language.useAppLanguage")}
+                  accessibilityRole="button"
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -844,6 +849,9 @@ export default function AccountScreen() {
                   <Pressable
                     key={loc}
                     onPress={() => setProfilePreferredLocale(loc)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityLabel={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
+                    accessibilityRole="button"
                     style={{
                       paddingVertical: 8,
                       paddingHorizontal: 12,
@@ -886,15 +894,88 @@ export default function AccountScreen() {
                   onChangeText={setProfileBusinessName}
                   placeholder={t("account.phBusinessName")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
+
+              <SecondaryButton
+                title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
+                onPress={async () => {
+                  const name = profileBusinessName.trim();
+                  if (!name) { setBanner({ message: t("businessSetup.errEnterName") }); return; }
+                  setLookupSearching(true);
+                  setLookupResults(null);
+                  setBanner(null);
+                  try {
+                    const results = await aiBusinessLookup({ business_name: name });
+                    if (results.length === 0) setBanner({ message: t("businessSetup.noResults"), tone: "info" });
+                    setLookupResults(results.length > 0 ? results : null);
+                  } catch {
+                    setBanner({ message: t("businessSetup.lookupError") });
+                  } finally {
+                    setLookupSearching(false);
+                  }
+                }}
+                disabled={lookupSearching || !profileBusinessName.trim()}
+              />
+
+              {lookupResults && lookupResults.length > 0 && (
+                <View style={{ gap: Spacing.sm }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", opacity: 0.6 }}>
+                    {t("businessSetup.selectResult")}
+                  </Text>
+                  {lookupResults.map((r, i) => (
+                    <Pressable
+                      key={i}
+                      onPress={() => {
+                        setProfileBusinessName(r.name);
+                        setProfileAddress(r.formatted_address);
+                        setProfileLocation(r.formatted_address);
+                        if (r.phone) setProfilePhone(r.phone);
+                        if (r.category) setProfileCategory(r.category);
+                        if (r.hours_text) setProfileHours(r.hours_text);
+                        if (r.lat != null) setProfileLatitude(String(r.lat));
+                        if (r.lng != null) setProfileLongitude(String(r.lng));
+                        setLookupResults(null);
+                        setBanner({
+                          message: r.source === "ai_estimate"
+                            ? t("businessSetup.estimatedInfo")
+                            : t("businessSetup.infoFilled"),
+                          tone: r.source === "ai_estimate" ? "info" : "success",
+                        });
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: theme.surface,
+                          borderRadius: Radii.lg,
+                          padding: Spacing.md,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                        }}
+                      >
+                        <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
+                        <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
+                        {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
+                        {r.source === "ai_estimate" && (
+                          <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
+                            {t("businessSetup.aiEstimate")}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
               <View>
                 <Text style={{ fontSize: 13 }}>{t("account.fieldContactName")}</Text>
                 <TextInput
@@ -902,12 +983,14 @@ export default function AccountScreen() {
                   onChangeText={setProfileContactName}
                   placeholder={t("account.phContactName")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -919,12 +1002,14 @@ export default function AccountScreen() {
                   placeholder={t("account.phBusinessEmail")}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -935,12 +1020,14 @@ export default function AccountScreen() {
                   onChangeText={setProfileAddress}
                   placeholder={t("account.phAddress")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -951,12 +1038,14 @@ export default function AccountScreen() {
                   onChangeText={setProfilePhone}
                   placeholder={t("account.phPhone")}
                   keyboardType="phone-pad"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -966,12 +1055,14 @@ export default function AccountScreen() {
                   value={profileCategory}
                   onChangeText={setProfileCategory}
                   placeholder={t("account.phCategory")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -982,6 +1073,7 @@ export default function AccountScreen() {
                   onChangeText={setProfileHours}
                   placeholder={t("account.phHours")}
                   multiline
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
@@ -990,6 +1082,7 @@ export default function AccountScreen() {
                     marginTop: 4,
                     minHeight: 56,
                     textAlignVertical: "top",
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -999,12 +1092,14 @@ export default function AccountScreen() {
                   value={profileTone}
                   onChangeText={setProfileTone}
                   placeholder={t("account.phTone")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1014,12 +1109,14 @@ export default function AccountScreen() {
                   value={profileLocation}
                   onChangeText={setProfileLocation}
                   placeholder={t("account.phLocation")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1035,12 +1132,14 @@ export default function AccountScreen() {
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 6,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
                 <TextInput
@@ -1050,12 +1149,14 @@ export default function AccountScreen() {
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 8,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1066,6 +1167,7 @@ export default function AccountScreen() {
                   onChangeText={setProfileShortDescription}
                   placeholder={t("account.phShortDescription")}
                   multiline
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
@@ -1074,6 +1176,7 @@ export default function AccountScreen() {
                     marginTop: 4,
                     minHeight: 72,
                     textAlignVertical: "top",
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
                 <SecondaryButton

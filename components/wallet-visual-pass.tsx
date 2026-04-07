@@ -2,12 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
   Modal,
   Text,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
@@ -63,7 +70,7 @@ export function WalletVisualPassModal({
 }: WalletVisualPassModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const pulse = useRef(new Animated.Value(1)).current;
+  const pulseScale = useSharedValue(1);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
   const completeOnce = useRef(false);
@@ -83,27 +90,25 @@ export function WalletVisualPassModal({
     return Math.max(0, Math.ceil((minCompleteMs - nowMs) / 1000));
   }, [visible, minCompleteMs, nowMs]);
 
+  const pulseAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1.03,
-          duration: 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    if (visible) loop.start();
-    else loop.stop();
-    return () => loop.stop();
-  }, [visible, pulse]);
+    if (visible) {
+      pulseScale.value = withRepeat(
+        withSequence(
+          withTiming(1.03, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1, // infinite
+      );
+    } else {
+      cancelAnimation(pulseScale);
+      pulseScale.value = 1;
+    }
+    return () => cancelAnimation(pulseScale);
+  }, [visible, pulseScale]);
 
   const runComplete = useCallback(async () => {
     if (completingRef.current) return;
@@ -163,7 +168,7 @@ export function WalletVisualPassModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={confirmClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={confirmClose} accessibilityViewIsModal>
       <View
         style={{
           flex: 1,
@@ -235,7 +240,7 @@ export function WalletVisualPassModal({
           )}
         </View>
 
-        <Animated.View style={{ alignSelf: "center", transform: [{ scale: pulse }], marginBottom: 16 }}>
+        <Animated.View style={[{ alignSelf: "center", marginBottom: 16 }, pulseAnimatedStyle]}>
           {token ? <QRCode value={token} size={140} backgroundColor="#fff" /> : null}
         </Animated.View>
 

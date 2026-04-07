@@ -89,7 +89,7 @@
     "ctaViewAllDeals": "모든 딜 보기",
     "ctaFavoriteHint": "좋아하는 매장을 즐겨찾기하면 반경 밖이어도 알림을 받을 수 있어요.",
     "emptyLiveTitle": "라이브 딜 없음",
-    "emptyLiveBody": "잠시 후 다시 확인하거나 아래 매장을 둘러보세요.",
+    "emptyLiveBody": "잠시 후 다시 확인하거나 매장 탭으로 전환하여 둘러보세요.",
     "favoritesFilter": "즐겨찾기",
     "favoritesOn": "즐겨찾기만 · 켜짐",
     "favoritesOff": "즐겨찾기만 보기",
@@ -98,6 +98,7 @@
     "emptyBusinessesTitle": "아직 매장이 없습니다",
     "emptyBusinessesBody": "매장이 TWOFER에 참여하면 여기에 표시됩니다.",
     "loadDealsError": "라이브 딜을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "errFavoriteToggle": "즐겨찾기를 업데이트하지 못했습니다. 다시 시도해 주세요.",
     "loadBusinessesError": "비즈니스 목록을 불러오지 못했습니다. 당겨서 새로고침하거나 잠시 후 다시 시도해 주세요.",
     "guestBannerTitle": "계정 없이 둘러보기",
     "guestBannerBody": "로그인하면 딜 받기, 지갑·QR 이용이 가능합니다. 목록은 그대로 볼 수 있어요.",
@@ -156,7 +157,11 @@
     "notifFavoritesOnly": "즐겨찾기만",
     "gpsErrorTitle": "위치를 사용할 수 없음",
     "gpsErrorBody": "현재 위치를 가져올 수 없습니다. 다시 시도하거나 우편번호로 전환하세요.",
-    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요."
+    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요.",
+    "switchModeTitle": "앱 모드",
+    "switchModeHelp": "로그아웃 없이 소비자와 비즈니스 보기를 전환하세요.",
+    "switchToBusiness": "비즈니스 모드로 전환",
+    "switchToConsumer": "소비자 모드로 전환"
   },
   "onboarding": {
     "title": "TWOFER에 오신 것을 환영해요",
@@ -340,11 +345,8 @@
     "prefillFromMenuOffer": "메뉴 오퍼에서 불러온 초안입니다. 확인 후 게시하세요.",
     "prefillFromReuse": "이전 딜에서 불러왔습니다. 수정 후 게시하세요.",
     "aiPosterAttached": "이 딜용 AI 포스터",
-    "schedulingHint": "빠른 딜은 지금부터 선택한 종료 시각까지입니다. 미래 시작, 매주 반복, AI 광고는 AI 광고 화면을 사용하세요.",
-    "openAiScheduling": "AI 광고 열기(일정)",
     "sectionBasics": "딜 기본 정보",
     "sectionLimits": "한도 및 시간",
-    "sectionAdvanced": "고급 일정",
     "scheduleSuggestionUse": "이 일정 사용",
     "scheduleSuggestionCustomize": "맞춤 설정",
     "prefillFromCreateHub": "AI가 딜을 작성했습니다. 내용을 확인하고 준비되면 게시하세요.",
@@ -352,7 +354,23 @@
     "previewTitle": "고객 미리보기",
     "previewPublish": "좋아요 — 게시",
     "previewGoBack": "돌아가서 수정",
-    "previewHint": "고객에게 이렇게 보입니다."
+    "previewHint": "고객에게 이렇게 보입니다.",
+    "errNoDays": "Pick at least one day.",
+    "sectionSchedule": "Schedule",
+    "fieldStartTime": "Start",
+    "recurringToggle": "Make this recurring",
+    "presetEveryDay": "Every day",
+    "presetWeekdays": "Weekdays",
+    "presetCustom": "Custom",
+    "windowStart": "Daily start",
+    "windowEnd": "Daily end",
+    "dayMon": "M",
+    "dayTue": "T",
+    "dayWed": "W",
+    "dayThu": "T",
+    "dayFri": "F",
+    "daySat": "S",
+    "daySun": "S"
   },
   "language": {
     "sectionApp": "앱 언어",
@@ -458,7 +476,11 @@
     "aiDescGenerating": "생성 중...",
     "aiDescGenerated": "AI가 설명을 생성했습니다. 검토 후 저장하세요.",
     "aiDescFailed": "설명을 생성할 수 없습니다.",
-    "aiDescNeedsNameCategory": "먼저 비즈니스 이름과 카테고리를 추가하세요."
+    "aiDescNeedsNameCategory": "먼저 비즈니스 이름과 카테고리를 추가하세요.",
+    "expandBizProfile": "Show all business fields",
+    "collapseBizProfile": "Hide business fields",
+    "advancedOptions": "Advanced",
+    "switchToConsumerShort": "Browse as customer"
   },
   "settingsScreen": {
     "title": "설정",
@@ -514,7 +536,11 @@
     "createManually": "수동으로 만들기",
     "moreToolsTitle": "다른 만들기 방법",
     "moreToolsShow": "더 보기",
-    "moreToolsHide": "접기"
+    "moreToolsHide": "접기",
+    "newDeal": "New Deal",
+    "newDealSub": "Photo, voice, or text — AI creates your ad",
+    "reuseDeal": "Reuse Past Deal",
+    "reuseDealSub": "Relaunch a template or past offer"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -535,6 +561,7 @@
     "categoryPlaceholder": "Section (optional)",
     "pricePlaceholder": "Price (optional)",
     "removeLine": "Remove",
+    "photoPermissionDenied": "메뉴 이미지를 선택하려면 사진 라이브러리 접근이 필요합니다.",
     "pickMore": "Add more photos (append)",
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "라이브러리에 있는 항목은 건너뛰기",
@@ -601,7 +628,8 @@
     "errInvalidVariant": "이 광고 옵션을 사용할 수 없습니다. 메뉴 오퍼 화면에서 다시 다듬기를 열어 주세요.",
     "goBack": "돌아가기",
     "promoLineLabel": "프로모 문구",
-    "bodyCopyLabel": "상세"
+    "bodyCopyLabel": "상세",
+    "yourEdits": "수정 내역"
   },
   "aiCompose": {
     "title": "AI 오퍼",
@@ -660,7 +688,8 @@
     "untitled": "제목 없음",
     "openInAiAds": "AI 딜에서 열기",
     "repeatCta": "빠른 딜로 반복 →",
-    "backToAiCompose": "← AI 오퍼로 돌아가기"
+    "backToAiCompose": "← AI 오퍼로 돌아가기",
+    "backToCreate": "← Back to Create"
   },
   "dealDetail": {
     "title": "딜",
@@ -684,7 +713,8 @@
     "errLoginClaim": "딜을 받으려면 로그인하세요.",
     "errLoginFavorite": "즐겨찾기를 쓰려면 로그인하세요.",
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
-    "viewBusiness": "매장 프로필"
+    "viewBusiness": "매장 프로필",
+    "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요."
   },
   "redeem": {
     "title": "사용",
@@ -771,7 +801,9 @@
     "demoHint": "미리보기/개발 전용",
     "demoCredentialsHint": "시드 데모 로그인: {{email}} · 비밀번호 {{password}}",
     "emailLabel": "이메일",
+    "emailPlaceholder": "you@example.com",
     "passwordLabel": "비밀번호",
+    "passwordPlaceholder": "••••••••",
     "forgotPassword": "비밀번호 찾기",
     "logIn": "로그인",
     "pleaseWait": "잠시만 기다려 주세요…",
@@ -910,7 +942,8 @@
     "browseMoreDeals": "다른 딜 둘러보기",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "종료",
-    "modalTitle": "모달"
+    "modalTitle": "모달",
+    "tapToRetry": "다시 시도하려면 탭하세요"
   },
   "debugDiagnostics": {
     "title": "진단"
@@ -1367,7 +1400,16 @@
       "weekends": "주말",
       "late_night": "심야",
       "custom_prompt": "직접 입력…"
-    }
+    },
+    "errEnterName": "Enter a business name first.",
+    "lookupButton": "Look up my business",
+    "searching": "Searching…",
+    "selectResult": "Tap to auto-fill your info:",
+    "noResults": "No results found. Enter your info manually.",
+    "lookupError": "Lookup failed. Enter your info manually.",
+    "infoFilled": "Info filled! Review and edit if needed.",
+    "estimatedInfo": "Info is estimated — please verify before saving.",
+    "aiEstimate": "Estimated by AI"
   },
   "settingsConsumer": {
     "editTitle": "쇼퍼 프로필",
@@ -1446,6 +1488,19 @@
     "refreshLimitReached": "재생성 완료 — 새 배치를 시작하거나 아래에서 편집하세요.",
     "refreshesLeft": "재생성 남은 횟수: {{remaining}} / {{total}}",
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
+    "generatingPhaseCopy": "Crafting your ad copy...",
+    "generatingPhaseImages": "Generating unique images for each ad...",
+    "generatingPhaseFinishing": "Almost there — finishing up...",
+    "errMicPermission": "Microphone permission is required for voice input.",
+    "errRecordingStart": "Could not start recording. Try again.",
+    "transcribeDone": "Voice transcribed and added to your description.",
+    "transcribeEmpty": "No speech detected. Try again.",
+    "transcribeCooldown": "Please wait a moment before recording again.",
+    "transcribeFailed": "Transcription failed. Try again.",
+    "quotaRemaining": "{{remaining}} of {{limit}} AI uses left this month",
+    "quotaWarning": "Only {{remaining}} AI uses remaining this month.",
+    "prefillFromReuse": "Deal prefilled from your past deals.",
+    "prefillFromHub": "Deal prefilled. Add a photo and generate your ad!",
     "errUploadPhotoBeforeGenerate": "Upload the photo before generating.",
     "errGenerationFailed": "Generation failed",
     "errUnexpectedAiResponse": "Unexpected response from AI. Try again.",
@@ -1517,6 +1572,10 @@
     "errPublishDraft": "Please generate or enter title and description.",
     "errPublishDraftFirst": "Please generate or enter title and description first.",
     "errPublishFailed": "Publish failed.",
+    "errPublishPermission": "Permission denied. Make sure you own this business.",
+    "errPublishDuplicate": "This deal already exists.",
+    "errPublishPhoto": "Photo upload failed. Try picking a new photo.",
+    "errPublishNetwork": "Network error. Check your connection and try again.",
     "errSaveTemplateFailed": "Saving template failed.",
     "friendlyOpenaiConfig": "AI isn’t configured on the server yet. You can still write your deal below.",
     "friendlySession": "Session expired. Log in again, then try generating.",
@@ -1546,7 +1605,11 @@
     "edit": "Edit"
   },
   "billing": {
-    "trialEndsIn": "30일 무료 체험이 {{days}}일 후에 끝나요",
+    "currentStatus": "상태",
+    "retryLoadPricing": "재시도",
+    "trialEndsIn": "30일 체험이 {{days}}일 후에 종료됩니다",
+    "trialExpired": "무료 체험이 종료되었습니다",
+    "currentPlan": "현재 플랜",
     "trialExpiredBanner": "계정을 다시 활성화하세요",
     "reactivateMessage": "계정을 다시 활성화하세요",
     "paywallExpiredMessage": "체험 기간이 종료되었습니다. 계속 딜을 만들려면 계정을 다시 활성화하세요.",
@@ -1592,5 +1655,27 @@
     "backToBilling": "결제로 돌아가기",
     "errPortal": "Stripe 포털을 열 수 없습니다.",
     "errUpgrade": "업그레이드를 시작할 수 없습니다."
+  },
+  "aiInsights": {
+    "title": "AI Insights",
+    "refresh": "Refresh",
+    "loading": "Analyzing your deals...",
+    "noSuggestions": "No suggestions available yet — create a deal first!"
+  },
+  "walkthrough": {
+    "dashboardTitle": "Your Dashboard",
+    "dashboardBody": "This is your home base. See all your deals, track claims and redemptions, and monitor how your business is doing at a glance.",
+    "createTitle": "Create a Deal",
+    "createBody": "Launch BOGO deals in seconds. Set the offer, pick a schedule, and your deal goes live to nearby customers instantly.",
+    "trackTitle": "Track Performance",
+    "trackBody": "Watch redemptions roll in, see which deals work best, and use insights to keep customers coming back.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip tour",
+    "createFirstDeal": "Create Your First Deal",
+    "useAiDeal": "Use This Deal Idea",
+    "exploreDashboard": "Explore Dashboard First",
+    "aiSuggestionLabel": "AI deal idea for you",
+    "aiLoading": "Generating a deal idea for you..."
   }
 }

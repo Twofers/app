@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
+import { buildAdVariantImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +27,8 @@ type AdVariant = {
   style_label: string;
   rationale: string;
   visual_direction: string;
+  /** AI-generated ad image in deal-photos bucket; set after DALL-E generation */
+  poster_storage_path?: string | null;
 };
 
 type AdsResult = { ads: AdVariant[] };
@@ -32,8 +36,8 @@ type AdsResult = { ads: AdVariant[] };
 const LANE_ORDER: CreativeLane[] = ["value", "neighborhood", "premium"];
 
 const CHAT_MODEL = resolveOpenAiChatModel();
-const DEFAULT_MONTHLY = Number(Deno.env.get("AI_MONTHLY_LIMIT") ?? "30");
-const COOLDOWN_SEC = Number(Deno.env.get("AI_COOLDOWN_SECONDS") ?? "60");
+const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
+const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
 
 function utcMonthStartIso(): string {
   const d = new Date();
@@ -300,10 +304,28 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set. Add it to Supabase secrets." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const ms2 = 900 + Math.floor(Math.random() * 550);
+      await new Promise((r) => setTimeout(r, ms2));
+      const fallbackAds = buildDemoAdVariants({
+        hint_text: hintForModel,
+        price,
+        business_name: typeof business.name === "string" ? business.name : "",
+        business_context,
+        offer_schedule_summary,
+        output_language,
+        regeneration_attempt,
+      });
+      const fallbackNorm = normalizeLaneOrder(fallbackAds as AdVariant[]);
+      if (!fallbackNorm) {
+        return new Response(JSON.stringify({ error: "Generation failed." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ads: fallbackNorm }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: prior } = await supabase
@@ -370,7 +392,10 @@ serve(async (req) => {
         : "";
 
     const system = [
-      "You write exactly 3 mobile ad concepts for a local deal app (Twofer). Output JSON only.",
+      "You write exactly 3 mobile ad concepts for independent cafés and local food businesses on Twofer. Output JSON only.",
+      "",
+      "VOICE & TONE: Write like the owner's best marketer — warm, confident, never corporate. Use sensory language (\"hand-pulled\", \"small-batch\", \"freshly baked\", \"single-origin\"). Avoid generic ad-speak (\"best deal ever\", \"amazing offer\", \"don't miss out\"). No exclamation marks. The deal should feel like a generous invitation from a craftsperson, not a clearance sale.",
+      "",
       `OUTPUT LANGUAGE: Write headline, subheadline, cta, style_label, rationale, and visual_direction entirely in ${outputLangName}. Do not mix languages.`,
       signedPosterUrl
         ? "PRIORITY ORDER: (1) SECTION A offer facts in the user message — structured offer JSON (if present), owner note, schedule, price field (2) the image (3) SECTION B profile hints for tone/voice only."
@@ -604,6 +629,73 @@ serve(async (req) => {
       prompt_tokens: usage?.prompt_tokens ?? null,
       completion_tokens: usage?.completion_tokens ?? null,
     });
+
+    // --- DALL-E image generation (3 images in parallel) ---
+    const businessNameForImage = typeof business.name === "string" ? business.name : "Local Café";
+    let imageSuccessCount = 0;
+    try {
+      const imageResults = await Promise.allSettled(
+        normalized.map((ad) => {
+          const prompt = buildAdVariantImagePrompt({
+            lane: ad.creative_lane,
+            businessName: businessNameForImage,
+            headline: ad.headline,
+            subheadline: ad.subheadline,
+            visualDirection: ad.visual_direction,
+          });
+          return tryGeneratePosterPng(openAiKey!, prompt, "ai_ads");
+        }),
+      );
+      const ts = Date.now();
+      for (let i = 0; i < normalized.length; i++) {
+        const result = imageResults[i];
+        const png =
+          result.status === "fulfilled" ? result.value : null;
+        if (!png || png.length < 100) {
+          normalized[i].poster_storage_path = null;
+          continue;
+        }
+        const imgPath = `${business_id}/ai_ad_${normalized[i].creative_lane}_${ts}_${i}.png`;
+        const { error: upErr } = await admin.storage
+          .from("deal-photos")
+          .upload(imgPath, png, { contentType: "image/png", upsert: false });
+        if (upErr) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads",
+              event: "image_upload_error",
+              lane: normalized[i].creative_lane,
+              err: upErr.message?.slice(0, 200),
+            }),
+          );
+          normalized[i].poster_storage_path = null;
+        } else {
+          normalized[i].poster_storage_path = imgPath;
+          imageSuccessCount++;
+        }
+      }
+    } catch (imgErr) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads",
+          event: "image_gen_batch_error",
+          err: String(imgErr).slice(0, 200),
+        }),
+      );
+      // Text variants are still valid — return them without images
+      for (const ad of normalized) ad.poster_storage_path = null;
+    }
+
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads",
+        event: "image_gen_summary",
+        user_id: user.id,
+        business_id,
+        images_generated: imageSuccessCount,
+        images_total: normalized.length,
+      }),
+    );
 
     const updatedUsed = (monthCount ?? 0) + 1;
     const quota = { used: updatedUsed, limit: monthlyLimit, remaining: Math.max(0, monthlyLimit - updatedUsed) };

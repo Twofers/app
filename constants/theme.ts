@@ -34,7 +34,7 @@ export const Colors = {
     surface: '#1b1e20',
     surfaceMuted: '#202427',
     border: '#2a2f33',
-    mutedText: '#a8afb7',
+    mutedText: '#b4bcc5',
     tint: '#FF9F1C',
     primary: '#FF9F1C',
     primaryText: '#11181C',

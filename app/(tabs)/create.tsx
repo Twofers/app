@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CardShell } from "@/components/ui/card-shell";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -17,22 +17,20 @@ import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
-import { aiGenerateDealCopy } from "../../lib/functions";
+
 
 export default function CreateDeal() {
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
-  const { isLoggedIn, businessId, businessName, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, loading, subscriptionStatus, trialEndsAt } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
   const [templates, setTemplates] = useState<{ id: string; title: string | null; description: string | null; poster_url: string | null; price: number | null }[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
-  const [offerText, setOfferText] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
@@ -111,13 +109,10 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Banner
             tone="warning"
-            message={t("billing.paywallExpiredMessage", {
-              defaultValue:
-                "Your trial has ended. Reactivate your account to continue creating deals.",
-            })}
+            message={t("billing.paywallExpiredMessage")}
           />
           <PrimaryButton
-            title={t("billing.goToBilling", { defaultValue: "Go to Billing" })}
+            title={t("billing.goToBilling")}
             onPress={() =>
               router.replace({
                 pathname: "/(tabs)/billing",
@@ -139,217 +134,87 @@ export default function CreateDeal() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Single "Create Deal" entry point ────────── */}
-          <View
+          {/* ── New Deal ── */}
+          <Pressable
+            onPress={() => router.push("/create/ai")}
+            style={{
+              borderRadius: Radii.card,
+              padding: Spacing.xl,
+              backgroundColor: Colors.light.primary,
+              alignItems: "center",
+              boxShadow: "0px 4px 14px rgba(255,159,28,0.35)",
+              elevation: 4,
+            }}
+          >
+            <Text style={{ fontSize: 20, fontWeight: "900", color: "#fff", letterSpacing: 0.2 }}>
+              {t("createHub.newDeal")}
+            </Text>
+            <Text style={{ fontSize: 14, color: "#fff", opacity: 0.88, marginTop: 6 }}>
+              {t("createHub.newDealSub")}
+            </Text>
+          </Pressable>
+
+          {/* ── Reuse Past Deal ── */}
+          <Pressable
+            onPress={() => router.push("/create/reuse")}
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               backgroundColor: Colors.light.surface,
-              borderWidth: 2,
-              borderColor: Colors.light.primary,
-              boxShadow: "0px 4px 10px rgba(0,0,0,0.12)",
-              elevation: 4,
+              borderWidth: 1.5,
+              borderColor: Colors.light.border,
+              alignItems: "center",
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text, marginBottom: Spacing.sm }}>
-              {t("createHub.offerInputLabel")}
+            <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
+              {t("createHub.reuseDeal")}
             </Text>
-            <TextInput
-              value={offerText}
-              onChangeText={setOfferText}
-              placeholder={t("createHub.offerInputPlaceholder")}
-              placeholderTextColor="#999"
-              multiline
-              editable={!aiLoading}
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                minHeight: 72,
-                textAlignVertical: "top",
-                fontSize: 16,
-                backgroundColor: "#fff",
-              }}
-            />
-            <View style={{ marginTop: Spacing.md }}>
-              <PrimaryButton
-                title={aiLoading ? t("createHub.creatingDeal") : t("createHub.createDealButton")}
-                disabled={aiLoading}
-                onPress={async () => {
-                  const text = offerText.trim();
-                  if (!text) {
-                    setBanner({ message: t("createHub.errOfferEmpty"), tone: "error" });
-                    return;
-                  }
-                  setBanner(null);
-                  setAiLoading(true);
-                  try {
-                    const result = await aiGenerateDealCopy({
-                      hint_text: text,
-                      business_name: businessName ?? undefined,
-                      business_id: businessId ?? undefined,
-                    });
-                    setOfferText("");
-                    router.push({
-                      pathname: "/create/quick",
-                      params: {
-                        prefillTitle: result.title,
-                        prefillHint: result.description,
-                        fromCreateHub: "1",
-                      },
-                    });
-                  } catch (_err) {
-                    setBanner({ message: t("createHub.errAiCreateFailed"), tone: "error" });
-                  } finally {
-                    setAiLoading(false);
-                  }
-                }}
-              />
-            </View>
-            {aiLoading ? (
-              <View style={{ flexDirection: "row", alignItems: "center", marginTop: Spacing.sm, gap: 8 }}>
-                <ActivityIndicator size="small" color={Colors.light.primary} />
-                <Text style={{ opacity: 0.6, fontSize: 14 }}>{t("createHub.creatingDeal")}</Text>
-              </View>
-            ) : null}
-            {banner?.tone === "error" ? (
-              <View style={{ marginTop: Spacing.sm }}>
-                <SecondaryButton
-                  title={t("createHub.createManually")}
-                  onPress={() => router.push("/create/quick")}
-                />
-              </View>
-            ) : null}
-          </View>
+            <Text style={{ fontSize: 13, color: theme.mutedText, marginTop: 4 }}>
+              {t("createHub.reuseDealSub")}
+            </Text>
+          </Pressable>
 
+          {/* ── More Tools (menu features) ── */}
           <Pressable
             onPress={() => setMoreToolsOpen((v) => !v)}
             accessibilityRole="button"
             accessibilityState={{ expanded: moreToolsOpen }}
           >
             <CardShell variant="muted">
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "800" }}>{t("createHub.moreToolsTitle")}</Text>
-              <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14, fontWeight: "600" }}>
+              <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
+              <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
                 {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
               </Text>
             </CardShell>
           </Pressable>
 
           {moreToolsOpen ? (
-            <View style={{ gap: Spacing.md }}>
-              <Pressable
-                onPress={() => router.push("/create/quick")}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  backgroundColor: Colors.light.surface,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                }}
-              >
-                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.quickDealTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                  {t("createHub.quickDealSubtitle")}
-                </Text>
-              </Pressable>
-
+            <View style={{ gap: Spacing.sm }}>
               <Pressable
                 onPress={() => router.push("/create/menu-offer" as Href)}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  backgroundColor: Colors.light.surface,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                }}
+                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border }}
               >
-                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuDealFastTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                  {t("createHub.menuDealFastSubtitle")}
-                </Text>
+                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.menuDealFastTitle")}</Text>
+                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
               </Pressable>
-
-              <Pressable
-                onPress={() => router.push("/create/ai-compose")}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.lg,
-                  backgroundColor: "#1e3a5f",
-                  boxShadow: "0px 3px 8px rgba(0,0,0,0.08)",
-                  elevation: 2,
-                }}
-              >
-                <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiComposeTitle")}</Text>
-                <Text style={{ color: "white", opacity: 0.88, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
-                  {t("createHub.aiComposeSubtitle")}
-                </Text>
-              </Pressable>
-
               <Pressable
                 onPress={() => router.push("/create/menu-scan" as Href)}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  backgroundColor: Colors.light.surface,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                }}
+                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border }}
               >
-                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.scanMenuTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                  {t("createHub.scanMenuSubtitle")}
-                </Text>
+                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.scanMenuTitle")}</Text>
+                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
               </Pressable>
-
               <Pressable
                 onPress={() => router.push("/create/menu-manager" as Href)}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  backgroundColor: Colors.light.surfaceMuted,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                }}
+                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border }}
               >
-                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.menuManagerTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                  {t("createHub.menuManagerSubtitle")}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => router.push("/create/reuse")}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  backgroundColor: Colors.light.surface,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                }}
-              >
-                <Text style={{ color: "#111", fontSize: 16, fontWeight: "700" }}>{t("createHub.reuseTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                  {t("createHub.reuseSubtitle")}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => router.push("/create/ai")}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.lg,
-                  backgroundColor: Colors.light.surfaceMuted,
-                }}
-              >
-                <Text style={{ color: "#111", fontSize: 17, fontWeight: "700" }}>{t("createHub.aiAdsTitle")}</Text>
-                <Text style={{ color: "#111", opacity: 0.72, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22 }}>
-                  {t("createHub.aiAdsSubtitle")}
-                </Text>
+                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.menuManagerTitle")}</Text>
+                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>
               </Pressable>
             </View>
           ) : null}
 
+          {/* ── Templates ── */}
           <View style={{ marginTop: Spacing.sm }}>
             <Text style={{ fontSize: 17, fontWeight: "700", marginBottom: Spacing.md }}>{t("createHub.templatesTitle")}</Text>
             {templatesLoading ? (

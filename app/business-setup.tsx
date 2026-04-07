@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { ActivityIndicator, Image, ScrollView, Text, TextInput, View } from "react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
+import { consumePendingDeepLink } from "@/lib/post-auth-route";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
+import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 
 type Tone = "error" | "success" | "info";
 
@@ -58,6 +62,8 @@ export default function BusinessSetupScreen() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
 
   const trimmed = useMemo(
     () => ({
@@ -119,6 +125,43 @@ export default function BusinessSetupScreen() {
     } finally {
       setLogoUploading(false);
     }
+  }
+
+  async function onLookup() {
+    if (!businessName.trim()) {
+      setBanner({ message: t("businessSetup.errEnterName"), tone: "error" });
+      return;
+    }
+    setSearching(true);
+    setLookupResults(null);
+    setBanner(null);
+    try {
+      const results = await aiBusinessLookup({ business_name: businessName.trim() });
+      if (results.length === 0) {
+        setBanner({ message: t("businessSetup.noResults"), tone: "info" });
+      }
+      setLookupResults(results.length > 0 ? results : null);
+    } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Lookup error:", e);
+      setBanner({ message: t("businessSetup.lookupError"), tone: "error" });
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function applyLookupResult(result: BusinessLookupResult) {
+    setBusinessName(result.name);
+    setAddress(result.formatted_address);
+    if (result.phone) setPhone(result.phone);
+    if (result.category) setShortDescription(result.category);
+    setLookupResults(null);
+    const isEstimate = result.source === "ai_estimate";
+    setBanner({
+      message: isEstimate
+        ? t("businessSetup.estimatedInfo")
+        : t("businessSetup.infoFilled"),
+      tone: isEstimate ? "info" : "success",
+    });
   }
 
   async function onSubmit() {
@@ -218,12 +261,14 @@ export default function BusinessSetupScreen() {
       }
 
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
-      setTimeout(() => {
-        router.replace("/(tabs)/dashboard");
+      setTimeout(async () => {
+        const pending = await consumePendingDeepLink();
+        router.replace((pending ?? "/(tabs)/dashboard") as Href);
       }, 250);
     } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Save error:", e);
       setBanner({
-        message: (e instanceof Error ? e.message : String(e)) || t("businessSetup.errSave"),
+        message: t("businessSetup.errSave"),
         tone: "error",
       });
     } finally {

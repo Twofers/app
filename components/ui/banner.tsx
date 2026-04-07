@@ -1,12 +1,14 @@
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Radii } from "@/constants/theme";
+import i18n from "@/lib/i18n/config";
 
 type BannerProps = {
   message: string;
   tone?: "error" | "success" | "info" | "warning";
+  onRetry?: () => void;
 };
 
-export function Banner({ message, tone = "info" }: BannerProps) {
+export function Banner({ message, tone = "info", onRetry }: BannerProps) {
   const stylesByTone = {
     error: { backgroundColor: "#fde8e8", borderColor: "#f5b5b5", textColor: "#7a1f1f" },
     success: { backgroundColor: "#e8f5e9", borderColor: "#b7dfbf", textColor: "#1b5e20" },
@@ -16,6 +18,8 @@ export function Banner({ message, tone = "info" }: BannerProps) {
 
   return (
     <View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
       style={{
         borderWidth: 1,
         borderColor: stylesByTone.borderColor,
@@ -26,6 +30,17 @@ export function Banner({ message, tone = "info" }: BannerProps) {
       }}
     >
       <Text style={{ color: stylesByTone.textColor, fontWeight: "600", lineHeight: 20 }}>{message}</Text>
+      {onRetry ? (
+        <Pressable
+          onPress={onRetry}
+          accessibilityRole="button"
+          style={{ marginTop: 6 }}
+        >
+          <Text style={{ color: stylesByTone.textColor, fontWeight: "700", textDecorationLine: "underline", fontSize: 13 }}>
+            {i18n.t("commonUi.tapToRetry")}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

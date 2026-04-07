@@ -6,6 +6,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
+import { SLOW_LOAD_HINT_MS } from "@/constants/timing";
 
 export default function Index() {
   const params = useGlobalSearchParams<{ e2e?: string }>();
@@ -31,7 +32,7 @@ export default function Index() {
       setShowSlowLoadHint(false);
       return;
     }
-    const id = setTimeout(() => setShowSlowLoadHint(true), 8000);
+    const id = setTimeout(() => setShowSlowLoadHint(true), SLOW_LOAD_HINT_MS);
     return () => clearTimeout(id);
   }, [authGateLoading]);
 

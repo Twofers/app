@@ -137,13 +137,13 @@ export default function BusinessProfileScreen() {
       const { error } = await supabase.from("favorites").insert({ user_id: userId, business_id: id });
       if (error) {
         setIsFavorite(false);
-        setBanner(error.message);
+        setBanner(t("consumerHome.errFavoriteToggle"));
       }
     } else {
       const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("business_id", id);
       if (error) {
         setIsFavorite(true);
-        setBanner(error.message);
+        setBanner(t("consumerHome.errFavoriteToggle"));
       }
     }
   }
@@ -302,7 +302,7 @@ export default function BusinessProfileScreen() {
               {(() => {
                 const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
                 return uri ? (
-                  <Image source={{ uri }} style={{ width: "100%", height: 200 }} contentFit="cover" />
+                  <Image source={{ uri }} style={{ width: "100%", aspectRatio: 16 / 9 }} contentFit="cover" />
                 ) : (
                   <View
                     style={{ height: 120, backgroundColor: "#ececec", alignItems: "center", justifyContent: "center" }}

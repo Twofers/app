@@ -178,7 +178,7 @@ serve(async (req) => {
     const nowIso = now.toISOString();
 
     // 🔒 Verify token belongs to a deal owned by this business
-    const deal = claim.deal as any;
+    const deal = claim.deal as { business?: { owner_id?: string }; max_claims?: number | null } | null;
     if (!deal || deal.business?.owner_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "This token does not belong to your business" }),
@@ -301,10 +301,7 @@ serve(async (req) => {
   } catch (err) {
     console.error("Unexpected error:", err);
     return new Response(
-      JSON.stringify({
-        error: "Server error",
-        details: err instanceof Error ? err.message : String(err),
-      }),
+      JSON.stringify({ error: "Server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

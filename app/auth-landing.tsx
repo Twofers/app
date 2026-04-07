@@ -48,17 +48,20 @@ function ScalePressable({
   disabled,
   style,
   children,
+  accessibilityLabel,
 }: {
   onPress: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
+  accessibilityLabel?: string;
 }) {
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <AnimatedPressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       disabled={disabled}
       onPressIn={() => {
@@ -149,6 +152,7 @@ export default function AuthLandingScreen() {
   const [pw, setPw] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_PASSWORD : ""));
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
 
   useEffect(() => {
@@ -196,6 +200,18 @@ export default function AuthLandingScreen() {
 
   function clearFeedback() {
     setAuthError(null);
+    setEmailError(null);
+  }
+
+  function validateEmail(): boolean {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setEmailError(
+        t("authLanding.invalidEmail", { defaultValue: "Please enter a valid email address" }),
+      );
+      return false;
+    }
+    setEmailError(null);
+    return true;
   }
 
   function onEmailChange(v: string) {
@@ -211,6 +227,7 @@ export default function AuthLandingScreen() {
 
   async function handleLogIn() {
     if (!canSubmit || !selectedMode) return;
+    if (!validateEmail()) return;
     setBusyAction("login");
     clearFeedback();
     logAuthPath("normal_login", email.trim());
@@ -245,6 +262,7 @@ export default function AuthLandingScreen() {
 
   async function handleSignUp() {
     if (!canSubmit || !selectedMode) return;
+    if (!validateEmail()) return;
     setBusyAction("signup");
     clearFeedback();
     setSignUpAwaitingVerification(false);
@@ -310,10 +328,10 @@ export default function AuthLandingScreen() {
             {/* FIX: Penguin enlarged significantly. Container clips the "TWOFER"
                 text baked into splash-icon.png so it doesn't duplicate the
                 orange Text below. Penguin is now the dominant hero element. */}
-            <View style={{ width: 360, height: 220, overflow: "hidden", alignItems: "center" }}>
+            <View style={{ maxWidth: "75%", aspectRatio: 360 / 160, overflow: "hidden", alignItems: "center" }}>
               <Image
                 source={require("../assets/images/splash-icon.png")}
-                style={{ width: 360, height: 400 }}
+                style={{ width: 300, height: 330 }}
                 resizeMode="contain"
                 accessibilityIgnoresInvertColors
                 accessibilityLabel={t("authLanding.heroA11y")}
@@ -354,6 +372,10 @@ export default function AuthLandingScreen() {
                     <Pressable
                       key={locale}
                       onPress={() => void chooseLocale(locale)}
+                      accessibilityRole="button"
+                      accessibilityLabel={locale.toUpperCase()}
+                      accessibilityState={{ selected: active }}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                       style={{
                         borderRadius: 999,
                         paddingHorizontal: Spacing.md,
@@ -495,19 +517,31 @@ export default function AuthLandingScreen() {
                 keyboardType="email-address"
                 autoCorrect={false}
                 editable={!busy}
-                placeholder="you@example.com"
+                accessibilityLabel={t("authLanding.emailLabel")}
+                placeholder={t("authLanding.emailPlaceholder")}
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
-                  borderColor: inputBorder,
+                  borderColor: emailError ? "#d32f2f" : inputBorder,
                   borderRadius: Radii.md,
                   padding: Spacing.lg,
                   fontSize: 16,
                   backgroundColor: inputBg,
                   color: theme.text,
-                  marginBottom: Spacing.md,
+                  marginBottom: emailError ? 4 : Spacing.md,
                 }}
               />
+              {emailError ? (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#d32f2f",
+                    marginBottom: Spacing.md,
+                  }}
+                >
+                  {emailError}
+                </Text>
+              ) : null}
 
               <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
                 {t("authLanding.passwordLabel")}
@@ -517,7 +551,8 @@ export default function AuthLandingScreen() {
                 onChangeText={onPwChange}
                 secureTextEntry
                 editable={!busy}
-                placeholder="••••••••"
+                accessibilityLabel={t("authLanding.passwordLabel")}
+                placeholder={t("authLanding.passwordPlaceholder")}
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
@@ -530,9 +565,45 @@ export default function AuthLandingScreen() {
                 }}
               />
 
+              {pw.length > 0 && pw !== DEMO_PREVIEW_PASSWORD ? (
+                (() => {
+                  const hasUpper = /[A-Z]/.test(pw);
+                  const hasNumber = /[0-9]/.test(pw);
+                  const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+                  const bonusCount = [hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+                  const strength =
+                    pw.length < 8 ? "weak" : bonusCount >= 3 ? "strong" : bonusCount >= 2 ? "medium" : "weak";
+                  const color = strength === "strong" ? "#2e7d32" : strength === "medium" ? "#FF9F1C" : "#d32f2f";
+                  const widthPct = strength === "strong" ? "100%" : strength === "medium" ? "66%" : "33%";
+                  const label =
+                    strength === "strong"
+                      ? t("authLanding.strengthStrong", { defaultValue: "Strong" })
+                      : strength === "medium"
+                        ? t("authLanding.strengthMedium", { defaultValue: "Medium" })
+                        : t("authLanding.strengthWeak", { defaultValue: "Weak" });
+                  return (
+                    <View style={{ marginTop: 6 }}>
+                      <View
+                        style={{
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: theme.border,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <View style={{ height: 4, borderRadius: 2, backgroundColor: color, width: widthPct }} />
+                      </View>
+                      <Text style={{ fontSize: 12, color, marginTop: 2 }}>{label}</Text>
+                    </View>
+                  );
+                })()
+              ) : null}
+
               <Pressable
                 onPress={() => router.push("/forgot-password" as Href)}
                 disabled={busy}
+                accessibilityRole="link"
+                accessibilityLabel={t("authLanding.forgotPassword")}
                 style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
@@ -560,6 +631,7 @@ export default function AuthLandingScreen() {
               <ScalePressable
                 disabled={!canSubmit}
                 onPress={() => void handleLogIn()}
+                accessibilityLabel={busyAction === "login" ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,
@@ -583,6 +655,7 @@ export default function AuthLandingScreen() {
               <ScalePressable
                 disabled={!canSubmit}
                 onPress={() => void handleSignUp()}
+                accessibilityLabel={t("authLanding.createAccount")}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,

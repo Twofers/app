@@ -15,11 +15,29 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setSession(data.session ?? null);
-      setIsInitialLoading(false);
-    });
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          // Stale/invalid refresh token — clear it so the user lands on login
+          void supabase.auth.signOut().finally(() => {
+            if (!cancelled) {
+              setSession(null);
+              setIsInitialLoading(false);
+            }
+          });
+          return;
+        }
+        setSession(data.session ?? null);
+        setIsInitialLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        void supabase.auth.signOut().catch(() => {});
+        setSession(null);
+        setIsInitialLoading(false);
+      });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {

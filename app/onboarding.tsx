@@ -14,6 +14,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import i18n from "@/lib/i18n/config";
 import type { AppLocale } from "@/lib/i18n/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -64,18 +65,27 @@ export default function OnboardingScreen() {
   }, []);
 
   useEffect(() => {
-    void getOnboardingStepIndex().then((s) => {
-      if (s !== null) goToStep(s);
-    });
+    void (async () => {
+      const savedStep = await getOnboardingStepIndex();
+      if (savedStep !== null) {
+        goToStep(savedStep);
+        return;
+      }
+      // Skip language step if user already chose one on auth landing
+      const manual = await AsyncStorage.getItem("twoforone.locale_manual_override");
+      if (manual === "1") {
+        goToStep(1);
+      }
+    })();
   }, [goToStep]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (step > 0) {
         goToStep(step - 1);
-        return true;
       }
-      return false;
+      // Always consume back press during onboarding to prevent app exit
+      return true;
     });
     return () => sub.remove();
   }, [step, goToStep]);
@@ -114,12 +124,8 @@ export default function OnboardingScreen() {
       await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
       goToStep(3);
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : "";
-      setHint(
-        detail
-          ? `${t("onboarding.locationError")} (${detail})`
-          : t("onboarding.locationError"),
-      );
+      if (__DEV__) console.warn("GPS error:", err);
+      setHint(t("onboarding.locationError"));
       goToStep(2);
     } finally {
       setBusy(false);
@@ -149,12 +155,8 @@ export default function OnboardingScreen() {
       await setLastKnownConsumerCoords(geo.lat, geo.lng);
       goToStep(3);
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : "";
-      setHint(
-        detail
-          ? `${t("onboarding.zipLookupFail")} (${detail})`
-          : t("onboarding.zipLookupFail"),
-      );
+      if (__DEV__) console.warn("ZIP lookup error:", err);
+      setHint(t("onboarding.zipLookupFail"));
     } finally {
       setBusy(false);
     }

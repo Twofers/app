@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,14 +90,90 @@ serve(async (req) => {
       );
     }
 
+    // Demo account: return template suggestions without calling OpenAI
+    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
+    if (isDemoUserEmail(user.email) && !demoWantsLive) {
+      const ms = 500 + Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, ms));
+
+      const biz = typeof business_name === "string" && business_name.trim() ? business_name.trim() : "Demo Roasted Bean Coffee";
+      const claims = Array.isArray(weekly_claims_by_day) ? (weekly_claims_by_day as number[]) : [];
+      const titles = Array.isArray(top_deal_titles) ? (top_deal_titles as string[]) : [];
+      const redeems = typeof total_redeems === "number" ? total_redeems : 0;
+      const claimsTotal = typeof total_claims === "number" ? total_claims : 0;
+
+      // Build contextual suggestions from metrics
+      const pool: Suggestion[] = [];
+
+      // Check if oat milk latte is a top deal
+      if (titles.some((t: string) => /oat milk latte/i.test(t))) {
+        pool.push({
+          icon: "\u2615",
+          title: "Expand your latte lineup",
+          body: `Your oat milk latte BOGO is your strongest performer at ${biz}. Consider adding a vanilla cortado variant to capture espresso lovers too.`,
+        });
+      }
+
+      // Check weekday vs weekend claims
+      const weekday = claims.slice(1, 6).reduce((a: number, b: number) => a + b, 0);
+      const weekend = (claims[0] ?? 0) + (claims[6] ?? 0);
+      if (weekday < weekend && weekend > 0) {
+        pool.push({
+          icon: "\uD83D\uDCC5",
+          title: "Boost your midweek traffic",
+          body: `${biz} sees more claims on weekends. A Tuesday cold brew BOGO could pull in remote workers looking for a midweek treat.`,
+        });
+      } else {
+        pool.push({
+          icon: "\uD83D\uDCC8",
+          title: "Weekend pastry pairing",
+          body: `Your weekday deals are solid. Try a Saturday morning croissant + latte bundle to capture weekend brunch traffic at ${biz}.`,
+        });
+      }
+
+      // Redemption rate insight
+      if (claimsTotal > 0 && redeems / claimsTotal < 0.5) {
+        pool.push({
+          icon: "\uD83C\uDFAF",
+          title: "Improve your redemption rate",
+          body: `People are claiming deals but not always redeeming. Consider a shorter window or a reminder push — making the deal feel time-sensitive can lift redemptions.`,
+        });
+      } else {
+        pool.push({
+          icon: "\u2728",
+          title: "Quality photos drive claims",
+          body: `A well-lit photo of your ${titles[0] ?? "best seller"} can double engagement. Shoot near the window with natural light for the best result.`,
+        });
+      }
+
+      // Always include a craft-focused suggestion
+      pool.push({
+        icon: "\uD83C\uDF1F",
+        title: "Tell your origin story",
+        body: `Customers at ${biz} connect with craft. Add a line about your single-origin beans or hand-laminated croissants — it builds trust and repeat visits.`,
+      });
+
+      const demoSuggestions = pool.slice(0, 3);
+      return new Response(JSON.stringify({ suggestions: demoSuggestions }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not set." }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      const ms2 = 500 + Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, ms2));
+      const biz2 = typeof business_name === "string" && business_name.trim() ? business_name.trim() : "your business";
+      const titles2 = Array.isArray(top_deal_titles) ? (top_deal_titles as string[]) : [];
+      const fallbackSuggestions: Suggestion[] = [
+        { icon: "\u2615", title: "Expand your lineup", body: `Your top deal${titles2[0] ? ` ("${titles2[0]}")` : ""} is driving claims at ${biz2}. Consider adding a variant to capture a wider audience.` },
+        { icon: "\uD83D\uDCC8", title: "Weekend pastry pairing", body: `Try a Saturday morning pastry + drink bundle to capture weekend brunch traffic at ${biz2}.` },
+        { icon: "\uD83C\uDF1F", title: "Tell your origin story", body: `Customers at ${biz2} connect with craft. Add a line about your sourcing or process \u2014 it builds trust and repeat visits.` },
+      ];
+      return new Response(JSON.stringify({ suggestions: fallbackSuggestions }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Quota: 30 insight requests per month per business
@@ -149,16 +226,23 @@ serve(async (req) => {
     }
 
     const systemPrompt = [
-      "You are an analytics advisor for a small local business running BOGO deals.",
+      "You are a marketing strategist for independent cafés and local food businesses on a deals app called Twofer.",
       "Given their recent deal performance data, generate 2-3 short, actionable suggestions.",
-      "Each suggestion should be specific, data-driven, and help the owner get more customers.",
-      "If claims are low, suggest timing or deal type changes.",
-      "If one day has much higher activity, suggest capitalizing on slow days.",
-      "If a deal type is popular, suggest similar deals.",
-      "Keep each title under 40 chars and each body under 120 chars.",
-      "For icon, use a single relevant emoji.",
-      "Return JSON only: an array of objects with icon, title, body.",
-    ].join(" ");
+      "",
+      "APPROACH:",
+      "- Think like a craft-focused brand consultant, not a generic marketing bot.",
+      "- Suggestions should help the owner highlight what makes their business special — ingredients, process, sourcing, freshness.",
+      "- Be specific and data-driven: reference actual numbers, days, or deal names from the data.",
+      "- Frame suggestions around quality and craft: \"Your cold brew BOGO is strong — try a cortado variant\" not \"Try more deals\".",
+      "- If claims are low on certain days, suggest targeted quality deals for those days.",
+      "- If a deal is performing well, suggest expanding that product line or pairing it with something complementary.",
+      "- One suggestion should always encourage storytelling: origin stories, process details, or ingredient highlights that build customer loyalty.",
+      "",
+      "FORMAT:",
+      "- Keep each title under 40 chars and each body under 120 chars.",
+      "- For icon, use a single relevant emoji.",
+      "- Return JSON only: an array of objects with icon, title, body.",
+    ].join("\n");
 
     const aiBody = {
       model: CHAT_MODEL,

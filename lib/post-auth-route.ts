@@ -1,7 +1,38 @@
 import type { Href } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { TabMode } from "./tab-mode";
 
 const BUSINESS_ONLY_TABS = new Set(["create", "redeem", "dashboard", "billing", "account"]);
+
+/** Key used to persist the intended deep-link destination across auth + onboarding screens. */
+const PENDING_DEEP_LINK_KEY = "twoforone_pending_deep_link_v1";
+
+/**
+ * Save a deep-link destination so it survives through multi-screen auth + setup flows.
+ * Called by auth-landing before redirecting to setup screens.
+ */
+export async function savePendingDeepLink(href: string): Promise<void> {
+  if (!href || href === "/(tabs)" || href === "/(tabs)/create" || href === "/(tabs)/dashboard") return;
+  try {
+    await AsyncStorage.setItem(PENDING_DEEP_LINK_KEY, href);
+  } catch {
+    /* noop */
+  }
+}
+
+/**
+ * Consume the saved deep-link (returns it and clears storage).
+ * Called by setup-completion screens to redirect to the original destination.
+ */
+export async function consumePendingDeepLink(): Promise<string | null> {
+  try {
+    const href = await AsyncStorage.getItem(PENDING_DEEP_LINK_KEY);
+    if (href) await AsyncStorage.removeItem(PENDING_DEEP_LINK_KEY);
+    return href;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * `next` from TabAuthGate is a path like "/(tabs)/wallet". For customer post-auth,
@@ -32,12 +63,16 @@ export async function resolvePostAuthReplaceHref(params: {
   nextParam: string | undefined;
 }): Promise<Href> {
   const { role, nextParam } = params;
-  const next = typeof nextParam === "string" && nextParam.length > 0 ? nextParam : "/(tabs)";
+  const raw = typeof nextParam === "string" && nextParam.length > 0 ? nextParam : "/(tabs)";
+  // Sanitize: only allow internal routes starting with / and no protocol
+  const next = raw.startsWith("/") && !raw.includes("://") ? raw : "/(tabs)";
 
   if (role === "business") {
     const { getBusinessProfileAccessForCurrentUser } = await import("./business-profile-access");
     const access = await getBusinessProfileAccessForCurrentUser();
     if (!access.isComplete) {
+      // Preserve the intended destination so business-setup can redirect there after completion.
+      await savePendingDeepLink(next);
       return "/business-setup" as Href;
     }
     if (next.startsWith("/(tabs)/billing")) {

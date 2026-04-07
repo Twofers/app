@@ -114,16 +114,18 @@ export default function DealDetail() {
   }, [loadDeal, authLoading, isLoggedIn, router]);
 
   useEffect(() => {
+    if (!userId || !deal?.business_id) return;
+    let cancelled = false;
     (async () => {
-      if (!userId || !deal?.business_id) return;
       const { data: fav } = await supabase
         .from("favorites")
         .select("business_id")
         .eq("user_id", userId)
         .eq("business_id", deal.business_id)
         .maybeSingle();
-      setIsFavorite(!!fav);
+      if (!cancelled) setIsFavorite(!!fav);
     })();
+    return () => { cancelled = true; };
   }, [userId, deal?.business_id]);
 
   // MVP open tracking: count once per loaded deal detail view.
@@ -153,7 +155,7 @@ export default function DealDetail() {
       // drops. The server-side timeout is 45s which is too long for UX.
       const claimPromise = claimDeal(deal.id, telem);
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Claim timed out — please try again.")), 15_000),
+        setTimeout(() => reject(new Error(t("dealDetail.claimTimedOut"))), 15_000),
       );
       const out = await Promise.race([claimPromise, timeoutPromise]);
       if (out.claim_id) {
