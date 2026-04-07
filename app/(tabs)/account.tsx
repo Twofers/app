@@ -823,6 +823,9 @@ export default function AccountScreen() {
               <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                 <Pressable
                   onPress={() => setProfilePreferredLocale(null)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityLabel={t("language.useAppLanguage")}
+                  accessibilityRole="button"
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -846,6 +849,9 @@ export default function AccountScreen() {
                   <Pressable
                     key={loc}
                     onPress={() => setProfilePreferredLocale(loc)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityLabel={loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
+                    accessibilityRole="button"
                     style={{
                       paddingVertical: 8,
                       paddingHorizontal: 12,
@@ -888,12 +894,14 @@ export default function AccountScreen() {
                   onChangeText={setProfileBusinessName}
                   placeholder={t("account.phBusinessName")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -975,12 +983,14 @@ export default function AccountScreen() {
                   onChangeText={setProfileContactName}
                   placeholder={t("account.phContactName")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -992,12 +1002,14 @@ export default function AccountScreen() {
                   placeholder={t("account.phBusinessEmail")}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1008,12 +1020,14 @@ export default function AccountScreen() {
                   onChangeText={setProfileAddress}
                   placeholder={t("account.phAddress")}
                   autoCapitalize="words"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1024,12 +1038,14 @@ export default function AccountScreen() {
                   onChangeText={setProfilePhone}
                   placeholder={t("account.phPhone")}
                   keyboardType="phone-pad"
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1039,12 +1055,14 @@ export default function AccountScreen() {
                   value={profileCategory}
                   onChangeText={setProfileCategory}
                   placeholder={t("account.phCategory")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1055,6 +1073,7 @@ export default function AccountScreen() {
                   onChangeText={setProfileHours}
                   placeholder={t("account.phHours")}
                   multiline
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
@@ -1063,6 +1082,7 @@ export default function AccountScreen() {
                     marginTop: 4,
                     minHeight: 56,
                     textAlignVertical: "top",
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1072,12 +1092,14 @@ export default function AccountScreen() {
                   value={profileTone}
                   onChangeText={setProfileTone}
                   placeholder={t("account.phTone")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1087,12 +1109,14 @@ export default function AccountScreen() {
                   value={profileLocation}
                   onChangeText={setProfileLocation}
                   placeholder={t("account.phLocation")}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1108,12 +1132,14 @@ export default function AccountScreen() {
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 6,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
                 <TextInput
@@ -1123,12 +1149,14 @@ export default function AccountScreen() {
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 8,
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
               </View>
@@ -1139,6 +1167,7 @@ export default function AccountScreen() {
                   onChangeText={setProfileShortDescription}
                   placeholder={t("account.phShortDescription")}
                   multiline
+                  editable={!savingProfile}
                   style={{
                     borderWidth: 1,
                     borderColor: theme.border,
@@ -1147,6 +1176,7 @@ export default function AccountScreen() {
                     marginTop: 4,
                     minHeight: 72,
                     textAlignVertical: "top",
+                    backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
                 <SecondaryButton

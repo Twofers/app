@@ -77,6 +77,7 @@ export function QrModal({
   const [tick, setTick] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toastOpacity = useSharedValue(0);
   const toastTranslateY = useSharedValue(-14);
@@ -84,7 +85,7 @@ export function QrModal({
 
   const particles = useMemo(() => {
     const colors = ["#FF9F1C", "#FFD166", "#FDE68A", "#FFFFFF", "#FFE6C7"];
-    const count = 18;
+    const count = 12;
     return Array.from({ length: count }, (_, idx) => {
       const angle = (idx / count) * Math.PI * 2;
       const radius = 46 + (idx % 6) * 6;
@@ -136,6 +137,8 @@ export function QrModal({
     if (!visible) {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
+      if (toastHideRef.current) clearTimeout(toastHideRef.current);
+      toastHideRef.current = null;
       setToastVisible(false);
       toastOpacity.value = 0;
       toastTranslateY.value = -14;
@@ -144,12 +147,16 @@ export function QrModal({
     }
   }, [visible, toastOpacity, toastTranslateY, confettiProgress]);
 
+  const TOAST_DISPLAY_MS = 3000;
+
   useEffect(() => {
     if (!visible) return;
     if (!successToastNonce) return;
 
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = null;
+    if (toastHideRef.current) clearTimeout(toastHideRef.current);
+    toastHideRef.current = null;
 
     setToastVisible(true);
     toastOpacity.value = 0;
@@ -163,12 +170,14 @@ export function QrModal({
     toastTimerRef.current = setTimeout(() => {
       toastOpacity.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
       toastTranslateY.value = withTiming(-10, { duration: 180, easing: Easing.in(Easing.cubic) }, () => {});
-      setTimeout(() => setToastVisible(false), 220);
-    }, 3000);
+      toastHideRef.current = setTimeout(() => setToastVisible(false), 220);
+    }, TOAST_DISPLAY_MS);
 
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
+      if (toastHideRef.current) clearTimeout(toastHideRef.current);
+      toastHideRef.current = null;
     };
   }, [successToastNonce, visible, toastOpacity, toastTranslateY, confettiProgress]);
 
@@ -254,7 +263,7 @@ export function QrModal({
 
               {/* Confetti burst */}
               <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: 10, alignItems: "center", pointerEvents: "none" }}>
-                <View style={{ position: "absolute", top: 2, width: 1, height: 1 }}>
+                <View renderToHardwareTextureAndroid style={{ position: "absolute", top: 2, width: 1, height: 1 }}>
                   {particles.map((p, idx) => (
                     <ConfettiParticle
                       key={idx}

@@ -915,7 +915,8 @@
     "browseMoreDeals": "다른 딜 둘러보기",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "종료",
-    "modalTitle": "모달"
+    "modalTitle": "모달",
+    "tapToRetry": "다시 시도하려면 탭하세요"
   },
   "debugDiagnostics": {
     "title": "진단"
@@ -1535,7 +1536,9 @@
     "edit": "Edit"
   },
   "billing": {
-    "trialEndsIn": "30일 무료 체험이 {{days}}일 후에 끝나요",
+    "currentStatus": "상태",
+    "retryLoadPricing": "재시도",
+    "trialEndsIn": "30일 체험이 {{days}}일 후에 종료됩니다",
     "trialExpired": "무료 체험이 종료되었습니다",
     "currentPlan": "현재 플랜",
     "trialExpiredBanner": "계정을 다시 활성화하세요",

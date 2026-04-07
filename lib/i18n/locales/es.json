@@ -915,7 +915,8 @@
     "browseMoreDeals": "Ver más ofertas",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Termina",
-    "modalTitle": "Modal"
+    "modalTitle": "Modal",
+    "tapToRetry": "Toca para reintentar"
   },
   "debugDiagnostics": {
     "title": "Diagnósticos"
@@ -1535,7 +1536,9 @@
     "edit": "Edit"
   },
   "billing": {
-    "trialEndsIn": "Tu prueba de 30 días termina en {{days}} días",
+    "currentStatus": "Estado",
+    "retryLoadPricing": "Reintentar",
+    "trialEndsIn": "Tu prueba de 30 dias termina en {{days}} dias",
     "trialExpired": "Tu prueba gratuita ha terminado",
     "currentPlan": "Plan actual",
     "trialExpiredBanner": "Reactivar tu cuenta",

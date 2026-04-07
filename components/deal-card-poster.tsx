@@ -87,6 +87,7 @@ export function DealCardPoster({
       <HapticScalePressable
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityLabel={title}
       >
         {posterUrl ? (
           <Image
@@ -94,6 +95,8 @@ export function DealCardPoster({
             style={{ height: imageHeight, width: "100%" }}
             contentFit="cover"
             transition={300}
+            placeholder={{ blurhash: "LKG8wh~qIU%M_3xut7RjD%ofWBt7" }}
+            cachePolicy="memory-disk"
           />
         ) : (
           <View

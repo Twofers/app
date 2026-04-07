@@ -16,6 +16,7 @@ import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { format, startOfDay, startOfMonth, subDays } from "date-fns";
 
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { Banner } from "@/components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -861,8 +862,8 @@ export default function BusinessDashboard() {
 
   if (!modeReady) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator color={primary} />
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+        <LoadingSkeleton rows={2} />
       </View>
     );
   }
@@ -875,6 +876,7 @@ export default function BusinessDashboard() {
     : t("offersDashboard.subtitle");
 
   return (
+    <AppErrorBoundary>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
       <WelcomeWalkthrough
         visible={showWalkthrough}
@@ -897,7 +899,7 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
-          {banner ? <Banner message={banner} tone="error" /> : null}
+          {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={4} />
@@ -1142,5 +1144,6 @@ export default function BusinessDashboard() {
         </View>
       </Modal>
     </View>
+    </AppErrorBoundary>
   );
 }

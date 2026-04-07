@@ -2,6 +2,9 @@
  * Deal posters are stored in Supabase Storage (`deal-photos`). Legacy rows often store a short-lived
  * signed URL in `poster_url`, which breaks the feed after expiry. Prefer resolving a stable path to
  * the public object URL (bucket is public-read for active deal art).
+ *
+ * Signed URLs created by edge functions use a 1-year expiry. This is acceptable because deals
+ * themselves expire much sooner, so the URL will never outlive its usefulness.
  */
 
 const BUCKET = "deal-photos";

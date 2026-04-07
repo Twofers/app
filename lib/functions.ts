@@ -5,6 +5,11 @@ import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
 import type { BusinessContextPayload, CreativeLane, GeneratedAd } from "./ad-variants";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import {
+  EDGE_FN_TIMEOUT_DEFAULT_MS,
+  EDGE_FN_TIMEOUT_AI_MS as _EDGE_FN_TIMEOUT_AI_MS,
+  EDGE_FN_TIMEOUT_FAST_MS,
+} from "@/constants/timing";
 
 // ── Client-side demo session helper ──────────────────────────
 let _cachedDemoEmail: string | null | undefined;
@@ -26,9 +31,9 @@ export function clearDemoEmailCache() {
 }
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
-export const EDGE_FUNCTION_TIMEOUT_MS = 45_000;
-export const EDGE_FUNCTION_TIMEOUT_AI_MS = 120_000;
-export const EDGE_FUNCTION_TIMEOUT_QUICK_MS = 25_000;
+export const EDGE_FUNCTION_TIMEOUT_MS = EDGE_FN_TIMEOUT_DEFAULT_MS;
+export const EDGE_FUNCTION_TIMEOUT_AI_MS = _EDGE_FN_TIMEOUT_AI_MS;
+export const EDGE_FUNCTION_TIMEOUT_QUICK_MS = EDGE_FN_TIMEOUT_FAST_MS;
 
 type SupabaseFunctionInvokeError = {
   message?: string;

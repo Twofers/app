@@ -30,6 +30,15 @@ export type StripeIds = {
   stripeSubscriptionId: string | null;
 };
 
+type BusinessProfileBilling = {
+  subscription_status?: string | null;
+  subscription_tier?: string | null;
+  trial_ends_at?: string | null;
+  current_period_ends_at?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+};
+
 function numOrNull(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -146,16 +155,7 @@ export function useBusiness() {
     // Billing v4: subscription is canonical on `business_profiles`.
     // Backward-safe fallback: if the row/columns aren't ready yet, use `businesses.subscription_tier`.
     const billingSelect = "subscription_status,subscription_tier,trial_ends_at,current_period_ends_at,stripe_customer_id,stripe_subscription_id";
-    let bpRow:
-      | {
-          subscription_status?: string | null;
-          subscription_tier?: string | null;
-          trial_ends_at?: string | null;
-          current_period_ends_at?: string | null;
-          stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-        }
-      | null = null;
+    let bpRow: BusinessProfileBilling | null = null;
 
     const { data: byUserRow, error: byUserErr } = await supabase
       .from("business_profiles")
@@ -164,7 +164,7 @@ export function useBusiness() {
       .maybeSingle();
 
     if (!byUserErr) {
-      bpRow = byUserRow as any;
+      bpRow = byUserRow as BusinessProfileBilling | null;
     } else if (byUserErr.code === "PGRST116") {
       bpRow = null;
     } else {
@@ -174,7 +174,7 @@ export function useBusiness() {
         .select(billingSelect)
         .eq("owner_id", uid)
         .maybeSingle();
-      if (!byOwnerErr) bpRow = byOwnerRow as any;
+      if (!byOwnerErr) bpRow = byOwnerRow as BusinessProfileBilling | null;
     }
 
     const isActiveSubscription = bpRow?.subscription_status === "active";

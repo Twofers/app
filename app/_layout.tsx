@@ -74,6 +74,12 @@ function RootNavigationStack() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {/* Deep link handlers — priority order:
+         1. Auth recovery (password reset links)
+         2. Billing deep links (subscription/checkout)
+         3. Deal deep links (shared deal URLs)
+         4. Notification deep links (push notification routes)
+         5. Legacy tab format migration (backward compat) */}
       <LegacyTabsDeepLinkHandler />
       <NotificationDeepLinkHandler />
       <AuthRecoveryLinkHandler />

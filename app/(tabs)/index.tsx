@@ -45,9 +45,10 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
+import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
-const MIN_FEED_FOCUS_REFRESH_MS = 60_000;
+const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
 type Deal = {
   id: string;
   title: string | null;

@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { Radii } from "@/constants/theme";
+import i18n from "@/lib/i18n/config";
 
 type BannerProps = {
   message: string;
@@ -36,7 +37,7 @@ export function Banner({ message, tone = "info", onRetry }: BannerProps) {
           style={{ marginTop: 6 }}
         >
           <Text style={{ color: stylesByTone.textColor, fontWeight: "700", textDecorationLine: "underline", fontSize: 13 }}>
-            Tap to retry
+            {i18n.t("commonUi.tapToRetry")}
           </Text>
         </Pressable>
       ) : null}

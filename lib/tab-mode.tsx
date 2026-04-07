@@ -86,6 +86,9 @@ async function loadStoredMode(): Promise<TabMode> {
   return "customer";
 }
 
+/** Promise-chain mutex so concurrent setMode calls are serialized. */
+let modeQueue = Promise.resolve();
+
 export function TabModeProvider({ children }: { children: ReactNode }) {
   const { session, isInitialLoading: authLoading } = useAuthSession();
   const [mode, setModeState] = useState<TabMode>("customer");
@@ -140,7 +143,7 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     };
   }, [authLoading, session?.user?.id]);
 
-  const setMode = useCallback(async (next: TabMode) => {
+  const doSetMode = useCallback(async (next: TabMode) => {
     userChoseModeRef.current = true;
     setReady(true);
     const prev = mode;
@@ -170,6 +173,15 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [mode, session?.user?.id]);
+
+  const setMode = useCallback(
+    (next: TabMode): Promise<void> => {
+      const p = modeQueue.then(() => doSetMode(next)).catch(() => {});
+      modeQueue = p;
+      return p;
+    },
+    [doSetMode],
+  );
 
   const value = useMemo(() => ({ mode, setMode, ready }), [mode, setMode, ready]);
 

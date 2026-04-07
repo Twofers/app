@@ -1090,7 +1090,8 @@
     "browseMoreDeals": "Browse More Deals",
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Ends",
-    "modalTitle": "Modal"
+    "modalTitle": "Modal",
+    "tapToRetry": "Tap to retry"
   },
   "debugDiagnostics": {
     "title": "Diagnostics"
@@ -1566,6 +1567,8 @@
     "edit": "Edit"
   },
   "billing": {
+    "currentStatus": "Status",
+    "retryLoadPricing": "Retry",
     "trialEndsIn": "Your 30-day trial ends in {{days}} days",
     "trialExpired": "Your free trial has ended",
     "currentPlan": "Current plan",

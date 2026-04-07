@@ -109,13 +109,10 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Banner
             tone="warning"
-            message={t("billing.paywallExpiredMessage", {
-              defaultValue:
-                "Your trial has ended. Reactivate your account to continue creating deals.",
-            })}
+            message={t("billing.paywallExpiredMessage")}
           />
           <PrimaryButton
-            title={t("billing.goToBilling", { defaultValue: "Go to Billing" })}
+            title={t("billing.goToBilling")}
             onPress={() =>
               router.replace({
                 pathname: "/(tabs)/billing",
