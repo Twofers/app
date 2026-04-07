@@ -49,11 +49,24 @@ describe("canCreateDeal", () => {
         trialEndsAt: "2999-01-01T00:00:00.000Z",
       }),
     ).toBe(true);
+  });
+
+  it("allows trial status with null trialEndsAt (trial just created, date not yet set)", () => {
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks expired trial", () => {
+    expect(
+      canCreateDeal({
+        isLoggedIn: true,
+        subscriptionStatus: "trial",
+        trialEndsAt: "2000-01-01T00:00:00.000Z",
       }),
     ).toBe(false);
   });

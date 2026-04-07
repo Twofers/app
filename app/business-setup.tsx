@@ -8,6 +8,7 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
+import { consumePendingDeepLink } from "@/lib/post-auth-route";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
@@ -175,8 +176,9 @@ export default function BusinessSetupScreen() {
       }
 
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
-      setTimeout(() => {
-        router.replace("/(tabs)/dashboard");
+      setTimeout(async () => {
+        const pending = await consumePendingDeepLink();
+        router.replace((pending ?? "/(tabs)/dashboard") as any);
       }, 250);
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);

@@ -95,6 +95,8 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   /** User picked Customer/Business before persisted mode finished loading — do not overwrite their choice. */
   const userChoseModeRef = useRef(false);
+  /** Monotonic counter — incremented on every explicit `setMode` call so the remote‐sync effect can detect a concurrent local change and bail out. */
+  const localChangeEpochRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +120,9 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     const uid = session?.user?.id;
     if (!uid) return;
     let cancelled = false;
+    /** Snapshot the epoch at effect start — if `doSetMode` fires while we're
+     *  waiting or fetching, the epoch will have advanced and we bail out. */
+    const epochAtStart = localChangeEpochRef.current;
     /** Delay so auth-landing can upsert `app_tab_mode` before we read it. */
     const timer = setTimeout(() => {
       void (async () => {
@@ -126,8 +131,11 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
           skipNextRemoteTabModeFetchForUserId = null;
           return;
         }
+        if (localChangeEpochRef.current !== epochAtStart) return;
         const remote = await fetchAppTabModeForUser(uid);
         if (!remote || cancelled) return;
+        // If the user changed mode locally while the fetch was in flight, discard the stale remote value.
+        if (localChangeEpochRef.current !== epochAtStart) return;
         userChoseModeRef.current = true;
         setModeState(remote);
         try {
@@ -144,6 +152,7 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
   }, [authLoading, session?.user?.id]);
 
   const doSetMode = useCallback(async (next: TabMode) => {
+    localChangeEpochRef.current += 1;
     userChoseModeRef.current = true;
     setReady(true);
     const prev = mode;

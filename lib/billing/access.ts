@@ -21,7 +21,13 @@ export function canCreateDeal(params: {
   if (!params.isLoggedIn) return true;
   if (params.bypass) return true;
   if (params.subscriptionStatus === "active") return true;
-  if (params.subscriptionStatus === "trial" && !isTrialExpired(params.trialEndsAt)) return true;
+  if (params.subscriptionStatus === "trial") {
+    // Null trialEndsAt with trial status means the trial was just created and the
+    // date hasn't been set yet (auto-repair in useBusiness is still in-flight).
+    // Treat as active trial rather than blocking the user.
+    if (!params.trialEndsAt) return true;
+    if (!isTrialExpired(params.trialEndsAt)) return true;
+  }
   return false;
 }
 

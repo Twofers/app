@@ -157,21 +157,21 @@ serve(async (req) => {
     const currentPeriodEndsAt = unixSecondsToIso(subscriptionForUpdate?.current_period_end);
 
     // Find matching business_profiles: prefer by subscription id, fall back to customer id.
-    let businessProfileRow: { id: string } | null = null;
+    let businessProfileRow: { id: string; owner_id: string | null } | null = null;
     const { data: bySub } = await supabase
       .from("business_profiles")
-      .select("id")
+      .select("id,owner_id")
       .eq("stripe_subscription_id", subscriptionId)
       .maybeSingle();
-    if (bySub?.id) businessProfileRow = { id: bySub.id };
+    if (bySub?.id) businessProfileRow = { id: bySub.id, owner_id: bySub.owner_id ?? null };
 
     if (!businessProfileRow) {
       const { data: byCust } = await supabase
         .from("business_profiles")
-        .select("id")
+        .select("id,owner_id")
         .eq("stripe_customer_id", customerId)
         .maybeSingle();
-      if (byCust?.id) businessProfileRow = { id: byCust.id };
+      if (byCust?.id) businessProfileRow = { id: byCust.id, owner_id: byCust.owner_id ?? null };
     }
 
     if (!businessProfileRow) {
@@ -202,6 +202,18 @@ serve(async (req) => {
       "tier=",
       subscriptionTier,
     );
+
+    // Keep legacy `businesses.subscription_tier` in sync (some client code reads it as fallback).
+    if (subscriptionTier && businessProfileRow.owner_id) {
+      try {
+        await supabase
+          .from("businesses")
+          .update({ subscription_tier: subscriptionTier })
+          .eq("owner_id", businessProfileRow.owner_id);
+      } catch {
+        // best-effort — canonical source is business_profiles
+      }
+    }
 
     // Optional recommended logging. Best-effort: never fail the webhook if history table doesn't exist.
     try {

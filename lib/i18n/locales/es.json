@@ -341,11 +341,8 @@
     "prefillFromMenuOffer": "Borrador desde tu oferta con menú. Revísalo y publica.",
     "prefillFromReuse": "Campos cargados desde una oferta anterior. Ajusta y publica.",
     "aiPosterAttached": "Póster IA para esta oferta",
-    "schedulingHint": "La oferta rápida va desde ahora hasta la hora de fin. Para empezar en el futuro, horarios semanales o anuncios con IA, usa Anuncios con IA.",
-    "openAiScheduling": "Abrir anuncios con IA (horario)",
     "sectionBasics": "Datos de la oferta",
     "sectionLimits": "Límites y tiempo",
-    "sectionAdvanced": "Programación avanzada",
     "scheduleSuggestionUse": "Usar este horario",
     "scheduleSuggestionCustomize": "Personalizar",
     "prefillFromCreateHub": "IA preparó tu oferta. Revisa los detalles y publica cuando estés listo.",
@@ -353,7 +350,23 @@
     "previewTitle": "Vista previa del cliente",
     "previewPublish": "Se ve bien — Publicar",
     "previewGoBack": "Volver y editar",
-    "previewHint": "Así verán los clientes tu oferta."
+    "previewHint": "Así verán los clientes tu oferta.",
+    "errNoDays": "Pick at least one day.",
+    "sectionSchedule": "Schedule",
+    "fieldStartTime": "Start",
+    "recurringToggle": "Make this recurring",
+    "presetEveryDay": "Every day",
+    "presetWeekdays": "Weekdays",
+    "presetCustom": "Custom",
+    "windowStart": "Daily start",
+    "windowEnd": "Daily end",
+    "dayMon": "M",
+    "dayTue": "T",
+    "dayWed": "W",
+    "dayThu": "T",
+    "dayFri": "F",
+    "daySat": "S",
+    "daySun": "S"
   },
   "language": {
     "sectionApp": "Idioma de la app",
@@ -459,7 +472,11 @@
     "aiDescGenerating": "Generando...",
     "aiDescGenerated": "Descripción generada por IA. Revisa y guarda.",
     "aiDescFailed": "No se pudo generar la descripción.",
-    "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero."
+    "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero.",
+    "expandBizProfile": "Show all business fields",
+    "collapseBizProfile": "Hide business fields",
+    "advancedOptions": "Advanced",
+    "switchToConsumerShort": "Browse as customer"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -515,7 +532,11 @@
     "createManually": "Crear manualmente",
     "moreToolsTitle": "Más formas de crear",
     "moreToolsShow": "Ver más",
-    "moreToolsHide": "Ocultar"
+    "moreToolsHide": "Ocultar",
+    "newDeal": "New Deal",
+    "newDealSub": "Photo, voice, or text — AI creates your ad",
+    "reuseDeal": "Reuse Past Deal",
+    "reuseDealSub": "Relaunch a template or past offer"
   },
   "menuScan": {
     "title": "Scan menu",
@@ -663,7 +684,8 @@
     "untitled": "Sin título",
     "openInAiAds": "Abre en Oferta IA",
     "repeatCta": "Repetir en Oferta rápida →",
-    "backToAiCompose": "← Volver a oferta IA"
+    "backToAiCompose": "← Volver a oferta IA",
+    "backToCreate": "← Back to Create"
   },
   "dealDetail": {
     "title": "Oferta",
@@ -1346,7 +1368,16 @@
       "weekends": "Fines de semana",
       "late_night": "Abierto tarde",
       "custom_prompt": "Personalizado…"
-    }
+    },
+    "errEnterName": "Enter a business name first.",
+    "lookupButton": "Look up my business",
+    "searching": "Searching…",
+    "selectResult": "Tap to auto-fill your info:",
+    "noResults": "No results found. Enter your info manually.",
+    "lookupError": "Lookup failed. Enter your info manually.",
+    "infoFilled": "Info filled! Review and edit if needed.",
+    "estimatedInfo": "Info is estimated — please verify before saving.",
+    "aiEstimate": "Estimated by AI"
   },
   "settingsConsumer": {
     "editTitle": "Perfil de comprador",
@@ -1421,7 +1452,7 @@
     "generatingHint": "Creating three different angles: value, neighborhood, and premium. Usually under half a minute.",
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "Generating unique images for each ad...",
-    "generatingPhaseFinishing": "Almost there \u2014 finishing up...",
+    "generatingPhaseFinishing": "Almost there — finishing up...",
     "errMicPermission": "Microphone permission is required for voice input.",
     "errRecordingStart": "Could not start recording. Try again.",
     "transcribeDone": "Voice transcribed and added to your description.",
@@ -1586,5 +1617,27 @@
     "backToBilling": "Volver a Facturación",
     "errPortal": "No se pudo abrir el portal de Stripe.",
     "errUpgrade": "No se pudo iniciar la actualización."
+  },
+  "aiInsights": {
+    "title": "AI Insights",
+    "refresh": "Refresh",
+    "loading": "Analyzing your deals...",
+    "noSuggestions": "No suggestions available yet — create a deal first!"
+  },
+  "walkthrough": {
+    "dashboardTitle": "Your Dashboard",
+    "dashboardBody": "This is your home base. See all your deals, track claims and redemptions, and monitor how your business is doing at a glance.",
+    "createTitle": "Create a Deal",
+    "createBody": "Launch BOGO deals in seconds. Set the offer, pick a schedule, and your deal goes live to nearby customers instantly.",
+    "trackTitle": "Track Performance",
+    "trackBody": "Watch redemptions roll in, see which deals work best, and use insights to keep customers coming back.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip tour",
+    "createFirstDeal": "Create Your First Deal",
+    "useAiDeal": "Use This Deal Idea",
+    "exploreDashboard": "Explore Dashboard First",
+    "aiSuggestionLabel": "AI deal idea for you",
+    "aiLoading": "Generating a deal idea for you..."
   }
 }
