@@ -1084,7 +1084,6 @@ export default function AiDealScreen() {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
       const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
-      const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
       const start = isRecurring ? new Date() : startTime;

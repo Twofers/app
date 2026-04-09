@@ -1,7 +1,7 @@
 import type { DealQualityResult } from "./deal-quality";
 import type { AppLocale } from "./i18n/config";
-import { isAppLocale } from "./i18n/config";
-import i18n from "./i18n/config";
+import i18n, { isAppLocale } from "./i18n/config";
+
 
 /**
  * Localized banner for blocked deal-quality checks.

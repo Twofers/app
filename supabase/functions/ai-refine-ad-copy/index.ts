@@ -3,11 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail, type AdVariant, type CreativeLane } from "../ai-generate-ad-variants/demo-variants.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -189,6 +185,8 @@ function buildDemoRefinedDraft(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

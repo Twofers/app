@@ -2,11 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
 import { hasClaimOnLocalBusinessDay } from "../_shared/claim-limits.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -101,6 +97,8 @@ function zonedWallToUtcMs(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -171,7 +169,7 @@ serve(async (req) => {
     const session_id_at_claim =
       typeof body.session_id_at_claim === "string" ? body.session_id_at_claim.trim().slice(0, 128) : null;
 
-    if (!dealId) {
+    if (!dealId || typeof dealId !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing deal_id" }),
         {
@@ -181,24 +179,18 @@ serve(async (req) => {
       );
     }
 
-    // 🚦 Rate limit: max 3 claim attempts per minute per user
-    const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
-    const { count: recentClaimCount } = await supabase
-      .from("deal_claims")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", oneMinuteAgo);
-    if (recentClaimCount !== null && recentClaimCount >= 3) {
+    // Validate UUID format before hitting the database
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dealId)) {
       return new Response(
-        JSON.stringify({ error: "Too many attempts. Try again in 30 seconds." }),
+        JSON.stringify({ error: "Invalid deal_id format" }),
         {
-          status: 429,
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    // 🔍 Fetch and validate deal
+    // 🔍 Fetch and validate deal (before rate limit, so invalid IDs don't exhaust quotas)
     const { data: deal, error: dealError } = await supabase
       .from("deals")
       .select("id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone")
@@ -220,6 +212,24 @@ serve(async (req) => {
         JSON.stringify({ error: "This deal is not active" }),
         {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // 🚦 Rate limit: max 3 claim attempts per minute per user
+    // Placed after deal validation so invalid IDs don't exhaust legitimate users' quotas.
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+    const { count: recentClaimCount } = await supabase
+      .from("deal_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", oneMinuteAgo);
+    if (recentClaimCount !== null && recentClaimCount >= 3) {
+      return new Response(
+        JSON.stringify({ error: "Too many attempts. Try again in 30 seconds." }),
+        {
+          status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -280,6 +290,9 @@ serve(async (req) => {
       const tz = (typeof deal.timezone === "string" && deal.timezone.trim().length > 0)
         ? deal.timezone.trim()
         : DEFAULT_BUSINESS_TZ;
+      if (tz === DEFAULT_BUSINESS_TZ && deal.timezone !== DEFAULT_BUSINESS_TZ) {
+        console.warn(`[claim-deal] deal ${dealId} has empty/missing timezone, falling back to ${DEFAULT_BUSINESS_TZ}`);
+      }
 
       if (!days.length || windowStart == null || windowEnd == null) {
         return new Response(
@@ -550,9 +563,13 @@ serve(async (req) => {
         break;
       }
       insertError = err ?? { message: "insert failed" };
-      const msg = String(err?.message ?? "");
-      if (err?.code === "23505" && msg.includes("short_code")) {
-        continue;
+      // Retry only on short_code unique constraint violations.
+      // Check both constraint detail and message for robustness across PG versions.
+      if (err?.code === "23505") {
+        const detail = String(err?.details ?? err?.message ?? "");
+        if (detail.includes("short_code") || detail.includes("deal_claims_short_code")) {
+          continue;
+        }
       }
       break;
     }

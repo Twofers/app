@@ -4,11 +4,7 @@ import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { buildDemoAdVariants, isDemoUserEmail } from "./demo-variants.ts";
 import { buildAdVariantImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 type BusinessContext = {
   category?: string;
@@ -57,6 +53,8 @@ function normalizeLaneOrder(ads: AdVariant[]): AdVariant[] | null {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

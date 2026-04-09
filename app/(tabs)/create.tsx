@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { PrimaryButton } from "../../components/ui/primary-button";
-import { SecondaryButton } from "../../components/ui/secondary-button";
+
 import { Banner } from "../../components/ui/banner";
 import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";

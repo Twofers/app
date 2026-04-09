@@ -75,7 +75,6 @@ export default function AccountScreen() {
   const [profileHours, setProfileHours] = useState("");
   const [businessProfileCheckLoading, setBusinessProfileCheckLoading] = useState(false);
   const [businessProfileComplete, setBusinessProfileComplete] = useState(false);
-  const [businessSetupMessage, setBusinessSetupMessage] = useState<string | null>(null);
   const [businessProfileSnapshot, setBusinessProfileSnapshot] = useState<{
     name: string | null;
     address: string | null;
@@ -116,13 +115,8 @@ export default function AccountScreen() {
               }
             : null,
         );
-        if (access.isComplete) {
-          setBusinessSetupMessage(t("account.bizSetupComplete"));
-        } else if (access.hasProfileRow) {
-          setBusinessSetupMessage(t("account.bizSetupFinish"));
-        } else {
-          setBusinessSetupMessage(t("account.bizSetupStart"));
-        }
+        // Business setup state is derived from access.isComplete / access.hasProfileRow;
+        // no separate message state needed.
       })
       .finally(() => {
         if (!cancelled) setBusinessProfileCheckLoading(false);

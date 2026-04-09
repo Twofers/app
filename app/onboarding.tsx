@@ -73,9 +73,10 @@ export default function OnboardingScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (step > 0) {
         goToStep(step - 1);
+        return true;
       }
-      // Always consume back press during onboarding to prevent app exit
-      return true;
+      // On step 0, allow back press to exit onboarding to auth screen
+      return false;
     });
     return () => sub.remove();
   }, [step, goToStep]);

@@ -471,11 +471,11 @@ export default function BusinessDashboard() {
         setInsights(null);
       }
     } catch (err: unknown) {
-      setInsights(null);
       setDealsHasMore(false);
       const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
       setBanner(msg);
-      setWeekCounts(weekDays.map(() => 0));
+      // Keep stale data visible on refresh failure — only clear if this was the first load.
+      setDeals((prev) => (prev.length > 0 ? prev : []));
     } finally {
       setLoadingMetrics(false);
     }

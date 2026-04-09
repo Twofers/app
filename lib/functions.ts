@@ -567,7 +567,7 @@ export async function aiRefineAdCopy(body: {
   structured_offer: Record<string, unknown>;
   selected_draft: Record<string, unknown>;
   instruction: string;
-  conversation_history: Array<{ role: string; content: string }>;
+  conversation_history: { role: string; content: string }[];
   output_language?: string;
 }): Promise<{ ok: true; draft: GeneratedAd; usage: AiRefineAdCopyUsage }> {
   try {

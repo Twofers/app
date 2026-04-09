@@ -234,7 +234,8 @@ export default function HomeScreen() {
     if (error) {
       logPostgrestError("home screen deals", error);
       setBanner(t("consumerHome.loadDealsError"));
-      setDeals([]);
+      // Keep stale data on refresh failure; only clear if this was the initial load.
+      setDeals((prev) => (prev.length > 0 ? prev : []));
       setLoadingDeals(false);
       return;
     }
@@ -261,7 +262,8 @@ export default function HomeScreen() {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown businesses load error" };
       logPostgrestError("home screen businesses", err);
       setBanner(t("consumerHome.loadBusinessesError"));
-      setBusinesses([]);
+      // Keep stale data on refresh failure
+      setBusinesses((prev) => (prev.length > 0 ? prev : []));
     }
     setLoadingBiz(false);
   }, [t]);
@@ -318,7 +320,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!userId) return;
     void syncConsumerDealNotifications({ userId, favoriteBusinessIds });
-  }, [userId, favoriteBusinessIds, deals.length]);
+  }, [userId, favoriteBusinessIds, deals]);
 
   const toggleFavorite = useCallback(
     async (businessId: string) => {

@@ -204,7 +204,7 @@ export default function AuthLandingScreen() {
   }
 
   function validateEmail(): boolean {
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
       setEmailError(
         t("authLanding.invalidEmail", { defaultValue: "Please enter a valid email address" }),
       );

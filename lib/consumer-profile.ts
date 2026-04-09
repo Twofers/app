@@ -34,6 +34,8 @@ export function isValidBirthdateIso(s: string): boolean {
   today.setHours(23, 59, 59, 999);
   if (dt.getTime() > today.getTime()) return false;
   if (y! < 1900) return false;
+  const currentYear = new Date().getFullYear();
+  if (y! > currentYear - 13) return false; // minimum age 13
   return true;
 }
 
