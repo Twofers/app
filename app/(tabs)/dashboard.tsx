@@ -445,28 +445,29 @@ export default function BusinessDashboard() {
       setDeals(hydrateDealRows(firstPage, perDealMap));
       setDealsHasMore(firstPage.length === DASHBOARD_DEALS_PAGE_SIZE);
 
-      const { count: impressionsCount } = await supabase
-        .from("app_analytics_events")
-        .select("id, deals!inner(business_id)", { count: "exact", head: true })
-        .eq("event_name", "deal_viewed")
-        .eq("deals.business_id", businessId)
-        .gte("occurred_at", monthStart.toISOString());
+      const [impressionsResult, opensResult, insightsResult] = await Promise.all([
+        supabase
+          .from("app_analytics_events")
+          .select("id, deals!inner(business_id)", { count: "exact", head: true })
+          .eq("event_name", "deal_viewed")
+          .eq("deals.business_id", businessId)
+          .gte("occurred_at", monthStart.toISOString()),
+        supabase
+          .from("app_analytics_events")
+          .select("id, deals!inner(business_id)", { count: "exact", head: true })
+          .eq("event_name", "deal_opened")
+          .eq("deals.business_id", businessId)
+          .gte("occurred_at", monthStart.toISOString()),
+        supabase.rpc("merchant_business_insights", {
+          p_business_id: businessId,
+        }),
+      ]);
 
-      const { count: opensCount } = await supabase
-        .from("app_analytics_events")
-        .select("id, deals!inner(business_id)", { count: "exact", head: true })
-        .eq("event_name", "deal_opened")
-        .eq("deals.business_id", businessId)
-        .gte("occurred_at", monthStart.toISOString());
+      setMonthImpressions(impressionsResult.count ?? 0);
+      setMonthOpens(opensResult.count ?? 0);
 
-      setMonthImpressions(impressionsCount ?? 0);
-      setMonthOpens(opensCount ?? 0);
-
-      const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {
-        p_business_id: businessId,
-      });
-      if (!rpcErr) {
-        setInsights(parseMerchantInsights(rpcInsights));
+      if (!insightsResult.error) {
+        setInsights(parseMerchantInsights(insightsResult.data));
       } else {
         setInsights(null);
       }

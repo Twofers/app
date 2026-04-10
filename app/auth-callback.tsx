@@ -13,7 +13,7 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     const id = setTimeout(() => {
       router.replace("/");
-    }, 0);
+    }, 500);
     return () => clearTimeout(id);
   }, [router]);
 

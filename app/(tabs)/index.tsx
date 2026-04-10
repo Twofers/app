@@ -468,11 +468,15 @@ export default function HomeScreen() {
     });
   }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo]);
 
+  const loggedDealIdsRef = useRef(new Set<string>());
+
   // MVP impressions tracking: count deals whenever the visible list changes.
   // This is an approximation of "shown" but stays simple/reliable for MVP.
   useEffect(() => {
     if (loadingDeals) return;
     for (const d of liveDealsDisplay) {
+      if (loggedDealIdsRef.current.has(d.id)) continue;
+      loggedDealIdsRef.current.add(d.id);
       trackAppAnalyticsEvent({
         event_name: "deal_viewed",
         deal_id: d.id,

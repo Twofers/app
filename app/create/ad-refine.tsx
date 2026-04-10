@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,7 @@ import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context
 import { aiRefineAdCopy, getErrorCode } from "@/lib/functions";
 import { splitSubheadlineForPromoAndBody } from "@/lib/menu-ad-copy";
 import { useBusiness } from "@/hooks/use-business";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { resolveDealFlowLanguage } from "@/lib/translate-deal-quality";
 import { Colors, Radii } from "@/constants/theme";
@@ -45,6 +46,8 @@ export default function AdRefineScreen() {
     (Number.isFinite(variantIdx) && Number.isInteger(variantIdx) && variantIdx >= 0 && variantIdx <= 2);
   const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { businessId, businessPreferredLocale } = useBusiness();
   const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
@@ -56,6 +59,8 @@ export default function AdRefineScreen() {
     refineHistory,
     setRefineHistory,
   } = useCreateMenuOfferWizard();
+
+  useEffect(() => { setRefineHistory([]); }, [variantIdx]);
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -173,9 +178,9 @@ export default function AdRefineScreen() {
             padding: Spacing.md,
             borderRadius: Radii.md,
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             marginBottom: Spacing.md,
-            backgroundColor: Colors.light.surface,
+            backgroundColor: theme.surface,
             gap: 6,
           }}
         >
@@ -208,13 +213,13 @@ export default function AdRefineScreen() {
               style={{
                 alignSelf: "flex-end",
                 maxWidth: "90%",
-                backgroundColor: Colors.light.primary,
+                backgroundColor: theme.primary,
                 padding: 10,
                 borderRadius: 12,
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: Colors.light.primaryText }}>{item.content}</Text>
+              <Text style={{ color: theme.primaryText }}>{item.content}</Text>
             </View>
           )}
           ListEmptyComponent={<Text style={{ opacity: 0.5 }}>—</Text>}

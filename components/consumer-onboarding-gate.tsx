@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter, useSegments } from "expo-router";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { useTabMode } from "@/lib/tab-mode";
@@ -25,9 +25,11 @@ export function ConsumerOnboardingGate() {
   const segments = useSegments();
   const { mode, ready } = useTabMode();
   const { session, isInitialLoading } = useAuthSession();
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
     if (isInitialLoading || !ready) return;
+    if (verifiedRef.current) return;
     const root = String(segments[0] ?? "");
     if (SKIP_ROOTS.has(root)) return;
     if (mode !== "customer") return;
@@ -51,7 +53,9 @@ export function ConsumerOnboardingGate() {
         if (cancelled) return;
         if (!prefs.onboardingComplete) {
           router.replace("/onboarding");
+          return;
         }
+        verifiedRef.current = true;
       } catch (err) {
         if (__DEV__) console.warn("[ConsumerOnboardingGate]", err);
       }

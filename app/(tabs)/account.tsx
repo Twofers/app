@@ -485,14 +485,14 @@ export default function AccountScreen() {
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           borderRadius: Radii.pill,
-          backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+          backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
           borderWidth: 1,
-          borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+          borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
         }}
       >
-        <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: active ? theme.primary : theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
       </Pressable>
     );
   }
@@ -824,14 +824,14 @@ export default function AccountScreen() {
                     paddingVertical: 8,
                     paddingHorizontal: 12,
                     borderRadius: 10,
-                    backgroundColor: profilePreferredLocale == null ? "#111" : "#e8e8e8",
+                    backgroundColor: profilePreferredLocale == null ? theme.text : theme.surfaceMuted,
                     marginRight: 8,
                     marginBottom: 8,
                   }}
                 >
                   <Text
                     style={{
-                      color: profilePreferredLocale == null ? "#fff" : "#111",
+                      color: profilePreferredLocale == null ? theme.background : theme.text,
                       fontWeight: "600",
                       fontSize: 13,
                     }}
@@ -850,14 +850,14 @@ export default function AccountScreen() {
                       paddingVertical: 8,
                       paddingHorizontal: 12,
                       borderRadius: 10,
-                      backgroundColor: profilePreferredLocale === loc ? "#111" : "#e8e8e8",
+                      backgroundColor: profilePreferredLocale === loc ? theme.text : theme.surfaceMuted,
                       marginRight: 8,
                       marginBottom: 8,
                     }}
                   >
                     <Text
                       style={{
-                        color: profilePreferredLocale === loc ? "#fff" : "#111",
+                        color: profilePreferredLocale === loc ? theme.background : theme.text,
                         fontWeight: "600",
                         fontSize: 13,
                       }}

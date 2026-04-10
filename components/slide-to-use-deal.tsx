@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Animated, LayoutChangeEvent, PanResponder, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
@@ -6,16 +6,24 @@ import { Spacing } from "@/lib/screen-layout";
 type SlideToUseDealProps = {
   onConfirmed: () => void;
   disabled?: boolean;
+  /** Reset key — when this changes the slider resets to the start position. */
+  resetKey?: string | number;
 };
 
 const KNOB = 52;
 const THRESHOLD_RATIO = 0.72;
 
-export function SlideToUseDeal({ onConfirmed, disabled }: SlideToUseDealProps) {
+export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDealProps) {
   const { t } = useTranslation();
   const trackW = useRef(0);
   const pan = useRef(new Animated.Value(0)).current;
   const fired = useRef(false);
+
+  // Reset slider when the parent signals a new deal / new context.
+  useEffect(() => {
+    fired.current = false;
+    pan.setValue(0);
+  }, [resetKey, pan]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     trackW.current = e.nativeEvent.layout.width;
@@ -51,6 +59,8 @@ export function SlideToUseDeal({ onConfirmed, disabled }: SlideToUseDealProps) {
       <Text style={{ fontSize: 13, opacity: 0.65, textAlign: "center" }}>{t("consumerWallet.slideHint")}</Text>
       <View
         onLayout={onLayout}
+        accessibilityRole="adjustable"
+        accessibilityLabel={t("consumerWallet.slideLabel")}
         style={{
           height: KNOB + 12,
           borderRadius: 999,

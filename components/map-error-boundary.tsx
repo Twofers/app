@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Appearance, Text, View } from "react-native";
 import { Colors } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -23,18 +23,20 @@ export class MapErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const scheme = Appearance.getColorScheme() === "dark" ? "dark" : "light";
+      const theme = Colors[scheme];
       return (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxl }}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xxl, backgroundColor: theme.background }}>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md, color: theme.text }}>
             {i18n.t("errorBoundary.mapTitle")}
           </Text>
-          <Text style={{ opacity: 0.65, textAlign: "center", lineHeight: 22, marginBottom: Spacing.lg }}>
+          <Text style={{ opacity: 0.65, textAlign: "center", lineHeight: 22, marginBottom: Spacing.lg, color: theme.text }}>
             {i18n.t("errorBoundary.mapBody")}
           </Text>
           <PrimaryButton
             title={i18n.t("errorBoundary.mapRetry")}
             onPress={() => this.setState({ hasError: false })}
-            style={{ backgroundColor: Colors.light.primary }}
+            style={{ backgroundColor: theme.primary }}
           />
         </View>
       );

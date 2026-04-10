@@ -244,12 +244,13 @@ serve(async (req) => {
     }
 
     // 💾 Mark as redeemed (idempotent: same claim id, only if still null)
+    const redeemMethod = shortCodeNorm.length >= 4 ? "short_code" : "qr";
     const { data: updated, error: updateError } = await supabase
       .from("deal_claims")
       .update({
         redeemed_at: nowIso,
         claim_status: "redeemed",
-        redeem_method: "qr",
+        redeem_method: redeemMethod,
         redeem_started_at: null,
       })
       .eq("id", claimId)
@@ -301,7 +302,6 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: "Server error",
-        details: err instanceof Error ? err.message : String(err),
       }),
       {
         status: 500,

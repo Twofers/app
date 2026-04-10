@@ -115,6 +115,10 @@ export function WalletVisualPassModal({
     completingRef.current = true;
     setCompleting(true);
     try {
+      // Calculate how long to wait based on actual minCompleteMs rather than
+      // using fixed 600ms intervals that may exhaust before the window opens.
+      const waitMs = Math.max(0, minCompleteMs - Date.now());
+      if (waitMs > 0) await sleep(waitMs + 500); // +500ms buffer for clock skew
       for (let i = 0; i < 10; i++) {
         try {
           await completeVisualRedeem(claimId);
@@ -125,7 +129,7 @@ export function WalletVisualPassModal({
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : "";
           if (msg.includes("not finished yet") || msg.includes("Redemption window")) {
-            await sleep(600);
+            await sleep(1000);
             continue;
           }
           throw e;
@@ -134,10 +138,11 @@ export function WalletVisualPassModal({
       throw new Error(t("consumerWallet.passCompleteError"));
     } catch (e: unknown) {
       completingRef.current = false;
+      completeOnce.current = false; // Allow retry on failure
       setCompleting(false);
       onError(e instanceof Error ? e.message : t("consumerWallet.passCompleteError"));
     }
-  }, [claimId, onRedeemed, onError, t]);
+  }, [claimId, minCompleteMs, onRedeemed, onError, t]);
 
   useEffect(() => {
     if (!visible || completeOnce.current || completingRef.current) return;

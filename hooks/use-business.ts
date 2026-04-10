@@ -206,10 +206,13 @@ export function useBusiness() {
 
       try {
         if (bpRow) {
+          // Only repair fields that are still NULL to avoid overwriting
+          // values set concurrently by Stripe webhooks or other devices.
           await supabase
             .from("business_profiles")
             .update(repair)
-            .or(`user_id.eq.${uid},owner_id.eq.${uid}`);
+            .or(`user_id.eq.${uid},owner_id.eq.${uid}`)
+            .is("subscription_status", null);
           bpRow = { ...bpRow, ...repair };
         } else if (data) {
           const profileSeed = {

@@ -508,8 +508,12 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     }
   }, [t]);
 
+  const lastMapLoadRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      const now = Date.now();
+      if (now - lastMapLoadRef.current < 15_000) return;
+      lastMapLoadRef.current = now;
       void loadMapData();
     }, [loadMapData]),
   );

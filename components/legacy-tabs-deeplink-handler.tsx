@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { devLog, devWarn } from "@/lib/dev-log";
 import { normalizeLegacyTabsDeepLink } from "@/lib/normalize-legacy-tabs-deep-link";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
+import { claimInitialUrl } from "@/lib/initial-url-guard";
 
 /**
  * Accepts `scheme://tabs/<segment>` and `scheme:///tabs/<segment>` style URLs that
@@ -34,11 +35,13 @@ export function LegacyTabsDeepLinkHandler() {
       }
     };
 
-    void Linking.getInitialURL().then((url) => {
-      if (!url || initialDone.current) return;
-      initialDone.current = true;
-      runWhenBridgeSettled(() => handle(url));
-    });
+    if (claimInitialUrl()) {
+      void Linking.getInitialURL().then((url) => {
+        if (!url || initialDone.current) return;
+        initialDone.current = true;
+        runWhenBridgeSettled(() => handle(url));
+      });
+    }
 
     const sub = Linking.addEventListener("url", ({ url }) => handle(url));
     return () => sub.remove();

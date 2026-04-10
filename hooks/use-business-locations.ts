@@ -76,32 +76,35 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
 
       if (list.length === 0 && !autoCreateInFlightRef.current) {
         autoCreateInFlightRef.current = true;
-        const { data: biz, error: bErr } = await supabase
-          .from("businesses")
-          .select("name,address,location,phone,latitude,longitude")
-          .eq("id", businessId)
-          .single();
-        if (bErr) throw new Error(bErr.message);
-        const addr =
-          [biz?.address, biz?.location].map((s) => (typeof s === "string" ? s.trim() : "")).find(Boolean) ||
-          "See business profile";
-        const label =
-          typeof biz?.name === "string" && biz.name.trim() ? `${biz.name.trim()} — main` : "Primary location";
-        const { data: ins, error: iErr } = await supabase
-          .from("business_locations")
-          .insert({
-            business_id: businessProfileId,
-            name: label,
-            address: addr,
-            phone: typeof biz?.phone === "string" && biz.phone.trim() ? biz.phone.trim() : null,
-            lat: typeof biz?.latitude === "number" ? biz.latitude : null,
-            lng: typeof biz?.longitude === "number" ? biz.longitude : null,
-          })
-          .select("id,business_id,name,address,phone")
-          .single();
-        autoCreateInFlightRef.current = false;
-        if (iErr) throw new Error(iErr.message);
-        if (ins) list = [ins as BusinessLocationRow];
+        try {
+          const { data: biz, error: bErr } = await supabase
+            .from("businesses")
+            .select("name,address,location,phone,latitude,longitude")
+            .eq("id", businessId)
+            .single();
+          if (bErr) throw new Error(bErr.message);
+          const addr =
+            [biz?.address, biz?.location].map((s) => (typeof s === "string" ? s.trim() : "")).find(Boolean) ||
+            "See business profile";
+          const label =
+            typeof biz?.name === "string" && biz.name.trim() ? `${biz.name.trim()} — main` : "Primary location";
+          const { data: ins, error: iErr } = await supabase
+            .from("business_locations")
+            .insert({
+              business_id: businessProfileId,
+              name: label,
+              address: addr,
+              phone: typeof biz?.phone === "string" && biz.phone.trim() ? biz.phone.trim() : null,
+              lat: typeof biz?.latitude === "number" ? biz.latitude : null,
+              lng: typeof biz?.longitude === "number" ? biz.longitude : null,
+            })
+            .select("id,business_id,name,address,phone")
+            .single();
+          if (iErr) throw new Error(iErr.message);
+          if (ins) list = [ins as BusinessLocationRow];
+        } finally {
+          autoCreateInFlightRef.current = false;
+        }
       }
 
       setLocations(list);

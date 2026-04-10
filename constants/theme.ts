@@ -78,13 +78,11 @@ export const Typography = {
     fontSize: 32,
     lineHeight: 38,
     fontWeight: '700' as const,
-    color: '#11181C',
   },
   titleLg: {
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '700' as const,
-    color: '#11181C',
   },
   /** Tab / stack screen titles — pair with `theme.text` for color. */
   screenTitle: {
@@ -97,25 +95,21 @@ export const Typography = {
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '700' as const,
-    color: '#11181C',
   },
   body: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '400' as const,
-    color: '#11181C',
   },
   bodyMuted: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '400' as const,
-    color: '#5F6773',
   },
   caption: {
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '500' as const,
-    color: '#5F6773',
   },
 };
 

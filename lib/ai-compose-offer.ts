@@ -215,8 +215,13 @@ export async function aiComposeOfferGenerate(body: {
     }
     return d as AiComposeSuccess;
   } catch (err) {
-    devWarn("[aiComposeOfferGenerate] Edge function failed, using client fallback:", err);
-    return buildDemoComposeResult(body.prompt_text);
+    // Only fall back to demo data for demo/preview accounts. Real merchants
+    // must see the actual error so they can act on it (quota, auth, etc.).
+    if (isDemoPreviewAccountEmail(body.business_id)) {
+      devWarn("[aiComposeOfferGenerate] Demo account fallback:", err);
+      return buildDemoComposeResult(body.prompt_text);
+    }
+    throw err;
   }
 }
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   Text,
   TextInput,
@@ -66,6 +65,7 @@ export default function MenuManagerScreen() {
   const visible = showArchived ? rows : rows.filter((r) => !r.archived_at);
 
   const startEdit = (r: Row) => {
+    setAdding(false);
     setEditingId(r.id);
     setDraft({
       name: r.name,
@@ -171,7 +171,7 @@ export default function MenuManagerScreen() {
         />
 
         {!adding ? (
-          <PrimaryButton title={t("menuManager.addManual")} onPress={() => setAdding(true)} />
+          <PrimaryButton title={t("menuManager.addManual")} onPress={() => { setEditingId(null); setDraft({ name: "", category: "", price_text: "", description: "" }); setAdding(true); }} />
         ) : (
           <View style={{ gap: Spacing.sm }}>
             <TextInput
@@ -235,12 +235,9 @@ export default function MenuManagerScreen() {
           <Text style={{ opacity: 0.7 }}>{t("menuManager.empty")}</Text>
         ) : null}
 
-        <FlatList
-          data={visible}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          renderItem={({ item: r }) => (
+        {visible.map((r) => (
             <View
+              key={r.id}
               style={{
                 marginBottom: Spacing.md,
                 padding: Spacing.md,
@@ -322,8 +319,7 @@ export default function MenuManagerScreen() {
                 </>
               )}
             </View>
-          )}
-        />
+          ))}
       </ScrollView>
     </KeyboardScreen>
   );

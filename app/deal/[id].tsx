@@ -185,20 +185,34 @@ export default function DealDetail() {
   }
 
   async function refreshQr() {
-    if (!deal) return;
+    if (!deal || !userId) return;
     if (refreshingQr) return;
     setRefreshingQr(true);
     try {
-      const out = await claimDeal(deal.id);
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
+      // Look up existing active claim instead of creating a new one.
+      const { data: existing } = await supabase
+        .from("deal_claims")
+        .select("token,expires_at,short_code")
+        .eq("deal_id", deal.id)
+        .eq("user_id", userId)
+        .eq("claim_status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing?.token) {
+        setQrToken(existing.token);
+        setQrExpires(existing.expires_at);
+        setQrShortCode(existing.short_code ?? null);
+      } else {
+        setBanner(t("dealDetail.noActiveClaim"));
+      }
     } catch (e: unknown) {
       const msg =
         e instanceof Error
           ? e.message
           : typeof e === "string"
             ? e
-            : JSON.stringify(e, null, 2);
+            : t("commonUi.genericError");
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);

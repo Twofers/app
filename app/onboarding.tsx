@@ -160,6 +160,9 @@ export default function OnboardingScreen() {
       await afterLocationResolved();
       await setOnboardingComplete(true);
       router.replace("/(tabs)");
+    } catch (err: unknown) {
+      if (__DEV__) console.warn("[onboarding] finish error:", err);
+      setHint(t("onboarding.finishError", { defaultValue: "Something went wrong. Please try again." }));
     } finally {
       setBusy(false);
     }

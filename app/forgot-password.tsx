@@ -19,11 +19,16 @@ export default function ForgotPasswordScreen() {
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
 
   async function onSubmit() {
     const trimmed = email.trim();
     if (!trimmed) {
       setError(t("passwordRecovery.errEmailRequired"));
+      return;
+    }
+    if (Date.now() < cooldownUntil) {
+      setError(t("passwordRecovery.errCooldown", { defaultValue: "Please wait 60 seconds before requesting another email." }));
       return;
     }
     setBusy(true);
@@ -37,6 +42,7 @@ export default function ForgotPasswordScreen() {
         return;
       }
       setSuccess(true);
+      setCooldownUntil(Date.now() + 60_000);
     } catch {
       setError(t("passwordRecovery.requestGenericError"));
     } finally {

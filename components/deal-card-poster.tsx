@@ -5,6 +5,7 @@ import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reani
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { useMinuteTick } from "@/hooks/use-minute-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
@@ -54,6 +55,8 @@ export function DealCardPoster({
   showLiveCountdown = true,
 }: DealCardPosterProps) {
   const { t, i18n } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { height: windowHeight } = useWindowDimensions();
   const minuteTick = useMinuteTick();
 
@@ -77,7 +80,7 @@ export function DealCardPoster({
     <View
       style={{
         borderRadius: 24,
-        backgroundColor: "#fff",
+        backgroundColor: theme.surface,
         overflow: "hidden",
         marginBottom: Spacing.xxl,
         boxShadow: "0px 12px 26px rgba(0,0,0,0.18)",

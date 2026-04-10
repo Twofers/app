@@ -183,6 +183,7 @@ serve(async (req) => {
           .eq("user_id", user.id)
           .in("id", ids)
           .is("redeemed_at", null)
+          .not("claim_status", "in", "(redeemed,canceled,expired)")
           .select("id");
 
         if (expErr) {

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   Switch,
   Text,
@@ -281,12 +280,9 @@ export default function MenuScanScreen() {
             <Switch value={skipDuplicatesOnSave} onValueChange={setSkipDuplicatesOnSave} />
           </View>
           <SecondaryButton title={t("menuScan.addRow")} onPress={addRow} />
-          <FlatList
-            data={rows}
-            keyExtractor={(item) => item.key}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
+          {rows.map((item) => (
               <View
+                key={item.key}
                 style={{
                   marginBottom: Spacing.md,
                   padding: Spacing.md,
@@ -346,8 +342,7 @@ export default function MenuScanScreen() {
                   <Text style={{ color: "#c62828", fontWeight: "600" }}>{t("menuScan.removeLine")}</Text>
                 </Pressable>
               </View>
-            )}
-          />
+            ))}
           <PrimaryButton
             title={saving ? t("menuScan.saving") : t("menuScan.save")}
             onPress={() => void saveMenu()}

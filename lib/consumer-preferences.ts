@@ -136,6 +136,18 @@ export async function setLastKnownConsumerCoords(lat: number, lng: number) {
   await AsyncStorage.setItem(PREFIX + "last_lng", String(lng));
 }
 
+export async function getLastKnownConsumerCoords(): Promise<{ lat: number; lng: number } | null> {
+  const [latRaw, lngRaw] = await Promise.all([
+    AsyncStorage.getItem(PREFIX + "last_lat"),
+    AsyncStorage.getItem(PREFIX + "last_lng"),
+  ]);
+  if (latRaw == null || lngRaw == null) return null;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
 export function milesToKm(miles: number) {
   return miles * 1.60934;
 }

@@ -180,6 +180,7 @@ export default function RedeemScanner() {
                 placeholder={t("redeem.manualPlaceholder")}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                maxLength={8}
                 editable={!processing}
                 style={{
                   borderWidth: 1,

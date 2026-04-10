@@ -1,6 +1,7 @@
 import * as Location from "expo-location";
 import type { ConsumerPreferences } from "./consumer-preferences";
 import { geocodeUsZip } from "./us-zip-geocode";
+import { getLastKnownConsumerCoords } from "./consumer-preferences";
 
 export type ResolvedConsumerCoords = {
   lat: number;
@@ -32,7 +33,18 @@ export async function resolveConsumerCoordinates(
   }
 
   const { status } = await Location.getForegroundPermissionsAsync();
-  if (status !== "granted") return null;
+  if (status !== "granted") {
+    const cached = await getLastKnownConsumerCoords();
+    if (cached) {
+      return {
+        lat: cached.lat,
+        lng: cached.lng,
+        source: "gps" as const,
+        showsDeviceLocationBlueDot: false,
+      };
+    }
+    return null;
+  }
   try {
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     return {

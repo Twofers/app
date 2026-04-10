@@ -34,6 +34,7 @@ import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useTabMode } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -41,6 +42,8 @@ export default function SettingsScreen() {
   const { setMode: setTabMode } = useTabMode();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
@@ -190,12 +193,12 @@ export default function SettingsScreen() {
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           borderRadius: Radii.md,
-          backgroundColor: active ? "#111" : Colors.light.surfaceMuted,
+          backgroundColor: active ? theme.text : theme.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
         }}
       >
-        <Text style={{ fontWeight: "700", color: active ? "#fff" : "#333" }}>{label}</Text>
+        <Text style={{ fontWeight: "700", color: active ? theme.background : theme.text }}>{label}</Text>
       </Pressable>
     );
   }
@@ -216,7 +219,7 @@ export default function SettingsScreen() {
             onPress={() => router.push("/consumer-profile-setup?edit=1" as Href)}
             style={{
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               borderRadius: Radii.lg,
               padding: Spacing.lg,
             }}
@@ -231,7 +234,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -255,7 +258,7 @@ export default function SettingsScreen() {
                 maxLength={10}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: Radii.md,
                   padding: Spacing.md,
                   fontSize: 16,
@@ -271,7 +274,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -289,7 +292,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -330,7 +333,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,
@@ -349,14 +352,14 @@ export default function SettingsScreen() {
                     paddingVertical: Spacing.sm,
                     paddingHorizontal: Spacing.md,
                     borderRadius: Radii.pill,
-                    backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                    backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
                     borderWidth: 1,
-                    borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+                    borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
                     marginRight: Spacing.sm,
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>
+                  <Text style={{ color: active ? theme.primary : "#333", fontWeight: "700", fontSize: 13 }}>
                     {loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
                   </Text>
                 </Pressable>
@@ -369,7 +372,7 @@ export default function SettingsScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               gap: Spacing.sm,
@@ -387,7 +390,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,

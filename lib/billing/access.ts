@@ -18,7 +18,9 @@ export function canCreateDeal(params: {
   trialEndsAt: string | null;
   bypass?: boolean;
 }): boolean {
-  if (!params.isLoggedIn) return true;
+  // Only check billing eligibility for logged-in users. When not logged in,
+  // the auth gate will redirect — billing check is irrelevant.
+  if (!params.isLoggedIn) return false;
   if (params.bypass) return true;
   if (params.subscriptionStatus === "active") return true;
   if (params.subscriptionStatus === "trial") {

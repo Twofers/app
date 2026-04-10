@@ -1,17 +1,21 @@
 import { useWindowDimensions, View, type DimensionValue } from "react-native";
 import { Spacing } from "@/lib/screen-layout";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type LoadingSkeletonProps = {
   rows?: number;
 };
 
 export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { height: windowHeight } = useWindowDimensions();
   const imageHeight = Math.round(Math.max(280, windowHeight * 0.48));
   const cardHeight = Math.round(Math.min(860, Math.max(640, imageHeight + 320)));
 
   const block = (height: number, width: DimensionValue, radius = 12) => (
-    <View style={{ height, width, borderRadius: radius, backgroundColor: "#ececec" }} />
+    <View style={{ height, width, borderRadius: radius, backgroundColor: theme.border }} />
   );
 
   return (
@@ -21,15 +25,15 @@ export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
           key={`skeleton-${idx}`}
           style={{
             borderRadius: 24,
-            backgroundColor: "#ffffff",
+            backgroundColor: theme.surface,
             overflow: "hidden",
             height: cardHeight,
             borderWidth: 1,
-            borderColor: "#f1f1f1",
+            borderColor: theme.border,
           }}
         >
           {/* Poster */}
-          <View style={{ height: imageHeight, width: "100%", backgroundColor: "#f2f2f2" }} />
+          <View style={{ height: imageHeight, width: "100%", backgroundColor: theme.surfaceMuted }} />
 
           {/* Content */}
           <View style={{ padding: Spacing.xxl, gap: Spacing.md }}>
@@ -60,8 +64,8 @@ export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
               paddingVertical: Spacing.xxl,
               gap: Spacing.lg,
               borderTopWidth: 1,
-              borderTopColor: "#f0f0f0",
-              backgroundColor: "#fff",
+              borderTopColor: theme.border,
+              backgroundColor: theme.surface,
             }}
           >
             {block(56, "100%", 24)}

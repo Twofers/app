@@ -517,6 +517,7 @@ export default function AiDealScreen() {
 
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
+    let cancelled = false;
     (async () => {
       const { data, error } = await supabase
         .from("deal_templates")
@@ -524,6 +525,7 @@ export default function AiDealScreen() {
         .eq("id", templateId)
         .eq("business_id", businessId)
         .single();
+      if (cancelled) return;
       if (!error && data) {
         const row = data as TemplateRow;
         setTitle(row.title ?? "");
@@ -557,6 +559,7 @@ export default function AiDealScreen() {
         setLastGenerationError(null);
       }
     })();
+    return () => { cancelled = true; };
   }, [dealIdFromRoute, templateId, businessId]);
 
   /** Deep-link prefill from AI Compose / menu-offer (full publish flow stays on this screen). */
@@ -1200,16 +1203,16 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPublishDraftFirst"), tone: "error" });
       return;
     }
+    const priceNum = parseOptionalPriceInput(price);
+    if (priceNum !== null && Number.isNaN(priceNum)) {
+      setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      return;
+    }
     setSavingTemplate(true);
     setBanner(null);
     try {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
-      const priceNum = parseOptionalPriceInput(price);
-      if (priceNum !== null && Number.isNaN(priceNum)) {
-        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
-        return;
-      }
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
       const isRecurring = validityMode === "recurring";
@@ -1604,7 +1607,7 @@ export default function AiDealScreen() {
                   marginTop: 6,
                 }}
               >
-                <Text>{startTime.toLocaleString()}</Text>
+                <Text>{formatAppDateTime(startTime, i18n.language)}</Text>
               </Pressable>
               {showStartPicker ? (
                 Platform.OS === "android" ? (

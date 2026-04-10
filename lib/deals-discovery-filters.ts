@@ -7,6 +7,10 @@ export function normalizeSearch(q: string): string {
 export type DealForDiscovery = {
   title: string | null;
   description: string | null;
+  title_es?: string | null;
+  title_ko?: string | null;
+  description_es?: string | null;
+  description_ko?: string | null;
   businesses?: {
     name: string | null;
     category: string | null;
@@ -20,6 +24,10 @@ export function dealMatchesSearch(deal: DealForDiscovery, queryRaw: string): boo
   const hay = [
     deal.title,
     deal.description,
+    deal.title_es,
+    deal.title_ko,
+    deal.description_es,
+    deal.description_ko,
     deal.businesses?.name,
     deal.businesses?.category,
     deal.businesses?.location,

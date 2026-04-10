@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   Switch,
   Text,
@@ -34,6 +33,7 @@ import {
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
 import { resolveDealFlowLanguage } from "@/lib/translate-deal-quality";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
@@ -87,6 +87,8 @@ export default function MenuOfferScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const {
     businessId,
     loading: bizLoading,
@@ -325,8 +327,8 @@ export default function MenuOfferScreen() {
                 padding: Spacing.md,
                 borderRadius: Radii.md,
                 borderWidth: primaryLocationId === loc.id ? 2 : 1,
-                borderColor: primaryLocationId === loc.id ? Colors.light.primary : Colors.light.border,
-                backgroundColor: Colors.light.surface,
+                borderColor: primaryLocationId === loc.id ? theme.primary : theme.border,
+                backgroundColor: theme.surface,
               }}
             >
               <Text style={{ fontWeight: "700" }}>{loc.name}</Text>
@@ -365,9 +367,9 @@ export default function MenuOfferScreen() {
                           borderRadius: Radii.md,
                           borderWidth: extraLocationIds.has(loc.id) ? 2 : 1,
                           borderColor: extraLocationIds.has(loc.id)
-                            ? Colors.light.primary
-                            : Colors.light.border,
-                          backgroundColor: Colors.light.surface,
+                            ? theme.primary
+                            : theme.border,
+                          backgroundColor: theme.surface,
                         }}
                       >
                         <Text style={{ fontWeight: "600" }}>{loc.name}</Text>
@@ -387,12 +389,9 @@ export default function MenuOfferScreen() {
       {step === "main" && items.length > 0 ? (
         <View style={{ gap: Spacing.sm }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepMain")}</Text>
-          <FlatList
-            data={items}
-            keyExtractor={(it) => it.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
+          {items.map((item) => (
               <Pressable
+                key={item.id}
                 onPress={() => {
                   setMainItem(item);
                   setStep("paired");
@@ -401,9 +400,9 @@ export default function MenuOfferScreen() {
                   padding: Spacing.md,
                   borderRadius: Radii.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   marginBottom: Spacing.sm,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{item.name}</Text>
@@ -411,8 +410,7 @@ export default function MenuOfferScreen() {
                   <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
                 ) : null}
               </Pressable>
-            )}
-          />
+            ))}
           <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("location")} />
         </View>
       ) : null}
@@ -435,12 +433,9 @@ export default function MenuOfferScreen() {
               setStep("pairing");
             }}
           />
-          <FlatList
-            data={items.filter((i) => i.id !== mainItem.id)}
-            keyExtractor={(it) => it.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
+          {items.filter((i) => i.id !== mainItem.id).map((item) => (
               <Pressable
+                key={item.id}
                 onPress={() => {
                   setPairedItem(item);
                   setStep("pairing");
@@ -449,16 +444,15 @@ export default function MenuOfferScreen() {
                   padding: Spacing.md,
                   borderRadius: Radii.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   marginBottom: Spacing.sm,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{item.name}</Text>
               </Pressable>
-            )}
-          />
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("main")} />
+            ))}
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setPairedItem(null); setStructuredOffer(null); setStep("main"); }} />
         </View>
       ) : null}
 
@@ -473,8 +467,8 @@ export default function MenuOfferScreen() {
                 padding: Spacing.md,
                 borderRadius: Radii.md,
                 borderWidth: pairingType === opt.id ? 2 : 1,
-                borderColor: pairingType === opt.id ? Colors.light.primary : Colors.light.border,
-                backgroundColor: "#fff",
+                borderColor: pairingType === opt.id ? theme.primary : theme.border,
+                backgroundColor: theme.surface,
               }}
             >
               <Text style={{ fontWeight: "600" }}>{opt.label}</Text>
@@ -493,8 +487,8 @@ export default function MenuOfferScreen() {
                       paddingVertical: Spacing.sm,
                       borderRadius: Radii.md,
                       borderWidth: discountPercent === p ? 2 : 1,
-                      borderColor: discountPercent === p ? Colors.light.primary : Colors.light.border,
-                      backgroundColor: Colors.light.surface,
+                      borderColor: discountPercent === p ? theme.primary : theme.border,
+                      backgroundColor: theme.surface,
                     }}
                   >
                     <Text style={{ fontWeight: "600" }}>{p}%</Text>
@@ -513,18 +507,18 @@ export default function MenuOfferScreen() {
                 placeholder={t("menuOffer.fixedPricePlaceholder")}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: Radii.md,
                   padding: Spacing.md,
                   marginTop: 6,
                   fontSize: 16,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               />
             </View>
           ) : null}
           <PrimaryButton title={t("menuOffer.next")} onPress={onPairingNext} />
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("paired")} />
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("paired"); }} />
         </View>
       ) : null}
 
@@ -534,9 +528,9 @@ export default function MenuOfferScreen() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: Colors.light.surface,
+              backgroundColor: theme.surface,
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               gap: Spacing.md,
               boxShadow: "0px 8px 24px rgba(0,0,0,0.08)",
               elevation: 5,
@@ -556,7 +550,7 @@ export default function MenuOfferScreen() {
               style={{ minHeight: 64 }}
             />
           </View>
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("pairing")} />
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("pairing"); }} />
         </View>
       ) : null}
 
@@ -575,8 +569,8 @@ export default function MenuOfferScreen() {
                   borderRadius: Radii.lg,
                   padding: Spacing.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
-                  backgroundColor: "#fff",
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
                   gap: Spacing.sm,
                 }}
               >

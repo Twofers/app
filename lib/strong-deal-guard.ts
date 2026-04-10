@@ -30,6 +30,15 @@ const FREE_ITEM_PATTERNS: RegExp[] = [
   /(?:^|\s)free\b/i,
   /\bon\s+the\s+house\b/i,   // on the house
   /\bcomplimentary\b/i,      // complimentary [item]
+  // Spanish free-item patterns
+  /\bgratis\b/i,                        // gratis (free)
+  /\bcortesía\b/i,                      // cortesía (complimentary)
+  /\bde\s+regalo\b/i,                   // de regalo (as a gift)
+  /\binvita\s+la\s+casa\b/i,           // invita la casa (on the house)
+  // Korean free-item patterns
+  /무료/,                                // 무료 (free)
+  /서비스/,                              // 서비스 (service/on the house)
+  /공짜/,                                // 공짜 (free/gratis)
 ];
 
 // ── 2. CONDITIONAL DISCOUNT ───────────────────────────────────────────────────
@@ -58,6 +67,19 @@ const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\b40\s*%\s*off\b/i,
   /\b[4-9]\d\s*%\s*off\b/i,
   /\b100\s*%\s*off\b/i,
+  // Spanish BOGO / strong-deal patterns
+  /\bcompra\s+uno?\b.*\bgratis\b/i,                 // compra uno ... gratis
+  /\blleva(?:te)?\s+(?:otro|el\s+segundo)\b.*\bgratis\b/i, // llevate otro gratis
+  /\b2\s*(?:x|por)\s*1\b/i,                         // 2x1, 2 por 1
+  /\bdos\s+por\s+uno\b/i,                           // dos por uno
+  /\b[4-9]\d\s*%\s*(?:de\s+)?descuento\b/i,         // 40%+ descuento
+  /\bmitad\s+de\s+precio\b/i,                        // mitad de precio (half price)
+  /\bel\s+segundo\s+a\s+mitad\b/i,                   // el segundo a mitad
+  // Korean BOGO / strong-deal patterns
+  /1\s*\+\s*1/,                                      // 1+1
+  /\b[4-9]\d\s*%\s*할인/,                             // 40%+ 할인 (discount)
+  /하나\s*사면\s*하나/,                                // 하나 사면 하나 (buy one get one)
+  /반값/,                                             // 반값 (half price)
 ];
 
 function extractPercents(text: string): number[] {

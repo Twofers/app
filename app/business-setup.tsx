@@ -94,6 +94,7 @@ export default function BusinessSetupScreen() {
   }
 
   async function onSubmit() {
+    if (busy) return;
     setBanner(null);
     if (!trimmed.businessName || !trimmed.address) {
       setBanner({ message: t("businessSetup.errNameAddress"), tone: "error" });

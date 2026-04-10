@@ -484,7 +484,8 @@ serve(async (req) => {
       const { count, error: countError } = await supabase
         .from("deal_claims")
         .select("*", { count: "exact", head: true })
-        .eq("deal_id", dealId);
+        .eq("deal_id", dealId)
+        .neq("claim_status", "canceled");
 
       if (countError) {
         console.error("Error counting claims:", countError);

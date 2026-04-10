@@ -136,6 +136,12 @@ const KOREAN_DEAL_PATTERNS: RegExp[] = [
   /타임세일/,
 ];
 
+/** Localized phrases that imply a strong percentage discount — skip the numeric floor check. */
+const LOCALIZED_PERCENT_STRONG_PATTERNS: RegExp[] = [
+  /\b\d{1,3}\s*%\s*de?\s*descuento\b/i,
+  /\b\d{1,3}\s*%\s*할인\b/,
+];
+
 const STRONG_OFFER_PATTERNS: RegExp[] = [
   ...CORE_STRONG_PATTERNS,
   ...CLEAR_FREE_ITEM_PHRASE_PATTERNS,
@@ -291,6 +297,9 @@ export function assessDealQuality(input: DealQualityInput): DealQualityResult {
   const singlePercent = uniquePercents.length === 1 ? uniquePercents[0] : null;
 
   if (singlePercent != null && singlePercent < DEAL_QUALITY_MIN_PERCENT) {
+    if (matchesAny(text, LOCALIZED_PERCENT_STRONG_PATTERNS)) {
+      return { tier: "acceptable", blocked: false, blockReason: null, message: "" };
+    }
     return {
       tier: "weak",
       blocked: true,
