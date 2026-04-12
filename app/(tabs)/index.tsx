@@ -46,38 +46,12 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
+import { useRealtimeDeals } from "@/hooks/use-realtime-deals";
+import { DEAL_FEED_SELECT, type Deal } from "@/lib/deal-feed-schema";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
-type Deal = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  title_es: string | null;
-  title_ko: string | null;
-  description_es: string | null;
-  description_ko: string | null;
-  end_time: string;
-  is_active: boolean;
-  poster_url: string | null;
-  poster_storage_path?: string | null;
-  business_id: string;
-  price: number | null;
-  max_claims: number | null;
-  businesses?: {
-    name: string | null;
-    category: string | null;
-    location: string | null;
-    latitude: number | string | null;
-    longitude: number | string | null;
-  } | null;
-  start_time: string;
-  is_recurring: boolean;
-  days_of_week: number[] | null;
-  window_start_minutes: number | null;
-  window_end_minutes: number | null;
-  timezone: string | null;
-};
+
 
 function localizedTitle(deal: Deal, lang: string): string {
   const l = lang.split("-")[0]?.toLowerCase() ?? "en";
@@ -174,6 +148,21 @@ export default function HomeScreen() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
+
+  // --- Realtime deal subscription ---
+  const existingDealIds = useMemo(() => new Set(deals.map((d) => d.id)), [deals]);
+  const onNewRealtimeDeal = useCallback((deal: Deal) => {
+    setDeals((prev) => {
+      if (prev.some((d) => d.id === deal.id)) return prev;
+      return [deal, ...prev];
+    });
+  }, []);
+  useRealtimeDeals({
+    enabled: isFocused && feedSegment === "deals",
+    existingDealIds,
+    onNewDeal: onNewRealtimeDeal,
+  });
+
   const lastFeedFocusHydrateAtRef = useRef(0);
   const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
   const dealsFade = useSharedValue(0);
@@ -223,9 +212,7 @@ export default function HomeScreen() {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select(
-        "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-      )
+      .select(DEAL_FEED_SELECT)
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
