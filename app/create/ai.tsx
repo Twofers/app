@@ -762,12 +762,7 @@ export default function AiDealScreen() {
         return false;
       }
     }
-    if (forGenerate) {
-      if (!photoUri && !posterUrl) {
-        setBanner({ message: t("createAi.errAddPhoto"), tone: "error" });
-        return false;
-      }
-    }
+    // Photo is optional — users can generate ads with just text
     return true;
   }
 
@@ -896,15 +891,14 @@ export default function AiDealScreen() {
 
     try {
       const path = await ensureUploadedPhoto();
-      if (!path) {
-        throw new Error(t("createAi.errUploadPhotoBeforeGenerate"));
+      if (path) {
+        await ensurePosterUrl(path);
       }
-      await ensurePosterUrl(path);
       const priceNum = priceNumPreCheck;
       const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
         body: {
           business_id: businessId,
-          photo_path: path,
+          photo_path: path ?? null,
           hint_text: hintText.trim(),
           price: priceNum,
           business_context: businessContextForAi,

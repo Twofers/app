@@ -143,12 +143,12 @@ serve(async (req) => {
       ? "Korean"
       : "English";
 
-    const input_mode_log = photo_path ? "photo_hint" : "structured_offer";
+    const input_mode_log = photo_path ? "photo_hint" : has_structured_offer ? "structured_offer" : "text_only";
 
-    if (!business_id || (!photo_path && !has_structured_offer)) {
+    if (!business_id || (!photo_path && !has_structured_offer && !hint_text)) {
       return new Response(
         JSON.stringify({
-          error: "Missing business_id, or provide photo_path and/or structured_offer.",
+          error: "Missing business_id, or provide photo_path, structured_offer, and/or hint_text.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
