@@ -254,7 +254,7 @@ export default function SettingsScreen() {
                 onChangeText={setZip}
                 onEndEditing={() => void saveZip()}
                 placeholder={t("onboarding.zipPlaceholder")}
-                autoCapitalize="characters"
+                autoCapitalize="none"
                 maxLength={10}
                 style={{
                   borderWidth: 1,

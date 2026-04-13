@@ -891,6 +891,7 @@
     "forgotSubtitle": "Enter the email you use for TWOFER. If an account exists, we’ll email you a reset link.",
     "submitRequest": "Send reset link",
     "sending": "Sending…",
+    "resendIn": "Resend in {{seconds}}s",
     "requestSuccess": "If an account exists for that email, we sent a password reset link.",
     "requestGenericError": "We couldn’t send a reset email right now. Try again in a moment.",
     "errEmailRequired": "Enter your email address.",

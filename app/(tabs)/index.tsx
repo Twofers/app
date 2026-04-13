@@ -39,6 +39,7 @@ import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { buildClaimDealTelemetry } from "@/lib/claim-telemetry";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -346,7 +347,8 @@ export default function HomeScreen() {
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
-        const out = await claimDeal(dealId);
+        const telem = await buildClaimDealTelemetry("feed");
+        const out = await claimDeal(dealId, telem);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
         trackAppAnalyticsEvent({
@@ -588,15 +590,28 @@ export default function HomeScreen() {
           }}
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
-            <Image
-              source={{
-                uri:
-                  resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path) ??
-                  "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
-              }}
-              style={{ width: "100%", height: heroImageHeight }}
-              contentFit="cover"
-            />
+            {(() => {
+              const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
+              return posterUri ? (
+                <Image
+                  source={{ uri: posterUri }}
+                  style={{ width: "100%", height: heroImageHeight }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: "100%",
+                    height: heroImageHeight,
+                    backgroundColor: theme.surfaceMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+                </View>
+              );
+            })()}
           </Pressable>
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>

@@ -51,7 +51,7 @@ export default function ConsumerProfileSetupScreen() {
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
   const [birthDate, setBirthDate] = useState(defaultBirthDate);
-  const [showPicker, setShowPicker] = useState(Platform.OS === "ios");
+  const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
@@ -194,7 +194,7 @@ export default function ConsumerProfileSetupScreen() {
           <Text style={{ fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18, color: C.mutedText }}>
             {t("consumerProfile.birthdateHint")}
           </Text>
-          {Platform.OS === "android" ? (
+          {!showPicker ? (
             <Pressable
               onPress={() => setShowPicker(true)}
               style={{
@@ -206,7 +206,6 @@ export default function ConsumerProfileSetupScreen() {
                 backgroundColor: C.surface,
               }}
             >
-              {/* FIX: Show human-readable date instead of raw ISO "2001-03-26" */}
               <Text style={{ fontSize: 16, fontWeight: "600", color: C.text }}>
                 {birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
               </Text>

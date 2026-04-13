@@ -131,9 +131,9 @@ export default function BusinessBillingScreen() {
         // Show fallback pricing so the screen is still usable, with an error banner.
         // In dev mode the banner is suppressed for convenience.
         setPricing({
-          proMonthlyPrice: 49,
-          premiumMonthlyPrice: 99,
-          extraLocationPrice: 19,
+          proMonthlyPrice: 30,
+          premiumMonthlyPrice: 79,
+          extraLocationPrice: 15,
         });
         if (!__DEV__) {
           setBanner({

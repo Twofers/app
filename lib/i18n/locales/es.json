@@ -891,6 +891,7 @@
     "forgotSubtitle": "Introduce el correo que usas en TWOFER. Si hay una cuenta, te enviaremos un enlace.",
     "submitRequest": "Enviar enlace",
     "sending": "Enviando…",
+    "resendIn": "Reenviar en {{seconds}}s",
     "requestSuccess": "Si existe una cuenta con ese correo, enviamos un enlace para restablecer la contraseña.",
     "requestGenericError": "No pudimos enviar el correo ahora. Inténtalo de nuevo en un momento.",
     "errEmailRequired": "Introduce tu correo electrónico.",
