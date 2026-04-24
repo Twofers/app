@@ -564,6 +564,11 @@ serve(async (req) => {
         break;
       }
       insertError = err ?? { message: "insert failed" };
+      // The max_claims trigger beat us — a concurrent claim filled the last slot.
+      // No point retrying for short_code collisions; bail out and return 409 below.
+      if (err?.message === "MAX_CLAIMS_REACHED") {
+        break;
+      }
       // Retry only on short_code unique constraint violations.
       // Check both constraint detail and message for robustness across PG versions.
       if (err?.code === "23505") {
@@ -577,6 +582,17 @@ serve(async (req) => {
 
     if (insertError || !short_code || !newClaimId) {
       console.error("Insert error:", insertError);
+      // Atomic max_claims trigger fired — match the pre-check's error copy so
+      // clients see the same message regardless of which layer caught it.
+      if (insertError?.message === "MAX_CLAIMS_REACHED") {
+        return new Response(
+          JSON.stringify({ error: "This deal has reached its claim limit." }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
       if (insertError?.code === "23505") {
         return new Response(
           JSON.stringify({ error: "You already have an active claim for this deal" }),
