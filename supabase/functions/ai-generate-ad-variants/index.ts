@@ -211,25 +211,34 @@ serve(async (req) => {
       );
     }
 
-    const cooldownMs = Math.max(10, COOLDOWN_SEC) * 1000;
-    const { data: recentCall } = await admin
-      .from("ai_generation_logs")
-      .select("id")
-      .eq("business_id", business_id)
-      .eq("request_type", "ad_variants")
-      .eq("success", true)
-      .gte("created_at", new Date(Date.now() - cooldownMs).toISOString())
-      .limit(1)
-      .maybeSingle();
+    // Cooldown only applies to fresh initial generations. Regenerations are already
+    // capped at 2 per draft (MAX_REGENERATION_ATTEMPT above), so a second cooldown
+    // just blocks the merchant from iterating on their ad within the same session.
+    if (regeneration_attempt === 0) {
+      const cooldownMs = Math.max(10, COOLDOWN_SEC) * 1000;
+      const { data: recentCall } = await admin
+        .from("ai_generation_logs")
+        .select("id, created_at")
+        .eq("business_id", business_id)
+        .eq("request_type", "ad_variants")
+        .eq("success", true)
+        .gte("created_at", new Date(Date.now() - cooldownMs).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (recentCall) {
-      return new Response(
-        JSON.stringify({
-          error: "Please wait a moment before generating again.",
-          error_code: "COOLDOWN_ACTIVE",
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      if (recentCall) {
+        const lastTs = new Date(recentCall.created_at as string).getTime();
+        const waitSec = Math.max(1, Math.ceil((lastTs + cooldownMs - Date.now()) / 1000));
+        return new Response(
+          JSON.stringify({
+            error: `Please wait ${waitSec}s before generating a new batch.`,
+            error_code: "COOLDOWN_ACTIVE",
+            wait_seconds: waitSec,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     let signedPosterUrl: string | null = null;
@@ -301,29 +310,28 @@ serve(async (req) => {
       }
     }
 
+    // For non-demo merchants, a missing OPENAI_API_KEY should surface — not silently
+    // serve generic template copy dressed up as AI output. The client maps
+    // `OPENAI_KEY_MISSING` to a "contact support" banner.
     if (!openAiKey) {
-      const ms2 = 900 + Math.floor(Math.random() * 550);
-      await new Promise((r) => setTimeout(r, ms2));
-      const fallbackAds = buildDemoAdVariants({
-        hint_text: hintForModel,
-        price,
-        business_name: typeof business.name === "string" ? business.name : "",
-        business_context,
-        offer_schedule_summary,
-        output_language,
-        regeneration_attempt,
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "ad_variants",
+        input_mode: input_mode_log,
+        request_hash: "openai_key_missing",
+        prompt_version: "v1",
+        success: false,
+        failure_reason: "OPENAI_KEY_MISSING",
+        openai_called: false,
       });
-      const fallbackNorm = normalizeLaneOrder(fallbackAds as AdVariant[]);
-      if (!fallbackNorm) {
-        return new Response(JSON.stringify({ error: "Generation failed." }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ ads: fallbackNorm }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "OPENAI_API_KEY is not set on the server. Contact support to enable AI.",
+          error_code: "OPENAI_KEY_MISSING",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: prior } = await supabase

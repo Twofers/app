@@ -732,6 +732,10 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errCutoff"), tone: "error" });
       return false;
     }
+    // Schedule only needs to be valid at publish time. For AI generation we use
+    // whatever the merchant has so far (or defaults) as context — blocking the
+    // creative step on a picker error is a terrible first impression.
+    if (forGenerate) return true;
     if (validityMode === "one-time") {
       if (endTime <= startTime) {
         setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
@@ -762,7 +766,6 @@ export default function AiDealScreen() {
         return false;
       }
     }
-    // Photo is optional — users can generate ads with just text
     return true;
   }
 
@@ -816,7 +819,11 @@ export default function AiDealScreen() {
 
   function friendlyGenerationError(raw: string): string {
     const lower = raw.toLowerCase();
-    if (lower.includes("openai_api_key") || lower.includes("not set")) {
+    if (
+      lower.includes("openai_api_key") ||
+      lower.includes("openai_key_missing") ||
+      lower.includes("not set")
+    ) {
       return t("createAi.friendlyOpenaiConfig");
     }
     if (lower.includes("unauthorized") || lower.includes("log in")) {
@@ -828,13 +835,21 @@ export default function AiDealScreen() {
     if (lower.includes("regeneration limit")) {
       return t("createAi.friendlyRegenLimit");
     }
-    if (lower.includes("rate limit") || lower.includes("429")) {
+    if (
+      lower.includes("rate limit") ||
+      lower.includes("429") ||
+      lower.includes("please wait") ||
+      lower.includes("cooldown")
+    ) {
+      // The server includes the wait time in the raw message (e.g.
+      // "Please wait 42s before..."), so surface it verbatim when short.
+      if (raw.length <= 120) return raw;
       return t("createAi.friendlyGenerationRateLimit");
     }
     if (raw.length > 120) {
       return t("createAi.friendlyGenerationLongError");
     }
-    return t("createAi.fallbackIntro");
+    return raw || t("createAi.fallbackIntro");
   }
 
   async function generateAdVariants(mode: "initial" | "regenerate") {
@@ -979,7 +994,8 @@ export default function AiDealScreen() {
   }
 
   function devPromptAiCreateDeal() {
-    if (!validateInputs(true)) return;
+    // Dev one-shot creates a real deal — needs full schedule validation.
+    if (!validateInputs(false)) return;
     Alert.alert(t("createAi.devCreateConfirmTitle"), t("createAi.devCreateConfirmMsg"), [
       { text: t("createAi.cancel"), style: "cancel" },
       {
@@ -1435,7 +1451,7 @@ export default function AiDealScreen() {
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 1, total: 3 })}
+              {t("createAi.sectionPhoto")}
             </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
@@ -1476,14 +1492,16 @@ export default function AiDealScreen() {
             style={{
               marginTop: 16,
               borderRadius: 14,
-              backgroundColor: "#f6f7fb",
+              backgroundColor: "#fff3e0",
               paddingHorizontal: 12,
               paddingVertical: 8,
               alignSelf: "flex-start",
+              borderWidth: 1,
+              borderColor: "rgba(255,159,28,0.45)",
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 2, total: 3 })}
+            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, color: "#b45309" }}>
+              {t("createAi.sectionOffer")}
             </Text>
           </View>
           <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
@@ -1555,9 +1573,12 @@ export default function AiDealScreen() {
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 3, total: 3 })}
+              {t("createAi.sectionSchedule")}
             </Text>
           </View>
+          <Text style={{ marginTop: 6, opacity: 0.65, fontSize: 12, lineHeight: 17 }}>
+            {t("createAi.scheduleDefaultsHint")}
+          </Text>
           <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
             <Pressable

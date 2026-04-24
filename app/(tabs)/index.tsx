@@ -347,7 +347,7 @@ export default function HomeScreen() {
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
-        const telem = await buildClaimDealTelemetry("feed");
+        const telem = await buildClaimDealTelemetry("organic");
         const out = await claimDeal(dealId, telem);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
