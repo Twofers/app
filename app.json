@@ -15,7 +15,10 @@
       "bundleIdentifier": "com.unvmex2.twoforone",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "twoforone uses your location to sort nearby deals and match your area to business profile locations.",
+        "NSLocationWhenInUseUsageDescription": "TWOFER uses your location to sort nearby deals and match your area to business profile locations.",
+        "NSCameraUsageDescription": "TWOFER uses your camera to scan QR codes for redeeming deals and to capture menu photos for AI menu extraction.",
+        "NSMicrophoneUsageDescription": "TWOFER uses your microphone only for the AI Compose voice input feature, which transcribes your spoken offer into deal copy.",
+        "NSPhotoLibraryUsageDescription": "TWOFER uses your photo library to attach photos to your deals and to upload menu photos for AI extraction.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

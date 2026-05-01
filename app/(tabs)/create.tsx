@@ -154,6 +154,36 @@ export default function CreateDeal() {
             </Text>
           </Pressable>
 
+          {/* ── Scan Menu with AI ──
+              Promoted out of "More Tools" because menu-scan is a core
+              AI-first differentiator: photo → menu items → reusable for deal
+              creation. First-time owners should see this on the create hub,
+              not buried in a collapsed disclosure. */}
+          <Pressable
+            onPress={() => router.push("/create/menu-scan" as Href)}
+            style={{
+              borderRadius: Radii.card,
+              padding: Spacing.lg,
+              backgroundColor: Colors.light.surface,
+              borderWidth: 2,
+              borderColor: Colors.light.primary,
+              boxShadow: "0px 4px 12px rgba(255,159,28,0.18)",
+              elevation: 3,
+            }}
+            accessibilityLabel={t("createHub.scanMenuTitle")}
+            accessibilityHint={t("createHub.scanMenuSubtitle")}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "900", color: Colors.light.primary, letterSpacing: 1.2, marginBottom: 4 }}>
+              ✨ AI
+            </Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: theme.text }}>
+              {t("createHub.scanMenuTitle")}
+            </Text>
+            <Text style={{ fontSize: 13, color: theme.mutedText, marginTop: 4, lineHeight: 18 }}>
+              {t("createHub.scanMenuSubtitle")}
+            </Text>
+          </Pressable>
+
           {/* ── Reuse Past Deal ── */}
           <Pressable
             onPress={() => router.push("/create/reuse")}
@@ -174,7 +204,7 @@ export default function CreateDeal() {
             </Text>
           </Pressable>
 
-          {/* ── More Tools (menu features) ── */}
+          {/* ── More Tools (advanced menu features) ── */}
           <Pressable
             onPress={() => setMoreToolsOpen((v) => !v)}
             accessibilityRole="button"
@@ -196,13 +226,6 @@ export default function CreateDeal() {
               >
                 <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.menuDealFastTitle")}</Text>
                 <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-scan" as Href)}
-                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border }}
-              >
-                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.scanMenuTitle")}</Text>
-                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push("/create/menu-manager" as Href)}

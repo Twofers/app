@@ -347,7 +347,7 @@ export default function HomeScreen() {
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
-        const telem = await buildClaimDealTelemetry("feed");
+        const telem = await buildClaimDealTelemetry("organic");
         const out = await claimDeal(dealId, telem);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
@@ -1036,7 +1036,54 @@ export default function HomeScreen() {
               ? emptyNearbyLive || showDealsSkeleton
                 ? null
                 : (
-                    <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
+                    /* Zero-deals coach: shown when the feed is truly empty
+                       (no deals globally, not just outside radius). The
+                       inline emptyNearbyLive block above handles the
+                       "deals exist but not nearby" case separately. */
+                    <View
+                      style={{
+                        borderRadius: Radii.card,
+                        backgroundColor: theme.surface,
+                        padding: Spacing.xxxl,
+                        margin: Spacing.lg,
+                        borderWidth: 1,
+                        borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
+                        gap: Spacing.md,
+                        alignItems: "center",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 28,
+                          backgroundColor:
+                            colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Image
+                          source={require("../../assets/images/splash-icon.png")}
+                          style={{ width: 30, height: 30, opacity: 0.95 }}
+                          contentFit="contain"
+                        />
+                      </View>
+                      <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text, textAlign: "center" }}>
+                        {t("consumerHome.emptyZeroTitle")}
+                      </Text>
+                      <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
+                        {t("consumerHome.emptyZeroBody")}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
+                        {t("consumerHome.emptyZeroPenguinHint")}
+                      </Text>
+                      <PrimaryButton
+                        title={t("consumerHome.emptyZeroBrowseCta")}
+                        onPress={() => setFeedSegment("shops")}
+                        style={{ alignSelf: "stretch" }}
+                      />
+                    </View>
                   )
               : loadingBiz && businesses.length === 0
                 ? (

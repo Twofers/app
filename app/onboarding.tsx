@@ -53,7 +53,9 @@ export default function OnboardingScreen() {
     void setOnboardingStepIndex(clamped);
   }, []);
   const [zip, setZip] = useState("");
-  const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
+  // Pilot is centered on ZIP 75063 (Irving) with a 15-mile target radius
+  // covering Coppell, Grapevine, Carrollton, Las Colinas, and parts of Dallas.
+  const [radius, setRadius] = useState<ConsumerRadiusMiles>(15);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 

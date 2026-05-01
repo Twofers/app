@@ -482,3 +482,49 @@ entrypoint = "./functions/deal-link/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/send-deal-push/index.ts"
+
+[functions.ai-business-lookup]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ai-business-lookup/index.ts"
+
+[functions.ai-deal-suggestions]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ai-deal-suggestions/index.ts"
+
+[functions.ai-translate-deal]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ai-translate-deal/index.ts"
+
+[functions.billing-pricing]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-pricing/index.ts"
+
+[functions.billing-checkout-redirect]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-checkout-redirect/index.ts"
+
+[functions.simulate-subscribe]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/simulate-subscribe/index.ts"
+
+[functions.stripe-create-checkout-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-create-checkout-session/index.ts"
+
+[functions.stripe-customer-portal-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-customer-portal-session/index.ts"
+
+# Stripe webhook validates the request via Stripe-Signature header (not JWT).
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-webhook/index.ts"

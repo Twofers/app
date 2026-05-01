@@ -13,9 +13,9 @@ const ALLOWED_ORIGINS = new Set([
   // Expo Go / dev-client local dev server
   "http://localhost:8081",
   "http://localhost:19006",
-  // Production web (if ever used)
-  "https://twofer.app",
-  "https://www.twofer.app",
+  // Production web (legal pages + future web client)
+  "https://twoferapp.com",
+  "https://www.twoferapp.com",
 ]);
 
 export function getCorsHeaders(req: Request): Record<string, string> {

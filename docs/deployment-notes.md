@@ -12,7 +12,7 @@
 
 ## Database migrations (exact set)
 
-Apply these migration files in order:
+Apply migration files in **filename (timestamp) order**. Easiest: `npx supabase db push` against the linked project after `npx supabase link --project-ref <ref>` — it applies any unmigrated files. The full ordered list as of launch:
 
 | Order | File |
 |------:|------|
@@ -32,34 +32,91 @@ Apply these migration files in order:
 | 14 | `20260327120000_launch_visual_redeem_analytics.sql` |
 | 15 | `20260328140000_merchant_insights_rpc.sql` |
 | 16 | `20260330120000_fix_deal_claims_deals_rls_recursion.sql` |
-| 17 | `20260331120000_deal_poster_storage_public_read.sql` |
-| 18 | `20260401120000_add_claim_blocked_reason_mix_to_merchant_business_insights.sql` |
+| 17 | `20260330140000_deals_public_read_start_time_deal_templates_timezone.sql` |
+| 18 | `20260331120000_deal_poster_storage_public_read.sql` |
+| 19 | `20260401120000_add_claim_blocked_reason_mix_to_merchant_business_insights.sql` |
+| 20 | `20260401150000_update_strong_deal_guardrail_free_item.sql` |
+| 21 | `20260402120000_push_tokens.sql` |
+| 22 | `20260402130000_server_set_quality_tier.sql` |
+| 23 | `20260403120000_consumer_push_prefs.sql` |
+| 24 | `20260404120000_app_analytics_events_select_business_owner.sql` |
+| 25 | `20260429120000_business_menu_items.sql` |
+| 26 | `20260502120000_profiles_app_tab_mode.sql` |
+| 27 | `20260530120000_business_locations_deal_location.sql` |
+| 28 | `20260601000000_create_business_profiles.sql` |
+| 29 | `20260601153000_billing_v4_app_config_and_subscription_rls.sql` |
+| 30 | `20260601160000_create_subscription_history.sql` |
+| 31 | `20260630120000_lockdown_deal_claims_client_insert.sql` |
+| 32 | `20260630123000_enforce_business_locations_cap_insert_rls.sql` |
+| 33 | `20260701120001_enable_rate_limits_rls.sql` |
+| 34 | `20260701120002_enable_app_config_rls_backend_only.sql` |
+| 35 | `20260701130000_fix_deal_claims_rls_recursion_billing_v4.sql` |
+| 36 | `20260702120000_deal_translation_columns.sql` |
+| 37 | `20260703120000_add_analytics_business_id_index.sql` |
+| 38 | `20260703120001_push_token_cleanup.sql` |
+| 39 | `20260703120002_birthdate_check_constraint.sql` |
+| 40 | `20260703120003_deal_claims_status_changed_at.sql` |
+| 41 | `20260703120004_timezone_validation.sql` |
+| 42 | `20260704120000_enable_deals_realtime.sql` |
 
 **Launch-critical for merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql` (claim lifecycle + analytics) and `20260328140000_merchant_insights_rpc.sql` (`merchant_business_insights`, `merchant_deal_insights` RPCs).
 
+**Launch-critical for billing (Stripe):** `20260601153000_billing_v4_app_config_and_subscription_rls.sql` (creates `app_config`, `business_profiles.subscription_*` columns, RLS) and `20260601160000_create_subscription_history.sql`. After applying, **seed the `app_config` row with current pricing** — the `billing-pricing` Edge function reads it. See `docs/stripe-setup.md`.
+
+**Launch-critical for menu / locations:** `20260429120000_business_menu_items.sql` (AI menu OCR storage), `20260530120000_business_locations_deal_location.sql` (multi-location).
+
+**Launch-critical for realtime:** `20260704120000_enable_deals_realtime.sql` (Supabase Realtime publication on `deals`).
+
 ## Edge Functions to deploy (exact set)
 
-Deploy all folders under `supabase/functions/` that ship with this repo. The **wallet / redeem / account** flows require at minimum:
+Recommended: `npx supabase functions deploy` deploys every folder under `supabase/functions/` that ships in this repo. Below is the full inventory grouped by purpose.
+
+**Wallet / redeem / claim:**
 
 | Function | Purpose |
 |----------|---------|
 | `claim-deal` | Create claim, `expires_at`, telemetry |
 | `redeem-token` | Staff QR / short-code redeem |
-| `begin-visual-redeem` | Consumer “Use Deal” start |
+| `begin-visual-redeem` | Consumer "Use Deal" start |
 | `complete-visual-redeem` | Consumer pass completion |
 | `cancel-visual-redeem` | Deprecated path (returns 400); keep deployed if referenced |
 | `finalize-stale-redeems` | Auto-finalize stuck `redeeming` claims (~30s TTL) |
+
+**Auth / account / analytics:**
+
+| Function | Purpose |
+|----------|---------|
 | `delete-user-account` | Auth user deletion (blocks business owners — see policy below) |
 | `ingest-analytics-event` | Append-only client analytics |
+| `deal-link` | Deep-link redirect for deal sharing |
+| `send-deal-push` | Push notifications when a deal goes live |
 
-**AI / create flows (deploy if those product paths are live):**
+**AI flows:**
 
-| Function |
-|----------|
-| `ai-compose-offer` |
-| `ai-generate-ad-variants` |
-| `ai-generate-deal-copy` |
-| `ai-create-deal` |
+| Function | Purpose |
+|----------|---------|
+| `ai-compose-offer` | Voice / text → ad-copy compose (uses Whisper for voice) |
+| `ai-generate-ad-variants` | 3 distinct ad variants (value / neighborhood / premium) + DALL-E |
+| `ai-generate-deal-copy` | Quick-Deal "Suggest title" |
+| `ai-create-deal` | Legacy one-shot deal insert (dev tool) |
+| `ai-extract-menu` | Menu photo → structured items (vision) |
+| `ai-refine-ad-copy` | Chat-style refinement of selected ad |
+| `ai-business-lookup` | Business-setup lookup (name → address/phone/category) |
+| `ai-deal-suggestions` | Deal idea suggestions |
+| `ai-translate-deal` | Localize deal copy across EN / ES / KO |
+
+**Billing / Stripe (required for paid plans):**
+
+| Function | Purpose |
+|----------|---------|
+| `billing-pricing` | Read current pricing from `app_config` (no JWT) |
+| `stripe-create-checkout-session` | Start Stripe Checkout for Pro/Premium |
+| `stripe-customer-portal-session` | Open Stripe Customer Portal for plan management |
+| `stripe-webhook` | Receive Stripe events; verifies via `STRIPE_WEBHOOK_SECRET` |
+| `billing-checkout-redirect` | Post-checkout deep-link return into the app |
+| `simulate-subscribe` | **Dev only** — manually advance pilot accounts to `active` for QA |
+
+See `docs/stripe-setup.md` for end-to-end Stripe test-mode bring-up (products, prices, webhook URL, secrets).
 
 ## Environment variables
 
@@ -84,11 +141,26 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 ### Edge Function secrets (Supabase Dashboard)
 
-| Secret | Used by |
-|--------|---------|
-| `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (e.g. `delete-user-account`, claim/redeem edges as implemented) |
-| `OPENAI_API_KEY` | AI Edge functions |
-| Optional: `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL`, `AI_ADS_DEMO_USE_LIVE` | See `.env.example` |
+| Secret | Used by | Required |
+|--------|---------|---------|
+| `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem) | **Yes** |
+| `OPENAI_API_KEY` | All `ai-*` Edge functions | **Yes** |
+| `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
+| `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
+| `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default models | Optional |
+| `AI_ADS_DEMO_USE_LIVE` | Use live OpenAI (not stubbed) for `demo@demo.com` account | Optional |
+
+**⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` returns category-aware **fake menu items** as a fallback (no error to UI). Make sure the secret is set in production or pilot owners get fictional menus on first scan.
+
+**Setting Edge secrets:**
+
+```bash
+# In Supabase Dashboard → Project Settings → Edge Functions → Secrets
+# OR via CLI:
+npx supabase secrets set OPENAI_API_KEY=sk-...
+npx supabase secrets set STRIPE_SECRET_KEY=sk_test_...
+npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+```
 
 ## One-time cleanup: legacy `expires_at` / grace
 

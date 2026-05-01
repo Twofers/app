@@ -181,12 +181,13 @@ After deploying, set edge function secrets (see Section 2 above).
 ## 8. Pre-submission Checklist
 
 ### App Store Connect setup
-- [ ] Bundle ID registered: `com.twofer.app`
+- [ ] Bundle ID registered: `com.unvmex2.twoforone` (matches `app.json` `ios.bundleIdentifier`)
 - [ ] App record created in App Store Connect
 - [ ] App icons uploaded (1024×1024 PNG, no transparency)
 - [ ] Screenshots uploaded (see `store-assets/app-store-copy.md` for sizes)
 - [ ] Description, subtitle, keywords filled in
-- [ ] Privacy policy URL entered (e.g. `https://twofer.app/privacy`)
+- [ ] Privacy policy URL entered: `https://www.twoferapp.com/privacy`
+- [ ] Support URL entered: `https://www.twoferapp.com/support`
 - [ ] Age rating completed (Everyone / 4+)
 
 ### Google Play Console setup
