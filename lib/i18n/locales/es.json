@@ -719,7 +719,8 @@
     "errLoginClaim": "Inicia sesión para reclamar ofertas.",
     "errLoginFavorite": "Inicia sesión para guardar favoritos.",
     "couldNotLoad": "No pudimos cargar esta oferta. Puede haber terminado o ya no estar disponible.",
-    "viewBusiness": "Perfil del negocio"
+    "viewBusiness": "Perfil del negocio",
+    "reportBusinessLink": "Reportar este negocio"
   },
   "redeem": {
     "title": "Canjear",
@@ -750,7 +751,8 @@
     "scanNext": "Escanear otro",
     "errRedeemFailed": "El canje falló.",
     "errCodeRequired": "Introduce el código de la cartera del cliente.",
-    "defaultDealTitle": "Oferta"
+    "defaultDealTitle": "Oferta",
+    "reportCustomerLink": "Reportar a este cliente"
   },
   "auth": {
     "title": "Iniciar sesión",
@@ -827,7 +829,11 @@
     "backToSignIn": "Volver a iniciar sesión",
     "hintEnterEmail": "Ingresa tu correo para continuar.",
     "hintEnterPassword": "Ingresa tu contraseña para continuar.",
-    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar."
+    "hintEnterBoth": "Ingresa tu correo y contraseña para continuar.",
+    "inviteCodeLabel": "Código de invitación para negocios",
+    "inviteCodePlaceholder": "Ingresa el código que TWOFER te envió",
+    "inviteCodeHint": "Se requiere para crear una cuenta de negocio. Las cuentas existentes pueden dejarlo en blanco.",
+    "errInviteCode": "Ese código de invitación no es válido. Contacta a TWOFER para obtener uno."
   },
   "supportContact": {
     "sectionTitle": "Ayuda y contacto",
@@ -1388,6 +1394,11 @@
       "custom_prompt": "Personalizado…"
     },
     "errEnterName": "Enter a business name first.",
+    "errInviteCode": "Ese código de invitación no es válido. Contacta a TWOFER para obtener uno.",
+    "errCheckingInvite": "Un momento, estamos verificando tu invitación.",
+    "inviteCodeLabel": "Código de invitación para negocios",
+    "inviteCodePlaceholder": "Ingresa el código que TWOFER te envió",
+    "inviteCodeHint": "TWOFER es solo por invitación para cuentas de negocio durante el piloto. Ingresa el código que compartimos contigo para continuar.",
     "lookupButton": "Look up my business",
     "searching": "Searching…",
     "selectResult": "Tap to auto-fill your info:",
@@ -1659,5 +1670,35 @@
     "exploreDashboard": "Explore Dashboard First",
     "aiSuggestionLabel": "AI deal idea for you",
     "aiLoading": "Generating a deal idea for you..."
+  },
+  "report": {
+    "businessTitle": "Reportar este negocio",
+    "businessSubtitle": "Cuéntanos qué pasó. Revisaremos los reportes y haremos seguimiento con el negocio.",
+    "userTitle": "Reportar a este cliente",
+    "userSubtitle": "Cuéntanos qué pasó. Revisaremos los reportes y haremos seguimiento con el cliente.",
+    "reasonLabel": "Motivo",
+    "commentLabel": "Agrega detalles (opcional)",
+    "commentPlaceholder": "¿Algo más que debamos saber?",
+    "submit": "Enviar reporte",
+    "submitting": "Enviando…",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "submittedBody": "Gracias. Tu reporte fue enviado a TWOFER.",
+    "errPickReason": "Por favor elige un motivo.",
+    "errFailed": "No pudimos enviar tu reporte. Inténtalo de nuevo.",
+    "businessReason": {
+      "not_honored": "No respetó la oferta",
+      "doesnt_exist": "El negocio no existe",
+      "wrong_info": "Información incorrecta (dirección, horario, etc.)",
+      "inappropriate": "Contenido inapropiado",
+      "other": "Otra cosa"
+    },
+    "userReason": {
+      "abusive": "Comportamiento abusivo",
+      "fraud": "Sospecha de fraude",
+      "no_show": "No se presentó / oferta desperdiciada",
+      "inappropriate": "Comportamiento inapropiado",
+      "other": "Otra cosa"
+    }
   }
 }

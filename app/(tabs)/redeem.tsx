@@ -15,6 +15,8 @@ import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Radii } from "@/constants/theme";
+import { ReportSheet } from "@/components/report-sheet";
+import { submitUserReport, type UserReportReason } from "@/lib/reports";
 
 type RedeemMode = "scan" | "manual";
 
@@ -35,8 +37,9 @@ export default function RedeemScanner() {
   const [mode, setMode] = useState<RedeemMode>("scan");
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string } | null>(null);
+  const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string; claimId: string | null } | null>(null);
   const [claimCodeInput, setClaimCodeInput] = useState("");
+  const [reportVisible, setReportVisible] = useState(false);
 
   // Clear stale success/error state when tab regains focus
   useFocusEffect(
@@ -61,6 +64,7 @@ export default function RedeemScanner() {
       setSuccess({
         dealTitle: result.deal_title ?? t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
+        claimId: result.claim_id ?? null,
       });
       setClaimCodeInput("");
     } catch (err: unknown) {
@@ -141,6 +145,21 @@ export default function RedeemScanner() {
               }}
             />
           </View>
+          {success.claimId ? (
+            <Pressable
+              onPress={() => setReportVisible(true)}
+              accessibilityRole="button"
+              style={{
+                marginTop: Spacing.md,
+                paddingVertical: Spacing.md,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+                {t("redeem.reportCustomerLink", { defaultValue: "Report this customer" })}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={{ marginTop: Spacing.lg, flex: 1, paddingBottom: scrollBottom, gap: Spacing.md }}>
@@ -260,6 +279,21 @@ export default function RedeemScanner() {
           )}
         </View>
       )}
+      <ReportSheet
+        visible={reportVisible}
+        mode="user"
+        subjectLabel={success?.dealTitle ?? ""}
+        onDismiss={() => setReportVisible(false)}
+        onSubmit={async ({ reason, comment }) => {
+          if (!success?.claimId) return { ok: false };
+          const result = await submitUserReport({
+            claimId: success.claimId,
+            reason: reason as UserReportReason,
+            comment,
+          });
+          return { ok: result.ok };
+        }}
+      />
     </View>
     </KeyboardScreen>
   );

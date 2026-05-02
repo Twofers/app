@@ -17,6 +17,12 @@ import { Colors, Radii, Shadows } from "@/constants/theme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import {
+  BUSINESS_INVITE_PENDING_META_KEY,
+  isUserInviteValidated,
+  isValidBusinessInviteCode,
+  submitBusinessInvite,
+} from "@/lib/business-invite";
 
 type Tone = "error" | "success" | "info";
 
@@ -35,6 +41,13 @@ export default function BusinessSetupScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
   const [searching, setSearching] = useState(false);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
+  // Gap fix for the invite-code soft gate. `null` while we still don't know,
+  // `true` if the user has a row in business_invite_validations (or just earned
+  // one by auto-consuming the code stashed at signup), `false` if they reached
+  // this screen without ever validating — in which case we render the input.
+  const [inviteValidated, setInviteValidated] = useState<boolean | null>(null);
+  const [inviteCodeInput, setInviteCodeInput] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const trimmed = useMemo(
     () => ({
@@ -89,6 +102,37 @@ export default function BusinessSetupScreen() {
     };
   }, [authLoading, session?.user?.id]);
 
+  // Invite-validation check. Lives separately from the business prefill so a
+  // first-time user (no business row yet) still gets the right gate state.
+  // If the signup stashed a code in user_metadata we try it server-side once;
+  // either way, the resulting state drives whether the invite-code field is
+  // rendered below.
+  useEffect(() => {
+    if (authLoading) return;
+    const uid = session?.user?.id;
+    if (!uid) return;
+    let cancelled = false;
+    void (async () => {
+      if (await isUserInviteValidated(supabase, uid)) {
+        if (!cancelled) setInviteValidated(true);
+        return;
+      }
+      const meta = session?.user?.user_metadata as Record<string, unknown> | undefined;
+      const pending = meta?.[BUSINESS_INVITE_PENDING_META_KEY];
+      if (typeof pending === "string" && pending.length > 0) {
+        const result = await submitBusinessInvite(supabase, pending);
+        if (!cancelled && result.ok) {
+          setInviteValidated(true);
+          return;
+        }
+      }
+      if (!cancelled) setInviteValidated(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, session?.user?.id]);
+
 
   async function onLookup() {
     if (!businessName.trim()) {
@@ -130,6 +174,7 @@ export default function BusinessSetupScreen() {
   async function onSubmit() {
     if (busy) return;
     setBanner(null);
+    setInviteError(null);
     if (!trimmed.businessName || !trimmed.address) {
       setBanner({ message: t("businessSetup.errNameAddress"), tone: "error" });
       return;
@@ -141,8 +186,43 @@ export default function BusinessSetupScreen() {
       return;
     }
 
+    // Gap fix: if we still don't know whether this user is invite-validated,
+    // make them wait one beat instead of letting them slip through. This is
+    // briefly true on first mount before the validations check resolves.
+    if (inviteValidated === null) {
+      setBanner({ message: t("businessSetup.errCheckingInvite", { defaultValue: "Hold on a moment…" }), tone: "info" });
+      return;
+    }
+
     setBusy(true);
     try {
+      // Gap fix: a customer who switched roles to Business gets challenged
+      // here, since they never went through the signup-side invite gate.
+      // submitBusinessInvite re-validates the code server-side, so a forged
+      // client check still can't get past the trigger on businesses.
+      if (inviteValidated === false) {
+        if (!isValidBusinessInviteCode(inviteCodeInput)) {
+          setInviteError(
+            t("businessSetup.errInviteCode", {
+              defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+            }),
+          );
+          setBusy(false);
+          return;
+        }
+        const result = await submitBusinessInvite(supabase, inviteCodeInput);
+        if (!result.ok) {
+          setInviteError(
+            t("businessSetup.errInviteCode", {
+              defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+            }),
+          );
+          setBusy(false);
+          return;
+        }
+        setInviteValidated(true);
+      }
+
       const addr = trimmed.address;
       const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
       const { error } = await supabase
@@ -247,6 +327,54 @@ export default function BusinessSetupScreen() {
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
+        {inviteValidated === false ? (
+          <View
+            style={{
+              backgroundColor: "rgba(255,159,28,0.08)",
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: Colors.light.primary,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 15 }}>
+              {t("businessSetup.inviteCodeLabel", { defaultValue: "Business invite code" })}
+            </Text>
+            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75 }}>
+              {t("businessSetup.inviteCodeHint", {
+                defaultValue:
+                  "TWOFER is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
+              })}
+            </Text>
+            <TextInput
+              value={inviteCodeInput}
+              onChangeText={(v) => {
+                setInviteCodeInput(v);
+                if (inviteError) setInviteError(null);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={t("businessSetup.inviteCodePlaceholder", {
+                defaultValue: "Enter the code TWOFER gave you",
+              })}
+              placeholderTextColor={Colors.light.mutedText}
+              style={{
+                borderWidth: 1,
+                borderColor: inviteError ? "#d32f2f" : Colors.light.border,
+                borderRadius: Radii.md,
+                backgroundColor: Colors.light.surface,
+                paddingVertical: Spacing.sm,
+                paddingHorizontal: Spacing.md,
+                fontSize: 16,
+              }}
+            />
+            {inviteError ? (
+              <Text style={{ fontSize: 13, color: "#d32f2f" }}>{inviteError}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <Field label={t("businessSetup.businessName")} value={businessName} onChangeText={(s) => { setBusinessName(s); setLookupResults(null); }} />
 
         <SecondaryButton

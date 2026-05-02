@@ -719,7 +719,8 @@
     "errLoginClaim": "딜을 받으려면 로그인하세요.",
     "errLoginFavorite": "즐겨찾기를 쓰려면 로그인하세요.",
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
-    "viewBusiness": "매장 프로필"
+    "viewBusiness": "매장 프로필",
+    "reportBusinessLink": "이 매장 신고"
   },
   "redeem": {
     "title": "사용",
@@ -750,7 +751,8 @@
     "scanNext": "다음 스캔",
     "errRedeemFailed": "사용 처리에 실패했습니다.",
     "errCodeRequired": "고객 지갑에 표시된 클레임 코드를 입력하세요.",
-    "defaultDealTitle": "딜"
+    "defaultDealTitle": "딜",
+    "reportCustomerLink": "이 고객 신고"
   },
   "auth": {
     "title": "로그인",
@@ -827,7 +829,11 @@
     "backToSignIn": "로그인으로 돌아가기",
     "hintEnterEmail": "계속하려면 이메일을 입력하세요.",
     "hintEnterPassword": "계속하려면 비밀번호를 입력하세요.",
-    "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요."
+    "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요.",
+    "inviteCodeLabel": "비즈니스 초대 코드",
+    "inviteCodePlaceholder": "TWOFER에서 받은 코드를 입력하세요",
+    "inviteCodeHint": "비즈니스 계정을 만들려면 필요합니다. 기존 계정은 비워 두어도 됩니다.",
+    "errInviteCode": "유효하지 않은 초대 코드입니다. TWOFER에 문의해 코드를 받으세요."
   },
   "supportContact": {
     "sectionTitle": "도움 및 문의",
@@ -1388,6 +1394,11 @@
       "custom_prompt": "직접 입력…"
     },
     "errEnterName": "Enter a business name first.",
+    "errInviteCode": "유효하지 않은 초대 코드입니다. TWOFER에 문의해 코드를 받으세요.",
+    "errCheckingInvite": "잠시만요, 초대 코드를 확인하고 있어요.",
+    "inviteCodeLabel": "비즈니스 초대 코드",
+    "inviteCodePlaceholder": "TWOFER에서 받은 코드를 입력하세요",
+    "inviteCodeHint": "파일럿 기간 동안 비즈니스 계정은 초대제로만 운영됩니다. 받으신 코드를 입력해 계속 진행하세요.",
     "lookupButton": "Look up my business",
     "searching": "Searching…",
     "selectResult": "Tap to auto-fill your info:",
@@ -1659,5 +1670,35 @@
     "exploreDashboard": "Explore Dashboard First",
     "aiSuggestionLabel": "AI deal idea for you",
     "aiLoading": "Generating a deal idea for you..."
+  },
+  "report": {
+    "businessTitle": "이 매장을 신고합니다",
+    "businessSubtitle": "무엇이 잘못되었는지 알려주세요. 신고를 검토한 뒤 매장에 후속 조치를 안내합니다.",
+    "userTitle": "이 고객을 신고합니다",
+    "userSubtitle": "어떤 일이 있었는지 알려주세요. 신고를 검토한 뒤 고객에게 후속 조치를 안내합니다.",
+    "reasonLabel": "사유",
+    "commentLabel": "추가 내용 (선택)",
+    "commentPlaceholder": "더 알려주실 내용이 있나요?",
+    "submit": "신고 제출",
+    "submitting": "제출 중…",
+    "cancel": "취소",
+    "close": "닫기",
+    "submittedBody": "감사합니다. 신고가 TWOFER에 전달되었습니다.",
+    "errPickReason": "사유를 선택해 주세요.",
+    "errFailed": "신고를 제출하지 못했습니다. 다시 시도해 주세요.",
+    "businessReason": {
+      "not_honored": "오퍼를 이행하지 않음",
+      "doesnt_exist": "매장이 존재하지 않음",
+      "wrong_info": "잘못된 정보 (주소, 영업시간 등)",
+      "inappropriate": "부적절한 콘텐츠",
+      "other": "기타"
+    },
+    "userReason": {
+      "abusive": "공격적인 행동",
+      "fraud": "사기 의심",
+      "no_show": "노쇼 또는 오퍼 낭비",
+      "inappropriate": "부적절한 행동",
+      "other": "기타"
+    }
   }
 }

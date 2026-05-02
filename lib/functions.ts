@@ -205,6 +205,7 @@ export async function redeemToken(body: { token?: string; short_code?: string })
     ok: boolean;
     deal_title?: string;
     redeemed_at: string;
+    claim_id?: string;
   };
 }
 

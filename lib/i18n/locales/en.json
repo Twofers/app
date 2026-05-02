@@ -719,7 +719,8 @@
     "errLoginClaim": "Log in to claim deals.",
     "errLoginFavorite": "Log in to save favorites.",
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
-    "viewBusiness": "Business profile"
+    "viewBusiness": "Business profile",
+    "reportBusinessLink": "Report this business"
   },
   "redeem": {
     "title": "Redeem",
@@ -750,7 +751,8 @@
     "scanNext": "Scan next",
     "errRedeemFailed": "Redemption failed.",
     "errCodeRequired": "Enter the claim code from the customer’s wallet.",
-    "defaultDealTitle": "Deal"
+    "defaultDealTitle": "Deal",
+    "reportCustomerLink": "Report this customer"
   },
   "auth": {
     "title": "Login",
@@ -827,7 +829,11 @@
     "backToSignIn": "Back to sign in",
     "hintEnterEmail": "Enter your email to continue.",
     "hintEnterPassword": "Enter your password to continue.",
-    "hintEnterBoth": "Enter your email and password to continue."
+    "hintEnterBoth": "Enter your email and password to continue.",
+    "inviteCodeLabel": "Business invite code",
+    "inviteCodePlaceholder": "Enter the code TWOFER gave you",
+    "inviteCodeHint": "Required to create a business account. Existing accounts can leave this blank.",
+    "errInviteCode": "That invite code isn't valid. Reach out to TWOFER to get one."
   },
   "supportContact": {
     "sectionTitle": "Help & Contact",
@@ -1560,6 +1566,11 @@
     "errEmail": "Enter a valid email.",
     "errSave": "Could not create business. Try again.",
     "errEnterName": "Enter a business name first.",
+    "errInviteCode": "That invite code isn't valid. Reach out to TWOFER to get one.",
+    "errCheckingInvite": "Hold on a moment — we're double-checking your invite.",
+    "inviteCodeLabel": "Business invite code",
+    "inviteCodePlaceholder": "Enter the code TWOFER gave you",
+    "inviteCodeHint": "TWOFER is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
     "lookupButton": "Look up my business",
     "searching": "Searching…",
     "selectResult": "Tap to auto-fill your info:",
@@ -1697,5 +1708,35 @@
     "exploreDashboard": "Explore Dashboard First",
     "aiSuggestionLabel": "AI deal idea for you",
     "aiLoading": "Generating a deal idea for you..."
+  },
+  "report": {
+    "businessTitle": "Report this business",
+    "businessSubtitle": "Tell us what went wrong. We'll review reports and follow up with the business.",
+    "userTitle": "Report this customer",
+    "userSubtitle": "Tell us what happened. We'll review reports and follow up with the customer.",
+    "reasonLabel": "Reason",
+    "commentLabel": "Add details (optional)",
+    "commentPlaceholder": "Anything else we should know?",
+    "submit": "Submit report",
+    "submitting": "Submitting…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "submittedBody": "Thanks. Your report was submitted to TWOFER.",
+    "errPickReason": "Please choose a reason.",
+    "errFailed": "We couldn't submit your report. Try again.",
+    "businessReason": {
+      "not_honored": "Didn't honor the offer",
+      "doesnt_exist": "Business doesn't exist",
+      "wrong_info": "Wrong info (address, hours, etc.)",
+      "inappropriate": "Inappropriate content",
+      "other": "Something else"
+    },
+    "userReason": {
+      "abusive": "Abusive behavior",
+      "fraud": "Suspected fraud",
+      "no_show": "No-show or wasted offer",
+      "inappropriate": "Inappropriate behavior",
+      "other": "Something else"
+    }
   }
 }

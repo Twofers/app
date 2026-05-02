@@ -291,6 +291,7 @@ serve(async (req) => {
         deal_title: deal.title,
         redeemed_at: nowIso,
         deal_id: deal.id,
+        claim_id: claimId,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
