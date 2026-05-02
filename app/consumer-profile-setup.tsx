@@ -18,6 +18,7 @@ import {
   upsertConsumerProfile,
 } from "@/lib/consumer-profile";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 
 function defaultBirthDate() {
   const d = new Date();
@@ -127,7 +128,14 @@ export default function ConsumerProfileSetupScreen() {
         router.replace(prefs.onboardingComplete ? "/(tabs)" : "/onboarding");
       }
     } catch (e: unknown) {
-      setBanner({ message: e instanceof Error ? e.message : t("consumerProfile.errSave"), tone: "error" });
+      // Don't surface raw Postgres / RLS / JWT messages to a brand-new consumer.
+      // Route through translateKnownApiMessage so DB and network errors render as
+      // localized friendly text; fall back to the generic save-failed copy otherwise.
+      const raw = e instanceof Error ? e.message : "";
+      setBanner({
+        message: raw ? translateKnownApiMessage(raw, t) : t("consumerProfile.errSave"),
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }

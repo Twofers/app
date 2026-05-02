@@ -569,7 +569,10 @@
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Omitir líneas ya guardadas",
     "allDuplicatesInLibrary": "Todas las líneas coinciden con lo guardado. Desactiva omitir duplicados para añadirlas, o edita nombres.",
-    "savedWithSkipped": "Guardadas {{count}} líneas nuevas ({{skipped}} omitidas — ya en la biblioteca)."
+    "savedWithSkipped": "Guardadas {{count}} líneas nuevas ({{skipped}} omitidas — ya en la biblioteca).",
+    "someOversizedSkipped_one": "{{count}} foto era demasiado grande y se omitió — prueba con un encuadre más cercano.",
+    "someOversizedSkipped_other": "{{count}} fotos eran demasiado grandes y se omitieron — prueba con encuadres más cercanos.",
+    "allOversized": "Las fotos eran demasiado grandes para escanear. Prueba un encuadre más cercano o usa la cámara en menor resolución."
   },
   "menuOffer": {
     "title": "Menu offer",
@@ -825,6 +828,12 @@
     "hintEnterEmail": "Ingresa tu correo para continuar.",
     "hintEnterPassword": "Ingresa tu contraseña para continuar.",
     "hintEnterBoth": "Ingresa tu correo y contraseña para continuar."
+  },
+  "supportContact": {
+    "sectionTitle": "Ayuda y contacto",
+    "sectionHelp": "¿Atascado o tienes una pregunta? Escríbenos — solemos responder el mismo día.",
+    "emailA11y": "Enviar correo al soporte",
+    "phoneA11y": "Llamar al soporte"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -1273,6 +1282,7 @@
     "endDealConfirmBody": "Esto desactivará la oferta de inmediato. Los reclamos activos aún se pueden canjear.",
     "errLoadDashboard": "No se pudo cargar el panel.",
     "errEndDeal": "No se pudo finalizar la oferta.",
+    "publishedToast": "«{{title}}» está activa — los clientes ya pueden reclamarla.",
     "emptyDeals": "Aún no hay ofertas. Crea una para ver analíticas.",
     "createFirstDeal": "Crea tu primera oferta",
     "printFlyer": "Imprimir volante",

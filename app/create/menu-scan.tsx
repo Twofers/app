@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -18,6 +18,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { aiExtractMenu } from "@/lib/functions";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -33,6 +34,14 @@ type EditableRow = {
 function newKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
+
+/**
+ * Server caps the menu-scan base64 payload at 1.2M chars (see ai-extract-menu).
+ * Pre-checking here lets us skip oversized photos with a clear per-batch warning
+ * instead of failing the entire scan loop on the first too-big shot. Margin gives
+ * room for any small base64-vs-payload header overhead.
+ */
+const MAX_MENU_SCAN_BASE64_LENGTH = 1_100_000;
 
 /** Normalize for dedupe against saved library lines */
 function libraryDedupeKey(name: string, priceText: string): string {
@@ -53,6 +62,17 @@ export default function MenuScanScreen() {
   );
   const [existingLibraryKeys, setExistingLibraryKeys] = useState<Set<string>>(() => new Set());
   const [skipDuplicatesOnSave, setSkipDuplicatesOnSave] = useState(true);
+  const [scanProgress, setScanProgress] = useState<{ current: number; total: number } | null>(null);
+  const scanRequestIdRef = useRef(0);
+
+  function cancelScan() {
+    // Bumping the id makes any in-flight result a no-op when it returns; clearing the
+    // flags here re-enables the buttons immediately so the owner is not stuck waiting.
+    scanRequestIdRef.current += 1;
+    setScanning(false);
+    setScanProgress(null);
+    setBanner(null);
+  }
 
   useEffect(() => {
     if (!businessId) return;
@@ -115,14 +135,29 @@ export default function MenuScanScreen() {
       if (result.canceled || result.assets.length === 0) {
         return;
       }
+      const requestId = ++scanRequestIdRef.current;
       setScanning(true);
       setBanner(null);
+      setScanProgress({ current: 0, total: result.assets.length });
       try {
         const merged: EditableRow[] = [];
         let anyLow = false;
+        let processed = 0;
+        let oversizedCount = 0;
         for (const asset of result.assets) {
+          // Cancel mid-loop: stop walking the asset list and discard in-flight work.
+          if (requestId !== scanRequestIdRef.current) return;
+          processed += 1;
+          setScanProgress({ current: processed, total: result.assets.length });
           const b64 = asset.base64;
           if (!b64) continue;
+          // Pre-check the payload size — high-res phone photos can exceed the server
+          // cap on a single shot, which would fail the whole loop. Skip oversize ones
+          // and surface a count at the end so the rest of the batch still saves.
+          if (b64.length > MAX_MENU_SCAN_BASE64_LENGTH) {
+            oversizedCount += 1;
+            continue;
+          }
           const mime: string =
             asset.mimeType != null && asset.mimeType.startsWith("image/") ? asset.mimeType : "image/jpeg";
           const out = await aiExtractMenu({
@@ -130,6 +165,7 @@ export default function MenuScanScreen() {
             image_base64: b64,
             image_mime_type: mime,
           });
+          if (requestId !== scanRequestIdRef.current) return;
           if (out.low_legibility) anyLow = true;
           for (const it of out.items) {
             merged.push({
@@ -140,8 +176,14 @@ export default function MenuScanScreen() {
             });
           }
         }
+        if (requestId !== scanRequestIdRef.current) return;
         if (merged.length === 0) {
-          setBanner({ message: t("menuScan.emptyExtract"), tone: "info" });
+          // All photos either gave nothing OR were too large — pick the more informative banner.
+          if (oversizedCount > 0 && oversizedCount === result.assets.length) {
+            setBanner({ message: t("menuScan.allOversized"), tone: "error" });
+          } else {
+            setBanner({ message: t("menuScan.emptyExtract"), tone: "info" });
+          }
           return;
         }
         const sessionDedupe = new Set<string>();
@@ -153,16 +195,32 @@ export default function MenuScanScreen() {
           uniqueMerged.push(row);
         }
         setRows((prev) => (append ? [...prev, ...uniqueMerged] : uniqueMerged));
+        // Combine oversize and low-legibility into a single info banner so the owner
+        // sees both signals — fewer message-clobbers when both happen on the same batch.
+        const notes: string[] = [];
+        if (oversizedCount > 0) {
+          notes.push(t("menuScan.someOversizedSkipped", { count: oversizedCount }));
+        }
         if (anyLow) {
-          setBanner({ message: t("menuScan.lowLegibility"), tone: "info" });
+          notes.push(t("menuScan.lowLegibility"));
+        }
+        if (notes.length > 0) {
+          setBanner({ message: notes.join(" "), tone: "info" });
         }
       } catch (e) {
+        // Stale-result guard: don't surface an error from a request the user already canceled.
+        if (scanRequestIdRef.current !== requestId) return;
+        const raw = e instanceof Error ? e.message : "";
         setBanner({
-          message: e instanceof Error ? e.message : t("menuScan.errScan"),
+          message: raw ? translateKnownApiMessage(raw, t) : t("menuScan.errScan"),
           tone: "error",
         });
       } finally {
-        setScanning(false);
+        // Don't fight with cancelScan — it already cleared state for the canceled request.
+        if (scanRequestIdRef.current === requestId) {
+          setScanning(false);
+          setScanProgress(null);
+        }
       }
     },
     [businessId, t],
@@ -239,9 +297,17 @@ export default function MenuScanScreen() {
         setBanner({ message: t("menuScan.saved"), tone: "success" });
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : t("menuScan.errScan");
+      const msg = e instanceof Error ? e.message : "";
+      // Schema/migration errors get a dedicated message so the owner sees something
+      // actionable. Everything else flows through translateKnownApiMessage so RLS,
+      // JWT, network, and constraint errors render as friendly translated text rather
+      // than raw Postgres output.
       setBanner({
-        message: looksLikeMissingMenuTable(msg) ? t("menuWorkflow.errSchema") : msg,
+        message: looksLikeMissingMenuTable(msg)
+          ? t("menuWorkflow.errSchema")
+          : msg
+            ? translateKnownApiMessage(msg, t)
+            : t("menuScan.errScan"),
         tone: "error",
       });
     } finally {
@@ -292,6 +358,18 @@ export default function MenuScanScreen() {
         onPress={() => void pickAndScan("library", true)}
         disabled={scanning || !businessId}
       />
+      {scanning ? (
+        <View style={{ marginTop: 4, gap: Spacing.sm }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ActivityIndicator />
+            <Text style={{ opacity: 0.75, flex: 1 }}>
+              {t("menuScan.scanning")}
+              {scanProgress ? ` (${scanProgress.current}/${scanProgress.total})` : ""}
+            </Text>
+          </View>
+          <SecondaryButton title={t("commonUi.cancel")} onPress={cancelScan} />
+        </View>
+      ) : null}
       {rows.length > 0 ? (
         <>
           <View

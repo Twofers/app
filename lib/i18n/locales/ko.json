@@ -569,7 +569,10 @@
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "라이브러리에 있는 항목은 건너뛰기",
     "allDuplicatesInLibrary": "모든 줄이 이미 저장된 항목과 같습니다. 중복 건너뛰기를 끄거나 이름을 수정하세요.",
-    "savedWithSkipped": "새 줄 {{count}}개 저장 ({{skipped}}개 건너뜀 — 이미 라이브러리에 있음)."
+    "savedWithSkipped": "새 줄 {{count}}개 저장 ({{skipped}}개 건너뜀 — 이미 라이브러리에 있음).",
+    "someOversizedSkipped_one": "사진 {{count}}장이 너무 커서 건너뛰었습니다 — 더 가까이서 촬영해 보세요.",
+    "someOversizedSkipped_other": "사진 {{count}}장이 너무 커서 건너뛰었습니다 — 더 가까이서 촬영해 보세요.",
+    "allOversized": "사진이 너무 커서 스캔할 수 없습니다. 가까이에서 촬영하거나 카메라 해상도를 낮춰 보세요."
   },
   "menuOffer": {
     "title": "Menu offer",
@@ -825,6 +828,12 @@
     "hintEnterEmail": "계속하려면 이메일을 입력하세요.",
     "hintEnterPassword": "계속하려면 비밀번호를 입력하세요.",
     "hintEnterBoth": "계속하려면 이메일과 비밀번호를 입력하세요."
+  },
+  "supportContact": {
+    "sectionTitle": "도움 및 문의",
+    "sectionHelp": "막히거나 궁금한 점이 있나요? 언제든지 문의하세요 — 보통 당일에 답장드립니다.",
+    "emailA11y": "지원팀에 이메일 보내기",
+    "phoneA11y": "지원팀에 전화하기"
   },
   "legal": {
     "sectionTitle": "법적 고지",
@@ -1273,6 +1282,7 @@
     "endDealConfirmBody": "딜이 즉시 비활성화됩니다. 활성 클레임은 여전히 사용할 수 있습니다.",
     "errLoadDashboard": "대시보드를 불러오지 못했습니다.",
     "errEndDeal": "딜을 종료하지 못했습니다.",
+    "publishedToast": "\"{{title}}\" 딜이 게시되었습니다 — 고객이 바로 클레임할 수 있습니다.",
     "emptyDeals": "아직 딜이 없습니다. 분석을 보려면 딜을 만드세요.",
     "createFirstDeal": "첫 번째 딜 만들기",
     "printFlyer": "전단지 인쇄",

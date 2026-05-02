@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
+import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
 import { PASSWORD_MIN_LENGTH, validateNewPasswordPair } from "@/lib/auth-password-recovery";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
@@ -44,12 +45,15 @@ export default function ResetPasswordScreen() {
     try {
       const { error: upd } = await supabase.auth.updateUser({ password });
       if (upd) {
-        setError(upd.message || t("passwordRecovery.resetGenericError"));
+        // Translate Supabase auth errors (rate-limited, invalid creds, network) so the
+        // owner doesn't see "AuthApiError: Email rate limit exceeded" at 7am Saturday.
+        setError(friendlyAuthError(upd, t));
         return;
       }
       setSuccess(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t("passwordRecovery.resetGenericError"));
+      const raw = e instanceof Error ? e.message : "";
+      setError(raw ? friendlyAuthMessage(raw, t) : t("passwordRecovery.resetGenericError"));
     } finally {
       setBusy(false);
     }

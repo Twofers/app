@@ -569,7 +569,10 @@
     "multiHint": "Pick one or many photos — AI extracts lines from each.",
     "skipDupLabel": "Skip lines already in your library",
     "allDuplicatesInLibrary": "Every line matches something already saved. Turn off “skip duplicates” to add anyway, or edit names.",
-    "savedWithSkipped": "Saved {{count}} new lines ({{skipped}} skipped — already in library)."
+    "savedWithSkipped": "Saved {{count}} new lines ({{skipped}} skipped — already in library).",
+    "someOversizedSkipped_one": "{{count}} photo was too large to scan and was skipped — try a closer crop.",
+    "someOversizedSkipped_other": "{{count}} photos were too large to scan and were skipped — try a closer crop.",
+    "allOversized": "Photos were too large to scan. Try a closer shot or a lower-resolution camera setting."
   },
   "menuOffer": {
     "title": "Menu offer",
@@ -825,6 +828,12 @@
     "hintEnterEmail": "Enter your email to continue.",
     "hintEnterPassword": "Enter your password to continue.",
     "hintEnterBoth": "Enter your email and password to continue."
+  },
+  "supportContact": {
+    "sectionTitle": "Help & Contact",
+    "sectionHelp": "Stuck or have a question? Reach us anytime — we usually reply same day.",
+    "emailA11y": "Send an email to support",
+    "phoneA11y": "Call support"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -1464,6 +1473,7 @@
     "endDealConfirmBody": "This will deactivate the deal immediately. Active claims can still be redeemed.",
     "errLoadDashboard": "Failed to load dashboard.",
     "errEndDeal": "Could not end deal.",
+    "publishedToast": "\"{{title}}\" is live — customers can claim it now.",
     "emptyDeals": "No deals yet. Create one to see analytics.",
     "createFirstDeal": "Create Your First Deal",
     "printFlyer": "Print Flyer",

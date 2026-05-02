@@ -55,6 +55,7 @@ import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
 import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
+import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import {
   aiComposeOfferTranscribe,
@@ -745,10 +746,9 @@ export default function AiDealScreen() {
       if (code === "COOLDOWN_ACTIVE") {
         setBanner({ message: t("createAi.transcribeCooldown"), tone: "info" });
       } else {
-        setBanner({
-          message: e instanceof Error ? e.message : t("createAi.transcribeFailed"),
-          tone: "error",
-        });
+        // Don't surface raw internal codes (e.g. "no_uri") or Supabase storage errors —
+        // a non-technical owner can't act on those. Always show the translated fallback.
+        setBanner({ message: t("createAi.transcribeFailed"), tone: "error" });
       }
     } finally {
       setTranscribing(false);
@@ -859,6 +859,15 @@ export default function AiDealScreen() {
     return raw || t("createAi.fallbackIntro");
   }
 
+  function cancelGeneration() {
+    // Bumping the request id makes the in-flight result a no-op when it returns,
+    // and we re-enable the UI immediately so the user is not stuck on a spinner.
+    generationRequestIdRef.current += 1;
+    setGenerating(false);
+    setRevising(false);
+    setBanner(null);
+  }
+
   async function generateAd() {
     if (!validateInputs()) return;
     if (!businessId) {
@@ -879,8 +888,20 @@ export default function AiDealScreen() {
     const requestId = ++generationRequestIdRef.current;
 
     try {
-      const path = await ensureUploadedPhoto();
-      if (path) await ensurePosterUrl(path);
+      let path: string | null;
+      try {
+        path = await ensureUploadedPhoto();
+        if (path) await ensurePosterUrl(path);
+      } catch {
+        // Upload errors from Supabase storage have ugly messages ("JWT expired",
+        // "duplicate key", etc.). A non-technical owner can't act on those — give
+        // them the friendly "try a different photo" copy that already exists.
+        if (requestId !== generationRequestIdRef.current) return;
+        const friendly = t("createAi.errPublishPhoto");
+        setLastGenerationError(friendly);
+        setBanner({ message: friendly, tone: "error" });
+        return;
+      }
       // Snapshot the treatment we're about to send so revisions reference the same one
       // even if the user changes the selector mid-flight.
       const sentTreatment = path ? photoTreatment : null;
@@ -915,7 +936,11 @@ export default function AiDealScreen() {
         message_snippet: raw.slice(0, 80),
       });
     } finally {
-      setGenerating(false);
+      // Only flip the spinner off if our request is still the active one. If the user
+      // hit Cancel, that handler already cleared the flag — don't fight with it.
+      if (requestId === generationRequestIdRef.current) {
+        setGenerating(false);
+      }
     }
   }
 
@@ -968,7 +993,9 @@ export default function AiDealScreen() {
       const friendly = friendlyGenerationError(raw, code);
       setBanner({ message: friendly, tone: "error" });
     } finally {
-      setRevising(false);
+      if (requestId === generationRequestIdRef.current) {
+        setRevising(false);
+      }
     }
   }
 
@@ -1106,6 +1133,10 @@ export default function AiDealScreen() {
         });
       }
 
+      // Hand off a one-shot success flash to whichever tab the owner lands on
+      // (usually dashboard). Without this the redirect is silent — nervous pilots
+      // need a "yes, it worked" moment.
+      await markRecentPublish(title.trim());
       router.replace("/(tabs)");
     } catch (err: unknown) {
       let detail = "";
@@ -1577,14 +1608,31 @@ export default function AiDealScreen() {
                 style={{ height: 62, borderRadius: 18 }}
               />
               {generating ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}>
-                  <ActivityIndicator />
-                  <Text style={{ opacity: 0.75, flex: 1 }}>
-                    {photoUri || posterUrl
-                      ? t("createAi.generatingWithPhoto")
-                      : t("createAi.generatingNoPhoto")}
+                <View style={{ marginTop: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <ActivityIndicator />
+                    <Text style={{ opacity: 0.75, flex: 1 }}>
+                      {photoUri || posterUrl
+                        ? t("createAi.generatingWithPhoto")
+                        : t("createAi.generatingNoPhoto")}
+                    </Text>
+                  </View>
+                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17 }}>
+                    {t("createAi.generatingHint")}
                   </Text>
+                  <View style={{ marginTop: 10 }}>
+                    <SecondaryButton title={t("createAi.cancel")} onPress={cancelGeneration} />
+                  </View>
                 </View>
+              ) : null}
+              {!generating && !generatedAd && !showDraftEditor ? (
+                <SecondaryButton
+                  title={t("createAi.showDraftFields")}
+                  onPress={() => {
+                    setManualDraftUnlocked(true);
+                    setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
+                  }}
+                />
               ) : null}
             </View>
 

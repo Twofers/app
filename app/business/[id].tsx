@@ -13,6 +13,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { useBusiness } from "@/hooks/use-business";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type BizRow = {
@@ -74,7 +75,9 @@ export default function BusinessProfileScreen() {
     if (eb || !b) {
       setBiz(null);
       setDeal(null);
-      setBanner(eb?.message ?? t("businessProfile.notFound"));
+      // Don't leak Postgres details into the banner. Translate known patterns so
+      // RLS / network / "not found" all render as friendly localized text.
+      setBanner(eb?.message ? translateKnownApiMessage(eb.message, t) : t("businessProfile.notFound"));
       setLoading(false);
       return;
     }

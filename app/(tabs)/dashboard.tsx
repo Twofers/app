@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -46,6 +46,8 @@ import { triggerLightHaptic } from "@/lib/press-feedback";
 import { printDealFlyer } from "@/lib/deal-flyer";
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { consumeRecentPublish } from "@/lib/recent-publish";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -322,6 +324,7 @@ export default function BusinessDashboard() {
   const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
 
   const [banner, setBanner] = useState<string | null>(null);
+  const [publishFlash, setPublishFlash] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [deals, setDeals] = useState<DealRow[]>([]);
@@ -473,8 +476,8 @@ export default function BusinessDashboard() {
       }
     } catch (err: unknown) {
       setDealsHasMore(false);
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
-      setBanner(msg);
+      const raw = err instanceof Error ? err.message : "";
+      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errLoadDashboard"));
       // Keep stale data visible on refresh failure — only clear if this was the first load.
       setDeals((prev) => (prev.length > 0 ? prev : []));
     } finally {
@@ -504,8 +507,8 @@ export default function BusinessDashboard() {
       setDeals((prev) => [...prev, ...hydrateDealRows(chunk, map)]);
       setDealsHasMore(chunk.length === DASHBOARD_DEALS_PAGE_SIZE);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
-      setBanner(msg);
+      const raw = err instanceof Error ? err.message : "";
+      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errLoadDashboard"));
     } finally {
       setDealsLoadingMore(false);
     }
@@ -541,6 +544,32 @@ export default function BusinessDashboard() {
     setRefreshing(false);
   }
 
+  // Show a one-shot success flash when the owner just published a deal. The publish
+  // flow seeds AsyncStorage and redirects to /(tabs); we consume it here when the
+  // dashboard gains focus, so nervous pilots get a visible "yes, it worked" moment.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      void consumeRecentPublish().then((title) => {
+        if (!alive || !title) return;
+        setPublishFlash(
+          t("offersDashboard.publishedToast", {
+            title,
+            defaultValue: `"${title}" is live — customers can claim it now.`,
+          }),
+        );
+        timer = setTimeout(() => {
+          if (alive) setPublishFlash(null);
+        }, 5000);
+      });
+      return () => {
+        alive = false;
+        if (timer) clearTimeout(timer);
+      };
+    }, [t]),
+  );
+
   function endDealEarly(dealId: string) {
     if (!businessId || endingDealId) return;
     Alert.alert(
@@ -570,8 +599,8 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errEndDeal");
-      setBanner(msg);
+      const raw = err instanceof Error ? err.message : "";
+      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errEndDeal"));
     } finally {
       setEndingDealId(null);
     }
@@ -596,8 +625,14 @@ export default function BusinessDashboard() {
         },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errFlyer");
-      setBanner(msg);
+      // expo-print and expo-sharing throw technical messages ("Print job failed",
+      // "User cancelled sharing"). The owner sees these in a banner during a marketing
+      // task — they should see something actionable. Always show the friendly fallback;
+      // log the raw to dev console so we can still triage in development.
+      if (__DEV__ && err instanceof Error) {
+        console.warn("[generateFlyer]", err.message);
+      }
+      setBanner(t("offersDashboard.errFlyer"));
     } finally {
       setGeneratingFlyerId(null);
     }
@@ -900,6 +935,7 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
+          {publishFlash ? <Banner message={publishFlash} tone="success" /> : null}
           {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
 
           {loadingMetrics ? (

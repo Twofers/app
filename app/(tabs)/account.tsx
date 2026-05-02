@@ -23,6 +23,7 @@ import { DEMO_PREVIEW_EMAIL } from "../../lib/demo-account";
 import { ensureDemoCoffeePreview } from "../../lib/demo-preview-seed";
 import { signInDemoPreviewUser } from "../../lib/demo-auth-signin";
 import { friendlyAuthError, friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
+import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { logAuthPath } from "../../lib/auth-path-log";
 import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -332,7 +333,11 @@ export default function AccountScreen() {
         ]);
         return;
       }
-      const msg = e instanceof Error ? e.message : t("deleteAccount.errFailed");
+      // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner
+      // during a sensitive flow. Pass through translateKnownApiMessage so technical
+      // messages get a localized friendly equivalent; fall back to the generic copy.
+      const raw = e instanceof Error ? e.message : "";
+      const msg = raw ? translateKnownApiMessage(raw, t) : t("deleteAccount.errFailed");
       setBanner({ message: msg, tone: "error" });
       Alert.alert(t("deleteAccount.errFailed"), t("deleteAccount.fallbackWebBody"), [
         { text: t("deleteAccount.alertDismiss"), style: "cancel" },
@@ -450,9 +455,12 @@ export default function AccountScreen() {
       await refresh();
       setBanner({ message: t("account.profileSaved"), tone: "success" });
     } catch (e: unknown) {
+      // Raw Postgres / RLS errors don't help an owner who's editing their business
+      // profile (RLS denials, JWT expired, constraint violations). Route through
+      // the api-messages translator; fall back to the generic save-failed copy.
+      const raw = e instanceof Error ? e.message : "";
       setBanner({
-        message:
-          (e instanceof Error ? e.message : String(e)) || t("account.errSaveProfileFailed"),
+        message: raw ? translateKnownApiMessage(raw, t) : t("account.errSaveProfileFailed"),
         tone: "error",
       });
     } finally {

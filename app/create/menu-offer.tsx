@@ -17,6 +17,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import {
   loadLastMenuOfferPairingType,
@@ -132,8 +133,12 @@ export default function MenuOfferScreen() {
         .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) {
+        // Schema/migration errors get the dedicated copy; everything else flows through
+        // the api-messages translator so RLS, JWT, and Postgres errors render localized.
         setLoadErr(
-          looksLikeMissingMenuTable(error.message) ? t("menuWorkflow.errSchema") : error.message,
+          looksLikeMissingMenuTable(error.message)
+            ? t("menuWorkflow.errSchema")
+            : translateKnownApiMessage(error.message, t),
         );
         return;
       }

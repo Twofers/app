@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -34,6 +34,8 @@ import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useTabMode } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function SettingsScreen() {
@@ -165,7 +167,9 @@ export default function SettingsScreen() {
         replace: router.replace,
       });
       if (!result.ok) {
-        Alert.alert(t("account.errLogoutFailed"), result.message);
+        // result.message can come straight from supabase.auth.signOut() — translate
+        // through the api-messages layer so JWT/network errors render as friendly text.
+        Alert.alert(t("account.errLogoutFailed"), translateKnownApiMessage(result.message, t));
       }
     } finally {
       setLogoutBusy(false);
@@ -386,6 +390,37 @@ export default function SettingsScreen() {
             />
           </View>
         ) : null}
+
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: Radii.lg,
+            padding: Spacing.lg,
+            gap: Spacing.sm,
+          }}
+        >
+          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
+          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
+          <Pressable
+            onPress={() => void Linking.openURL(`mailto:${getSupportEmail()}`)}
+            accessibilityRole="link"
+            accessibilityLabel={t("supportContact.emailA11y")}
+            style={{ paddingVertical: Spacing.xs }}
+          >
+            <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{getSupportEmail()}</Text>
+          </Pressable>
+          {getSupportPhone() ? (
+            <Pressable
+              onPress={() => void Linking.openURL(`tel:${getSupportPhone()}`)}
+              accessibilityRole="link"
+              accessibilityLabel={t("supportContact.phoneA11y")}
+              style={{ paddingVertical: Spacing.xs }}
+            >
+              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{getSupportPhone()}</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
         <View
           style={{

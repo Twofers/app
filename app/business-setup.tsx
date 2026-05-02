@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 
 type Tone = "error" | "success" | "info";
 
@@ -54,6 +55,39 @@ export default function BusinessSetupScreen() {
     });
     if (!bypass && !session?.user?.id) router.replace("/auth-landing");
   }, [router, params.skipSetup, params.e2e, session?.user?.id, authLoading]);
+
+  // Pre-fill the form when an existing business is found for this owner. Without
+  // this, navigating back to /business-setup to "edit" shows an empty form, and
+  // submitting after typing only one field would wipe everything else (the upsert
+  // sends the full row). Uses `prev ||` so a user mid-type isn't clobbered by a
+  // late-resolving fetch.
+  useEffect(() => {
+    if (authLoading) return;
+    const uid = session?.user?.id;
+    if (!uid) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("name,address,phone,short_description")
+        .eq("owner_id", uid)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const row = data as {
+        name: string | null;
+        address: string | null;
+        phone: string | null;
+        short_description: string | null;
+      };
+      setBusinessName((prev) => prev || (row.name ?? ""));
+      setAddress((prev) => prev || (row.address ?? ""));
+      setPhone((prev) => prev || (row.phone ?? ""));
+      setShortDescription((prev) => prev || (row.short_description ?? ""));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, session?.user?.id]);
 
 
   async function onLookup() {
@@ -183,8 +217,14 @@ export default function BusinessSetupScreen() {
       }, 250);
     } catch (e: unknown) {
       if (__DEV__) console.warn("[business-setup] Save error:", e);
+      // Generic "couldn't save" leaves the owner stuck. Pass the raw message through
+      // translateKnownApiMessage so JWT-expired, RLS, duplicate-name, network and
+      // similar errors get a specific localized message they can act on. Fall back to
+      // the generic copy only if we have nothing useful to show.
+      const raw = e instanceof Error ? e.message : "";
+      const friendly = raw ? translateKnownApiMessage(raw, t) : "";
       setBanner({
-        message: t("businessSetup.errSave"),
+        message: friendly && friendly !== raw ? friendly : t("businessSetup.errSave"),
         tone: "error",
       });
     } finally {
