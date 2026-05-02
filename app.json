@@ -9,7 +9,7 @@
       "twoforone",
       "twofer"
     ],
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.unvmex2.twoforone",
