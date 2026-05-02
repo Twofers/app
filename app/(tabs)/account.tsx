@@ -306,7 +306,14 @@ export default function AccountScreen() {
   }
 
   function confirmDeleteAccount() {
-    Alert.alert(t("deleteAccount.title"), t("deleteAccount.bodyConsumer"), [
+    // Owners see the explicit cascade warning ("…your business, its deals, and
+    // claim history will also be removed"). Consumers see the simpler copy.
+    // Apple/Google both require the dialog to make the cascade consequences
+    // clear before destruction; the deleteAccount.body string already does that.
+    const message = businessId
+      ? t("deleteAccount.body")
+      : t("deleteAccount.bodyConsumer");
+    Alert.alert(t("deleteAccount.title"), message, [
       { text: t("commonUi.cancel"), style: "cancel" },
       {
         text: t("deleteAccount.confirmDestructive"),

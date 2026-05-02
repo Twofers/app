@@ -460,6 +460,20 @@ export default function BusinessBillingScreen() {
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
+                  ) : PILOT_DISABLE_BILLING_GATE ? (
+                    /* Same pilot gate as the Pro tier above — Apple rejects
+                       any "subscribe" button that links to non-IAP checkout
+                       for in-app digital subscriptions (Guideline 3.1.1).
+                       Trial is extended through the pilot; subscriptions
+                       launch in v1.1. */
+                    <View style={{ borderRadius: 14, backgroundColor: "rgba(255,159,28,0.10)", borderWidth: 1, borderColor: "rgba(255,159,28,0.32)", padding: 12 }}>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBanner")}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBody")}
+                      </Text>
+                    </View>
                   ) : (
                     <PrimaryButton
                       title={t("billing.subscribeNow")}
