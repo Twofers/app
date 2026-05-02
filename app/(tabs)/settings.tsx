@@ -391,36 +391,49 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: Radii.lg,
-            padding: Spacing.lg,
-            gap: Spacing.sm,
-          }}
-        >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
-          <Pressable
-            onPress={() => void Linking.openURL(`mailto:${getSupportEmail()}`)}
-            accessibilityRole="link"
-            accessibilityLabel={t("supportContact.emailA11y")}
-            style={{ paddingVertical: Spacing.xs }}
-          >
-            <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{getSupportEmail()}</Text>
-          </Pressable>
-          {getSupportPhone() ? (
-            <Pressable
-              onPress={() => void Linking.openURL(`tel:${getSupportPhone()}`)}
-              accessibilityRole="link"
-              accessibilityLabel={t("supportContact.phoneA11y")}
-              style={{ paddingVertical: Spacing.xs }}
+        {(() => {
+          // Hide the entire Help & Contact card when neither email nor phone is configured.
+          // Avoids shipping a dead-link row during pilots where the founder handles
+          // support directly (texting cafes, etc.). Set EXPO_PUBLIC_SUPPORT_EMAIL or
+          // EXPO_PUBLIC_SUPPORT_PHONE in the build to make it reappear.
+          const supportEmail = getSupportEmail();
+          const supportPhone = getSupportPhone();
+          if (!supportEmail && !supportPhone) return null;
+          return (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.lg,
+                gap: Spacing.sm,
+              }}
             >
-              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{getSupportPhone()}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+              <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
+              <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
+              {supportEmail ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("supportContact.emailA11y")}
+                  style={{ paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
+                </Pressable>
+              ) : null}
+              {supportPhone ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(`tel:${supportPhone}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("supportContact.phoneA11y")}
+                  style={{ paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportPhone}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })()}
 
         <View
           style={{
