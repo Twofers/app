@@ -26,7 +26,8 @@
       }
     },
     "production": {
-      "environment": "production"
+      "environment": "production",
+      "autoIncrement": true
     },
     "dev-client-apk": {
       "extends": "preview",
