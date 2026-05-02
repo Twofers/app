@@ -146,7 +146,7 @@ export function DealCardPoster({
           <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28 }}>{title}</Text>
 
           {price != null && (
-            <Text style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.primary }}>
+            <Text style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.primaryAccent }}>
               ${price.toFixed(2)}
             </Text>
           )}

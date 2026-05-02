@@ -21,8 +21,8 @@ export default function ManageSubscriptionScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
 
   const tierLabel = useMemo(() => {
-    if (subscriptionTier === "premium") return "Twofer Premium";
-    return "Twofer Pro";
+    if (subscriptionTier === "premium") return "TWOFER Premium";
+    return "TWOFER Pro";
   }, [subscriptionTier]);
 
   const openCustomerPortal = async (entry: "manage" | "cancel" | "invoices") => {

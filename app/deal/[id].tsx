@@ -365,7 +365,7 @@ export default function DealDetail() {
           accessibilityRole="button"
           style={{ marginTop: Spacing.xs, marginBottom: Spacing.sm, alignSelf: "flex-start" }}
         >
-          <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
+          <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
         </Pressable>
         <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
           {deal.title ?? t("dealDetail.dealFallback")}
@@ -419,7 +419,7 @@ export default function DealDetail() {
             accessibilityRole="button"
             style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: refreshingQr ? 0.6 : 1 }}
           >
-            <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>
+            <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 15 }}>
               {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
             </Text>
           </Pressable>

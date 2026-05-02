@@ -20,7 +20,14 @@ export const Colors = {
     border: '#E7E9EE',
     mutedText: '#5F6773',
     tint: '#FF9F1C', // Penguin orange (primary)
-    primary: '#FF9F1C', // Use for all big CTAs
+    primary: '#FF9F1C', // Use for filled buttons / backgrounds
+    /**
+     * Darker orange — use this for ORANGE TEXT on white/light backgrounds.
+     * The brand `primary` (#FF9F1C) only meets WCAG AA on filled-button surfaces; rendering
+     * it as text on white is 2.6:1 contrast which fails AA for normal text and small bold.
+     * #C76600 is ~5:1 on white.
+     */
+    primaryAccent: '#C76600',
     primaryText: '#FFFFFF',
     secondary: '#11181C',
     icon: '#687076',
@@ -37,6 +44,8 @@ export const Colors = {
     mutedText: '#b4bcc5',
     tint: '#FF9F1C',
     primary: '#FF9F1C',
+    /** On dark backgrounds, the brand orange has plenty of contrast — keep it. */
+    primaryAccent: '#FF9F1C',
     primaryText: '#11181C',
     secondary: '#ECEDEE',
     icon: '#9BA1A6',

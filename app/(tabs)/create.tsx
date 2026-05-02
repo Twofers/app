@@ -17,6 +17,8 @@ import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
+import { useWalkthroughGate } from "@/lib/walkthrough-gate";
 
 
 export default function CreateDeal() {
@@ -82,8 +84,20 @@ export default function CreateDeal() {
     })();
   }, [businessId, t]);
 
+  // First-time merchants land HERE after signup (not dashboard), so the walkthrough
+  // also has to mount on this screen. The shared gate hook ensures it only fires once
+  // across both surfaces.
+  const { showWalkthrough, dismissWalkthrough } = useWalkthroughGate(businessId);
+
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <WelcomeWalkthrough
+        visible={showWalkthrough}
+        onDismiss={dismissWalkthrough}
+        businessCategory={null}
+        businessName={null}
+        businessId={businessId}
+      />
       <ScreenHeader title={t("createHub.title")} subtitle={t("createHub.subtitle")} />
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
@@ -173,7 +187,7 @@ export default function CreateDeal() {
             accessibilityLabel={t("createHub.scanMenuTitle")}
             accessibilityHint={t("createHub.scanMenuSubtitle")}
           >
-            <Text style={{ fontSize: 11, fontWeight: "900", color: Colors.light.primary, letterSpacing: 1.2, marginBottom: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: "900", color: Colors.light.primaryAccent, letterSpacing: 1.2, marginBottom: 4 }}>
               ✨ AI
             </Text>
             <Text style={{ fontSize: 17, fontWeight: "800", color: theme.text }}>

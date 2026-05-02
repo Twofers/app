@@ -291,7 +291,9 @@ export default function AiDealScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+  // Default to "touchup" — least aggressive transformation, lowest risk of distorting
+  // a real product photo. First-time owners can opt up to clean-bg or studio polish.
+  const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("touchup");
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -1406,6 +1408,8 @@ export default function AiDealScreen() {
                 <Pressable
                   onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
                   disabled={transcribing}
+                  accessibilityRole="button"
+                  accessibilityLabel={isRecording ? t("createAi.stopRecording", { defaultValue: "Stop recording" }) : t("createAi.startRecording", { defaultValue: "Record voice note" })}
                   style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? "#e0245e" : "#111", alignItems: "center", justifyContent: "center" }}
                 >
                   {transcribing ? (

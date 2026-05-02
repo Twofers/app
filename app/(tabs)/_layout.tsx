@@ -37,7 +37,9 @@ const renderSettingsTabIcon = createTabIconRenderer("gearshape.fill");
 const renderCreateTabIcon = createTabIconRenderer("plus.circle.fill");
 const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
 const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
-const renderBillingTabIcon = createTabIconRenderer("heart.fill");
+// Was heart.fill — looked like Favorites and confused new merchants. Credit card icon
+// matches what they expect for a billing tab.
+const renderBillingTabIcon = createTabIconRenderer("creditcard.fill");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {

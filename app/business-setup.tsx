@@ -110,7 +110,9 @@ export default function BusinessSetupScreen() {
     setBusy(true);
     try {
       const addr = trimmed.address;
-      const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
+      // Pilot trial is 60 days (was 30) so the 10 founding cafes have a comfortable runway
+      // before any billing kicks in. Flip back to 30 in v1.1 alongside Stripe live mode.
+      const trialEndsIso = new Date(Date.now() + 60 * 86400000).toISOString();
       const { error } = await supabase
         .from("businesses")
         .upsert(
@@ -243,7 +245,7 @@ export default function BusinessSetupScreen() {
                   {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
                   {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
                   {r.source === "ai_estimate" && (
-                    <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: Colors.light.primaryAccent, marginTop: 4 }}>
                       {t("businessSetup.aiEstimate")}
                     </Text>
                   )}

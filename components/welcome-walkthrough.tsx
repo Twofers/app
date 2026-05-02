@@ -212,7 +212,7 @@ export function WelcomeWalkthrough({
                   style={{
                     fontSize: 12,
                     fontWeight: "800",
-                    color: Colors.light.primary,
+                    color: Colors.light.primaryAccent,
                     textTransform: "uppercase",
                     letterSpacing: 0.5,
                     marginBottom: 4,

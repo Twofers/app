@@ -308,7 +308,7 @@ export default function MenuManagerScreen() {
                   {r.description ? <Text style={{ opacity: 0.8 }}>{r.description}</Text> : null}
                   <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
                     <Pressable onPress={() => startEdit(r)}>
-                      <Text style={{ color: Colors.light.primary, fontWeight: "700" }}>{t("menuManager.edit")}</Text>
+                      <Text style={{ color: Colors.light.primaryAccent, fontWeight: "700" }}>{t("menuManager.edit")}</Text>
                     </Pressable>
                     <Pressable onPress={() => void toggleArchive(r)}>
                       <Text style={{ fontWeight: "600" }}>

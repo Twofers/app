@@ -148,8 +148,11 @@ export default function AuthLandingScreen() {
   const [selectedMode, setSelectedMode] = useState<TabMode | null>("customer");
   const [roleBusy, setRoleBusy] = useState(false);
 
-  const [email, setEmail] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_EMAIL : ""));
-  const [pw, setPw] = useState(() => (isDemoAuthHelperEnabled() ? DEMO_PREVIEW_PASSWORD : ""));
+  // Pre-fill demo creds ONLY in dev/debug builds — production users would otherwise see
+  // a stranger's email already in the field, which feels broken even if they re-type it.
+  const shouldPrefillDemo = __DEV__ && isDemoAuthHelperEnabled();
+  const [email, setEmail] = useState(() => (shouldPrefillDemo ? DEMO_PREVIEW_EMAIL : ""));
+  const [pw, setPw] = useState(() => (shouldPrefillDemo ? DEMO_PREVIEW_PASSWORD : ""));
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -341,7 +344,7 @@ export default function AuthLandingScreen() {
               style={{
                 fontSize: 36,
                 fontWeight: "900",
-                color: theme.primary,
+                color: theme.primaryAccent,
                 letterSpacing: 2,
                 marginTop: 2,
               }}
@@ -429,7 +432,7 @@ export default function AuthLandingScreen() {
                 }}
                 style={{ marginTop: Spacing.lg, alignSelf: "center", paddingVertical: Spacing.sm }}
               >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.primary }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.primaryAccent }}>
                   {t("authLanding.backToSignIn")}
                 </Text>
               </Pressable>
@@ -606,7 +609,7 @@ export default function AuthLandingScreen() {
                 accessibilityLabel={t("authLanding.forgotPassword")}
                 style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primaryAccent, opacity: busy ? 0.45 : 1 }}>
                   {t("authLanding.forgotPassword")}
                 </Text>
               </Pressable>
@@ -671,7 +674,7 @@ export default function AuthLandingScreen() {
                 }}
               >
                 {busyAction === "signup" ? <ActivityIndicator color={theme.primary} /> : null}
-                <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 18 }}>
+                <Text style={{ color: theme.primaryAccent, fontWeight: "900", fontSize: 18 }}>
                   {t("authLanding.createAccount")}
                 </Text>
               </ScalePressable>

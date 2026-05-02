@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TWOFER is a local BOGO deals app for independent cafes and bakeries, targeting DFW suburbs (Irving, Coppell, Grapevine, Carrollton). Pilot goal: 10 founding cafes on a 30-day free trial.
+TWOFER is a local BOGO deals app for independent cafes and bakeries, targeting DFW suburbs (Irving, Coppell, Grapevine, Carrollton). Pilot goal: 10 founding cafes on a 60-day free trial.
 
 **Tech stack:** Expo React Native + Expo Router + Supabase (edge functions on Deno)
 **Primary test target:** Android (emulator or physical device)
@@ -61,17 +61,19 @@ npx expo start -c     # -c clears the Metro cache
 
 | File | Purpose |
 |---|---|
-| `app/_layout.tsx` | Root navigator — auth listener lives here |
+| `app/_layout.tsx` | Root navigator |
+| `components/providers/auth-session-provider.tsx` | Auth listener (Supabase session subscription) |
 | `app/index.tsx` | Cold-start auth gate — redirects to login or tabs |
 | `app/auth-landing.tsx` | Login/signup screen |
 | `app/business-setup.tsx` | Business onboarding form |
 | `app/(tabs)/_layout.tsx` | Bottom tab navigator |
 | `app/(tabs)/index.tsx` | Consumer deal feed |
 | `app/(tabs)/dashboard.tsx` | Business analytics |
-| `app/create/quick.tsx` | Create a BOGO deal |
-| `hooks/use-business.ts` | Auth + business data hook |
+| `app/create/ai.tsx` | Create a BOGO deal (single-ad pipeline + photo enhancement) |
+| `app/create/menu-offer.tsx` | Menu-based offer wizard (redirects to ai.tsx) |
+| `hooks/use-business.ts` | Auth + business data hook (uses get_my_business RPC for PII) |
 | `lib/supabase.ts` | Supabase client |
-| `constants/theme.ts` | Colors, spacing, radii |
+| `constants/theme.ts` | Colors, spacing, radii (use `theme.primaryAccent` for orange-on-white text — `theme.primary` is button-fill only) |
 | `supabase/migrations/` | All DB migrations (run in order) |
 
 ---

@@ -45,8 +45,8 @@ import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { triggerLightHaptic } from "@/lib/press-feedback";
 import { printDealFlyer } from "@/lib/deal-flyer";
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
+import { useWalkthroughGate } from "@/lib/walkthrough-gate";
 import { AiInsightsCard } from "@/components/ai-insights-card";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -344,7 +344,8 @@ export default function BusinessDashboard() {
   const [monthlyStatsOpen, setMonthlyStatsOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [dealManageFor, setDealManageFor] = useState<DealRow | null>(null);
-  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  // Walkthrough gate is shared between dashboard and create — see lib/walkthrough-gate.ts.
+  const { showWalkthrough, dismissWalkthrough } = useWalkthroughGate(businessId);
   const [dealFilter, setDealFilter] = useState<"all" | "live" | "ended" | "recurring">("all");
   const [dealSort, setDealSort] = useState<"newest" | "claims" | "conversion">("newest");
 
@@ -516,25 +517,6 @@ export default function BusinessDashboard() {
     void loadMetrics();
   }, [businessId, loadMetrics]);
 
-  // Show walkthrough for first-time business owners
-  const WALKTHROUGH_KEY = "twoforone_walkthrough_complete";
-  useEffect(() => {
-    if (!businessId) return;
-    let cancelled = false;
-    (async () => {
-      const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
-      if (!cancelled && !done) {
-        setShowWalkthrough(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [businessId]);
-
-  const dismissWalkthrough = useCallback(async () => {
-    setShowWalkthrough(false);
-    await AsyncStorage.setItem(WALKTHROUGH_KEY, "1");
-  }, []);
-
   async function onRefresh() {
     setRefreshing(true);
     await loadMetrics();
@@ -562,9 +544,11 @@ export default function BusinessDashboard() {
     setBanner(null);
     try {
       const nowIso = new Date().toISOString();
+      // Also flip is_recurring=false so the "Recurring" badge doesn't keep showing on a
+      // deal the merchant just stopped — was misleading on the dashboard list.
       const { error } = await supabase
         .from("deals")
-        .update({ is_active: false, end_time: nowIso })
+        .update({ is_active: false, end_time: nowIso, is_recurring: false })
         .eq("id", dealId)
         .eq("business_id", businessId);
       if (error) throw error;

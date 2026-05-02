@@ -272,7 +272,8 @@ export default function BusinessBillingScreen() {
     setBusy(true);
     setBanner(null);
     try {
-      const trialEnd = new Date(Date.now() + 30 * 86400000).toISOString();
+      // Pilot trial is 60 days (was 30) — see business-setup.tsx for context.
+      const trialEnd = new Date(Date.now() + 60 * 86400000).toISOString();
       const { error } = await supabase
         .from("business_profiles")
         .update({
@@ -284,7 +285,7 @@ export default function BusinessBillingScreen() {
         .or(`user_id.eq.${userId},owner_id.eq.${userId}`);
       if (error) throw error;
       await refresh();
-      setBanner({ message: "Trial reset to 30 days.", tone: "success" });
+      setBanner({ message: "Trial reset to 60 days.", tone: "success" });
     } catch {
       setBanner({ message: "Unable to reset trial. Run npm run seed:demo with SUPABASE_SERVICE_ROLE_KEY.", tone: "error" });
     } finally {
@@ -368,7 +369,7 @@ export default function BusinessBillingScreen() {
             ) : null}
 
             {syncingCheckout ? (
-              <Text style={{ marginTop: 8, color: Colors.light.primary, fontWeight: "800", fontSize: 13 }}>
+              <Text style={{ marginTop: 8, color: Colors.light.primaryAccent, fontWeight: "800", fontSize: 13 }}>
                 {t("billing.syncingStatus")}
               </Text>
             ) : null}
@@ -385,8 +386,8 @@ export default function BusinessBillingScreen() {
 
             <View style={{ marginTop: 16, gap: 16 }}>
               <View style={[cardShadow, { padding: 16 }]}>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>Twofer Pro</Text>
-                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>TWOFER Pro</Text>
+                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primaryAccent }}>
                   ${proPrice}/mo
                 </Text>
                 <View style={{ marginTop: 10, gap: 8 }}>
@@ -436,8 +437,8 @@ export default function BusinessBillingScreen() {
 
               {showPremiumTier ? (
               <View style={[cardShadow, { padding: 16, borderColor: subscriptionTier === "premium" ? Colors.light.primary : Colors.light.border }]}>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>Twofer Premium</Text>
-                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>TWOFER Premium</Text>
+                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primaryAccent }}>
                   ${premiumPrice}/mo
                 </Text>
                 <View style={{ marginTop: 10, gap: 8 }}>
@@ -511,7 +512,7 @@ export default function BusinessBillingScreen() {
                     disabled={busy}
                   />
                   <SecondaryButton
-                    title="Reset Trial (30 days)"
+                    title="Reset Trial (60 days)"
                     onPress={() => void resetTrial()}
                     disabled={busy}
                   />

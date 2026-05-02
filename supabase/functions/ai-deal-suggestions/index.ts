@@ -306,7 +306,7 @@ serve(async (req) => {
         openai_called: true,
       });
       return new Response(
-        JSON.stringify({ error: "AI generation failed.", details: text }),
+        JSON.stringify({ error: "AI generation failed. Try again." }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

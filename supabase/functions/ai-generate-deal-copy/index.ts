@@ -288,7 +288,7 @@ serve(async (req) => {
     if (!aiRes.ok) {
       const text = await aiRes.text();
       return new Response(
-        JSON.stringify({ error: "AI generation failed.", details: text }),
+        JSON.stringify({ error: "AI generation failed. Try again." }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

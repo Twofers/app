@@ -189,7 +189,7 @@ export default function ReuseDealScreen() {
                     {row.price != null ? (
                       <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>${Number(row.price).toFixed(2)}</Text>
                     ) : null}
-                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.primary }}>
+                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.primaryAccent }}>
                       {t("reuseHub.repeatCta")}
                     </Text>
                   </View>
@@ -200,7 +200,7 @@ export default function ReuseDealScreen() {
           </View>
 
           <Pressable onPress={() => router.push("/create/ai" as Href)} style={{ paddingVertical: Spacing.md }}>
-            <Text style={{ fontWeight: "700", color: theme.primary }}>{t("reuseHub.backToCreate")}</Text>
+            <Text style={{ fontWeight: "700", color: theme.primaryAccent }}>{t("reuseHub.backToCreate")}</Text>
           </Pressable>
         </ScrollView>
       )}

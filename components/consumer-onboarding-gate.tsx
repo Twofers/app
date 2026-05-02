@@ -26,6 +26,17 @@ export function ConsumerOnboardingGate() {
   const { mode, ready } = useTabMode();
   const { session, isInitialLoading } = useAuthSession();
   const verifiedRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
+
+  // Reset verification state when the user changes — a sign-out / sign-in flow on a shared
+  // device must re-verify the new user's consumer profile + onboarding state, not skip them.
+  const currentUserId = session?.user?.id ?? null;
+  useEffect(() => {
+    if (lastUserIdRef.current !== currentUserId) {
+      verifiedRef.current = false;
+      lastUserIdRef.current = currentUserId;
+    }
+  }, [currentUserId]);
 
   useEffect(() => {
     if (isInitialLoading || !ready) return;

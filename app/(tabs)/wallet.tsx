@@ -593,7 +593,7 @@ export default function WalletScreen() {
               accessibilityRole="button"
               style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: isRedeeming ? 0.45 : 1 }}
             >
-              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>
+              <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 15 }}>
                 {t("consumerWallet.qrFallbackLabel")}
               </Text>
             </Pressable>

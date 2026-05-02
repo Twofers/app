@@ -344,7 +344,7 @@ function renderMapCanvas({
                 {previewDeal?.title ?? selectedBusiness.name}
               </Text>
               {typeof previewDeal?.price === "number" ? (
-                <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.primary }}>
+                <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.primaryAccent }}>
                   ${previewDeal.price.toFixed(2)}
                 </Text>
               ) : null}

@@ -37,7 +37,7 @@ export const DEAL_QUALITY_MIN_PERCENT = 40;
 
 /** Default bar — high-value offer types. */
 export const DEAL_QUALITY_BLOCK_MESSAGE =
-  "Twofer only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.";
+  "TWOFER only allows high-value deals. Try 40%+ off, BOGO, 2-for-1, or a stronger bundle.";
 
 /** More than one distinct % when no clear structural primary offer (BOGO / 2-for-1 / etc.). */
 export const DEAL_QUALITY_MULTIPLE_PERCENT_MESSAGE =

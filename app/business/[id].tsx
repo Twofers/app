@@ -247,6 +247,8 @@ export default function BusinessProfileScreen() {
 
         <Pressable
           onPress={toggleFavorite}
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
           style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.md, minHeight: 44 }}
         >
           <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? "#e0245e" : theme.mutedText} />
@@ -279,7 +281,7 @@ export default function BusinessProfileScreen() {
           <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text }}>{t("businessProfile.phone")}</Text>
           {biz.phone?.trim() ? (
             <Pressable onPress={dialPhone}>
-              <Text style={{ fontSize: 16, color: theme.primary, fontWeight: "600" }}>{biz.phone}</Text>
+              <Text style={{ fontSize: 16, color: theme.primaryAccent, fontWeight: "600" }}>{biz.phone}</Text>
             </Pressable>
           ) : (
             <Text style={{ color: theme.mutedText }}>{t("businessProfile.notProvided")}</Text>

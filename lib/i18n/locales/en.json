@@ -181,6 +181,7 @@
     "back": "Back",
     "locationDenied": "Location wasn’t shared. You can enter a ZIP code instead.",
     "locationError": "Couldn’t read your location. Try ZIP or Settings later.",
+    "openSettingsCta": "Open Settings to enable location",
     "zipRequired": "Enter a ZIP code.",
     "zipGeocodeFail": "We couldn’t find that ZIP. Check the code and try again.",
     "zipInvalidFormat": "Enter a valid 5-digit US ZIP code (optional +4).",
@@ -587,7 +588,7 @@
     "generate": "Generate 3 ad ideas",
     "generating": "Generating…",
     "generateStrongHeadline": "Generate 3 strong ad options",
-    "generateStrongSubtitle": "Twofer only allows strong deals — 40%+ off, BOGO, 2-for-1, or a free item with purchase.",
+    "generateStrongSubtitle": "TWOFER only allows strong deals — 40%+ off, BOGO, 2-for-1, or a free item with purchase.",
     "generateStrongVariants": "Generate 3 Strong Variants",
     "generatingStrongVariants": "Generating 3 strong variants…",
     "adsOptionalRefine": "Optional: use Refine with AI on any card to tweak wording in chat.",
@@ -613,7 +614,7 @@
     "percentOffLabel": "Discount (40% or more)",
     "fixedPriceLabel": "Special price (USD)",
     "fixedPricePlaceholder": "e.g. 3.50",
-    "errPercentWeak": "Twofer needs at least 40% off for this type — pick 40% or higher.",
+    "errPercentWeak": "TWOFER needs at least 40% off for this type — pick 40% or higher.",
     "errFixedPrice": "Enter a valid dollar amount for the special price."
   },
   "menuWorkflow": {
@@ -699,6 +700,7 @@
     "loading": "Loading...",
     "favorited": "Favorited",
     "favorite": "Favorite",
+    "noActiveClaim": "No active claim — tap Get this deal.",
     "noImage": "No image",
     "localBusiness": "Local business",
     "dealFallback": "Deal",
@@ -1119,6 +1121,8 @@
     "mapRetry": "Retry"
   },
   "commonUi": {
+    "brandName": "TWOFER",
+    "genericError": "Something went wrong. Please try again.",
     "ok": "OK",
     "cancel": "Cancel",
     "goBack": "Go Back",

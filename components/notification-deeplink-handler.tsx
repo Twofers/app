@@ -3,14 +3,30 @@ import { Platform } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { devWarn } from "@/lib/dev-log";
 
+/**
+ * Allowlist of routes a notification payload may navigate to. Without this allowlist a
+ * compromised or test push could route to internal screens (`/debug-diagnostics`,
+ * `/(tabs)/billing`, etc.) by setting `data.path` arbitrarily.
+ */
+const ALLOWED_PATH_PATTERNS: ReadonlyArray<RegExp> = [
+  /^\/deal\/[A-Za-z0-9_-]+$/,
+  /^\/business\/[A-Za-z0-9_-]+$/,
+  /^\/\(tabs\)$/,
+  /^\/\(tabs\)\/(index|wallet|map|settings|dashboard|create)$/,
+];
+
+function isAllowedPath(p: string): boolean {
+  return ALLOWED_PATH_PATTERNS.some((re) => re.test(p));
+}
+
 function readPath(data: Record<string, unknown> | undefined): Href | null {
   if (!data) return null;
   const path = data.path;
-  if (typeof path === "string" && path.startsWith("/")) {
+  if (typeof path === "string" && path.startsWith("/") && isAllowedPath(path)) {
     return path as Href;
   }
   const dealId = data.dealId;
-  if (typeof dealId === "string" && dealId.length > 0) {
+  if (typeof dealId === "string" && /^[A-Za-z0-9_-]+$/.test(dealId)) {
     return `/deal/${dealId}` as Href;
   }
   return null;

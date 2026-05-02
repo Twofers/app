@@ -655,9 +655,9 @@ export default function HomeScreen() {
             </Text>
             <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md, flexWrap: "wrap" }}>
               {distanceLabel ? (
-                <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
+                <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
               ) : null}
-              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 14 }}>
+              <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 14 }}>
                 {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
               </Text>
             </View>
@@ -679,7 +679,7 @@ export default function HomeScreen() {
               accessibilityLabel={t("consumerHome.shopInfoLink")}
               style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
             >
-              <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
+              <Text style={{ color: theme.primaryAccent, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
             </Pressable>
           </View>
         </View>
@@ -930,7 +930,7 @@ export default function HomeScreen() {
                 <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
                   {t("consumerHome.emptyNearbyBodySub")}
                 </Text>
-                <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
+                <Text style={{ fontSize: 13, color: theme.primaryAccent, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
                   {t("consumerHome.emptyNearbyPenguinHint")}
                 </Text>
                 <PrimaryButton
@@ -1092,7 +1092,7 @@ export default function HomeScreen() {
                       <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
                         {t("consumerHome.emptyZeroBody")}
                       </Text>
-                      <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
+                      <Text style={{ fontSize: 13, color: theme.primaryAccent, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
                         {t("consumerHome.emptyZeroPenguinHint")}
                       </Text>
                       <PrimaryButton

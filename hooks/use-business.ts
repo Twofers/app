@@ -247,7 +247,7 @@ export function useBusiness() {
     const rawStatus = (bpRow?.subscription_status ?? null) || null;
     const normalizedStatus: SubscriptionStatus =
       rawStatus === "active" || rawStatus === "trial" || rawStatus === "past_due" || rawStatus === "canceled" ? rawStatus : "canceled";
-    if (rawStatus && normalizedStatus !== rawStatus) {
+    if (rawStatus && normalizedStatus !== rawStatus && __DEV__) {
       console.warn(`[useBusiness] unrecognized subscription_status "${rawStatus}", treating as "canceled"`);
     }
 
@@ -255,7 +255,7 @@ export function useBusiness() {
     const rawTier = (bpRow?.subscription_tier ?? null) || null;
     const normalizedTier: "pro" | "premium" =
       rawTier === "premium" ? "premium" : "pro";
-    if (rawTier && rawTier !== "pro" && rawTier !== "premium") {
+    if (rawTier && rawTier !== "pro" && rawTier !== "premium" && __DEV__) {
       console.warn(`[useBusiness] unrecognized subscription_tier "${rawTier}", treating as "pro"`);
     }
 
