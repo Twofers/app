@@ -544,6 +544,9 @@
   },
   "menuScan": {
     "title": "Scan menu",
+    "takePhoto": "메뉴 사진 찍기",
+    "takeMore": "사진 더 찍기",
+    "cameraPermissionDenied": "메뉴 사진을 찍으려면 카메라 권한이 필요합니다. 설정 → TWOFER → 카메라에서 허용해 주세요.",
     "pickImage": "Choose menu photo",
     "scan": "Extract items",
     "scanning": "Reading menu…",

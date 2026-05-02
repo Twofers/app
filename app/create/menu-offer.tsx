@@ -478,7 +478,7 @@ export default function MenuOfferScreen() {
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ fontWeight: "600" }}>{t("menuOffer.percentOffLabel")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
-                {[40, 50, 100].map((p) => (
+                {[40, 50, 75].map((p) => (
                   <Pressable
                     key={p}
                     onPress={() => setDiscountPercent(p)}

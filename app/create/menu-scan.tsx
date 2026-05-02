@@ -77,24 +77,41 @@ export default function MenuScanScreen() {
   }, [businessId]);
 
   const pickAndScan = useCallback(
-    async (append: boolean) => {
+    async (source: "camera" | "library", append: boolean) => {
       if (!businessId) {
         setBanner({ message: t("menuScan.needBusiness"), tone: "error" });
         return;
       }
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        setBanner({ message: t("menuScan.photoPermissionDenied"), tone: "error" });
-        return;
+      // Camera: live capture (one photo). Library: pick up to 10 photos.
+      if (source === "camera") {
+        const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!camPerm.granted) {
+          setBanner({ message: t("menuScan.cameraPermissionDenied"), tone: "error" });
+          return;
+        }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          setBanner({ message: t("menuScan.photoPermissionDenied"), tone: "error" });
+          return;
+        }
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        quality: 0.85,
-        base64: true,
-        allowsMultipleSelection: true,
-        selectionLimit: 10,
-      });
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 0.85,
+              base64: true,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 0.85,
+              base64: true,
+              allowsMultipleSelection: true,
+              selectionLimit: 10,
+            });
       if (result.canceled || result.assets.length === 0) {
         return;
       }
@@ -255,14 +272,24 @@ export default function MenuScanScreen() {
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       <PrimaryButton
+        title={scanning ? t("menuScan.scanning") : t("menuScan.takePhoto")}
+        onPress={() => void pickAndScan("camera", false)}
+        disabled={scanning || !businessId}
+      />
+      <SecondaryButton
         title={scanning ? t("menuScan.scanning") : t("menuScan.pickImage")}
-        onPress={() => void pickAndScan(false)}
+        onPress={() => void pickAndScan("library", false)}
         disabled={scanning || !businessId}
       />
       <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuScan.multiHint")}</Text>
       <SecondaryButton
+        title={scanning ? t("menuScan.scanning") : t("menuScan.takeMore")}
+        onPress={() => void pickAndScan("camera", true)}
+        disabled={scanning || !businessId}
+      />
+      <SecondaryButton
         title={scanning ? t("menuScan.scanning") : t("menuScan.pickMore")}
-        onPress={() => void pickAndScan(true)}
+        onPress={() => void pickAndScan("library", true)}
         disabled={scanning || !businessId}
       />
       {rows.length > 0 ? (

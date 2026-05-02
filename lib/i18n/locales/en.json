@@ -544,7 +544,10 @@
   },
   "menuScan": {
     "title": "Scan menu",
-    "pickImage": "Choose menu photo",
+    "takePhoto": "Take photo of menu",
+    "takeMore": "Take another photo",
+    "cameraPermissionDenied": "Camera access is needed to take a menu photo. Enable it in Settings → TWOFER → Camera.",
+    "pickImage": "Choose from photos",
     "scan": "Extract items",
     "scanning": "Reading menu…",
     "save": "Save to menu",
