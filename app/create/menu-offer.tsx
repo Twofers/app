@@ -16,11 +16,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
-import { CREATIVE_LANE_ORDER, type CreativeLane, type GeneratedAd } from "@/lib/ad-variants";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
-import { aiGenerateAdVariantsStructured, getErrorCode } from "@/lib/functions";
-import { splitSubheadlineForPromoAndBody } from "@/lib/menu-ad-copy";
-import { buildQuickPrefillFromMenuOffer } from "@/lib/menu-offer-prefill";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import {
   loadLastMenuOfferPairingType,
@@ -51,21 +47,7 @@ type WizardStep =
   | "main"
   | "paired"
   | "pairing"
-  | "generate"
-  | "ads";
-
-function laneUiTitle(lane: CreativeLane, t: (k: string) => string): string {
-  if (lane === "value") return t("menuOffer.laneValue");
-  if (lane === "neighborhood") return t("menuOffer.laneNeighborhood");
-  return t("menuOffer.lanePremium");
-}
-
-function resolveCreativeLane(ad: GeneratedAd, index: number): CreativeLane {
-  if (ad.creative_lane === "value" || ad.creative_lane === "neighborhood" || ad.creative_lane === "premium") {
-    return ad.creative_lane;
-  }
-  return CREATIVE_LANE_ORDER[index] ?? "value";
-}
+  | "generate";
 
 function getPairingValidationError(params: {
   pairingType: MenuOfferPairingType;
@@ -107,8 +89,6 @@ export default function MenuOfferScreen() {
     setDealLocationIds,
     structuredOffer,
     setStructuredOffer,
-    setGenerationResult,
-    adsWorking,
     clearWizard,
   } = useCreateMenuOfferWizard();
 
@@ -123,7 +103,6 @@ export default function MenuOfferScreen() {
   const [extraLocationIds, setExtraLocationIds] = useState<Set<string>>(new Set());
   const [discountPercent, setDiscountPercent] = useState(50);
   const [fixedPriceText, setFixedPriceText] = useState("");
-  const [generating, setGenerating] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
   );
@@ -172,8 +151,12 @@ export default function MenuOfferScreen() {
     }
   }, [visibleLocations]);
 
-  const runGenerate = useCallback(async () => {
-    if (!businessId || !structuredOffer) return;
+  /**
+   * Skip in-wizard ad generation. Hand the structured offer to the main create flow,
+   * which runs the new single-ad pipeline with the offer text as the AI hint.
+   */
+  const goToAdCreation = useCallback(() => {
+    if (!structuredOffer) return;
     const strong = validateMenuOfferCanonicalSummary({
       human_summary: structuredOffer.human_summary,
       discount_percent: structuredOffer.discount_percent,
@@ -183,45 +166,20 @@ export default function MenuOfferScreen() {
       setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
-    setGenerating(true);
-    setBanner(null);
-    try {
-      const hint = buildOfferHintText(structuredOffer);
-      const { ads } = await aiGenerateAdVariantsStructured({
-        business_id: businessId,
-        structured_offer: structuredOffer as unknown as Record<string, unknown>,
-        hint_text: hint,
-        business_context: businessContextForAi,
-        output_language: dealLang,
-        regeneration_attempt: 0,
-      });
-      setGenerationResult(ads);
-      setStep("ads");
-    } catch (e) {
-      const code = getErrorCode(e);
-      const fallback = e instanceof Error ? e.message : t("menuOffer.errGenerate");
-      setBanner({
-        message: code === "MONTHLY_LIMIT" ? t("menuWorkflow.errMonthlyLimit") : fallback,
-        tone: "error",
-      });
-    } finally {
-      setGenerating(false);
-    }
-  }, [businessId, structuredOffer, businessContextForAi, dealLang, setGenerationResult, t]);
-
-  const goAiPublish = useCallback(
-    (ad: GeneratedAd) => {
-      if (!structuredOffer) return;
-      const locPrimary = dealLocationIds[0];
-      const params = buildQuickPrefillFromMenuOffer(ad, locPrimary);
-      clearWizard();
-      router.push({
-        pathname: "/create/ai",
-        params,
-      } as Href);
-    },
-    [structuredOffer, dealLocationIds, clearWizard, router],
-  );
+    const hint = buildOfferHintText(structuredOffer);
+    const locPrimary = dealLocationIds[0] ?? "";
+    const extras = dealLocationIds.slice(1).join(",");
+    clearWizard();
+    router.push({
+      pathname: "/create/ai",
+      params: {
+        prefillHint: hint,
+        ...(locPrimary ? { prefillLocationId: locPrimary } : {}),
+        ...(extras ? { prefillExtraLocationIds: extras } : {}),
+        fromMenuOffer: "1",
+      },
+    } as Href);
+  }, [structuredOffer, dealLocationIds, clearWizard, router, t]);
 
   const onLocationNext = useCallback(() => {
     if (!primaryLocationId) {
@@ -542,91 +500,12 @@ export default function MenuOfferScreen() {
             </Text>
             <Text style={{ opacity: 0.72, fontSize: 14 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
             <PrimaryButton
-              title={
-                generating ? t("menuOffer.generatingStrongVariants") : t("menuOffer.generateStrongVariants")
-              }
-              onPress={() => void runGenerate()}
-              disabled={generating}
+              title={t("menuOffer.generateStrongVariants")}
+              onPress={goToAdCreation}
               style={{ minHeight: 64 }}
             />
           </View>
           <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("pairing"); }} />
-        </View>
-      ) : null}
-
-      {step === "ads" && adsWorking?.length === 3 ? (
-        <View style={{ gap: Spacing.md }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.pickTitle")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("menuOffer.pickHelp")}</Text>
-          <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuOffer.adsOptionalRefine")}</Text>
-          {adsWorking.map((ad, index) => {
-            const laneKey = resolveCreativeLane(ad, index);
-            const subSplit = splitSubheadlineForPromoAndBody(ad.subheadline ?? "");
-            return (
-              <View
-                key={`${ad.creative_lane}-${index}`}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  backgroundColor: theme.surface,
-                  gap: Spacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    alignSelf: "flex-start",
-                    fontSize: 11,
-                    fontWeight: "800",
-                    color: "#fff",
-                    backgroundColor: "#111",
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    overflow: "hidden",
-                  }}
-                >
-                  {laneUiTitle(laneKey, t)}
-                </Text>
-                <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
-                {subSplit.bodyCopy ? (
-                  <>
-                    <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55 }}>
-                      {t("menuOffer.promoLineLabel")}
-                    </Text>
-                    <Text style={{ opacity: 0.85 }}>{subSplit.promoLine}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55, marginTop: 4 }}>
-                      {t("menuOffer.bodyCopyLabel")}
-                    </Text>
-                    <Text style={{ opacity: 0.8 }}>{subSplit.bodyCopy}</Text>
-                  </>
-                ) : (
-                  <Text style={{ opacity: 0.85 }}>{ad.subheadline}</Text>
-                )}
-                <Text style={{ fontWeight: "700" }}>{ad.cta}</Text>
-                {ad.visual_direction?.trim() ? (
-                  <Text style={{ fontSize: 12, opacity: 0.55 }}>
-                    {t("menuOffer.visualNote", { note: ad.visual_direction })}
-                  </Text>
-                ) : null}
-                <PrimaryButton
-                  title={t("menuOffer.useAiPublish")}
-                  onPress={() => goAiPublish(ad)}
-                  style={{ marginTop: Spacing.sm }}
-                />
-                <SecondaryButton
-                  title={t("menuOffer.refineAi")}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/create/ad-refine",
-                      params: { variantIndex: String(index) },
-                    } as Href)
-                  }
-                />
-              </View>
-            );
-          })}
         </View>
       ) : null}
     </ScrollView>

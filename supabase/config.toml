@@ -435,12 +435,6 @@ verify_jwt = false
 import_map = "./functions/ai-extract-menu/deno.json"
 entrypoint = "./functions/ai-extract-menu/index.ts"
 
-[functions.ai-refine-ad-copy]
-enabled = true
-verify_jwt = false
-import_map = "./functions/ai-refine-ad-copy/deno.json"
-entrypoint = "./functions/ai-refine-ad-copy/index.ts"
-
 [functions.delete-user-account]
 enabled = true
 verify_jwt = false
