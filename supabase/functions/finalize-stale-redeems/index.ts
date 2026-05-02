@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 import { isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -18,17 +18,16 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization")! } },
-    });
+    const userSupabase = userClient(req);
+    // deal_claims has no user-side UPDATE policy (only merchants can update via RLS),
+    // so all reads/writes after auth use the admin client. Every query is scoped to the
+    // authenticated user via .eq("user_id", user.id) so a user can only finalize their own claims.
+    const supabase = adminClient();
 
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await userSupabase.auth.getUser();
 
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized. Please log in." }), {

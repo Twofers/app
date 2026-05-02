@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const ALLOWED = new Set([
@@ -29,12 +29,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization")! } },
-    });
+    const supabase = userClient(req);
 
     const {
       data: { user },
@@ -88,7 +83,7 @@ serve(async (req) => {
     }
 
     // Per-user rate limit: 60 events/minute via the admin client (RLS-bypass for the count).
-    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const admin = adminClient();
     const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
     const { count: recent } = await admin
       .from("app_analytics_events")

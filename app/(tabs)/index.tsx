@@ -639,6 +639,11 @@ export default function HomeScreen() {
                 onPress={() => void toggleFavorite(item.business_id)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
+                accessibilityLabel={
+                  favoriteBusinessIds.includes(item.business_id)
+                    ? t("dealDetail.favorited")
+                    : t("dealDetail.favorite")
+                }
               >
                 <MaterialIcons
                   name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}

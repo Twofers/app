@@ -14,7 +14,8 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient as SupabaseClientType } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "./demo-variants.ts";
@@ -354,7 +355,7 @@ async function generateCopy(params: {
 
 // ─── Stage 3: image ────────────────────────────────────────────────────────
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = SupabaseClientType;
 
 async function produceImage(params: {
   openAiKey: string;
@@ -513,19 +514,15 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
 
-    const userClient = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-    });
-    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const userSupabase = userClient(req);
+    const admin = adminClient();
 
     const {
       data: { user },
       error: userErr,
-    } = await userClient.auth.getUser();
+    } = await userSupabase.auth.getUser();
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized. Please log in." }), {
         status: 401,
@@ -605,7 +602,7 @@ serve(async (req) => {
     }
 
     // Ownership check — must run before any expensive work
-    const { data: business, error: bizErr } = await userClient
+    const { data: business, error: bizErr } = await userSupabase
       .from("businesses")
       .select("id, owner_id, name")
       .eq("id", businessId)
@@ -826,7 +823,7 @@ serve(async (req) => {
       imageResult = await produceImage({
         openAiKey,
         admin,
-        userClient,
+        userClient: userSupabase,
         businessId,
         photoPath: photoPath || null,
         photoTreatment,
