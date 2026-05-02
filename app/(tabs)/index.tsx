@@ -131,6 +131,12 @@ export default function HomeScreen() {
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [claimingDealId, setClaimingDealId] = useState<string | null>(null);
+  /**
+   * Synchronous in-flight guard. React state updates are async, so a fast double-tap can
+   * pass the `if (claimingDealId)` check before the first tap's state update lands. The ref
+   * is updated synchronously and blocks the second tap before any await happens.
+   */
+  const claimInFlightRef = useRef(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
@@ -305,10 +311,18 @@ export default function HomeScreen() {
     }, [loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]),
   );
 
+  /**
+   * Schedule local "new deals" notifications ONCE per cold start, not on every deals change.
+   * The previous version re-ran on every deals update — including realtime inserts and focus
+   * refresh — which (a) wasted DB calls and (b) could fire local notifications for deals the
+   * user is literally looking at right now.
+   */
+  const notificationSyncDoneRef = useRef(false);
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || notificationSyncDoneRef.current) return;
+    notificationSyncDoneRef.current = true;
     void syncConsumerDealNotifications({ userId, favoriteBusinessIds });
-  }, [userId, favoriteBusinessIds, deals]);
+  }, [userId, favoriteBusinessIds]);
 
   const toggleFavorite = useCallback(
     async (businessId: string) => {
@@ -343,7 +357,9 @@ export default function HomeScreen() {
           setBanner(t("dealDetail.errLoginClaim"));
           return;
         }
-        if (claimingDealId) return;
+        // Synchronous lock — React state would be stale across rapid taps.
+        if (claimInFlightRef.current) return;
+        claimInFlightRef.current = true;
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
@@ -391,9 +407,10 @@ export default function HomeScreen() {
         });
       } finally {
         setClaimingDealId(null);
+        claimInFlightRef.current = false;
       }
     },
-    [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t],
+    [isLoggedIn, loadUserClaims, mapClaimError, t],
   );
 
   async function refreshQr() {

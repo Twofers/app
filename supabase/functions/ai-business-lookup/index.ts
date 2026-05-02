@@ -92,9 +92,56 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    if (business_name.length > 100) {
+      return new Response(
+        JSON.stringify({ error: "Business name too long (max 100 chars)." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const lat = typeof body.lat === "number" && Number.isFinite(body.lat) ? body.lat : null;
     const lng = typeof body.lng === "number" && Number.isFinite(body.lng) ? body.lng : null;
+
+    // Cost control: cap calls per user per minute and per day. Each call may hit Google
+    // Places ($0.032) and OpenAI fallback. An uncapped abuser with one signup could rack up
+    // thousands of dollars before a human notices.
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+    const { count: recentMin } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("request_type", "business_lookup")
+      .gte("created_at", oneMinAgo);
+    if ((recentMin ?? 0) >= 5) {
+      return new Response(
+        JSON.stringify({ error: "Please wait a moment before searching again.", error_code: "COOLDOWN_ACTIVE" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentDay } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("request_type", "business_lookup")
+      .gte("created_at", oneDayAgo);
+    if ((recentDay ?? 0) >= 50) {
+      return new Response(
+        JSON.stringify({ error: "Daily search limit reached. Try again tomorrow.", error_code: "DAILY_LIMIT" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    // Log the attempt so the throttle counter advances regardless of outcome.
+    void admin.from("ai_generation_logs").insert({
+      user_id: user.id,
+      request_type: "business_lookup",
+      input_mode: "text",
+      request_hash: business_name.slice(0, 80),
+      prompt_version: "v1",
+      success: true,
+      openai_called: false,
+    });
 
     // Demo account: return mock DFW coffee shop data
     const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";

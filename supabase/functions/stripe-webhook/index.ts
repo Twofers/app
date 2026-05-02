@@ -137,13 +137,32 @@ serve(async (req) => {
     const proCents = proMonthly != null ? Math.round(Number(proMonthly) * 100) : null;
     const premiumCents = premiumMonthly != null ? Math.round(Number(premiumMonthly) * 100) : null;
 
-    const subscriptionTier: AppSubscriptionTier = (() => {
-      if (unitsAmount == null) return "pro";
+    /** Resolve tier from the unit amount. Returns null if the amount doesn't match a known
+     * tier — the caller should skip processing in that case rather than default-grant. */
+    const subscriptionTier: AppSubscriptionTier | null = (() => {
+      if (unitsAmount == null) return null;
       if (premiumCents != null && unitsAmount === premiumCents) return "premium";
-      // If it doesn't match the premium price amount, default to pro.
       if (proCents != null && unitsAmount === proCents) return "pro";
-      return "pro";
+      return null;
     })();
+
+    if (subscriptionTier == null) {
+      console.warn(
+        "[stripe-webhook] unknown unit amount, skipping (event:",
+        event.id,
+        ", amount:",
+        unitsAmount,
+        ", proCents:",
+        proCents,
+        ", premiumCents:",
+        premiumCents,
+        ")",
+      );
+      return new Response(
+        JSON.stringify({ received: true, skipped: true, reason: "unknown_tier_amount" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const stripeStatus = subscriptionForUpdate?.status ?? null;
     const appSubscriptionStatus: AppSubscriptionStatus = mapStripeStatusToApp(
@@ -179,6 +198,38 @@ serve(async (req) => {
       });
     }
 
+    // Idempotency — if we've already processed this Stripe event, the unique index on
+    // subscription_history(stripe_event_id) makes the INSERT a no-op. We then skip the
+    // business_profiles UPDATE so an out-of-order replay can't clobber newer state.
+    const { data: insertedHistory, error: histErr } = await supabase
+      .from("subscription_history")
+      .upsert(
+        {
+          business_profile_id: businessProfileRow.id,
+          stripe_event_type: event.type,
+          stripe_event_id: event.id,
+          subscription_tier: subscriptionTier,
+          subscription_status: appSubscriptionStatus,
+          stripe_subscription_id: subscriptionId,
+          payload: event,
+        },
+        { onConflict: "stripe_event_id", ignoreDuplicates: true },
+      )
+      .select("id")
+      .maybeSingle();
+
+    if (histErr) {
+      console.error("[stripe-webhook] subscription_history upsert failed:", histErr);
+    }
+
+    if (!insertedHistory) {
+      console.log("[stripe-webhook] event already processed, skipping update:", event.id);
+      return new Response(
+        JSON.stringify({ received: true, skipped: true, reason: "duplicate_event" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const updatePayload: Record<string, unknown> = {
       stripe_customer_id: customerId,
       stripe_subscription_id: subscriptionId,
@@ -211,18 +262,6 @@ serve(async (req) => {
       } catch {
         // best-effort — canonical source is business_profiles
       }
-    }
-
-    // Optional recommended logging. Best-effort: never fail the webhook if history table doesn't exist.
-    try {
-      await supabase.from("subscription_history").insert({
-        business_profile_id: businessProfileRow.id,
-        stripe_event_type: event.type,
-        stripe_event_id: event.id,
-        payload: event,
-      });
-    } catch {
-      // ignore
     }
 
     return new Response(JSON.stringify({ received: true }), {

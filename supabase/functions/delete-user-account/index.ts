@@ -52,13 +52,13 @@ serve(async (req) => {
       .eq("owner_id", user.id);
 
     if (bizCountErr) {
-      console.error(bizCountErr);
+      console.error("delete-user-account: biz lookup failed:", bizCountErr);
       return new Response(
         JSON.stringify({
-          error: "Could not verify account type. Contact support to delete your login.",
-          code: blocked.code,
+          error: "Could not verify account type. Try again in a moment.",
+          code: "INTERNAL",
         }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -69,10 +69,28 @@ serve(async (req) => {
       });
     }
 
+    // Purge consumer data BEFORE deleting the auth row.
+    // The purge_user_data RPC anonymizes claim/analytics history (preserves merchant
+    // dashboards) and hard-deletes user-only tables (favorites, push_tokens,
+    // consumer_profiles, consumer_push_prefs).
+    const { error: purgeErr } = await supabaseAdmin.rpc("purge_user_data", {
+      p_user_id: user.id,
+    });
+    if (purgeErr) {
+      console.error("delete-user-account: purge_user_data failed:", purgeErr);
+      return new Response(
+        JSON.stringify({
+          error: "Could not purge account data. Please contact support.",
+          code: "PURGE_FAILED",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
 
     if (delErr) {
-      console.error("delete-user-account error:", delErr);
+      console.error("delete-user-account: auth delete failed:", delErr);
       return new Response(JSON.stringify({ error: "Could not delete account. Please contact support." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

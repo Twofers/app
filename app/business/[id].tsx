@@ -14,6 +14,8 @@ import { useBusiness } from "@/hooks/use-business";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 
 type BizRow = {
   id: string;
@@ -49,6 +51,8 @@ export default function BusinessProfileScreen() {
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
   const id = typeof idParam === "string" ? idParam : idParam?.[0] ?? "";
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { userId, isLoggedIn, loading: authLoading } = useBusiness();
   const [biz, setBiz] = useState<BizRow | null>(null);
   const [deal, setDeal] = useState<DealRow | null>(null);
@@ -112,11 +116,13 @@ export default function BusinessProfileScreen() {
   useEffect(() => {
     if (authLoading) return;
     if (!isLoggedIn) {
-      router.replace("/auth-landing");
+      // Preserve the business destination so the user lands here after sign-in.
+      const bizHref = id ? `/business/${id}` : "/(tabs)";
+      router.replace({ pathname: "/auth-landing", params: { next: bizHref } });
       return;
     }
     void load();
-  }, [load, authLoading, isLoggedIn, router]);
+  }, [load, authLoading, isLoggedIn, router, id]);
 
   const canOpenDirections = useMemo(() => {
     if (!biz) return false;
@@ -237,23 +243,23 @@ export default function BusinessProfileScreen() {
             contentFit="contain"
           />
         </View>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{biz.name}</Text>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{biz.name}</Text>
 
         <Pressable
           onPress={toggleFavorite}
           style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.md, minHeight: 44 }}
         >
-          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? "#e0245e" : "#666"} />
+          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? "#e0245e" : theme.mutedText} />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600" }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>
               {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
             </Text>
-            <Text style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>{t("consumerHome.favoriteAlertsHint")}</Text>
+            <Text style={{ fontSize: 12, marginTop: 2, color: theme.mutedText }}>{t("consumerHome.favoriteAlertsHint")}</Text>
           </View>
         </Pressable>
 
         {biz.address || biz.location ? (
-          <Text style={{ marginTop: Spacing.lg, fontSize: 16, lineHeight: 24, opacity: 0.85 }}>
+          <Text style={{ marginTop: Spacing.lg, fontSize: 16, lineHeight: 24, color: theme.text }}>
             {biz.address?.trim() || biz.location}
           </Text>
         ) : null}
@@ -263,38 +269,38 @@ export default function BusinessProfileScreen() {
         </View>
 
         <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 15, fontWeight: "700" }}>{t("businessProfile.hours")}</Text>
-          <Text style={{ opacity: 0.75, lineHeight: 22 }}>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text }}>{t("businessProfile.hours")}</Text>
+          <Text style={{ lineHeight: 22, color: theme.mutedText }}>
             {biz.hours_text?.trim() ? biz.hours_text : t("businessProfile.notProvided")}
           </Text>
         </View>
 
         <View style={{ marginTop: Spacing.lg, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 15, fontWeight: "700" }}>{t("businessProfile.phone")}</Text>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text }}>{t("businessProfile.phone")}</Text>
           {biz.phone?.trim() ? (
             <Pressable onPress={dialPhone}>
-              <Text style={{ fontSize: 16, color: "#2563eb", fontWeight: "600" }}>{biz.phone}</Text>
+              <Text style={{ fontSize: 16, color: theme.primary, fontWeight: "600" }}>{biz.phone}</Text>
             </Pressable>
           ) : (
-            <Text style={{ opacity: 0.75 }}>{t("businessProfile.notProvided")}</Text>
+            <Text style={{ color: theme.mutedText }}>{t("businessProfile.notProvided")}</Text>
           )}
         </View>
 
         {biz.short_description?.trim() ? (
           <View style={{ marginTop: Spacing.lg }}>
-            <Text style={{ opacity: 0.8, lineHeight: 22 }}>{biz.short_description}</Text>
+            <Text style={{ lineHeight: 22, color: theme.text }}>{biz.short_description}</Text>
           </View>
         ) : null}
 
-        <View style={{ marginTop: Spacing.xxl, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: "#eee" }}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md }}>{t("businessProfile.liveDeal")}</Text>
+        <View style={{ marginTop: Spacing.xxl, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: theme.border }}>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md, color: theme.text }}>{t("businessProfile.liveDeal")}</Text>
           {deal ? (
             <Pressable
               onPress={() => router.push(`/deal/${deal.id}` as Href)}
               style={{
                 borderRadius: 18,
                 overflow: "hidden",
-                backgroundColor: "#fff",
+                backgroundColor: theme.surface,
                 boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
                 elevation: 2,
               }}

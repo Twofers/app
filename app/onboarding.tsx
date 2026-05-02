@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BackHandler, ScrollView, Text, TextInput, View } from "react-native";
+import { BackHandler, Linking, ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useRouter } from "expo-router";
@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
+import { supabase } from "@/lib/supabase";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -58,6 +60,8 @@ export default function OnboardingScreen() {
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(15);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  /** True when the OS will refuse to prompt for location again (user denied permanently). */
+  const [locationPermanentlyDenied, setLocationPermanentlyDenied] = useState(false);
 
   useEffect(() => {
     void getConsumerPreferences().then((p) => {
@@ -106,12 +110,19 @@ export default function OnboardingScreen() {
     setBusy(true);
     setHint(null);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
+        // If the OS won't prompt again (user previously selected "never ask again"), the
+        // only way to grant is via system settings. Surface a clear CTA before we drop
+        // them at the ZIP fallback step.
+        if (!canAskAgain) {
+          setLocationPermanentlyDenied(true);
+        }
         setHint(t("onboarding.locationDenied"));
         goToStep(2);
         return;
       }
+      setLocationPermanentlyDenied(false);
       await setConsumerLocationMode("gps");
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
@@ -123,6 +134,10 @@ export default function OnboardingScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openSystemSettings() {
+    void Linking.openSettings();
   }
 
   async function saveZipAndContinue() {
@@ -176,6 +191,11 @@ export default function OnboardingScreen() {
       const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
       if (status === "granted") {
         await setAlertsEnabled(true);
+        // Register Expo push token immediately so the user can receive remote pushes.
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) await registerPushTokenIfNeeded(user.id);
+        } catch { /* non-fatal */ }
       } else if (skippedBecauseExpoGo) {
         await setAlertsEnabled(false);
       }
@@ -219,6 +239,14 @@ export default function OnboardingScreen() {
 
       {hint ? (
         <Text style={{ marginBottom: Spacing.md, color: "#b45309", fontSize: 14, lineHeight: 20 }}>{hint}</Text>
+      ) : null}
+      {locationPermanentlyDenied ? (
+        <View style={{ marginBottom: Spacing.md }}>
+          <SecondaryButton
+            title={t("onboarding.openSettingsCta", { defaultValue: "Open Settings to enable location" })}
+            onPress={openSystemSettings}
+          />
+        </View>
       ) : null}
 
       <ScrollView

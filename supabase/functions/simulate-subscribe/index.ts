@@ -16,9 +16,32 @@ serve(async (req) => {
     });
   }
 
-  // Dev-only gate (must be explicitly enabled).
+  // Dev-only gate. Multiple defenses so a single misconfigured env var can't open this in prod:
+  //   1. Production env flag must NOT be set.
+  //   2. BILLING_SIMULATE_SUBSCRIBE must be true.
+  //   3. The caller must supply a shared secret header that matches BILLING_SIMULATE_SUBSCRIBE_SECRET.
+  if (Deno.env.get("ENVIRONMENT") === "production") {
+    return new Response(JSON.stringify({ error: "Not available in production." }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
   if (Deno.env.get("BILLING_SIMULATE_SUBSCRIBE") !== "true") {
     return new Response(JSON.stringify({ error: "Not enabled." }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const expectedSecret = Deno.env.get("BILLING_SIMULATE_SUBSCRIBE_SECRET");
+  if (!expectedSecret || expectedSecret.length < 16) {
+    // Refuse to run if the shared secret isn't set to something non-trivial.
+    return new Response(JSON.stringify({ error: "Server misconfigured." }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (req.headers.get("x-simulate-subscribe-secret") !== expectedSecret) {
+    return new Response(JSON.stringify({ error: "Forbidden." }), {
       status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

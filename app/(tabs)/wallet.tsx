@@ -128,7 +128,10 @@ export default function WalletScreen() {
       return;
     }
     setBanner(null);
-    await finalizeStaleRedeems();
+    // Fire-and-forget the cleanup so the wallet load isn't blocked behind a network round-trip.
+    // Stale-redeem finalization is a janitor task — it doesn't need to complete before the
+    // user sees their claims.
+    void finalizeStaleRedeems().catch(() => { /* non-fatal */ });
     const { data, error } = await supabase
       .from("deal_claims")
       .select(

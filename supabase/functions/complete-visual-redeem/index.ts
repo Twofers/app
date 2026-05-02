@@ -3,10 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   finalizeStaleVisualRedeemForClaim,
   isPastRedeemDeadline,
+  VISUAL_REDEEM_MIN_HOLD_MS,
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-const MIN_MS = 14_000;
+const MIN_MS = VISUAL_REDEEM_MIN_HOLD_MS;
 const MAX_MS = 120_000;
 
 serve(async (req) => {

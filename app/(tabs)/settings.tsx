@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
+import { supabase } from "@/lib/supabase";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerLocationMode,
@@ -90,6 +92,12 @@ export default function SettingsScreen() {
         Alert.alert(t("settingsScreen.alertsPermissionTitle"), t("settingsScreen.alertsPermissionBody"));
         return;
       }
+      // Permission just granted — register the Expo push token now. Otherwise users who
+      // declined at onboarding and enable here would never receive remote pushes.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) await registerPushTokenIfNeeded(user.id);
+      } catch { /* non-fatal */ }
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);

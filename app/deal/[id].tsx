@@ -107,11 +107,14 @@ export default function DealDetail() {
   useEffect(() => {
     if (authLoading) return;
     if (!isLoggedIn) {
-      router.replace("/auth-landing");
+      // Preserve the deal destination so the user lands here after sign-in instead of
+      // being silently dropped on the home feed (broke the share-link growth loop).
+      const dealHref = id ? `/deal/${id}` : "/(tabs)";
+      router.replace({ pathname: "/auth-landing", params: { next: dealHref } });
       return;
     }
     void loadDeal();
-  }, [loadDeal, authLoading, isLoggedIn, router]);
+  }, [loadDeal, authLoading, isLoggedIn, router, id]);
 
   useEffect(() => {
     if (!userId || !deal?.business_id) return;

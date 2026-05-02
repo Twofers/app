@@ -36,15 +36,12 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
     setError(null);
     try {
       // Billing v4: locations are keyed off `business_profiles(id)` (not `businesses(id)`),
-      // so we first resolve the corresponding business_profiles row id.
-      const { data: bizOwner, error: bizOwnerErr } = await supabase
-        .from("businesses")
-        .select("owner_id")
-        .eq("id", businessId)
-        .maybeSingle();
-      if (bizOwnerErr || !bizOwner?.owner_id) throw new Error(bizOwnerErr?.message ?? "Missing business owner");
-
-      const ownerUid = String(bizOwner.owner_id);
+      // so we first resolve the corresponding business_profiles row id. The caller of
+      // this hook is always the merchant viewing their own locations, so auth.uid() is
+      // the owner — no need to read businesses.owner_id (which is now PII-restricted).
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const ownerUid = authUser?.id ? String(authUser.id) : "";
+      if (!ownerUid) throw new Error("Not authenticated");
 
       let businessProfileId: string | null = null;
       const { data: bpUserRow, error: bpUserErr } = await supabase

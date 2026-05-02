@@ -145,6 +145,29 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+      // SSRF guard: only accept Supabase storage URLs from this project. An arbitrary URL
+      // would let an attacker have OpenAI fetch internal endpoints, leak our egress IP, or
+      // amplify cost via huge responses.
+      try {
+        const parsed = new URL(imageUrlRaw);
+        const supabaseHost = new URL(supabaseUrl).host;
+        const isSupabaseStorage =
+          parsed.host === supabaseHost && parsed.pathname.startsWith("/storage/v1/");
+        if (!isSupabaseStorage) {
+          return new Response(
+            JSON.stringify({
+              error: "image_url must point to a file in this project's storage.",
+              error_code: "INVALID_URL_HOST",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "image_url is not a valid URL.", error_code: "INVALID_INPUT" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       imageUrlForModel = imageUrlRaw;
     } else if (imageBase64) {
       if (imageBase64.length > MAX_B64_CHARS) {

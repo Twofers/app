@@ -39,6 +39,15 @@ serve(async (req) => {
         },
       }
     );
+    /** Service-role client used for cross-tenant queries (rate limit, failed-attempt logging)
+     * that must NOT be filtered by RLS. The user-JWT-scoped `supabase` client above is RLS-enforced. */
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Caller IP — used for per-IP brute-force throttle.
+    const callerIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("cf-connecting-ip") ||
+      null;
 
     // 🔐 Get authenticated business user
     const {
@@ -75,16 +84,20 @@ serve(async (req) => {
     }
 
     const businessIds = (businesses ?? []).map((b) => b.id);
+    const primaryBusinessId = businessIds[0];
 
-    // 🚦 Rate limit: max 10 redeem attempts per minute per business owner
-    const { data: dealIdsData } = await supabase
+    // 🚦 Rate limit: max 10 successful redeems per minute per business owner.
+    // Uses admin client because the user-JWT client only sees claims for deals in the owner's
+    // RLS-allowed scope; a recent RLS migration (20260330120000) tightened that further so
+    // counts can return 0 even when the throttle should fire.
+    const { data: dealIdsData } = await admin
       .from("deals")
       .select("id")
       .in("business_id", businessIds);
     const dealIds = (dealIdsData ?? []).map((d) => d.id);
     if (dealIds.length > 0) {
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
-      const { count: recentRedeems } = await supabase
+      const { count: recentRedeems } = await admin
         .from("deal_claims")
         .select("*", { count: "exact", head: true })
         .in("deal_id", dealIds)
@@ -97,6 +110,43 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
+      }
+    }
+
+    // 🛡️ Brute-force protection: block this business+IP if it has 10+ failed attempts in the last 5 min.
+    if (primaryBusinessId) {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const failQuery = admin
+        .from("failed_redeem_attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", primaryBusinessId)
+        .gte("attempted_at", fiveMinAgo);
+      const { count: recentFailures } = callerIp
+        ? await failQuery.eq("ip_address", callerIp)
+        : await failQuery;
+      if (recentFailures !== null && recentFailures >= 10) {
+        return new Response(
+          JSON.stringify({
+            error: "Too many failed attempts. Try again in a few minutes.",
+            error_code: "FAILED_ATTEMPTS_LOCKOUT",
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    /** Helper to log a failed redemption attempt for brute-force tracking. */
+    async function logFailedAttempt(reason: string) {
+      if (!primaryBusinessId) return;
+      try {
+        await admin.from("failed_redeem_attempts").insert({
+          business_id: primaryBusinessId,
+          ip_address: callerIp,
+          user_id: user.id,
+          reason,
+        });
+      } catch (e) {
+        console.log(`[redeem-token] failed to log attempt: ${String(e).slice(0, 200)}`);
       }
     }
 
@@ -162,6 +212,7 @@ serve(async (req) => {
     }
 
     if (claimError || !claim) {
+      await logFailedAttempt("unknown_code");
       return new Response(
         JSON.stringify({ error: "Invalid token or claim code" }),
         {
@@ -178,6 +229,7 @@ serve(async (req) => {
     // 🔒 Verify token belongs to a deal owned by this business
     const deal = claim.deal as any;
     if (!deal || deal.business?.owner_id !== user.id) {
+      await logFailedAttempt("wrong_business");
       return new Response(
         JSON.stringify({ error: "This token does not belong to your business" }),
         {
@@ -278,7 +330,7 @@ serve(async (req) => {
         business_id: deal.business_id ?? null,
         deal_id: deal.id ?? null,
         claim_id: claimId,
-        context: { method: "qr" },
+        context: { method: redeemMethod },
       });
     } catch (err) {
       console.error("[redeem-token] analytics insert failed", err);

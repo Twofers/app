@@ -137,6 +137,49 @@ serve(async (req) => {
       );
     }
 
+    // Cost control: cap translations per business per month and enforce a per-deal cooldown.
+    const monthlyLimit = Number(Deno.env.get("AI_TRANSLATE_MONTHLY_LIMIT") ?? "100");
+    const monthStartIso = (() => {
+      const d = new Date();
+      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+    })();
+    const { count: monthlyCount } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", deal.business_id)
+      .eq("request_type", "deal_translate")
+      .eq("openai_called", true)
+      .eq("success", true)
+      .gte("created_at", monthStartIso);
+    if ((monthlyCount ?? 0) >= monthlyLimit) {
+      return new Response(
+        JSON.stringify({
+          error: `Monthly translation limit reached (${monthlyLimit}). Resets on the 1st.`,
+          error_code: "MONTHLY_LIMIT",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+    const { data: recentForDeal } = await admin
+      .from("ai_generation_logs")
+      .select("id")
+      .eq("business_id", deal.business_id)
+      .eq("request_type", "deal_translate")
+      .eq("request_hash", `translate:${deal_id}`)
+      .gte("created_at", oneMinAgo)
+      .limit(1)
+      .maybeSingle();
+    if (recentForDeal) {
+      return new Response(
+        JSON.stringify({
+          error: "This deal was just translated. Please wait a moment.",
+          error_code: "COOLDOWN_ACTIVE",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const title = deal.title ?? "";
     const description = deal.description ?? "";
 

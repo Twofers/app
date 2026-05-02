@@ -7,6 +7,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
+import { registerPushTokenIfNeeded } from "../../lib/push-token";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
@@ -185,6 +186,12 @@ export default function AccountScreen() {
         setBanner({ message: t("account.alertsEnableHint"), tone: "info" });
         return;
       }
+      // Permission just granted — register the Expo push token so this user can actually
+      // receive remote pushes. Without this they'd silently never get notifications.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) await registerPushTokenIfNeeded(user.id);
+      } catch { /* non-fatal */ }
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);

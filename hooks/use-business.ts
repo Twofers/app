@@ -115,13 +115,11 @@ export function useBusiness() {
     setUserId(uid);
     setSessionEmail(session?.user?.email ?? null);
 
-    const { data, error: bizError } = await supabase
-      .from("businesses")
-      .select(
-        "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
-      )
-      .eq("owner_id", uid)
-      .maybeSingle();
+    // Owner read uses the SECURITY DEFINER RPC so PII columns (business_email,
+    // contact_name, tone, owner_id) are returned even though anon/authenticated grants
+    // exclude them at the column level.
+    const { data: rpcRows, error: bizError } = await supabase.rpc("get_my_business");
+    const data = Array.isArray(rpcRows) && rpcRows.length > 0 ? rpcRows[0] : null;
 
     if (bizError) {
       setBusiness(null);

@@ -676,7 +676,17 @@ export default function AiDealScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
     if (result.canceled || !result.assets?.[0]?.uri) return;
-    setPhotoUri(result.assets[0].uri);
+    const asset = result.assets[0];
+    // Size guard: a 12 MP phone photo is 6+ MB raw; uploads can stall for 30+ seconds
+    // on cellular. Reject anything over 5 MB up front so we don't lose the user mid-upload.
+    if (typeof asset.fileSize === "number" && asset.fileSize > 5 * 1024 * 1024) {
+      setBanner({
+        message: t("createAi.errPhotoTooLarge", { defaultValue: "Photo is too large (max 5 MB). Try a smaller one." }),
+        tone: "error",
+      });
+      return;
+    }
+    setPhotoUri(asset.uri);
     setPosterUrl(null);
     setPhotoPath(null);
     resetGenerationState();
@@ -693,12 +703,23 @@ export default function AiDealScreen() {
 
   async function capturePhoto() {
     if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-    if (photo?.uri) {
-      setPhotoUri(photo.uri);
-      setPosterUrl(null);
-      setPhotoPath(null);
-      resetGenerationState();
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (photo?.uri) {
+        setPhotoUri(photo.uri);
+        setPosterUrl(null);
+        setPhotoPath(null);
+        resetGenerationState();
+      }
+    } catch (e) {
+      // Camera failures on lower-end Android: surface a banner so the user isn't stuck on
+      // the camera modal with no feedback.
+      setBanner({
+        message: t("createAi.errCameraCapture", { defaultValue: "Could not take photo. Try again." }),
+        tone: "error",
+      });
+    } finally {
+      // Always close the camera modal so the user can recover via library upload.
       setShowCamera(false);
     }
   }
@@ -771,8 +792,16 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return false;
       }
-      const now = new Date();
-      const durationMinutes = Math.floor((endTime.getTime() - now.getTime()) / 60000);
+      // Reject scheduling deals that already started in the past (60s grace for clock skew).
+      // This only applies to NEW deals — existing deals being edited are allowed to keep
+      // their original startTime even if it's now in the past.
+      if (!editingDealId && startTime.getTime() < Date.now() - 60_000) {
+        setBanner({ message: t("createAi.errStartInPast", { defaultValue: "Start time can't be in the past." }), tone: "error" });
+        return false;
+      }
+      // Cutoff is a buffer subtracted from end_time within the deal's own duration —
+      // it must be smaller than the deal's total length, not just smaller than (endTime - now).
+      const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
       if (cutoffNum >= durationMinutes) {
         setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
         return false;
@@ -1041,8 +1070,20 @@ export default function AiDealScreen() {
       const userPhotoStoragePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
-      const start = isRecurring ? new Date() : startTime;
-      const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
+      // Recurring deals don't have a meaningful end_time on the deal row itself — the
+      // recurrence pattern (days_of_week + window) drives availability. Use a far-future
+      // sentinel (5 years) so the deal doesn't silently expire from the merchant's view.
+      // Previously this was 30 days, which surprised owners who expected "recurring" to
+      // mean "always on".
+      const RECURRING_FAR_FUTURE_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+      const recurringStart = (() => {
+        // Normalize recurring start to start-of-today so editing later doesn't shift it.
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+      })();
+      const start = isRecurring ? recurringStart : startTime;
+      const end = isRecurring ? new Date(Date.now() + RECURRING_FAR_FUTURE_MS) : endTime;
 
       const aiPosterPath = generatedAd?.poster_storage_path ?? null;
       const finalStoragePath = aiPosterPath ?? userPhotoStoragePath;
@@ -1818,10 +1859,21 @@ export default function AiDealScreen() {
 
                 <Text style={{ marginTop: 16 }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
-                <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
-                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
-                <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
-                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                {/*
+                  When editing an existing deal, the saved description already contains
+                  promo + CTA + details combined (composeListingDescription). Showing the
+                  promo/CTA fields would cause whatever the user types there to be DUPLICATED
+                  on top of the inlined original. So we hide them on edit and let the user
+                  edit the full description in one box.
+                */}
+                {!editingDealId ? (
+                  <>
+                    <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
+                    <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                    <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
+                    <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                  </>
+                ) : null}
                 <Text style={{ marginTop: 12 }}>{t("createAi.editDetails")}</Text>
                 <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} multiline style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90 }} />
 

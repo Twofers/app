@@ -17,6 +17,14 @@ export function isPastRedeemDeadline(
 /** After Use Deal starts, auto-complete to redeemed this many ms after `redeem_started_at`. */
 export const VISUAL_REDEEM_AUTO_FINALIZE_MS = 30_000;
 
+/**
+ * Minimum hold time before a visual redemption can be completed by the merchant. Both the
+ * begin handler (which computes `min_complete_at` for the client) and the complete handler
+ * (which gates server-side) MUST use this constant — a mismatch creates a race window where
+ * a concurrent finalizer can complete a still-running pass.
+ */
+export const VISUAL_REDEEM_MIN_HOLD_MS = 15_000;
+
 /** Idempotent: redeeming + started ≥ TTL → redeemed (visual). Returns true if this claim was finalized. */
 export async function finalizeStaleVisualRedeemForClaim(
   supabase: SupabaseClient,

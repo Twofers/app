@@ -78,6 +78,53 @@ serve(async (req) => {
       ? body.context
       : {};
 
+    // Cap context size — protects DB from analytics-pipe abuse via giant payloads.
+    const ctxSize = JSON.stringify(ctx).length;
+    if (ctxSize > 4096) {
+      return new Response(JSON.stringify({ error: "context too large (max 4 KB)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Per-user rate limit: 60 events/minute via the admin client (RLS-bypass for the count).
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+    const { count: recent } = await admin
+      .from("app_analytics_events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", oneMinAgo);
+    if ((recent ?? 0) >= 60) {
+      return new Response(JSON.stringify({ error: "Too many events. Try again shortly." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // If business_id or deal_id is provided, verify they exist before inserting (prevents
+    // attacker writing rows tagged with arbitrary merchant ids that pollute their dashboards).
+    if (body.business_id) {
+      const { data: bizCheck } = await admin
+        .from("businesses").select("id").eq("id", body.business_id).maybeSingle();
+      if (!bizCheck) {
+        return new Response(JSON.stringify({ error: "Unknown business_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    if (body.deal_id) {
+      const { data: dealCheck } = await admin
+        .from("deals").select("id").eq("id", body.deal_id).maybeSingle();
+      if (!dealCheck) {
+        return new Response(JSON.stringify({ error: "Unknown deal_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const { error: insErr } = await supabase.from("app_analytics_events").insert({
       event_name: eventName,
       user_id: user.id,

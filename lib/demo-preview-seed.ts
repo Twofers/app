@@ -164,11 +164,12 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
   const uid = session.user.id;
   const trialEndsAtIso = new Date(Date.now() + 30 * 86400000).toISOString();
 
-  const { data: biz, error: bizReadErr } = await client
-    .from("businesses")
-    .select("id,category,business_email,location")
-    .eq("owner_id", uid)
-    .maybeSingle();
+  // Owner reads use the SECURITY DEFINER RPC to access PII columns
+  // (business_email is restricted from anon/authenticated grants).
+  const { data: rpcRows, error: bizReadErr } = await client.rpc("get_my_business");
+  const biz = Array.isArray(rpcRows) && rpcRows.length > 0
+    ? (rpcRows[0] as { id: string; category: string | null; business_email: string | null; location: string | null })
+    : null;
 
   if (bizReadErr) return;
 

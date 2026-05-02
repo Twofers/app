@@ -3,15 +3,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+/** Cooldown between pushes for the same deal (avoids merchant spamming favoriters). */
+const PER_DEAL_PUSH_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+/** Max pushes per business per UTC day. */
+const PER_BUSINESS_DAILY_PUSH_CAP = 5;
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
+
+  function jsonResponse(body: Record<string, unknown>, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -71,6 +76,45 @@ serve(async (req) => {
       return jsonResponse({ error: "Not your deal" }, 403);
     }
 
+    // --- Throttle: per-deal cooldown ---
+    const cooldownSinceIso = new Date(Date.now() - PER_DEAL_PUSH_COOLDOWN_MS).toISOString();
+    const { count: recentForDeal } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", deal.business_id)
+      .eq("request_type", "deal_push")
+      .eq("request_hash", `deal:${deal.id}`)
+      .gte("created_at", cooldownSinceIso);
+
+    if ((recentForDeal ?? 0) > 0) {
+      return jsonResponse({
+        sent: 0,
+        errors: 0,
+        audience: 0,
+        skipped: "cooldown_active",
+        message: "This deal was already pushed within the last 6 hours.",
+      });
+    }
+
+    // --- Throttle: per-business daily cap ---
+    const dailySinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: dailyCount } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", deal.business_id)
+      .eq("request_type", "deal_push")
+      .gte("created_at", dailySinceIso);
+
+    if ((dailyCount ?? 0) >= PER_BUSINESS_DAILY_PUSH_CAP) {
+      return jsonResponse({
+        sent: 0,
+        errors: 0,
+        audience: 0,
+        skipped: "daily_cap_reached",
+        message: `Daily push cap (${PER_BUSINESS_DAILY_PUSH_CAP}) reached for this business.`,
+      });
+    }
+
     const bizLat =
       typeof biz.latitude === "number" ? biz.latitude : null;
     const bizLng =
@@ -113,7 +157,6 @@ serve(async (req) => {
     const allUserIds = new Set([...favUserIds, ...radiusUserIds]);
     allUserIds.delete(user.id);
 
-    // Also exclude users with notification_mode = 'none'
     if (allUserIds.size > 0) {
       const { data: optedOut } = await admin
         .from("consumer_profiles")
@@ -127,6 +170,17 @@ serve(async (req) => {
     }
 
     if (allUserIds.size === 0) {
+      // Still log so the throttle counter advances even on zero-audience attempts.
+      await admin.from("ai_generation_logs").insert({
+        business_id: deal.business_id,
+        user_id: user.id,
+        request_type: "deal_push",
+        input_mode: "audience",
+        request_hash: `deal:${deal.id}`,
+        prompt_version: "v1",
+        success: true,
+        openai_called: false,
+      });
       return jsonResponse({ sent: 0, errors: 0, audience: 0 });
     }
 
@@ -141,6 +195,16 @@ serve(async (req) => {
     );
 
     if (tokens.length === 0) {
+      await admin.from("ai_generation_logs").insert({
+        business_id: deal.business_id,
+        user_id: user.id,
+        request_type: "deal_push",
+        input_mode: "no_tokens",
+        request_hash: `deal:${deal.id}`,
+        prompt_version: "v1",
+        success: true,
+        openai_called: false,
+      });
       return jsonResponse({ sent: 0, errors: 0, audience: allUserIds.size });
     }
 
@@ -148,6 +212,18 @@ serve(async (req) => {
     const result = await sendExpoPushBatch(tokens, businessName, dealTitle, {
       dealId: deal.id,
       path: `/deal/${deal.id}`,
+    });
+
+    // --- 6. Log for throttle tracking ---
+    await admin.from("ai_generation_logs").insert({
+      business_id: deal.business_id,
+      user_id: user.id,
+      request_type: "deal_push",
+      input_mode: "send",
+      request_hash: `deal:${deal.id}`,
+      prompt_version: "v1",
+      success: true,
+      openai_called: false,
     });
 
     return jsonResponse({

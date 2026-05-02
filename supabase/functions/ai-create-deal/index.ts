@@ -97,6 +97,53 @@ serve(async (req) => {
       );
     }
 
+    // Defensive validation: client-supplied values must be sane before they hit the deal insert.
+    const endTimeDate = new Date(String(end_time));
+    if (Number.isNaN(endTimeDate.getTime())) {
+      return new Response(
+        JSON.stringify({ error: "Invalid end_time." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (endTimeDate.getTime() < Date.now() + 30 * 60 * 1000) {
+      return new Response(
+        JSON.stringify({ error: "end_time must be at least 30 minutes from now." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const maxClaimsNum = Number(max_claims);
+    if (!Number.isFinite(maxClaimsNum) || !Number.isInteger(maxClaimsNum) || maxClaimsNum < 1 || maxClaimsNum > 10000) {
+      return new Response(
+        JSON.stringify({ error: "max_claims must be an integer between 1 and 10000." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (price != null && price !== "") {
+      const priceNum = Number(price);
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        return new Response(
+          JSON.stringify({ error: "price must be a non-negative number." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (claim_cutoff_buffer_minutes != null) {
+      const cutNum = Number(claim_cutoff_buffer_minutes);
+      if (!Number.isFinite(cutNum) || cutNum < 0 || cutNum > 240) {
+        return new Response(
+          JSON.stringify({ error: "claim_cutoff_buffer_minutes must be between 0 and 240." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+    // Path-traversal guard: photo_path must live under the business's own folder.
+    if (typeof photo_path === "string" && !photo_path.startsWith(`${business_id}/`)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid photo_path." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: business, error: businessError } = await supabase
       .from("businesses")
       .select("id, owner_id")

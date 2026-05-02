@@ -377,11 +377,22 @@ serve(async (req) => {
       .select("id")
       .eq("business_id", businessId);
     if (bizDealsError) {
+      // Fail closed — without the full deal list we cannot enforce the per-business per-day cap.
       console.error("biz deals lookup:", bizDealsError);
+      return new Response(
+        JSON.stringify({ error: "Service temporarily unavailable. Please try again." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
-    let businessDealIds = (bizDealRows ?? []).map((r: { id: string }) => r.id);
+    const businessDealIds = (bizDealRows ?? []).map((r: { id: string }) => r.id);
     if (businessDealIds.length === 0) {
-      businessDealIds = [dealId];
+      // Defensive: every deal we resolve here should have at least itself in the business's deal list.
+      // If it doesn't, the deal lookup above is in an inconsistent state.
+      console.error("biz deals lookup returned empty for businessId", businessId);
+      return new Response(
+        JSON.stringify({ error: "Service temporarily unavailable. Please try again." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const nowMs = now.getTime();
@@ -577,23 +588,33 @@ serve(async (req) => {
 
     if (insertError || !short_code || !newClaimId) {
       console.error("Insert error:", insertError);
+      // SQLSTATE P0001 with message MAX_CLAIMS_REACHED is raised by enforce_deal_max_claims trigger
+      // (migration 20260704130000). The trigger is the authoritative cap — when the pre-check above
+      // missed a concurrent claim, this catches it.
+      const msg = String(insertError?.message ?? "");
+      if (insertError?.code === "P0001" && msg.includes("MAX_CLAIMS_REACHED")) {
+        return new Response(
+          JSON.stringify({
+            error: "This deal just sold out — try a different one.",
+            error_code: "MAX_CLAIMS_REACHED",
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // Unique-violation on (user_id, deal_id) partial index from migration 20260705120002 means
+      // a concurrent double-tap from the same user. Treat as the same idempotent path the
+      // pre-check handles.
       if (insertError?.code === "23505") {
         return new Response(
           JSON.stringify({ error: "You already have an active claim for this deal" }),
-          {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       return new Response(
         JSON.stringify({
           error: `Failed to create claim: ${insertError?.message ?? "unknown"}`,
         }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

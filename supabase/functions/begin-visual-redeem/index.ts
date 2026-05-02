@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   finalizeStaleVisualRedeemForClaim,
   isPastRedeemDeadline,
+  VISUAL_REDEEM_MIN_HOLD_MS,
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -106,7 +107,7 @@ serve(async (req) => {
     const started = claim.redeem_started_at ? new Date(claim.redeem_started_at as string) : null;
 
     if (status === "redeeming" && started) {
-      const minComplete = new Date(started.getTime() + 15 * 1000);
+      const minComplete = new Date(started.getTime() + VISUAL_REDEEM_MIN_HOLD_MS);
       return new Response(
         JSON.stringify({
           ok: true,
@@ -143,7 +144,7 @@ serve(async (req) => {
       });
     }
 
-    const minComplete = new Date(now.getTime() + 15 * 1000);
+    const minComplete = new Date(now.getTime() + VISUAL_REDEEM_MIN_HOLD_MS);
     return new Response(
       JSON.stringify({
         ok: true,

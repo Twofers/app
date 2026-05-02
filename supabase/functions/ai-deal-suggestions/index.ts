@@ -181,7 +181,10 @@ serve(async (req) => {
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
 
-    const { count: usedThisMonth } = await supabase
+    // Quota count must use the admin (service-role) client so co-owners and shared-business
+    // sessions cannot bypass the cap by exploiting RLS row visibility.
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const { count: usedThisMonth } = await admin
       .from("ai_generation_logs")
       .select("id", { count: "exact", head: true })
       .eq("business_id", business_id)
