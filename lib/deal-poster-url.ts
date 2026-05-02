@@ -36,7 +36,7 @@ export function extractDealPhotoStoragePath(raw: string | null | undefined): str
   return null;
 }
 
-export function buildPublicDealPhotoUrl(storagePath: string): string | null {
+export function buildPublicDealPhotoUrl(storagePath: string, opts?: { width?: number; quality?: number }): string | null {
   const base = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   if (!base || !storagePath.trim()) return null;
   const cleanBase = base.replace(/\/$/, "");
@@ -45,21 +45,40 @@ export function buildPublicDealPhotoUrl(storagePath: string): string | null {
     .filter(Boolean)
     .map((seg) => encodeURIComponent(seg))
     .join("/");
-  return `${cleanBase}/storage/v1/object/public/${BUCKET}/${encodedPath}`;
+  const url = `${cleanBase}/storage/v1/object/public/${BUCKET}/${encodedPath}`;
+  if (opts && (opts.width || opts.quality)) {
+    const params = new URLSearchParams();
+    if (opts.width) params.set("width", String(opts.width));
+    if (opts.quality) params.set("quality", String(opts.quality));
+    return `${url}?${params.toString()}`;
+  }
+  return url;
 }
+
+/** Recommended sizes for the consumer feed and detail screens. */
+export const DEAL_POSTER_FEED_WIDTH = 720;
+export const DEAL_POSTER_DETAIL_WIDTH = 1080;
+export const DEAL_POSTER_QUALITY = 75;
 
 /**
  * URI for <Image source={{ uri }} />: stable public URL from `poster_storage_path` or parsed legacy
  * `poster_url`; otherwise any remaining absolute URL (e.g. external demo image).
+ *
+ * `displayWidth` is forwarded to Supabase Storage's image transform so we don't ship a 4 MB
+ * original to a 720px-wide card on cellular. Pass undefined to skip the transform.
  */
 export function resolveDealPosterDisplayUri(
   posterUrl: string | null | undefined,
   posterStoragePath?: string | null,
+  displayWidth?: number,
 ): string | null {
   const explicit = posterStoragePath?.trim();
   const path = explicit || extractDealPhotoStoragePath(posterUrl ?? null);
   if (path) {
-    const pub = buildPublicDealPhotoUrl(path);
+    const pub = buildPublicDealPhotoUrl(
+      path,
+      displayWidth ? { width: displayWidth, quality: DEAL_POSTER_QUALITY } : undefined,
+    );
     if (pub) return pub;
   }
   const raw = posterUrl?.trim();

@@ -115,11 +115,14 @@ export function WalletVisualPassModal({
     completingRef.current = true;
     setCompleting(true);
     try {
-      // Calculate how long to wait based on actual minCompleteMs rather than
-      // using fixed 600ms intervals that may exhaust before the window opens.
+      // Wait until the server-defined minCompleteAt window opens. Use a 1.5s buffer (was
+      // 500ms) to absorb realistic device-clock skew without burning a retry attempt.
       const waitMs = Math.max(0, minCompleteMs - Date.now());
-      if (waitMs > 0) await sleep(waitMs + 500); // +500ms buffer for clock skew
-      for (let i = 0; i < 10; i++) {
+      if (waitMs > 0) await sleep(waitMs + 1500);
+      // Retry budget: 20 attempts at 1s spacing = 20 seconds of "not finished yet" tolerance.
+      // Was 10 attempts which could exhaust on a slow network or moderate clock skew, leaving
+      // the user with a confusing error after they were told "20 seconds left".
+      for (let i = 0; i < 20; i++) {
         try {
           await completeVisualRedeem(claimId);
           completingRef.current = false;

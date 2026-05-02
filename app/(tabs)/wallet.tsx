@@ -31,7 +31,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
-import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { DEAL_POSTER_FEED_WIDTH, resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type ClaimRow = {
@@ -478,7 +478,7 @@ export default function WalletScreen() {
         >
           <View style={{ flexDirection: "row", gap: Spacing.md }}>
             {(() => {
-              const posterUri = resolveDealPosterDisplayUri(row.deals?.poster_url, row.deals?.poster_storage_path);
+              const posterUri = resolveDealPosterDisplayUri(row.deals?.poster_url, row.deals?.poster_storage_path, DEAL_POSTER_FEED_WIDTH);
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}

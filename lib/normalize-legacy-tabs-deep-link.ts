@@ -38,8 +38,19 @@ export function normalizeLegacyTabsDeepLink(url: string | null): Href | null {
   }
 
   if (!remainder) return null;
-  const segment = remainder.split("/")[0] ?? "";
-  if (!KNOWN_TAB_SEGMENTS.has(segment)) return null;
+  // Validate every segment, not just the first. Without this, `tabs/redeem/extra/junk`
+  // passes the segment check (segment[0]="redeem") and the entire `redeem/extra/junk` is
+  // concatenated into the href — Expo Router probably rejects, but it's defensive to
+  // refuse anything we don't recognize as a clean tab href.
+  const segments = remainder.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  const head = segments[0] ?? "";
+  if (!KNOWN_TAB_SEGMENTS.has(head)) return null;
+  // Allow at most one extra segment after the tab (e.g. /(tabs)/billing/manage). Anything
+  // deeper is rejected so we don't synthesize unexpected nested routes.
+  if (segments.length > 2) return null;
+  // Whatever lives in segment[1+] must be safe-looking (no path traversal, no query bleed).
+  if (segments.slice(1).some((s) => !/^[A-Za-z0-9_-]+$/.test(s))) return null;
 
-  return `/(tabs)/${remainder}` as Href;
+  return `/(tabs)/${segments.join("/")}` as Href;
 }

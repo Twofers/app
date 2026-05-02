@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
@@ -81,21 +81,17 @@ serve(async (req) => {
     });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
 
-  const userClient = createClient(supabaseUrl, supabaseServiceKey, {
-    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-  });
+  const userSupabase = userClient(req);
 
-  const admin = createClient(supabaseUrl, supabaseServiceKey);
+  const admin = adminClient();
 
   try {
     const {
       data: { user },
       error: userError,
-    } = await userClient.auth.getUser();
+    } = await userSupabase.auth.getUser();
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: "Unauthorized. Please log in.", error_code: "UNAUTHORIZED" }),

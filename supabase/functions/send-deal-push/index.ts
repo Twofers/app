@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 
 /** Cooldown between pushes for the same deal (avoids merchant spamming favoriters). */
 const PER_DEAL_PUSH_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -26,12 +26,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const authClient = createClient(supabaseUrl, serviceKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization")! } },
-    });
+    const authClient = userClient(req);
 
     const {
       data: { user },
@@ -53,7 +48,7 @@ serve(async (req) => {
       return jsonResponse({ error: "deal_id is required" }, 400);
     }
 
-    const admin = createClient(supabaseUrl, serviceKey);
+    const admin = adminClient();
 
     const { data: deal, error: dealErr } = await admin
       .from("deals")

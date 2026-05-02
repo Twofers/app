@@ -38,7 +38,7 @@ import {
   getMerchantDealScheduleStatus,
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
-import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { DEAL_POSTER_FEED_WIDTH, resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
 import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
@@ -47,6 +47,7 @@ import { printDealFlyer } from "@/lib/deal-flyer";
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { useWalkthroughGate } from "@/lib/walkthrough-gate";
 import { AiInsightsCard } from "@/components/ai-insights-card";
+import { LegalExternalLinks } from "@/components/legal-external-links";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -527,7 +528,10 @@ export default function BusinessDashboard() {
     if (!businessId || endingDealId) return;
     Alert.alert(
       t("offersDashboard.endDealConfirmTitle"),
-      t("offersDashboard.endDealConfirmBody"),
+      // Explicit "cannot be undone" — the action is destructive and there is no Restart.
+      t("offersDashboard.endDealConfirmBodyIrreversible", {
+        defaultValue: "This stops the deal now and cannot be undone. To pause and resume later, edit the deal instead.",
+      }),
       [
         { text: t("commonUi.cancel"), style: "cancel" },
         {
@@ -537,6 +541,45 @@ export default function BusinessDashboard() {
         },
       ],
     );
+  }
+
+  function deleteDeal(dealId: string) {
+    if (!businessId || endingDealId) return;
+    Alert.alert(
+      t("offersDashboard.deleteDealConfirmTitle", { defaultValue: "Delete this deal?" }),
+      t("offersDashboard.deleteDealConfirmBody", {
+        defaultValue: "Permanently removes the deal and its analytics from your dashboard. Past claims and redemptions stay on record. Cannot be undone.",
+      }),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("offersDashboard.deleteDeal", { defaultValue: "Delete" }),
+          style: "destructive",
+          onPress: () => void doDeleteDeal(dealId),
+        },
+      ],
+    );
+  }
+
+  async function doDeleteDeal(dealId: string) {
+    setEndingDealId(dealId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .delete()
+        .eq("id", dealId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+    } catch (err: unknown) {
+      const msg = err instanceof Error
+        ? err.message
+        : t("offersDashboard.errDeleteDeal", { defaultValue: "Failed to delete deal." });
+      setBanner(msg);
+    } finally {
+      setEndingDealId(null);
+    }
   }
 
   async function doEndDealEarly(dealId: string) {
@@ -566,7 +609,7 @@ export default function BusinessDashboard() {
     setGeneratingFlyerId(deal.id);
     setBanner(null);
     try {
-      const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+      const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path, DEAL_POSTER_FEED_WIDTH);
       await printDealFlyer({
         dealId: deal.id,
         title: deal.title ?? t("offersDashboard.dealFallback"),
@@ -925,13 +968,18 @@ export default function BusinessDashboard() {
                     </Text>
                   ) : null}
                   {listFooter}
+                  {/* Legal + Support entry point so merchants stuck on a flow can reach
+                      the support URL without hunting through Account → Advanced. */}
+                  <View style={{ marginTop: Spacing.lg, alignItems: "center" }}>
+                    <LegalExternalLinks align="center" showSupport={true} />
+                  </View>
                 </View>
               }
               ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
               renderItem={({ item }) => {
                 const sched = dealScheduleStatus(item);
                 const active = sched === "live";
-                const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
+                const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path, DEAL_POSTER_FEED_WIDTH);
                 return (
                   <Animated.View entering={FadeInDown.duration(360).delay(60).springify()}>
                     <CardShell>
@@ -1122,6 +1170,18 @@ export default function BusinessDashboard() {
                     }}
                   />
                 )
+              ) : null}
+              {/* Delete is destructive and irreversible — separate from End Early. Always
+                  available (active or ended) so a typo'd test deal can be removed. */}
+              {endingDealId !== dealManageFor.id ? (
+                <EndEarlyButton
+                  title={t("offersDashboard.deleteDeal", { defaultValue: "Delete Deal" })}
+                  onPress={() => {
+                    const id = dealManageFor.id;
+                    setDealManageFor(null);
+                    deleteDeal(id);
+                  }}
+                />
               ) : null}
               <SecondaryButton title={t("commonUi.cancel")} onPress={() => setDealManageFor(null)} />
             </View>

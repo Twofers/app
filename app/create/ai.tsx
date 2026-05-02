@@ -25,6 +25,7 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
+import { useBusinessLocations } from "../../hooks/use-business-locations";
 import { Banner } from "../../components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
@@ -253,7 +254,12 @@ export default function AiDealScreen() {
     sessionEmail,
     businessName,
     businessProfile,
+    subscriptionTier,
   } = useBusiness();
+  // For owners with multiple locations: surface a picker so they can target a specific
+  // location (or multiple at once on Premium). Without this, multi-location cafes always
+  // got a deal scoped to whatever default location was active.
+  const { visibleLocations: businessLocations } = useBusinessLocations(businessId, subscriptionTier);
   const isDemoAiAccount = isDemoPreviewAccountEmail(sessionEmail);
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
@@ -1604,6 +1610,64 @@ export default function AiDealScreen() {
               placeholder={t("createAi.placeholderCutoff")}
               style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
             />
+
+            {/*
+              Multi-location picker — only renders when the merchant has more than one
+              location configured. Premium owners can target multiple locations at once
+              (creates one deal row per location at publish time); single-location cafes
+              never see this section.
+            */}
+            {businessLocations.length > 1 ? (
+              <View style={{ marginTop: 16 }}>
+                <Text style={{ fontWeight: "700" }}>
+                  {t("createAi.locationsHeader", { defaultValue: "Where does this deal run?" })}
+                </Text>
+                <Text style={{ marginTop: 4, opacity: 0.7, fontSize: 13 }}>
+                  {subscriptionTier === "premium"
+                    ? t("createAi.locationsHelpMulti", {
+                        defaultValue: "Tap to toggle. Premium plan — pick one or more locations.",
+                      })
+                    : t("createAi.locationsHelpSingle", {
+                        defaultValue: "Pick the location for this deal.",
+                      })}
+                </Text>
+                <View style={{ marginTop: 8, gap: 6 }}>
+                  {businessLocations.map((loc) => {
+                    const selected = publishLocationIds.includes(loc.id);
+                    return (
+                      <Pressable
+                        key={loc.id}
+                        onPress={() => {
+                          if (subscriptionTier === "premium") {
+                            // Toggle membership.
+                            setPublishLocationIds((prev) =>
+                              prev.includes(loc.id)
+                                ? prev.filter((id) => id !== loc.id)
+                                : [...prev, loc.id],
+                            );
+                          } else {
+                            // Pro tier: single-select.
+                            setPublishLocationIds([loc.id]);
+                          }
+                        }}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          borderWidth: selected ? 2 : 1,
+                          borderColor: selected ? "#FF9F1C" : "#cfd3de",
+                          backgroundColor: selected ? "#FFF6E6" : "#fff",
+                        }}
+                      >
+                        <Text style={{ fontWeight: "700", fontSize: 14 }}>{loc.name}</Text>
+                        {loc.address ? (
+                          <Text style={{ marginTop: 2, opacity: 0.7, fontSize: 12 }}>{loc.address}</Text>
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
 
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminClient, userClient } from "../_shared/auth-clients.ts";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -56,12 +56,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization")! } },
-    });
+    const supabase = userClient(req);
 
     const {
       data: { user },
@@ -105,7 +100,7 @@ serve(async (req) => {
     // Cost control: cap calls per user per minute and per day. Each call may hit Google
     // Places ($0.032) and OpenAI fallback. An uncapped abuser with one signup could rack up
     // thousands of dollars before a human notices.
-    const admin = createClient(supabaseUrl, supabaseServiceKey);
+    const admin = adminClient();
     const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
     const { count: recentMin } = await admin
       .from("ai_generation_logs")

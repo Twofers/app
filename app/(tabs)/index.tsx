@@ -34,11 +34,11 @@ import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
+import { CONSUMER_RADIUS_MILES_OPTIONS, getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
-import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { DEAL_POSTER_FEED_WIDTH, resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildClaimDealTelemetry } from "@/lib/claim-telemetry";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -608,7 +608,7 @@ export default function HomeScreen() {
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
             {(() => {
-              const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
+              const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path, DEAL_POSTER_FEED_WIDTH);
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
@@ -933,16 +933,29 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 13, color: theme.primaryAccent, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
                   {t("consumerHome.emptyNearbyPenguinHint")}
                 </Text>
-                <PrimaryButton
-                  title={t("consumerHome.ctaWidenRadius")}
-                  onPress={() => router.push("/(tabs)/settings")}
-                  style={{ alignSelf: "stretch" }}
-                />
-                <SecondaryButton
-                  title={t("consumerHome.ctaViewAllDeals")}
-                  onPress={() => setShowAllLiveDeals(true)}
-                  style={{ alignSelf: "stretch" }}
-                />
+                {/* When the user is already at max radius, hide the "widen radius" CTA
+                    (it would just send them to settings to do nothing) and lead with
+                    "View all" so they at least see what's out there. */}
+                {radiusMiles < CONSUMER_RADIUS_MILES_OPTIONS[CONSUMER_RADIUS_MILES_OPTIONS.length - 1] ? (
+                  <>
+                    <PrimaryButton
+                      title={t("consumerHome.ctaWidenRadius")}
+                      onPress={() => router.push("/(tabs)/settings")}
+                      style={{ alignSelf: "stretch" }}
+                    />
+                    <SecondaryButton
+                      title={t("consumerHome.ctaViewAllDeals")}
+                      onPress={() => setShowAllLiveDeals(true)}
+                      style={{ alignSelf: "stretch" }}
+                    />
+                  </>
+                ) : (
+                  <PrimaryButton
+                    title={t("consumerHome.ctaViewAllDeals")}
+                    onPress={() => setShowAllLiveDeals(true)}
+                    style={{ alignSelf: "stretch" }}
+                  />
+                )}
                 <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20, color: theme.text }}>
                   {t("consumerHome.ctaFavoriteHint")}
                 </Text>
