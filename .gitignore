@@ -50,3 +50,15 @@ app-example
 screenshots/
 *.apk
 *.aab
+
+claude-history-export/
+
+claude-history-export/
+
+project-knowledge/
+
+.codex/
+
+claude-history-secret-scan.txt
+
+convert-claude-history.ps1

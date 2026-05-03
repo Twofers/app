@@ -29,6 +29,7 @@ type EditableRow = {
   name: string;
   category: string;
   price_text: string;
+  size_options: string[];
 };
 
 function newKey() {
@@ -46,6 +47,14 @@ const MAX_MENU_SCAN_BASE64_LENGTH = 1_100_000;
 /** Normalize for dedupe against saved library lines */
 function libraryDedupeKey(name: string, priceText: string): string {
   return `${name.trim().toLowerCase()}|${priceText.trim().toLowerCase()}`;
+}
+
+function parseSizesInput(text: string): string[] {
+  return text
+    .split(/[,/\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 export default function MenuScanScreen() {
@@ -142,6 +151,7 @@ export default function MenuScanScreen() {
       try {
         const merged: EditableRow[] = [];
         let anyLow = false;
+        let anySyntheticFallback = false;
         let processed = 0;
         let oversizedCount = 0;
         for (const asset of result.assets) {
@@ -167,12 +177,14 @@ export default function MenuScanScreen() {
           });
           if (requestId !== scanRequestIdRef.current) return;
           if (out.low_legibility) anyLow = true;
+          if (out.extraction_source === "synthetic_fallback") anySyntheticFallback = true;
           for (const it of out.items) {
             merged.push({
               key: newKey(),
               name: it.name,
               category: it.category ?? "",
               price_text: it.price_text ?? "",
+              size_options: Array.isArray(it.size_options) ? it.size_options : [],
             });
           }
         }
@@ -204,6 +216,9 @@ export default function MenuScanScreen() {
         if (anyLow) {
           notes.push(t("menuScan.lowLegibility"));
         }
+        if (anySyntheticFallback) {
+          notes.push(t("menuScan.syntheticFallbackNotice"));
+        }
         if (notes.length > 0) {
           setBanner({ message: notes.join(" "), tone: "info" });
         }
@@ -227,7 +242,7 @@ export default function MenuScanScreen() {
   );
 
   const addRow = useCallback(() => {
-    setRows((r) => [...r, { key: newKey(), name: "", category: "", price_text: "" }]);
+    setRows((r) => [...r, { key: newKey(), name: "", category: "", price_text: "", size_options: [] }]);
   }, []);
 
   const removeRow = useCallback((key: string) => {
@@ -276,6 +291,7 @@ export default function MenuScanScreen() {
         name: r.name,
         category: r.category.trim() || null,
         price_text: r.price_text.trim() || null,
+        size_options: r.size_options.length > 0 ? r.size_options : null,
         sort_order: i,
         source: "scan" as const,
       }));
@@ -436,6 +452,21 @@ export default function MenuScanScreen() {
                     )
                   }
                   placeholder={t("menuScan.pricePlaceholder")}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 10,
+                    padding: 10,
+                  }}
+                />
+                <TextInput
+                  value={item.size_options.join(", ")}
+                  onChangeText={(text) =>
+                    setRows((prev) =>
+                      prev.map((x) => (x.key === item.key ? { ...x, size_options: parseSizesInput(text) } : x)),
+                    )
+                  }
+                  placeholder={t("menuScan.sizePlaceholder", { defaultValue: "Sizes as shown (optional)" })}
                   style={{
                     borderWidth: 1,
                     borderColor: "#ccc",

@@ -1,5 +1,5 @@
 /**
- * Structured offer from menu-driven wizard — canonical facts for AI ad generation and refine.
+ * Structured offer from menu-driven wizard - canonical facts for AI ad generation and refine.
  */
 
 export type MenuOfferPairingType =
@@ -12,6 +12,7 @@ export type MenuOfferPairingType =
 export type MenuItemRef = {
   id?: string;
   name: string;
+  size_label?: string | null;
 };
 
 export type StructuredOffer = {
@@ -20,9 +21,9 @@ export type StructuredOffer = {
   pairing_type: MenuOfferPairingType;
   /** Single-line summary for prompts and Quick Deal hint */
   human_summary: string;
-  /** For percent_off — must be >= 40 for strong-deal alignment */
+  /** For percent_off - must be >= 40 for strong-deal alignment */
   discount_percent?: number | null;
-  /** For fixed_price_special — dollars */
+  /** For fixed_price_special - dollars */
   fixed_price_amount?: number | null;
 };
 
@@ -30,11 +31,18 @@ export type ExtractedMenuItem = {
   name: string;
   category?: string;
   price_text?: string;
+  size_options?: string[];
   readable?: boolean;
 };
 
+function displayItemName(item: MenuItemRef): string {
+  const name = item.name.trim();
+  const size = item.size_label?.trim();
+  return size ? `${size} ${name}` : name;
+}
+
 export function buildOfferHintText(offer: StructuredOffer): string {
-  return offer.human_summary.trim() || offer.main_item.name.trim();
+  return offer.human_summary.trim() || displayItemName(offer.main_item);
 }
 
 export function buildStructuredOffer(params: {
@@ -44,10 +52,20 @@ export function buildStructuredOffer(params: {
   discount_percent?: number | null;
   fixed_price_amount?: number | null;
 }): StructuredOffer {
-  const main = { id: params.main.id, name: params.main.name.trim() };
+  const main = {
+    id: params.main.id,
+    name: params.main.name.trim(),
+    size_label: params.main.size_label?.trim() || null,
+  };
   const paired = params.paired
-    ? { id: params.paired.id, name: params.paired.name.trim() }
+    ? {
+        id: params.paired.id,
+        name: params.paired.name.trim(),
+        size_label: params.paired.size_label?.trim() || null,
+      }
     : null;
+  const mainName = displayItemName(main);
+  const pairedName = paired ? displayItemName(paired) : null;
   const pct =
     typeof params.discount_percent === "number" && Number.isFinite(params.discount_percent)
       ? Math.round(params.discount_percent)
@@ -61,29 +79,29 @@ export function buildStructuredOffer(params: {
   switch (params.pairing_type) {
     case "percent_off": {
       const p = pct != null && pct >= 40 ? pct : 40;
-      human_summary = `${p}% off ${main.name}.`;
+      human_summary = `${p}% off ${mainName}.`;
       break;
     }
     case "fixed_price_special": {
       const amt = fixedAmt != null ? fixedAmt.toFixed(2) : "?";
-      human_summary = `Special price: ${main.name} for $${amt} — 40% or more off vs. everyday price.`;
+      human_summary = `Special price: ${mainName} for $${amt} - 40% or more off vs. everyday price.`;
       break;
     }
     case "bogo_pair":
       human_summary = paired
-        ? `BOGO / 2-for-1: ${main.name} and ${paired.name}.`
-        : `BOGO / 2-for-1: ${main.name}.`;
+        ? `BOGO / 2-for-1: ${mainName} and ${pairedName}.`
+        : `BOGO / 2-for-1: ${mainName}.`;
       break;
     case "second_half_off":
       human_summary = paired
-        ? `Second item half off — ${main.name} + ${paired.name}.`
-        : `50% off the second item — ${main.name}.`;
+        ? `Second item half off - ${mainName} + ${pairedName}.`
+        : `50% off the second item - ${mainName}.`;
       break;
     case "free_with_purchase":
     default:
       human_summary = paired
-        ? `Buy ${main.name}, get ${paired.name} free.`
-        : `Buy ${main.name}, get a second item free.`;
+        ? `Buy ${mainName}, get ${pairedName} free.`
+        : `Buy ${mainName}, get a second item free.`;
   }
 
   return {

@@ -40,6 +40,7 @@ type DbMenuItem = {
   name: string;
   category: string | null;
   price_text: string | null;
+  size_options?: string[] | null;
   archived_at?: string | null;
 };
 
@@ -98,6 +99,8 @@ export default function MenuOfferScreen() {
   const [step, setStep] = useState<WizardStep>("location");
   const [mainItem, setMainItem] = useState<DbMenuItem | null>(null);
   const [pairedItem, setPairedItem] = useState<DbMenuItem | null>(null);
+  const [mainSize, setMainSize] = useState<string | null>(null);
+  const [pairedSize, setPairedSize] = useState<string | null>(null);
   const [pairingType, setPairingType] = useState<MenuOfferPairingType>("free_with_purchase");
   const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
   const [applyMultiLocation, setApplyMultiLocation] = useState(false);
@@ -127,7 +130,7 @@ export default function MenuOfferScreen() {
     void (async () => {
       const { data, error } = await supabase
         .from("business_menu_items")
-        .select("id,name,category,price_text,archived_at")
+        .select("id,name,category,price_text,size_options,archived_at")
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -211,8 +214,8 @@ export default function MenuOfferScreen() {
     }
     setBanner(null);
     const offer = buildStructuredOffer({
-      main: { id: mainItem.id, name: mainItem.name },
-      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name } : null,
+      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize },
+      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize } : null,
       pairing_type: pairingType,
       discount_percent: pairingType === "percent_off" ? discountPercent : undefined,
       fixed_price_amount:
@@ -232,6 +235,8 @@ export default function MenuOfferScreen() {
   }, [
     mainItem,
     pairedItem,
+    mainSize,
+    pairedSize,
     pairingType,
     discountPercent,
     fixedPriceText,
@@ -262,6 +267,43 @@ export default function MenuOfferScreen() {
     { id: "percent_off", label: t("menuOffer.pairPercent") },
     { id: "fixed_price_special", label: t("menuOffer.pairFixed") },
   ];
+
+  function sizesFor(item: DbMenuItem): string[] {
+    return Array.isArray(item.size_options) ? item.size_options.filter((s) => s.trim().length > 0) : [];
+  }
+
+  function defaultSizeFor(item: DbMenuItem): string | null {
+    return sizesFor(item)[0] ?? null;
+  }
+
+  function renderSizeChips(params: {
+    item: DbMenuItem;
+    selected: string | null;
+    onSelect: (size: string) => void;
+  }) {
+    const sizes = sizesFor(params.item);
+    if (sizes.length === 0) return null;
+    return (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginTop: Spacing.sm }}>
+        {sizes.map((size) => (
+          <Pressable
+            key={`${params.item.id}-${size}`}
+            onPress={() => params.onSelect(size)}
+            style={{
+              paddingHorizontal: Spacing.sm,
+              paddingVertical: 6,
+              borderRadius: Radii.md,
+              borderWidth: params.selected === size ? 2 : 1,
+              borderColor: params.selected === size ? theme.primary : theme.border,
+              backgroundColor: params.selected === size ? "#FFF3E0" : theme.surface,
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 13 }}>{size}</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -357,6 +399,9 @@ export default function MenuOfferScreen() {
                 key={item.id}
                 onPress={() => {
                   setMainItem(item);
+                  setMainSize(defaultSizeFor(item));
+                  setPairedItem(null);
+                  setPairedSize(null);
                   setStep("paired");
                 }}
                 style={{
@@ -372,6 +417,17 @@ export default function MenuOfferScreen() {
                 {item.price_text ? (
                   <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
                 ) : null}
+                {renderSizeChips({
+                  item,
+                  selected: mainItem?.id === item.id ? mainSize : null,
+                  onSelect: (size) => {
+                    setMainItem(item);
+                    setMainSize(size);
+                    setPairedItem(null);
+                    setPairedSize(null);
+                    setStep("paired");
+                  },
+                })}
               </Pressable>
             ))}
           <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("location")} />
@@ -385,6 +441,7 @@ export default function MenuOfferScreen() {
             title={t("menuOffer.skipPaired")}
             onPress={() => {
               setPairedItem(null);
+              setPairedSize(null);
               setStep("pairing");
             }}
           />
@@ -393,6 +450,7 @@ export default function MenuOfferScreen() {
             onPress={() => {
               if (!mainItem) return;
               setPairedItem(mainItem);
+              setPairedSize(mainSize ?? defaultSizeFor(mainItem));
               setStep("pairing");
             }}
           />
@@ -401,6 +459,7 @@ export default function MenuOfferScreen() {
                 key={item.id}
                 onPress={() => {
                   setPairedItem(item);
+                  setPairedSize(defaultSizeFor(item));
                   setStep("pairing");
                 }}
                 style={{
@@ -413,9 +472,21 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{item.name}</Text>
+                {item.price_text ? (
+                  <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
+                ) : null}
+                {renderSizeChips({
+                  item,
+                  selected: pairedItem?.id === item.id ? pairedSize : null,
+                  onSelect: (size) => {
+                    setPairedItem(item);
+                    setPairedSize(size);
+                    setStep("pairing");
+                  },
+                })}
               </Pressable>
             ))}
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setPairedItem(null); setStructuredOffer(null); setStep("main"); }} />
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setPairedItem(null); setPairedSize(null); setStructuredOffer(null); setStep("main"); }} />
         </View>
       ) : null}
 

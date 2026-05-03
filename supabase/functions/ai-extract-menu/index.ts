@@ -12,6 +12,7 @@ type MenuItemRow = {
   name: string;
   category: string;
   price_text: string;
+  size_options: string[];
   readable: boolean;
 };
 
@@ -72,6 +73,8 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
+  const allowSyntheticWithoutKey =
+    Deno.env.get("AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY")?.trim().toLowerCase() === "true";
 
   const userClient = createClient(supabaseUrl, supabaseServiceKey, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
@@ -163,57 +166,57 @@ serve(async (req) => {
 
     // Category-aware sample menus for demo/no-key fallback
     const bizCategory = ((biz as { category?: string }).category ?? "").toLowerCase();
-    type MenuItem = { name: string; category: string; price_text: string; readable: true };
+    type MenuItem = { name: string; category: string; price_text: string; size_options: string[]; readable: true };
 
     function sampleMenuForCategory(cat: string): MenuItem[] {
       if (/bakery|bake|pastry|bread/i.test(cat)) return [
-        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
-        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
-        { name: "Sourdough Loaf", category: "Bread", price_text: "$7.00", readable: true },
-        { name: "Cinnamon Roll", category: "Pastry", price_text: "$5.25", readable: true },
-        { name: "Almond Bear Claw", category: "Pastry", price_text: "$4.75", readable: true },
-        { name: "Chocolate Chip Cookie", category: "Cookie", price_text: "$3.50", readable: true },
+        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", size_options: [], readable: true },
+        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", size_options: [], readable: true },
+        { name: "Sourdough Loaf", category: "Bread", price_text: "$7.00", size_options: [], readable: true },
+        { name: "Cinnamon Roll", category: "Pastry", price_text: "$5.25", size_options: [], readable: true },
+        { name: "Almond Bear Claw", category: "Pastry", price_text: "$4.75", size_options: [], readable: true },
+        { name: "Chocolate Chip Cookie", category: "Cookie", price_text: "$3.50", size_options: [], readable: true },
       ];
       if (/taco|mexican|tex.?mex/i.test(cat)) return [
-        { name: "Al Pastor Taco", category: "Tacos", price_text: "$4.50", readable: true },
-        { name: "Carnitas Taco", category: "Tacos", price_text: "$4.50", readable: true },
-        { name: "Chicken Tinga Taco", category: "Tacos", price_text: "$4.25", readable: true },
-        { name: "Queso Fundido", category: "Sides", price_text: "$6.00", readable: true },
-        { name: "Chips & Guacamole", category: "Sides", price_text: "$5.50", readable: true },
-        { name: "Horchata", category: "Drinks", price_text: "$3.75", readable: true },
+        { name: "Al Pastor Taco", category: "Tacos", price_text: "$4.50", size_options: [], readable: true },
+        { name: "Carnitas Taco", category: "Tacos", price_text: "$4.50", size_options: [], readable: true },
+        { name: "Chicken Tinga Taco", category: "Tacos", price_text: "$4.25", size_options: [], readable: true },
+        { name: "Queso Fundido", category: "Sides", price_text: "$6.00", size_options: [], readable: true },
+        { name: "Chips & Guacamole", category: "Sides", price_text: "$5.50", size_options: [], readable: true },
+        { name: "Horchata", category: "Drinks", price_text: "$3.75", size_options: ["Regular", "Large"], readable: true },
       ];
       if (/pizza|italian/i.test(cat)) return [
-        { name: "Margherita Pizza", category: "Pizza", price_text: "$14.00", readable: true },
-        { name: "Pepperoni Pizza", category: "Pizza", price_text: "$15.00", readable: true },
-        { name: "Caesar Salad", category: "Salads", price_text: "$9.50", readable: true },
-        { name: "Garlic Knots", category: "Sides", price_text: "$6.00", readable: true },
-        { name: "Tiramisu", category: "Dessert", price_text: "$8.00", readable: true },
-        { name: "Italian Soda", category: "Drinks", price_text: "$4.00", readable: true },
+        { name: "Margherita Pizza", category: "Pizza", price_text: "$14.00", size_options: ["Personal", "Large"], readable: true },
+        { name: "Pepperoni Pizza", category: "Pizza", price_text: "$15.00", size_options: ["Personal", "Large"], readable: true },
+        { name: "Caesar Salad", category: "Salads", price_text: "$9.50", size_options: [], readable: true },
+        { name: "Garlic Knots", category: "Sides", price_text: "$6.00", size_options: [], readable: true },
+        { name: "Tiramisu", category: "Dessert", price_text: "$8.00", size_options: [], readable: true },
+        { name: "Italian Soda", category: "Drinks", price_text: "$4.00", size_options: ["Regular", "Large"], readable: true },
       ];
       if (/juice|smoothie|acai/i.test(cat)) return [
-        { name: "Green Machine Smoothie", category: "Smoothies", price_text: "$8.50", readable: true },
-        { name: "Acai Bowl", category: "Bowls", price_text: "$12.00", readable: true },
-        { name: "Fresh Orange Juice", category: "Juices", price_text: "$6.50", readable: true },
-        { name: "Mango Pineapple Smoothie", category: "Smoothies", price_text: "$8.00", readable: true },
-        { name: "Avocado Toast", category: "Food", price_text: "$9.00", readable: true },
-        { name: "Protein Ball Pack", category: "Snacks", price_text: "$5.50", readable: true },
+        { name: "Green Machine Smoothie", category: "Smoothies", price_text: "$8.50", size_options: ["16 oz", "24 oz"], readable: true },
+        { name: "Acai Bowl", category: "Bowls", price_text: "$12.00", size_options: [], readable: true },
+        { name: "Fresh Orange Juice", category: "Juices", price_text: "$6.50", size_options: ["Small", "Large"], readable: true },
+        { name: "Mango Pineapple Smoothie", category: "Smoothies", price_text: "$8.00", size_options: ["16 oz", "24 oz"], readable: true },
+        { name: "Avocado Toast", category: "Food", price_text: "$9.00", size_options: [], readable: true },
+        { name: "Protein Ball Pack", category: "Snacks", price_text: "$5.50", size_options: [], readable: true },
       ];
       if (/sandwich|deli|sub/i.test(cat)) return [
-        { name: "Turkey Club", category: "Sandwiches", price_text: "$10.50", readable: true },
-        { name: "Caprese Panini", category: "Sandwiches", price_text: "$9.75", readable: true },
-        { name: "Chicken Salad Wrap", category: "Wraps", price_text: "$9.00", readable: true },
-        { name: "Tomato Basil Soup", category: "Soups", price_text: "$5.50", readable: true },
-        { name: "Garden Salad", category: "Salads", price_text: "$7.50", readable: true },
-        { name: "Iced Tea", category: "Drinks", price_text: "$3.00", readable: true },
+        { name: "Turkey Club", category: "Sandwiches", price_text: "$10.50", size_options: [], readable: true },
+        { name: "Caprese Panini", category: "Sandwiches", price_text: "$9.75", size_options: [], readable: true },
+        { name: "Chicken Salad Wrap", category: "Wraps", price_text: "$9.00", size_options: [], readable: true },
+        { name: "Tomato Basil Soup", category: "Soups", price_text: "$5.50", size_options: ["Cup", "Bowl"], readable: true },
+        { name: "Garden Salad", category: "Salads", price_text: "$7.50", size_options: [], readable: true },
+        { name: "Iced Tea", category: "Drinks", price_text: "$3.00", size_options: ["Regular", "Large"], readable: true },
       ];
       // Default: coffee shop
       return [
-        { name: "Oat Milk Latte", category: "Coffee", price_text: "$6.50", readable: true },
-        { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", readable: true },
-        { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "$5.75", readable: true },
-        { name: "Matcha Latte", category: "Tea", price_text: "$6.00", readable: true },
-        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", readable: true },
-        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", readable: true },
+        { name: "Oat Milk Latte", category: "Coffee", price_text: "12 oz $5.50 / 16 oz $6.50", size_options: ["12 oz", "16 oz"], readable: true },
+        { name: "Vanilla Cortado", category: "Coffee", price_text: "$5.25", size_options: [], readable: true },
+        { name: "Single-Origin Cold Brew", category: "Cold Coffee", price_text: "16 oz $5.75 / 24 oz $6.75", size_options: ["16 oz", "24 oz"], readable: true },
+        { name: "Matcha Latte", category: "Tea", price_text: "12 oz $5.25 / 16 oz $6.00", size_options: ["12 oz", "16 oz"], readable: true },
+        { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", size_options: [], readable: true },
+        { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", size_options: [], readable: true },
       ];
     }
 
@@ -229,13 +232,35 @@ serve(async (req) => {
       );
     }
 
-    if (!openAiKey) {
+    if (!openAiKey && allowSyntheticWithoutKey) {
+      // Explicitly opt-in synthetic fallback for preview/dev projects only.
+      // Pilot production must never silently label placeholder rows as OCR output.
       const ms = 700 + Math.floor(Math.random() * 500);
       await new Promise((r) => setTimeout(r, ms));
       const items = sampleMenuForCategory(bizCategory);
       return new Response(
-        JSON.stringify({ ok: true, items, low_legibility: false, menu_notes: `${items.length} items extracted. All prices clearly legible.` }),
+        JSON.stringify({
+          ok: true,
+          items,
+          low_legibility: false,
+          extraction_source: "synthetic_fallback",
+          menu_notes:
+            "Sample items returned because OPENAI_API_KEY is missing and preview fallback is enabled.",
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (!openAiKey) {
+      // Return a clear configuration error so production cannot appear to have
+      // extracted real menu data when AI is not configured.
+      console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
+      return new Response(
+        JSON.stringify({
+          error:
+            "Menu scan is not configured yet. Please ask support to set OPENAI_API_KEY for this project.",
+          error_code: "OPENAI_NOT_CONFIGURED",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -248,6 +273,8 @@ serve(async (req) => {
       "- Do NOT invent dishes, prices, or items not visible. Prefer an empty items list over guessing.",
       "- For each legible line: name = the item as printed (concise). category = menu section heading if visible, else empty string.",
       "- price_text = price as printed (e.g. $4.50) or empty if none on that line.",
+      "- size_options = the sizes/variants printed for that item (e.g. Small, Medium, Large, 12 oz, 16 oz, Hot, Iced). Keep labels exactly as printed when readable. Use [] when no size/variant is shown.",
+      "- If prices vary by size, keep the full visible size/price text in price_text and also list the sizes in size_options.",
       "- If the image is blurry or mostly unreadable, set low_legibility=true and keep items minimal.",
       "- menu_notes: brief note for the owner (e.g. 'corner cropped') or empty string.",
       "- Extract EVERY distinct item you can read — the owner will select which ones to use for deals.",
@@ -267,9 +294,13 @@ serve(async (req) => {
                 name: { type: "string" },
                 category: { type: "string" },
                 price_text: { type: "string" },
+                size_options: {
+                  type: "array",
+                  items: { type: "string" },
+                },
                 readable: { type: "boolean" },
               },
-              required: ["name", "category", "price_text", "readable"],
+              required: ["name", "category", "price_text", "size_options", "readable"],
               additionalProperties: false,
             },
           },
@@ -380,6 +411,12 @@ serve(async (req) => {
           name: r.name.trim(),
           category: typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
           price_text: typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
+          size_options: Array.isArray(r.size_options)
+            ? r.size_options
+              .filter((size) => typeof size === "string" && size.trim().length > 0)
+              .map((size) => size.trim())
+              .slice(0, 12)
+            : [],
           readable: true,
         }))
       : [];
@@ -389,6 +426,7 @@ serve(async (req) => {
         ok: true,
         items,
         low_legibility: parsed.low_legibility === true,
+        extraction_source: "openai",
         menu_notes: typeof parsed.menu_notes === "string" ? parsed.menu_notes : "",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

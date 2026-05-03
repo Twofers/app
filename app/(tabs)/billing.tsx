@@ -251,7 +251,9 @@ export default function BusinessBillingScreen() {
       });
       if (error) throw error;
       const url = data?.checkout_url as string | undefined;
-      if (!url) throw new Error("Missing checkout_url from checkout session function.");
+      if (!url) {
+        throw new Error(t("billing.errSubscribe"));
+      }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
     } catch (err) {
       const detail = err instanceof Error ? err.message : parseFunctionError(err);
