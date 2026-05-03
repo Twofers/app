@@ -58,6 +58,20 @@ Apply migration files in **filename (timestamp) order**. Easiest: `npx supabase 
 | 40 | `20260703120003_deal_claims_status_changed_at.sql` |
 | 41 | `20260703120004_timezone_validation.sql` |
 | 42 | `20260704120000_enable_deals_realtime.sql` |
+| 43 | `20260704130000_enforce_max_claims_atomic.sql` |
+| 44 | `20260705120000_businesses_pii_column_grants.sql` |
+| 45 | `20260705120002_deal_claims_unique_active.sql` |
+| 46 | `20260705120003_subscription_history_idempotency.sql` |
+| 47 | `20260705120004_deal_claims_dashboard_index.sql` |
+| 48 | `20260705120005_business_profiles_single_row.sql` |
+| 49 | `20260705120006_realtime_publication_insert_only.sql` |
+| 50 | `20260705120007_failed_redeem_attempts.sql` |
+| 51 | `20260705120008_purge_user_data_rpc.sql` |
+| 52 | `20260705120009_push_token_cleanup_schedule.sql` |
+| 53 | `20260705130000_reports.sql` |
+| 54 | `20260706120000_business_invite_gate.sql` |
+| 55 | `20260706130000_deal_photo_owner_upload_policies.sql` |
+| 56 | `20260707120000_business_menu_item_sizes.sql` |
 
 **Launch-critical for merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql` (claim lifecycle + analytics) and `20260328140000_merchant_insights_rpc.sql` (`merchant_business_insights`, `merchant_deal_insights` RPCs).
 
@@ -149,8 +163,11 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
 | `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default models | Optional |
 | `AI_ADS_DEMO_USE_LIVE` | Use live OpenAI (not stubbed) for `demo@demo.com` account | Optional |
+| `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
-**⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` returns category-aware **fake menu items** as a fallback (no error to UI). Make sure the secret is set in production or pilot owners get fictional menus on first scan.
+**⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
+
+`ai-generate-deal-copy` also now returns a plain-language error with `error_code: OPENAI_NOT_CONFIGURED` for non-demo users when `OPENAI_API_KEY` is missing. Template copy fallback is kept for the explicit demo account path only.
 
 **Setting Edge secrets:**
 

@@ -59,6 +59,12 @@ export function parseFunctionError(error: unknown): string {
     if (name === "AbortError" || msg.includes("abort")) {
       return "Request timed out. Check your connection and try again.";
     }
+    if (msg.includes("network") || msg.includes("fetch")) {
+      return "We couldn't reach the server. Check your connection and try again.";
+    }
+    if (msg.includes("function invocation failed")) {
+      return "We couldn't complete this action right now. Please try again.";
+    }
   }
 
   // Supabase functions.invoke error structure:
@@ -84,21 +90,50 @@ export function parseFunctionError(error: unknown): string {
   // Try error.message (might be JSON string)
   if (error.message) {
     errorMessage = error.message;
-    
+
     // Try to parse as JSON
     try {
       const parsed = JSON.parse(errorMessage);
       if (parsed.error) {
-        return parsed.error;
+        errorMessage = String(parsed.error);
+      }
+      const parsedCode = typeof parsed.error_code === "string" ? parsed.error_code : undefined;
+      if (parsedCode === "OPENAI_NOT_CONFIGURED") {
+        return "Menu scan is temporarily unavailable. Please contact support.";
       }
     } catch {
       // Not JSON, use message as-is
     }
   }
-  
-  // Fallback to error message or context
+
+  const normalized = (errorMessage || "").toLowerCase();
+  if (!normalized) {
+    const ctxMsg = error.context?.message;
+    return typeof ctxMsg === "string" && ctxMsg.trim().length > 0
+      ? ctxMsg
+      : "We couldn't complete this action right now. Please try again.";
+  }
+  if (
+    normalized.includes("function invocation failed") ||
+    normalized.includes("missing environment variable") ||
+    normalized.includes("insert failed") ||
+    normalized.includes("rls") ||
+    normalized.includes("row-level security") ||
+    normalized.includes("permission denied")
+  ) {
+    return "We couldn't complete this action right now. Please try again or contact support.";
+  }
+  if (normalized.includes("openai_not_configured")) {
+    return "Menu scan is temporarily unavailable. Please contact support.";
+  }
+
+  // Fallback to cleaned error message or context
   const ctxMsg = error.context?.message;
-  return errorMessage || (typeof ctxMsg === "string" ? ctxMsg : "") || "Unknown error";
+  return (
+    errorMessage ||
+    (typeof ctxMsg === "string" ? ctxMsg : "") ||
+    "We couldn't complete this action right now. Please try again."
+  );
 }
 
 /** Thrown from AI edge invokes when the response body includes `error_code`. */
@@ -355,7 +390,12 @@ export async function aiBusinessLookup(body: {
     const d = data as { results?: BusinessLookupResult[] };
     return Array.isArray(d.results) ? d.results : [];
   } catch (err) {
-    devWarn("[aiBusinessLookup] Edge function failed, using client fallback:", err);
+    const isDemoUser = await isCurrentUserDemo();
+    if (!isDemoUser) {
+      devWarn("[aiBusinessLookup] Edge function failed:", err);
+      throw err;
+    }
+    devWarn("[aiBusinessLookup] Edge function failed, using demo fallback:", err);
     return [{
       name: body.business_name,
       formatted_address: "123 Main St, Irving, TX 75038",
@@ -455,7 +495,12 @@ export async function aiGenerateDealCopy(body: {
     }
     return { title: d.title, promo_line: d.promo_line, description: d.description };
   } catch (err) {
-    devWarn("[aiGenerateDealCopy] Edge function failed, using client fallback:", err);
+    const isDemoUser = await isCurrentUserDemo();
+    if (!isDemoUser) {
+      devWarn("[aiGenerateDealCopy] Edge function failed:", err);
+      throw err;
+    }
+    devWarn("[aiGenerateDealCopy] Edge function failed, using demo fallback:", err);
     return buildDemoDealCopy(body.hint_text, body.price, body.business_name);
   }
 }
@@ -523,6 +568,7 @@ export type AiExtractMenuItem = {
   name: string;
   category?: string;
   price_text?: string;
+  size_options?: string[];
   readable?: boolean;
 };
 
@@ -530,6 +576,7 @@ export type AiExtractMenuResult = {
   ok: true;
   items: AiExtractMenuItem[];
   low_legibility: boolean;
+  extraction_source?: "openai" | "synthetic_fallback";
   menu_notes: string;
 };
 
@@ -554,8 +601,14 @@ export async function aiExtractMenu(body: {
   }
   return {
     ok: true,
-    items: d.items as AiExtractMenuItem[],
+    items: (d.items as AiExtractMenuItem[]).map((item) => ({
+      ...item,
+      size_options: Array.isArray(item.size_options)
+        ? item.size_options.filter((size) => typeof size === "string" && size.trim().length > 0)
+        : [],
+    })),
     low_legibility: d.low_legibility === true,
+    extraction_source: d.extraction_source === "synthetic_fallback" ? "synthetic_fallback" : "openai",
     menu_notes: typeof d.menu_notes === "string" ? d.menu_notes : "",
   };
 }
