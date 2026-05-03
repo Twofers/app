@@ -29,7 +29,6 @@ import {
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
-import { resolveDealFlowLanguage } from "@/lib/translate-deal-quality";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -69,22 +68,19 @@ function getPairingValidationError(params: {
 
 export default function MenuOfferScreen() {
   const router = useRouter();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const {
     businessId,
     loading: bizLoading,
-    businessContextForAi,
-    businessPreferredLocale,
     subscriptionTier,
   } = useBusiness();
   const { visibleLocations, loading: locLoading, error: locErr } = useBusinessLocations(
     businessId,
     subscriptionTier,
   );
-  const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   const {
     dealLocationIds,
