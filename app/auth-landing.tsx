@@ -208,7 +208,7 @@ export default function AuthLandingScreen() {
   }
 
   function validateEmail(): boolean {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setEmailError(
         t("authLanding.invalidEmail", { defaultValue: "Please enter a valid email address" }),
       );
@@ -275,6 +275,7 @@ export default function AuthLandingScreen() {
       );
       return;
     }
+
     setBusyAction("signup");
     clearFeedback();
     setSignUpAwaitingVerification(false);
@@ -345,10 +346,10 @@ export default function AuthLandingScreen() {
             {/* FIX: Penguin enlarged significantly. Container clips the "TWOFER"
                 text baked into splash-icon.png so it doesn't duplicate the
                 orange Text below. Penguin is now the dominant hero element. */}
-            <View style={{ maxWidth: "85%", aspectRatio: 360 / 220, overflow: "hidden", alignItems: "center" }}>
+            <View style={{ maxWidth: "75%", aspectRatio: 360 / 160, overflow: "hidden", alignItems: "center" }}>
               <Image
                 source={require("../assets/images/splash-icon.png")}
-                style={{ width: 360, height: 400 }}
+                style={{ width: 300, height: 330 }}
                 resizeMode="contain"
                 accessibilityIgnoresInvertColors
                 accessibilityLabel={t("authLanding.heroA11y")}
@@ -582,7 +583,7 @@ export default function AuthLandingScreen() {
                 }}
               />
 
-              {pw.length > 0 ? (
+              {pw.length > 0 && pw !== DEMO_PREVIEW_PASSWORD ? (
                 (() => {
                   const hasUpper = /[A-Z]/.test(pw);
                   const hasNumber = /[0-9]/.test(pw);

@@ -14,6 +14,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import i18n from "@/lib/i18n/config";
 import type { AppLocale } from "@/lib/i18n/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -53,9 +54,7 @@ export default function OnboardingScreen() {
     void setOnboardingStepIndex(clamped);
   }, []);
   const [zip, setZip] = useState("");
-  // Pilot is centered on ZIP 75063 (Irving) with a 15-mile target radius
-  // covering Coppell, Grapevine, Carrollton, Las Colinas, and parts of Dallas.
-  const [radius, setRadius] = useState<ConsumerRadiusMiles>(15);
+  const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -66,19 +65,27 @@ export default function OnboardingScreen() {
   }, []);
 
   useEffect(() => {
-    void getOnboardingStepIndex().then((s) => {
-      if (s !== null) goToStep(s);
-    });
+    void (async () => {
+      const savedStep = await getOnboardingStepIndex();
+      if (savedStep !== null) {
+        goToStep(savedStep);
+        return;
+      }
+      // Skip language step if user already chose one on auth landing
+      const manual = await AsyncStorage.getItem("twoforone.locale_manual_override");
+      if (manual === "1") {
+        goToStep(1);
+      }
+    })();
   }, [goToStep]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (step > 0) {
         goToStep(step - 1);
-        return true;
       }
-      // On step 0, allow back press to exit onboarding to auth screen
-      return false;
+      // Always consume back press during onboarding to prevent app exit
+      return true;
     });
     return () => sub.remove();
   }, [step, goToStep]);
@@ -162,9 +169,6 @@ export default function OnboardingScreen() {
       await afterLocationResolved();
       await setOnboardingComplete(true);
       router.replace("/(tabs)");
-    } catch (err: unknown) {
-      if (__DEV__) console.warn("[onboarding] finish error:", err);
-      setHint(t("onboarding.finishError", { defaultValue: "Something went wrong. Please try again." }));
     } finally {
       setBusy(false);
     }

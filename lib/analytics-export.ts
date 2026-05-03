@@ -1,0 +1,121 @@
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+
+export type ExportRow = {
+  dealTitle: string;
+  startDate: string;
+  endDate: string;
+  claims: number;
+  redemptions: number;
+  conversionRate: number;
+};
+
+function escapeCsvField(val: string): string {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
+export async function exportAnalyticsCsv(rows: ExportRow[], businessName: string): Promise<void> {
+  const header = "Deal Title,Start Date,End Date,Claims,Redemptions,Conversion Rate";
+  const lines = rows.map(
+    (r) =>
+      `${escapeCsvField(r.dealTitle)},${r.startDate},${r.endDate},${r.claims},${r.redemptions},${r.conversionRate}%`,
+  );
+  const csv = [header, ...lines].join("\n");
+
+  // Render CSV as plain-text HTML for print-to-file, then share as PDF with tabular layout
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body { font-family: monospace; white-space: pre-wrap; padding: 24px; font-size: 12px; }
+    h2 { font-family: sans-serif; }
+  </style></head><body>
+  <h2>TWOFER Analytics Export${businessName ? ` — ${escapeHtml(businessName)}` : ""}</h2>
+  <pre>${escapeHtml(csv)}</pre>
+  </body></html>`;
+
+  const { uri } = await Print.printToFileAsync({ html, width: 612, height: 792 });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
+  }
+}
+
+export async function exportAnalyticsPdf(rows: ExportRow[], businessName: string): Promise<void> {
+  const totalClaims = rows.reduce((s, r) => s + r.claims, 0);
+  const totalRedemptions = rows.reduce((s, r) => s + r.redemptions, 0);
+  const avgConversion = rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.conversionRate, 0) / rows.length) : 0;
+  const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const tableRows = rows
+    .map(
+      (r) => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;">${escapeHtml(r.dealTitle)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${r.startDate}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${r.endDate}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${r.claims}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${r.redemptions}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${r.conversionRate}%</td>
+      </tr>`,
+    )
+    .join("");
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><style>
+      body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 0; padding: 0; color: #222; }
+      .header { background: #FF9F1C; padding: 24px 32px; color: #fff; }
+      .header h1 { margin: 0; font-size: 22px; font-weight: 800; }
+      .header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+      .content { padding: 24px 32px; }
+      .summary { display: flex; gap: 24px; margin-bottom: 24px; }
+      .stat { text-align: center; }
+      .stat .val { font-size: 28px; font-weight: 800; color: #FF9F1C; }
+      .stat .lbl { font-size: 11px; opacity: 0.6; margin-top: 4px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { background: #f8f8f8; padding: 10px 12px; text-align: left; font-weight: 700; border-bottom: 2px solid #ddd; }
+      th:not(:first-child) { text-align: center; }
+      .footer { margin-top: 32px; text-align: center; font-size: 11px; opacity: 0.4; }
+    </style></head>
+    <body>
+      <div class="header">
+        <h1>TWOFER — Deal Analytics</h1>
+        <p>${escapeHtml(businessName)} &middot; ${dateStr}</p>
+      </div>
+      <div class="content">
+        <table style="width:auto;margin-bottom:24px;">
+          <tr>
+            <td style="padding:0 24px 0 0;"><span style="font-size:28px;font-weight:800;color:#FF9F1C;">${totalClaims}</span><br><span style="font-size:11px;opacity:0.6;">Total Claims</span></td>
+            <td style="padding:0 24px 0 0;"><span style="font-size:28px;font-weight:800;color:#FF9F1C;">${totalRedemptions}</span><br><span style="font-size:11px;opacity:0.6;">Total Redemptions</span></td>
+            <td><span style="font-size:28px;font-weight:800;color:#FF9F1C;">${avgConversion}%</span><br><span style="font-size:11px;opacity:0.6;">Avg Conversion</span></td>
+          </tr>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th>Deal</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Claims</th>
+              <th>Redeems</th>
+              <th>Conv.</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="footer">Generated by TWOFER</div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const { uri } = await Print.printToFileAsync({ html, width: 612, height: 792 });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}

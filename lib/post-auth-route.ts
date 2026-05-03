@@ -63,7 +63,9 @@ export async function resolvePostAuthReplaceHref(params: {
   nextParam: string | undefined;
 }): Promise<Href> {
   const { role, nextParam } = params;
-  const next = typeof nextParam === "string" && nextParam.length > 0 ? nextParam : "/(tabs)";
+  const raw = typeof nextParam === "string" && nextParam.length > 0 ? nextParam : "/(tabs)";
+  // Sanitize: only allow internal routes starting with / and no protocol
+  const next = raw.startsWith("/") && !raw.includes("://") ? raw : "/(tabs)";
 
   if (role === "business") {
     const { getBusinessProfileAccessForCurrentUser } = await import("./business-profile-access");

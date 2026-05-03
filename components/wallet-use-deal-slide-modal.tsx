@@ -26,7 +26,7 @@ export function WalletUseDealSlideModal({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} animationType="fade" transparent accessibilityViewIsModal onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent accessibilityViewIsModal>
       <View
         style={{
           flex: 1,

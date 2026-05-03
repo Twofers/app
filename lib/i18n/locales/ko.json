@@ -161,7 +161,11 @@
     "notifFavoritesOnly": "즐겨찾기만",
     "gpsErrorTitle": "위치를 사용할 수 없음",
     "gpsErrorBody": "현재 위치를 가져올 수 없습니다. 다시 시도하거나 우편번호로 전환하세요.",
-    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요."
+    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요.",
+    "switchModeTitle": "앱 모드",
+    "switchModeHelp": "로그아웃 없이 소비자와 비즈니스 보기를 전환하세요.",
+    "switchToBusiness": "비즈니스 모드로 전환",
+    "switchToConsumer": "소비자 모드로 전환"
   },
   "onboarding": {
     "title": "TWOFER에 오신 것을 환영해요",
@@ -723,7 +727,8 @@
     "errLoginFavorite": "즐겨찾기를 쓰려면 로그인하세요.",
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
     "viewBusiness": "매장 프로필",
-    "reportBusinessLink": "이 매장 신고"
+    "reportBusinessLink": "이 매장 신고",
+    "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요."
   },
   "redeem": {
     "title": "사용",
@@ -1289,6 +1294,16 @@
     "endDealEarly": "딜 조기 종료",
     "endDealConfirmTitle": "딜을 조기 종료하시겠습니까?",
     "endDealConfirmBody": "딜이 즉시 비활성화됩니다. 활성 클레임은 여전히 사용할 수 있습니다.",
+    "pauseDeal": "딜 일시중지",
+    "resumeDeal": "딜 재개",
+    "duplicateDeal": "딜 복제",
+    "pauseConfirmTitle": "이 딜을 일시중지하시겠습니까?",
+    "pauseConfirmBody": "딜이 고객에게 숨겨지지만 나중에 재개할 수 있습니다.",
+    "resumeConfirmTitle": "이 딜을 재개하시겠습니까?",
+    "resumeConfirmBody": "딜이 다시 고객에게 표시됩니다.",
+    "errPauseDeal": "딜을 일시중지하지 못했습니다.",
+    "errResumeDeal": "딜을 재개하지 못했습니다.",
+    "statusPaused": "일시중지",
     "errLoadDashboard": "대시보드를 불러오지 못했습니다.",
     "errEndDeal": "딜을 종료하지 못했습니다.",
     "publishedToast": "\"{{title}}\" 딜이 게시되었습니다 — 고객이 바로 클레임할 수 있습니다.",
@@ -1325,7 +1340,21 @@
     "sortNewest": "최신순",
     "sortClaims": "클레임 많은순",
     "sortConversion": "전환율 높은순",
-    "showingFiltered": "{{total}}개 중 {{shown}}개 표시"
+    "showingFiltered": "{{total}}개 중 {{shown}}개 표시",
+    "selectMode": "선택",
+    "selectDone": "완료",
+    "selectAll": "전체 선택",
+    "deselectAll": "전체 해제",
+    "bulkPause": "일시중지 ({{count}})",
+    "bulkResume": "재개 ({{count}})",
+    "bulkDelete": "삭제 ({{count}})",
+    "bulkDeleteConfirmTitle": "{{count}}개 딜을 삭제하시겠습니까?",
+    "bulkDeleteConfirmBody": "되돌릴 수 없습니다. 활성 클레임은 여전히 사용할 수 있습니다.",
+    "errBulkPause": "일부 딜을 일시중지하지 못했습니다.",
+    "errBulkResume": "일부 딜을 재개하지 못했습니다.",
+    "errBulkDelete": "일부 딜을 삭제하지 못했습니다.",
+    "exportAnalytics": "내보내기",
+    "exportAllTitle": "딜 분석 내보내기"
   },
   "consumerProfile": {
     "navTitle": "내 프로필",
@@ -1371,6 +1400,9 @@
     "hoursLabel": "영업시간",
     "categoryOtherPh": "카테고리 설명",
     "hoursCustomPh": "예: 월–금 7시–15시, 일요일 휴무",
+    "logoUploadHint": "탭하여 로고 업로드",
+    "errLogoUpload": "로고를 업로드하지 못했습니다. 다시 시도하세요.",
+    "errPhotoPermission": "로고를 업로드하려면 사진 라이브러리 권한이 필요합니다.",
     "continue": "비즈니스 만들기",
     "creating": "만드는 중…",
     "errRequired": "모든 항목을 입력하세요(칩을 활용하세요).",
@@ -1425,7 +1457,13 @@
     "bestTime": "가장 좋은 시간: {{day}} {{from}}–{{to}} {{period}}",
     "periodAm": "오전",
     "periodPm": "오후",
-    "errLoad": "분석을 불러오지 못했습니다."
+    "errLoad": "분석을 불러오지 못했습니다.",
+    "exportTitle": "분석 내보내기",
+    "exportChoose": "내보내기 형식 선택",
+    "exportCsv": "CSV",
+    "exportPdf": "PDF",
+    "exporting": "내보내는 중...",
+    "errExport": "내보내기를 생성하지 못했습니다."
   },
   "createAi": {
     "titleScreen": "AI ads",

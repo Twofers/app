@@ -215,11 +215,14 @@ export async function aiComposeOfferGenerate(body: {
     }
     return d as AiComposeSuccess;
   } catch (err) {
-    // Only fall back to demo data for demo/preview accounts. Real merchants
-    // must see the actual error so they can act on it (quota, auth, etc.).
-    if (isDemoPreviewAccountEmail(body.business_id)) {
-      devWarn("[aiComposeOfferGenerate] Demo account fallback:", err);
-      return buildDemoComposeResult(body.prompt_text);
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (isDemoPreviewAccountEmail(data?.user?.email ?? null)) {
+        devWarn("[aiComposeOfferGenerate] Demo account fallback:", err);
+        return buildDemoComposeResult(body.prompt_text);
+      }
+    } catch {
+      // ignore secondary auth read errors
     }
     throw err;
   }

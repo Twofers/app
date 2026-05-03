@@ -40,7 +40,7 @@ export function DealPreviewModal({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" accessibilityViewIsModal={true} onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent animationType="slide" accessibilityViewIsModal={true}>
       <View
         style={{
           flex: 1,

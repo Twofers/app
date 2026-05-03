@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type 
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import { useNavigation } from "@react-navigation/native";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
@@ -65,12 +64,11 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   }, [forceBypass, session?.user]);
 
   // Prevent Android back button from exiting the app while on a tab screen.
-  const navigation = useNavigation();
   useEffect(() => {
     if (Platform.OS !== "android") return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => !navigation.canGoBack());
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
-  }, [navigation]);
+  }, []);
 
   if (forceBypass && session?.user) {
     return <>{children}</>;

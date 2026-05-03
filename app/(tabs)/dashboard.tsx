@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -44,13 +44,16 @@ import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { triggerLightHaptic } from "@/lib/press-feedback";
 import { printDealFlyer } from "@/lib/deal-flyer";
+import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
-import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-import { consumeRecentPublish } from "@/lib/recent-publish";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function DealListSeparator() {
+  return <View style={{ height: Spacing.md }} />;
+}
 
 function EndEarlyButton({
   title,
@@ -324,11 +327,11 @@ export default function BusinessDashboard() {
   const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
 
   const [banner, setBanner] = useState<string | null>(null);
-  const [publishFlash, setPublishFlash] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [endingDealId, setEndingDealId] = useState<string | null>(null);
+  const [pausingDealId, setPausingDealId] = useState<string | null>(null);
   const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
   const [dealsHasMore, setDealsHasMore] = useState(false);
@@ -350,6 +353,10 @@ export default function BusinessDashboard() {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [dealFilter, setDealFilter] = useState<"all" | "live" | "ended" | "recurring">("all");
   const [dealSort, setDealSort] = useState<"newest" | "claims" | "conversion">("newest");
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [exportingAnalytics, setExportingAnalytics] = useState(false);
 
   const primary = Colors.light.primary;
 
@@ -448,38 +455,37 @@ export default function BusinessDashboard() {
       setDeals(hydrateDealRows(firstPage, perDealMap));
       setDealsHasMore(firstPage.length === DASHBOARD_DEALS_PAGE_SIZE);
 
-      const [impressionsResult, opensResult, insightsResult] = await Promise.all([
-        supabase
-          .from("app_analytics_events")
-          .select("id, deals!inner(business_id)", { count: "exact", head: true })
-          .eq("event_name", "deal_viewed")
-          .eq("deals.business_id", businessId)
-          .gte("occurred_at", monthStart.toISOString()),
-        supabase
-          .from("app_analytics_events")
-          .select("id, deals!inner(business_id)", { count: "exact", head: true })
-          .eq("event_name", "deal_opened")
-          .eq("deals.business_id", businessId)
-          .gte("occurred_at", monthStart.toISOString()),
-        supabase.rpc("merchant_business_insights", {
-          p_business_id: businessId,
-        }),
-      ]);
+      const { count: impressionsCount } = await supabase
+        .from("app_analytics_events")
+        .select("id, deals!inner(business_id)", { count: "exact", head: true })
+        .eq("event_name", "deal_viewed")
+        .eq("deals.business_id", businessId)
+        .gte("occurred_at", monthStart.toISOString());
 
-      setMonthImpressions(impressionsResult.count ?? 0);
-      setMonthOpens(opensResult.count ?? 0);
+      const { count: opensCount } = await supabase
+        .from("app_analytics_events")
+        .select("id, deals!inner(business_id)", { count: "exact", head: true })
+        .eq("event_name", "deal_opened")
+        .eq("deals.business_id", businessId)
+        .gte("occurred_at", monthStart.toISOString());
 
-      if (!insightsResult.error) {
-        setInsights(parseMerchantInsights(insightsResult.data));
+      setMonthImpressions(impressionsCount ?? 0);
+      setMonthOpens(opensCount ?? 0);
+
+      const { data: rpcInsights, error: rpcErr } = await supabase.rpc("merchant_business_insights", {
+        p_business_id: businessId,
+      });
+      if (!rpcErr) {
+        setInsights(parseMerchantInsights(rpcInsights));
       } else {
         setInsights(null);
       }
     } catch (err: unknown) {
+      setInsights(null);
       setDealsHasMore(false);
-      const raw = err instanceof Error ? err.message : "";
-      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errLoadDashboard"));
-      // Keep stale data visible on refresh failure — only clear if this was the first load.
-      setDeals((prev) => (prev.length > 0 ? prev : []));
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
+      setBanner(msg);
+      setWeekCounts(weekDays.map(() => 0));
     } finally {
       setLoadingMetrics(false);
     }
@@ -507,8 +513,8 @@ export default function BusinessDashboard() {
       setDeals((prev) => [...prev, ...hydrateDealRows(chunk, map)]);
       setDealsHasMore(chunk.length === DASHBOARD_DEALS_PAGE_SIZE);
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : "";
-      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errLoadDashboard"));
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
+      setBanner(msg);
     } finally {
       setDealsLoadingMore(false);
     }
@@ -544,32 +550,6 @@ export default function BusinessDashboard() {
     setRefreshing(false);
   }
 
-  // Show a one-shot success flash when the owner just published a deal. The publish
-  // flow seeds AsyncStorage and redirects to /(tabs); we consume it here when the
-  // dashboard gains focus, so nervous pilots get a visible "yes, it worked" moment.
-  useFocusEffect(
-    useCallback(() => {
-      let alive = true;
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      void consumeRecentPublish().then((title) => {
-        if (!alive || !title) return;
-        setPublishFlash(
-          t("offersDashboard.publishedToast", {
-            title,
-            defaultValue: `"${title}" is live — customers can claim it now.`,
-          }),
-        );
-        timer = setTimeout(() => {
-          if (alive) setPublishFlash(null);
-        }, 5000);
-      });
-      return () => {
-        alive = false;
-        if (timer) clearTimeout(timer);
-      };
-    }, [t]),
-  );
-
   function endDealEarly(dealId: string) {
     if (!businessId || endingDealId) return;
     Alert.alert(
@@ -599,10 +579,220 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : "";
-      setBanner(raw ? translateKnownApiMessage(raw, t) : t("offersDashboard.errEndDeal"));
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errEndDeal");
+      setBanner(msg);
     } finally {
       setEndingDealId(null);
+    }
+  }
+
+  function pauseDeal(dealId: string) {
+    if (!businessId || pausingDealId) return;
+    Alert.alert(
+      t("offersDashboard.pauseConfirmTitle", "Pause this deal?"),
+      t("offersDashboard.pauseConfirmBody", "The deal will be hidden from customers but can be resumed later."),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("offersDashboard.pauseDeal", "Pause"),
+          onPress: () => void doPauseDeal(dealId),
+        },
+      ],
+    );
+  }
+
+  async function doPauseDeal(dealId: string) {
+    setPausingDealId(dealId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ is_active: false })
+        .eq("id", dealId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errPauseDeal", "Could not pause deal.");
+      setBanner(msg);
+    } finally {
+      setPausingDealId(null);
+    }
+  }
+
+  function resumeDeal(dealId: string) {
+    if (!businessId || pausingDealId) return;
+    Alert.alert(
+      t("offersDashboard.resumeConfirmTitle", "Resume this deal?"),
+      t("offersDashboard.resumeConfirmBody", "The deal will be visible to customers again."),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("offersDashboard.resumeDeal", "Resume"),
+          onPress: () => void doResumeDeal(dealId),
+        },
+      ],
+    );
+  }
+
+  async function doResumeDeal(dealId: string) {
+    setPausingDealId(dealId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ is_active: true })
+        .eq("id", dealId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errResumeDeal", "Could not resume deal.");
+      setBanner(msg);
+    } finally {
+      setPausingDealId(null);
+    }
+  }
+
+  function duplicateDeal(deal: DealRow) {
+    setDealManageFor(null);
+    router.push({
+      pathname: "/create/quick",
+      params: {
+        prefillTitle: deal.title ?? "",
+        prefillHint: deal.description ?? "",
+      },
+    });
+  }
+
+  function toggleDealSelection(dealId: string) {
+    setSelectedDealIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dealId)) next.delete(dealId);
+      else next.add(dealId);
+      return next;
+    });
+  }
+
+  function exitBulkMode() {
+    setBulkSelectMode(false);
+    setSelectedDealIds(new Set());
+  }
+
+  async function bulkPause() {
+    if (!businessId || selectedDealIds.size === 0) return;
+    setBulkBusy(true);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ is_active: false })
+        .in("id", Array.from(selectedDealIds))
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+      exitBulkMode();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkPause", "Could not pause some deals.");
+      setBanner(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkResume() {
+    if (!businessId || selectedDealIds.size === 0) return;
+    setBulkBusy(true);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .update({ is_active: true })
+        .in("id", Array.from(selectedDealIds))
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+      exitBulkMode();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkResume", "Could not resume some deals.");
+      setBanner(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function bulkDelete() {
+    if (!businessId || selectedDealIds.size === 0) return;
+    const count = selectedDealIds.size;
+    Alert.alert(
+      t("offersDashboard.bulkDeleteConfirmTitle", { defaultValue: "Delete {{count}} deals?", count }),
+      t("offersDashboard.bulkDeleteConfirmBody", "This cannot be undone. Active claims can still be redeemed."),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("offersDashboard.bulkDelete", { defaultValue: "Delete ({{count}})", count }),
+          style: "destructive",
+          onPress: () => void doBulkDelete(),
+        },
+      ],
+    );
+  }
+
+  async function doBulkDelete() {
+    setBulkBusy(true);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .delete()
+        .in("id", Array.from(selectedDealIds))
+        .eq("business_id", businessId);
+      if (error) throw error;
+      await loadMetrics();
+      exitBulkMode();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkDelete", "Could not delete some deals.");
+      setBanner(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function handleExportAnalytics() {
+    if (filteredDeals.length === 0) return;
+    Alert.alert(
+      t("offersDashboard.exportAllTitle", "Export deal analytics"),
+      t("dealAnalytics.exportChoose", "Choose export format"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        { text: t("dealAnalytics.exportCsv", "CSV"), onPress: () => void doExportAnalytics("csv") },
+        { text: t("dealAnalytics.exportPdf", "PDF"), onPress: () => void doExportAnalytics("pdf") },
+      ],
+    );
+  }
+
+  async function doExportAnalytics(format: "csv" | "pdf") {
+    setExportingAnalytics(true);
+    setBanner(null);
+    try {
+      const rows: ExportRow[] = filteredDeals.map((d) => ({
+        dealTitle: d.title ?? t("offersDashboard.dealFallback"),
+        startDate: new Date(d.start_time).toLocaleDateString(),
+        endDate: new Date(d.end_time).toLocaleDateString(),
+        claims: d.claims,
+        redemptions: d.redeems,
+        conversionRate: d.conversion,
+      }));
+      if (format === "csv") {
+        await exportAnalyticsCsv(rows, businessName ?? "");
+      } else {
+        await exportAnalyticsPdf(rows, businessName ?? "");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("dealAnalytics.errExport", "Could not generate export.");
+      setBanner(msg);
+    } finally {
+      setExportingAnalytics(false);
     }
   }
 
@@ -625,14 +815,8 @@ export default function BusinessDashboard() {
         },
       });
     } catch (err: unknown) {
-      // expo-print and expo-sharing throw technical messages ("Print job failed",
-      // "User cancelled sharing"). The owner sees these in a banner during a marketing
-      // task — they should see something actionable. Always show the friendly fallback;
-      // log the raw to dev console so we can still triage in development.
-      if (__DEV__ && err instanceof Error) {
-        console.warn("[generateFlyer]", err.message);
-      }
-      setBanner(t("offersDashboard.errFlyer"));
+      const msg = err instanceof Error ? err.message : t("offersDashboard.errFlyer");
+      setBanner(msg);
     } finally {
       setGeneratingFlyerId(null);
     }
@@ -651,7 +835,12 @@ export default function BusinessDashboard() {
     });
   }
 
-  function statusBadgeLabel(status: MerchantDealScheduleStatus): string {
+  function isDealPaused(item: DealRow): boolean {
+    return !item.is_active && new Date(item.end_time) > new Date();
+  }
+
+  function statusBadgeLabel(status: MerchantDealScheduleStatus, item?: DealRow): string {
+    if (item && isDealPaused(item)) return t("offersDashboard.statusPaused", "Paused");
     if (status === "scheduled") return t("offersDashboard.statusScheduled");
     if (status === "live") return t("offersDashboard.statusLive");
     if (status === "recurring_inactive") return t("offersDashboard.statusRecurringOff");
@@ -696,18 +885,55 @@ export default function BusinessDashboard() {
             </CardShell>
           </Pressable>
         ) : null}
-        <Text
-          style={{
-            fontWeight: "800",
-            fontSize: 17,
-            letterSpacing: -0.2,
-            color: Colors.light.text,
-          }}
-        >
-          {deals.length > 0
-            ? t("offersDashboard.yourDealsCount", { count: deals.length })
-            : t("offersDashboard.yourDeals")}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text
+            style={{
+              fontWeight: "800",
+              fontSize: 17,
+              letterSpacing: -0.2,
+              color: Colors.light.text,
+              flex: 1,
+            }}
+          >
+            {deals.length > 0
+              ? t("offersDashboard.yourDealsCount", { count: deals.length })
+              : t("offersDashboard.yourDeals")}
+          </Text>
+          {deals.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                if (bulkSelectMode) exitBulkMode();
+                else setBulkSelectMode(true);
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: primary }}>
+                {bulkSelectMode
+                  ? t("offersDashboard.selectDone", "Done")
+                  : t("offersDashboard.selectMode", "Select")}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {bulkSelectMode && filteredDeals.length > 0 ? (
+          <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xs }}>
+            <Pressable
+              onPress={() => {
+                setSelectedDealIds(new Set(filteredDeals.map((d) => d.id)));
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: primary }}>
+                {t("offersDashboard.selectAll", "Select all")}
+              </Text>
+            </Pressable>
+            {selectedDealIds.size > 0 ? (
+              <Pressable onPress={() => setSelectedDealIds(new Set())}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+                  {t("offersDashboard.deselectAll", "Deselect all")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {deals.length > 0 ? (
           <View style={{ gap: Spacing.xs }}>
             <ScrollFilterRow
@@ -738,15 +964,24 @@ export default function BusinessDashboard() {
         ) : null}
       </View>
     ),
-    [t, router, billingBlocked, deals.length, dealFilter, dealSort, filteredDeals.length],
+    [t, router, billingBlocked, deals.length, dealFilter, dealSort, filteredDeals.length, bulkSelectMode, selectedDealIds.size, filteredDeals, primary],
   );
 
   const listFooter = useMemo(
     () => (
       <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
-        <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: Colors.light.text }}>
-          {t("offersDashboard.overview")}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: Colors.light.text }}>
+            {t("offersDashboard.overview")}
+          </Text>
+          {filteredDeals.length > 0 ? (
+            <SecondaryButton
+              title={exportingAnalytics ? "..." : t("offersDashboard.exportAnalytics", "Export")}
+              onPress={handleExportAnalytics}
+              disabled={exportingAnalytics}
+            />
+          ) : null}
+        </View>
         <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18 }}>{t("offersDashboard.periodHint")}</Text>
 
         <CardShell variant="muted">
@@ -893,6 +1128,8 @@ export default function BusinessDashboard() {
       businessId,
       businessName,
       businessProfile,
+      filteredDeals,
+      exportingAnalytics,
     ],
   );
 
@@ -935,7 +1172,6 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
-          {publishFlash ? <Banner message={publishFlash} tone="success" /> : null}
           {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
 
           {loadingMetrics ? (
@@ -979,7 +1215,9 @@ export default function BusinessDashboard() {
                   {listFooter}
                 </View>
               }
-              ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              ItemSeparatorComponent={DealListSeparator}
               renderItem={({ item }) => {
                 const sched = dealScheduleStatus(item);
                 const active = sched === "live";
@@ -988,10 +1226,36 @@ export default function BusinessDashboard() {
                   <Animated.View entering={FadeInDown.duration(360).delay(60).springify()}>
                     <CardShell>
                       <HapticScalePressable
-                        onPress={() => router.push(`/deal-analytics/${item.id}`)}
+                        onPress={() => {
+                          if (bulkSelectMode) {
+                            toggleDealSelection(item.id);
+                          } else {
+                            router.push(`/deal-analytics/${item.id}`);
+                          }
+                        }}
                         style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1 })}
                       >
                         <View style={{ flexDirection: "row", gap: Spacing.md }}>
+                          {bulkSelectMode ? (
+                            <View style={{ justifyContent: "center" }}>
+                              <View
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: 12,
+                                  borderWidth: 2,
+                                  borderColor: selectedDealIds.has(item.id) ? primary : Colors.light.border,
+                                  backgroundColor: selectedDealIds.has(item.id) ? primary : "transparent",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                {selectedDealIds.has(item.id) ? (
+                                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>✓</Text>
+                                ) : null}
+                              </View>
+                            </View>
+                          ) : null}
                           {posterUri ? (
                             <Image
                               source={{ uri: posterUri }}
@@ -1042,7 +1306,7 @@ export default function BusinessDashboard() {
                                     color: active ? "#c26100" : "#555",
                                   }}
                                 >
-                                  {statusBadgeLabel(sched)}
+                                  {statusBadgeLabel(sched, item)}
                                 </Text>
                               </View>
                             </View>
@@ -1116,6 +1380,80 @@ export default function BusinessDashboard() {
         </View>
       )}
 
+      {bulkSelectMode && selectedDealIds.size > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: Colors.light.background,
+            borderTopWidth: 1,
+            borderTopColor: Colors.light.border,
+            paddingHorizontal: horizontal,
+            paddingVertical: Spacing.md,
+            paddingBottom: Spacing.xl,
+            flexDirection: "row",
+            gap: Spacing.sm,
+          }}
+        >
+          {bulkBusy ? (
+            <View style={{ flex: 1, alignItems: "center", paddingVertical: Spacing.sm }}>
+              <ActivityIndicator color={primary} />
+            </View>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => void bulkPause()}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: Radii.lg,
+                  backgroundColor: primary,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+                  {t("offersDashboard.bulkPause", { defaultValue: "Pause ({{count}})", count: selectedDealIds.size })}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void bulkResume()}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: Radii.lg,
+                  backgroundColor: Colors.light.surface,
+                  borderWidth: 1.5,
+                  borderColor: primary,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: primary, fontWeight: "800", fontSize: 14 }}>
+                  {t("offersDashboard.bulkResume", { defaultValue: "Resume ({{count}})", count: selectedDealIds.size })}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={bulkDelete}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: Radii.lg,
+                  backgroundColor: "#fff",
+                  borderWidth: 1.5,
+                  borderColor: "rgba(198,40,40,0.85)",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#b71c1c", fontWeight: "800", fontSize: 14 }}>
+                  {t("offersDashboard.bulkDelete", { defaultValue: "Delete ({{count}})", count: selectedDealIds.size })}
+                </Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      ) : null}
+
       <Modal
         visible={dealManageFor !== null}
         transparent
@@ -1141,7 +1479,7 @@ export default function BusinessDashboard() {
               <Text style={{ fontWeight: "800", fontSize: 17, color: Colors.light.text }} numberOfLines={2}>
                 {dealManageFor.title ?? t("offersDashboard.dealFallback")}
               </Text>
-              {dealScheduleStatus(dealManageFor) !== "ended" ? (
+              {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (
                 <SecondaryButton
                   title={t("offersDashboard.editDeal")}
                   onPress={() => {
@@ -1152,6 +1490,10 @@ export default function BusinessDashboard() {
                 />
               ) : null}
               <SecondaryButton
+                title={t("offersDashboard.duplicateDeal", "Duplicate deal")}
+                onPress={() => duplicateDeal(dealManageFor)}
+              />
+              <SecondaryButton
                 title={t("offersDashboard.printFlyer")}
                 onPress={() => {
                   const d = dealManageFor;
@@ -1159,7 +1501,38 @@ export default function BusinessDashboard() {
                   void generateFlyer(d);
                 }}
               />
-              {dealScheduleStatus(dealManageFor) !== "ended" ? (
+              {isDealPaused(dealManageFor) ? (
+                pausingDealId === dealManageFor.id ? (
+                  <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                    <ActivityIndicator color={primary} />
+                  </View>
+                ) : (
+                  <SecondaryButton
+                    title={t("offersDashboard.resumeDeal", "Resume deal")}
+                    onPress={() => {
+                      const id = dealManageFor.id;
+                      setDealManageFor(null);
+                      resumeDeal(id);
+                    }}
+                  />
+                )
+              ) : dealScheduleStatus(dealManageFor) !== "ended" ? (
+                pausingDealId === dealManageFor.id ? (
+                  <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                    <ActivityIndicator color={primary} />
+                  </View>
+                ) : (
+                  <SecondaryButton
+                    title={t("offersDashboard.pauseDeal", "Pause deal")}
+                    onPress={() => {
+                      const id = dealManageFor.id;
+                      setDealManageFor(null);
+                      pauseDeal(id);
+                    }}
+                  />
+                )
+              ) : null}
+              {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (
                 endingDealId === dealManageFor.id ? (
                   <View style={{ padding: Spacing.md, alignItems: "center" }}>
                     <ActivityIndicator color="#c62828" />

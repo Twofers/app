@@ -65,6 +65,10 @@ serve(async (req) => {
 
     if (staleRedeemingErr) {
       console.error(staleRedeemingErr);
+      return new Response(JSON.stringify({ error: "Failed to query stale claims" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } else if (staleRedeemingClaims && staleRedeemingClaims.length > 0) {
       const toRedeem = staleRedeemingClaims.filter((r: {
         id: string;

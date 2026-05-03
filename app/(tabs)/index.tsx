@@ -39,7 +39,6 @@ import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
-import { buildClaimDealTelemetry } from "@/lib/claim-telemetry";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -47,12 +46,38 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
-import { useRealtimeDeals } from "@/hooks/use-realtime-deals";
-import { DEAL_FEED_SELECT, type Deal } from "@/lib/deal-feed-schema";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
-
+type Deal = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  title_es: string | null;
+  title_ko: string | null;
+  description_es: string | null;
+  description_ko: string | null;
+  end_time: string;
+  is_active: boolean;
+  poster_url: string | null;
+  poster_storage_path?: string | null;
+  business_id: string;
+  price: number | null;
+  max_claims: number | null;
+  businesses?: {
+    name: string | null;
+    category: string | null;
+    location: string | null;
+    latitude: number | string | null;
+    longitude: number | string | null;
+  } | null;
+  start_time: string;
+  is_recurring: boolean;
+  days_of_week: number[] | null;
+  window_start_minutes: number | null;
+  window_end_minutes: number | null;
+  timezone: string | null;
+};
 
 function localizedTitle(deal: Deal, lang: string): string {
   const l = lang.split("-")[0]?.toLowerCase() ?? "en";
@@ -149,21 +174,6 @@ export default function HomeScreen() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
-
-  // --- Realtime deal subscription ---
-  const existingDealIds = useMemo(() => new Set(deals.map((d) => d.id)), [deals]);
-  const onNewRealtimeDeal = useCallback((deal: Deal) => {
-    setDeals((prev) => {
-      if (prev.some((d) => d.id === deal.id)) return prev;
-      return [deal, ...prev];
-    });
-  }, []);
-  useRealtimeDeals({
-    enabled: isFocused && feedSegment === "deals",
-    existingDealIds,
-    onNewDeal: onNewRealtimeDeal,
-  });
-
   const lastFeedFocusHydrateAtRef = useRef(0);
   const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
   const dealsFade = useSharedValue(0);
@@ -213,7 +223,9 @@ export default function HomeScreen() {
     setLoadingDeals(true);
     const { data, error } = await supabase
       .from("deals")
-      .select(DEAL_FEED_SELECT)
+      .select(
+        "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+      )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
@@ -222,8 +234,7 @@ export default function HomeScreen() {
     if (error) {
       logPostgrestError("home screen deals", error);
       setBanner(t("consumerHome.loadDealsError"));
-      // Keep stale data on refresh failure; only clear if this was the initial load.
-      setDeals((prev) => (prev.length > 0 ? prev : []));
+      setDeals([]);
       setLoadingDeals(false);
       return;
     }
@@ -250,8 +261,7 @@ export default function HomeScreen() {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown businesses load error" };
       logPostgrestError("home screen businesses", err);
       setBanner(t("consumerHome.loadBusinessesError"));
-      // Keep stale data on refresh failure
-      setBusinesses((prev) => (prev.length > 0 ? prev : []));
+      setBusinesses([]);
     }
     setLoadingBiz(false);
   }, [t]);
@@ -308,7 +318,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!userId) return;
     void syncConsumerDealNotifications({ userId, favoriteBusinessIds });
-  }, [userId, favoriteBusinessIds, deals]);
+  }, [userId, favoriteBusinessIds, deals.length]);
 
   const toggleFavorite = useCallback(
     async (businessId: string) => {
@@ -347,8 +357,7 @@ export default function HomeScreen() {
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
 
-        const telem = await buildClaimDealTelemetry("organic");
-        const out = await claimDeal(dealId, telem);
+        const out = await claimDeal(dealId);
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         if (out.claim_id) setClaimSuccessToastNonce((n) => n + 1);
         trackAppAnalyticsEvent({
@@ -457,15 +466,11 @@ export default function HomeScreen() {
     });
   }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo]);
 
-  const loggedDealIdsRef = useRef(new Set<string>());
-
   // MVP impressions tracking: count deals whenever the visible list changes.
   // This is an approximation of "shown" but stays simple/reliable for MVP.
   useEffect(() => {
     if (loadingDeals) return;
     for (const d of liveDealsDisplay) {
-      if (loggedDealIdsRef.current.has(d.id)) continue;
-      loggedDealIdsRef.current.add(d.id);
       trackAppAnalyticsEvent({
         event_name: "deal_viewed",
         deal_id: d.id,
@@ -590,28 +595,15 @@ export default function HomeScreen() {
           }}
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
-            {(() => {
-              const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
-              return posterUri ? (
-                <Image
-                  source={{ uri: posterUri }}
-                  style={{ width: "100%", height: heroImageHeight }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View
-                  style={{
-                    width: "100%",
-                    height: heroImageHeight,
-                    backgroundColor: theme.surfaceMuted,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
-                </View>
-              );
-            })()}
+            <Image
+              source={{
+                uri:
+                  resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path) ??
+                  "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
+              }}
+              style={{ width: "100%", height: heroImageHeight }}
+              contentFit="cover"
+            />
           </Pressable>
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
@@ -1033,57 +1025,10 @@ export default function HomeScreen() {
           renderItem={renderFeedItem}
           ListEmptyComponent={
             feedSegment === "deals"
-              ? emptyNearbyLive || showDealsSkeleton
+              ? emptyNearbyLive || showDealsSkeleton || banner
                 ? null
                 : (
-                    /* Zero-deals coach: shown when the feed is truly empty
-                       (no deals globally, not just outside radius). The
-                       inline emptyNearbyLive block above handles the
-                       "deals exist but not nearby" case separately. */
-                    <View
-                      style={{
-                        borderRadius: Radii.card,
-                        backgroundColor: theme.surface,
-                        padding: Spacing.xxxl,
-                        margin: Spacing.lg,
-                        borderWidth: 1,
-                        borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
-                        gap: Spacing.md,
-                        alignItems: "center",
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: 28,
-                          backgroundColor:
-                            colorScheme === "dark" ? "rgba(255,159,28,0.22)" : "rgba(255,159,28,0.14)",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Image
-                          source={require("../../assets/images/splash-icon.png")}
-                          style={{ width: 30, height: 30, opacity: 0.95 }}
-                          contentFit="contain"
-                        />
-                      </View>
-                      <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text, textAlign: "center" }}>
-                        {t("consumerHome.emptyZeroTitle")}
-                      </Text>
-                      <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
-                        {t("consumerHome.emptyZeroBody")}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: theme.primary, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
-                        {t("consumerHome.emptyZeroPenguinHint")}
-                      </Text>
-                      <PrimaryButton
-                        title={t("consumerHome.emptyZeroBrowseCta")}
-                        onPress={() => setFeedSegment("shops")}
-                        style={{ alignSelf: "stretch" }}
-                      />
-                    </View>
+                    <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
                   )
               : loadingBiz && businesses.length === 0
                 ? (

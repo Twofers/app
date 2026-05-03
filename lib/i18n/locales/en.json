@@ -161,7 +161,11 @@
     "notifFavoritesOnly": "Favorites only",
     "gpsErrorTitle": "Location unavailable",
     "gpsErrorBody": "Could not get your current position. Try again or switch to ZIP code.",
-    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius."
+    "notifFavoritesOverride": "Favorited businesses can alert you even when they’re outside your radius.",
+    "switchModeTitle": "App mode",
+    "switchModeHelp": "Switch between consumer and business views without logging out.",
+    "switchToBusiness": "Switch to Business mode",
+    "switchToConsumer": "Switch to Consumer mode"
   },
   "onboarding": {
     "title": "Welcome to TWOFER",
@@ -538,7 +542,7 @@
     "moreToolsShow": "Show more",
     "moreToolsHide": "Hide",
     "newDeal": "New Deal",
-    "newDealSub": "Photo, voice, or text — AI creates your ad",
+    "newDealSub": "Photo, voice, or text \u2014 AI creates your ad",
     "reuseDeal": "Reuse Past Deal",
     "reuseDealSub": "Relaunch a template or past offer"
   },
@@ -723,7 +727,8 @@
     "errLoginFavorite": "Log in to save favorites.",
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
     "viewBusiness": "Business profile",
-    "reportBusinessLink": "Report this business"
+    "reportBusinessLink": "Report this business",
+    "claimTimedOut": "Claim timed out \u2014 please try again."
   },
   "redeem": {
     "title": "Redeem",
@@ -985,7 +990,7 @@
     "windowEnd": "End:",
     "maxClaims": "Max claims",
     "cutoffBuffer": "Claim cutoff buffer (minutes)",
-    "generateWorking": "Working on your ad…",
+    "generateWorking": "Working on your ad\u2026",
     "generateCta": "Generate ad",
     "regenerate": "Generate again",
     "regenerating": "Generating…",
@@ -1480,6 +1485,16 @@
     "endDealEarly": "End deal early",
     "endDealConfirmTitle": "End deal early?",
     "endDealConfirmBody": "This will deactivate the deal immediately. Active claims can still be redeemed.",
+    "pauseDeal": "Pause deal",
+    "resumeDeal": "Resume deal",
+    "duplicateDeal": "Duplicate deal",
+    "pauseConfirmTitle": "Pause this deal?",
+    "pauseConfirmBody": "The deal will be hidden from customers but can be resumed later.",
+    "resumeConfirmTitle": "Resume this deal?",
+    "resumeConfirmBody": "The deal will be visible to customers again.",
+    "errPauseDeal": "Could not pause deal.",
+    "errResumeDeal": "Could not resume deal.",
+    "statusPaused": "Paused",
     "errLoadDashboard": "Failed to load dashboard.",
     "errEndDeal": "Could not end deal.",
     "publishedToast": "\"{{title}}\" is live — customers can claim it now.",
@@ -1516,7 +1531,21 @@
     "sortNewest": "Newest",
     "sortClaims": "Most claims",
     "sortConversion": "Best conversion",
-    "showingFiltered": "Showing {{shown}} of {{total}} deals"
+    "showingFiltered": "Showing {{shown}} of {{total}} deals",
+    "selectMode": "Select",
+    "selectDone": "Done",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "bulkPause": "Pause ({{count}})",
+    "bulkResume": "Resume ({{count}})",
+    "bulkDelete": "Delete ({{count}})",
+    "bulkDeleteConfirmTitle": "Delete {{count}} deals?",
+    "bulkDeleteConfirmBody": "This cannot be undone. Active claims can still be redeemed.",
+    "errBulkPause": "Could not pause some deals.",
+    "errBulkResume": "Could not resume some deals.",
+    "errBulkDelete": "Could not delete some deals.",
+    "exportAnalytics": "Export",
+    "exportAllTitle": "Export deal analytics"
   },
   "consumerProfile": {
     "navTitle": "Your profile",
@@ -1562,6 +1591,9 @@
     "hoursLabel": "Hours",
     "categoryOtherPh": "Describe your category",
     "hoursCustomPh": "e.g. Mon–Fri 7a–3p, closed Sun",
+    "logoUploadHint": "Tap to upload your logo",
+    "errLogoUpload": "Could not upload logo. Try again.",
+    "errPhotoPermission": "Photo library permission is needed to upload a logo.",
     "continue": "Create business",
     "creating": "Creating…",
     "errRequired": "Fill in every field (use chips where you can).",
@@ -1616,7 +1648,13 @@
     "bestTime": "Best time: {{day}} {{from}}–{{to}} {{period}}",
     "periodAm": "AM",
     "periodPm": "PM",
-    "errLoad": "Failed to load analytics."
+    "errLoad": "Failed to load analytics.",
+    "exportTitle": "Export analytics",
+    "exportChoose": "Choose export format",
+    "exportCsv": "CSV",
+    "exportPdf": "PDF",
+    "exporting": "Exporting...",
+    "errExport": "Could not generate export."
   },
   "menuManager": {
     "title": "Menu library",

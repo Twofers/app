@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "react-native";
-import { Colors, Radii } from "@/constants/theme";
+import { Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import i18n from "@/lib/i18n/config";
 
