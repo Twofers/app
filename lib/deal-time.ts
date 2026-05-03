@@ -78,8 +78,16 @@ export function isDealActiveNow(deal: RecurringInfo) {
     const windowEnd = deal.window_end_minutes;
     const tz = deal.timezone || "America/Chicago";
 
-    if (!days.length || windowStart == null || windowEnd == null || windowStart >= windowEnd) return false;
+    if (!days.length || windowStart == null || windowEnd == null) return false;
     const { day, minutes } = getLocalParts(now, tz);
+    if (windowEnd <= windowStart) {
+      // Overnight window (e.g., 10PM-2AM): active if on a scheduled day after windowStart,
+      // or on the following day before windowEnd.
+      if (days.includes(day) && minutes >= windowStart) return true;
+      const prevDay = day === 1 ? 7 : day - 1;
+      if (days.includes(prevDay) && minutes < windowEnd) return true;
+      return false;
+    }
     if (!days.includes(day)) return false;
     return minutes >= windowStart && minutes < windowEnd;
   } catch (e) {

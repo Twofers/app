@@ -23,6 +23,7 @@ import { DEMO_PREVIEW_EMAIL } from "../../lib/demo-account";
 import { ensureDemoCoffeePreview } from "../../lib/demo-preview-seed";
 import { signInDemoPreviewUser } from "../../lib/demo-auth-signin";
 import { friendlyAuthError, friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
+import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { logAuthPath } from "../../lib/auth-path-log";
 import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -75,7 +76,6 @@ export default function AccountScreen() {
   const [profileHours, setProfileHours] = useState("");
   const [businessProfileCheckLoading, setBusinessProfileCheckLoading] = useState(false);
   const [businessProfileComplete, setBusinessProfileComplete] = useState(false);
-  const [businessSetupMessage, setBusinessSetupMessage] = useState<string | null>(null);
   const [businessProfileSnapshot, setBusinessProfileSnapshot] = useState<{
     name: string | null;
     address: string | null;
@@ -116,13 +116,8 @@ export default function AccountScreen() {
               }
             : null,
         );
-        if (access.isComplete) {
-          setBusinessSetupMessage(t("account.bizSetupComplete"));
-        } else if (access.hasProfileRow) {
-          setBusinessSetupMessage(t("account.bizSetupFinish"));
-        } else {
-          setBusinessSetupMessage(t("account.bizSetupStart"));
-        }
+        // Business setup state is derived from access.isComplete / access.hasProfileRow;
+        // no separate message state needed.
       })
       .finally(() => {
         if (!cancelled) setBusinessProfileCheckLoading(false);
@@ -311,7 +306,14 @@ export default function AccountScreen() {
   }
 
   function confirmDeleteAccount() {
-    Alert.alert(t("deleteAccount.title"), t("deleteAccount.bodyConsumer"), [
+    // Owners see the explicit cascade warning ("…your business, its deals, and
+    // claim history will also be removed"). Consumers see the simpler copy.
+    // Apple/Google both require the dialog to make the cascade consequences
+    // clear before destruction; the deleteAccount.body string already does that.
+    const message = businessId
+      ? t("deleteAccount.body")
+      : t("deleteAccount.bodyConsumer");
+    Alert.alert(t("deleteAccount.title"), message, [
       { text: t("commonUi.cancel"), style: "cancel" },
       {
         text: t("deleteAccount.confirmDestructive"),
@@ -338,7 +340,11 @@ export default function AccountScreen() {
         ]);
         return;
       }
-      const msg = e instanceof Error ? e.message : t("deleteAccount.errFailed");
+      // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner
+      // during a sensitive flow. Pass through translateKnownApiMessage so technical
+      // messages get a localized friendly equivalent; fall back to the generic copy.
+      const raw = e instanceof Error ? e.message : "";
+      const msg = raw ? translateKnownApiMessage(raw, t) : t("deleteAccount.errFailed");
       setBanner({ message: msg, tone: "error" });
       Alert.alert(t("deleteAccount.errFailed"), t("deleteAccount.fallbackWebBody"), [
         { text: t("deleteAccount.alertDismiss"), style: "cancel" },
@@ -456,9 +462,12 @@ export default function AccountScreen() {
       await refresh();
       setBanner({ message: t("account.profileSaved"), tone: "success" });
     } catch (e: unknown) {
+      // Raw Postgres / RLS errors don't help an owner who's editing their business
+      // profile (RLS denials, JWT expired, constraint violations). Route through
+      // the api-messages translator; fall back to the generic save-failed copy.
+      const raw = e instanceof Error ? e.message : "";
       setBanner({
-        message:
-          (e instanceof Error ? e.message : String(e)) || t("account.errSaveProfileFailed"),
+        message: raw ? translateKnownApiMessage(raw, t) : t("account.errSaveProfileFailed"),
         tone: "error",
       });
     } finally {
@@ -491,14 +500,14 @@ export default function AccountScreen() {
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           borderRadius: Radii.pill,
-          backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+          backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
           borderWidth: 1,
-          borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+          borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
         }}
       >
-        <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: active ? theme.primary : theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
       </Pressable>
     );
   }
@@ -830,14 +839,14 @@ export default function AccountScreen() {
                     paddingVertical: 8,
                     paddingHorizontal: 12,
                     borderRadius: 10,
-                    backgroundColor: profilePreferredLocale == null ? "#111" : "#e8e8e8",
+                    backgroundColor: profilePreferredLocale == null ? theme.text : theme.surfaceMuted,
                     marginRight: 8,
                     marginBottom: 8,
                   }}
                 >
                   <Text
                     style={{
-                      color: profilePreferredLocale == null ? "#fff" : "#111",
+                      color: profilePreferredLocale == null ? theme.background : theme.text,
                       fontWeight: "600",
                       fontSize: 13,
                     }}
@@ -856,14 +865,14 @@ export default function AccountScreen() {
                       paddingVertical: 8,
                       paddingHorizontal: 12,
                       borderRadius: 10,
-                      backgroundColor: profilePreferredLocale === loc ? "#111" : "#e8e8e8",
+                      backgroundColor: profilePreferredLocale === loc ? theme.text : theme.surfaceMuted,
                       marginRight: 8,
                       marginBottom: 8,
                     }}
                   >
                     <Text
                       style={{
-                        color: profilePreferredLocale === loc ? "#fff" : "#111",
+                        color: profilePreferredLocale === loc ? theme.background : theme.text,
                         fontWeight: "600",
                         fontSize: 13,
                       }}

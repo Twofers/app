@@ -2,7 +2,11 @@ import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { devWarn } from "@/lib/dev-log";
 import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
-import type { BusinessContextPayload, CreativeLane, GeneratedAd } from "./ad-variants";
+import type {
+  BusinessContextPayload,
+  GeneratedAd,
+  PhotoTreatment,
+} from "./ad-variants";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import {
@@ -55,6 +59,12 @@ export function parseFunctionError(error: unknown): string {
     if (name === "AbortError" || msg.includes("abort")) {
       return "Request timed out. Check your connection and try again.";
     }
+    if (msg.includes("network") || msg.includes("fetch")) {
+      return "We couldn't reach the server. Check your connection and try again.";
+    }
+    if (msg.includes("function invocation failed")) {
+      return "We couldn't complete this action right now. Please try again.";
+    }
   }
 
   // Supabase functions.invoke error structure:
@@ -80,21 +90,50 @@ export function parseFunctionError(error: unknown): string {
   // Try error.message (might be JSON string)
   if (error.message) {
     errorMessage = error.message;
-    
+
     // Try to parse as JSON
     try {
       const parsed = JSON.parse(errorMessage);
       if (parsed.error) {
-        return parsed.error;
+        errorMessage = String(parsed.error);
+      }
+      const parsedCode = typeof parsed.error_code === "string" ? parsed.error_code : undefined;
+      if (parsedCode === "OPENAI_NOT_CONFIGURED") {
+        return "Menu scan is temporarily unavailable. Please contact support.";
       }
     } catch {
       // Not JSON, use message as-is
     }
   }
-  
-  // Fallback to error message or context
+
+  const normalized = (errorMessage || "").toLowerCase();
+  if (!normalized) {
+    const ctxMsg = error.context?.message;
+    return typeof ctxMsg === "string" && ctxMsg.trim().length > 0
+      ? ctxMsg
+      : "We couldn't complete this action right now. Please try again.";
+  }
+  if (
+    normalized.includes("function invocation failed") ||
+    normalized.includes("missing environment variable") ||
+    normalized.includes("insert failed") ||
+    normalized.includes("rls") ||
+    normalized.includes("row-level security") ||
+    normalized.includes("permission denied")
+  ) {
+    return "We couldn't complete this action right now. Please try again or contact support.";
+  }
+  if (normalized.includes("openai_not_configured")) {
+    return "Menu scan is temporarily unavailable. Please contact support.";
+  }
+
+  // Fallback to cleaned error message or context
   const ctxMsg = error.context?.message;
-  return errorMessage || (typeof ctxMsg === "string" ? ctxMsg : "") || "Unknown error";
+  return (
+    errorMessage ||
+    (typeof ctxMsg === "string" ? ctxMsg : "") ||
+    "We couldn't complete this action right now. Please try again."
+  );
 }
 
 /** Thrown from AI edge invokes when the response body includes `error_code`. */
@@ -201,6 +240,7 @@ export async function redeemToken(body: { token?: string; short_code?: string })
     ok: boolean;
     deal_title?: string;
     redeemed_at: string;
+    claim_id?: string;
   };
 }
 
@@ -350,7 +390,12 @@ export async function aiBusinessLookup(body: {
     const d = data as { results?: BusinessLookupResult[] };
     return Array.isArray(d.results) ? d.results : [];
   } catch (err) {
-    devWarn("[aiBusinessLookup] Edge function failed, using client fallback:", err);
+    const isDemoUser = await isCurrentUserDemo();
+    if (!isDemoUser) {
+      devWarn("[aiBusinessLookup] Edge function failed:", err);
+      throw err;
+    }
+    devWarn("[aiBusinessLookup] Edge function failed, using demo fallback:", err);
     return [{
       name: body.business_name,
       formatted_address: "123 Main St, Irving, TX 75038",
@@ -450,7 +495,12 @@ export async function aiGenerateDealCopy(body: {
     }
     return { title: d.title, promo_line: d.promo_line, description: d.description };
   } catch (err) {
-    devWarn("[aiGenerateDealCopy] Edge function failed, using client fallback:", err);
+    const isDemoUser = await isCurrentUserDemo();
+    if (!isDemoUser) {
+      devWarn("[aiGenerateDealCopy] Edge function failed:", err);
+      throw err;
+    }
+    devWarn("[aiGenerateDealCopy] Edge function failed, using demo fallback:", err);
     return buildDemoDealCopy(body.hint_text, body.price, body.business_name);
   }
 }
@@ -518,6 +568,7 @@ export type AiExtractMenuItem = {
   name: string;
   category?: string;
   price_text?: string;
+  size_options?: string[];
   readable?: boolean;
 };
 
@@ -525,6 +576,7 @@ export type AiExtractMenuResult = {
   ok: true;
   items: AiExtractMenuItem[];
   low_legibility: boolean;
+  extraction_source?: "openai" | "synthetic_fallback";
   menu_notes: string;
 };
 
@@ -549,295 +601,86 @@ export async function aiExtractMenu(body: {
   }
   return {
     ok: true,
-    items: d.items as AiExtractMenuItem[],
+    items: (d.items as AiExtractMenuItem[]).map((item) => ({
+      ...item,
+      size_options: Array.isArray(item.size_options)
+        ? item.size_options.filter((size) => typeof size === "string" && size.trim().length > 0)
+        : [],
+    })),
     low_legibility: d.low_legibility === true,
+    extraction_source: d.extraction_source === "synthetic_fallback" ? "synthetic_fallback" : "openai",
     menu_notes: typeof d.menu_notes === "string" ? d.menu_notes : "",
   };
 }
 
-export type AiRefineAdCopyUsage = {
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
-  total_tokens: number | null;
-};
-
-/** Refine one ad draft with chat history (Edge: `ai-refine-ad-copy`). */
-export async function aiRefineAdCopy(body: {
-  business_id: string;
-  structured_offer: Record<string, unknown>;
-  selected_draft: Record<string, unknown>;
-  instruction: string;
-  conversation_history: Array<{ role: string; content: string }>;
-  output_language?: string;
-}): Promise<{ ok: true; draft: GeneratedAd; usage: AiRefineAdCopyUsage }> {
-  try {
-    const { data, error } = await supabase.functions.invoke("ai-refine-ad-copy", {
-      body: {
-        business_id: body.business_id,
-        structured_offer: body.structured_offer,
-        selected_draft: body.selected_draft,
-        instruction: body.instruction,
-        conversation_history: body.conversation_history,
-        output_language: body.output_language ?? "en",
-      },
-      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-    });
-    if (error) {
-      throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
-    }
-    throwIfEdgeResponseError(data);
-    const d = data as {
-      ok?: boolean;
-      draft?: GeneratedAd;
-      usage?: AiRefineAdCopyUsage;
-    };
-    if (!d?.ok || !d.draft || typeof d.draft.headline !== "string") {
-      throw new Error("Unexpected response from ai-refine-ad-copy.");
-    }
-    return { ok: true, draft: d.draft, usage: d.usage ?? { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
-  } catch (err) {
-    devWarn("aiRefineAdCopy: edge failed, using client fallback:", err);
-    const draft = buildDemoRefinedDraft(
-      body.selected_draft as GeneratedAd,
-      body.instruction,
-      body.structured_offer,
-    );
-    return { ok: true, draft, usage: { prompt_tokens: null, completion_tokens: null, total_tokens: null } };
-  }
-}
-
-// ── Demo ad-refine fallback ──────────────────────────────────
-type ToneKey = "fun" | "urgent" | "short" | "formal" | "casual" | "emoji" | "spanish" | "korean" | "savings" | "quality" | "community" | "generic";
-
-const TONE_PATTERNS: [ToneKey, RegExp][] = [
-  ["fun", /\b(fun|playful|silly|witty|humor|humour|funny|energetic|lively|cheerful|upbeat)\b/i],
-  ["urgent", /\b(urgen|hurry|limited|rush|fast|quick|now|fomo|scarcity|don'?t miss|act fast|last chance)\b/i],
-  ["short", /\b(short|brief|concise|trim|fewer words|less text|simpler|minimal|tighter)\b/i],
-  ["formal", /\b(formal|professional|polished|elegant|sophisticated|refined|business|classy)\b/i],
-  ["casual", /\b(casual|chill|relaxed|laid.?back|friendly|conversational|warm|cozy)\b/i],
-  ["emoji", /\b(emoji|emojis|icons|emoticon)\b/i],
-  ["spanish", /\b(spanish|español|espanol|en español)\b/i],
-  ["korean", /\b(korean|한국어|한글)\b/i],
-  ["savings", /\b(saving|value|price|deal|cheap|afford|discount|money|budget|bang for)\b/i],
-  ["quality", /\b(quality|craft|artisan|premium|handmade|fresh|ingredient|small.?batch|specialty)\b/i],
-  ["community", /\b(community|local|neighbor|neighbourhood|neighborhood|block|corner|regulars|family)\b/i],
-];
-
-function detectTone(instruction: string): ToneKey {
-  for (const [key, rx] of TONE_PATTERNS) {
-    if (rx.test(instruction)) return key;
-  }
-  return "generic";
-}
-
-function clipText(s: string, max: number): string {
-  const t = s.replace(/\s+/g, " ").trim();
-  return t.length <= max ? t : t.slice(0, max - 1).trimEnd() + "\u2026";
-}
-
-function extractOfferItem(offer: Record<string, unknown>): string {
-  const item =
-    (offer.buy_item as string) ||
-    (offer.free_item as string) ||
-    (offer.item_name as string) ||
-    (offer.hint_text as string) ||
-    "";
-  return item.trim() || "your favorite";
-}
-
-function buildDemoRefinedDraft(
-  draft: GeneratedAd,
-  instruction: string,
-  offer: Record<string, unknown>,
-): GeneratedAd {
-  const tone = detectTone(instruction);
-  const lane = draft.creative_lane ?? ("value" as CreativeLane);
-  const item = extractOfferItem(offer);
-
-  const rewrites: Record<ToneKey, Omit<GeneratedAd, "creative_lane">> = {
-    fun: {
-      headline: clipText(`Double the ${item}, double the smiles`, 40),
-      subheadline: clipText(`Bring a friend and treat yourselves — life's too short for just one ${item}!`, 88),
-      cta: "Let's Go!",
-      style_label: "Playful & bright",
-      rationale: "Lighthearted energy makes the deal feel like a treat, not a transaction.",
-      visual_direction: "Bright colors, candid smiles, hand-drawn accents.",
-    },
-    urgent: {
-      headline: clipText(`Today only — BOGO ${item}`, 40),
-      subheadline: "Spots are filling up. Grab yours before they're gone.",
-      cta: "Claim Now",
-      style_label: "Time-sensitive",
-      rationale: "Clear urgency drives immediate action without feeling pushy.",
-      visual_direction: "Bold countdown feel, high contrast, warm tones.",
-    },
-    short: {
-      headline: clipText(`2-for-1 ${item}`, 40),
-      subheadline: "Buy one, get one. Simple as that.",
-      cta: "Get Yours",
-      style_label: "Minimal",
-      rationale: "Stripped to the essentials — the offer speaks for itself.",
-      visual_direction: "Clean whitespace, bold type, single product shot.",
-    },
-    formal: {
-      headline: clipText(`Complimentary ${item} with purchase`, 40),
-      subheadline: clipText(`We invite you to experience our craftsmanship — enjoy a second ${item} on us.`, 88),
-      cta: "Redeem Offer",
-      style_label: "Polished & refined",
-      rationale: "Professional tone elevates the brand without losing warmth.",
-      visual_direction: "Serif accents, muted palette, elegant product photography.",
-    },
-    casual: {
-      headline: clipText(`Hey, free ${item} on us`, 40),
-      subheadline: "Grab a friend, swing by, and enjoy two for the price of one. No catch.",
-      cta: "Come On In",
-      style_label: "Friendly & relaxed",
-      rationale: "Feels like a friend telling you about a deal, not an ad.",
-      visual_direction: "Warm lighting, approachable vibe, handwritten feel.",
-    },
-    emoji: {
-      headline: clipText(`Buy 1 Get 1 ${item}`, 40),
-      subheadline: clipText(`Treat yourself and a friend — two ${item}s, one price. What's not to love?`, 88),
-      cta: "Grab the Deal",
-      style_label: "Eye-catching",
-      rationale: "Visual flair draws the eye in a busy feed.",
-      visual_direction: "Colorful accents, product close-up, pop of orange.",
-    },
-    spanish: {
-      headline: clipText(`2x1 en ${item}`, 40),
-      subheadline: "Compra uno y llévate otro gratis. Ven con alguien especial.",
-      cta: "Canjear ahora",
-      style_label: "Oferta directa",
-      rationale: "Mensaje claro en español para alcanzar más vecinos.",
-      visual_direction: "Colores cálidos, tipografía legible, producto al frente.",
-    },
-    korean: {
-      headline: clipText(`${item} 1+1 혜택`, 40),
-      subheadline: "하나 사면 하나 더! 친구와 함께 방문하세요.",
-      cta: "지금 받기",
-      style_label: "깔끔한 혜택",
-      rationale: "한국어로 명확하게 전달하여 더 많은 이웃에게 도달합니다.",
-      visual_direction: "깔끔한 배경, 제품 강조, 따뜻한 톤.",
-    },
-    savings: {
-      headline: clipText(`Save on ${item} — BOGO deal`, 40),
-      subheadline: "Why pay for two when you can get one free? Real savings, no strings.",
-      cta: "See the Savings",
-      style_label: "Value-forward",
-      rationale: "Leads with the financial benefit to attract deal-seekers.",
-      visual_direction: "Price badge overlay, warm product shot, bold numbers.",
-    },
-    quality: {
-      headline: clipText(`Handcrafted ${item}, twice the joy`, 40),
-      subheadline: clipText(`Every ${item} is made fresh with care. Now enjoy two for the price of one.`, 88),
-      cta: "Taste the Craft",
-      style_label: "Artisan quality",
-      rationale: "Highlights the craft behind the product to justify the visit.",
-      visual_direction: "Tight crop on texture and detail, natural light, minimal text.",
-    },
-    community: {
-      headline: clipText(`Your neighborhood ${item} spot`, 40),
-      subheadline: clipText(`We're proud to be part of this community. Bring a neighbor — BOGO today.`, 88),
-      cta: "Stop By",
-      style_label: "Local favorite",
-      rationale: "Neighborhood warmth turns the deal into a community moment.",
-      visual_direction: "Storefront or street context, warm tones, real people.",
-    },
-    generic: {
-      headline: clipText(draft.headline || `BOGO ${item}`, 40),
-      subheadline: clipText(
-        draft.subheadline
-          ? `${draft.subheadline.split(".")[0]}. Freshly updated to match your vision.`
-          : `Buy one ${item}, get one free. Updated just for you.`,
-        88,
-      ),
-      cta: clipText(draft.cta || "Claim Yours", 26),
-      style_label: "Refreshed",
-      rationale: "Applied your feedback while keeping the core offer front and center.",
-      visual_direction: "Balanced layout, product hero, clean typography.",
-    },
-  };
-
-  return { creative_lane: lane, ...rewrites[tone] };
-}
+// ── v2 single-ad pipeline (the new quality-first flow) ─────────────────────────────
 
 export type AdVariantsQuota = { used: number; limit: number; remaining: number };
 
-/** Client-side demo fallback for ad variants. */
-function buildDemoAdVariants(hint: string, bizName?: string): GeneratedAd[] {
-  const biz = bizName ?? "Local business";
-  return [
-    {
-      creative_lane: "value" as CreativeLane,
-      headline: `BOGO at ${biz}`.slice(0, 50),
-      subheadline: `${hint.slice(0, 40)} — buy one, get one free`,
-      cta: "Grab Yours Today",
-      style_label: "Value",
-      rationale: "Clear savings message",
-      visual_direction: "Bold price-led design",
-    },
-    {
-      creative_lane: "neighborhood" as CreativeLane,
-      headline: `Your Neighbors Love ${biz}`.slice(0, 50),
-      subheadline: `Come try ${hint.slice(0, 40)} and bring a friend`,
-      cta: "Visit Us",
-      style_label: "Community",
-      rationale: "Local community tone",
-      visual_direction: "Warm, inviting neighborhood feel",
-    },
-    {
-      creative_lane: "premium" as CreativeLane,
-      headline: `Crafted with Care at ${biz}`.slice(0, 50),
-      subheadline: `Two for one — ${hint.slice(0, 40)}`,
-      cta: "Discover the Difference",
-      style_label: "Premium",
-      rationale: "Quality-focused messaging",
-      visual_direction: "Clean, refined aesthetic",
-    },
-  ];
-}
-
-/** Three ad lanes from structured offer (optional photo). Edge: `ai-generate-ad-variants`. */
-export async function aiGenerateAdVariantsStructured(body: {
+export type AiGenerateAdRequest = {
   business_id: string;
-  structured_offer: Record<string, unknown>;
   hint_text: string;
   business_context: BusinessContextPayload;
   output_language: string;
   photo_path?: string;
-  price?: number | null;
-  regeneration_attempt?: number;
+  photo_treatment?: PhotoTreatment | null;
   offer_schedule_summary?: string;
-}): Promise<{ ads: GeneratedAd[]; quota?: AdVariantsQuota }> {
-  try {
-    const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
-      body: {
-        business_id: body.business_id,
-        structured_offer: body.structured_offer,
-        hint_text: body.hint_text,
-        business_context: body.business_context,
-        output_language: body.output_language,
-        regeneration_attempt: body.regeneration_attempt ?? 0,
-        ...(body.photo_path ? { photo_path: body.photo_path } : {}),
-        ...(body.price != null ? { price: body.price } : {}),
-        ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
-      },
-      timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-    });
-    if (error) {
-      throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
-    }
-    throwIfEdgeResponseError(data);
-    const d = data as { ads?: GeneratedAd[]; quota?: AdVariantsQuota };
-    if (!Array.isArray(d.ads) || d.ads.length !== 3) {
-      throw new Error("Unexpected response from ai-generate-ad-variants.");
-    }
-    return { ads: d.ads, quota: d.quota };
-  } catch (err) {
-    devWarn("[aiGenerateAdVariantsStructured] Edge function failed, using client fallback:", err);
-    return {
-      ads: buildDemoAdVariants(body.hint_text, body.business_context?.category),
-      quota: { used: 0, limit: 30, remaining: 30 },
-    };
+};
+
+export type AiReviseAdRequest = AiGenerateAdRequest & {
+  previous_ad: GeneratedAd;
+  revision_target: "copy" | "image" | "both";
+  revision_count: number;
+  revision_preset?: string;
+  revision_feedback?: string;
+};
+
+export type AiGenerateAdResponse = { ad: GeneratedAd; quota?: AdVariantsQuota };
+
+/** Generate a single ad (research → copy → image). Edge: `ai-generate-ad-variants`. */
+export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerateAdResponse> {
+  return invokeAdEdge({
+    business_id: body.business_id,
+    hint_text: body.hint_text,
+    business_context: body.business_context,
+    output_language: body.output_language,
+    ...(body.photo_path ? { photo_path: body.photo_path } : {}),
+    ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
+    ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+  });
+}
+
+/** Revise an existing ad — copy only, image only, or both. */
+export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdResponse> {
+  return invokeAdEdge({
+    business_id: body.business_id,
+    hint_text: body.hint_text,
+    business_context: body.business_context,
+    output_language: body.output_language,
+    previous_ad: body.previous_ad,
+    revision_target: body.revision_target,
+    revision_count: body.revision_count,
+    ...(body.revision_preset ? { revision_preset: body.revision_preset } : {}),
+    ...(body.revision_feedback ? { revision_feedback: body.revision_feedback } : {}),
+    ...(body.photo_path ? { photo_path: body.photo_path } : {}),
+    ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
+    ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+  });
+}
+
+async function invokeAdEdge(payload: Record<string, unknown>): Promise<AiGenerateAdResponse> {
+  const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
+    body: payload,
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+  if (error) {
+    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
   }
+  throwIfEdgeResponseError(data);
+  const d = data as { ad?: GeneratedAd; ads?: GeneratedAd[]; quota?: AdVariantsQuota };
+  const ad = d.ad ?? (Array.isArray(d.ads) && d.ads.length > 0 ? d.ads[0] : undefined);
+  if (!ad || typeof ad.headline !== "string") {
+    throw new Error("Unexpected response from ai-generate-ad-variants.");
+  }
+  return { ad, quota: d.quota };
 }

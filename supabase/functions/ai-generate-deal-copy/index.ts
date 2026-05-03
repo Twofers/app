@@ -2,11 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 type AiResult = {
   title: string;
@@ -96,6 +92,8 @@ function buildDemoDealCopyResult(hint: string, price: unknown, bizName: string):
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -181,14 +179,17 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      const ms = 600 + Math.floor(Math.random() * 400);
-      await new Promise((r) => setTimeout(r, ms));
-      const bizName = business_name ?? "your business";
-      const result = buildDemoDealCopyResult(String(hint_text), price, bizName);
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.log(JSON.stringify({ tag: "ai_generate_deal_copy", event: "openai_not_configured" }));
+      return new Response(
+        JSON.stringify({
+          error: "AI copy is temporarily unavailable. Please try again later.",
+          error_code: "OPENAI_NOT_CONFIGURED",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Look up business for logging/quota (optional body param or fallback to owner lookup)

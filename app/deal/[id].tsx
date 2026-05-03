@@ -21,6 +21,8 @@ import { formatValiditySummary } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { ReportSheet } from "@/components/report-sheet";
+import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 
 type Deal = {
   id: string;
@@ -67,6 +69,7 @@ export default function DealDetail() {
   const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
+  const [reportVisible, setReportVisible] = useState(false);
 
   const loadClaimCount = useCallback(async (dealId: string) => {
     const { count, error } = await supabase
@@ -185,20 +188,34 @@ export default function DealDetail() {
   }
 
   async function refreshQr() {
-    if (!deal) return;
+    if (!deal || !userId) return;
     if (refreshingQr) return;
     setRefreshingQr(true);
     try {
-      const out = await claimDeal(deal.id);
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
+      // Look up existing active claim instead of creating a new one.
+      const { data: existing } = await supabase
+        .from("deal_claims")
+        .select("token,expires_at,short_code")
+        .eq("deal_id", deal.id)
+        .eq("user_id", userId)
+        .eq("claim_status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing?.token) {
+        setQrToken(existing.token);
+        setQrExpires(existing.expires_at);
+        setQrShortCode(existing.short_code ?? null);
+      } else {
+        setBanner(t("dealDetail.noActiveClaim"));
+      }
     } catch (e: unknown) {
       const msg =
         e instanceof Error
           ? e.message
           : typeof e === "string"
             ? e
-            : JSON.stringify(e, null, 2);
+            : t("commonUi.genericError");
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);
@@ -407,7 +424,37 @@ export default function DealDetail() {
             </Text>
           </Pressable>
         </View>
+
+        <Pressable
+          onPress={() => setReportVisible(true)}
+          accessibilityRole="button"
+          style={{
+            marginTop: Spacing.xl,
+            paddingVertical: Spacing.md,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+            {t("dealDetail.reportBusinessLink", { defaultValue: "Report this business" })}
+          </Text>
+        </Pressable>
       </ScrollView>
+
+      <ReportSheet
+        visible={reportVisible}
+        mode="business"
+        subjectLabel={deal.businesses?.name ?? t("dealDetail.localBusiness")}
+        onDismiss={() => setReportVisible(false)}
+        onSubmit={async ({ reason, comment }) => {
+          const result = await submitBusinessReport({
+            businessId: deal.business_id,
+            reason: reason as BusinessReportReason,
+            comment,
+            dealId: deal.id,
+          });
+          return { ok: result.ok };
+        }}
+      />
 
       <QrModal
         visible={qrVisible}

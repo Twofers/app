@@ -13,6 +13,10 @@ import { redeemToken } from "../../lib/functions";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors, Radii } from "@/constants/theme";
+import { ReportSheet } from "@/components/report-sheet";
+import { submitUserReport, type UserReportReason } from "@/lib/reports";
 
 type RedeemMode = "scan" | "manual";
 
@@ -26,13 +30,16 @@ export default function RedeemScanner() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const { isLoggedIn, businessId, loading } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<RedeemMode>("scan");
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string } | null>(null);
+  const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string; claimId: string | null } | null>(null);
   const [claimCodeInput, setClaimCodeInput] = useState("");
+  const [reportVisible, setReportVisible] = useState(false);
 
   // Clear stale success/error state when tab regains focus
   useFocusEffect(
@@ -57,6 +64,7 @@ export default function RedeemScanner() {
       setSuccess({
         dealTitle: result.deal_title ?? t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
+        claimId: result.claim_id ?? null,
       });
       setClaimCodeInput("");
     } catch (err: unknown) {
@@ -93,23 +101,23 @@ export default function RedeemScanner() {
 
   return (
     <KeyboardScreen>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("redeem.title")}</Text>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("redeem.title")}</Text>
       {!success ? (
-        <Text style={{ marginTop: Spacing.sm, fontSize: 14, opacity: 0.72, lineHeight: 20 }}>
+        <Text style={{ marginTop: Spacing.sm, fontSize: 14, opacity: 0.72, lineHeight: 20, color: theme.text }}>
           {mode === "scan" ? t("redeem.scanPrimaryHint") : t("redeem.manualFallbackHint")}
         </Text>
       ) : null}
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("redeem.loginPrompt")}</Text>
+        <Text style={{ marginTop: Spacing.lg, opacity: 0.7, color: theme.text }}>{t("redeem.loginPrompt")}</Text>
       ) : loading ? (
-        <Text style={{ marginTop: Spacing.lg, opacity: 0.7 }}>{t("redeem.loading")}</Text>
+        <Text style={{ marginTop: Spacing.lg, opacity: 0.7, color: theme.text }}>{t("redeem.loading")}</Text>
       ) : !businessId ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("redeem.createHeader")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("redeem.createBody")}</Text>
+          <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("redeem.createHeader")}</Text>
+          <Text style={{ opacity: 0.7, color: theme.text }}>{t("redeem.createBody")}</Text>
           <PrimaryButton title={t("redeem.startBusinessSetup")} onPress={() => router.push("/business-setup")} />
         </View>
       ) : success ? (
@@ -118,12 +126,12 @@ export default function RedeemScanner() {
             style={{
               borderRadius: 18,
               padding: Spacing.lg,
-              backgroundColor: "#e8f5e9",
+              backgroundColor: colorScheme === "dark" ? "#1b3a1f" : "#e8f5e9",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 17 }}>{t("redeem.redeemed")}</Text>
-            <Text style={{ marginTop: Spacing.sm, fontSize: 16 }}>{success.dealTitle}</Text>
-            <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 14 }}>
+            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("redeem.redeemed")}</Text>
+            <Text style={{ marginTop: Spacing.sm, fontSize: 16, color: theme.text }}>{success.dealTitle}</Text>
+            <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 14, color: theme.text }}>
               {t("redeem.redeemedAt")}{" "}
               {formatAppDateTime(success.redeemedAt, i18n.language)}
             </Text>
@@ -137,6 +145,21 @@ export default function RedeemScanner() {
               }}
             />
           </View>
+          {success.claimId ? (
+            <Pressable
+              onPress={() => setReportVisible(true)}
+              accessibilityRole="button"
+              style={{
+                marginTop: Spacing.md,
+                paddingVertical: Spacing.md,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
+                {t("redeem.reportCustomerLink", { defaultValue: "Report this customer" })}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={{ marginTop: Spacing.lg, flex: 1, paddingBottom: scrollBottom, gap: Spacing.md }}>
@@ -147,11 +170,11 @@ export default function RedeemScanner() {
                 flex: 1,
                 paddingVertical: Spacing.sm,
                 borderRadius: 12,
-                backgroundColor: mode === "scan" ? "#111" : "#eee",
+                backgroundColor: mode === "scan" ? theme.text : theme.surfaceMuted,
                 alignItems: "center",
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "scan" ? "#fff" : "#333" }}>{t("redeem.modeScan")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.background : theme.text }}>{t("redeem.modeScan")}</Text>
             </Pressable>
             <Pressable
               onPress={() => setMode("manual")}
@@ -159,11 +182,11 @@ export default function RedeemScanner() {
                 flex: 1,
                 paddingVertical: Spacing.sm,
                 borderRadius: 12,
-                backgroundColor: mode === "manual" ? "#111" : "#eee",
+                backgroundColor: mode === "manual" ? theme.text : theme.surfaceMuted,
                 alignItems: "center",
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "manual" ? "#fff" : "#333" }}>{t("redeem.modeManual")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.background : theme.text }}>{t("redeem.modeManual")}</Text>
             </Pressable>
           </View>
 
@@ -173,22 +196,26 @@ export default function RedeemScanner() {
               contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
               {...FORM_SCROLL_KEYBOARD_PROPS}
             >
-              <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20 }}>{t("redeem.manualHelp")}</Text>
+              <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20, color: theme.text }}>{t("redeem.manualHelp")}</Text>
               <TextInput
                 value={claimCodeInput}
                 onChangeText={setClaimCodeInput}
                 placeholder={t("redeem.manualPlaceholder")}
+                placeholderTextColor={theme.mutedText}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                maxLength={8}
                 editable={!processing}
                 style={{
                   borderWidth: 1,
-                  borderColor: "#ccc",
+                  borderColor: theme.border,
                   borderRadius: 10,
                   padding: 12,
                   fontSize: 18,
                   fontWeight: "700",
                   letterSpacing: 2,
+                  color: theme.text,
+                  backgroundColor: theme.surface,
                 }}
               />
               <PrimaryButton
@@ -199,11 +226,11 @@ export default function RedeemScanner() {
             </ScrollView>
           ) : !permission ? (
             <View>
-              <Text style={{ opacity: 0.7 }}>{t("redeem.requestingCamera")}</Text>
+              <Text style={{ opacity: 0.7, color: theme.text }}>{t("redeem.requestingCamera")}</Text>
             </View>
           ) : !permission.granted ? (
             <View>
-              <Text style={{ opacity: 0.7, marginBottom: Spacing.md }}>{t("redeem.cameraRequired")}</Text>
+              <Text style={{ opacity: 0.7, marginBottom: Spacing.md, color: theme.text }}>{t("redeem.cameraRequired")}</Text>
               <PrimaryButton title={t("redeem.grantPermission")} onPress={requestPermission} />
             </View>
           ) : (
@@ -243,15 +270,30 @@ export default function RedeemScanner() {
                   marginTop: Spacing.sm,
                   paddingVertical: Spacing.md,
                   borderRadius: 12,
-                  backgroundColor: "#eee",
+                  backgroundColor: theme.surfaceMuted,
                 }}
               >
-                <Text style={{ textAlign: "center", fontWeight: "700" }}>{t("redeem.scanNext")}</Text>
+                <Text style={{ textAlign: "center", fontWeight: "700", color: theme.text }}>{t("redeem.scanNext")}</Text>
               </Pressable>
             </>
           )}
         </View>
       )}
+      <ReportSheet
+        visible={reportVisible}
+        mode="user"
+        subjectLabel={success?.dealTitle ?? ""}
+        onDismiss={() => setReportVisible(false)}
+        onSubmit={async ({ reason, comment }) => {
+          if (!success?.claimId) return { ok: false };
+          const result = await submitUserReport({
+            claimId: success.claimId,
+            reason: reason as UserReportReason,
+            comment,
+          });
+          return { ok: result.ok };
+        }}
+      />
     </View>
     </KeyboardScreen>
   );

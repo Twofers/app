@@ -19,7 +19,6 @@ import {
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
@@ -32,20 +31,17 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
-  aiCreateDeal,
-  aiGenerateDealCopy,
-  EDGE_FUNCTION_TIMEOUT_AI_MS,
+  aiGenerateAd,
+  aiReviseAd,
   notifyDealPublished,
   translateDeal,
-  parseFunctionError,
+  getErrorCode,
 } from "../../lib/functions";
 import {
   adToDealDraft,
   composeListingDescription,
-  CREATIVE_LANE_I18N_KEY,
-  CREATIVE_LANE_ORDER,
-  type CreativeLane,
   type GeneratedAd,
+  type PhotoTreatment,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
 import { assessDealQuality } from "../../lib/deal-quality";
@@ -59,6 +55,7 @@ import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
 import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
+import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import {
   aiComposeOfferTranscribe,
@@ -81,15 +78,8 @@ type TemplateRow = {
   timezone?: string | null;
 };
 
-/** English weekday labels for `offer_schedule_summary` sent to the edge function (stable for the model). */
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
-  1: "Mon",
-  2: "Tue",
-  3: "Wed",
-  4: "Thu",
-  5: "Fri",
-  6: "Sat",
-  7: "Sun",
+  1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
 };
 
 function minutesFromDate(date: Date) {
@@ -104,7 +94,10 @@ function formatMinutes(minutes: number) {
   return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-/** Sent to AI so copy matches the deal schedule (MVP test cases). */
+/**
+ * English-only schedule summary sent to the AI so its copy can ground in the deal window.
+ * Stable English keeps the model's behavior predictable across user locales.
+ */
 function buildOfferScheduleSummary(
   validityMode: "one-time" | "recurring",
   startTime: Date,
@@ -126,44 +119,56 @@ function buildOfferScheduleSummary(
   )} (${timezone})`;
 }
 
-/** Visual style per creative lane — gives each ad a distinct look. */
-const AD_LANE_STYLES: Record<CreativeLane, {
-  gradient: [string, string, string];
-  accent: string;
-  bg: string;
-  badge: string;
-  badgeText: string;
-  ctaBg: string;
-  ctaText: string;
-}> = {
-  value: {
-    gradient: ["transparent", "rgba(255,159,28,0.45)", "rgba(255,100,0,0.92)"],
-    accent: "#FF9F1C",
-    bg: "#FFF8F0",
-    badge: "#FF9F1C",
-    badgeText: "#fff",
-    ctaBg: "#FF9F1C",
-    ctaText: "#fff",
-  },
-  neighborhood: {
-    gradient: ["transparent", "rgba(16,85,60,0.4)", "rgba(10,65,45,0.90)"],
-    accent: "#0B8457",
-    bg: "#F0FAF5",
-    badge: "#0B8457",
-    badgeText: "#fff",
-    ctaBg: "#0B8457",
-    ctaText: "#fff",
-  },
-  premium: {
-    gradient: ["transparent", "rgba(25,20,55,0.45)", "rgba(15,10,40,0.92)"],
-    accent: "#6C3FC5",
-    bg: "#F5F0FF",
-    badge: "#6C3FC5",
-    badgeText: "#fff",
-    ctaBg: "#6C3FC5",
-    ctaText: "#fff",
-  },
-};
+const DAY_I18N_KEYS = [
+  "",
+  "createAi.dayMon",
+  "createAi.dayTue",
+  "createAi.dayWed",
+  "createAi.dayThu",
+  "createAi.dayFri",
+  "createAi.daySat",
+  "createAi.daySun",
+];
+
+/** Localized schedule label rendered into the user's UI (separate from the AI input). */
+function buildDisplayScheduleSummary(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  validityMode: "one-time" | "recurring",
+  startTime: Date,
+  endTime: Date,
+  daysOfWeek: number[],
+  windowStart: Date,
+  windowEnd: Date,
+  timezone: string,
+  language: string,
+): string {
+  if (validityMode === "one-time") {
+    const start = startTime.toLocaleString(language);
+    const end = endTime.toLocaleString(language);
+    return t("createAi.scheduleOneTimeFmt", {
+      start,
+      end,
+      defaultValue: `One-time: ${start} → ${end}`,
+    });
+  }
+  const dayLabels = [...daysOfWeek]
+    .sort((a, b) => a - b)
+    .map((v) => {
+      const key = DAY_I18N_KEYS[v] ?? "createAi.dayMon";
+      const fallback = SCHEDULE_DAY_BY_VALUE[v] ?? String(v);
+      return t(key, { defaultValue: fallback });
+    })
+    .join(", ");
+  const startLabel = formatMinutes(minutesFromDate(windowStart));
+  const endLabel = formatMinutes(minutesFromDate(windowEnd));
+  return t("createAi.scheduleRecurringFmt", {
+    days: dayLabels,
+    start: startLabel,
+    end: endLabel,
+    timezone,
+    defaultValue: `Recurring: ${dayLabels} · ${startLabel}–${endLabel} (${timezone})`,
+  });
+}
 
 async function fileUriToBase64(uri: string): Promise<string> {
   if (Platform.OS !== "web") {
@@ -178,20 +183,45 @@ async function fileUriToBase64(uri: string): Promise<string> {
 }
 
 const QUOTA_FOCUS_MIN_MS = 30_000;
-const MAX_REGENERATIONS_PER_DRAFT = 2;
-
-/** Manual QA tags for validation runs — see docs/ai-ad-validation/ */
-const QA_CASE_IDS = Array.from({ length: 12 }, (_, i) => `TC${String(i + 1).padStart(2, "0")}`);
-
+const SOFT_REVISION_CAP = 5;
 const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
-/** Empty input → `null` for APIs; non-empty but invalid → `NaN` (use `Number.isNaN` before saving). */
 function parseOptionalPriceInput(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
   const n = Number(s);
   return Number.isNaN(n) ? NaN : n;
 }
+
+type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
+
+const PHOTO_TREATMENT_OPTIONS: ReadonlyArray<PhotoTreatmentOption> = [
+  { key: "touchup", labelKey: "createAi.treatmentTouchupLabel", helperKey: "createAi.treatmentTouchupHelper" },
+  { key: "cleanbg", labelKey: "createAi.treatmentCleanbgLabel", helperKey: "createAi.treatmentCleanbgHelper" },
+  { key: "studiopolish", labelKey: "createAi.treatmentStudiopolishLabel", helperKey: "createAi.treatmentStudiopolishHelper" },
+];
+
+type RevisionTarget = "copy" | "image" | "both";
+
+const COPY_PRESET_KEYS = [
+  "createAi.revisePresetShorter",
+  "createAi.revisePresetCasual",
+  "createAi.revisePresetProfessional",
+  "createAi.revisePresetSavings",
+  "createAi.revisePresetItem",
+];
+
+const IMAGE_PRESET_KEYS_GENERATED = [
+  "createAi.revisePresetGenAngle",
+  "createAi.revisePresetGenBrighter",
+  "createAi.revisePresetGenMoodier",
+];
+
+const IMAGE_PRESET_KEYS_PHOTO = [
+  "createAi.revisePresetPhotoBrighter",
+  "createAi.revisePresetPhotoCrop",
+  "createAi.revisePresetPhotoBg",
+];
 
 export default function AiDealScreen() {
   const router = useRouter();
@@ -252,24 +282,6 @@ export default function AiDealScreen() {
     }, [businessId, reloadQuota, quota]),
   );
 
-  const dayOptionsUi = useMemo(
-    () => [
-      { label: t("createAi.dayMon"), value: 1 },
-      { label: t("createAi.dayTue"), value: 2 },
-      { label: t("createAi.dayWed"), value: 3 },
-      { label: t("createAi.dayThu"), value: 4 },
-      { label: t("createAi.dayFri"), value: 5 },
-      { label: t("createAi.daySat"), value: 6 },
-      { label: t("createAi.daySun"), value: 7 },
-    ],
-    [t],
-  );
-
-  function laneUiTitle(lane: CreativeLane): string {
-    const key = CREATIVE_LANE_I18N_KEY[lane];
-    return key ? t(key) : t("createAi.optionFallback");
-  }
-
   function formatPickerTime(date: Date) {
     return format(date, "p", { locale: dateFnsLocaleFor(i18n.language) });
   }
@@ -280,6 +292,8 @@ export default function AiDealScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
   const [title, setTitle] = useState("");
@@ -293,7 +307,6 @@ export default function AiDealScreen() {
   const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  /** Android needs two-step datetime: date picker first, then time picker. */
   const [androidStartPickerMode, setAndroidStartPickerMode] = useState<"date" | "time">("date");
   const androidStartDateRef = useRef<Date | null>(null);
   const [androidEndPickerMode, setAndroidEndPickerMode] = useState<"date" | "time">("date");
@@ -310,21 +323,36 @@ export default function AiDealScreen() {
     message: string;
     tone?: "error" | "success" | "info" | "warning";
   } | null>(null);
+
+  // Generation state — single ad, with revise loop
   const [generating, setGenerating] = useState(false);
-  /** Phase-based progress: 0=copy, 1=images, 2=finishing */
-  const [generatingPhase, setGeneratingPhase] = useState(0);
-  const [generatedAds, setGeneratedAds] = useState<GeneratedAd[] | null>(null);
-  const [selectedAdIndex, setSelectedAdIndex] = useState<number | null>(null);
-  /** After "Use this ad", snapshot for detecting edits before publish */
+  const [generatedAd, setGeneratedAd] = useState<GeneratedAd | null>(null);
+  const [adAccepted, setAdAccepted] = useState(false);
+  /**
+   * Tracks the treatment that produced the *current* generatedAd.poster_storage_path.
+   * The user can change `photoTreatment` between generate and revise; the server needs to
+   * know what treatment produced the previous_ad's image, not the current UI selection.
+   */
+  const lastSentPhotoTreatmentRef = useRef<PhotoTreatment | null>(null);
+
+  // Revision state
+  const [revising, setRevising] = useState(false);
+  const [revisionsUsed, setRevisionsUsed] = useState(0);
+  const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
+  const [revisionFeedback, setRevisionFeedback] = useState("");
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  /**
+   * Monotonic ID for in-flight generate/revise calls. If user replaces the photo or hits
+   * generate again before a revise resolves, we bump this counter and discard stale results.
+   */
+  const generationRequestIdRef = useRef(0);
+
   const aiDraftBaselineRef = useRef<{
     title: string;
     promo_line: string;
     cta_text: string;
     description: string;
   } | null>(null);
-  /** Successful regenerations after the latest initial generation (max 2). */
-  const [regenerationsUsed, setRegenerationsUsed] = useState(0);
-  const [lastSuccessfulGenAttempt, setLastSuccessfulGenAttempt] = useState(0);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
@@ -332,11 +360,6 @@ export default function AiDealScreen() {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
-  /** Tags generation in Supabase logs; see docs/ai-ad-validation/README.md */
-  const [manualValidationTag, setManualValidationTag] = useState("");
-  const [qaPanelOpen, setQaPanelOpen] = useState(false);
-  const [devEdgeBusy, setDevEdgeBusy] = useState<"copy" | "create" | null>(null);
-  const [devToolsOpen, setDevToolsOpen] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
   const menuOfferScrollDoneRef = useRef(false);
@@ -344,6 +367,7 @@ export default function AiDealScreen() {
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
   const [dealEditLoading, setDealEditLoading] = useState(false);
 
+  /** Stable English — shipped to the AI. Do not localize. */
   const offerScheduleSummary = useMemo(
     () =>
       buildOfferScheduleSummary(
@@ -358,6 +382,23 @@ export default function AiDealScreen() {
     [validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone],
   );
 
+  /** Localized — shown in the user's UI. */
+  const displayScheduleSummary = useMemo(
+    () =>
+      buildDisplayScheduleSummary(
+        t,
+        validityMode,
+        startTime,
+        endTime,
+        daysOfWeek,
+        windowStart,
+        windowEnd,
+        timezone,
+        i18n.language,
+      ),
+    [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone, i18n.language],
+  );
+
   const listingBody = useMemo(
     () => composeListingDescription(promoLine, ctaText, description),
     [promoLine, ctaText, description],
@@ -370,7 +411,7 @@ export default function AiDealScreen() {
   const showDraftEditor =
     templateLoaded ||
     editingDealId != null ||
-    selectedAdIndex !== null ||
+    adAccepted ||
     title.trim().length > 0 ||
     promoLine.trim().length > 0 ||
     ctaText.trim().length > 0 ||
@@ -379,7 +420,7 @@ export default function AiDealScreen() {
 
   const composeDirty = useMemo(() => {
     if (photoUri || hintText.trim() || price.trim()) return true;
-    if (generatedAds != null || selectedAdIndex != null) return true;
+    if (generatedAd != null || adAccepted) return true;
     if (title.trim() || promoLine.trim() || ctaText.trim() || description.trim()) return true;
     if (maxClaims !== "50" || cutoffMins !== "15") return true;
     if (validityMode !== "one-time") return true;
@@ -391,8 +432,8 @@ export default function AiDealScreen() {
     photoUri,
     hintText,
     price,
-    generatedAds,
-    selectedAdIndex,
+    generatedAd,
+    adAccepted,
     title,
     promoLine,
     ctaText,
@@ -404,20 +445,6 @@ export default function AiDealScreen() {
     manualDraftUnlocked,
     templateLoaded,
   ]);
-
-  // Phase-based progress message while generating (copy ~8s, images ~20s)
-  useEffect(() => {
-    if (!generating) {
-      setGeneratingPhase(0);
-      return;
-    }
-    const t1 = setTimeout(() => setGeneratingPhase(1), 8000);
-    const t2 = setTimeout(() => setGeneratingPhase(2), 22000);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [generating]);
 
   usePreventRemove(
     composeDirty,
@@ -449,74 +476,80 @@ export default function AiDealScreen() {
     setDealEditLoading(true);
     void (async () => {
       try {
-      const { data, error } = await supabase
-        .from("deals")
-        .select(
-          "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
-        )
-        .eq("id", dealIdFromRoute)
-        .eq("business_id", businessId)
-        .maybeSingle();
-      if (cancelled) return;
-      if (error || !data) {
-        setDealLoadError(error?.message ?? "Not found");
-        setEditingDealId(null);
-        return;
-      }
-      const row = data as Record<string, unknown>;
-      setEditingDealId(String(row.id));
-      setTitle(String(row.title ?? ""));
-      setDescription(String(row.description ?? ""));
-      setPromoLine("");
-      setCtaText("");
-      setPrice(row.price != null ? String(row.price) : "");
-      setPosterUrl((row.poster_url as string | null) ?? null);
-      const pPath = row.poster_storage_path as string | null | undefined;
-      if (pPath) setPhotoPath(pPath);
-      setMaxClaims(String(row.max_claims ?? 50));
-      setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
-      setValidityMode(row.is_recurring ? "recurring" : "one-time");
-      if (row.start_time) setStartTime(new Date(String(row.start_time)));
-      if (row.end_time) setEndTime(new Date(String(row.end_time)));
-      setDaysOfWeek(
-        Array.isArray(row.days_of_week) && row.days_of_week.length
-          ? (row.days_of_week as number[])
-          : [1, 2, 3, 4, 5],
-      );
-      if (row.window_start_minutes != null) {
-        const wm = Number(row.window_start_minutes);
-        const d = new Date();
-        d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
-        setWindowStart(d);
-      }
-      if (row.window_end_minutes != null) {
-        const wm = Number(row.window_end_minutes);
-        const d = new Date();
-        d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
-        setWindowEnd(d);
-      }
-      const tz = row.timezone;
-      if (typeof tz === "string" && tz.trim()) setTimezone(tz.trim());
-      else setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago");
-      const lid = row.location_id;
-      setPublishLocationIds(lid ? [String(lid)] : []);
-      setManualDraftUnlocked(true);
-      setGeneratedAds(null);
-      setSelectedAdIndex(null);
-      aiDraftBaselineRef.current = null;
-      setLastGenerationError(null);
-      setTemplateLoaded(false);
+        const { data, error } = await supabase
+          .from("deals")
+          .select(
+            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
+          )
+          .eq("id", dealIdFromRoute)
+          .eq("business_id", businessId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !data) {
+          setDealLoadError(error?.message ?? "Not found");
+          setEditingDealId(null);
+          return;
+        }
+        const row = data as Record<string, unknown>;
+        setEditingDealId(String(row.id));
+        setTitle(String(row.title ?? ""));
+        setDescription(String(row.description ?? ""));
+        setPromoLine("");
+        setCtaText("");
+        setPrice(row.price != null ? String(row.price) : "");
+        const rawPosterUrl = (row.poster_url as string | null) ?? null;
+        const pPath = row.poster_storage_path as string | null | undefined;
+        // Restore both the storage path AND a usable preview URL — without this the photo
+        // selector renders empty when editing an existing deal that has a poster.
+        if (pPath) {
+          setPhotoPath(pPath);
+          setPosterUrl(rawPosterUrl ?? buildPublicDealPhotoUrl(pPath));
+        } else {
+          setPosterUrl(rawPosterUrl);
+        }
+        setMaxClaims(String(row.max_claims ?? 50));
+        setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
+        setValidityMode(row.is_recurring ? "recurring" : "one-time");
+        if (row.start_time) setStartTime(new Date(String(row.start_time)));
+        if (row.end_time) setEndTime(new Date(String(row.end_time)));
+        setDaysOfWeek(
+          Array.isArray(row.days_of_week) && row.days_of_week.length
+            ? (row.days_of_week as number[])
+            : [1, 2, 3, 4, 5],
+        );
+        if (row.window_start_minutes != null) {
+          const wm = Number(row.window_start_minutes);
+          const d = new Date();
+          d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
+          setWindowStart(d);
+        }
+        if (row.window_end_minutes != null) {
+          const wm = Number(row.window_end_minutes);
+          const d = new Date();
+          d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
+          setWindowEnd(d);
+        }
+        const tz = row.timezone;
+        if (typeof tz === "string" && tz.trim()) setTimezone(tz.trim());
+        else setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago");
+        const lid = row.location_id;
+        setPublishLocationIds(lid ? [String(lid)] : []);
+        setManualDraftUnlocked(true);
+        setGeneratedAd(null);
+        setAdAccepted(false);
+        aiDraftBaselineRef.current = null;
+        setLastGenerationError(null);
+        setTemplateLoaded(false);
       } finally {
         if (!cancelled) setDealEditLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [dealIdFromRoute, businessId]);
 
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
+    let cancelled = false;
     (async () => {
       const { data, error } = await supabase
         .from("deal_templates")
@@ -524,6 +557,7 @@ export default function AiDealScreen() {
         .eq("id", templateId)
         .eq("business_id", businessId)
         .single();
+      if (cancelled) return;
       if (!error && data) {
         const row = data as TemplateRow;
         setTitle(row.title ?? "");
@@ -550,19 +584,18 @@ export default function AiDealScreen() {
           setTimezone(row.timezone.trim());
         }
         setTemplateLoaded(true);
-        setGeneratedAds(null);
-        setSelectedAdIndex(null);
+        setGeneratedAd(null);
+        setAdAccepted(false);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
         setLastGenerationError(null);
       }
     })();
+    return () => { cancelled = true; };
   }, [dealIdFromRoute, templateId, businessId]);
 
-  /** Deep-link prefill from AI Compose / menu-offer (full publish flow stays on this screen). */
   useEffect(() => {
     if (templateId || dealIdFromRoute) return;
-
     const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
     const pt = g(params.prefillTitle).trim();
     const pp = g(params.prefillPromoLine).trim();
@@ -579,7 +612,6 @@ export default function AiDealScreen() {
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
-
     if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && locIds.length === 0) return;
 
     if (pt) setTitle((prev) => prev || pt);
@@ -605,22 +637,10 @@ export default function AiDealScreen() {
       setManualDraftUnlocked(true);
     }
   }, [
-    templateId,
-    params.prefillTitle,
-    params.prefillPromoLine,
-    params.prefillCta,
-    params.prefillDescription,
-    params.prefillHint,
-    params.prefillPrice,
-    params.prefillPosterPath,
-    params.fromAiCompose,
-    params.fromMenuOffer,
-    params.fromReuse,
-    params.fromCreateHub,
-    params.prefillLocationId,
-    params.prefillExtraLocationIds,
-    dealIdFromRoute,
-    t,
+    templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
+    params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
+    params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
+    params.prefillLocationId, params.prefillExtraLocationIds, dealIdFromRoute, t,
   ]);
 
   useEffect(() => {
@@ -633,6 +653,22 @@ export default function AiDealScreen() {
     return () => clearTimeout(tid);
   }, [params.fromMenuOffer, scheduleSectionY]);
 
+  /**
+   * Reset everything generated from the previous photo/offer combination. Called whenever
+   * the user changes the source inputs (new photo, new treatment) so we never publish a stale
+   * AI-generated poster paired with a different photo.
+   */
+  function resetGenerationState() {
+    setGeneratedAd(null);
+    setAdAccepted(false);
+    setRevisionsUsed(0);
+    setRevisionFeedback("");
+    setActivePreset(null);
+    aiDraftBaselineRef.current = null;
+    lastSentPhotoTreatmentRef.current = null;
+    generationRequestIdRef.current += 1;
+  }
+
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== "granted") {
@@ -644,6 +680,7 @@ export default function AiDealScreen() {
     setPhotoUri(result.assets[0].uri);
     setPosterUrl(null);
     setPhotoPath(null);
+    resetGenerationState();
   }
 
   async function takePhoto() {
@@ -662,6 +699,7 @@ export default function AiDealScreen() {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      resetGenerationState();
       setShowCamera(false);
     }
   }
@@ -704,21 +742,20 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.transcribeEmpty"), tone: "info" });
       }
     } catch (e: unknown) {
-      const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : undefined;
+      const code = getErrorCode(e);
       if (code === "COOLDOWN_ACTIVE") {
         setBanner({ message: t("createAi.transcribeCooldown"), tone: "info" });
       } else {
-        setBanner({
-          message: e instanceof Error ? e.message : t("createAi.transcribeFailed"),
-          tone: "error",
-        });
+        // Don't surface raw internal codes (e.g. "no_uri") or Supabase storage errors —
+        // a non-technical owner can't act on those. Always show the translated fallback.
+        setBanner({ message: t("createAi.transcribeFailed"), tone: "error" });
       }
     } finally {
       setTranscribing(false);
     }
   }
 
-  function validateInputs(forGenerate: boolean) {
+  function validateInputs(): boolean {
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
     if (Number.isNaN(maxClaimsNum) || maxClaimsNum <= 0) {
@@ -734,7 +771,6 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return false;
       }
-
       const now = new Date();
       const durationMinutes = Math.floor((endTime.getTime() - now.getTime()) / 60000);
       if (cutoffNum >= durationMinutes) {
@@ -752,16 +788,9 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errRecurringWindow"), tone: "error" });
         return false;
       }
-
       const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
       if (cutoffNum >= windowDurationMinutes) {
         setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
-        return false;
-      }
-    }
-    if (forGenerate) {
-      if (!photoUri && !posterUrl) {
-        setBanner({ message: t("createAi.errAddPhoto"), tone: "error" });
         return false;
       }
     }
@@ -816,220 +845,177 @@ export default function AiDealScreen() {
     };
   }
 
-  function friendlyGenerationError(raw: string): string {
+  function friendlyGenerationError(raw: string, code?: string): string {
+    if (code === "OPENAI_KEY_MISSING") return t("createAi.friendlyOpenaiConfig");
+    if (code === "MONTHLY_LIMIT") return t("createAi.friendlyGenerationRateLimit");
+    if (code === "COOLDOWN_ACTIVE") return raw;
+    if (code === "REVISION_LIMIT") return t("createAi.errRegenClientLimit");
     const lower = raw.toLowerCase();
-    if (lower.includes("openai_api_key") || lower.includes("not set")) {
-      return t("createAi.friendlyOpenaiConfig");
-    }
     if (lower.includes("unauthorized") || lower.includes("log in")) {
       return t("createAi.friendlySession");
     }
-    if (lower.includes("photo") || lower.includes("access the photo")) {
-      return t("createAi.friendlyPhoto");
-    }
-    if (lower.includes("regeneration limit")) {
-      return t("createAi.friendlyRegenLimit");
-    }
-    if (lower.includes("rate limit") || lower.includes("429")) {
-      return t("createAi.friendlyGenerationRateLimit");
-    }
-    if (raw.length > 120) {
-      return t("createAi.friendlyGenerationLongError");
-    }
-    return t("createAi.fallbackIntro");
+    if (lower.includes("photo")) return t("createAi.friendlyPhoto");
+    if (lower.length > 120) return t("createAi.friendlyGenerationLongError");
+    return raw || t("createAi.fallbackIntro");
   }
 
-  async function generateAdVariants(mode: "initial" | "regenerate") {
-    if (!validateInputs(true)) return;
+  function cancelGeneration() {
+    // Bumping the request id makes the in-flight result a no-op when it returns,
+    // and we re-enable the UI immediately so the user is not stuck on a spinner.
+    generationRequestIdRef.current += 1;
+    setGenerating(false);
+    setRevising(false);
+    setBanner(null);
+  }
+
+  async function generateAd() {
+    if (!validateInputs()) return;
     if (!businessId) {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
     }
-
-    if (mode === "regenerate" && regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT) {
-      const limTag = manualValidationTag.trim().slice(0, 80);
-      trackEvent(AiAdsEvents.REGENERATE_LIMIT_HIT, {
-        screen: "create_ai",
-        ...(limTag ? { manual_validation_tag: limTag } : {}),
-      });
-      setBanner({
-        message: t("createAi.errRegenClientLimit"),
-        tone: "info",
-      });
-      return;
-    }
-
-    // Validate price before clearing state (so existing ads aren't wiped on bad input)
     const priceNumPreCheck = parseOptionalPriceInput(price);
     if (priceNumPreCheck !== null && Number.isNaN(priceNumPreCheck)) {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
       return;
     }
 
-    const attemptForApi = mode === "initial" ? 0 : regenerationsUsed + 1;
-
-    const tagForLog = manualValidationTag.trim().slice(0, 80);
-
-    if (mode === "initial") {
-      trackEvent(AiAdsEvents.GENERATE_TAPPED, {
-        screen: "create_ai",
-        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
-      });
-      setRegenerationsUsed(0);
-    } else {
-      trackEvent(AiAdsEvents.REGENERATE_TAPPED, {
-        screen: "create_ai",
-        attempt: attemptForApi,
-        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
-      });
-    }
-
+    trackEvent(AiAdsEvents.GENERATE_TAPPED, { screen: "create_ai" });
     setGenerating(true);
     setBanner(null);
     setLastGenerationError(null);
-    setSelectedAdIndex(null);
-    setGeneratedAds(null);
-    aiDraftBaselineRef.current = null;
+    resetGenerationState();
+    const requestId = ++generationRequestIdRef.current;
 
     try {
-      const path = await ensureUploadedPhoto();
-      if (!path) {
-        throw new Error(t("createAi.errUploadPhotoBeforeGenerate"));
+      let path: string | null;
+      try {
+        path = await ensureUploadedPhoto();
+        if (path) await ensurePosterUrl(path);
+      } catch {
+        // Upload errors from Supabase storage have ugly messages ("JWT expired",
+        // "duplicate key", etc.). A non-technical owner can't act on those — give
+        // them the friendly "try a different photo" copy that already exists.
+        if (requestId !== generationRequestIdRef.current) return;
+        const friendly = t("createAi.errPublishPhoto");
+        setLastGenerationError(friendly);
+        setBanner({ message: friendly, tone: "error" });
+        return;
       }
-      await ensurePosterUrl(path);
-      const priceNum = priceNumPreCheck;
-      const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
-        body: {
-          business_id: businessId,
-          photo_path: path,
-          hint_text: hintText.trim(),
-          price: priceNum,
-          business_context: businessContextForAi,
-          regeneration_attempt: attemptForApi,
-          offer_schedule_summary: offerScheduleSummary,
-          output_language: dealOutputLang,
-          ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
-        },
-        timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+      // Snapshot the treatment we're about to send so revisions reference the same one
+      // even if the user changes the selector mid-flight.
+      const sentTreatment = path ? photoTreatment : null;
+
+      const { ad } = await aiGenerateAd({
+        business_id: businessId,
+        hint_text: hintText.trim(),
+        business_context: businessContextForAi,
+        output_language: dealOutputLang,
+        ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
+        ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
       });
-      if (error) {
-        throw new Error(parseFunctionError(error));
-      }
-      if (data && typeof data === "object" && "error" in data) {
-        throw new Error(String((data as { error?: string }).error ?? t("createAi.errGenerationFailed")));
-      }
-      const ads = (data as { ads?: GeneratedAd[] })?.ads;
-      if (!Array.isArray(ads) || ads.length !== 3) {
-        throw new Error(t("createAi.errUnexpectedAiResponse"));
-      }
-      setGeneratedAds(ads);
-      setLastSuccessfulGenAttempt(attemptForApi);
-      if (mode === "regenerate") {
-        setRegenerationsUsed((u) => u + 1);
-      }
-      setLastGenerationError(null);
-      setBanner({
-        message:
-          attemptForApi > 0 ? t("createAi.successBatchNew") : t("createAi.successBatchFirst"),
-        tone: "success",
-      });
+      // Stale-result guard: discard if user kicked off another generation after this one.
+      if (requestId !== generationRequestIdRef.current) return;
+      lastSentPhotoTreatmentRef.current = sentTreatment;
+      setGeneratedAd(ad);
+      setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
-        regeneration_attempt: attemptForApi,
-        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
+        regeneration_attempt: 0,
       });
     } catch (err: unknown) {
-      const raw =
-        (err instanceof Error ? err.message : String(err)) || t("createAi.errAiGenerationFailed");
-      const friendly = friendlyGenerationError(raw);
+      if (requestId !== generationRequestIdRef.current) return;
+      const raw = err instanceof Error ? err.message : String(err);
+      const code = getErrorCode(err);
+      const friendly = friendlyGenerationError(raw, code);
       setLastGenerationError(friendly);
       setBanner({ message: friendly, tone: "error" });
       trackEvent(AiAdsEvents.GENERATION_FAILED, {
         screen: "create_ai",
-        regeneration_attempt: attemptForApi,
+        regeneration_attempt: 0,
         message_snippet: raw.slice(0, 80),
-        ...(tagForLog ? { manual_validation_tag: tagForLog } : {}),
       });
     } finally {
-      setGenerating(false);
+      // Only flip the spinner off if our request is still the active one. If the user
+      // hit Cancel, that handler already cleared the flag — don't fight with it.
+      if (requestId === generationRequestIdRef.current) {
+        setGenerating(false);
+      }
     }
   }
 
-  async function devTestGenerateDealCopy() {
-    if (!hintText.trim()) {
-      setBanner({ message: t("createAi.errAddHint"), tone: "error" });
+  async function reviseAd() {
+    if (!generatedAd || !businessId) return;
+    if (revisionsUsed >= SOFT_REVISION_CAP) {
+      setBanner({ message: t("createAi.errRegenClientLimit"), tone: "info" });
       return;
     }
-    setDevEdgeBusy("copy");
-    setBanner(null);
-    try {
-      const priceNum = parseOptionalPriceInput(price);
-      const out = await aiGenerateDealCopy({
-        hint_text: hintText.trim(),
-        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
-        business_name: businessName ?? null,
-        business_id: businessId ?? null,
-      });
-      const body = [`title: ${out.title}`, `promo_line: ${out.promo_line}`, `description: ${out.description}`].join(
-        "\n\n",
-      );
-      Alert.alert(t("createAi.devCopyOkTitle"), body.length > 1600 ? `${body.slice(0, 1600)}…` : body);
-    } catch (e: unknown) {
-      Alert.alert(t("createAi.devCopyFailTitle"), e instanceof Error ? e.message : String(e));
-    } finally {
-      setDevEdgeBusy(null);
+    if (!activePreset && !revisionFeedback.trim()) {
+      setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
+      return;
     }
-  }
-
-  function devPromptAiCreateDeal() {
-    if (!validateInputs(true)) return;
-    Alert.alert(t("createAi.devCreateConfirmTitle"), t("createAi.devCreateConfirmMsg"), [
-      { text: t("createAi.cancel"), style: "cancel" },
-      {
-        text: t("createAi.devCreateConfirmRun"),
-        style: "destructive",
-        onPress: () => void runDevAiCreateDeal(),
-      },
-    ]);
-  }
-
-  async function runDevAiCreateDeal() {
-    if (!businessId) return;
-    setDevEdgeBusy("create");
+    setRevising(true);
     setBanner(null);
+    const requestId = ++generationRequestIdRef.current;
+    /**
+     * Send the treatment that produced the *previous* ad image, not the current UI selection.
+     * This way the server's image-only revision applies enhancement consistent with what the
+     * user is looking at, even if they fiddled with the selector after generating.
+     */
+    const treatmentForRevision =
+      lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
     try {
-      const path = await ensureUploadedPhoto();
-      if (!path) {
-        throw new Error(t("createAi.errUploadPhotoForDevCreate"));
-      }
-      const maxClaimsNum = Number(maxClaims);
-      const cutoffNum = Number(cutoffMins);
-      const priceNum = parseOptionalPriceInput(price);
-      const isRecurring = validityMode === "recurring";
-      const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
-      const out = await aiCreateDeal({
+      const { ad } = await aiReviseAd({
         business_id: businessId,
-        photo_path: path,
         hint_text: hintText.trim(),
-        price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
-        end_time: end.toISOString(),
-        max_claims: maxClaimsNum,
-        claim_cutoff_buffer_minutes: cutoffNum,
+        business_context: businessContextForAi,
+        output_language: dealOutputLang,
+        previous_ad: generatedAd,
+        revision_target: revisionTarget,
+        revision_count: revisionsUsed + 1,
+        ...(activePreset ? { revision_preset: activePreset } : {}),
+        ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
+        ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
+        ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
       });
-      void notifyDealPublished(out.deal_id);
-      void translateDeal(out.deal_id);
-      Alert.alert(t("createAi.devCreateOkTitle"), `deal_id: ${out.deal_id}\n\n${out.title}`, [
-        { text: t("commonUi.ok"), onPress: () => router.replace("/(tabs)/dashboard") },
-      ]);
-    } catch (e: unknown) {
-      Alert.alert(t("createAi.devCreateFailTitle"), e instanceof Error ? e.message : String(e));
+      // Stale-result guard: discard if user replaced the photo or kicked off another generation.
+      if (requestId !== generationRequestIdRef.current) return;
+      setGeneratedAd(ad);
+      setRevisionsUsed((u) => u + 1);
+      setRevisionFeedback("");
+      setActivePreset(null);
+      setAdAccepted(false);
+      aiDraftBaselineRef.current = null;
+    } catch (err: unknown) {
+      if (requestId !== generationRequestIdRef.current) return;
+      const raw = err instanceof Error ? err.message : String(err);
+      const code = getErrorCode(err);
+      const friendly = friendlyGenerationError(raw, code);
+      setBanner({ message: friendly, tone: "error" });
     } finally {
-      setDevEdgeBusy(null);
+      if (requestId === generationRequestIdRef.current) {
+        setRevising(false);
+      }
     }
+  }
+
+  function acceptAd() {
+    if (!generatedAd) return;
+    applyAdToDraft(generatedAd);
+    setAdAccepted(true);
+    trackEvent(AiAdsEvents.AD_SELECTED, {
+      screen: "create_ai",
+      creative_lane: "single",
+      regeneration_attempt: revisionsUsed,
+    });
+    // Scroll to draft editor
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 200);
   }
 
   async function publishDeal() {
-    if (!validateInputs(false)) return;
+    if (!validateInputs()) return;
     if (!businessId) {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
@@ -1038,8 +1024,6 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPublishDraft"), tone: "error" });
       return;
     }
-
-    // Pre-flight validations (before setPublishing) so the button doesn't flash
     const priceNum = parseOptionalPriceInput(price);
     if (priceNum !== null && Number.isNaN(priceNum)) {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
@@ -1047,7 +1031,6 @@ export default function AiDealScreen() {
     }
 
     const composedDescription = composeListingDescription(promoLine, ctaText, description);
-
     const quality = assessDealQuality({
       title: title.trim(),
       description: composedDescription,
@@ -1071,7 +1054,6 @@ export default function AiDealScreen() {
       return;
     }
 
-    // Validate end_time is in the future for one-time deals (before setPublishing)
     const isRecurring = validityMode === "recurring";
     if (!isRecurring && endTime.getTime() <= Date.now()) {
       setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
@@ -1083,17 +1065,14 @@ export default function AiDealScreen() {
     try {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
-      const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
-      const publicPoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
+      const userPhotoStoragePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
       const start = isRecurring ? new Date() : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
 
-      // Prefer AI-generated image from selected variant over user's uploaded photo
-      const selectedAd = selectedAdIndex != null ? generatedAds?.[selectedAdIndex] : null;
-      const aiPosterPath = selectedAd?.poster_storage_path ?? null;
-      const finalStoragePath = aiPosterPath ?? storagePath;
+      const aiPosterPath = generatedAd?.poster_storage_path ?? null;
+      const finalStoragePath = aiPosterPath ?? userPhotoStoragePath;
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
 
       const baseRow = {
@@ -1118,10 +1097,7 @@ export default function AiDealScreen() {
       if (editingDealId) {
         const { error } = await supabase
           .from("deals")
-          .update({
-            ...baseRow,
-            location_id: publishLocationIds[0] ?? null,
-          })
+          .update({ ...baseRow, location_id: publishLocationIds[0] ?? null })
           .eq("id", editingDealId)
           .eq("business_id", businessId);
         if (error) throw error;
@@ -1130,10 +1106,7 @@ export default function AiDealScreen() {
       } else {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
-        const rows = locTargets.map((lid) => ({
-          ...baseRow,
-          location_id: lid,
-        }));
+        const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
         const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
         if (error) throw error;
         for (const row of dealsOut ?? []) {
@@ -1154,18 +1127,18 @@ export default function AiDealScreen() {
         if (edited) {
           trackEvent(AiAdsEvents.FIELDS_EDITED_BEFORE_PUBLISH, { screen: "create_ai" });
         }
-        const pubTag = manualValidationTag.trim().slice(0, 80);
         trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
           screen: "create_ai",
           draft_edited: edited,
-          ...(pubTag ? { manual_validation_tag: pubTag } : {}),
         });
       }
 
+      // Hand off a one-shot success flash to whichever tab the owner lands on
+      // (usually dashboard). Without this the redirect is silent — nervous pilots
+      // need a "yes, it worked" moment.
+      await markRecentPublish(title.trim());
       router.replace("/(tabs)");
     } catch (err: unknown) {
-      if (__DEV__) console.warn("[ai] Publish error:", err);
-      // Surface a helpful error message, not just "Publish failed"
       let detail = "";
       if (err instanceof Error) {
         const m = err.message.toLowerCase();
@@ -1201,22 +1174,20 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPublishDraftFirst"), tone: "error" });
       return;
     }
+    const priceNum = parseOptionalPriceInput(price);
+    if (priceNum !== null && Number.isNaN(priceNum)) {
+      setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      return;
+    }
     setSavingTemplate(true);
     setBanner(null);
     try {
       const path = await ensureUploadedPhoto();
       const signedPoster = await ensurePosterUrl(path);
-      const priceNum = parseOptionalPriceInput(price);
-      if (priceNum !== null && Number.isNaN(priceNum)) {
-        setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
-        return;
-      }
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
       const isRecurring = validityMode === "recurring";
-
       const composedDescription = composeListingDescription(promoLine, ctaText, description);
-
       const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const durablePoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
 
@@ -1236,12 +1207,8 @@ export default function AiDealScreen() {
       });
       if (error) throw error;
       setBanner({ message: t("createAi.templateSaved"), tone: "success" });
-    } catch (err: unknown) {
-      if (__DEV__) console.warn("[ai] Save template error:", err);
-      setBanner({
-        message: t("createAi.errSaveTemplateFailed"),
-        tone: "error",
-      });
+    } catch {
+      setBanner({ message: t("createAi.errSaveTemplateFailed"), tone: "error" });
     } finally {
       setSavingTemplate(false);
     }
@@ -1267,951 +1234,673 @@ export default function AiDealScreen() {
 
   if (dealIdFromRoute && dealEditLoading) {
     return (
-      <View
-        style={{
-          paddingTop: top,
-          paddingHorizontal: horizontal,
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator />
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.loadingDeal")}</Text>
       </View>
     );
   }
 
+  const adImageUri = generatedAd?.poster_storage_path
+    ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+    : photoUri ?? posterUrl ?? null;
+  const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
+  const revisionsLeftLabel =
+    revisionsLeft === 0
+      ? t("createAi.reviseRevisionsNoneLeft")
+      : revisionsLeft === 1
+        ? t("createAi.reviseRevisionsLeftSingular")
+        : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
+  const imagePresetKeys = generatedAd?.photo_source === "generated"
+    ? IMAGE_PRESET_KEYS_GENERATED
+    : IMAGE_PRESET_KEYS_PHOTO;
+  const presetKeysForTarget =
+    revisionTarget === "image"
+      ? imagePresetKeys
+      : revisionTarget === "copy"
+        ? COPY_PRESET_KEYS
+        : [...COPY_PRESET_KEYS, ...imagePresetKeys];
+  const targetLabel: Record<RevisionTarget, string> = {
+    copy: t("createAi.reviseTargetCopy"),
+    image: t("createAi.reviseTargetImage"),
+    both: t("createAi.reviseTargetBoth"),
+  };
+
   return (
     <KeyboardScreen>
-    <ScrollView
-      ref={scrollRef}
-      style={{ flex: 1 }}
-      {...FORM_SCROLL_KEYBOARD_PROPS}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingTop: top,
-        paddingHorizontal: horizontal,
-        paddingBottom: scrollBottom,
-      }}
-    >
-      <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>
-        {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
-      </Text>
-      <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        {...FORM_SCROLL_KEYBOARD_PROPS}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: top,
+          paddingHorizontal: horizontal,
+          paddingBottom: scrollBottom,
+        }}
+      >
+        <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>
+          {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
+        </Text>
+        <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
 
-      {isDemoAiAccount ? (
-        <View
-          style={{
-            marginTop: 14,
-            padding: 14,
-            borderRadius: 14,
-            backgroundColor: "#f0f7ff",
-            borderWidth: 1,
-            borderColor: "#c5daf7",
-          }}
-        >
-          <Text style={{ fontWeight: "700", fontSize: 15, color: "#0d47a1" }}>{t("createAi.demoModeTitle")}</Text>
-          <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: "#1565c0" }}>
-            {t("createAi.demoModeBody")}
-          </Text>
-        </View>
-      ) : null}
-
-      {__DEV__ ? (
-        <Pressable
-          onPress={() => setDevToolsOpen((o) => !o)}
-          style={{ marginTop: 8, alignSelf: "flex-start", paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8, backgroundColor: "#fff8e1", borderWidth: 1, borderColor: "#e6d29a" }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#b45309" }}>DEV ▾</Text>
-        </Pressable>
-      ) : null}
-      {__DEV__ && devToolsOpen ? (
-        <View style={{ marginTop: 6, padding: 12, borderRadius: 14, backgroundColor: "#fff8e1", borderWidth: 1, borderColor: "#e6d29a", gap: 8 }}>
-          <SecondaryButton title={devEdgeBusy === "copy" ? t("createAi.devBusy") : t("createAi.devTestCopy")} onPress={() => void devTestGenerateDealCopy()} disabled={devEdgeBusy !== null} />
-          <SecondaryButton title={devEdgeBusy === "create" ? t("createAi.devBusy") : t("createAi.devTestCreate")} onPress={devPromptAiCreateDeal} disabled={devEdgeBusy !== null} />
-        </View>
-      ) : null}
-
-      <View style={{ marginTop: 12 }}>
-        <Pressable
-          onPress={() => setQaPanelOpen((o) => !o)}
-          style={{
-            paddingVertical: 8,
-            paddingHorizontal: 10,
-            borderRadius: 10,
-            backgroundColor: "#f3f3f3",
-            alignSelf: "flex-start",
-          }}
-        >
-          <Text style={{ fontWeight: "700", fontSize: 13 }}>
-            {qaPanelOpen ? "▼" : "▶"} {t("createAi.qaToggle")}
-          </Text>
-        </Pressable>
-        {qaPanelOpen ? (
-          <View style={{ marginTop: 8, gap: 8 }}>
-            <Text style={{ fontSize: 12, opacity: 0.75, lineHeight: 17 }}>{t("createAi.qaHelp")}</Text>
-            <TextInput
-              value={manualValidationTag}
-              onChangeText={(text) => setManualValidationTag(text.slice(0, 80))}
-              placeholder={t("createAi.qaPlaceholder")}
-              autoCapitalize="characters"
-              style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 10,
-                padding: 10,
-                fontSize: 14,
-              }}
-            />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {QA_CASE_IDS.map((id) => (
-                <Pressable
-                  key={id}
-                  onPress={() => setManualValidationTag(id)}
-                  style={{
-                    paddingVertical: 4,
-                    paddingHorizontal: 8,
-                    borderRadius: 8,
-                    backgroundColor: manualValidationTag === id ? "#111" : "#eee",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: manualValidationTag === id ? "#fff" : "#111",
-                    }}
-                  >
-                    {id}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            {manualValidationTag.trim() ? (
-              <Text style={{ fontSize: 11, opacity: 0.6 }}>
-                {t("createAi.qaActiveTag", { tag: manualValidationTag.trim() })}
-              </Text>
-            ) : null}
+        {isDemoAiAccount ? (
+          <View style={{ marginTop: 14, padding: 14, borderRadius: 14, backgroundColor: "#f0f7ff", borderWidth: 1, borderColor: "#c5daf7" }}>
+            <Text style={{ fontWeight: "700", fontSize: 15, color: "#0d47a1" }}>{t("createAi.demoModeTitle")}</Text>
+            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: "#1565c0" }}>{t("createAi.demoModeBody")}</Text>
           </View>
         ) : null}
-      </View>
 
-      {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
-      {dealLoadError ? (
-        <Banner message={dealLoadError} tone="error" />
-      ) : null}
-      {String(params.fromMenuOffer ?? "") === "1" && !editingDealId ? (
-        <View
-          style={{
-            marginTop: 12,
-            padding: 12,
-            borderRadius: 14,
-            backgroundColor: "rgba(255,159,28,0.12)",
-            borderWidth: 1,
-            borderColor: "rgba(255,159,28,0.45)",
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("createAi.menuOfferScheduleHint")}</Text>
-        </View>
-      ) : null}
+        {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+        {dealLoadError ? <Banner message={dealLoadError} tone="error" /> : null}
 
-      {showCamera ? (
-        <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
-          <CameraView ref={cameraRef} style={{ height: 360, width: "100%" }} facing="back" />
-          <View style={{ padding: 12, backgroundColor: "#111" }}>
-            <PrimaryButton title={t("createAi.capturePhoto")} onPress={capturePhoto} />
-            <View style={{ marginTop: 8 }}>
-              <SecondaryButton title={t("createAi.cancel")} onPress={() => setShowCamera(false)} />
-            </View>
-          </View>
-        </View>
-      ) : (
-        <>
-          <View
-            style={{
-              marginTop: 14,
-              borderRadius: 14,
-              backgroundColor: "#f6f7fb",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              alignSelf: "flex-start",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 1, total: 3 })}
-            </Text>
-          </View>
-          <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
-            <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
-          </View>
-
-          {photoUri || posterUrl ? (
-            <Image
-              source={{ uri: photoUri ?? posterUrl ?? "" }}
-              style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={{ marginTop: 12 }}>
-              <View
-                style={{
-                  height: 260,
-                  borderRadius: 18,
-                  backgroundColor: "#f3f6ff",
-                  borderWidth: 1.5,
-                  borderColor: "#cfd7ff",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 16,
-                }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#2f3fb2" }}>
-                  {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
-                </Text>
-                <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center" }}>{t("createAi.photoHint")}</Text>
+        {showCamera ? (
+          <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
+            <CameraView ref={cameraRef} style={{ height: 360, width: "100%" }} facing="back" />
+            <View style={{ padding: 12, backgroundColor: "#111" }}>
+              <PrimaryButton title={t("createAi.capturePhoto")} onPress={capturePhoto} />
+              <View style={{ marginTop: 8 }}>
+                <SecondaryButton title={t("createAi.cancel")} onPress={() => setShowCamera(false)} />
               </View>
             </View>
-          )}
-
-          <View
-            style={{
-              marginTop: 16,
-              borderRadius: 14,
-              backgroundColor: "#f6f7fb",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              alignSelf: "flex-start",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 2, total: 3 })}
-            </Text>
           </View>
-          <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
-          <View style={{ marginTop: 6 }}>
-            <TextInput
-              value={hintText}
-              onChangeText={setHintText}
-              placeholder={t("createAi.hintPlaceholder")}
-              multiline
-              style={{
-                borderWidth: 1,
-                borderColor: isRecording ? "#e0245e" : "#cfd3de",
-                borderRadius: 14,
-                padding: 14,
-                paddingRight: Platform.OS !== "web" ? 56 : 14,
-                minHeight: 56,
-                backgroundColor: "#fff",
-              }}
-            />
-            {Platform.OS !== "web" ? (
-              <Pressable
-                onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
-                disabled={transcribing}
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  bottom: 8,
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: isRecording ? "#e0245e" : "#111",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {transcribing ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
-                )}
-              </Pressable>
-            ) : null}
-          </View>
+        ) : (
+          <>
+            <StepBadge n={1} total={3} t={t} />
+            <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+              <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
+              <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
+            </View>
 
-          <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-            placeholder={t("createAi.placeholderPrice")}
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 6,
-            }}
-          />
-
-          <View
-            onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
-            style={{
-              marginTop: 16,
-              borderRadius: 14,
-              backgroundColor: "#f6f7fb",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              alignSelf: "flex-start",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
-              {t("createAi.stepOfTotal", { current: 3, total: 3 })}
-            </Text>
-          </View>
-          <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            <Pressable
-              onPress={() => setValidityMode("one-time")}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: validityMode === "one-time" ? "#111" : "#eee",
-              }}
-            >
-              <Text style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}>
-                {t("createAi.oneTime")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setValidityMode("recurring")}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: validityMode === "recurring" ? "#111" : "#eee",
-              }}
-            >
-              <Text style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}>
-                {t("createAi.recurring")}
-              </Text>
-            </Pressable>
-          </View>
-
-          {validityMode === "one-time" ? (
-            <>
-              <Text style={{ marginTop: 12 }}>{t("createAi.startTime")}</Text>
-              <Pressable
-                onPress={() => setShowStartPicker(true)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              >
-                <Text>{startTime.toLocaleString()}</Text>
-              </Pressable>
-              {showStartPicker ? (
-                Platform.OS === "android" ? (
-                  <DateTimePicker
-                    value={androidStartDateRef.current ?? startTime}
-                    mode={androidStartPickerMode}
-                    onChange={(event, date) => {
-                      if (event.type === "dismissed" || !date) {
-                        setShowStartPicker(false);
-                        setAndroidStartPickerMode("date");
-                        androidStartDateRef.current = null;
-                        return;
-                      }
-                      if (androidStartPickerMode === "date") {
-                        androidStartDateRef.current = date;
-                        setAndroidStartPickerMode("time");
-                      } else {
-                        const picked = androidStartDateRef.current ?? startTime;
-                        const merged = new Date(picked);
-                        merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
-                        setStartTime(merged);
-                        setShowStartPicker(false);
-                        setAndroidStartPickerMode("date");
-                        androidStartDateRef.current = null;
-                      }
-                    }}
-                  />
-                ) : (
-                  <DateTimePicker
-                    value={startTime}
-                    mode="datetime"
-                    onChange={(_event, date) => {
-                      setShowStartPicker(false);
-                      if (date) setStartTime(date);
-                    }}
-                  />
-                )
-              ) : null}
-
-              <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
-              <Pressable
-                onPress={() => setShowEndPicker(true)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              >
-                <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
-              </Pressable>
-              {showEndPicker ? (
-                Platform.OS === "android" ? (
-                  <DateTimePicker
-                    value={androidEndDateRef.current ?? endTime}
-                    mode={androidEndPickerMode}
-                    onChange={(event, date) => {
-                      if (event.type === "dismissed" || !date) {
-                        setShowEndPicker(false);
-                        setAndroidEndPickerMode("date");
-                        androidEndDateRef.current = null;
-                        return;
-                      }
-                      if (androidEndPickerMode === "date") {
-                        androidEndDateRef.current = date;
-                        setAndroidEndPickerMode("time");
-                      } else {
-                        const picked = androidEndDateRef.current ?? endTime;
-                        const merged = new Date(picked);
-                        merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
-                        setEndTime(merged);
-                        setShowEndPicker(false);
-                        setAndroidEndPickerMode("date");
-                        androidEndDateRef.current = null;
-                      }
-                    }}
-                  />
-                ) : (
-                  <DateTimePicker
-                    value={endTime}
-                    mode="datetime"
-                    onChange={(_event, date) => {
-                      setShowEndPicker(false);
-                      if (date) setEndTime(date);
-                    }}
-                  />
-                )
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text style={{ marginTop: 12 }}>{t("createAi.days")}</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                {dayOptionsUi.map((day) => {
-                  const selected = daysOfWeek.includes(day.value);
-                  return (
-                    <Pressable
-                      key={day.value}
-                      onPress={() => {
-                        setDaysOfWeek((prev) =>
-                          selected ? prev.filter((d) => d !== day.value) : [...prev, day.value]
-                        );
-                      }}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 999,
-                        backgroundColor: selected ? "#111" : "#eee",
-                      }}
-                    >
-                      <Text style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}>
-                        {day.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={{ marginTop: 12 }}>{t("createAi.timeWindow")}</Text>
-              <Pressable
-                onPress={() => setShowWindowStartPicker(true)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              >
-                <Text>
-                  {t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}
-                </Text>
-              </Pressable>
-              {showWindowStartPicker ? (
-                <DateTimePicker
-                  value={windowStart}
-                  mode="time"
-                  onChange={(_event, date) => {
-                    setShowWindowStartPicker(false);
-                    if (date) setWindowStart(date);
-                  }}
-                />
-              ) : null}
-
-              <Pressable
-                onPress={() => setShowWindowEndPicker(true)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              >
-                <Text>
-                  {t("createAi.windowEnd")} {formatPickerTime(windowEnd)}
-                </Text>
-              </Pressable>
-              {showWindowEndPicker ? (
-                <DateTimePicker
-                  value={windowEnd}
-                  mode="time"
-                  onChange={(_event, date) => {
-                    setShowWindowEndPicker(false);
-                    if (date) setWindowEnd(date);
-                  }}
-                />
-              ) : null}
-            </>
-          )}
-
-          <Text style={{ marginTop: 12 }}>{t("createAi.maxClaims")}</Text>
-          <TextInput
-            value={maxClaims}
-            onChangeText={setMaxClaims}
-            keyboardType="number-pad"
-            placeholder={t("createAi.placeholderMaxClaims")}
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 6,
-            }}
-          />
-
-          <Text style={{ marginTop: 12 }}>{t("createAi.cutoffBuffer")}</Text>
-          <TextInput
-            value={cutoffMins}
-            onChangeText={setCutoffMins}
-            keyboardType="number-pad"
-            placeholder={t("createAi.placeholderCutoff")}
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 6,
-            }}
-          />
-
-          {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
-            <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
-          ) : null}
-
-          <View style={{ marginTop: 16, gap: 10 }}>
-            {quota ? (
-              <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center" }}>
-                {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
-              </Text>
-            ) : null}
-            <PrimaryButton
-              title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
-              onPress={() => void generateAdVariants("initial")}
-              disabled={generating}
-              style={{ height: 62, borderRadius: 18 }}
-            />
-            {generatedAds && generatedAds.length === 3 ? (
-              <>
-                <SecondaryButton
-                  title={generating ? t("createAi.regenerating") : t("createAi.regenerate")}
-                  onPress={() => void generateAdVariants("regenerate")}
-                  disabled={generating || regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT}
-                />
-                <Text style={{ fontSize: 14, opacity: 0.8, fontWeight: "600", textAlign: "center" }}>
-                  {regenerationsUsed >= MAX_REGENERATIONS_PER_DRAFT
-                    ? t("createAi.refreshLimitReached")
-                    : t("createAi.refreshesLeft", {
-                        remaining: MAX_REGENERATIONS_PER_DRAFT - regenerationsUsed,
-                        total: MAX_REGENERATIONS_PER_DRAFT,
-                      })}
-                </Text>
-              </>
-            ) : null}
-            {generating ? (
-              <View style={{ marginTop: 4, gap: 6 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <ActivityIndicator />
-                  <Text style={{ opacity: 0.75, flex: 1 }}>
-                    {generatingPhase === 0
-                      ? t("createAi.generatingPhaseCopy")
-                      : generatingPhase === 1
-                        ? t("createAi.generatingPhaseImages")
-                        : t("createAi.generatingPhaseFinishing")}
+            {photoUri || posterUrl ? (
+              <Image
+                source={{ uri: photoUri ?? posterUrl ?? "" }}
+                style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={{ marginTop: 12 }}>
+                <View style={{ height: 260, borderRadius: 18, backgroundColor: "#f3f6ff", borderWidth: 1.5, borderColor: "#cfd7ff", alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
+                  <Text style={{ fontSize: 18, fontWeight: "700", color: "#2f3fb2" }}>
+                    {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
                   </Text>
+                  <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center" }}>{t("createAi.photoHint")}</Text>
+                </View>
+              </View>
+            )}
+
+            {photoUri || posterUrl ? (
+              <View style={{ marginTop: 14 }}>
+                <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6 }}>{t("createAi.photoPolishTitle")}</Text>
+                <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8 }}>
+                  {t("createAi.photoPolishHelp")}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {PHOTO_TREATMENT_OPTIONS.map((opt) => {
+                    const selected = photoTreatment === opt.key;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        onPress={() => {
+                          if (opt.key === photoTreatment) return;
+                          setPhotoTreatment(opt.key);
+                          // Stale-ad guard: changing the treatment after generating means the
+                          // displayed ad no longer reflects the chosen polish.
+                          if (generatedAd) resetGenerationState();
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 10,
+                          paddingHorizontal: 8,
+                          borderRadius: 12,
+                          backgroundColor: selected ? "#FF9F1C" : "#f6f7fb",
+                          borderWidth: selected ? 0 : 1,
+                          borderColor: "#e0e3ec",
+                        }}
+                      >
+                        <Text style={{ fontWeight: "700", fontSize: 13, color: selected ? "#fff" : "#111", textAlign: "center" }}>
+                          {t(opt.labelKey)}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 11, color: selected ? "#fff" : "#666", textAlign: "center" }}>
+                          {t(opt.helperKey)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
             ) : null}
-          </View>
 
-          {lastGenerationError && !generating ? (
-            <View
-              style={{
-                marginTop: 16,
-                padding: 14,
-                borderRadius: 14,
-                backgroundColor: "#fafafa",
-                borderWidth: 1,
-                borderColor: "#e0e0e0",
-                gap: 10,
-              }}
-            >
-              <Text style={{ fontWeight: "700" }}>{t("createAi.fallbackIntro")}</Text>
-              <Text style={{ opacity: 0.8, lineHeight: 20 }}>{t("createAi.fallbackBody")}</Text>
-              <SecondaryButton
-                title={t("createAi.showDraftFields")}
-                onPress={() => {
-                  setManualDraftUnlocked(true);
-                  setBanner({
-                    message: t("createAi.manualDraftBanner"),
-                    tone: "info",
-                  });
-                }}
-              />
+            <View style={{ marginTop: 16 }}>
+              <StepBadge n={2} total={3} t={t} />
             </View>
-          ) : null}
-
-          {generatedAds && generatedAds.length === 3 ? (
-            <View style={{ marginTop: 20, gap: 16 }}>
-              <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createAi.pickAdTitle")}</Text>
-              <Text style={{ opacity: 0.7, marginBottom: 4 }}>{t("createAi.pickAdHelp")}</Text>
-              {generatedAds.map((ad, index) => {
-                const selected = selectedAdIndex === index;
-                const laneKey = (ad.creative_lane ?? CREATIVE_LANE_ORDER[index]) as CreativeLane;
-                const laneTitle = laneUiTitle(laneKey);
-                const ls = AD_LANE_STYLES[laneKey] ?? AD_LANE_STYLES.value;
-                // AI-generated image takes priority over user's uploaded photo
-                const aiImageUri = ad.poster_storage_path
-                  ? buildPublicDealPhotoUrl(ad.poster_storage_path)
-                  : null;
-                const cardImageUri = aiImageUri ?? photoUri ?? posterUrl ?? null;
-                return (
-                  <Pressable
-                    key={`${ad.creative_lane ?? index}-${index}`}
-                    onPress={() => {
-                      setSelectedAdIndex(index);
-                      applyAdToDraft(ad);
-                      trackEvent(AiAdsEvents.AD_SELECTED, {
-                        screen: "create_ai",
-                        creative_lane: ad.creative_lane ?? CREATIVE_LANE_ORDER[index],
-                        regeneration_attempt: lastSuccessfulGenAttempt,
-                        ...(manualValidationTag.trim()
-                          ? { manual_validation_tag: manualValidationTag.trim().slice(0, 80) }
-                          : {}),
-                      });
-                    }}
-                    style={{
-                      borderRadius: 24,
-                      overflow: "hidden",
-                      borderWidth: selected ? 3 : 0,
-                      borderColor: selected ? ls.accent : "transparent",
-                      elevation: selected ? 6 : 3,
-                      shadowColor: "#000",
-                      shadowOpacity: selected ? 0.15 : 0.08,
-                      shadowRadius: selected ? 14 : 8,
-                      shadowOffset: { width: 0, height: selected ? 6 : 3 },
-                    }}
-                  >
-                    {/* Hero image with gradient overlay and headline */}
-                    <View style={{ height: 260, width: "100%", backgroundColor: "#222" }}>
-                      {cardImageUri ? (
-                        <Image
-                          source={{ uri: cardImageUri }}
-                          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                          contentFit="cover"
-                        />
-                      ) : null}
-                      <LinearGradient
-                        colors={ls.gradient}
-                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                      />
-                      {/* Lane badge — top left */}
-                      <View style={{ position: "absolute", top: 14, left: 14, flexDirection: "row", gap: 6 }}>
-                        <View
-                          style={{
-                            backgroundColor: ls.badge,
-                            paddingHorizontal: 12,
-                            paddingVertical: 5,
-                            borderRadius: 999,
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: "800", color: ls.badgeText, letterSpacing: 0.4 }}>
-                            {laneTitle.toUpperCase()}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor: "rgba(255,255,255,0.22)",
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 999,
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>
-                            {ad.style_label}
-                          </Text>
-                        </View>
-                      </View>
-                      {/* Headline overlay — bottom of image */}
-                      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 18 }}>
-                        <Text
-                          style={{
-                            fontSize: 22,
-                            fontWeight: "900",
-                            color: "#fff",
-                            letterSpacing: -0.4,
-                            lineHeight: 28,
-                            textShadowColor: "rgba(0,0,0,0.5)",
-                            textShadowOffset: { width: 0, height: 1 },
-                            textShadowRadius: 4,
-                          }}
-                        >
-                          {ad.headline}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Ad body section */}
-                    <View style={{ backgroundColor: ls.bg, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18 }}>
-                      <Text style={{ fontSize: 15, lineHeight: 22, color: "#333", fontWeight: "500" }}>
-                        {ad.subheadline}
-                      </Text>
-                      {/* CTA button */}
-                      <View
-                        style={{
-                          marginTop: 14,
-                          backgroundColor: ls.ctaBg,
-                          paddingVertical: 12,
-                          paddingHorizontal: 20,
-                          borderRadius: 14,
-                          alignSelf: "flex-start",
-                        }}
-                      >
-                        <Text style={{ fontSize: 15, fontWeight: "800", color: ls.ctaText, letterSpacing: 0.2 }}>
-                          {ad.cta}
-                        </Text>
-                      </View>
-                      {/* Business info + deal timing */}
-                      <View
-                        style={{
-                          marginTop: 16,
-                          paddingTop: 14,
-                          borderTopWidth: 1,
-                          borderTopColor: "rgba(0,0,0,0.08)",
-                          gap: 6,
-                        }}
-                      >
-                        {businessName ? (
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#222" }}>
-                            {businessName}
-                          </Text>
-                        ) : null}
-                        {businessProfile?.address || businessProfile?.location ? (
-                          <Text style={{ fontSize: 13, color: "#555", lineHeight: 18 }}>
-                            {businessProfile.address ?? businessProfile.location}
-                          </Text>
-                        ) : null}
-                        <Text style={{ fontSize: 12, color: "#777", lineHeight: 17 }}>
-                          {offerScheduleSummary}
-                        </Text>
-                      </View>
-                      {/* Branding line */}
-                      <View
-                        style={{
-                          marginTop: 12,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          opacity: 0.5,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: 8,
-                            backgroundColor: ls.accent,
-                          }}
-                        />
-                        <Text style={{ fontSize: 11, fontWeight: "700", letterSpacing: 0.8, color: "#555" }}>
-                          TWOFER
-                        </Text>
-                      </View>
-                      {manualValidationTag.trim() ? (
-                        <Text
-                          style={{ fontSize: 10, color: "#888", marginTop: 8 }}
-                          accessibilityLabel={`Creative lane ${ad.creative_lane}`}
-                        >
-                          {t("createAi.qaMetadata", { lane: ad.creative_lane })}
-                        </Text>
-                      ) : null}
-                    </View>
-
-                    {/* Selection indicator */}
-                    <View
-                      style={{
-                        backgroundColor: selected ? ls.accent : "#f5f5f5",
-                        paddingVertical: 14,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: "800",
-                          color: selected ? "#fff" : "#555",
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        {selected ? t("createAi.selectedEditBelow") : t("createAi.useThisAd")}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-
-          {showDraftEditor ? (
-            <>
-              <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
-              <View
-                style={{
-                  borderRadius: 18,
-                  backgroundColor: "#fff",
-                  overflow: "hidden",
-                  marginTop: 10,
-                  boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
-                  elevation: 2,
-                }}
-              >
-                {(() => {
-                  // Show AI-generated image from selected variant if available
-                  const selectedAd = selectedAdIndex != null ? generatedAds?.[selectedAdIndex] : null;
-                  const selectedAiUri = selectedAd?.poster_storage_path
-                    ? buildPublicDealPhotoUrl(selectedAd.poster_storage_path)
-                    : null;
-                  const previewUri = selectedAiUri ?? photoUri ?? posterUrl ?? null;
-                  return previewUri ? (
-                    <Image
-                      source={{ uri: previewUri }}
-                      style={{ height: 200, width: "100%" }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={{ height: 200, backgroundColor: "#eee" }} />
-                  );
-                })()}
-                <View style={{ padding: 12 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                  {promoLine ? (
-                    <Text style={{ marginTop: 6, fontWeight: "600" }}>{promoLine}</Text>
-                  ) : null}
-                  {ctaText ? (
-                    <Text style={{ marginTop: 6, fontWeight: "700" }}>{ctaText}</Text>
-                  ) : null}
-                  <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                  <Text style={{ marginTop: 8, opacity: 0.7 }}>
-                    {t("createAi.scheduleLabel")} {offerScheduleSummary}
-                  </Text>
-                  <Text style={{ marginTop: 4, opacity: 0.7 }}>
-                    {t("createAi.maxClaimsLabel")} {maxClaims}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={{ marginTop: 16 }}>{t("createAi.editHeadline")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
+            <View style={{ marginTop: 6 }}>
               <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder={t("createAi.headlinePlaceholder")}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              />
-              <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
-              <TextInput
-                value={promoLine}
-                onChangeText={setPromoLine}
-                placeholder={t("createAi.subheadlinePlaceholder")}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              />
-              <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
-              <TextInput
-                value={ctaText}
-                onChangeText={setCtaText}
-                placeholder={t("createAi.ctaPlaceholder")}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                }}
-              />
-              <Text style={{ marginTop: 12 }}>{t("createAi.editDetails")}</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder={t("createAi.detailsPlaceholder")}
+                value={hintText}
+                onChangeText={setHintText}
+                placeholder={t("createAi.hintPlaceholder")}
                 multiline
                 style={{
                   borderWidth: 1,
-                  borderColor: "#ccc",
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 6,
-                  minHeight: 90,
+                  borderColor: isRecording ? "#e0245e" : "#cfd3de",
+                  borderRadius: 14,
+                  padding: 14,
+                  paddingRight: Platform.OS !== "web" ? 56 : 14,
+                  minHeight: 56,
+                  backgroundColor: "#fff",
                 }}
               />
+              {Platform.OS !== "web" ? (
+                <Pressable
+                  onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
+                  disabled={transcribing}
+                  style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? "#e0245e" : "#111", alignItems: "center", justifyContent: "center" }}
+                >
+                  {transcribing ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
 
-              <View style={{ marginTop: 16, gap: 8 }}>
-                <PrimaryButton
-                  title={
-                    publishing
-                      ? t("createAi.publishing")
-                      : editingDealId
-                        ? t("createAi.saveDealChanges")
-                        : t("createAi.publishDeal")
-                  }
-                  onPress={publishDeal}
-                  disabled={publishing}
-                  style={{ height: 66, borderRadius: 20 }}
-                />
+            <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
+            <TextInput
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="decimal-pad"
+              placeholder={t("createAi.placeholderPrice")}
+              style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
+            />
+
+            <View
+              onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
+              style={{ marginTop: 16 }}
+            >
+              <StepBadge n={3} total={3} t={t} />
+            </View>
+            <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+              <Pressable
+                onPress={() => setValidityMode("one-time")}
+                style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? "#111" : "#eee" }}
+              >
+                <Text style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}>{t("createAi.oneTime")}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setValidityMode("recurring")}
+                style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? "#111" : "#eee" }}
+              >
+                <Text style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}>{t("createAi.recurring")}</Text>
+              </Pressable>
+            </View>
+
+            {validityMode === "one-time" ? (
+              <>
+                <Text style={{ marginTop: 12 }}>{t("createAi.startTime")}</Text>
+                <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}>
+                  <Text>{formatAppDateTime(startTime, i18n.language)}</Text>
+                </Pressable>
+                {showStartPicker ? (
+                  Platform.OS === "android" ? (
+                    <DateTimePicker
+                      value={androidStartDateRef.current ?? startTime}
+                      mode={androidStartPickerMode}
+                      onChange={(event, date) => {
+                        if (event.type === "dismissed" || !date) {
+                          setShowStartPicker(false);
+                          setAndroidStartPickerMode("date");
+                          androidStartDateRef.current = null;
+                          return;
+                        }
+                        if (androidStartPickerMode === "date") {
+                          androidStartDateRef.current = date;
+                          setAndroidStartPickerMode("time");
+                        } else {
+                          const picked = androidStartDateRef.current ?? startTime;
+                          const merged = new Date(picked);
+                          merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                          setStartTime(merged);
+                          setShowStartPicker(false);
+                          setAndroidStartPickerMode("date");
+                          androidStartDateRef.current = null;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <DateTimePicker
+                      value={startTime}
+                      mode="datetime"
+                      onChange={(_event, date) => { setShowStartPicker(false); if (date) setStartTime(date); }}
+                    />
+                  )
+                ) : null}
+
+                <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
+                <Pressable onPress={() => setShowEndPicker(true)} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}>
+                  <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
+                </Pressable>
+                {showEndPicker ? (
+                  Platform.OS === "android" ? (
+                    <DateTimePicker
+                      value={androidEndDateRef.current ?? endTime}
+                      mode={androidEndPickerMode}
+                      onChange={(event, date) => {
+                        if (event.type === "dismissed" || !date) {
+                          setShowEndPicker(false);
+                          setAndroidEndPickerMode("date");
+                          androidEndDateRef.current = null;
+                          return;
+                        }
+                        if (androidEndPickerMode === "date") {
+                          androidEndDateRef.current = date;
+                          setAndroidEndPickerMode("time");
+                        } else {
+                          const picked = androidEndDateRef.current ?? endTime;
+                          const merged = new Date(picked);
+                          merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                          setEndTime(merged);
+                          setShowEndPicker(false);
+                          setAndroidEndPickerMode("date");
+                          androidEndDateRef.current = null;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <DateTimePicker
+                      value={endTime}
+                      mode="datetime"
+                      onChange={(_event, date) => { setShowEndPicker(false); if (date) setEndTime(date); }}
+                    />
+                  )
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={{ marginTop: 12 }}>{t("createAi.days")}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                  {[
+                    { label: t("createAi.dayMon"), value: 1 },
+                    { label: t("createAi.dayTue"), value: 2 },
+                    { label: t("createAi.dayWed"), value: 3 },
+                    { label: t("createAi.dayThu"), value: 4 },
+                    { label: t("createAi.dayFri"), value: 5 },
+                    { label: t("createAi.daySat"), value: 6 },
+                    { label: t("createAi.daySun"), value: 7 },
+                  ].map((day) => {
+                    const selected = daysOfWeek.includes(day.value);
+                    return (
+                      <Pressable
+                        key={day.value}
+                        onPress={() => {
+                          setDaysOfWeek((prev) =>
+                            selected ? prev.filter((d) => d !== day.value) : [...prev, day.value],
+                          );
+                        }}
+                        style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? "#111" : "#eee" }}
+                      >
+                        <Text style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}>{day.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={{ marginTop: 12 }}>{t("createAi.timeWindow")}</Text>
+                <Pressable onPress={() => setShowWindowStartPicker(true)} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}>
+                  <Text>{t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}</Text>
+                </Pressable>
+                {showWindowStartPicker ? (
+                  <DateTimePicker
+                    value={windowStart}
+                    mode="time"
+                    onChange={(_event, date) => { setShowWindowStartPicker(false); if (date) setWindowStart(date); }}
+                  />
+                ) : null}
+
+                <Pressable onPress={() => setShowWindowEndPicker(true)} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}>
+                  <Text>{t("createAi.windowEnd")} {formatPickerTime(windowEnd)}</Text>
+                </Pressable>
+                {showWindowEndPicker ? (
+                  <DateTimePicker
+                    value={windowEnd}
+                    mode="time"
+                    onChange={(_event, date) => { setShowWindowEndPicker(false); if (date) setWindowEnd(date); }}
+                  />
+                ) : null}
+              </>
+            )}
+
+            <Text style={{ marginTop: 12 }}>{t("createAi.maxClaims")}</Text>
+            <TextInput
+              value={maxClaims}
+              onChangeText={setMaxClaims}
+              keyboardType="number-pad"
+              placeholder={t("createAi.placeholderMaxClaims")}
+              style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
+            />
+
+            <Text style={{ marginTop: 12 }}>{t("createAi.cutoffBuffer")}</Text>
+            <TextInput
+              value={cutoffMins}
+              onChangeText={setCutoffMins}
+              keyboardType="number-pad"
+              placeholder={t("createAi.placeholderCutoff")}
+              style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
+            />
+
+            {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
+              <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
+            ) : null}
+
+            <View style={{ marginTop: 16, gap: 10 }}>
+              {quota ? (
+                <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center" }}>
+                  {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
+                </Text>
+              ) : null}
+              <PrimaryButton
+                title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
+                onPress={() => void generateAd()}
+                disabled={generating || revising}
+                style={{ height: 62, borderRadius: 18 }}
+              />
+              {generating ? (
+                <View style={{ marginTop: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <ActivityIndicator />
+                    <Text style={{ opacity: 0.75, flex: 1 }}>
+                      {photoUri || posterUrl
+                        ? t("createAi.generatingWithPhoto")
+                        : t("createAi.generatingNoPhoto")}
+                    </Text>
+                  </View>
+                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17 }}>
+                    {t("createAi.generatingHint")}
+                  </Text>
+                  <View style={{ marginTop: 10 }}>
+                    <SecondaryButton title={t("createAi.cancel")} onPress={cancelGeneration} />
+                  </View>
+                </View>
+              ) : null}
+              {!generating && !generatedAd && !showDraftEditor ? (
                 <SecondaryButton
-                  title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}
-                  onPress={saveTemplate}
-                  disabled={savingTemplate}
+                  title={t("createAi.showDraftFields")}
+                  onPress={() => {
+                    setManualDraftUnlocked(true);
+                    setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
+                  }}
+                />
+              ) : null}
+            </View>
+
+            {lastGenerationError && !generating ? (
+              <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: "#fafafa", borderWidth: 1, borderColor: "#e0e0e0", gap: 10 }}>
+                <Text style={{ fontWeight: "700" }}>{t("createAi.fallbackIntro")}</Text>
+                <Text style={{ opacity: 0.8, lineHeight: 20 }}>{t("createAi.fallbackBody")}</Text>
+                <SecondaryButton
+                  title={t("createAi.showDraftFields")}
+                  onPress={() => {
+                    setManualDraftUnlocked(true);
+                    setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
+                  }}
                 />
               </View>
-            </>
-          ) : null}
-        </>
-      )}
-    </ScrollView>
+            ) : null}
+
+            {/* Single ad preview — text rendered ABOVE image, not baked in */}
+            {generatedAd ? (
+              <View style={{ marginTop: 22, gap: 14 }}>
+                <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createAi.yourAd")}</Text>
+
+                {/* Ad card: text above, image below */}
+                <View
+                  style={{
+                    borderRadius: 24,
+                    backgroundColor: "#fff",
+                    overflow: "hidden",
+                    elevation: 4,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.1,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 4 },
+                  }}
+                >
+                  {/* Top — meta line */}
+                  <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4 }}>
+                    {businessName ? (
+                      <Text style={{ fontSize: 12, color: "#888", fontWeight: "600", letterSpacing: 0.3 }}>
+                        {businessName.toUpperCase()}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {/* Headline + subline */}
+                  <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
+                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: "#FF7A00", lineHeight: 28 }}>
+                      {generatedAd.headline}
+                    </Text>
+                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: "#222", lineHeight: 22 }}>
+                      {generatedAd.subheadline}
+                    </Text>
+                  </View>
+
+                  {/* Image */}
+                  {adImageUri ? (
+                    <Image
+                      source={{ uri: adImageUri }}
+                      style={{ height: 320, width: "100%" }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={{ height: 200, backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ opacity: 0.5 }}>{t("createAi.noImage")}</Text>
+                    </View>
+                  )}
+
+                  {/* CTA + meta */}
+                  <View style={{ paddingHorizontal: 18, paddingVertical: 16, gap: 10 }}>
+                    <View
+                      style={{
+                        backgroundColor: "#FF9F1C",
+                        paddingVertical: 12,
+                        paddingHorizontal: 20,
+                        borderRadius: 14,
+                        alignSelf: "flex-start",
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: 0.2 }}>
+                        {generatedAd.cta}
+                      </Text>
+                    </View>
+                    {businessProfile?.address || businessProfile?.location ? (
+                      <Text style={{ fontSize: 13, color: "#666" }}>
+                        {businessProfile.address ?? businessProfile.location}
+                      </Text>
+                    ) : null}
+                    <Text style={{ fontSize: 12, color: "#888" }}>{displayScheduleSummary}</Text>
+                  </View>
+                </View>
+
+                {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: "#f8f6f0", borderLeftWidth: 3, borderLeftColor: "#FF9F1C" }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#a06400", letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 13, color: "#444", lineHeight: 19 }}>
+                      {generatedAd.item_research.description}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Accept button */}
+                {!adAccepted ? (
+                  <PrimaryButton
+                    title={t("createAi.useThisAd")}
+                    onPress={acceptAd}
+                    style={{ height: 56, borderRadius: 16 }}
+                  />
+                ) : (
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: "#e8f6e8", borderWidth: 1, borderColor: "#9ed79e" }}>
+                    <Text style={{ fontWeight: "700", color: "#1a5f1a" }}>{t("createAi.adAccepted")}</Text>
+                  </View>
+                )}
+
+                {/* Revise panel */}
+                {!adAccepted ? (
+                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: "#fafbff", borderWidth: 1, borderColor: "#e0e3ec", gap: 12 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createAi.tweakTitle")}</Text>
+                      <Text style={{ fontSize: 12, color: "#888" }}>{revisionsLeftLabel}</Text>
+                    </View>
+
+                    {/* Target toggle */}
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
+                        const selected = revisionTarget === target;
+                        return (
+                          <Pressable
+                            key={target}
+                            onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 8,
+                              borderRadius: 999,
+                              backgroundColor: selected ? "#111" : "#fff",
+                              borderWidth: 1,
+                              borderColor: selected ? "#111" : "#cfd3de",
+                            }}
+                          >
+                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? "#fff" : "#111", fontSize: 13 }}>
+                              {targetLabel[target]}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    {/* Presets */}
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {presetKeysForTarget.map((presetKey) => {
+                        const presetText = t(presetKey);
+                        const selected = activePreset === presetText;
+                        return (
+                          <Pressable
+                            key={presetKey}
+                            onPress={() => setActivePreset(selected ? null : presetText)}
+                            style={{
+                              paddingVertical: 6,
+                              paddingHorizontal: 12,
+                              borderRadius: 999,
+                              backgroundColor: selected ? "#FF9F1C" : "#fff",
+                              borderWidth: 1,
+                              borderColor: selected ? "#FF9F1C" : "#cfd3de",
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#fff" : "#222" }}>{presetText}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    {/* Free-text feedback */}
+                    <TextInput
+                      value={revisionFeedback}
+                      onChangeText={setRevisionFeedback}
+                      placeholder={t("createAi.reviseFeedbackPlaceholder")}
+                      multiline
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#cfd3de",
+                        borderRadius: 12,
+                        padding: 12,
+                        minHeight: 50,
+                        backgroundColor: "#fff",
+                        fontSize: 14,
+                      }}
+                    />
+
+                    <SecondaryButton
+                      title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}
+                      onPress={() => void reviseAd()}
+                      disabled={revising || generating || revisionsUsed >= SOFT_REVISION_CAP}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Draft editor — appears once user accepts the ad or starts a manual draft */}
+            {showDraftEditor ? (
+              <>
+                <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
+                <View
+                  style={{
+                    borderRadius: 18,
+                    backgroundColor: "#fff",
+                    overflow: "hidden",
+                    marginTop: 10,
+                    boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
+                    elevation: 2,
+                  }}
+                >
+                  {(() => {
+                    const previewUri = generatedAd?.poster_storage_path
+                      ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+                      : photoUri ?? posterUrl ?? null;
+                    return previewUri ? (
+                      <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
+                    ) : (
+                      <View style={{ height: 200, backgroundColor: "#eee" }} />
+                    );
+                  })()}
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || t("createAi.placeholderDealTitle")}</Text>
+                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600" }}>{promoLine}</Text> : null}
+                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700" }}>{ctaText}</Text> : null}
+                    <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                    <Text style={{ marginTop: 8, opacity: 0.7 }}>{t("createAi.scheduleLabel")} {displayScheduleSummary}</Text>
+                    <Text style={{ marginTop: 4, opacity: 0.7 }}>{t("createAi.maxClaimsLabel")} {maxClaims}</Text>
+                  </View>
+                </View>
+
+                <Text style={{ marginTop: 16 }}>{t("createAi.editHeadline")}</Text>
+                <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
+                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
+                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }} />
+                <Text style={{ marginTop: 12 }}>{t("createAi.editDetails")}</Text>
+                <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} multiline style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90 }} />
+
+                <View style={{ marginTop: 16, gap: 8 }}>
+                  <PrimaryButton
+                    title={publishing ? t("createAi.publishing") : editingDealId ? t("createAi.saveDealChanges") : t("createAi.publishDeal")}
+                    onPress={() => void publishDeal()}
+                    disabled={publishing}
+                    style={{ height: 66, borderRadius: 20 }}
+                  />
+                  <SecondaryButton
+                    title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}
+                    onPress={() => void saveTemplate()}
+                    disabled={savingTemplate}
+                  />
+                </View>
+              </>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
     </KeyboardScreen>
+  );
+}
+
+function StepBadge({ n, total, t }: { n: number; total: number; t: (key: string, opts?: Record<string, unknown>) => string }) {
+  return (
+    <View style={{ borderRadius: 14, backgroundColor: "#f6f7fb", paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" }}>
+      <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
+        {t("createAi.stepOfTotal", { current: n, total })}
+      </Text>
+    </View>
   );
 }

@@ -89,9 +89,12 @@ Deals, Coupons, Local Business, Coffee, Food, Restaurants
 ---
 
 ## Privacy Policy URL
-*(Required for both stores — host a simple policy at your domain)*
+*(Required for both stores — pages live at the URLs below)*
 
-Suggested URL: `https://twofer.app/privacy`
+Privacy: `https://www.twoferapp.com/privacy`
+Terms:   `https://www.twoferapp.com/terms`
+Support: `https://www.twoferapp.com/support`
+Delete:  `https://www.twoferapp.com/delete-account`
 
 Minimum required disclosures:
 - Location data is used only to sort nearby deals; not stored or shared

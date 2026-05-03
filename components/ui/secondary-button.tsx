@@ -3,6 +3,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 
 import { Colors, Fonts, Radii } from "@/constants/theme";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -23,6 +24,8 @@ export function SecondaryButton({
   accessibilityLabel,
   accessibilityHint,
 }: SecondaryButtonProps) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -30,7 +33,8 @@ export function SecondaryButton({
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
       onPressIn={() => {
         if (disabled) return;
@@ -48,7 +52,7 @@ export function SecondaryButton({
           paddingVertical: 14,
           paddingHorizontal: 22,
           borderRadius: Radii.lg,
-          backgroundColor: "#ffffff",
+          backgroundColor: theme.surface,
           borderWidth: 1.5,
           borderColor: "rgba(17,24,28,0.18)",
           opacity: disabled ? 0.65 : 1,
@@ -64,7 +68,7 @@ export function SecondaryButton({
         adjustsFontSizeToFit
         minimumFontScale={0.8}
         style={{
-          color: Colors.light.text,
+          color: theme.text,
           fontSize: 17,
           fontWeight: "800",
           textAlign: "center",

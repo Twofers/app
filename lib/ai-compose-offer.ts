@@ -215,8 +215,16 @@ export async function aiComposeOfferGenerate(body: {
     }
     return d as AiComposeSuccess;
   } catch (err) {
-    devWarn("[aiComposeOfferGenerate] Edge function failed, using client fallback:", err);
-    return buildDemoComposeResult(body.prompt_text);
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (isDemoPreviewAccountEmail(data?.user?.email ?? null)) {
+        devWarn("[aiComposeOfferGenerate] Demo account fallback:", err);
+        return buildDemoComposeResult(body.prompt_text);
+      }
+    } catch {
+      // ignore secondary auth read errors
+    }
+    throw err;
   }
 }
 

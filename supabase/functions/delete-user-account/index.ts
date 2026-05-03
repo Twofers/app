@@ -1,12 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -42,40 +40,29 @@ serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const blocked = {
-      error:
-        "This login is linked to a business profile. Contact support before deleting your account.",
-      code: "BUSINESS_OWNER_DELETE_BLOCKED",
-    };
-
-    const { count, error: bizCountErr } = await supabaseAdmin
-      .from("businesses")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", user.id);
-
-    if (bizCountErr) {
-      console.error(bizCountErr);
-      return new Response(
-        JSON.stringify({
-          error: "Could not verify account type. Contact support to delete your login.",
-          code: blocked.code,
-        }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (count != null && count > 0) {
-      return new Response(JSON.stringify(blocked), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    /**
+     * Deleting the auth user cascades through the schema automatically —
+     *   businesses.owner_id → ON DELETE CASCADE
+     *   deals.business_id → ON DELETE CASCADE
+     *   deal_claims.user_id / deal_id → ON DELETE CASCADE
+     *   business_profiles.user_id / owner_id → ON DELETE CASCADE
+     *   business_menu_items.business_id → ON DELETE CASCADE (via businesses)
+     *   deal_templates.business_id → ON DELETE CASCADE (via businesses)
+     *   consumer_profiles.user_id → ON DELETE CASCADE
+     *   profiles.id → ON DELETE CASCADE
+     *   push_tokens.user_id → ON DELETE CASCADE
+     *   favorites (user_id, business_id) → ON DELETE CASCADE
+     *   analytics_events.user_id → ON DELETE SET NULL (anonymized retention)
+     *
+     * Apple (5.1.1.v) and Google both require account deletion to complete
+     * inside the app — the previous "block business owners → contact support"
+     * branch was a documented rejection trigger and has been removed.
+     */
     const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
 
     if (delErr) {
-      console.error(delErr);
-      return new Response(JSON.stringify({ error: delErr.message ?? "Could not delete account" }), {
+      console.error("delete-user-account error:", delErr);
+      return new Response(JSON.stringify({ error: "Could not delete account. Please contact support." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

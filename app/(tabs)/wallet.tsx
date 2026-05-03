@@ -412,7 +412,7 @@ export default function WalletScreen() {
             bucket === "active" && !redeemed && !tokenDead
               ? urgent
                 ? "#fff7ed"
-                : "#f8fafc"
+                : theme.surfaceMuted
               : theme.surface,
           padding: Spacing.md,
           marginBottom: Spacing.md,
@@ -501,22 +501,22 @@ export default function WalletScreen() {
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.xs }}>
                 <DealStatusPill status={pillStatus} />
               </View>
-              <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
+              <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }} numberOfLines={2}>
                 {dealTitle(row)}
               </Text>
-              <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14 }} numberOfLines={1}>
+              <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, color: theme.text }} numberOfLines={1}>
                 {businessName(row)}
               </Text>
-              <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12 }}>
+              <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
                 {t("consumerWallet.claimedRecord", {
                   datetime: formatAppDateTime(row.created_at, i18n.language),
                 })}
               </Text>
-              <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12 }}>
+              <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12, color: theme.text }}>
                 {t("consumerWallet.expiresAtLabel", { datetime: expiryShown })}
               </Text>
               {bucket === "active" ? (
-                <Text style={{ marginTop: Spacing.sm, fontSize: 13, fontWeight: "700", letterSpacing: 1 }}>
+                <Text style={{ marginTop: Spacing.sm, fontSize: 13, fontWeight: "700", letterSpacing: 1, color: theme.text }}>
                   {t("consumerWallet.cardCodeLine", { code: shortLabel })}
                 </Text>
               ) : null}
@@ -530,7 +530,7 @@ export default function WalletScreen() {
                   {t("consumerWallet.redeemedViaQr")}
                 </Text>
               ) : null}
-              <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17 }}>
+              <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }}>
                 {bucket === "active" && !redeemed && !tokenDead
                   ? t("consumerWallet.redeemByCaption", { datetime: expiryShown })
                   : t("consumerWallet.expiresLocal", { datetime: expiryShown })}
@@ -544,12 +544,12 @@ export default function WalletScreen() {
               style={{
                 borderRadius: Radii.md,
                 borderWidth: 1,
-                borderColor: "#d1d5db",
-                backgroundColor: "#fff",
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
                 padding: Spacing.md,
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, opacity: 0.65 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, opacity: 0.65, color: theme.text }}>
                 {t("consumerWallet.scanQrAtCounter")}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
@@ -566,13 +566,13 @@ export default function WalletScreen() {
                     backgroundColor: "#f9fafb",
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: "700", opacity: 0.55 }}>QR</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "700", opacity: 0.55, color: theme.text }}>QR</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, opacity: 0.58 }}>
+                  <Text style={{ fontSize: 12, opacity: 0.58, color: theme.text }}>
                     {t("consumerWallet.verifyCodeLabel")}
                   </Text>
-                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: theme.text }}>
                     {shortLabel}
                   </Text>
                 </View>
@@ -651,12 +651,12 @@ export default function WalletScreen() {
           }}
         >
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statRedeemed")}</Text>
-            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>{stats.redeemedCount}</Text>
+            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600", color: theme.text }}>{t("consumerWallet.statRedeemed")}</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4, color: theme.text }}>{stats.redeemedCount}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600" }}>{t("consumerWallet.statSaved")}</Text>
-            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4 }}>
+            <Text style={{ fontSize: 12, opacity: 0.55, fontWeight: "600", color: theme.text }}>{t("consumerWallet.statSaved")}</Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", marginTop: 4, color: theme.text }}>
               {t("consumerWallet.statSavedValue", { amount: stats.savedTotal.toFixed(2) })}
             </Text>
           </View>
@@ -683,6 +683,7 @@ export default function WalletScreen() {
                 fontWeight: "800",
                 marginTop: section.key === "active" ? 0 : Spacing.md,
                 marginBottom: Spacing.sm,
+                color: theme.text,
               }}
             >
               {section.title}
@@ -703,8 +704,8 @@ export default function WalletScreen() {
                 : { title: t("consumerWallet.emptyEndedTitle"), sub: t("consumerWallet.emptyEndedSub") };
             return (
               <View style={{ marginBottom: Spacing.lg, opacity: 0.72 }}>
-                <Text style={{ fontWeight: "600" }}>{msg.title}</Text>
-                <Text style={{ marginTop: 4, fontSize: 14 }}>{msg.sub}</Text>
+                <Text style={{ fontWeight: "600", color: theme.text }}>{msg.title}</Text>
+                <Text style={{ marginTop: 4, fontSize: 14, color: theme.text }}>{msg.sub}</Text>
               </View>
             );
           }}

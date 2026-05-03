@@ -4,13 +4,11 @@ import {
   finalizeStaleVisualRedeemForClaim,
   isPastRedeemDeadline,
 } from "../_shared/claim-redeem.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -246,12 +244,13 @@ serve(async (req) => {
     }
 
     // 💾 Mark as redeemed (idempotent: same claim id, only if still null)
+    const redeemMethod = shortCodeNorm.length >= 4 ? "short_code" : "qr";
     const { data: updated, error: updateError } = await supabase
       .from("deal_claims")
       .update({
         redeemed_at: nowIso,
         claim_status: "redeemed",
-        redeem_method: "qr",
+        redeem_method: redeemMethod,
         redeem_started_at: null,
       })
       .eq("id", claimId)
@@ -292,6 +291,7 @@ serve(async (req) => {
         deal_title: deal.title,
         redeemed_at: nowIso,
         deal_id: deal.id,
+        claim_id: claimId,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

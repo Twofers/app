@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   Switch,
   Text,
@@ -17,11 +16,8 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
-import { CREATIVE_LANE_ORDER, type CreativeLane, type GeneratedAd } from "@/lib/ad-variants";
 import { useCreateMenuOfferWizard } from "@/lib/create-menu-offer-wizard-context";
-import { aiGenerateAdVariantsStructured, getErrorCode } from "@/lib/functions";
-import { splitSubheadlineForPromoAndBody } from "@/lib/menu-ad-copy";
-import { buildQuickPrefillFromMenuOffer } from "@/lib/menu-offer-prefill";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import {
   loadLastMenuOfferPairingType,
@@ -33,7 +29,7 @@ import {
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
-import { resolveDealFlowLanguage } from "@/lib/translate-deal-quality";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
@@ -43,6 +39,7 @@ type DbMenuItem = {
   name: string;
   category: string | null;
   price_text: string | null;
+  size_options?: string[] | null;
   archived_at?: string | null;
 };
 
@@ -51,21 +48,7 @@ type WizardStep =
   | "main"
   | "paired"
   | "pairing"
-  | "generate"
-  | "ads";
-
-function laneUiTitle(lane: CreativeLane, t: (k: string) => string): string {
-  if (lane === "value") return t("menuOffer.laneValue");
-  if (lane === "neighborhood") return t("menuOffer.laneNeighborhood");
-  return t("menuOffer.lanePremium");
-}
-
-function resolveCreativeLane(ad: GeneratedAd, index: number): CreativeLane {
-  if (ad.creative_lane === "value" || ad.creative_lane === "neighborhood" || ad.creative_lane === "premium") {
-    return ad.creative_lane;
-  }
-  return CREATIVE_LANE_ORDER[index] ?? "value";
-}
+  | "generate";
 
 function getPairingValidationError(params: {
   pairingType: MenuOfferPairingType;
@@ -85,28 +68,25 @@ function getPairingValidationError(params: {
 
 export default function MenuOfferScreen() {
   const router = useRouter();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const {
     businessId,
     loading: bizLoading,
-    businessContextForAi,
-    businessPreferredLocale,
     subscriptionTier,
   } = useBusiness();
   const { visibleLocations, loading: locLoading, error: locErr } = useBusinessLocations(
     businessId,
     subscriptionTier,
   );
-  const dealLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   const {
     dealLocationIds,
     setDealLocationIds,
     structuredOffer,
     setStructuredOffer,
-    setGenerationResult,
-    adsWorking,
     clearWizard,
   } = useCreateMenuOfferWizard();
 
@@ -115,13 +95,14 @@ export default function MenuOfferScreen() {
   const [step, setStep] = useState<WizardStep>("location");
   const [mainItem, setMainItem] = useState<DbMenuItem | null>(null);
   const [pairedItem, setPairedItem] = useState<DbMenuItem | null>(null);
+  const [mainSize, setMainSize] = useState<string | null>(null);
+  const [pairedSize, setPairedSize] = useState<string | null>(null);
   const [pairingType, setPairingType] = useState<MenuOfferPairingType>("free_with_purchase");
   const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
   const [applyMultiLocation, setApplyMultiLocation] = useState(false);
   const [extraLocationIds, setExtraLocationIds] = useState<Set<string>>(new Set());
   const [discountPercent, setDiscountPercent] = useState(50);
   const [fixedPriceText, setFixedPriceText] = useState("");
-  const [generating, setGenerating] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
   );
@@ -145,14 +126,18 @@ export default function MenuOfferScreen() {
     void (async () => {
       const { data, error } = await supabase
         .from("business_menu_items")
-        .select("id,name,category,price_text,archived_at")
+        .select("id,name,category,price_text,size_options,archived_at")
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) {
+        // Schema/migration errors get the dedicated copy; everything else flows through
+        // the api-messages translator so RLS, JWT, and Postgres errors render localized.
         setLoadErr(
-          looksLikeMissingMenuTable(error.message) ? t("menuWorkflow.errSchema") : error.message,
+          looksLikeMissingMenuTable(error.message)
+            ? t("menuWorkflow.errSchema")
+            : translateKnownApiMessage(error.message, t),
         );
         return;
       }
@@ -170,8 +155,12 @@ export default function MenuOfferScreen() {
     }
   }, [visibleLocations]);
 
-  const runGenerate = useCallback(async () => {
-    if (!businessId || !structuredOffer) return;
+  /**
+   * Skip in-wizard ad generation. Hand the structured offer to the main create flow,
+   * which runs the new single-ad pipeline with the offer text as the AI hint.
+   */
+  const goToAdCreation = useCallback(() => {
+    if (!structuredOffer) return;
     const strong = validateMenuOfferCanonicalSummary({
       human_summary: structuredOffer.human_summary,
       discount_percent: structuredOffer.discount_percent,
@@ -181,45 +170,20 @@ export default function MenuOfferScreen() {
       setBanner({ message: t(key, { defaultValue: strong.message }), tone: "error" });
       return;
     }
-    setGenerating(true);
-    setBanner(null);
-    try {
-      const hint = buildOfferHintText(structuredOffer);
-      const { ads } = await aiGenerateAdVariantsStructured({
-        business_id: businessId,
-        structured_offer: structuredOffer as unknown as Record<string, unknown>,
-        hint_text: hint,
-        business_context: businessContextForAi,
-        output_language: dealLang,
-        regeneration_attempt: 0,
-      });
-      setGenerationResult(ads);
-      setStep("ads");
-    } catch (e) {
-      const code = getErrorCode(e);
-      const fallback = e instanceof Error ? e.message : t("menuOffer.errGenerate");
-      setBanner({
-        message: code === "MONTHLY_LIMIT" ? t("menuWorkflow.errMonthlyLimit") : fallback,
-        tone: "error",
-      });
-    } finally {
-      setGenerating(false);
-    }
-  }, [businessId, structuredOffer, businessContextForAi, dealLang, setGenerationResult, t]);
-
-  const goAiPublish = useCallback(
-    (ad: GeneratedAd) => {
-      if (!structuredOffer) return;
-      const locPrimary = dealLocationIds[0];
-      const params = buildQuickPrefillFromMenuOffer(ad, locPrimary);
-      clearWizard();
-      router.push({
-        pathname: "/create/ai",
-        params,
-      } as Href);
-    },
-    [structuredOffer, dealLocationIds, clearWizard, router],
-  );
+    const hint = buildOfferHintText(structuredOffer);
+    const locPrimary = dealLocationIds[0] ?? "";
+    const extras = dealLocationIds.slice(1).join(",");
+    clearWizard();
+    router.push({
+      pathname: "/create/ai",
+      params: {
+        prefillHint: hint,
+        ...(locPrimary ? { prefillLocationId: locPrimary } : {}),
+        ...(extras ? { prefillExtraLocationIds: extras } : {}),
+        fromMenuOffer: "1",
+      },
+    } as Href);
+  }, [structuredOffer, dealLocationIds, clearWizard, router, t]);
 
   const onLocationNext = useCallback(() => {
     if (!primaryLocationId) {
@@ -246,8 +210,8 @@ export default function MenuOfferScreen() {
     }
     setBanner(null);
     const offer = buildStructuredOffer({
-      main: { id: mainItem.id, name: mainItem.name },
-      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name } : null,
+      main: { id: mainItem.id, name: mainItem.name, size_label: mainSize },
+      paired: pairedItem ? { id: pairedItem.id, name: pairedItem.name, size_label: pairedSize } : null,
       pairing_type: pairingType,
       discount_percent: pairingType === "percent_off" ? discountPercent : undefined,
       fixed_price_amount:
@@ -267,6 +231,8 @@ export default function MenuOfferScreen() {
   }, [
     mainItem,
     pairedItem,
+    mainSize,
+    pairedSize,
     pairingType,
     discountPercent,
     fixedPriceText,
@@ -298,6 +264,43 @@ export default function MenuOfferScreen() {
     { id: "fixed_price_special", label: t("menuOffer.pairFixed") },
   ];
 
+  function sizesFor(item: DbMenuItem): string[] {
+    return Array.isArray(item.size_options) ? item.size_options.filter((s) => s.trim().length > 0) : [];
+  }
+
+  function defaultSizeFor(item: DbMenuItem): string | null {
+    return sizesFor(item)[0] ?? null;
+  }
+
+  function renderSizeChips(params: {
+    item: DbMenuItem;
+    selected: string | null;
+    onSelect: (size: string) => void;
+  }) {
+    const sizes = sizesFor(params.item);
+    if (sizes.length === 0) return null;
+    return (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginTop: Spacing.sm }}>
+        {sizes.map((size) => (
+          <Pressable
+            key={`${params.item.id}-${size}`}
+            onPress={() => params.onSelect(size)}
+            style={{
+              paddingHorizontal: Spacing.sm,
+              paddingVertical: 6,
+              borderRadius: Radii.md,
+              borderWidth: params.selected === size ? 2 : 1,
+              borderColor: params.selected === size ? theme.primary : theme.border,
+              backgroundColor: params.selected === size ? "#FFF3E0" : theme.surface,
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 13 }}>{size}</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, paddingTop: top }}
@@ -325,8 +328,8 @@ export default function MenuOfferScreen() {
                 padding: Spacing.md,
                 borderRadius: Radii.md,
                 borderWidth: primaryLocationId === loc.id ? 2 : 1,
-                borderColor: primaryLocationId === loc.id ? Colors.light.primary : Colors.light.border,
-                backgroundColor: Colors.light.surface,
+                borderColor: primaryLocationId === loc.id ? theme.primary : theme.border,
+                backgroundColor: theme.surface,
               }}
             >
               <Text style={{ fontWeight: "700" }}>{loc.name}</Text>
@@ -365,9 +368,9 @@ export default function MenuOfferScreen() {
                           borderRadius: Radii.md,
                           borderWidth: extraLocationIds.has(loc.id) ? 2 : 1,
                           borderColor: extraLocationIds.has(loc.id)
-                            ? Colors.light.primary
-                            : Colors.light.border,
-                          backgroundColor: Colors.light.surface,
+                            ? theme.primary
+                            : theme.border,
+                          backgroundColor: theme.surface,
                         }}
                       >
                         <Text style={{ fontWeight: "600" }}>{loc.name}</Text>
@@ -387,32 +390,42 @@ export default function MenuOfferScreen() {
       {step === "main" && items.length > 0 ? (
         <View style={{ gap: Spacing.sm }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepMain")}</Text>
-          <FlatList
-            data={items}
-            keyExtractor={(it) => it.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
+          {items.map((item) => (
               <Pressable
+                key={item.id}
                 onPress={() => {
                   setMainItem(item);
+                  setMainSize(defaultSizeFor(item));
+                  setPairedItem(null);
+                  setPairedSize(null);
                   setStep("paired");
                 }}
                 style={{
                   padding: Spacing.md,
                   borderRadius: Radii.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   marginBottom: Spacing.sm,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{item.name}</Text>
                 {item.price_text ? (
                   <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
                 ) : null}
+                {renderSizeChips({
+                  item,
+                  selected: mainItem?.id === item.id ? mainSize : null,
+                  onSelect: (size) => {
+                    setMainItem(item);
+                    setMainSize(size);
+                    setPairedItem(null);
+                    setPairedSize(null);
+                    setStep("paired");
+                  },
+                })}
               </Pressable>
-            )}
-          />
+            ))}
           <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("location")} />
         </View>
       ) : null}
@@ -424,6 +437,7 @@ export default function MenuOfferScreen() {
             title={t("menuOffer.skipPaired")}
             onPress={() => {
               setPairedItem(null);
+              setPairedSize(null);
               setStep("pairing");
             }}
           />
@@ -432,33 +446,43 @@ export default function MenuOfferScreen() {
             onPress={() => {
               if (!mainItem) return;
               setPairedItem(mainItem);
+              setPairedSize(mainSize ?? defaultSizeFor(mainItem));
               setStep("pairing");
             }}
           />
-          <FlatList
-            data={items.filter((i) => i.id !== mainItem.id)}
-            keyExtractor={(it) => it.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
+          {items.filter((i) => i.id !== mainItem.id).map((item) => (
               <Pressable
+                key={item.id}
                 onPress={() => {
                   setPairedItem(item);
+                  setPairedSize(defaultSizeFor(item));
                   setStep("pairing");
                 }}
                 style={{
                   padding: Spacing.md,
                   borderRadius: Radii.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   marginBottom: Spacing.sm,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               >
                 <Text style={{ fontWeight: "700" }}>{item.name}</Text>
+                {item.price_text ? (
+                  <Text style={{ opacity: 0.7, marginTop: 4 }}>{item.price_text}</Text>
+                ) : null}
+                {renderSizeChips({
+                  item,
+                  selected: pairedItem?.id === item.id ? pairedSize : null,
+                  onSelect: (size) => {
+                    setPairedItem(item);
+                    setPairedSize(size);
+                    setStep("pairing");
+                  },
+                })}
               </Pressable>
-            )}
-          />
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("main")} />
+            ))}
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setPairedItem(null); setPairedSize(null); setStructuredOffer(null); setStep("main"); }} />
         </View>
       ) : null}
 
@@ -473,8 +497,8 @@ export default function MenuOfferScreen() {
                 padding: Spacing.md,
                 borderRadius: Radii.md,
                 borderWidth: pairingType === opt.id ? 2 : 1,
-                borderColor: pairingType === opt.id ? Colors.light.primary : Colors.light.border,
-                backgroundColor: "#fff",
+                borderColor: pairingType === opt.id ? theme.primary : theme.border,
+                backgroundColor: theme.surface,
               }}
             >
               <Text style={{ fontWeight: "600" }}>{opt.label}</Text>
@@ -484,7 +508,7 @@ export default function MenuOfferScreen() {
             <View style={{ gap: Spacing.sm }}>
               <Text style={{ fontWeight: "600" }}>{t("menuOffer.percentOffLabel")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
-                {[40, 50, 100].map((p) => (
+                {[40, 50, 75].map((p) => (
                   <Pressable
                     key={p}
                     onPress={() => setDiscountPercent(p)}
@@ -493,8 +517,8 @@ export default function MenuOfferScreen() {
                       paddingVertical: Spacing.sm,
                       borderRadius: Radii.md,
                       borderWidth: discountPercent === p ? 2 : 1,
-                      borderColor: discountPercent === p ? Colors.light.primary : Colors.light.border,
-                      backgroundColor: Colors.light.surface,
+                      borderColor: discountPercent === p ? theme.primary : theme.border,
+                      backgroundColor: theme.surface,
                     }}
                   >
                     <Text style={{ fontWeight: "600" }}>{p}%</Text>
@@ -513,18 +537,18 @@ export default function MenuOfferScreen() {
                 placeholder={t("menuOffer.fixedPricePlaceholder")}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: Radii.md,
                   padding: Spacing.md,
                   marginTop: 6,
                   fontSize: 16,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                 }}
               />
             </View>
           ) : null}
           <PrimaryButton title={t("menuOffer.next")} onPress={onPairingNext} />
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("paired")} />
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("paired"); }} />
         </View>
       ) : null}
 
@@ -534,9 +558,9 @@ export default function MenuOfferScreen() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: Colors.light.surface,
+              backgroundColor: theme.surface,
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               gap: Spacing.md,
               boxShadow: "0px 8px 24px rgba(0,0,0,0.08)",
               elevation: 5,
@@ -548,91 +572,12 @@ export default function MenuOfferScreen() {
             </Text>
             <Text style={{ opacity: 0.72, fontSize: 14 }}>{t("menuOffer.generateStrongSubtitle")}</Text>
             <PrimaryButton
-              title={
-                generating ? t("menuOffer.generatingStrongVariants") : t("menuOffer.generateStrongVariants")
-              }
-              onPress={() => void runGenerate()}
-              disabled={generating}
+              title={t("menuOffer.generateStrongVariants")}
+              onPress={goToAdCreation}
               style={{ minHeight: 64 }}
             />
           </View>
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("pairing")} />
-        </View>
-      ) : null}
-
-      {step === "ads" && adsWorking?.length === 3 ? (
-        <View style={{ gap: Spacing.md }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.pickTitle")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("menuOffer.pickHelp")}</Text>
-          <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuOffer.adsOptionalRefine")}</Text>
-          {adsWorking.map((ad, index) => {
-            const laneKey = resolveCreativeLane(ad, index);
-            const subSplit = splitSubheadlineForPromoAndBody(ad.subheadline ?? "");
-            return (
-              <View
-                key={`${ad.creative_lane}-${index}`}
-                style={{
-                  borderRadius: Radii.lg,
-                  padding: Spacing.md,
-                  borderWidth: 1,
-                  borderColor: Colors.light.border,
-                  backgroundColor: "#fff",
-                  gap: Spacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    alignSelf: "flex-start",
-                    fontSize: 11,
-                    fontWeight: "800",
-                    color: "#fff",
-                    backgroundColor: "#111",
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    overflow: "hidden",
-                  }}
-                >
-                  {laneUiTitle(laneKey, t)}
-                </Text>
-                <Text style={{ fontSize: 17, fontWeight: "800" }}>{ad.headline}</Text>
-                {subSplit.bodyCopy ? (
-                  <>
-                    <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55 }}>
-                      {t("menuOffer.promoLineLabel")}
-                    </Text>
-                    <Text style={{ opacity: 0.85 }}>{subSplit.promoLine}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.55, marginTop: 4 }}>
-                      {t("menuOffer.bodyCopyLabel")}
-                    </Text>
-                    <Text style={{ opacity: 0.8 }}>{subSplit.bodyCopy}</Text>
-                  </>
-                ) : (
-                  <Text style={{ opacity: 0.85 }}>{ad.subheadline}</Text>
-                )}
-                <Text style={{ fontWeight: "700" }}>{ad.cta}</Text>
-                {ad.visual_direction?.trim() ? (
-                  <Text style={{ fontSize: 12, opacity: 0.55 }}>
-                    {t("menuOffer.visualNote", { note: ad.visual_direction })}
-                  </Text>
-                ) : null}
-                <PrimaryButton
-                  title={t("menuOffer.useAiPublish")}
-                  onPress={() => goAiPublish(ad)}
-                  style={{ marginTop: Spacing.sm }}
-                />
-                <SecondaryButton
-                  title={t("menuOffer.refineAi")}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/create/ad-refine",
-                      params: { variantIndex: String(index) },
-                    } as Href)
-                  }
-                />
-              </View>
-            );
-          })}
+          <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("pairing"); }} />
         </View>
       ) : null}
     </ScrollView>

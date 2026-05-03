@@ -10,6 +10,8 @@ import { Banner } from "@/components/ui/banner";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 
 type TemplateRow = {
   id: string;
@@ -33,6 +35,8 @@ export default function ReuseDealScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const { businessId, isLoggedIn, loading } = useBusiness();
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [deals, setDeals] = useState<DealRow[]>([]);
@@ -120,9 +124,9 @@ export default function ReuseDealScreen() {
                     gap: Spacing.md,
                     padding: Spacing.md,
                     borderRadius: 16,
-                    backgroundColor: "#fafafa",
+                    backgroundColor: theme.surfaceMuted,
                     borderWidth: 1,
-                    borderColor: "#eee",
+                    borderColor: theme.border,
                     marginBottom: Spacing.sm,
                   }}
                 >
@@ -163,9 +167,9 @@ export default function ReuseDealScreen() {
                     gap: Spacing.md,
                     padding: Spacing.md,
                     borderRadius: 16,
-                    backgroundColor: "#fff",
+                    backgroundColor: theme.surface,
                     borderWidth: 1,
-                    borderColor: "#eee",
+                    borderColor: theme.border,
                     marginBottom: Spacing.sm,
                   }}
                 >
@@ -185,7 +189,7 @@ export default function ReuseDealScreen() {
                     {row.price != null ? (
                       <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>${Number(row.price).toFixed(2)}</Text>
                     ) : null}
-                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: "#2563eb" }}>
+                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: "theme.primary" }}>
                       {t("reuseHub.repeatCta")}
                     </Text>
                   </View>
@@ -196,7 +200,7 @@ export default function ReuseDealScreen() {
           </View>
 
           <Pressable onPress={() => router.push("/create/ai" as Href)} style={{ paddingVertical: Spacing.md }}>
-            <Text style={{ fontWeight: "700", color: "#2563eb" }}>{t("reuseHub.backToCreate")}</Text>
+            <Text style={{ fontWeight: "700", color: "theme.primary" }}>{t("reuseHub.backToCreate")}</Text>
           </Pressable>
         </ScrollView>
       )}

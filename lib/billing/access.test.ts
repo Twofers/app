@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canCreateDeal, isTrialExpired } from "./access";
+import { PILOT_DISABLE_BILLING_GATE, canCreateDeal, isTrialExpired } from "./access";
 
 describe("isTrialExpired", () => {
   it("returns false for a future trial end", () => {
@@ -21,12 +21,12 @@ describe("isTrialExpired", () => {
 });
 
 describe("canCreateDeal", () => {
-  it("blocks when past due", () => {
+  it("blocks unauthenticated callers regardless of any other state", () => {
     expect(
       canCreateDeal({
-        isLoggedIn: true,
-        subscriptionStatus: "past_due",
-        trialEndsAt: null,
+        isLoggedIn: false,
+        subscriptionStatus: "active",
+        trialEndsAt: "2999-01-01T00:00:00.000Z",
       }),
     ).toBe(false);
   });
@@ -41,7 +41,7 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("allows trial status only when trial is still valid", () => {
+  it("allows trial with valid end date", () => {
     expect(
       canCreateDeal({
         isLoggedIn: true,
@@ -51,7 +51,7 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("allows trial status with null trialEndsAt (trial just created, date not yet set)", () => {
+  it("allows trial with null trialEndsAt (trial just created)", () => {
     expect(
       canCreateDeal({
         isLoggedIn: true,
@@ -61,13 +61,27 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("blocks expired trial", () => {
+  // The next two tests document the pilot-flag behavior. When v1.1 ships and
+  // PILOT_DISABLE_BILLING_GATE is flipped to false, both should expect false.
+  it("during pilot: allows past_due (PILOT_DISABLE_BILLING_GATE bypass)", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+    expect(
+      canCreateDeal({
+        isLoggedIn: true,
+        subscriptionStatus: "past_due",
+        trialEndsAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("during pilot: allows expired trial (PILOT_DISABLE_BILLING_GATE bypass)", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: "2000-01-01T00:00:00.000Z",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

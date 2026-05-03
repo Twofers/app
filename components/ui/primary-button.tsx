@@ -3,6 +3,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-na
 
 import { Colors, Fonts, Radii } from "@/constants/theme";
 import { springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -16,6 +17,8 @@ type PrimaryButtonProps = {
 };
 
 export function PrimaryButton({ title, onPress, disabled, style, accessibilityLabel, accessibilityHint }: PrimaryButtonProps) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const scale = useSharedValue(1);
   const pressDepth = useSharedValue(0);
   const rStyle = useAnimatedStyle(() => ({
@@ -29,7 +32,8 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
       onPressIn={() => {
         if (disabled) return;
@@ -49,7 +53,7 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
           paddingVertical: 14,
           paddingHorizontal: 22,
           borderRadius: Radii.lg,
-          backgroundColor: Colors.light.primary,
+          backgroundColor: theme.primary,
           opacity: disabled ? 0.65 : 1,
           justifyContent: "center",
           alignItems: "center",

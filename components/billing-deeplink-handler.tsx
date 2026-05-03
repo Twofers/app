@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
+import { claimInitialUrl } from "@/lib/initial-url-guard";
 
 type BillingCheckout = "success" | "cancel";
 
@@ -58,6 +59,7 @@ export function BillingDeepLinkHandler() {
     void (async () => {
       if (initialDone.current) return;
       initialDone.current = true;
+      if (!claimInitialUrl()) return;
       const initial = await Linking.getInitialURL();
       runWhenBridgeSettled(() => navigate(initial));
     })();

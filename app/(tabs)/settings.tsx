@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -34,6 +34,9 @@ import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useTabMode } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -41,6 +44,8 @@ export default function SettingsScreen() {
   const { setMode: setTabMode } = useTabMode();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
@@ -162,7 +167,9 @@ export default function SettingsScreen() {
         replace: router.replace,
       });
       if (!result.ok) {
-        Alert.alert(t("account.errLogoutFailed"), result.message);
+        // result.message can come straight from supabase.auth.signOut() — translate
+        // through the api-messages layer so JWT/network errors render as friendly text.
+        Alert.alert(t("account.errLogoutFailed"), translateKnownApiMessage(result.message, t));
       }
     } finally {
       setLogoutBusy(false);
@@ -190,12 +197,12 @@ export default function SettingsScreen() {
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           borderRadius: Radii.md,
-          backgroundColor: active ? "#111" : Colors.light.surfaceMuted,
+          backgroundColor: active ? theme.text : theme.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
         }}
       >
-        <Text style={{ fontWeight: "700", color: active ? "#fff" : "#333" }}>{label}</Text>
+        <Text style={{ fontWeight: "700", color: active ? theme.background : theme.text }}>{label}</Text>
       </Pressable>
     );
   }
@@ -216,7 +223,7 @@ export default function SettingsScreen() {
             onPress={() => router.push("/consumer-profile-setup?edit=1" as Href)}
             style={{
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               borderRadius: Radii.lg,
               padding: Spacing.lg,
             }}
@@ -231,7 +238,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -251,11 +258,11 @@ export default function SettingsScreen() {
                 onChangeText={setZip}
                 onEndEditing={() => void saveZip()}
                 placeholder={t("onboarding.zipPlaceholder")}
-                autoCapitalize="characters"
+                autoCapitalize="none"
                 maxLength={10}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: Radii.md,
                   padding: Spacing.md,
                   fontSize: 16,
@@ -271,7 +278,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -289,7 +296,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.md,
@@ -330,7 +337,7 @@ export default function SettingsScreen() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,
@@ -349,14 +356,14 @@ export default function SettingsScreen() {
                     paddingVertical: Spacing.sm,
                     paddingHorizontal: Spacing.md,
                     borderRadius: Radii.pill,
-                    backgroundColor: active ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                    backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
                     borderWidth: 1,
-                    borderColor: active ? "rgba(255,159,28,0.4)" : Colors.light.border,
+                    borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
                     marginRight: Spacing.sm,
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  <Text style={{ color: active ? Colors.light.primary : "#333", fontWeight: "700", fontSize: 13 }}>
+                  <Text style={{ color: active ? theme.primary : "#333", fontWeight: "700", fontSize: 13 }}>
                     {loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
                   </Text>
                 </Pressable>
@@ -389,7 +396,7 @@ export default function SettingsScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               gap: Spacing.sm,
@@ -404,10 +411,54 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
+        {(() => {
+          // Hide the entire Help & Contact card when neither email nor phone is configured.
+          // Avoids shipping a dead-link row during pilots where the founder handles
+          // support directly (texting cafes, etc.). Set EXPO_PUBLIC_SUPPORT_EMAIL or
+          // EXPO_PUBLIC_SUPPORT_PHONE in the build to make it reappear.
+          const supportEmail = getSupportEmail();
+          const supportPhone = getSupportPhone();
+          if (!supportEmail && !supportPhone) return null;
+          return (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.lg,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
+              <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
+              {supportEmail ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("supportContact.emailA11y")}
+                  style={{ paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
+                </Pressable>
+              ) : null}
+              {supportPhone ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(`tel:${supportPhone}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("supportContact.phoneA11y")}
+                  style={{ paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportPhone}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })()}
+
         <View
           style={{
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
             borderRadius: Radii.lg,
             padding: Spacing.lg,
             gap: Spacing.sm,

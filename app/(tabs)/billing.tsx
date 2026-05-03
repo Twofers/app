@@ -16,7 +16,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
 import type { SubscriptionPricing } from "@/lib/billing/subscription-pricing";
 import { devError, devLog } from "@/lib/dev-log";
-import { isTrialExpired } from "@/lib/billing/access";
+import { PILOT_DISABLE_BILLING_GATE, isTrialExpired } from "@/lib/billing/access";
 
 function daysBetween(nowMs: number, targetIso: string | null): number | null {
   if (!targetIso) return null;
@@ -128,13 +128,14 @@ export default function BusinessBillingScreen() {
           devError("[billing-pricing] parseFunctionError:", parseFunctionError(e));
         }
         if (cancelled) return;
-        if (__DEV__) {
-          setPricing({
-            proMonthlyPrice: 49,
-            premiumMonthlyPrice: 99,
-            extraLocationPrice: 19,
-          });
-        } else {
+        // Show fallback pricing so the screen is still usable, with an error banner.
+        // In dev mode the banner is suppressed for convenience.
+        setPricing({
+          proMonthlyPrice: 30,
+          premiumMonthlyPrice: 79,
+          extraLocationPrice: 15,
+        });
+        if (!__DEV__) {
           setBanner({
             message: t("billing.errLoadPricing"),
             tone: "error",
@@ -230,6 +231,11 @@ export default function BusinessBillingScreen() {
   const proPrice = pricing?.proMonthlyPrice;
   const premiumPrice = pricing?.premiumMonthlyPrice;
 
+  // Pilot scope: 10 single-location cafes. Premium tier (3 locations, $79)
+  // adds noise without value. Hide it unless the user is already on Premium
+  // (so existing subscribers can still see and manage their plan).
+  const showPremiumTier = subscriptionTier === "premium";
+
   const subscribe = async (tier: "pro" | "premium") => {
     if (busy) return;
     setBusy(true);
@@ -245,7 +251,9 @@ export default function BusinessBillingScreen() {
       });
       if (error) throw error;
       const url = data?.checkout_url as string | undefined;
-      if (!url) throw new Error("Missing checkout_url from checkout session function.");
+      if (!url) {
+        throw new Error(t("billing.errSubscribe"));
+      }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
     } catch (err) {
       const detail = err instanceof Error ? err.message : parseFunctionError(err);
@@ -403,6 +411,18 @@ export default function BusinessBillingScreen() {
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
+                  ) : PILOT_DISABLE_BILLING_GATE ? (
+                    /* Pilot: subscriptions launch in v1.1. Don't show a
+                       Subscribe button that would dead-end at an unset
+                       Stripe account. Trial is extended through pilot. */
+                    <View style={{ borderRadius: 14, backgroundColor: "rgba(255,159,28,0.10)", borderWidth: 1, borderColor: "rgba(255,159,28,0.32)", padding: 12 }}>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBanner")}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBody")}
+                      </Text>
+                    </View>
                   ) : (
                     <PrimaryButton
                       title={t("billing.subscribeNow")}
@@ -416,6 +436,7 @@ export default function BusinessBillingScreen() {
                 </View>
               </View>
 
+              {showPremiumTier ? (
               <View style={[cardShadow, { padding: 16, borderColor: subscriptionTier === "premium" ? Colors.light.primary : Colors.light.border }]}>
                 <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>Twofer Premium</Text>
                 <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
@@ -441,6 +462,20 @@ export default function BusinessBillingScreen() {
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
+                  ) : PILOT_DISABLE_BILLING_GATE ? (
+                    /* Same pilot gate as the Pro tier above — Apple rejects
+                       any "subscribe" button that links to non-IAP checkout
+                       for in-app digital subscriptions (Guideline 3.1.1).
+                       Trial is extended through the pilot; subscriptions
+                       launch in v1.1. */
+                    <View style={{ borderRadius: 14, backgroundColor: "rgba(255,159,28,0.10)", borderWidth: 1, borderColor: "rgba(255,159,28,0.32)", padding: 12 }}>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBanner")}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
+                        {t("billing.pilotTrialBody")}
+                      </Text>
+                    </View>
                   ) : (
                     <PrimaryButton
                       title={t("billing.subscribeNow")}
@@ -453,17 +488,20 @@ export default function BusinessBillingScreen() {
                   )}
                 </View>
               </View>
+              ) : null}
             </View>
 
-            <View style={{ marginTop: 16, gap: 12 }}>
-              <SecondaryButton
-                title={t("billing.manageSubscription")}
-                onPress={() => router.push("/(tabs)/billing/manage")}
-                disabled={busy}
-                accessibilityLabel={t("billing.a11yManageSubscriptionLabel")}
-                accessibilityHint={t("billing.a11yManageSubscriptionHint")}
-              />
-            </View>
+            {PILOT_DISABLE_BILLING_GATE && subscriptionStatus !== "active" ? null : (
+              <View style={{ marginTop: 16, gap: 12 }}>
+                <SecondaryButton
+                  title={t("billing.manageSubscription")}
+                  onPress={() => router.push("/(tabs)/billing/manage")}
+                  disabled={busy}
+                  accessibilityLabel={t("billing.a11yManageSubscriptionLabel")}
+                  accessibilityHint={t("billing.a11yManageSubscriptionHint")}
+                />
+              </View>
+            )}
 
             {simulateVisible ? (
               <View

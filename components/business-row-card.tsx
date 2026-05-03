@@ -2,6 +2,8 @@ import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
 type BusinessRowCardProps = {
@@ -24,13 +26,15 @@ export function BusinessRowCard({
   onToggleFavorite,
 }: BusinessRowCardProps) {
   const { t } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   return (
     <HapticScalePressable
       onPress={onPress}
       style={{
         borderRadius: 18,
-        backgroundColor: "#fff",
+        backgroundColor: theme.surface,
         padding: Spacing.md,
         marginBottom: Spacing.md,
         boxShadow: "0px 3px 10px rgba(0,0,0,0.07)",

@@ -83,6 +83,8 @@ export function useBusiness() {
   const [businessOwnershipAmbiguous, setBusinessOwnershipAmbiguous] = useState(false);
   const [loading, setLoading] = useState(true);
   const hasEverFetchedRef = useRef(false);
+  /** Prevents concurrent billing-init writes from racing on trial_ends_at. */
+  const billingInitInFlightRef = useRef(false);
 
   const businessContextForAi = useMemo(() => businessRowToAiContext(business), [business]);
 
@@ -185,7 +187,8 @@ export function useBusiness() {
       (!isActiveSubscription && !bpRow.trial_ends_at) ||
       (!isActiveSubscription && !bpRow.current_period_ends_at);
 
-    if (needsBillingInit) {
+    if (needsBillingInit && !billingInitInFlightRef.current) {
+      billingInitInFlightRef.current = true;
       // Only compute a new trial end date when we truly need to write one for the
       // first time.  Previously this was calculated on every refresh, which silently
       // extended trials each time the hook ran.
@@ -203,10 +206,13 @@ export function useBusiness() {
 
       try {
         if (bpRow) {
+          // Only repair fields that are still NULL to avoid overwriting
+          // values set concurrently by Stripe webhooks or other devices.
           await supabase
             .from("business_profiles")
             .update(repair)
-            .or(`user_id.eq.${uid},owner_id.eq.${uid}`);
+            .or(`user_id.eq.${uid},owner_id.eq.${uid}`)
+            .is("subscription_status", null);
           bpRow = { ...bpRow, ...repair };
         } else if (data) {
           const profileSeed = {
@@ -235,17 +241,25 @@ export function useBusiness() {
         }
       } catch (err) {
         if (__DEV__) console.warn("[useBusiness] billing init error:", err);
+      } finally {
+        billingInitInFlightRef.current = false;
       }
     }
 
     const rawStatus = (bpRow?.subscription_status ?? null) || null;
     const normalizedStatus: SubscriptionStatus =
       rawStatus === "active" || rawStatus === "trial" || rawStatus === "past_due" || rawStatus === "canceled" ? rawStatus : "canceled";
+    if (rawStatus && normalizedStatus !== rawStatus) {
+      console.warn(`[useBusiness] unrecognized subscription_status "${rawStatus}", treating as "canceled"`);
+    }
 
     // Keep the existing `subscriptionTier` contract for location limits.
     const rawTier = (bpRow?.subscription_tier ?? null) || null;
     const normalizedTier: "pro" | "premium" =
       rawTier === "premium" ? "premium" : "pro";
+    if (rawTier && rawTier !== "pro" && rawTier !== "premium") {
+      console.warn(`[useBusiness] unrecognized subscription_tier "${rawTier}", treating as "pro"`);
+    }
 
     setSubscriptionStatus(normalizedStatus);
     setTrialEndsAt(bpRow?.trial_ends_at ? String(bpRow.trial_ends_at) : null);

@@ -6,14 +6,10 @@ const FALLBACK_BASE = "https://www.twoferapp.com/deal";
 // const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone";
 // const APP_STORE  = "https://apps.apple.com/app/twofer/idXXXXXXXXXX";
 
+import { getCorsHeaders } from "../_shared/cors.ts";
+
 const SCHEME_PREFIX = "twoforone://deal/";
 const BRAND_COLOR = "#FF9F1C";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 function esc(s: string): string {
   return s
@@ -118,6 +114,8 @@ function buildLandingPage(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

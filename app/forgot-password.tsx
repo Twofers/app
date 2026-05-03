@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -19,11 +19,38 @@ export default function ForgotPasswordScreen() {
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) {
+      setCooldownRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setCooldownRemaining(remaining);
+      if (remaining <= 0 && timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [cooldownUntil]);
 
   async function onSubmit() {
     const trimmed = email.trim();
     if (!trimmed) {
       setError(t("passwordRecovery.errEmailRequired"));
+      return;
+    }
+    if (Date.now() < cooldownUntil) {
+      setError(t("passwordRecovery.errCooldown", { defaultValue: "Please wait 60 seconds before requesting another email." }));
       return;
     }
     setBusy(true);
@@ -37,6 +64,7 @@ export default function ForgotPasswordScreen() {
         return;
       }
       setSuccess(true);
+      setCooldownUntil(Date.now() + 60_000);
     } catch {
       setError(t("passwordRecovery.requestGenericError"));
     } finally {
@@ -93,9 +121,15 @@ export default function ForgotPasswordScreen() {
               />
             </View>
             <PrimaryButton
-              title={busy ? t("passwordRecovery.sending") : t("passwordRecovery.submitRequest")}
+              title={
+                busy
+                  ? t("passwordRecovery.sending")
+                  : cooldownRemaining > 0
+                    ? t("passwordRecovery.resendIn", { seconds: cooldownRemaining })
+                    : t("passwordRecovery.submitRequest")
+              }
               onPress={() => void onSubmit()}
-              disabled={busy}
+              disabled={busy || cooldownRemaining > 0}
             />
             <Pressable onPress={() => router.back()} disabled={busy} style={{ paddingVertical: Spacing.sm }}>
               <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center" }}>{t("commonUi.goBack")}</Text>

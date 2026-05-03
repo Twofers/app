@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -21,6 +21,8 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
   const [locations, setLocations] = useState<BusinessLocationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Prevents concurrent auto-creation of the default location. */
+  const autoCreateInFlightRef = useRef(false);
 
   const maxLocations = useMemo(() => maxLocationsForTier(subscriptionTier), [subscriptionTier]);
 
@@ -72,32 +74,37 @@ export function useBusinessLocations(businessId: string | null, subscriptionTier
       if (qErr) throw new Error(qErr.message);
       let list = (rows ?? []) as BusinessLocationRow[];
 
-      if (list.length === 0) {
-        const { data: biz, error: bErr } = await supabase
-          .from("businesses")
-          .select("name,address,location,phone,latitude,longitude")
-          .eq("id", businessId)
-          .single();
-        if (bErr) throw new Error(bErr.message);
-        const addr =
-          [biz?.address, biz?.location].map((s) => (typeof s === "string" ? s.trim() : "")).find(Boolean) ||
-          "See business profile";
-        const label =
-          typeof biz?.name === "string" && biz.name.trim() ? `${biz.name.trim()} — main` : "Primary location";
-        const { data: ins, error: iErr } = await supabase
-          .from("business_locations")
-          .insert({
-            business_id: businessProfileId,
-            name: label,
-            address: addr,
-            phone: typeof biz?.phone === "string" && biz.phone.trim() ? biz.phone.trim() : null,
-            lat: typeof biz?.latitude === "number" ? biz.latitude : null,
-            lng: typeof biz?.longitude === "number" ? biz.longitude : null,
-          })
-          .select("id,business_id,name,address,phone")
-          .single();
-        if (iErr) throw new Error(iErr.message);
-        if (ins) list = [ins as BusinessLocationRow];
+      if (list.length === 0 && !autoCreateInFlightRef.current) {
+        autoCreateInFlightRef.current = true;
+        try {
+          const { data: biz, error: bErr } = await supabase
+            .from("businesses")
+            .select("name,address,location,phone,latitude,longitude")
+            .eq("id", businessId)
+            .single();
+          if (bErr) throw new Error(bErr.message);
+          const addr =
+            [biz?.address, biz?.location].map((s) => (typeof s === "string" ? s.trim() : "")).find(Boolean) ||
+            "See business profile";
+          const label =
+            typeof biz?.name === "string" && biz.name.trim() ? `${biz.name.trim()} — main` : "Primary location";
+          const { data: ins, error: iErr } = await supabase
+            .from("business_locations")
+            .insert({
+              business_id: businessProfileId,
+              name: label,
+              address: addr,
+              phone: typeof biz?.phone === "string" && biz.phone.trim() ? biz.phone.trim() : null,
+              lat: typeof biz?.latitude === "number" ? biz.latitude : null,
+              lng: typeof biz?.longitude === "number" ? biz.longitude : null,
+            })
+            .select("id,business_id,name,address,phone")
+            .single();
+          if (iErr) throw new Error(iErr.message);
+          if (ins) list = [ins as BusinessLocationRow];
+        } finally {
+          autoCreateInFlightRef.current = false;
+        }
       }
 
       setLocations(list);

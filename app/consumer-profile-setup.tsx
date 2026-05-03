@@ -18,6 +18,7 @@ import {
   upsertConsumerProfile,
 } from "@/lib/consumer-profile";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 
 function defaultBirthDate() {
   const d = new Date();
@@ -51,7 +52,7 @@ export default function ConsumerProfileSetupScreen() {
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
   const [birthDate, setBirthDate] = useState(defaultBirthDate);
-  const [showPicker, setShowPicker] = useState(Platform.OS === "ios");
+  const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
@@ -127,7 +128,14 @@ export default function ConsumerProfileSetupScreen() {
         router.replace(prefs.onboardingComplete ? "/(tabs)" : "/onboarding");
       }
     } catch (e: unknown) {
-      setBanner({ message: e instanceof Error ? e.message : t("consumerProfile.errSave"), tone: "error" });
+      // Don't surface raw Postgres / RLS / JWT messages to a brand-new consumer.
+      // Route through translateKnownApiMessage so DB and network errors render as
+      // localized friendly text; fall back to the generic save-failed copy otherwise.
+      const raw = e instanceof Error ? e.message : "";
+      setBanner({
+        message: raw ? translateKnownApiMessage(raw, t) : t("consumerProfile.errSave"),
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -194,7 +202,7 @@ export default function ConsumerProfileSetupScreen() {
           <Text style={{ fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18, color: C.mutedText }}>
             {t("consumerProfile.birthdateHint")}
           </Text>
-          {Platform.OS === "android" ? (
+          {!showPicker ? (
             <Pressable
               onPress={() => setShowPicker(true)}
               style={{
@@ -206,7 +214,6 @@ export default function ConsumerProfileSetupScreen() {
                 backgroundColor: C.surface,
               }}
             >
-              {/* FIX: Show human-readable date instead of raw ISO "2001-03-26" */}
               <Text style={{ fontSize: 16, fontWeight: "600", color: C.text }}>
                 {birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
               </Text>

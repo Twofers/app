@@ -8,6 +8,21 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import 'react-native-reanimated';
 
+import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
+import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
+import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
+import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
+import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
+import { BillingDeepLinkHandler } from '@/components/billing-deeplink-handler';
+import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
+import { AuthStackGate } from '@/components/auth-stack-gate';
+import { AppI18nGate } from '@/components/providers/app-i18n-gate';
+import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { TabModeProvider } from '@/lib/tab-mode';
+import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
+
 // N-2 FIX: Register foreground notification handler at module level so
 // notifications received while the app is open are displayed to the user.
 // This MUST run before any component mounts.
@@ -45,21 +60,6 @@ if (__DEV__) {
     '[billing-pricing]',
   ]);
 }
-
-import { AppErrorBoundary } from '@/components/app-error-boundary';
-import { ConsumerOnboardingGate } from '@/components/consumer-onboarding-gate';
-import { AuthRecoveryLinkHandler } from '@/components/auth-recovery-link-handler';
-import { DiagnosticBootLog } from '@/components/diagnostic-boot-log';
-import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-handler';
-import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
-import { BillingDeepLinkHandler } from '@/components/billing-deeplink-handler';
-import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
-import { AuthStackGate } from '@/components/auth-stack-gate';
-import { AppI18nGate } from '@/components/providers/app-i18n-gate';
-import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { TabModeProvider } from '@/lib/tab-mode';
-import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 

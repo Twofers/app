@@ -4,11 +4,7 @@ import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
 import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 type AiResult = {
   title: string;
@@ -20,6 +16,8 @@ type AiResult = {
 const CHAT_MODEL = resolveOpenAiChatModel();
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

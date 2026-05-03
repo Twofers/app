@@ -10,7 +10,7 @@ import { Colors, Spacing } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
+import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
@@ -51,11 +51,19 @@ export default function ManageSubscriptionScreen() {
       });
       if (error) throw error;
       const url = data?.url as string | undefined;
-      if (!url) throw new Error("Missing portal url from portal session function.");
+      if (!url) {
+        throw new Error(
+          t("billingManage.errPortal", { defaultValue: "Unable to open Stripe portal." }),
+        );
+      }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
     } catch (err) {
       setBanner({
-        message: err instanceof Error ? err.message : t("billingManage.errPortal", { defaultValue: "Unable to open Stripe portal." }),
+        message:
+          err instanceof Error
+            ? err.message
+            : parseFunctionError(err) ||
+              t("billingManage.errPortal", { defaultValue: "Unable to open Stripe portal." }),
         tone: "error",
       });
     } finally {
@@ -75,11 +83,19 @@ export default function ManageSubscriptionScreen() {
       });
       if (error) throw error;
       const url = data?.checkout_url as string | undefined;
-      if (!url) throw new Error("Missing checkout_url from checkout session function.");
+      if (!url) {
+        throw new Error(
+          t("billingManage.errUpgrade", { defaultValue: "Unable to start upgrade checkout." }),
+        );
+      }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
     } catch (err) {
       setBanner({
-        message: err instanceof Error ? err.message : t("billingManage.errUpgrade", { defaultValue: "Unable to start upgrade checkout." }),
+        message:
+          err instanceof Error
+            ? err.message
+            : parseFunctionError(err) ||
+              t("billingManage.errUpgrade", { defaultValue: "Unable to start upgrade checkout." }),
         tone: "error",
       });
     } finally {

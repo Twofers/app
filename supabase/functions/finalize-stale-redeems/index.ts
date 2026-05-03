@@ -1,13 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -189,6 +187,7 @@ serve(async (req) => {
           .eq("user_id", user.id)
           .in("id", ids)
           .is("redeemed_at", null)
+          .not("claim_status", "in", "(redeemed,canceled,expired)")
           .select("id");
 
         if (expErr) {

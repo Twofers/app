@@ -40,6 +40,7 @@ import { upsertAppTabModeForUser } from "@/lib/profiles-app-mode";
 import { DEMO_PREVIEW_EMAIL, DEMO_PREVIEW_PASSWORD } from "@/lib/demo-account";
 import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
 import { isDemoAuthHelperEnabled } from "@/lib/runtime-env";
+import { BUSINESS_INVITE_PENDING_META_KEY, isValidBusinessInviteCode } from "@/lib/business-invite";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -153,6 +154,8 @@ export default function AuthLandingScreen() {
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
 
   useEffect(() => {
@@ -201,6 +204,7 @@ export default function AuthLandingScreen() {
   function clearFeedback() {
     setAuthError(null);
     setEmailError(null);
+    setInviteError(null);
   }
 
   function validateEmail(): boolean {
@@ -263,16 +267,30 @@ export default function AuthLandingScreen() {
   async function handleSignUp() {
     if (!canSubmit || !selectedMode) return;
     if (!validateEmail()) return;
+    if (selectedMode === "business" && !isValidBusinessInviteCode(inviteCode)) {
+      setInviteError(
+        t("authLanding.errInviteCode", {
+          defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+        }),
+      );
+      return;
+    }
+
     setBusyAction("signup");
     clearFeedback();
     setSignUpAwaitingVerification(false);
     logAuthPath("signup");
     try {
+      const signUpData =
+        selectedMode === "business"
+          ? { [BUSINESS_INVITE_PENDING_META_KEY]: inviteCode.trim().toLowerCase() }
+          : undefined;
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
           emailRedirectTo: getEmailAuthRedirectUrl(),
+          ...(signUpData ? { data: signUpData } : {}),
         },
       });
       if (error) {
@@ -597,6 +615,45 @@ export default function AuthLandingScreen() {
                     </View>
                   );
                 })()
+              ) : null}
+
+              {selectedMode === "business" ? (
+                <View style={{ marginTop: Spacing.md }}>
+                  <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+                    {t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
+                  </Text>
+                  <TextInput
+                    value={inviteCode}
+                    onChangeText={(v) => {
+                      setInviteCode(v);
+                      if (inviteError) setInviteError(null);
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!busy}
+                    accessibilityLabel={t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
+                    placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code TWOFER gave you" })}
+                    placeholderTextColor={theme.mutedText}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: inviteError ? "#d32f2f" : inputBorder,
+                      borderRadius: Radii.md,
+                      padding: Spacing.lg,
+                      fontSize: 16,
+                      backgroundColor: inputBg,
+                      color: theme.text,
+                    }}
+                  />
+                  {inviteError ? (
+                    <Text style={{ fontSize: 13, color: "#d32f2f", marginTop: 4 }}>{inviteError}</Text>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: 4 }}>
+                      {t("authLanding.inviteCodeHint", {
+                        defaultValue: "Required to create a business account. Existing accounts can leave this blank.",
+                      })}
+                    </Text>
+                  )}
+                </View>
               ) : null}
 
               <Pressable

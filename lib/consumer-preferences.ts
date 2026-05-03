@@ -7,8 +7,12 @@ export type ConsumerLocationMode = "gps" | "zip";
 /** How we decide which deals trigger local notifications (extensible for future filters). */
 export type ConsumerNotificationMode = "all_nearby" | "favorites_only";
 
-export const CONSUMER_RADIUS_MILES_OPTIONS = [1, 3, 5, 10] as const;
+export const CONSUMER_RADIUS_MILES_OPTIONS = [1, 3, 5, 10, 15, 25] as const;
 export type ConsumerRadiusMiles = (typeof CONSUMER_RADIUS_MILES_OPTIONS)[number];
+
+// Pilot is centered on ZIP 75063 (Irving, TX) with a 15-mile target reach
+// covering Coppell, Grapevine, Carrollton, Las Colinas, and parts of Dallas.
+const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 15;
 
 export type ConsumerNotificationPrefsV1 = {
   v: 1;
@@ -32,7 +36,7 @@ const DEFAULTS: ConsumerPreferences = {
   onboardingComplete: false,
   locationMode: "gps",
   zipCode: "",
-  radiusMiles: 3,
+  radiusMiles: DEFAULT_RADIUS_MILES,
   notificationPrefs: { v: 1, mode: "all_nearby" },
   lastLatitude: null,
   lastLongitude: null,
@@ -71,10 +75,10 @@ export async function getConsumerPreferences(): Promise<ConsumerPreferences> {
     AsyncStorage.getItem(PREFIX + "last_lng"),
   ]);
 
-  const r = radiusMiles != null ? Number(radiusMiles) : 3;
+  const r = radiusMiles != null ? Number(radiusMiles) : DEFAULT_RADIUS_MILES;
   const radius: ConsumerRadiusMiles = CONSUMER_RADIUS_MILES_OPTIONS.includes(r as ConsumerRadiusMiles)
     ? (r as ConsumerRadiusMiles)
-    : 3;
+    : DEFAULT_RADIUS_MILES;
 
   return {
     onboardingComplete: onboardingComplete === "true",
@@ -134,6 +138,18 @@ export async function setConsumerNotificationPrefs(prefs: ConsumerNotificationPr
 export async function setLastKnownConsumerCoords(lat: number, lng: number) {
   await AsyncStorage.setItem(PREFIX + "last_lat", String(lat));
   await AsyncStorage.setItem(PREFIX + "last_lng", String(lng));
+}
+
+export async function getLastKnownConsumerCoords(): Promise<{ lat: number; lng: number } | null> {
+  const [latRaw, lngRaw] = await Promise.all([
+    AsyncStorage.getItem(PREFIX + "last_lat"),
+    AsyncStorage.getItem(PREFIX + "last_lng"),
+  ]);
+  if (latRaw == null || lngRaw == null) return null;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
 }
 
 export function milesToKm(miles: number) {
