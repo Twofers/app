@@ -5,7 +5,7 @@
  * - Stage 1: optional web research for unfamiliar menu items (gpt-4o-search-preview).
  * - Stage 2: copy generation tuned for an item-forward, anti-AI-tell voice.
  * - Stage 3: image — enhance the cafe's uploaded photo (touchup / cleanbg / studiopolish)
- *            OR fall back to DALL-E 3 (natural style, HD) when no photo is provided.
+ *            OR generate a photoreal hero via the configured GPT image model when no photo is provided.
  *
  * The app renders the headline/subline/CTA ABOVE the image — text is never baked in.
  *
@@ -454,7 +454,7 @@ async function produceImage(params: {
     return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment };
   }
 
-  // Path B — no photo: generate via DALL-E in photographic mode
+  // Path B — no photo: generate via OpenAI Images (GPT image model)
   const itemName = research.item_name || itemHint || "menu item";
   const prompt = buildPhotoAdImagePrompt({
     itemName,

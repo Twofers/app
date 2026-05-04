@@ -110,7 +110,7 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | Function | Purpose |
 |----------|---------|
 | `ai-compose-offer` | Voice / text → ad-copy compose (uses Whisper for voice) |
-| `ai-generate-ad-variants` | 3 distinct ad variants (value / neighborhood / premium) + DALL-E |
+| `ai-generate-ad-variants` | Single-ad pipeline (research → copy → GPT image generate or photo edit) |
 | `ai-generate-deal-copy` | Quick-Deal "Suggest title" |
 | `ai-create-deal` | Legacy one-shot deal insert (dev tool) |
 | `ai-extract-menu` | Menu photo → structured items (vision) |
@@ -161,7 +161,8 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `OPENAI_API_KEY` | All `ai-*` Edge functions | **Yes** |
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
-| `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default models | Optional |
+| `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default chat / Whisper models | Optional |
+| `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-2`) | Optional |
 | `AI_ADS_DEMO_USE_LIVE` | Use live OpenAI (not stubbed) for `demo@demo.com` account | Optional |
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
@@ -175,6 +176,9 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 # In Supabase Dashboard → Project Settings → Edge Functions → Secrets
 # OR via CLI:
 npx supabase secrets set OPENAI_API_KEY=sk-...
+npx supabase secrets set OPENAI_IMAGE_MODEL_DEFAULT=gpt-image-2
+npx supabase secrets set OPENAI_IMAGE_MODEL_GENERATE=gpt-image-2
+npx supabase secrets set OPENAI_IMAGE_MODEL_EDIT=gpt-image-2
 npx supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 ```
