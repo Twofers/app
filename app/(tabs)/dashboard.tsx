@@ -129,6 +129,9 @@ type DealRow = {
   window_start_minutes: number | null;
   window_end_minutes: number | null;
   timezone: string | null;
+  price: number | null;
+  max_claims: number | null;
+  claim_cutoff_buffer_minutes: number | null;
   claims: number;
   redeems: number;
   expiredUnredeemed: number;
@@ -143,7 +146,7 @@ type PerDealMetrics = {
 
 const DASHBOARD_DEALS_PAGE_SIZE = 100;
 const DASHBOARD_DEALS_SELECT =
-  "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
 
 function buildPerDealMap(monthOnly: ClaimRow[], nowMs: number): Record<string, PerDealMetrics> {
   const perDealMap: Record<string, PerDealMetrics> = {};
@@ -657,10 +660,20 @@ export default function BusinessDashboard() {
   function duplicateDeal(deal: DealRow) {
     setDealManageFor(null);
     router.push({
-      pathname: "/create/quick",
+      pathname: "/create/ai",
       params: {
         prefillTitle: deal.title ?? "",
         prefillHint: deal.description ?? "",
+        prefillPrice: deal.price != null ? String(deal.price) : "",
+        prefillPosterPath: deal.poster_storage_path ?? "",
+        prefillIsRecurring: deal.is_recurring ? "1" : "0",
+        prefillDaysOfWeek: deal.days_of_week ? deal.days_of_week.join(",") : "",
+        prefillWindowStartMin: deal.window_start_minutes != null ? String(deal.window_start_minutes) : "",
+        prefillWindowEndMin: deal.window_end_minutes != null ? String(deal.window_end_minutes) : "",
+        prefillTimezone: deal.timezone ?? "",
+        prefillMaxClaims: deal.max_claims != null ? String(deal.max_claims) : "",
+        prefillCutoffMins: deal.claim_cutoff_buffer_minutes != null ? String(deal.claim_cutoff_buffer_minutes) : "",
+        fromReuse: "1",
       },
     });
   }
@@ -1345,11 +1358,17 @@ export default function BusinessDashboard() {
                         </View>
                       </HapticScalePressable>
 
-                      <View style={{ marginTop: Spacing.md }}>
+                      <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
                         <SecondaryButton
                           title={t("offersDashboard.manageDeal")}
                           onPress={() => setDealManageFor(item)}
                         />
+                        {sched === "ended" ? (
+                          <PrimaryButton
+                            title={t("offersDashboard.runAgainCta")}
+                            onPress={() => duplicateDeal(item)}
+                          />
+                        ) : null}
                       </View>
                     </CardShell>
                   </Animated.View>

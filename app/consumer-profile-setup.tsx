@@ -52,6 +52,7 @@ export default function ConsumerProfileSetupScreen() {
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
   const [birthDate, setBirthDate] = useState(defaultBirthDate);
+  const [birthdateTouched, setBirthdateTouched] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -72,7 +73,10 @@ export default function ConsumerProfileSetupScreen() {
       if (row) {
         setZip(row.zip_code ?? "");
         const parsed = row.birthdate ? parseIsoToLocalDate(row.birthdate) : null;
-        if (parsed) setBirthDate(parsed);
+        if (parsed) {
+          setBirthDate(parsed);
+          setBirthdateTouched(true);
+        }
         if (isConsumerProfileComplete(row) && !isEdit) {
           const prefs = await getConsumerPreferences();
           router.replace(prefs.onboardingComplete ? "/(tabs)" : "/onboarding");
@@ -93,16 +97,12 @@ export default function ConsumerProfileSetupScreen() {
       setBanner({ message: t("consumerProfile.errZip"), tone: "error" });
       return;
     }
-    const iso = toIsoDate(birthDate);
-    if (!isValidBirthdateIso(iso)) {
-      setBanner({ message: t("consumerProfile.errBirthdate"), tone: "error" });
-      return;
-    }
     const uid = session?.user?.id;
     if (!uid) {
       setBanner({ message: t("consumerProfile.errLogin"), tone: "error" });
       return;
     }
+    const iso = birthdateTouched ? toIsoDate(birthDate) : undefined;
     setBusy(true);
     try {
       const { error } = await upsertConsumerProfile({
@@ -198,7 +198,10 @@ export default function ConsumerProfileSetupScreen() {
         </View>
 
         <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, color: C.text }}>{t("consumerProfile.birthdateTitle")}</Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginBottom: Spacing.sm }}>
+            <Text style={{ fontWeight: "700", color: C.text }}>{t("consumerProfile.birthdateTitle")}</Text>
+            <Text style={{ fontSize: 12, color: C.mutedText }}>({t("consumerProfile.birthdateOptional")})</Text>
+          </View>
           <Text style={{ fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18, color: C.mutedText }}>
             {t("consumerProfile.birthdateHint")}
           </Text>
@@ -228,7 +231,7 @@ export default function ConsumerProfileSetupScreen() {
               minimumDate={new Date(1900, 0, 1)}
               onChange={(_, d) => {
                 if (Platform.OS === "android") setShowPicker(false);
-                if (d) setBirthDate(d);
+                if (d) { setBirthDate(d); setBirthdateTouched(true); }
               }}
             />
           ) : null}

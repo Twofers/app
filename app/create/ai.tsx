@@ -82,6 +82,18 @@ const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
 };
 
+const SCHEDULE_PRESETS = [
+  { key: "weekdays", days: [1, 2, 3, 4, 5], startMin: 540, endMin: 1020 },
+  { key: "daily", days: [1, 2, 3, 4, 5, 6, 7], startMin: 480, endMin: 1200 },
+  { key: "weekends", days: [6, 7], startMin: 600, endMin: 840 },
+] as const;
+
+function dateFromMinutes(minutes: number): Date {
+  const d = new Date();
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
+
 function minutesFromDate(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
 }
@@ -243,6 +255,13 @@ export default function AiDealScreen() {
     fromCreateHub?: string;
     prefillLocationId?: string;
     prefillExtraLocationIds?: string;
+    prefillIsRecurring?: string;
+    prefillDaysOfWeek?: string;
+    prefillWindowStartMin?: string;
+    prefillWindowEndMin?: string;
+    prefillTimezone?: string;
+    prefillMaxClaims?: string;
+    prefillCutoffMins?: string;
   }>();
   const { templateId, dealId: dealIdParam } = params;
   const { t, i18n } = useTranslation();
@@ -316,6 +335,8 @@ export default function AiDealScreen() {
   const [windowStart, setWindowStart] = useState(new Date());
   const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [schedulePreset, setSchedulePreset] = useState<string | null>(null);
+  const [claimSettingsOpen, setClaimSettingsOpen] = useState(false);
   const [timezone, setTimezone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
   );
@@ -612,7 +633,8 @@ export default function AiDealScreen() {
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && locIds.length === 0) return;
+    const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && locIds.length === 0 && !hasSchedulePrefill) return;
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -624,6 +646,21 @@ export default function AiDealScreen() {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
     }
+
+    // Schedule prefill (from "Run again" / duplicate)
+    if (g(params.prefillIsRecurring) === "1") setValidityMode("recurring");
+    const daysStr = g(params.prefillDaysOfWeek).trim();
+    if (daysStr) setDaysOfWeek(daysStr.split(",").map(Number).filter((n) => n >= 1 && n <= 7));
+    const wsm = g(params.prefillWindowStartMin).trim();
+    if (wsm) { const m = Number(wsm); if (Number.isFinite(m)) { const d = new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); setWindowStart(d); } }
+    const wem = g(params.prefillWindowEndMin).trim();
+    if (wem) { const m = Number(wem); if (Number.isFinite(m)) { const d = new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); setWindowEnd(d); } }
+    const tz = g(params.prefillTimezone).trim();
+    if (tz) setTimezone(tz);
+    const mc = g(params.prefillMaxClaims).trim();
+    if (mc) setMaxClaims(mc);
+    const cf = g(params.prefillCutoffMins).trim();
+    if (cf) setCutoffMins(cf);
 
     if (fromAi === "1" && (pt || pp || pc || pd || ph || posterPath)) {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
@@ -641,6 +678,8 @@ export default function AiDealScreen() {
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
     params.prefillLocationId, params.prefillExtraLocationIds, dealIdFromRoute, t,
+    params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
+    params.prefillWindowEndMin, params.prefillTimezone, params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
 
   useEffect(() => {
@@ -1520,6 +1559,33 @@ export default function AiDealScreen() {
               </>
             ) : (
               <>
+                <Text style={{ marginTop: 12, fontWeight: "600", fontSize: 13, opacity: 0.5 }}>{t("createAi.schedulePresetsLabel")}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                  {SCHEDULE_PRESETS.map((preset) => {
+                    const active = schedulePreset === preset.key;
+                    return (
+                      <Pressable
+                        key={preset.key}
+                        onPress={() => {
+                          if (active) {
+                            setSchedulePreset(null);
+                          } else {
+                            setSchedulePreset(preset.key);
+                            setDaysOfWeek([...preset.days]);
+                            setWindowStart(dateFromMinutes(preset.startMin));
+                            setWindowEnd(dateFromMinutes(preset.endMin));
+                          }
+                        }}
+                        style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? "#FF9F1C" : "#eee" }}
+                      >
+                        <Text style={{ color: active ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }}>
+                          {t(`createAi.preset_${preset.key}`)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
                 <Text style={{ marginTop: 12 }}>{t("createAi.days")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                   {[
@@ -1536,6 +1602,7 @@ export default function AiDealScreen() {
                       <Pressable
                         key={day.value}
                         onPress={() => {
+                          setSchedulePreset(null);
                           setDaysOfWeek((prev) =>
                             selected ? prev.filter((d) => d !== day.value) : [...prev, day.value],
                           );
@@ -1556,7 +1623,7 @@ export default function AiDealScreen() {
                   <DateTimePicker
                     value={windowStart}
                     mode="time"
-                    onChange={(_event, date) => { setShowWindowStartPicker(false); if (date) setWindowStart(date); }}
+                    onChange={(_event, date) => { setShowWindowStartPicker(false); setSchedulePreset(null); if (date) setWindowStart(date); }}
                   />
                 ) : null}
 
@@ -1567,29 +1634,41 @@ export default function AiDealScreen() {
                   <DateTimePicker
                     value={windowEnd}
                     mode="time"
-                    onChange={(_event, date) => { setShowWindowEndPicker(false); if (date) setWindowEnd(date); }}
+                    onChange={(_event, date) => { setShowWindowEndPicker(false); setSchedulePreset(null); if (date) setWindowEnd(date); }}
                   />
                 ) : null}
               </>
             )}
 
-            <Text style={{ marginTop: 12 }}>{t("createAi.maxClaims")}</Text>
-            <TextInput
-              value={maxClaims}
-              onChangeText={setMaxClaims}
-              keyboardType="number-pad"
-              placeholder={t("createAi.placeholderMaxClaims")}
-              style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
-            />
-
-            <Text style={{ marginTop: 12 }}>{t("createAi.cutoffBuffer")}</Text>
-            <TextInput
-              value={cutoffMins}
-              onChangeText={setCutoffMins}
-              keyboardType="number-pad"
-              placeholder={t("createAi.placeholderCutoff")}
-              style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
-            />
+            <Pressable
+              onPress={() => setClaimSettingsOpen((v) => !v)}
+              style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+            >
+              <Text style={{ fontWeight: "700" }}>{t("createAi.claimSettingsHeader")}</Text>
+              <Text style={{ fontSize: 12, opacity: 0.5 }}>
+                {claimSettingsOpen ? "▲" : `${maxClaims} claims, ${cutoffMins} min ▼`}
+              </Text>
+            </Pressable>
+            {claimSettingsOpen ? (
+              <>
+                <Text style={{ marginTop: 8 }}>{t("createAi.maxClaims")}</Text>
+                <TextInput
+                  value={maxClaims}
+                  onChangeText={setMaxClaims}
+                  keyboardType="number-pad"
+                  placeholder={t("createAi.placeholderMaxClaims")}
+                  style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
+                />
+                <Text style={{ marginTop: 8 }}>{t("createAi.cutoffBuffer")}</Text>
+                <TextInput
+                  value={cutoffMins}
+                  onChangeText={setCutoffMins}
+                  keyboardType="number-pad"
+                  placeholder={t("createAi.placeholderCutoff")}
+                  style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12, marginTop: 6 }}
+                />
+              </>
+            ) : null}
 
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />

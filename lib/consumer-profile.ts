@@ -44,9 +44,7 @@ export function isConsumerProfileComplete(
 ): boolean {
   const zip = row?.zip_code?.trim();
   if (!zip) return false;
-  if (row?.birthdate && isValidBirthdateIso(row.birthdate)) return true;
-  if (row?.age_range?.trim()) return true;
-  return false;
+  return true;
 }
 
 export async function fetchConsumerProfile(userId: string): Promise<ConsumerProfileRow | null> {
@@ -71,13 +69,13 @@ export async function updateConsumerProfileZip(userId: string, zipCode: string):
 export async function upsertConsumerProfile(input: {
   userId: string;
   zipCode: string;
-  birthdate: string;
+  birthdate?: string;
 }): Promise<{ error: Error | null }> {
   const zip = normalizeUsZipInput(input.zipCode);
   if (!zip) return { error: new Error("ZIP_REQUIRED") };
   if (!isValidUsZipFormat(zip)) return { error: new Error("ZIP_FORMAT_INVALID") };
-  const bd = input.birthdate.trim();
-  if (!isValidBirthdateIso(bd)) return { error: new Error("BIRTHDATE_INVALID") };
+  const bd = input.birthdate?.trim() || null;
+  if (bd && !isValidBirthdateIso(bd)) return { error: new Error("BIRTHDATE_INVALID") };
   const { error } = await supabase.from("consumer_profiles").upsert(
     {
       user_id: input.userId,
