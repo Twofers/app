@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -78,6 +78,18 @@ export default function BusinessSetupScreen() {
   const [inviteValidated, setInviteValidated] = useState<boolean | null>(null);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
+  // FIX: Track the post-submit redirect timer so it can be cancelled on unmount.
+  // Without this, the setTimeout callback fires after navigation away, causing
+  // state updates on an unmounted component and potential double-navigation.
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const trimmed = useMemo(
     () => ({
@@ -376,7 +388,7 @@ export default function BusinessSetupScreen() {
       }
 
       setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
-      setTimeout(async () => {
+      redirectTimerRef.current = setTimeout(async () => {
         const pending = await consumePendingDeepLink();
         router.replace((pending ?? "/(tabs)/dashboard") as Href);
       }, 250);

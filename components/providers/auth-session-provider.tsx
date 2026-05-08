@@ -15,6 +15,11 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // FIX: Track whether `onAuthStateChange` has already delivered a session
+    // so we don't overwrite it with a stale `getSession` result. This prevents
+    // a race where a token-refresh event arrives before the initial getSession
+    // promise resolves, causing the fresh session to be replaced by the old one.
+    let authChangeReceived = false;
     void supabase.auth
       .getSession()
       .then(({ data, error }) => {
@@ -29,7 +34,10 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        setSession(data.session ?? null);
+        // Only apply if onAuthStateChange hasn't already delivered a fresher session.
+        if (!authChangeReceived) {
+          setSession(data.session ?? null);
+        }
         setIsInitialLoading(false);
       })
       .catch(() => {
@@ -41,6 +49,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      authChangeReceived = true;
       setSession(nextSession);
       setIsInitialLoading(false);
     });
