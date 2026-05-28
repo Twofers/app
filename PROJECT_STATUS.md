@@ -109,8 +109,9 @@ Optional, only if you want these extra features later:
 - **But** I have not actually rebuilt a fresh database to watch them run cleanly.
   I recommend one verification run in Phase 2 before we call it solved.
 
-### #5 — 8 Expo packages are one patch version behind  🟢 MINOR
-- Cosmetic. One command updates them. No rush.
+### #5 — 8 Expo packages are one patch version behind  ✅ FIXED 2026-05-28
+- Was cosmetic. All 8 are now updated to the versions the Expo SDK expects (see
+  Fix #4). Type-check still passes; "Dependencies are up to date."
 
 ---
 
@@ -151,6 +152,21 @@ Optional, only if you want these extra features later:
 - **To test the AI on this computer later:** paste your OpenAI key after the `=`
   in `supabase/.env`, then run the local Supabase stack. (Not needed for your
   phone test — that uses the live dashboard key you already set.)
+
+**Fix #4 (2026-05-28) — updated the 8 out-of-date helper packages.**
+- Bumped all 8 to the exact versions the Expo SDK expects (all tiny patch
+  updates, same SDK 54 — low risk). `expo install --check` now says
+  "Dependencies are up to date" and the type-check still passes.
+- **FYI, not acted on:** the updater suggested adding an `expo-web-browser`
+  plugin entry to `app.config.js`. The app has always worked without it (that
+  plugin is optional for normal "open a link" use), so I left the config alone
+  rather than guess. Mention it if you ever want it added.
+
+**Note on the test-database rebuild (the old §5 #4 item):** you don't want a
+local Supabase stack, and rebuilding the *live* database is off-limits (it would
+risk real data). So migration health stays "verified by reading the files"
+(done in Phase 1 — they look correct). Real-world proof will come naturally the
+next time a migration deploys to production.
 
 ---
 
