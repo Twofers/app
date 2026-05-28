@@ -242,9 +242,9 @@ Never paste real secret values into tickets or commits.
 |--------|--------|
 | `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`. |
 | `OPENAI_WHISPER_MODEL` | Voice path in `ai-compose-offer`. |
-| `OPENAI_IMAGE_MODEL_DEFAULT` | Default for both generate and edit when role-specific vars unset (`_shared/dalle-image.ts`); allowlisted ids only; invalid → `gpt-image-2`. |
-| `OPENAI_IMAGE_MODEL_GENERATE` | Text-to-image / poster generation (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-2`. |
-| `OPENAI_IMAGE_MODEL_EDIT` | Uploaded-photo edits (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-2`. |
+| `OPENAI_IMAGE_MODEL_DEFAULT` | Default for both generate and edit when role-specific vars unset (`_shared/dalle-image.ts`); allowlisted ids only; invalid → `gpt-image-1`. |
+| `OPENAI_IMAGE_MODEL_GENERATE` | Text-to-image / poster generation (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
+| `OPENAI_IMAGE_MODEL_EDIT` | Uploaded-photo edits (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
 | `AI_ADS_DEMO_USE_LIVE` | When `true`, demo account can use live OpenAI for ads paths. |
 | `AI_COMPOSE_PROMPT_VERSION` | `ai-compose-offer` |
 | `AI_DEDUP_WINDOW_SECONDS` | `ai-compose-offer` |

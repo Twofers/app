@@ -176,9 +176,9 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 # In Supabase Dashboard → Project Settings → Edge Functions → Secrets
 # OR via CLI:
 npx supabase secrets set OPENAI_API_KEY=sk-...
-npx supabase secrets set OPENAI_IMAGE_MODEL_DEFAULT=gpt-image-2
-npx supabase secrets set OPENAI_IMAGE_MODEL_GENERATE=gpt-image-2
-npx supabase secrets set OPENAI_IMAGE_MODEL_EDIT=gpt-image-2
+npx supabase secrets set OPENAI_IMAGE_MODEL_DEFAULT=gpt-image-1
+npx supabase secrets set OPENAI_IMAGE_MODEL_GENERATE=gpt-image-1
+npx supabase secrets set OPENAI_IMAGE_MODEL_EDIT=gpt-image-1
 npx supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 ```

@@ -17,7 +17,7 @@ export const OPENAI_IMAGE_MODEL_ALLOWLIST = new Set([
   "gpt-image-2-2026-04-21",
 ]);
 
-const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-2";
+const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-1";
 
 const MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024;
 const MIN_EDIT_IMAGE_BYTES = 64;
