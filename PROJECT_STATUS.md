@@ -93,12 +93,14 @@ Optional, only if you want these extra features later:
 - **What I can't see from here:** the live error logs and the exact model names
   currently set. I need one small thing from you to confirm (see §8).
 
-### #3 — Local testing of the AI is broken: the file `supabase/.env` is corrupted  🟡 MEDIUM
-- That file is supposed to hold local settings. Instead it has **3 stray lines of
+### #3 — Local testing of the AI is broken: the file `supabase/.env` is corrupted  ✅ FIXED 2026-05-28
+- That file was supposed to hold local settings. Instead it had **3 stray lines of
   leftover code** and **no OpenAI key**.
-- **Impact is limited:** this file lives only on this computer (it is not shipped
-  to the live app), so it does **not** break the live product. But it means
-  nobody can test the AI on this machine until it's fixed. Easy fix in Phase 2.
+- **Impact was limited:** this file lives only on this computer (it is not shipped
+  to the live app), so it never broke the live product — it just meant nobody could
+  test the AI on this machine.
+- **Fixed:** I replaced the junk with a clean, properly-formatted template (see
+  Fix #3 in §6). Local AI testing now just needs you to paste an OpenAI key into it.
 
 ### #4 — The old database errors you remembered ("missing columns", "ON CONFLICT") appear already fixed — but I haven't proven it  🟡 MEDIUM (needs a verification run)
 - A recent change ("Fix duplicate Supabase migration timestamp") and the current
@@ -137,6 +139,18 @@ Optional, only if you want these extra features later:
   programs and the create-a-deal screen end to end. Summary in §6b below.
 - **No code changed for this** — it was a review. The only real bug in the whole
   system was the `gpt-image-2` name, already handled by Fix #1.
+
+**Fix #3 (2026-05-28) — cleaned up the corrupted local test file `supabase/.env`.**
+- Removed the 3 stray lines of leftover code and replaced them with a clean,
+  correctly-formatted template (plain-English header + a blank `OPENAI_API_KEY=`
+  line for you to fill, with the picture model pinned to `gpt-image-1` to match
+  your live setting).
+- **No git checkpoint for this one** — that file is git-ignored on purpose (it's
+  local-only and must never ship), so cleaning it leaves the saved history clean.
+  This is expected, not a mistake.
+- **To test the AI on this computer later:** paste your OpenAI key after the `=`
+  in `supabase/.env`, then run the local Supabase stack. (Not needed for your
+  phone test — that uses the live dashboard key you already set.)
 
 ---
 
