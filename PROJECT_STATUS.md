@@ -162,6 +162,17 @@ Optional, only if you want these extra features later:
   plugin is optional for normal "open a link" use), so I left the config alone
   rather than guess. Mention it if you ever want it added.
 
+**Fix #5 (2026-05-28) — removed `gpt-image-2` from the allowed picture-model list.**
+- Deleted the two `gpt-image-2` entries from the server-side allowlist in
+  `supabase/functions/_shared/dalle-image.ts`, so the name that caused this whole
+  incident can never be accepted again. If any setting ever points there, the code
+  now safely falls back to `gpt-image-1`.
+- Also fixed one more stale doc line that still listed `gpt-image-2` as the default
+  (`docs/deployment-notes.md`) — a line I missed in Fix #1.
+- This is a server (edge-function) change, so it takes effect the next time the
+  functions are deployed. Your live setting is already `gpt-image-1`, so nothing
+  changes for you today — this just closes the door for good.
+
 **Note on the test-database rebuild (the old §5 #4 item):** you don't want a
 local Supabase stack, and rebuilding the *live* database is off-limits (it would
 risk real data). So migration health stays "verified by reading the files"
@@ -193,13 +204,10 @@ ad. Plain-English results:
 3. **Owners never see scary error codes.** Every failure is translated to a plain
    sentence (e.g. "Please wait a moment before generating again.").
 
-**One optional hardening idea (your call — I did NOT change this):**
-- The code keeps a list of "allowed picture models," and `gpt-image-2` is still on
-  that list. It isn't hurting anything now (your live setting is `gpt-image-1`),
-  but it's the same name that caused this whole mess. If you want, I can remove
-  the unverified `gpt-image-2` entries so nobody can accidentally pick them again.
-  I left it alone because I'm not 100% certain `gpt-image-2` doesn't exist, and you
-  told me not to guess. Say the word and I'll remove it.
+**Optional hardening — DONE 2026-05-28 (see Fix #5):**
+- The code's list of "allowed picture models" no longer includes `gpt-image-2`, so
+  that bad name can never be selected again — not from the dashboard, not from a
+  future deploy. Only the `gpt-image-1` family remains.
 
 ---
 

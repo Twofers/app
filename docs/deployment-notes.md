@@ -162,7 +162,7 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
 | `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default chat / Whisper models | Optional |
-| `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-2`) | Optional |
+| `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-1`) | Optional |
 | `AI_ADS_DEMO_USE_LIVE` | Use live OpenAI (not stubbed) for `demo@demo.com` account | Optional |
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
