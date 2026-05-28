@@ -4,7 +4,7 @@ _Plain-English status of the app. This file is the single source of truth and is
 updated after every work session._
 
 **Last updated:** 2026-05-28
-**Phase:** 1 (Investigate only — nothing has been changed yet)
+**Phase:** 2 (Fixing, one safe step at a time — the image-model fix is in)
 
 ---
 
@@ -122,9 +122,54 @@ Optional, only if you want these extra features later:
 - Also softened the `.env.example` text-model note so it no longer recommends an
   unverified `gpt-5.4-mini` (the safe default `gpt-4o-mini` is used when unset).
 - Safety check (typecheck) passed. Saved as a git checkpoint.
-- **Important:** this fixes the *defaults* for future deploys. Your **live app**
-  is still using the old `gpt-image-2` setting until you change it in the
-  dashboard — that's the next step (§7).
+- **Live app updated too (2026-05-28):** you set the three dashboard secrets
+  (`OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`,
+  `OPENAI_IMAGE_MODEL_EDIT`) to `gpt-image-1`. I confirmed the code reads those
+  exact names, so your change is wired in correctly and takes effect with no
+  redeploy. The code change above is the belt-and-suspenders backup for future
+  deploys.
+- **Not yet eye-tested:** you don't have the newest app build on your phone, so
+  we haven't watched a real ad generate with an image yet. That's the one
+  remaining confirmation, and it waits until you update your phone (§7).
+
+**Fix #2 (2026-05-28) — I read the rest of the AI code; found no more breaks.**
+- You asked me to "check the rest of the code." I read all five AI server
+  programs and the create-a-deal screen end to end. Summary in §6b below.
+- **No code changed for this** — it was a review. The only real bug in the whole
+  system was the `gpt-image-2` name, already handled by Fix #1.
+
+---
+
+## 6b. Full code review — what I checked and what I found
+
+I read every place the app talks to OpenAI, plus the screen owners use to make an
+ad. Plain-English results:
+
+| Area I checked | Healthy? | Notes |
+|---|---|---|
+| Make-an-ad (words + picture) — the flagship | ✅ | Well-built. If the picture fails, the words still come through. |
+| Voice note → text (the mic button) | ✅ | Uses the known-good `whisper-1`. Falls back gracefully. |
+| Auto-fill shop details during setup | ✅ | Tries Google first, then AI; safe model; friendly errors. |
+| Scan a menu photo → item list | ✅ | Safe model; clear "try again" message if it can't read the photo. |
+| Deal-copy text suggestions | ✅ | The crash an old report warned about is already fixed. |
+
+**Three things I confirmed that protect you:**
+1. **No other wrong model names.** I scanned every server program for bad model
+   names like the `gpt-image-2` one. Only that single one existed — now fixed.
+   Words use `gpt-4o-mini`, voice uses `whisper-1`, both real and known-good.
+2. **A missing picture never shows as "broken."** If the AI can't make the
+   image, the owner sees a tidy "no image yet" placeholder (or their own uploaded
+   photo) — never a broken-image icon — and the ad's words are unaffected.
+3. **Owners never see scary error codes.** Every failure is translated to a plain
+   sentence (e.g. "Please wait a moment before generating again.").
+
+**One optional hardening idea (your call — I did NOT change this):**
+- The code keeps a list of "allowed picture models," and `gpt-image-2` is still on
+  that list. It isn't hurting anything now (your live setting is `gpt-image-1`),
+  but it's the same name that caused this whole mess. If you want, I can remove
+  the unverified `gpt-image-2` entries so nobody can accidentally pick them again.
+  I left it alone because I'm not 100% certain `gpt-image-2` doesn't exist, and you
+  told me not to guess. Say the word and I'll remove it.
 
 ---
 
