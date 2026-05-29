@@ -368,3 +368,50 @@ So the work here is **polish on a solid base**, not a rescue job.
 - **Step 3 — needs your decision before I touch anything:** items 1 and 2 above
   (restyle the flagship "Create a deal" screen to match the brand; replace the
   internet stock-photo fallback with a branded placeholder).
+
+### ✅ Done — polish pass completed (2026-05-28)
+
+You approved both Step 3 items, so the whole list (1–5) was done. Each fix is its
+own saved checkpoint (commit) with a plain-English message, and the type-check
+passed with zero errors after every single one. **Nothing about the AI itself, the
+database, or the orange brand color was changed** — this was visual consistency
+only. Here is every change, newest first, and how to see it on your phone:
+
+- **Restyled the "Create a deal" (AI) screen to match the brand.** *(commit
+  `db18a90`)* The off-brand blue boxes and plain grey inputs on the app's most
+  important owner screen are gone; it now uses the same orange-on-white look as the
+  rest of the app. I only restyled the *app's* parts of the screen — the little
+  preview of the finished ad is left exactly as the AI makes it.
+  **See it:** open the **Create** tab → the prompt box, buttons, and panels now
+  look like the rest of the app.
+- **Branded "Photo coming soon" tile instead of a random internet photo.** *(commit
+  `077d2ff`)* When a deal has no picture yet, the customer feed used to fill the big
+  image with a stock coffee photo pulled off the internet. It now shows a clean
+  orange coffee-cup tile that ships inside the app — on-brand and can't break.
+  **See it:** the home feed, on any deal that hasn't had a photo added yet.
+- **One shared color for the favorite heart everywhere.** *(commit `c6f7abf`)* The
+  pink "favorite" heart was hand-typed on three screens; it's now one defined color.
+  **See it:** tap the heart on the home feed, a business page, and a deal page — the
+  exact same pink in all three.
+- **Standard input boxes on the password, account, and menu-scan screens.** *(commits
+  `dcad9af`, `5559736`)* These forms used a plain grey box instead of the app's
+  styled input. They now match every other form.
+  **See it:** "Forgot password", "Reset password", the Account tab, and "Scan a menu".
+- **Consistent error-red and success-green across the app.** *(commits `7befa94`,
+  `5df7d10`, plus the new tokens in `b889a64`)* The red for errors and green for
+  success were typed in slightly differently on each screen; they're now defined
+  once in the theme and reused. **See it:** the green "subscribed" note on Billing,
+  and any red error message — same shade everywhere now.
+- **Deleted leftover starter-kit images.** *(commit `36b63b3`)* Four unused default
+  Expo template pictures were removed from the project. Invisible to users — purely
+  a tidiness fix so the project looks professionally maintained.
+
+**Not done (your call, no action needed):** the blue app-icon penguin vs. the
+orange in-app penguin, the tiny wordmark in empty-state cards, and the
+behind-the-scenes logging tidy (item 6) — all cosmetic/internal, none worth the
+churn before the pilot. Say the word if you want any of them.
+
+**How to test the whole thing:** run `npx expo start`, press `a` for the Android
+emulator (or scan the QR code with your phone), and tap through Home → a deal →
+Create → Account. Everything should feel like one consistent, crisp orange-and-white
+app. If anything looks off, tell me which screen and I'll fix it.
