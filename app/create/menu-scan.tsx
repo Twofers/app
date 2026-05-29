@@ -424,7 +424,7 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.namePlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: Colors.light.border,
                     borderRadius: 10,
                     padding: 10,
                   }}
@@ -439,7 +439,7 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.categoryPlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: Colors.light.border,
                     borderRadius: 10,
                     padding: 10,
                   }}
@@ -454,7 +454,7 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.pricePlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: Colors.light.border,
                     borderRadius: 10,
                     padding: 10,
                   }}
@@ -469,13 +469,13 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.sizePlaceholder", { defaultValue: "Sizes as shown (optional)" })}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#ccc",
+                    borderColor: Colors.light.border,
                     borderRadius: 10,
                     padding: 10,
                   }}
                 />
                 <Pressable onPress={() => removeRow(item.key)}>
-                  <Text style={{ color: "#c62828", fontWeight: "600" }}>{t("menuScan.removeLine")}</Text>
+                  <Text style={{ color: Colors.light.danger, fontWeight: "600" }}>{t("menuScan.removeLine")}</Text>
                 </Pressable>
               </View>
             ))}
