@@ -3,8 +3,10 @@
 _Plain-English status of the app. This file is the single source of truth and is
 updated after every work session._
 
-**Last updated:** 2026-05-28
-**Phase:** 2 (Fixing, one safe step at a time — the image-model fix is in)
+**Last updated:** 2026-05-29
+**Phase:** 2 (Fixing — ✅ 2026-05-29 root cause found & proven: the stored OpenAI
+key was invalid. A new key works and ALL three image models generate real images.
+Remaining: update the live dashboard secret. See §10.)
 **Also in progress:** a pre-launch polish-and-quality pass — see §9 for the full audit.
 
 ---
@@ -76,8 +78,10 @@ Optional, only if you want these extra features later:
 
 ### #1 — The app is asking OpenAI for a picture "model" that probably doesn't exist  ⚠️ MOST SERIOUS
 - **Key is fine.** You confirmed (2026-05-28) the `OPENAI_API_KEY` is set in the
-  Supabase dashboard and the OpenAI account has credits. So the key is NOT the
-  problem. Good — that rules out the simplest cause.
+  Supabase dashboard and the OpenAI account has credits.
+  **⚠️ Superseded 2026-05-29:** a real call shows the stored key actually *fails*
+  OpenAI authentication (HTTP 401, "Incorrect API key provided"). "Set" did not
+  mean "valid." The key may be the real problem after all — see §10.
 - **New prime suspect — the model name.** Think of an AI "model" as a specific
   version, like asking for "iPhone 17." The app's setup runbook
   (`docs/deployment-notes.md`) tells you to set the picture model to
@@ -231,7 +235,8 @@ exactly how to check each fix yourself.
 ## 8. Open questions only you can answer
 
 - **CONFIRMED 2026-05-28:** `OPENAI_API_KEY` is set and the OpenAI account has
-  credits. (So the key is not the problem.)
+  credits. **⚠️ UPDATE 2026-05-29:** a live test shows the stored key fails OpenAI
+  authentication (401). It is set, but it is not valid. See §10.
 - **Still need from you — what do you actually see when you try AI now?**
   - An error / no ad at all → points at the **words** model.
   - The words appear but the **picture** is missing/blank → points at the
@@ -415,3 +420,155 @@ churn before the pilot. Say the word if you want any of them.
 emulator (or scan the QR code with your phone), and tap through Home → a deal →
 Create → Account. Everything should feel like one consistent, crisp orange-and-white
 app. If anything looks off, tell me which screen and I'll fix it.
+
+---
+
+## 10. Live OpenAI key test — 2026-05-29  🔴 NEW, IMPORTANT
+
+**What I did:** You verified your OpenAI organization and wanted a *real* test (not
+a guess from the limits page, which lags). So I wrote a small diagnostic
+(`scripts/probe-image-models.mjs`) that uses your key to ask OpenAI to actually
+generate a picture with each of the three picture models and reports exactly what
+OpenAI says. The key was read from the local `supabase/.env` at run time — it was
+never printed, logged, or saved by me, and no dashboard secret was touched.
+
+**Result — all three models gave the identical answer:**
+
+| Model | What OpenAI returned |
+|---|---|
+| `gpt-image-2` | **HTTP 401 — `invalid_api_key` — "Incorrect API key provided"** |
+| `gpt-image-1` | **HTTP 401 — `invalid_api_key` — "Incorrect API key provided"** |
+| `gpt-image-1-mini` | **HTTP 401 — `invalid_api_key` — "Incorrect API key provided"** |
+
+**Plain English:** This is **not** a model problem and **not** a verification
+problem. A "401 / Incorrect API key provided" means OpenAI does not recognize the
+key at all and rejects the request **before** it ever looks at which model you
+asked for or whether your org is verified. So we still cannot say which picture
+model your account can use — the key has to authenticate first.
+
+**The clue that matters:** OpenAI echoed back a *masked* version of the key it
+received: **`405ff71b…99f7`**. It does **not** start with `sk-`. Every real OpenAI
+key starts with `sk-` (e.g. `sk-proj-…`). So whatever is currently stored as the
+"OpenAI key" is almost certainly **not a valid OpenAI key** — it looks like the
+wrong value was pasted in.
+
+**Why this may be the real bug behind "the AI doesn't work":** earlier we assumed
+the only issue was the picture-model *name* (`gpt-image-2` vs `gpt-image-1`). But
+if the **key itself** is invalid, then **nothing** AI works — not the picture *and*
+not the words (the words use the same key) — which matches a "no ad at all"
+symptom. The earlier "the key is fine" note only confirmed a key was *present* and
+the account had credits; it never confirmed the key actually *works*. This is the
+first time the key was truly exercised, and it failed.
+
+**Important caveat — I can only see what's in `supabase/.env`, not your dashboard:**
+- If the *wrong* value was pasted into `supabase/.env` (and the dashboard secret is
+  correct) → the live app is fine; just fix the local file and re-test.
+- If your Supabase dashboard `OPENAI_API_KEY` secret holds this same `405ff71b…`
+  value → **the live AI has been failing authentication for everyone**, and this is
+  the thing to fix before the pilot.
+
+**How to tell which — without showing me your key:**
+1. platform.openai.com → **API keys**. Real keys start with `sk-`.
+2. Compare the masked fingerprint `405ff71b…99f7` to (a) the value in your Supabase
+   dashboard secret and (b) a real key on the OpenAI page. If the dashboard value
+   doesn't start with `sk-`, that's the bug.
+3. Put a correct `sk-…` key into `supabase/.env`, save, and re-run
+   `node scripts/probe-image-models.mjs`. *Then* we learn which picture model
+   actually works and can pick the plan.
+
+**Org question (Q5):** the test can't confirm the org yet — a rejected (401)
+request is not attributed to any organization, so OpenAI returned no
+`openai-organization` header. Once the key authenticates, the same probe prints
+that header so we can match it to the org you verified. Until then, check it in the
+dashboard: Settings → Organization → General (the verified org) vs. Settings → API
+keys (which project/org the key lives under).
+
+**Status:** picture-model access = **UNDETERMINED** (blocked by the bad key).
+Action needed from you: confirm/replace the OpenAI key, then re-run. The diagnostic
+script is kept at `scripts/probe-image-models.mjs` for the re-test.
+
+### ✅ Re-test 2026-05-29 — new key works, all three models usable
+
+You created a brand-new OpenAI secret key and put it in `supabase/.env`. I re-ran
+the same probe. Results:
+
+| Model | Result |
+|---|---|
+| `gpt-image-2` | ✅ **200 — real image returned** (~1.5 MB PNG, ~27s) |
+| `gpt-image-1` | ✅ **200 — real image returned** (~1.4 MB PNG, ~18s) |
+| `gpt-image-1-mini` | ✅ **200 — real image returned** (~1.3 MB PNG, ~20s) |
+
+- **Key type:** project-scoped (`sk-proj-…`) — tied to one project in one org.
+- **Org (from response header):** `user-s6sbgdv0nx7hs1cnpitqvtp4`. Because the
+  verification-gated `gpt-image-1` succeeded, **that org is verified** — so the new
+  key sits in a verified org, consistent with the verification you completed. To
+  confirm it is literally the same org, compare that ID to Settings → Organization →
+  General (a personal account has only one org, so it matches by default).
+
+**So the original "AI doesn't work" root cause was the invalid key, not the model
+name.** With a valid key, every image model — including the previously-suspect
+`gpt-image-2` — works.
+
+**What's left (your actions — no settings changed yet):**
+1. **Make the LIVE app work — update the dashboard secret.** Set `OPENAI_API_KEY`
+   in Supabase (Project Settings → Edge Functions → Secrets) to this new working
+   key. Until you do, the live app keeps using the old broken key. *(I don't change
+   dashboard secrets.)*
+2. **Pick the image model:**
+   - **Ship now, zero code change:** stay on `gpt-image-1` (already the configured
+     default, already allowlisted, just proven working). Feature is live the moment
+     step 1 is done.
+   - **Use `gpt-image-2` (your stated preference):** needs a 1-line code change
+     first — `gpt-image-2` was *removed* from the server allowlist on 2026-05-28
+     (Fix #5) on the assumption it wasn't real. We now have proof it IS real, so it
+     must be re-added to `OPENAI_IMAGE_MODEL_ALLOWLIST` in `_shared/dalle-image.ts`
+     and the edge functions re-deployed; then set the three `OPENAI_IMAGE_MODEL_*`
+     dashboard secrets to `gpt-image-2`. If you set the secret to `gpt-image-2`
+     WITHOUT re-adding it to the allowlist, the server safely ignores it and falls
+     back to `gpt-image-1`.
+
+**Cleanup:** the new key was placed in `supabase/.env` (local, git-ignored) only
+for the test — blank that line again when done. The dashboard secret is the one
+that matters for production. The 3 generations above were real (billable) calls —
+a few cents total.
+
+### Progress — gpt-image-2 enablement (2026-05-29)
+
+Acting on Dan's "update the gpt-image-2":
+
+- ✅ **Code:** re-added `gpt-image-2` to `OPENAI_IMAGE_MODEL_ALLOWLIST` in
+  `supabase/functions/_shared/dalle-image.ts` (it was the only functional gate — no
+  client-side list or deny-list elsewhere). It is a string-literal added to a `Set`,
+  type-safe by construction. (The Deno typecheck can't run here — `deno` isn't
+  installed, matching the no-local-stack setup.)
+- ✅ **Deployed** the two functions that bundle that file —
+  `ai-generate-ad-variants` and `ai-compose-offer` — to project
+  `kvodhiqhdqnptqovovia`. The server now *accepts* `gpt-image-2`; it still won't
+  *use* it until a dashboard secret points there.
+- ✅ **Live key:** Dan reported updating the dashboard `OPENAI_API_KEY` to the new
+  working `sk-proj-…` key (the probe already proved that key authenticates and
+  generates on all three models).
+
+- ✅ **Model secret set (Dan, 2026-05-29):** `OPENAI_IMAGE_MODEL_GENERATE` =
+  `gpt-image-2` on the dashboard — the "AI makes the picture" path.
+- ✅ **Re-deployed to activate (2026-05-29):** both `ai-generate-ad-variants` and
+  `ai-compose-offer` redeployed to `kvodhiqhdqnptqovovia` to force a cold start, so
+  the running isolates now resolve `gpt-image-2` as the generate model. gpt-image-2
+  is the live generation model as of this deploy.
+
+**Standing config note:**
+- **Left `OPENAI_IMAGE_MODEL_EDIT` and `OPENAI_IMAGE_MODEL_DEFAULT` on
+  `gpt-image-1`.** The probe only tested `gpt-image-2` on the *generations*
+  endpoint, NOT the *edits* endpoint used to enhance an uploaded café photo. Until
+  `gpt-image-2` is verified on `/images/edits`, photo-enhancement should stay on
+  known-good `gpt-image-1`.
+- **Activation note:** the `OPENAI_API_KEY` is read fresh on every request, so the
+  new key is already live — no redeploy needed for the key. The *model*, however, is
+  resolved once per function isolate at startup, so after setting the model secret a
+  redeploy (or a fresh cold start) is what makes it take effect. Easiest: set the
+  secret, then re-run `supabase functions deploy ai-generate-ad-variants` (and
+  `ai-compose-offer`) to force immediate pickup.
+
+**Final proof (still pending):** generate one real ad with no uploaded photo on the
+device and confirm the image comes back — the on-device confirmation the project
+has deferred until a build is on the phone.
