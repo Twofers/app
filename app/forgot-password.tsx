@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getPasswordRecoveryRedirectUrl } from "@/lib/auth-password-recovery";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -112,7 +113,7 @@ export default function ForgotPasswordScreen() {
                 editable={!busy}
                 style={{
                   borderWidth: 1,
-                  borderColor: "#ccc",
+                  borderColor: Colors.light.border,
                   borderRadius: 12,
                   padding: 12,
                   marginTop: 6,

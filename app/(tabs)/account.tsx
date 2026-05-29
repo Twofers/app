@@ -561,7 +561,7 @@ export default function AccountScreen() {
               keyboardType="email-address"
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
+                borderColor: Colors.light.border,
                 borderRadius: 10,
                 padding: 12,
                 marginTop: 6,
@@ -577,7 +577,7 @@ export default function AccountScreen() {
               secureTextEntry
               style={{
                 borderWidth: 1,
-                borderColor: "#ccc",
+                borderColor: Colors.light.border,
                 borderRadius: 10,
                 padding: 12,
                 marginTop: 6,
