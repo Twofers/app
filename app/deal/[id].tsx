@@ -316,7 +316,7 @@ export default function DealDetail() {
           <MaterialIcons
             name={isFavorite ? "favorite" : "favorite-border"}
             size={22}
-            color={isFavorite ? "#e0245e" : theme.mutedText}
+            color={isFavorite ? theme.favorite : theme.mutedText}
           />
           <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>
             {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}

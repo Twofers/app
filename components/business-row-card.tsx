@@ -98,7 +98,7 @@ export function BusinessRowCard({
             backgroundColor: isFavorite ? "rgba(224,36,94,0.12)" : pressed ? "#f4f4f5" : "transparent",
           })}
         >
-          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={26} color={isFavorite ? "#e0245e" : "#666"} />
+          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={26} color={isFavorite ? theme.favorite : theme.icon} />
         </HapticScalePressable>
       </View>
     </HapticScalePressable>

@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { Colors } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { formatValiditySummary, isDealActiveNow } from "@/lib/deal-time";
 import { Banner } from "@/components/ui/banner";
@@ -246,7 +247,7 @@ export default function BusinessProfileScreen() {
           onPress={toggleFavorite}
           style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.md, minHeight: 44 }}
         >
-          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? "#e0245e" : "#666"} />
+          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? Colors.light.favorite : Colors.light.icon} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 16, fontWeight: "600" }}>
               {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
