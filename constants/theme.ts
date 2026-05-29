@@ -27,6 +27,12 @@ export const Colors = {
     tabIconDefault: '#687076',
     tabIconSelected: '#FF9F1C',
     cardShadow: '#000000',
+    // Status / feedback colors — named versions of hex values already used across screens.
+    danger: '#D32F2F',
+    success: '#2E7D32',
+    successSurface: '#E8F6E8',
+    successBorder: '#9ED79E',
+    favorite: '#E0245E',
   },
   dark: {
     text: '#ECEDEE',
@@ -43,6 +49,12 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: '#FF9F1C',
     cardShadow: '#000000',
+    // Status / feedback colors — lighter variants for legibility on dark backgrounds.
+    danger: '#EF5350',
+    success: '#66BB6A',
+    successSurface: '#1E2B1E',
+    successBorder: '#2E7D32',
+    favorite: '#F0467A',
   },
 };
 
