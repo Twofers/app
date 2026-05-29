@@ -5,6 +5,7 @@ updated after every work session._
 
 **Last updated:** 2026-05-28
 **Phase:** 2 (Fixing, one safe step at a time — the image-model fix is in)
+**Also in progress:** a pre-launch polish-and-quality pass — see §9 for the full audit.
 
 ---
 
@@ -239,3 +240,131 @@ exactly how to check each fix yourself.
 - (Optional, even more certain) In the Supabase dashboard → Edge Functions →
   Logs, the failed attempt prints the exact OpenAI error. If you can read me that
   red line, it names the bad model directly.
+
+---
+
+## 9. Polish Audit — pre-launch review (2026-05-28)
+
+A senior-developer "does this look like a pro built it?" pass over the whole app.
+**This was a read-only review — no code was changed in this step.** The AI
+ad-generation feature was intentionally left untouched (it is being handled
+separately), and nothing about the database was changed.
+
+### Headline: the app is in good shape
+
+This is **not** a rough prototype. It already has the things that separate a
+"real" app from a weekend project:
+
+- **One consistent design system.** Colors, spacing, corner-radius, shadows, and
+  text sizes are defined in one place (`constants/theme.ts`) and used across ~25
+  screens. The orange-on-white penguin brand is applied consistently almost
+  everywhere.
+- **Loading states everywhere.** Screens show spinners or "skeleton" placeholders
+  while data loads — they don't look frozen.
+- **Friendly empty states.** When there are no deals nearby, the customer sees a
+  branded penguin card with encouragement and buttons ("widen your search",
+  "view all deals") — not a blank screen.
+- **Friendly error messages.** Failures are translated into plain sentences
+  (e.g. "Please wait a moment before generating again.") via a shared error
+  helper. I found **no raw error objects or scary codes shown to users.** The
+  error banner even has a "retry" button.
+- **Three languages.** English, Spanish, and Korean are wired through the whole
+  app, including translated deal titles.
+- **Accessibility basics are present.** Buttons have labels, tap targets are
+  large (most buttons are 48–58px tall), and small icons have extra tap area.
+- **Real app identity.** Branded penguin app icon, branded splash screen with the
+  TWOFER wordmark, and the screen is locked to "light mode" so the white-background
+  design can't be broken by a phone's dark mode.
+- **Clean under the hood.** No "TODO"/"lorem ipsum"/leftover "test" text, no dead
+  buttons that do nothing, and the type-check passes with zero errors.
+
+So the work here is **polish on a solid base**, not a rescue job.
+
+### What I found — ranked by how much a real user would actually notice
+
+**1. The "Create a deal" screen looks like a different app. 🔴 Most noticeable**
+- This is the screen a cafe owner uses most — the flagship "type a prompt, get an
+  ad" feature (`app/create/ai.tsx`).
+- Unlike the rest of the app, it uses hand-picked one-off colors — including
+  several **blue** tones (`#f0f7ff`, `#c5daf7`, `#cfd7ff`) that clash with the
+  orange brand — and plain grey `#ccc` input boxes instead of the app's standard
+  styled inputs.
+- **Why it matters:** it's the most important owner-facing screen, and it's the
+  one place the otherwise-consistent design visibly breaks. An owner could feel
+  the app is "unfinished" exactly where it should impress most.
+- **This is a bigger change → see "Needs your decision" below.** (It's also in the
+  AI feature area I was told to leave alone, so I want your explicit go before
+  touching it — even though the change would be cosmetic only, not the AI itself.)
+
+**2. Deals with no photo show a random internet stock photo. 🟠 Noticeable**
+- When a deal has no uploaded image (and before the AI picture is made), the
+  customer feed fills the big hero image with a **stock coffee photo pulled from
+  the internet** (`app/(tabs)/index.tsx`, the Unsplash URL).
+- **Why it matters:** (a) it's not the shop's photo and not branded, so it can
+  look generic or even misleading; (b) it depends on an outside website staying
+  up — if that link ever breaks, the card shows a broken image.
+- **Recommendation:** swap it for a clean branded "no photo yet" placeholder
+  (orange/penguin) that ships inside the app. Low risk, but it changes something
+  visible → I'll confirm with you first (see "Needs your decision").
+
+**3. A few forms use plain grey input boxes instead of the styled ones. 🟡 Subtle**
+- The login extras, password-reset, "edit business", and "scan a menu" screens
+  draw their text boxes with a plain grey `#ccc` border instead of the app's
+  standard input style.
+- **Why it matters:** side by side, the app feels very slightly uneven. Most users
+  won't consciously notice, but it's the kind of thing that adds up.
+- **Safe to fix myself → Step 2.**
+
+**4. Error-red and success-green are hand-typed on each screen. 🟡 Subtle**
+- The red used for errors and the green for success are typed in directly on each
+  screen (`#d32f2f`, `#2e7d32`, etc.) rather than defined once in the theme. They
+  vary slightly from screen to screen.
+- **Why it matters:** minor visual inconsistency, and it makes future changes
+  harder. Adding proper "danger / success / warning" colors to the theme is the
+  professional way to do it.
+- **Safe to fix myself → Step 2.**
+
+**5. Leftover starter-kit files in the project. ⚪ Invisible to users**
+- Four default Expo template images (`react-logo*.png`, `partial-react-logo.png`)
+  are sitting in the assets folder, unused and referenced nowhere.
+- **Why it matters:** a developer reviewing the code would flag them as clutter;
+  users never see them.
+- **Safe to fix myself → Step 2 (delete the dead files).**
+
+**6. Inconsistent behind-the-scenes logging. ⚪ Invisible to users**
+- The project has a proper "only log during development" helper (`lib/dev-log.ts`),
+  but ~14 files still call the raw logger directly. Most are diagnostic paths.
+- **Why it matters:** purely a code-tidiness issue; not visible to users and not a
+  bug. Worth standardizing for a clean reviewer impression.
+- **Safe to fix myself → Step 2 (low priority).**
+
+### Smaller observations (noted, not necessarily worth acting on)
+
+- **Two penguin styles.** The home-screen app icon is a **blue**-scarf penguin on a
+  blue background; the in-app/splash penguin is **orange**-accented on white. Not
+  broken — just slightly inconsistent between the icon you tap and what opens. A
+  design call for you, not a code fix.
+- **Tiny logo in empty cards.** The empty-state cards reuse the splash image (which
+  has "TWOFER" text baked in) shrunk to ~34px, so the wordmark becomes too small to
+  read. Cosmetic; could use a plain penguin mark instead.
+- **Developer "FIX:" notes** left in a few files (e.g. `app/_layout.tsx`,
+  `app/auth-landing.tsx`). Harmless; slightly noisy to a reviewer.
+
+### What I can't fully verify from here
+
+- I reviewed **code only** — I did not run the app on a phone/emulator in this pass.
+  Things like exact on-screen spacing, animation smoothness, and live navigation
+  flow are best confirmed on your device. I found no dead buttons or
+  unreachable screens in the code, but a real tap-through is the final proof.
+- The app icon/splash **files exist and are wired correctly**, and I viewed them —
+  they're the proper branded penguin, not placeholders.
+
+### Plan from here
+
+- **Step 2 — safe fixes I'll do now, one checkpoint (commit) each:** items 3, 4, 5,
+  6 above (grey inputs → standard style, add theme danger/success colors, delete
+  dead starter images, tidy logging). Each is low-risk, reversible, and I'll
+  type-check after every one.
+- **Step 3 — needs your decision before I touch anything:** items 1 and 2 above
+  (restyle the flagship "Create a deal" screen to match the brand; replace the
+  internet stock-photo fallback with a branded placeholder).
