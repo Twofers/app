@@ -13,6 +13,7 @@ export const OPENAI_IMAGE_MODEL_ALLOWLIST = new Set([
   "gpt-image-1",
   "gpt-image-1-mini",
   "gpt-image-1.5",
+  "gpt-image-2",
 ]);
 
 const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-1";
