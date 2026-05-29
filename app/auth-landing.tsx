@@ -540,7 +540,7 @@ export default function AuthLandingScreen() {
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
-                  borderColor: emailError ? "#d32f2f" : inputBorder,
+                  borderColor: emailError ? theme.danger : inputBorder,
                   borderRadius: Radii.md,
                   padding: Spacing.lg,
                   fontSize: 16,
@@ -553,7 +553,7 @@ export default function AuthLandingScreen() {
                 <Text
                   style={{
                     fontSize: 13,
-                    color: "#d32f2f",
+                    color: theme.danger,
                     marginBottom: Spacing.md,
                   }}
                 >
@@ -591,7 +591,7 @@ export default function AuthLandingScreen() {
                   const bonusCount = [hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
                   const strength =
                     pw.length < 8 ? "weak" : bonusCount >= 3 ? "strong" : bonusCount >= 2 ? "medium" : "weak";
-                  const color = strength === "strong" ? "#2e7d32" : strength === "medium" ? "#FF9F1C" : "#d32f2f";
+                  const color = strength === "strong" ? theme.success : strength === "medium" ? theme.primary : theme.danger;
                   const widthPct = strength === "strong" ? "100%" : strength === "medium" ? "66%" : "33%";
                   const label =
                     strength === "strong"
@@ -636,7 +636,7 @@ export default function AuthLandingScreen() {
                     placeholderTextColor={theme.mutedText}
                     style={{
                       borderWidth: 1,
-                      borderColor: inviteError ? "#d32f2f" : inputBorder,
+                      borderColor: inviteError ? theme.danger : inputBorder,
                       borderRadius: Radii.md,
                       padding: Spacing.lg,
                       fontSize: 16,
@@ -645,7 +645,7 @@ export default function AuthLandingScreen() {
                     }}
                   />
                   {inviteError ? (
-                    <Text style={{ fontSize: 13, color: "#d32f2f", marginTop: 4 }}>{inviteError}</Text>
+                    <Text style={{ fontSize: 13, color: theme.danger, marginTop: 4 }}>{inviteError}</Text>
                   ) : (
                     <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: 4 }}>
                       {t("authLanding.inviteCodeHint", {
