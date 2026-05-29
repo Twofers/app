@@ -406,8 +406,8 @@ export default function BusinessBillingScreen() {
                 </View>
                 <View style={{ marginTop: 14 }}>
                   {subscriptionStatus === "active" && subscriptionTier === "pro" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: Colors.light.successSurface, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.success }}>
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
@@ -430,7 +430,7 @@ export default function BusinessBillingScreen() {
                       onPress={() => void subscribe("pro")}
                       accessibilityLabel={t("billing.a11ySubscribeProLabel")}
                       accessibilityHint={t("billing.a11ySubscribeProHint")}
-                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                      style={{ backgroundColor: Colors.light.primary, borderRadius: 22, height: 62, minHeight: 62 }}
                     />
                   )}
                 </View>
@@ -457,8 +457,8 @@ export default function BusinessBillingScreen() {
                 </View>
                 <View style={{ marginTop: 14 }}>
                   {subscriptionStatus === "active" && subscriptionTier === "premium" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: "#e8f5e9", alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: "#2e7d32" }}>
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: Colors.light.successSurface, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.success }}>
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
@@ -483,7 +483,7 @@ export default function BusinessBillingScreen() {
                       onPress={() => void subscribe("premium")}
                       accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
                       accessibilityHint={t("billing.a11ySubscribePremiumHint")}
-                      style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
+                      style={{ backgroundColor: Colors.light.primary, borderRadius: 22, height: 62, minHeight: 62 }}
                     />
                   )}
                 </View>

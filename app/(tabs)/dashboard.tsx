@@ -1554,7 +1554,7 @@ export default function BusinessDashboard() {
               {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (
                 endingDealId === dealManageFor.id ? (
                   <View style={{ padding: Spacing.md, alignItems: "center" }}>
-                    <ActivityIndicator color="#c62828" />
+                    <ActivityIndicator color={Colors.light.danger} />
                   </View>
                 ) : (
                   <EndEarlyButton

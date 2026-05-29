@@ -458,7 +458,7 @@ export default function BusinessSetupScreen() {
               placeholderTextColor={Colors.light.mutedText}
               style={{
                 borderWidth: 1,
-                borderColor: inviteError ? "#d32f2f" : Colors.light.border,
+                borderColor: inviteError ? theme.danger : Colors.light.border,
                 borderRadius: Radii.md,
                 backgroundColor: Colors.light.surface,
                 paddingVertical: Spacing.sm,
@@ -467,7 +467,7 @@ export default function BusinessSetupScreen() {
               }}
             />
             {inviteError ? (
-              <Text style={{ fontSize: 13, color: "#d32f2f" }}>{inviteError}</Text>
+              <Text style={{ fontSize: 13, color: theme.danger }}>{inviteError}</Text>
             ) : null}
           </View>
         ) : null}
