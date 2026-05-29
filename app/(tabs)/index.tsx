@@ -582,6 +582,7 @@ export default function HomeScreen() {
       const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
       const offerText = localizedTitle(item, i18n.language) || t("dealDetail.dealFallback");
       const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
+      const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
       return (
         <View
           style={{
@@ -595,15 +596,29 @@ export default function HomeScreen() {
           }}
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
-            <Image
-              source={{
-                uri:
-                  resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path) ??
-                  "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=60",
-              }}
-              style={{ width: "100%", height: heroImageHeight }}
-              contentFit="cover"
-            />
+            {posterUri ? (
+              <Image
+                source={{ uri: posterUri }}
+                style={{ width: "100%", height: heroImageHeight }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  width: "100%",
+                  height: heroImageHeight,
+                  backgroundColor: theme.surfaceMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <MaterialIcons name="local-cafe" size={40} color={theme.primary} />
+                <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
+                  {t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
+                </Text>
+              </View>
+            )}
           </Pressable>
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
@@ -618,7 +633,7 @@ export default function HomeScreen() {
                 <MaterialIcons
                   name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}
                   size={24}
-                  color={favoriteBusinessIds.includes(item.business_id) ? "#e0245e" : theme.icon}
+                  color={favoriteBusinessIds.includes(item.business_id) ? theme.favorite : theme.icon}
                 />
               </Pressable>
             </View>
@@ -860,7 +875,7 @@ export default function HomeScreen() {
                 <MaterialIcons
                   name={favoritesOnly ? "favorite" : "favorite-border"}
                   size={26}
-                  color={favoritesOnly ? "#e0245e" : theme.mutedText}
+                  color={favoritesOnly ? theme.favorite : theme.mutedText}
                 />
               </Pressable>
             </View>
