@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -206,6 +206,7 @@ serve(async (req) => {
         type: "json_schema",
         json_schema: {
           name: "business_lookup",
+          strict: true,
           schema: {
             type: "object",
             properties: {
@@ -251,6 +252,7 @@ serve(async (req) => {
           content: `Find business info for "${business_name}" ${locationHint}.`,
         },
       ],
+      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1536 }),
     };
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {

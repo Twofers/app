@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { buildPosterImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
@@ -641,8 +641,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userParts },
         ],
-        max_tokens: 1200,
-        temperature: 0.7,
+        ...chatCompletionTuning(MODEL, { maxTokens: 1200, temperature: 0.7 }),
       }),
     });
 

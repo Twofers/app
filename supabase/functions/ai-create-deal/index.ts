@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
@@ -222,6 +222,7 @@ serve(async (req) => {
         type: "json_schema",
         json_schema: {
           name: "deal_ad",
+          strict: true,
           schema: {
             type: "object",
             properties: {
@@ -230,7 +231,8 @@ serve(async (req) => {
               promo_line: { type: "string" },
               hashtags: { type: "array", items: { type: "string" } },
             },
-            required: ["title", "description", "promo_line"],
+            // strict mode requires every property to be listed in `required`.
+            required: ["title", "description", "promo_line", "hashtags"],
             additionalProperties: false,
           },
         },
@@ -249,6 +251,7 @@ serve(async (req) => {
           ],
         },
       ],
+      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1024 }),
     };
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {

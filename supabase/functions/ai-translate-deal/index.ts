@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -188,6 +188,7 @@ serve(async (req) => {
         type: "json_schema",
         json_schema: {
           name: "deal_translations",
+          strict: true,
           schema: {
             type: "object",
             properties: {
@@ -208,6 +209,7 @@ serve(async (req) => {
           content: `Title: ${title}\nDescription: ${description}`,
         },
       ],
+      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1024 }),
     };
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {

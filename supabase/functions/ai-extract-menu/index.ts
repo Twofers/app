@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
 import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -314,7 +314,8 @@ serve(async (req) => {
 
     const responsesBody = {
       model: MODEL,
-      temperature: 0.2,
+      // gpt-5 reasoning models reject a non-default temperature; only send it for gpt-4o-class.
+      ...(isGpt5FamilyModel(MODEL) ? {} : { temperature: 0.2 }),
       input: [
         {
           role: "user",
