@@ -6,14 +6,13 @@ import Animated, {
   FadeIn,
   FadeInRight,
   FadeInLeft,
-  FadeOut,
 } from "react-native-reanimated";
 
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
-import { parseFunctionError, EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
+import { EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
 
 const STEPS = ["dashboard", "create", "track"] as const;
 type Step = (typeof STEPS)[number];

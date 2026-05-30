@@ -14,7 +14,7 @@ import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
 import { ReportSheet } from "@/components/report-sheet";
 import { submitUserReport, type UserReportReason } from "@/lib/reports";
 

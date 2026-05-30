@@ -690,6 +690,7 @@ export default function HomeScreen() {
       claimStatus,
       claimingDealId,
       doClaim,
+      i18n.language,
     ],
   );
 

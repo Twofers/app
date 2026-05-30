@@ -817,7 +817,10 @@ serve(async (req) => {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", err: msg }));
     return new Response(
-      JSON.stringify({ error: msg || "Unexpected error", error_code: "INTERNAL" }),
+      JSON.stringify({
+        error: "We couldn't compose that offer right now. Please try again.",
+        error_code: "INTERNAL",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

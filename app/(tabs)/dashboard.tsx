@@ -771,44 +771,6 @@ export default function BusinessDashboard() {
     }
   }
 
-  function handleExportAnalytics() {
-    if (filteredDeals.length === 0) return;
-    Alert.alert(
-      t("offersDashboard.exportAllTitle", "Export deal analytics"),
-      t("dealAnalytics.exportChoose", "Choose export format"),
-      [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        { text: t("dealAnalytics.exportCsv", "CSV"), onPress: () => void doExportAnalytics("csv") },
-        { text: t("dealAnalytics.exportPdf", "PDF"), onPress: () => void doExportAnalytics("pdf") },
-      ],
-    );
-  }
-
-  async function doExportAnalytics(format: "csv" | "pdf") {
-    setExportingAnalytics(true);
-    setBanner(null);
-    try {
-      const rows: ExportRow[] = filteredDeals.map((d) => ({
-        dealTitle: d.title ?? t("offersDashboard.dealFallback"),
-        startDate: new Date(d.start_time).toLocaleDateString(),
-        endDate: new Date(d.end_time).toLocaleDateString(),
-        claims: d.claims,
-        redemptions: d.redeems,
-        conversionRate: d.conversion,
-      }));
-      if (format === "csv") {
-        await exportAnalyticsCsv(rows, businessName ?? "");
-      } else {
-        await exportAnalyticsPdf(rows, businessName ?? "");
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("dealAnalytics.errExport", "Could not generate export.");
-      setBanner(msg);
-    } finally {
-      setExportingAnalytics(false);
-    }
-  }
-
   async function generateFlyer(deal: DealRow) {
     if (generatingFlyerId) return;
     setGeneratingFlyerId(deal.id);
@@ -878,6 +840,44 @@ export default function BusinessDashboard() {
     }
     return result;
   }, [deals, dealFilter, dealSort]);
+
+  const doExportAnalytics = useCallback(async (format: "csv" | "pdf") => {
+    setExportingAnalytics(true);
+    setBanner(null);
+    try {
+      const rows: ExportRow[] = filteredDeals.map((d) => ({
+        dealTitle: d.title ?? t("offersDashboard.dealFallback"),
+        startDate: new Date(d.start_time).toLocaleDateString(),
+        endDate: new Date(d.end_time).toLocaleDateString(),
+        claims: d.claims,
+        redemptions: d.redeems,
+        conversionRate: d.conversion,
+      }));
+      if (format === "csv") {
+        await exportAnalyticsCsv(rows, businessName ?? "");
+      } else {
+        await exportAnalyticsPdf(rows, businessName ?? "");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("dealAnalytics.errExport", "Could not generate export.");
+      setBanner(msg);
+    } finally {
+      setExportingAnalytics(false);
+    }
+  }, [businessName, filteredDeals, t]);
+
+  const handleExportAnalytics = useCallback(() => {
+    if (filteredDeals.length === 0) return;
+    Alert.alert(
+      t("offersDashboard.exportAllTitle", "Export deal analytics"),
+      t("dealAnalytics.exportChoose", "Choose export format"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        { text: t("dealAnalytics.exportCsv", "CSV"), onPress: () => void doExportAnalytics("csv") },
+        { text: t("dealAnalytics.exportPdf", "PDF"), onPress: () => void doExportAnalytics("pdf") },
+      ],
+    );
+  }, [doExportAnalytics, filteredDeals.length, t]);
 
   const listTop = useMemo(
     () => (
@@ -977,7 +977,7 @@ export default function BusinessDashboard() {
         ) : null}
       </View>
     ),
-    [t, router, billingBlocked, deals.length, dealFilter, dealSort, filteredDeals.length, bulkSelectMode, selectedDealIds.size, filteredDeals, primary],
+    [t, router, billingBlocked, deals.length, dealFilter, dealSort, bulkSelectMode, selectedDealIds.size, filteredDeals, primary],
   );
 
   const listFooter = useMemo(
@@ -1142,6 +1142,7 @@ export default function BusinessDashboard() {
       businessName,
       businessProfile,
       filteredDeals,
+      handleExportAnalytics,
       exportingAnalytics,
     ],
   );

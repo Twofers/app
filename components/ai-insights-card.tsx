@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { CardShell } from "@/components/ui/card-shell";
-import { Colors, Spacing, Radii } from "@/constants/theme";
+import { Colors, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { parseFunctionError, EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
 import { isDemoPreviewAccountEmail } from "@/lib/demo-account";

@@ -208,7 +208,7 @@ function parseOptionalPriceInput(raw: string): number | null {
 
 type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
 
-const PHOTO_TREATMENT_OPTIONS: ReadonlyArray<PhotoTreatmentOption> = [
+const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
   { key: "touchup", labelKey: "createAi.treatmentTouchupLabel", helperKey: "createAi.treatmentTouchupHelper" },
   { key: "cleanbg", labelKey: "createAi.treatmentCleanbgLabel", helperKey: "createAi.treatmentCleanbgHelper" },
   { key: "studiopolish", labelKey: "createAi.treatmentStudiopolishLabel", helperKey: "createAi.treatmentStudiopolishHelper" },

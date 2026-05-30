@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Colors } from "@/constants/theme";
-import { Spacing } from "@/lib/screen-layout";
 
 type ProfileCompletenessBarProps = {
   percentage: number;
