@@ -15,7 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "./demo-variants.ts";
 import {
@@ -155,15 +155,17 @@ async function callResearchModel(params: {
 }): Promise<ItemResearch | null> {
   const { openAiKey, model, prompt, cleanHint, isWebSearch } = params;
   try {
+    // gpt-4o-search-preview rejects temperature; standard chat models accept it.
+    // chatCompletionTuning also maps the token/temperature params correctly for the
+    // gpt-5 family (max_completion_tokens, no temperature) when CHAT_MODEL is the fallback.
     const body: Record<string, unknown> = {
       model,
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 220,
+      ...chatCompletionTuning(model, {
+        maxTokens: 220,
+        temperature: isWebSearch ? undefined : 0.4,
+      }),
     };
-    // gpt-4o-search-preview rejects temperature; standard models accept it
-    if (!isWebSearch) {
-      body.temperature = 0.4;
-    }
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -303,6 +305,7 @@ async function generateCopy(params: {
 
   const jsonSchema = {
     name: "single_ad",
+    strict: true,
     schema: {
       type: "object",
       properties: {
@@ -328,8 +331,10 @@ async function generateCopy(params: {
         { role: "system", content: system },
         { role: "user", content: userText },
       ],
-      max_tokens: 400,
-      temperature: isRevision ? 0.7 : 0.6,
+      ...chatCompletionTuning(CHAT_MODEL, {
+        maxTokens: 400,
+        temperature: isRevision ? 0.7 : 0.6,
+      }),
     }),
   });
 
