@@ -1182,7 +1182,16 @@ export default function AiDealScreen() {
       let detail = "";
       if (err instanceof Error) {
         const m = err.message.toLowerCase();
-        if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) {
+        if (
+          m.includes("must be at least 40") ||
+          m.includes("give something free") ||
+          m.includes("strong deal")
+        ) {
+          // Server strong-deal guardrail rejected the copy (it can be stricter than
+          // the client mirror for some phrasings). Show the actionable guidance
+          // instead of a bare "Publish failed" with no reason.
+          detail = t("dealQuality.strongDealMessage");
+        } else if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) {
           detail = t("createAi.errPublishPermission");
         } else if (m.includes("duplicate") || m.includes("unique")) {
           detail = t("createAi.errPublishDuplicate");

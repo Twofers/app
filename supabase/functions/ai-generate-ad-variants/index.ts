@@ -216,6 +216,7 @@ async function callResearchModel(params: {
 const COPY_VOICE_RULES = [
   "Write like the cafe owner would write it — direct, item-forward, confident.",
   'Headline format: name the item and the offer. Example: "BOGO Large Iced Americano".',
+  'REQUIRED: state the offer with an explicit phrase — "BOGO", "2-for-1", "buy one get one", or "<item> free" — in the headline or subline. A deal with no such phrase cannot be published.',
   "If the item is unique or unfamiliar (research flagged it), the subline must explain what it is in plain words.",
   "If the item is common, the subline can lean into what makes their version worth coming for.",
   "",
@@ -500,6 +501,35 @@ function buildDemoSingleAd(itemHint: string): SingleAd {
     photo_treatment: null,
     poster_storage_path: null,
   };
+}
+
+// ─── Strong-deal phrase guarantee ──────────────────────────────────────────
+// Mirror of lib/strong-deal-guard.ts. The publish guard (client + server)
+// rejects copy that lacks an explicit strong-deal phrase. The model is told to
+// include one, but we also guarantee it deterministically so a generated ad can
+// never be blocked at publish. Every token below is accepted by both guards.
+const STRONG_PHRASE_RE =
+  /\bbogo\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s*for\s*one\b|\bbuy\s*one\s*get\s*one\b|\bget\s+one\s+free\b|(?:^|\s)free\b|\bon\s+the\s+house\b|\bcomplimentary\b|\b(?:4\d|[5-9]\d|100)\s*%\s*off\b|\bgratis\b|\b2\s*(?:x|por)\s*1\b|무료|반값|1\s*\+\s*1/i;
+
+function offerFallbackSubline(lang: "en" | "es" | "ko", item: string): string {
+  const it = item.trim().slice(0, 30);
+  if (lang === "es") {
+    return clip(it ? `Compra uno y llévate otro ${it} gratis.` : "Compra uno y llévate otro gratis.", 88);
+  }
+  if (lang === "ko") {
+    return clip(it ? `${it} 하나 사면 하나 무료.` : "하나 사면 하나 무료.", 88);
+  }
+  return clip(it ? `Buy one ${it}, get one free.` : "Buy one, get one free.", 88);
+}
+
+/** Guarantee the copy carries a publishable offer phrase; rewrite the subline if not. */
+function ensureOfferPhrase(
+  copy: Pick<SingleAd, "headline" | "subheadline" | "cta">,
+  lang: "en" | "es" | "ko",
+  item: string,
+): Pick<SingleAd, "headline" | "subheadline" | "cta"> {
+  if (STRONG_PHRASE_RE.test(`${copy.headline} ${copy.subheadline} ${copy.cta}`)) return copy;
+  return { ...copy, subheadline: offerFallbackSubline(lang, item) };
 }
 
 // ─── HTTP handler ──────────────────────────────────────────────────────────
@@ -818,6 +848,10 @@ serve(async (req) => {
         );
       }
     }
+
+    // Guarantee a publishable offer phrase — the model usually writes one, but
+    // when it doesn't, the deal would be blocked by the strong-deal guard at publish.
+    copy = ensureOfferPhrase(copy, outputLanguage, research.item_name || sourceHint);
 
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
     if (isRevision && previousAd && revisionTarget === "copy") {

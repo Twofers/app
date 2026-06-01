@@ -668,13 +668,44 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
   });
 }
 
+/**
+ * Edge functions return `{ error, error_code }` JSON with a non-2xx status, but
+ * supabase-js wraps that in a FunctionsHttpError whose `context` is the raw
+ * Response — the body is never pre-read, so the synchronous parsers above can't
+ * see it. Read it here (async) so codes like COOLDOWN_ACTIVE / MONTHLY_LIMIT
+ * reach the caller instead of a bare "Edge Function returned a non-2xx status".
+ */
+async function readInvokeErrorBody(
+  error: unknown,
+): Promise<{ message?: string; code?: string }> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (typeof Response !== "undefined" && ctx instanceof Response) {
+    try {
+      const data = await ctx.clone().json();
+      if (data && typeof data === "object") {
+        const o = data as { error?: unknown; error_code?: unknown };
+        return {
+          message: typeof o.error === "string" ? o.error : undefined,
+          code: typeof o.error_code === "string" ? o.error_code : undefined,
+        };
+      }
+    } catch {
+      /* body wasn't JSON, or was already consumed — fall back to sync parsing */
+    }
+  }
+  return {};
+}
+
 async function invokeAdEdge(payload: Record<string, unknown>): Promise<AiGenerateAdResponse> {
   const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
     body: payload,
     timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
   });
   if (error) {
-    throwInvokeError(parseFunctionError(error), extractErrorCodeFromInvokeError(error));
+    const fromBody = await readInvokeErrorBody(error);
+    const code = fromBody.code ?? extractErrorCodeFromInvokeError(error);
+    const message = fromBody.message ?? parseFunctionError(error);
+    throwInvokeError(message, code);
   }
   throwIfEdgeResponseError(data);
   const d = data as { ad?: GeneratedAd; ads?: GeneratedAd[]; quota?: AdVariantsQuota };
