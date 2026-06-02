@@ -90,6 +90,15 @@ serve(async (req) => {
     });
 
     if (insErr) {
+      // Daily impression idempotency: a partial unique index collapses repeat
+      // `deal_viewed` rows (same user + device_platform + deal + UTC day). A unique
+      // violation here means the impression is already counted — treat it as success.
+      if (eventName === "deal_viewed" && insErr.code === "23505") {
+        return new Response(JSON.stringify({ ok: true, deduped: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       console.error(insErr);
       return new Response(JSON.stringify({ error: "Could not record event" }), {
         status: 500,

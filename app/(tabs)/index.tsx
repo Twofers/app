@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type ViewToken,
 } from "react-native";
 import { Image } from "expo-image";
 import Animated, { useSharedValue, withTiming, useAnimatedStyle } from "react-native-reanimated";
@@ -174,6 +175,30 @@ export default function HomeScreen() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
+  // Keep the current segment readable inside the stable viewability callback below
+  // (FlatList forbids changing onViewableItemsChanged/viewabilityConfig between renders).
+  const feedSegmentRef = useRef(feedSegment);
+  feedSegmentRef.current = feedSegment;
+  // Per-session impression dedupe: each deal is counted at most once while the feed stays mounted.
+  const viewedDealIdsRef = useRef<Set<string>>(new Set());
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 50, minimumViewTime: 400 });
+  const onViewableDealsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    // Only deals produce impressions; the shops segment shares this FlatList.
+    if (feedSegmentRef.current !== "deals") return;
+    for (const token of viewableItems) {
+      if (!token.isViewable) continue;
+      const deal = token.item as Deal;
+      if (!deal || typeof deal.id !== "string") continue;
+      if (viewedDealIdsRef.current.has(deal.id)) continue;
+      viewedDealIdsRef.current.add(deal.id);
+      trackAppAnalyticsEvent({
+        event_name: "deal_viewed",
+        deal_id: deal.id,
+        business_id: deal.business_id,
+        context: { source: "list" },
+      });
+    }
+  });
   const lastFeedFocusHydrateAtRef = useRef(0);
   const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
   const dealsFade = useSharedValue(0);
@@ -466,19 +491,10 @@ export default function HomeScreen() {
     });
   }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo]);
 
-  // MVP impressions tracking: count deals whenever the visible list changes.
-  // This is an approximation of "shown" but stays simple/reliable for MVP.
-  useEffect(() => {
-    if (loadingDeals) return;
-    for (const d of liveDealsDisplay) {
-      trackAppAnalyticsEvent({
-        event_name: "deal_viewed",
-        deal_id: d.id,
-        business_id: d.business_id,
-        context: { source: "list" },
-      });
-    }
-  }, [loadingDeals, liveDealsDisplay]);
+  // Impressions are tracked from real viewport visibility via the FlatList's
+  // onViewableItemsChanged (see onViewableDealsChangedRef), deduped per session.
+  // This replaces the old effect that re-counted the whole list on every recompute
+  // (search keystrokes, favorite/radius/segment changes) and inflated merchant numbers.
 
   const businessesDisplay = useMemo(() => {
     let list = businesses;
@@ -1029,6 +1045,8 @@ export default function HomeScreen() {
           maxToRenderPerBatch={12}
           windowSize={7}
           initialNumToRender={8}
+          viewabilityConfig={viewabilityConfigRef.current}
+          onViewableItemsChanged={onViewableDealsChangedRef.current}
           refreshControl={
             <RefreshControl
               refreshing={refreshingFeed}
