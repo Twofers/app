@@ -446,6 +446,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/ingest-analytics-event/index.ts"
 
+# Cron-triggered; authorizes via x-cron-secret (env CRON_SECRET or Vault), not JWT.
+[functions.weekly-deal-digest]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/weekly-deal-digest/index.ts"
+
 [functions.begin-visual-redeem]
 enabled = true
 verify_jwt = false
