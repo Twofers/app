@@ -28,9 +28,26 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  // Only the scheduler (or an admin with the secret) may trigger this.
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  // Authorize the caller. Accept EITHER the CRON_SECRET env (manual/ops invocation)
+  // OR the Vault-stored cron secret used by the scheduled pg_cron job (generated
+  // server-side in the cron migration; never in source control), verified via RPC.
+  const provided = req.headers.get("x-cron-secret");
+  let authorized = false;
+  const envSecret = Deno.env.get("CRON_SECRET");
+  if (envSecret && provided && provided === envSecret) {
+    authorized = true;
+  }
+  if (!authorized && provided) {
+    try {
+      const { data } = await admin.rpc("verify_weekly_digest_secret", { p_secret: provided });
+      authorized = data === true;
+    } catch {
+      /* RPC may not exist yet (cron migration not applied); env path still applies */
+    }
+  }
+  if (!authorized) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
@@ -43,8 +60,6 @@ serve(async (req) => {
   const dryRun = body?.dry_run === true;
 
   try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
     const nowIso = new Date().toISOString();
     const sinceIso = new Date(Date.now() - DIGEST_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
