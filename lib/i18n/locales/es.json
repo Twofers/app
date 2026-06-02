@@ -197,6 +197,8 @@
     "zipLookupFail": "No pudimos consultar ese código ahora. Revisa la conexión e inténtalo de nuevo.",
     "signInCta": "Iniciar sesión o crear cuenta",
     "radiusTitle": "Radio cercano",
+    "categoriesTitle": "¿Qué te interesa?",
+    "categoriesHint": "Opcional: las mostraremos primero.",
     "radiusBody": "Priorizamos ofertas dentro de esta distancia. Aún puedes ver todo.",
     "radiusMiles": "{{miles}} mi",
     "notifyTitle": "¿Te avisamos?",

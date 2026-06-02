@@ -197,6 +197,8 @@
     "zipLookupFail": "지금은 우편번호를 조회할 수 없습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
     "signInCta": "로그인 또는 가입",
     "radiusTitle": "주변 반경",
+    "categoriesTitle": "어떤 걸 좋아하세요?",
+    "categoriesHint": "선택 사항 — 먼저 보여드릴게요.",
     "radiusBody": "이 거리 안 딜을 우선합니다. 전체는 계속 볼 수 있어요.",
     "radiusMiles": "{{miles}}마일",
     "notifyTitle": "알림을 받을까요?",

@@ -197,6 +197,8 @@
     "zipLookupFail": "We couldn’t look up that ZIP right now. Check your connection and try again.",
     "signInCta": "Sign in or create account",
     "radiusTitle": "Nearby radius",
+    "categoriesTitle": "What are you into?",
+    "categoriesHint": "Optional — we'll show these first.",
     "radiusBody": "We’ll prioritize deals within this distance. You can still browse everything.",
     "radiusMiles": "{{miles}} mi",
     "notifyTitle": "Stay in the loop?",

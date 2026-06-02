@@ -173,6 +173,7 @@ export default function HomeScreen() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
+  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
@@ -348,6 +349,7 @@ export default function HomeScreen() {
   const hydrateLocationFromPrefs = useCallback(async () => {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
+    setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
     const coords = await resolveConsumerCoordinates(prefs);
     if (coords) {
       setUserGeo({ lat: coords.lat, lng: coords.lng });
@@ -546,6 +548,14 @@ export default function HomeScreen() {
       const aFav = favoriteBusinessIds.includes(a.business_id) ? 0 : 1;
       const bFav = favoriteBusinessIds.includes(b.business_id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
+      // Soft relevance boost: deals from the consumer's chosen categories rank
+      // ahead of others (but after favorites, and before distance) so the first
+      // feed feels personalized without hiding anything.
+      if (preferredCategories.length) {
+        const aCat = preferredCategories.includes((a.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
+        const bCat = preferredCategories.includes((b.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
+        if (aCat !== bCat) return aCat - bCat;
+      }
       if (userGeo) {
         const ca = bizCoords(a.businesses);
         const cb = bizCoords(b.businesses);
@@ -555,7 +565,7 @@ export default function HomeScreen() {
       }
       return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
     });
-  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo]);
+  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo, preferredCategories]);
 
   // Impressions are tracked from real viewport visibility via the FlatList's
   // onViewableItemsChanged (see onViewableDealsChangedRef), deduped per session.

@@ -31,6 +31,10 @@ function sanitizeZipInput(raw: string): string {
   return cleaned.slice(0, 10);
 }
 
+// Mirrors the business-setup category keys (minus "other") so a consumer's picks
+// match real business.category values. Labels reuse businessSetup.cat.*.
+const CONSUMER_CATEGORY_KEYS = ["restaurant", "cafe", "bakery", "retail", "salon", "gym", "services"] as const;
+
 export default function OnboardingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -42,12 +46,14 @@ export default function OnboardingScreen() {
   const [locationMode, setLocationMode] = useState<"gps" | "zip">("gps");
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
+  const [categories, setCategories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
   useEffect(() => {
     void getConsumerPreferences().then((p) => {
       if (p.zipCode.trim()) setZip(p.zipCode.trim());
+      if (p.notificationPrefs.categoryTags?.length) setCategories(p.notificationPrefs.categoryTags);
     });
   }, []);
 
@@ -71,7 +77,11 @@ export default function OnboardingScreen() {
       });
       if (resolved) await setLastKnownConsumerCoords(resolved.lat, resolved.lng);
     }
-    await setConsumerNotificationPrefs({ v: 1, mode: "all_nearby" });
+    await setConsumerNotificationPrefs({
+      v: 1,
+      mode: "all_nearby",
+      ...(categories.length ? { categoryTags: categories } : {}),
+    });
     await setOnboardingComplete(true);
     router.replace("/(tabs)");
   }
@@ -199,6 +209,32 @@ export default function OnboardingScreen() {
                 >
                   <Text style={{ fontWeight: "700", color: active ? C.primary : C.text }}>
                     {t("onboarding.radiusMiles", { miles: m })}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Favorite categories (optional) — surfaced first in the feed */}
+        <View>
+          <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>{t("onboarding.categoriesTitle")}</Text>
+          <Text style={{ fontSize: 13, color: C.mutedText, marginBottom: Spacing.sm }}>{t("onboarding.categoriesHint")}</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
+            {CONSUMER_CATEGORY_KEYS.map((key) => {
+              const active = categories.includes(key);
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setCategories((prev) => (active ? prev.filter((c) => c !== key) : [...prev, key]))}
+                  style={{
+                    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill,
+                    backgroundColor: active ? "rgba(255,159,28,0.16)" : C.surfaceMuted,
+                    borderWidth: 1, borderColor: active ? "rgba(255,159,28,0.4)" : C.border,
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", color: active ? C.primary : C.text }}>
+                    {t(`businessSetup.cat.${key}`)}
                   </Text>
                 </Pressable>
               );
