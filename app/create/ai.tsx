@@ -1782,7 +1782,7 @@ export default function AiDealScreen() {
 
                   {/* Headline + subline */}
                   <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
-                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: "#FF7A00", lineHeight: 28 }}>
+                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: Colors.light.primary, lineHeight: 28 }}>
                       {generatedAd.headline}
                     </Text>
                     <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: "#222", lineHeight: 22 }}>
