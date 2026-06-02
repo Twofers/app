@@ -133,9 +133,9 @@ export default function CreateDeal() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── New Deal ── */}
+          {/* ── New Deal (express flow: photo/item → AI draft → publish) ── */}
           <Pressable
-            onPress={() => router.push("/create/ai")}
+            onPress={() => router.push("/create/quick")}
             style={{
               borderRadius: Radii.card,
               padding: Spacing.xl,

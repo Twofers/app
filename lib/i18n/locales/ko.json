@@ -1465,6 +1465,27 @@
     "exporting": "내보내는 중...",
     "errExport": "내보내기를 생성하지 못했습니다."
   },
+  "createQuick": {
+    "titleScreen": "빠른 딜",
+    "heading": "딜 만들기",
+    "intro": "메뉴 이름을 적거나 사진을 추가하면 오퍼를 만들어 드려요.",
+    "itemLabel": "어떤 메뉴인가요?",
+    "itemPlaceholder": "예: 오트밀크 라떼",
+    "changePhoto": "사진 변경",
+    "photoOptional": "사진은 선택 사항이에요 — 대신 만들어 드릴 수 있어요.",
+    "draftWithAi": "AI로 만들기",
+    "drafting": "만드는 중…",
+    "reviewHeading": "확인 후 게시",
+    "aiNote": "AI 초안이에요 — 게시 전에 자유롭게 수정하세요.",
+    "offerTitleLabel": "헤드라인",
+    "offerLineLabel": "오퍼",
+    "startOver": "다시 시작",
+    "advanced": "추가 옵션",
+    "needInput": "먼저 메뉴나 사진을 추가하세요.",
+    "needTitle": "먼저 헤드라인을 입력하세요.",
+    "photoPermission": "사진을 추가하려면 사진 접근을 허용하세요.",
+    "errGenerate": "딜을 만들지 못했어요. 다시 시도해 주세요."
+  },
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "{{total}}단계 중 {{current}}단계",

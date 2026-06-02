@@ -48,7 +48,7 @@ export default function CreateLayout() {
 
   return (
     <Stack>
-      <Stack.Screen name="quick" options={{ headerShown: false }} />
+      <Stack.Screen name="quick" options={{ title: t('createQuick.titleScreen') }} />
       <Stack.Screen name="ai" options={{ title: t('createAi.titleScreen') }} />
       <Stack.Screen name="ai-compose" options={{ title: t('aiCompose.title') }} />
       <Stack.Screen name="reuse" options={{ title: t('reuseHub.title') }} />

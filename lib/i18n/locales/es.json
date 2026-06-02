@@ -1465,6 +1465,27 @@
     "exporting": "Exportando...",
     "errExport": "No se pudo generar la exportación."
   },
+  "createQuick": {
+    "titleScreen": "Oferta rápida",
+    "heading": "Crea una oferta",
+    "intro": "Escribe un producto o agrega una foto: nosotros redactamos la oferta.",
+    "itemLabel": "¿Qué producto es?",
+    "itemPlaceholder": "ej. latte de avena",
+    "changePhoto": "Cambiar foto",
+    "photoOptional": "Foto opcional: podemos diseñar una por ti.",
+    "draftWithAi": "Crear con IA",
+    "drafting": "Creando…",
+    "reviewHeading": "Revisa y publica",
+    "aiNote": "Borrador de IA: edita lo que quieras antes de publicar.",
+    "offerTitleLabel": "Título",
+    "offerLineLabel": "Oferta",
+    "startOver": "Empezar de nuevo",
+    "advanced": "Más opciones",
+    "needInput": "Agrega un producto o una foto primero.",
+    "needTitle": "Agrega un título primero.",
+    "photoPermission": "Permite el acceso a las fotos para agregar una imagen.",
+    "errGenerate": "No se pudo crear la oferta. Inténtalo de nuevo."
+  },
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "Paso {{current}} de {{total}}",

@@ -940,6 +940,27 @@
     "backToSignIn": "Back to sign in",
     "continueToApp": "Continue"
   },
+  "createQuick": {
+    "titleScreen": "Quick deal",
+    "heading": "Create a deal",
+    "intro": "Name an item or add a photo — we'll draft the offer.",
+    "itemLabel": "What's the item?",
+    "itemPlaceholder": "e.g. oat milk latte",
+    "changePhoto": "Change photo",
+    "photoOptional": "Photo optional — we can design one for you.",
+    "draftWithAi": "Draft with AI",
+    "drafting": "Drafting…",
+    "reviewHeading": "Review & publish",
+    "aiNote": "AI draft — edit anything before publishing.",
+    "offerTitleLabel": "Headline",
+    "offerLineLabel": "Offer",
+    "startOver": "Start over",
+    "advanced": "More options",
+    "needInput": "Add an item or photo first.",
+    "needTitle": "Add a headline first.",
+    "photoPermission": "Allow photo access to add a picture.",
+    "errGenerate": "Couldn't draft a deal. Please try again."
+  },
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "Step {{current}} of {{total}}",
