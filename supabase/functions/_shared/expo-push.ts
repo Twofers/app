@@ -16,7 +16,7 @@ export type ExpoPushResult = {
 };
 
 /**
- * Send Expo push notifications in batches of 100 (Expo API limit).
+ * Send the same title/body to many tokens, in batches of 100 (Expo API limit).
  * Best-effort: logs failures but never throws.
  */
 export async function sendExpoPushBatch(
@@ -25,8 +25,6 @@ export async function sendExpoPushBatch(
   body: string,
   data?: Record<string, unknown>,
 ): Promise<ExpoPushResult> {
-  if (tokens.length === 0) return { sent: 0, errors: 0 };
-
   const unique = [...new Set(tokens)];
   const messages: ExpoPushMessage[] = unique.map((token) => ({
     to: token,
@@ -36,6 +34,15 @@ export async function sendExpoPushBatch(
     sound: "default" as const,
     channelId: "deal-alerts",
   }));
+  return sendExpoPushMessages(messages);
+}
+
+/**
+ * Send pre-built per-recipient messages (each with its own title/body, e.g. a
+ * personalized count), in batches of 100. Best-effort: logs failures, never throws.
+ */
+export async function sendExpoPushMessages(messages: ExpoPushMessage[]): Promise<ExpoPushResult> {
+  if (messages.length === 0) return { sent: 0, errors: 0 };
 
   let sent = 0;
   let errors = 0;

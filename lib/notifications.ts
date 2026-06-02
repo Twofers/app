@@ -2,7 +2,6 @@ import { Platform } from "react-native";
 import {
   scheduleLocalNotificationSafe,
   scheduleLocalNotificationAtSafe,
-  scheduleWeeklyLocalNotificationSafe,
   cancelScheduledNotificationSafe,
 } from "@/lib/expo-notifications-support";
 import { DEFAULT_CLAIM_GRACE_MINUTES } from "@/lib/claim-redeem-deadline";
@@ -61,34 +60,10 @@ export async function getAlertsEnabled(): Promise<boolean> {
 
 export async function setAlertsEnabled(enabled: boolean): Promise<void> {
   await setStored(ALERTS_KEY, enabled ? "true" : "false");
-  // Retention: keep the weekly "new deals near you" digest in sync with the opt-in,
-  // so every enable/disable path (settings, account, the favorite-consent prompt)
-  // schedules/cancels it without duplicating logic.
-  if (enabled) {
-    await scheduleWeeklyDealDigest();
-  } else {
-    await cancelWeeklyDealDigest();
-  }
-}
-
-/**
- * Weekly re-engagement nudge (local, repeating). Static copy drives an app open;
- * the existing on-focus syncConsumerDealNotifications then surfaces the real count.
- */
-export async function scheduleWeeklyDealDigest(): Promise<void> {
+  // The weekly "new deals near you" digest is now sent server-side (the
+  // weekly-deal-digest edge function) so it reaches users with the app closed and
+  // carries a real per-user count. Cancel any local weekly digest a prior build scheduled.
   await cancelWeeklyDealDigest();
-  const lng = i18n.language;
-  const id = await scheduleWeeklyLocalNotificationSafe(
-    {
-      title: String(i18n.t("pushTemplates.weeklyDigestTitle", { lng })),
-      body: String(i18n.t("pushTemplates.weeklyDigestBody", { lng })),
-      data: { path: "/(tabs)" },
-    },
-    7, // Saturday
-    11,
-    0,
-  );
-  if (id) await setStored(WEEKLY_DIGEST_ID_KEY, id);
 }
 
 export async function cancelWeeklyDealDigest(): Promise<void> {
