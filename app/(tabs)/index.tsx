@@ -203,6 +203,14 @@ export default function HomeScreen() {
   });
   const lastFeedFocusHydrateAtRef = useRef(0);
   const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
+  // Kept current for the stable loadBusinesses callback (which prefers the server-side
+  // nearby RPC) without rebuilding it on every geo/radius/favorites change.
+  const geoRef = useRef(userGeo);
+  geoRef.current = userGeo;
+  const radiusRef = useRef(radiusMiles);
+  radiusRef.current = radiusMiles;
+  const favoriteIdsRef = useRef(favoriteBusinessIds);
+  favoriteIdsRef.current = favoriteBusinessIds;
   const dealsFade = useSharedValue(0);
   const dealsFadeStyle = useAnimatedStyle(() => ({ opacity: dealsFade.value }));
 
@@ -276,6 +284,30 @@ export default function HomeScreen() {
   const loadBusinesses = useCallback(async () => {
     setLoadingBiz(true);
     try {
+      const geo = geoRef.current;
+      // Prefer server-side geo filtering (indexed nearby RPC): only fetch shops within
+      // the radius (plus favorites), ordered by distance. Falls back to the page-by-page
+      // load when there's no location yet, or if the RPC is unavailable (e.g. not yet
+      // deployed) — so the feed behaves exactly as before until the migration ships.
+      if (geo) {
+        const { data, error } = await supabase.rpc("nearby_businesses", {
+          p_lat: geo.lat,
+          p_lng: geo.lng,
+          p_radius_miles: radiusRef.current,
+          p_limit: 200,
+          p_offset: 0,
+          p_favorite_ids: favoriteIdsRef.current,
+        });
+        if (!error && Array.isArray(data)) {
+          setBusinesses(
+            (data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]).map(
+              (r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude }),
+            ) as BusinessRow[],
+          );
+          setLoadingBiz(false);
+          return;
+        }
+      }
       const rows = await collectBusinessesPageByPage(async ({ from, to }) => {
         return await supabase
           .from("businesses")
@@ -292,6 +324,13 @@ export default function HomeScreen() {
     }
     setLoadingBiz(false);
   }, [t]);
+
+  // Re-fetch the nearby shop set when location or radius changes. The page-by-page
+  // fallback is location-independent, so this only matters on the RPC path.
+  useEffect(() => {
+    if (!userGeo) return;
+    void loadBusinesses();
+  }, [userGeo, radiusMiles, loadBusinesses]);
 
   const loadFavorites = useCallback(async (currentUserId: string | null) => {
     if (!currentUserId) {
