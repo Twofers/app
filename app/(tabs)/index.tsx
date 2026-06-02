@@ -53,12 +53,14 @@ import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
 /**
- * Generous metro-wide fetch radius for the geo deal query. We fetch the nearest ~80
- * deals within this radius (plus favorites) so the client's own radius filter and
- * "show all" toggle still work over a geo-relevant, bounded set — instead of the 80
- * globally-soonest-ending deals, which at scale could all be in another city.
+ * Generous metro-wide fetch radius for the geo queries (deals AND shops).
+ *  - Deals: fetched within this radius; the user's own tighter radius filter and the
+ *    "show all" toggle then apply client-side over that bounded, geo-relevant set.
+ *  - Shops: the Shops tab is a discovery surface and is intentionally NOT filtered to
+ *    the user's tighter radius — it lists all shops in the metro, nearest first — so it
+ *    uses this radius too. Bounded for scale instead of loading every business globally.
  */
-const FEED_DEAL_FETCH_MILES = 60;
+const NEARBY_FETCH_MILES = 60;
 const FEED_DEAL_SELECT =
   "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 type Deal = {
@@ -213,12 +215,10 @@ export default function HomeScreen() {
   });
   const lastFeedFocusHydrateAtRef = useRef(0);
   const lastFeedFocusHydrateUserIdRef = useRef<string | null | undefined>(undefined);
-  // Kept current for the stable loadBusinesses callback (which prefers the server-side
-  // nearby RPC) without rebuilding it on every geo/radius/favorites change.
+  // Kept current for the stable loadBusinesses/loadDeals callbacks (which prefer the
+  // server-side nearby RPC) without rebuilding them on every geo/favorites change.
   const geoRef = useRef(userGeo);
   geoRef.current = userGeo;
-  const radiusRef = useRef(radiusMiles);
-  radiusRef.current = radiusMiles;
   const favoriteIdsRef = useRef(favoriteBusinessIds);
   favoriteIdsRef.current = favoriteBusinessIds;
   const dealsFade = useSharedValue(0);
@@ -277,7 +277,7 @@ export default function HomeScreen() {
         const { data: nearby, error: rpcErr } = await supabase.rpc("nearby_deals", {
           p_lat: geo.lat,
           p_lng: geo.lng,
-          p_radius_miles: FEED_DEAL_FETCH_MILES,
+          p_radius_miles: NEARBY_FETCH_MILES,
           p_limit: 80,
           p_offset: 0,
           p_favorite_ids: favoriteIdsRef.current,
@@ -327,15 +327,15 @@ export default function HomeScreen() {
     setLoadingBiz(true);
     try {
       const geo = geoRef.current;
-      // Prefer server-side geo filtering (indexed nearby RPC): only fetch shops within
-      // the radius (plus favorites), ordered by distance. Falls back to the page-by-page
-      // load when there's no location yet, or if the RPC is unavailable (e.g. not yet
-      // deployed) — so the feed behaves exactly as before until the migration ships.
+      // Discovery surface: fetch all shops in the metro (nearest first, plus favorites)
+      // via the indexed nearby RPC — NOT filtered to the user's tighter radius, matching
+      // the original Shops tab. Falls back to the page-by-page load when there's no
+      // location yet or the RPC is unavailable.
       if (geo) {
         const { data, error } = await supabase.rpc("nearby_businesses", {
           p_lat: geo.lat,
           p_lng: geo.lng,
-          p_radius_miles: radiusRef.current,
+          p_radius_miles: NEARBY_FETCH_MILES,
           p_limit: 200,
           p_offset: 0,
           p_favorite_ids: favoriteIdsRef.current,
@@ -367,12 +367,12 @@ export default function HomeScreen() {
     setLoadingBiz(false);
   }, [t]);
 
-  // Re-fetch the nearby shop set when location or radius changes. The page-by-page
-  // fallback is location-independent, so this only matters on the RPC path.
+  // Re-fetch the shop set when location changes. The fetch radius is fixed (metro-wide),
+  // so the user's radius changes don't affect the Shops list and don't need a reload.
   useEffect(() => {
     if (!userGeo) return;
     void loadBusinesses();
-  }, [userGeo, radiusMiles, loadBusinesses]);
+  }, [userGeo, loadBusinesses]);
 
   const loadFavorites = useCallback(async (currentUserId: string | null) => {
     if (!currentUserId) {
