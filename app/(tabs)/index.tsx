@@ -52,6 +52,15 @@ import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
+/**
+ * Generous metro-wide fetch radius for the geo deal query. We fetch the nearest ~80
+ * deals within this radius (plus favorites) so the client's own radius filter and
+ * "show all" toggle still work over a geo-relevant, bounded set — instead of the 80
+ * globally-soonest-ending deals, which at scale could all be in another city.
+ */
+const FEED_DEAL_FETCH_MILES = 60;
+const FEED_DEAL_SELECT =
+  "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 type Deal = {
   id: string;
   title: string | null;
@@ -257,30 +266,62 @@ export default function HomeScreen() {
 
   const loadDeals = useCallback(async () => {
     setLoadingDeals(true);
-    const { data, error } = await supabase
-      .from("deals")
-      .select(
-        "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-      )
-      .eq("is_active", true)
-      .gte("end_time", new Date().toISOString())
-      .order("end_time", { ascending: true })
-      .limit(80);
-
-    if (error) {
-      logPostgrestError("home screen deals", error);
-      setBanner(t("consumerHome.loadDealsError"));
-      setDeals([]);
+    const geo = geoRef.current;
+    try {
+      let rows: Deal[] | null = null;
+      // Prefer server-side geo filtering: nearest deals within a generous radius plus
+      // favorites, then hydrate full rows with the existing select. Falls back to the
+      // bounded global active query when there's no location yet or the RPC is
+      // unavailable (e.g. not yet deployed) — behavior is unchanged until the migration ships.
+      if (geo) {
+        const { data: nearby, error: rpcErr } = await supabase.rpc("nearby_deals", {
+          p_lat: geo.lat,
+          p_lng: geo.lng,
+          p_radius_miles: FEED_DEAL_FETCH_MILES,
+          p_limit: 80,
+          p_offset: 0,
+          p_favorite_ids: favoriteIdsRef.current,
+        });
+        if (!rpcErr && Array.isArray(nearby)) {
+          const ids = (nearby as { id: string }[]).map((r) => r.id);
+          if (ids.length === 0) {
+            rows = [];
+          } else {
+            const { data, error } = await supabase.from("deals").select(FEED_DEAL_SELECT).in("id", ids);
+            if (!error && Array.isArray(data)) rows = data as unknown as Deal[];
+          }
+        }
+      }
+      if (rows === null) {
+        const { data, error } = await supabase
+          .from("deals")
+          .select(FEED_DEAL_SELECT)
+          .eq("is_active", true)
+          .gte("end_time", new Date().toISOString())
+          .order("end_time", { ascending: true })
+          .limit(80);
+        if (error) {
+          logPostgrestError("home screen deals", error);
+          setBanner(t("consumerHome.loadDealsError"));
+          setDeals([]);
+          return;
+        }
+        rows = (data ?? []) as unknown as Deal[];
+      }
+      const filtered = rows.filter((deal) => isDealActiveNow(deal));
+      setDeals(filtered);
+      await loadUserClaims(filtered.map((d) => d.id));
+    } finally {
       setLoadingDeals(false);
-      return;
     }
-
-    const raw = (data ?? []) as unknown as Deal[];
-    const filtered = raw.filter((deal) => isDealActiveNow(deal));
-    setDeals(filtered);
-    await loadUserClaims(filtered.map((d) => d.id));
-    setLoadingDeals(false);
   }, [loadUserClaims, t]);
+
+  // Re-fetch the nearby deal set when location changes (the user's own radius filter
+  // is applied client-side over the fetched set, so radius changes don't need a reload).
+  useEffect(() => {
+    if (!userGeo) return;
+    void loadDeals();
+  }, [userGeo, loadDeals]);
 
   const loadBusinesses = useCallback(async () => {
     setLoadingBiz(true);
