@@ -1081,7 +1081,14 @@ export default function AiDealScreen() {
       return;
     }
 
+    // composedDescription includes the CTA — used ONLY for the quality + strong-deal
+    // guards below, so an offer phrase that happens to live only in the CTA (e.g.
+    // "Get one free") still satisfies validation.
     const composedDescription = composeListingDescription(promoLine, ctaText, description);
+    // listingDescription is what gets STORED and shown to consumers. The deal card already
+    // renders its own Claim button, so the CTA is a button label, not body copy — leaving it
+    // in the description repeats it (e.g. a "Claim deal" line above a Claim button). Drop it.
+    const listingDescription = composeListingDescription(promoLine, "", description);
     const quality = assessDealQuality({
       title: title.trim(),
       description: composedDescription,
@@ -1129,7 +1136,7 @@ export default function AiDealScreen() {
       const baseRow = {
         business_id: businessId,
         title: title.trim(),
-        description: composedDescription.trim(),
+        description: listingDescription.trim(),
         price: priceNum,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
