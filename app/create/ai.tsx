@@ -886,11 +886,22 @@ export default function AiDealScreen() {
   }
 
   function friendlyGenerationError(raw: string, code?: string): string {
+    // Map each known failure to a DISTINCT, truthful message so the owner (and a
+    // developer reading a screenshot) can tell cooldown from monthly cap from a
+    // copy failure. Server codes arrive via getErrorCode; codeless cases (403
+    // ownership, timeouts) are matched on the parsed message text.
     if (code === "OPENAI_KEY_MISSING") return t("createAi.friendlyOpenaiConfig");
-    if (code === "MONTHLY_LIMIT") return t("createAi.friendlyGenerationRateLimit");
-    if (code === "COOLDOWN_ACTIVE") return raw;
+    if (code === "MONTHLY_LIMIT") return t("createAi.friendlyMonthlyLimit");
+    if (code === "COOLDOWN_ACTIVE") return raw; // server message is specific ("Please wait 12s…")
     if (code === "REVISION_LIMIT") return t("createAi.errRegenClientLimit");
+    if (code === "COPY_FAILED") return t("createAi.friendlyCopyFailed");
     const lower = raw.toLowerCase();
+    if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) {
+      return t("createAi.friendlyTimeout");
+    }
+    if (lower.includes("do not own") || lower.includes("don’t own") || lower.includes("don't own")) {
+      return t("createAi.friendlyOwnership");
+    }
     if (lower.includes("unauthorized") || lower.includes("log in")) {
       return t("createAi.friendlySession");
     }
@@ -1727,7 +1738,10 @@ export default function AiDealScreen() {
 
             {lastGenerationError && !generating ? (
               <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, gap: 10 }}>
-                <Text style={{ fontWeight: "700" }}>{t("createAi.fallbackIntro")}</Text>
+                {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
+                    failure / timeout / ownership), not a generic "couldn't generate"
+                    line — so the cause is visible instead of hidden. */}
+                <Text style={{ fontWeight: "700" }}>{lastGenerationError}</Text>
                 <Text style={{ opacity: 0.8, lineHeight: 20 }}>{t("createAi.fallbackBody")}</Text>
                 <SecondaryButton
                   title={t("createAi.showDraftFields")}

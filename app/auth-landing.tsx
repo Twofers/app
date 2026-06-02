@@ -32,6 +32,7 @@ import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { Banner } from "@/components/ui/banner";
+import { LocaleFlag } from "@/components/ui/locale-flag";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 import i18n, { APP_LOCALES, type AppLocale } from "@/lib/i18n/config";
@@ -43,6 +44,13 @@ import { isDemoAuthHelperEnabled } from "@/lib/runtime-env";
 import { BUSINESS_INVITE_PENDING_META_KEY, isValidBusinessInviteCode } from "@/lib/business-invite";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Language switcher shows flags; keep a spoken label for screen readers.
+const LOCALE_LABELS: Record<AppLocale, string> = {
+  en: "English",
+  es: "Español",
+  ko: "한국어",
+};
 
 function ScalePressable({
   onPress,
@@ -379,10 +387,7 @@ export default function AuthLandingScreen() {
                 ? t("authLanding.subtitleBusiness")
                 : t("authLanding.subtitle")}
             </Text>
-            <View style={{ marginTop: Spacing.xs, alignItems: "center" }}>
-              <Text style={{ fontSize: 12, color: theme.mutedText, marginBottom: Spacing.xs }}>
-                {t("authLanding.languageLabel")}
-              </Text>
+            <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
               <View style={{ flexDirection: "row", gap: Spacing.sm }}>
                 {APP_LOCALES.map((locale) => {
                   const active = i18n.language.startsWith(locale);
@@ -391,36 +396,31 @@ export default function AuthLandingScreen() {
                       key={locale}
                       onPress={() => void chooseLocale(locale)}
                       accessibilityRole="button"
-                      accessibilityLabel={locale.toUpperCase()}
+                      accessibilityLabel={LOCALE_LABELS[locale]}
                       accessibilityState={{ selected: active }}
                       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                       style={{
-                        borderRadius: 999,
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.xs,
-                        borderWidth: 1,
+                        borderRadius: Radii.sm,
+                        // Border grows 1→2 when active; padding shrinks 3→2 so the
+                        // outer size stays fixed and the row doesn't shift.
+                        padding: active ? 2 : 3,
+                        borderWidth: active ? 2 : 1,
                         borderColor: active ? theme.primary : theme.border,
-                        backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,
+                        backgroundColor: theme.surface,
+                        opacity: active ? 1 : 0.6,
+                        boxShadow: active
+                          ? "0px 4px 10px rgba(255,159,28,0.25)"
+                          : "0px 1px 3px rgba(0,0,0,0.08)",
+                        elevation: active ? 3 : 1,
                       }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "800", color: active ? theme.primary : theme.text }}>
-                        {locale.toUpperCase()}
-                      </Text>
+                      <View style={{ borderRadius: Radii.sm - 2, overflow: "hidden" }}>
+                        <LocaleFlag locale={locale} width={40} />
+                      </View>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: theme.mutedText,
-                  marginTop: Spacing.xs,
-                  textAlign: "center",
-                  maxWidth: 280,
-                }}
-              >
-                {t("authLanding.languageHelp")}
-              </Text>
             </View>
           </View>
 
@@ -461,22 +461,11 @@ export default function AuthLandingScreen() {
                   fontWeight: "800",
                   fontSize: 16,
                   color: theme.text,
-                  marginBottom: 2,
+                  marginBottom: Spacing.sm,
                   textAlign: "center",
                 }}
               >
                 {t("authLanding.roleTitle")}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  lineHeight: 20,
-                  color: theme.mutedText,
-                  textAlign: "center",
-                  marginBottom: Spacing.sm,
-                }}
-              >
-                {t("authLanding.roleSubtitle")}
               </Text>
 
               <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md }}>
@@ -661,7 +650,7 @@ export default function AuthLandingScreen() {
                 disabled={busy}
                 accessibilityRole="link"
                 accessibilityLabel={t("authLanding.forgotPassword")}
-                style={{ alignSelf: "flex-end", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
+                style={{ alignSelf: "center", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
                   {t("authLanding.forgotPassword")}
