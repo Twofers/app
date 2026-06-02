@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -20,7 +21,8 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal } from "@/lib/functions";
-import { syncConsumerDealNotifications } from "@/lib/notifications";
+import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
+import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { isDealActiveNow } from "@/lib/deal-time";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -35,7 +37,7 @@ import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { getConsumerPreferences, setLastKnownConsumerCoords } from "@/lib/consumer-preferences";
+import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs } from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
@@ -345,6 +347,29 @@ export default function HomeScreen() {
     void syncConsumerDealNotifications({ userId, favoriteBusinessIds });
   }, [userId, favoriteBusinessIds, deals.length]);
 
+  // Consent-gated deal alerts. We never silently enable notifications when a user
+  // favorites a shop — we ask once per session, and only request OS permission if
+  // they accept.
+  const alertConsentAskedRef = useRef(false);
+  const enableDealAlerts = useCallback(async () => {
+    const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
+    if (skippedBecauseExpoGo || status !== "granted") {
+      Alert.alert(t("consumerHome.alertConsentTitle"), t("settingsScreen.alertsPermissionBody"));
+      return;
+    }
+    await setAlertsEnabled(true);
+    await setConsumerNotificationPrefs({ v: 1, mode: "favorites_only" });
+  }, [t]);
+  const maybeOfferDealAlerts = useCallback(async () => {
+    if (alertConsentAskedRef.current) return;
+    if (await getAlertsEnabled()) return; // already opted in — don't nag
+    alertConsentAskedRef.current = true;
+    Alert.alert(t("consumerHome.alertConsentTitle"), t("consumerHome.alertConsentBody"), [
+      { text: t("consumerHome.alertConsentDecline"), style: "cancel" },
+      { text: t("consumerHome.alertConsentAccept"), onPress: () => void enableDealAlerts() },
+    ]);
+  }, [t, enableDealAlerts]);
+
   const toggleFavorite = useCallback(
     async (businessId: string) => {
       if (!userId) {
@@ -365,10 +390,12 @@ export default function HomeScreen() {
         if (error) {
           setFavoriteBusinessIds(favoriteBusinessIds);
           setBanner(t("consumerHome.errFavoriteToggle"));
+        } else {
+          void maybeOfferDealAlerts();
         }
       }
     },
-    [userId, favoriteBusinessIds, t],
+    [userId, favoriteBusinessIds, t, maybeOfferDealAlerts],
   );
 
   const doClaim = useCallback(
@@ -1062,7 +1089,12 @@ export default function HomeScreen() {
               ? emptyNearbyLive || showDealsSkeleton || banner
                 ? null
                 : (
-                    <EmptyState title={t("consumerHome.emptyLiveTitle")} message={t("consumerHome.emptyLiveBody")} />
+                    <EmptyState
+                      title={t("consumerHome.emptyLiveTitle")}
+                      message={t("consumerHome.emptyLiveBody")}
+                      actionLabel={businesses.length > 0 ? t("consumerHome.browseShopsCta") : undefined}
+                      onAction={businesses.length > 0 ? () => setFeedSegment("shops") : undefined}
+                    />
                   )
               : loadingBiz && businesses.length === 0
                 ? (

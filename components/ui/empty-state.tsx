@@ -1,4 +1,4 @@
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -6,9 +6,12 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 type EmptyStateProps = {
   title: string;
   message: string;
+  /** Optional primary action (e.g. "Browse shops"). Renders a button when both are set. */
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
-export function EmptyState({ title, message }: EmptyStateProps) {
+export function EmptyState({ title, message, actionLabel, onAction }: EmptyStateProps) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme() ?? "light";
   const c = Colors[colorScheme];
@@ -50,6 +53,16 @@ export function EmptyState({ title, message }: EmptyStateProps) {
 
         <Text style={{ fontSize: 17, fontWeight: "800", color: c.text, textAlign: "center" }}>{title}</Text>
         <Text style={{ fontSize: 14, opacity: 0.72, lineHeight: 22, color: c.text, textAlign: "center" }}>{message}</Text>
+
+        {actionLabel && onAction ? (
+          <Pressable
+            onPress={onAction}
+            accessibilityRole="button"
+            style={{ marginTop: 10, backgroundColor: c.primary, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
+          >
+            <Text style={{ color: c.primaryText, fontWeight: "800", fontSize: 15 }}>{actionLabel}</Text>
+          </Pressable>
+        ) : null}
 
         <View
           style={{
