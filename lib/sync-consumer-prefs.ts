@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { getConsumerPreferences } from "./consumer-preferences";
+import { getAlertsEnabled } from "./notifications";
 import { devWarn } from "@/lib/dev-log";
 
 /**
@@ -19,6 +20,7 @@ export async function syncConsumerPrefsToServer(
     const update: Record<string, unknown> = {
       notification_mode: prefs.notificationPrefs.mode,
       radius_miles: prefs.radiusMiles,
+      deal_alerts_enabled: await getAlertsEnabled(),
     };
 
     if (prefs.lastLatitude != null && prefs.lastLongitude != null) {

@@ -1,18 +1,18 @@
 // Weekly "new deals near you" digest — a REAL per-user re-engagement push.
 //
-// For each opted-in consumer with a stored location, counts deals created in the
-// last 7 days whose business is within the consumer's radius, and sends a push
-// with that personalized count. Reaches users even when the app is closed (unlike
-// a local notification).
+// For each OPTED-IN consumer (consumer_profiles.deal_alerts_enabled = true, synced
+// from the in-app toggle), counts deals created in the last 7 days that they should
+// hear about — honoring radius + stored location and favorites (favorites_only counts
+// only favorited shops; all_nearby also always includes favorited shops) — and sends
+// a personalized push. Reaches users even when the app is closed.
 //
-// Consent model matches send-deal-push: a row in push_tokens (the user granted OS
-// push permission) plus consumer_profiles.notification_mode != 'none'.
-//
-// Invocation is guarded by a shared secret (CRON_SECRET env) so only the scheduler
-// can trigger a mass send. Schedule it weekly (see README.md in this folder).
+// Targeting logic lives in ../_shared/digest-targeting.ts (unit-tested). Invocation is
+// guarded by a shared secret (CRON_SECRET). POST { "dry_run": true } returns the
+// computed audience WITHOUT sending. Schedule weekly (see README.md).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendExpoPushMessages, haversineMiles, type ExpoPushMessage } from "../_shared/expo-push.ts";
+import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push.ts";
+import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "../_shared/digest-targeting.ts";
 
 const DIGEST_DAYS = 7;
 
@@ -28,16 +28,22 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  // Only the scheduler may trigger this (prevents abuse / accidental mass sends).
+  // Only the scheduler (or an admin with the secret) may trigger this.
   const cronSecret = Deno.env.get("CRON_SECRET");
   if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
+  let body: { dry_run?: boolean } = {};
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const admin = createClient(supabaseUrl, serviceKey);
+    body = await req.json();
+  } catch {
+    /* empty body is fine */
+  }
+  const dryRun = body?.dry_run === true;
+
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const nowIso = new Date().toISOString();
     const sinceIso = new Date(Date.now() - DIGEST_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -45,7 +51,7 @@ serve(async (req) => {
     // 1. Recently-posted, still-live deals + their business coordinates.
     const { data: dealRows, error: dealErr } = await admin
       .from("deals")
-      .select("id, created_at, businesses(latitude, longitude)")
+      .select("id, business_id, created_at, businesses(latitude, longitude)")
       .eq("is_active", true)
       .gte("created_at", sinceIso)
       .gte("end_time", nowIso)
@@ -55,55 +61,84 @@ serve(async (req) => {
       return jsonResponse({ error: "deals query failed" }, 500);
     }
 
-    const recentDeals = (dealRows ?? [])
-      .map((d) => {
-        const b = d.businesses as unknown as { latitude: number | null; longitude: number | null } | null;
-        const lat = b?.latitude != null ? Number(b.latitude) : NaN;
-        const lng = b?.longitude != null ? Number(b.longitude) : NaN;
-        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-      })
-      .filter((x): x is { lat: number; lng: number } => x !== null);
-
-    if (recentDeals.length === 0) {
+    const deals: DigestDeal[] = (dealRows ?? []).map((d) => {
+      const b = d.businesses as unknown as { latitude: number | null; longitude: number | null } | null;
+      return {
+        business_id: d.business_id as string,
+        lat: b?.latitude != null ? Number(b.latitude) : null,
+        lng: b?.longitude != null ? Number(b.longitude) : null,
+      };
+    });
+    if (deals.length === 0) {
       return jsonResponse({ ok: true, audience: 0, sent: 0, reason: "no recent deals" });
     }
 
-    // 2. Opted-in consumers with a stored location.
-    const { data: consumerRows } = await admin
+    // 2. Opted-in consumers ONLY (deal_alerts_enabled = true is the consent gate).
+    const { data: consumerRows, error: consErr } = await admin
       .from("consumer_profiles")
-      .select("user_id, last_latitude, last_longitude, radius_miles")
-      .not("last_latitude", "is", null)
-      .not("last_longitude", "is", null)
-      .neq("notification_mode", "none");
+      .select("user_id, deal_alerts_enabled, notification_mode, last_latitude, last_longitude, radius_miles")
+      .eq("deal_alerts_enabled", true);
+    if (consErr) {
+      console.error("[weekly-deal-digest] consumers query failed:", consErr);
+      return jsonResponse({ error: "consumers query failed" }, 500);
+    }
+    const base = consumerRows ?? [];
+    if (base.length === 0) {
+      return jsonResponse({ ok: true, audience: 0, sent: 0, reason: "no opted-in consumers" });
+    }
 
-    // 3. Per-user count of recent deals within their radius.
-    const perUserCount = new Map<string, number>();
-    for (const row of consumerRows ?? []) {
-      const lat = Number(row.last_latitude);
-      const lng = Number(row.last_longitude);
-      const radius = Number(row.radius_miles) || 15;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      let count = 0;
-      for (const d of recentDeals) {
-        if (haversineMiles(lat, lng, d.lat, d.lng) <= radius) count++;
+    // 3. Favorites for those users (so favorites_only + the override work).
+    const userIds = base.map((r) => r.user_id as string);
+    const favByUser = new Map<string, string[]>();
+    const { data: favRows } = await admin.from("favorites").select("user_id, business_id").in("user_id", userIds);
+    for (const f of favRows ?? []) {
+      const arr = favByUser.get(f.user_id as string) ?? [];
+      arr.push(f.business_id as string);
+      favByUser.set(f.user_id as string, arr);
+    }
+
+    const consumers: DigestConsumer[] = base.map((r) => ({
+      user_id: r.user_id as string,
+      deal_alerts_enabled: r.deal_alerts_enabled === true,
+      notification_mode: (r.notification_mode as string | null) ?? null,
+      lat: r.last_latitude != null ? Number(r.last_latitude) : null,
+      lng: r.last_longitude != null ? Number(r.last_longitude) : null,
+      radius_miles: r.radius_miles != null ? Number(r.radius_miles) : null,
+      favorite_business_ids: favByUser.get(r.user_id as string) ?? [],
+    }));
+
+    // 4. Per-user counts (pure, unit-tested, never throws).
+    const counts = computeDigestCounts(deals, consumers);
+    if (counts.size === 0) {
+      return jsonResponse({ ok: true, audience: 0, sent: 0, reason: "no users with qualifying deals" });
+    }
+
+    if (dryRun) {
+      // Aggregate proof — who would be targeted, without sending or leaking PII.
+      const distribution: Record<string, number> = {};
+      for (const n of counts.values()) {
+        const k = String(n);
+        distribution[k] = (distribution[k] ?? 0) + 1;
       }
-      if (count > 0) perUserCount.set(row.user_id as string, count);
+      return jsonResponse({
+        ok: true,
+        dry_run: true,
+        recent_deals: deals.length,
+        opted_in_consumers: consumers.length,
+        audience: counts.size,
+        count_distribution: distribution,
+      });
     }
 
-    if (perUserCount.size === 0) {
-      return jsonResponse({ ok: true, audience: 0, sent: 0, reason: "no users with nearby new deals" });
-    }
-
-    // 4. Push tokens for those users.
+    // 5. Push tokens for the audience, build personalized messages, send.
     const { data: tokenRows } = await admin
       .from("push_tokens")
       .select("user_id, expo_push_token")
-      .in("user_id", [...perUserCount.keys()]);
+      .in("user_id", [...counts.keys()]);
 
-    // 5. Build a personalized message per token and send.
     const messages: ExpoPushMessage[] = [];
     for (const row of tokenRows ?? []) {
-      const count = perUserCount.get(row.user_id as string);
+      const count = counts.get(row.user_id as string);
       if (!count) continue;
       messages.push({
         to: row.expo_push_token as string,
@@ -116,7 +151,7 @@ serve(async (req) => {
     }
 
     const result = await sendExpoPushMessages(messages);
-    return jsonResponse({ ok: true, audience: perUserCount.size, tokens: messages.length, ...result });
+    return jsonResponse({ ok: true, audience: counts.size, tokens: messages.length, ...result });
   } catch (err) {
     console.error("[weekly-deal-digest] Unhandled error:", err);
     return jsonResponse({ error: "Internal server error" }, 500);

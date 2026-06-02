@@ -64,6 +64,17 @@ export async function setAlertsEnabled(enabled: boolean): Promise<void> {
   // weekly-deal-digest edge function) so it reaches users with the app closed and
   // carries a real per-user count. Cancel any local weekly digest a prior build scheduled.
   await cancelWeeklyDealDigest();
+  // Mirror the opt-in to the server immediately so server push (digest) targets only
+  // opted-in users. The app-launch sync (syncConsumerPrefsToServer) keeps it consistent.
+  try {
+    const { data } = await supabase.auth.getUser();
+    const uid = data?.user?.id;
+    if (uid) {
+      await supabase.from("consumer_profiles").update({ deal_alerts_enabled: enabled }).eq("user_id", uid);
+    }
+  } catch {
+    /* best effort — launch-time sync will reconcile */
+  }
 }
 
 export async function cancelWeeklyDealDigest(): Promise<void> {
