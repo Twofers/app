@@ -48,6 +48,7 @@ app-example
 
 # Dev/debug screenshots
 screenshots/
+qa-screens/
 *.apk
 *.aab
 
