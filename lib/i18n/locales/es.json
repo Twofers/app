@@ -221,6 +221,11 @@
     "noLiveDeal": "Sin oferta en vivo ahora. Vuelve luego o guarda el negocio para alertas."
   },
   "pushTemplates": {
+    "weeklyDigestTitle": "Nuevas ofertas cerca de ti",
+    "weeklyDigestBody": "Mira los 2x1 cerca de ti esta semana.",
+    "claimExpiringTitle": "Tu oferta vence pronto",
+    "claimExpiringBody": "Canjea tu {{deal}} antes de que venza.",
+    "claimExpiringBodyGeneric": "Canjea tu oferta antes de que venza.",
     "newDealsTitle": "Nuevas ofertas de tus favoritos",
     "newDealsTitleFavorites": "Nuevas ofertas de favoritos",
     "newDealsTitleNearby": "Nuevas ofertas cerca de ti",

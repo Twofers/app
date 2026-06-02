@@ -21,7 +21,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal } from "@/lib/functions";
-import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
+import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled, scheduleClaimExpiryReminder } from "@/lib/notifications";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { isDealActiveNow } from "@/lib/deal-time";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -470,6 +470,13 @@ export default function HomeScreen() {
           [dealId]: { message: t("dealsBrowse.statusClaimedShowQr"), tone: "success" },
         }));
         await loadUserClaims(dealsRef.current.map((d) => d.id));
+        // Retention nudge: remind ~1h before this claim's redemption deadline.
+        const claimedDeal = dealsRef.current.find((d) => d.id === dealId);
+        void scheduleClaimExpiryReminder({
+          claimExpiresAt: out.expires_at,
+          graceMinutes: DEFAULT_CLAIM_GRACE_MINUTES,
+          dealTitle: claimedDeal ? localizedTitle(claimedDeal, i18n.language) : null,
+        });
       } catch (e: unknown) {
         const msg =
           typeof (e as { message?: string })?.message === "string"
@@ -495,7 +502,7 @@ export default function HomeScreen() {
         setClaimingDealId(null);
       }
     },
-    [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t],
+    [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t, i18n.language],
   );
 
   async function refreshQr() {

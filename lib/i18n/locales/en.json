@@ -221,6 +221,11 @@
     "noLiveDeal": "No live deal right now. Check back later or save this business for alerts."
   },
   "pushTemplates": {
+    "weeklyDigestTitle": "New deals near you",
+    "weeklyDigestBody": "See what's 2-for-1 near you this week.",
+    "claimExpiringTitle": "Your deal expires soon",
+    "claimExpiringBody": "Redeem your {{deal}} before it expires.",
+    "claimExpiringBodyGeneric": "Redeem your claimed deal before it expires.",
     "newDealsTitle": "New deals from your favorites",
     "newDealsTitleFavorites": "New deals from favorites",
     "newDealsTitleNearby": "New deals near you",

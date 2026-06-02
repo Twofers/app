@@ -1,5 +1,11 @@
 import { Platform } from "react-native";
-import { scheduleLocalNotificationSafe } from "@/lib/expo-notifications-support";
+import {
+  scheduleLocalNotificationSafe,
+  scheduleLocalNotificationAtSafe,
+  scheduleWeeklyLocalNotificationSafe,
+  cancelScheduledNotificationSafe,
+} from "@/lib/expo-notifications-support";
+import { DEFAULT_CLAIM_GRACE_MINUTES } from "@/lib/claim-redeem-deadline";
 import i18n from "./i18n/config";
 import { supabase } from "./supabase";
 import { getConsumerPreferences, milesToKm } from "./consumer-preferences";
@@ -7,6 +13,7 @@ import { haversineKm } from "./geo";
 
 const ALERTS_KEY = "deal_alerts_enabled";
 const LAST_SEEN_KEY = "last_seen_deals_at";
+const WEEKLY_DIGEST_ID_KEY = "weekly_digest_notif_id";
 
 const isWeb = Platform.OS === "web";
 const hasWindow = typeof window !== "undefined";
@@ -54,6 +61,70 @@ export async function getAlertsEnabled(): Promise<boolean> {
 
 export async function setAlertsEnabled(enabled: boolean): Promise<void> {
   await setStored(ALERTS_KEY, enabled ? "true" : "false");
+  // Retention: keep the weekly "new deals near you" digest in sync with the opt-in,
+  // so every enable/disable path (settings, account, the favorite-consent prompt)
+  // schedules/cancels it without duplicating logic.
+  if (enabled) {
+    await scheduleWeeklyDealDigest();
+  } else {
+    await cancelWeeklyDealDigest();
+  }
+}
+
+/**
+ * Weekly re-engagement nudge (local, repeating). Static copy drives an app open;
+ * the existing on-focus syncConsumerDealNotifications then surfaces the real count.
+ */
+export async function scheduleWeeklyDealDigest(): Promise<void> {
+  await cancelWeeklyDealDigest();
+  const lng = i18n.language;
+  const id = await scheduleWeeklyLocalNotificationSafe(
+    {
+      title: String(i18n.t("pushTemplates.weeklyDigestTitle", { lng })),
+      body: String(i18n.t("pushTemplates.weeklyDigestBody", { lng })),
+      data: { path: "/(tabs)" },
+    },
+    7, // Saturday
+    11,
+    0,
+  );
+  if (id) await setStored(WEEKLY_DIGEST_ID_KEY, id);
+}
+
+export async function cancelWeeklyDealDigest(): Promise<void> {
+  const id = await getStored(WEEKLY_DIGEST_ID_KEY);
+  if (id) {
+    await cancelScheduledNotificationSafe(id);
+    await setStored(WEEKLY_DIGEST_ID_KEY, "");
+  }
+}
+
+/**
+ * Retention: remind a user ~1h before a claim's redemption deadline so they don't
+ * forget to redeem. Best-effort and silent if notification permission isn't granted.
+ */
+export async function scheduleClaimExpiryReminder(params: {
+  claimExpiresAt: string;
+  graceMinutes?: number | null;
+  dealTitle?: string | null;
+}): Promise<void> {
+  const base = new Date(params.claimExpiresAt).getTime();
+  if (Number.isNaN(base)) return;
+  const deadlineMs = base + (params.graceMinutes ?? DEFAULT_CLAIM_GRACE_MINUTES) * 60_000;
+  const remindAt = new Date(deadlineMs - 60 * 60_000);
+  // Skip if the reminder time isn't at least 5 minutes out (window too short to help).
+  if (remindAt.getTime() <= Date.now() + 5 * 60_000) return;
+  const lng = i18n.language;
+  await scheduleLocalNotificationAtSafe(
+    {
+      title: String(i18n.t("pushTemplates.claimExpiringTitle", { lng })),
+      body: params.dealTitle
+        ? String(i18n.t("pushTemplates.claimExpiringBody", { lng, deal: params.dealTitle }))
+        : String(i18n.t("pushTemplates.claimExpiringBodyGeneric", { lng })),
+      data: { path: "/(tabs)/wallet" },
+    },
+    remindAt,
+  );
 }
 
 export async function getLastSeen(): Promise<string | null> {

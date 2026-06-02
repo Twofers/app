@@ -221,6 +221,11 @@
     "noLiveDeal": "지금 라이브 딜이 없습니다. 나중에 다시 보거나 즐겨찾기로 알림을 받아 보세요."
   },
   "pushTemplates": {
+    "weeklyDigestTitle": "주변 새 딜",
+    "weeklyDigestBody": "이번 주 주변의 1+1 딜을 확인하세요.",
+    "claimExpiringTitle": "딜이 곧 만료돼요",
+    "claimExpiringBody": "{{deal}} 딜을 만료 전에 사용하세요.",
+    "claimExpiringBodyGeneric": "받은 딜을 만료 전에 사용하세요.",
     "newDealsTitle": "즐겨찾기 매장의 새 딜",
     "newDealsTitleFavorites": "즐겨찾기의 새 딜",
     "newDealsTitleNearby": "주변 새 딜",

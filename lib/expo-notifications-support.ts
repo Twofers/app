@@ -73,3 +73,54 @@ export async function scheduleLocalNotificationSafe(request: ScheduleRequest): P
     return null;
   }
 }
+
+type NotificationContent = ScheduleRequest["content"];
+
+/** Schedule a one-shot local notification to fire at a specific date. No-op if the date is past or scheduling throws. */
+export async function scheduleLocalNotificationAtSafe(content: NotificationContent, date: Date): Promise<string | null> {
+  if (isExpoGo() && Platform.OS === "android") return null;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) return null;
+  try {
+    const Notifications = await getNotifications();
+    if (!Notifications) return null;
+    return await Notifications.scheduleNotificationAsync({
+      content,
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: "deal-alerts" },
+    });
+  } catch (e) {
+    devWarn("[notifications] date schedule skipped (non-fatal):", e);
+    return null;
+  }
+}
+
+/** Schedule a repeating weekly local notification (e.g. weekday 7 = Saturday). Returns its id. */
+export async function scheduleWeeklyLocalNotificationSafe(
+  content: NotificationContent,
+  weekday: number,
+  hour: number,
+  minute: number,
+): Promise<string | null> {
+  if (isExpoGo() && Platform.OS === "android") return null;
+  try {
+    const Notifications = await getNotifications();
+    if (!Notifications) return null;
+    return await Notifications.scheduleNotificationAsync({
+      content,
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday, hour, minute, channelId: "deal-alerts" },
+    });
+  } catch (e) {
+    devWarn("[notifications] weekly schedule skipped (non-fatal):", e);
+    return null;
+  }
+}
+
+/** Cancel a previously scheduled notification by id. No-op on failure. */
+export async function cancelScheduledNotificationSafe(id: string): Promise<void> {
+  try {
+    const Notifications = await getNotifications();
+    if (!Notifications) return;
+    await Notifications.cancelScheduledNotificationAsync(id);
+  } catch (e) {
+    devWarn("[notifications] cancel skipped (non-fatal):", e);
+  }
+}
