@@ -10,6 +10,13 @@
 -- signal we currently capture (device_platform); a user on two platforms still counts
 -- once per platform per day, which matches "per user/device + deal + day".
 
+-- 0) Safety backup of the FULL analytics table before the destructive de-dup below.
+--    Runs in the same migration/transaction, so the backup is guaranteed to capture
+--    the pre-cleanup state. Drop it once the deflated numbers are verified:
+--      DROP TABLE IF EXISTS public.app_analytics_events_backup_20260708;
+CREATE TABLE IF NOT EXISTS public.app_analytics_events_backup_20260708 AS
+  SELECT * FROM public.app_analytics_events;
+
 -- 1) Collapse historical duplicate deal_viewed rows so the unique index below can be
 --    built, and so existing dashboards deflate to honest numbers. Keeps the earliest
 --    row per group (lowest occurred_at, then lowest id).
