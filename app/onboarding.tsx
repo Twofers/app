@@ -13,6 +13,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
+  DEFAULT_RADIUS_MILES,
   getConsumerPreferences,
   setConsumerLocationMode,
   setConsumerNotificationPrefs,
@@ -40,7 +41,7 @@ export default function OnboardingScreen() {
 
   const [locationMode, setLocationMode] = useState<"gps" | "zip">("gps");
   const [zip, setZip] = useState("");
-  const [radius, setRadius] = useState<ConsumerRadiusMiles>(15);
+  const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 

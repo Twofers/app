@@ -13,7 +13,7 @@ import { Colors } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { isDealActiveNow } from "@/lib/deal-time";
-import { getConsumerPreferences, milesToKm } from "@/lib/consumer-preferences";
+import { getConsumerPreferences, milesToKm, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
@@ -479,7 +479,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   /** Device blue dot only when GPS + permission; never for ZIP-only mode. */
   const [showDeviceBlueDot, setShowDeviceBlueDot] = useState(false);
-  const [radiusMiles, setRadiusMiles] = useState(3);
+  const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const lastCameraFitSignatureRef = useRef<string | null>(null);
@@ -554,7 +554,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     return safeRegion(DALLAS_FALLBACK, 0.35, 0.35);
   }, [userPos, markers]);
 
-  const radiusKm = milesToKm(Number.isFinite(radiusMiles) ? radiusMiles : 3);
+  const radiusKm = milesToKm(Number.isFinite(radiusMiles) ? radiusMiles : DEFAULT_RADIUS_MILES);
   const showUserLocationDot = showDeviceBlueDot && !!userPos;
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;

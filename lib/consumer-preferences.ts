@@ -12,7 +12,7 @@ export type ConsumerRadiusMiles = (typeof CONSUMER_RADIUS_MILES_OPTIONS)[number]
 
 // Pilot is centered on ZIP 75063 (Irving, TX) with a 15-mile target reach
 // covering Coppell, Grapevine, Carrollton, Las Colinas, and parts of Dallas.
-const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 15;
+export const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 15;
 
 export type ConsumerNotificationPrefsV1 = {
   v: 1;

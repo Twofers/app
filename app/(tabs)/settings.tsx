@@ -12,6 +12,7 @@ import {
   type ConsumerLocationMode,
   type ConsumerNotificationMode,
   type ConsumerRadiusMiles,
+  DEFAULT_RADIUS_MILES,
   getConsumerPreferences,
   setConsumerLocationMode,
   setConsumerNotificationPrefs,
@@ -50,7 +51,7 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
   const [zip, setZip] = useState("");
-  const [radius, setRadius] = useState<ConsumerRadiusMiles>(3);
+  const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
   const [notifMode, setNotifModeState] = useState<ConsumerNotificationMode>("all_nearby");
   const [consumerSession, setConsumerSession] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);

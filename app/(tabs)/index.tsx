@@ -37,7 +37,7 @@ import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs } from "@/lib/consumer-preferences";
+import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
@@ -172,7 +172,7 @@ export default function HomeScreen() {
   >(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
-  const [radiusMiles, setRadiusMiles] = useState(3);
+  const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);

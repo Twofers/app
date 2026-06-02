@@ -158,7 +158,7 @@
     "zipInvalid": "Usa un código postal válido de 5 dígitos en EE. UU. (opcional +4).",
     "zipLookupFail": "No pudimos verificar ese código. Revisa el número y la conexión e inténtalo de nuevo.",
     "radiusSection": "Radio cercano",
-    "radiusHelp": "Orden, anillo del mapa y alertas “cerca” (por defecto 3 mi).",
+    "radiusHelp": "Orden, anillo del mapa y alertas “cerca” (por defecto 15 mi).",
     "notificationsSection": "Notificaciones",
     "notificationsHelp": "Activa alertas para ofertas nuevas. Puedes limitar a favoritos.",
     "notificationModeTitle": "Alcance de alertas",
