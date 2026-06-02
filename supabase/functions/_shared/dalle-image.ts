@@ -7,19 +7,41 @@
  *   the headline above the image.
  */
 
-/** Allowlisted image model ids only — never accept model names from clients. */
+/**
+ * Allowlisted image model ids only — never accept model names from clients.
+ *
+ * `gpt-image-2` is intentionally NOT here. It was re-added once before (75d487e) on the
+ * strength of a *minimal-payload* probe, but a probe with the real production payload
+ * (`quality: "high"`, `output_format: "png"`) showed it HANGS (>90s, no response) while
+ * `gpt-image-1` returns a real image in ~40s (verified 2026-06-02, scripts/probe-image-payload.mjs).
+ * A >90s hang can't fit the app's 120s AI budget and can't be rescued by the fallback retry
+ * (the retry would run AFTER the hang), so it shipped text-only ads with no image. Keeping it
+ * off the allowlist forces the resolver to fall through to gpt-image-1 even if a dashboard
+ * secret still points OPENAI_IMAGE_MODEL_GENERATE at gpt-image-2. Do NOT re-add it without
+ * re-running the production-payload probe and confirming it returns well under ~60s.
+ */
 export const OPENAI_IMAGE_MODEL_ALLOWLIST = new Set([
   "chatgpt-image-latest",
   "gpt-image-1",
   "gpt-image-1-mini",
   "gpt-image-1.5",
-  "gpt-image-2",
 ]);
 
 const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-1";
 
 const MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024;
 const MIN_EDIT_IMAGE_BYTES = 64;
+
+/**
+ * Per-call timeout for OpenAI image generate/edit requests. MUST stay safely below
+ * the app's EDGE_FN_TIMEOUT_AI_MS (120s — see constants/timing.ts). The server runs
+ * the research and copy stages BEFORE the image call, so if a slow or unavailable
+ * image model lets the request hang near the full client budget, the app aborts the
+ * whole invoke and shows "We couldn't generate ads right now." 60s leaves headroom
+ * for the other stages while still letting a healthy model finish; on timeout the
+ * caller falls back to the uploaded photo (or a no-image ad) instead of hard-failing.
+ */
+const IMAGE_CALL_TIMEOUT_MS = 60_000;
 
 /**
  * Picks the first non-empty allowlisted value from ordered env candidates.
@@ -139,7 +161,8 @@ function usesGptImageGenerationShape(model: string): boolean {
   return !isDalle2(model) && !isDalle3(model);
 }
 
-async function requestImageGenerationJson(
+/** Single generation attempt against one model. Returns null on any failure (HTTP, decode, or timeout). */
+async function attemptImageGeneration(
   openAiKey: string,
   model: string,
   prompt: string,
@@ -172,7 +195,7 @@ async function requestImageGenerationJson(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
     });
     if (!res.ok) {
       const errBody = await res.text();
@@ -180,6 +203,7 @@ async function requestImageGenerationJson(
         JSON.stringify({
           tag: logTag,
           event: "image_gen_http",
+          model,
           status: res.status,
           body: errBody.slice(0, 800),
         }),
@@ -188,9 +212,46 @@ async function requestImageGenerationJson(
     }
     return await decodeImageResponse(res, logTag);
   } catch (e) {
-    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", err: String(e) }));
+    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, err: String(e) }));
     return null;
   }
+}
+
+/**
+ * Generate an image, with a one-shot fallback to the known-good model.
+ *
+ * The configured generate model (from the OPENAI_IMAGE_MODEL_* dashboard secrets) can be a
+ * newer model that the OpenAI account can't call, or that rejects the production payload
+ * (e.g. `quality: "high"` / `output_format: "png"`). When that happens the primary attempt
+ * returns null and a text-only ad would ship with NO image. To keep the flagship feature
+ * resilient we retry exactly once on OPENAI_IMAGE_MODEL_FALLBACK (`gpt-image-1`), which is
+ * verified-good and accepts this same payload.
+ *
+ * Note on the time budget: a model/param rejection comes back as a fast HTTP 4xx, so the
+ * fallback attempt has ample room inside the caller's per-call timeout. A primary that hard
+ * *times out* leaves little headroom for the retry, but that path is no worse than today
+ * (still ends in a null image) — the common, fast-failing case is the one this rescues.
+ */
+async function requestImageGenerationJson(
+  openAiKey: string,
+  model: string,
+  prompt: string,
+  logTag: string,
+  posterStyleDalle3?: boolean,
+): Promise<Uint8Array | null> {
+  const png = await attemptImageGeneration(openAiKey, model, prompt, logTag, posterStyleDalle3);
+  if (png) return png;
+  if (model === OPENAI_IMAGE_MODEL_FALLBACK) return null; // already tried the safe model
+
+  console.log(
+    JSON.stringify({
+      tag: logTag,
+      event: "image_gen_fallback",
+      from: model,
+      to: OPENAI_IMAGE_MODEL_FALLBACK,
+    }),
+  );
+  return await attemptImageGeneration(openAiKey, OPENAI_IMAGE_MODEL_FALLBACK, prompt, logTag, posterStyleDalle3);
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +365,7 @@ export async function enhanceUploadedPhoto(params: {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiKey}` },
       body: form,
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
     });
     if (!res.ok) {
       const errBody = await res.text();

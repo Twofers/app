@@ -173,6 +173,10 @@ async function callResearchModel(params: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      // Bound the (web-search) research call so a slow model can't, together with
+      // copy + image, push total server time past the app's 120s invoke budget.
+      // On timeout the catch below returns null → graceful fallback, never a hard error.
+      signal: AbortSignal.timeout(25_000),
     });
     if (!res.ok) {
       console.log(
