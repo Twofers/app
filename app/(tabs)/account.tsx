@@ -744,7 +744,7 @@ export default function AccountScreen() {
                     <SecondaryButton title={t("account.startBusinessSetup")} onPress={goToBusinessSetup} />
                   ) : (
                     <Pressable onPress={goToBusinessSetup} style={{ paddingVertical: Spacing.sm, alignItems: "center" }}>
-                      <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
+                      <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
                     </Pressable>
                   )}
                   <Pressable
@@ -771,7 +771,7 @@ export default function AccountScreen() {
                 <Text style={{ marginTop: 6, opacity: 0.7, fontSize: 14, lineHeight: 20, color: theme.text }}>
                   {t("account.billingRowSubtitle")}
                 </Text>
-                <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.primary }}>
+                <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
                   {t("billing.goToBilling", { defaultValue: "Go to Billing" })} →
                 </Text>
               </CardShell>
@@ -890,7 +890,7 @@ export default function AccountScreen() {
               <Text style={{ fontWeight: "700", marginTop: 8 }}>{t("account.bizProfileHeader")}</Text>
               <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("account.bizProfileHelp")}</Text>
               <Pressable onPress={() => setBizProfileExpanded((v) => !v)} style={{ paddingVertical: Spacing.sm }}>
-                <Text style={{ color: theme.primary, fontWeight: "800" }}>
+                <Text style={{ color: theme.accentText, fontWeight: "800" }}>
                   {bizProfileExpanded ? t("account.collapseBizProfile") : t("account.expandBizProfile")}
                 </Text>
               </Pressable>
@@ -975,7 +975,7 @@ export default function AccountScreen() {
                         <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
                         {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
                         {r.source === "ai_estimate" && (
-                          <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
                             {t("businessSetup.aiEstimate")}
                           </Text>
                         )}
@@ -1226,7 +1226,7 @@ export default function AccountScreen() {
             onPress={() => setAdvancedOpen((v) => !v)}
             style={{ paddingVertical: Spacing.sm, alignSelf: "flex-start" }}
           >
-            <Text style={{ fontWeight: "800", color: theme.primary, fontSize: 15 }}>
+            <Text style={{ fontWeight: "800", color: theme.accentText, fontSize: 15 }}>
               {advancedOpen ? "− " : "+ "}
               {t("account.advancedOptions")}
             </Text>

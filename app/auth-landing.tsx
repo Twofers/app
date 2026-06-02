@@ -447,7 +447,7 @@ export default function AuthLandingScreen() {
                 }}
                 style={{ marginTop: Spacing.lg, alignSelf: "center", paddingVertical: Spacing.sm }}
               >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.primary }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.accentText }}>
                   {t("authLanding.backToSignIn")}
                 </Text>
               </Pressable>
@@ -652,7 +652,7 @@ export default function AuthLandingScreen() {
                 accessibilityLabel={t("authLanding.forgotPassword")}
                 style={{ alignSelf: "center", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.accentText, opacity: busy ? 0.45 : 1 }}>
                   {t("authLanding.forgotPassword")}
                 </Text>
               </Pressable>
@@ -717,7 +717,7 @@ export default function AuthLandingScreen() {
                 }}
               >
                 {busyAction === "signup" ? <ActivityIndicator color={theme.primary} /> : null}
-                <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 18 }}>
+                <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 18 }}>
                   {t("authLanding.createAccount")}
                 </Text>
               </ScalePressable>

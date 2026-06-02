@@ -438,7 +438,7 @@ export default function SettingsScreen() {
                   accessibilityLabel={t("supportContact.emailA11y")}
                   style={{ paddingVertical: Spacing.xs }}
                 >
-                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
+                  <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
                 </Pressable>
               ) : null}
               {supportPhone ? (
@@ -448,7 +448,7 @@ export default function SettingsScreen() {
                   accessibilityLabel={t("supportContact.phoneA11y")}
                   style={{ paddingVertical: Spacing.xs }}
                 >
-                  <Text style={{ color: theme.primary, fontWeight: "700", fontSize: 15 }}>{supportPhone}</Text>
+                  <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportPhone}</Text>
                 </Pressable>
               ) : null}
             </View>

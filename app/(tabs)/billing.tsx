@@ -370,7 +370,7 @@ export default function BusinessBillingScreen() {
             ) : null}
 
             {syncingCheckout ? (
-              <Text style={{ marginTop: 8, color: Colors.light.primary, fontWeight: "800", fontSize: 13 }}>
+              <Text style={{ marginTop: 8, color: Colors.light.accentText, fontWeight: "800", fontSize: 13 }}>
                 {t("billing.syncingStatus")}
               </Text>
             ) : null}

@@ -22,6 +22,11 @@ export const Colors = {
     tint: '#FF9F1C', // Penguin orange (primary)
     primary: '#FF9F1C', // Use for all big CTAs
     primaryText: '#FFFFFF',
+    // Brand orange #FF9F1C is ~2:1 on white and fails WCAG AA as small text.
+    // Use `accentText` for orange TEXT (time-left, distance, links, pills); keep
+    // `primary`/`tint` for fills, buttons, and tab accents. #B45309 = 5.0:1 on
+    // white, 4.8:1 on surfaceMuted.
+    accentText: '#B45309',
     secondary: '#11181C',
     icon: '#687076',
     tabIconDefault: '#687076',
@@ -44,6 +49,8 @@ export const Colors = {
     tint: '#FF9F1C',
     primary: '#FF9F1C',
     primaryText: '#11181C',
+    // Lighter orange for legible accent text on dark surfaces.
+    accentText: '#FFB454',
     secondary: '#ECEDEE',
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',

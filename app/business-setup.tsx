@@ -551,7 +551,7 @@ export default function BusinessSetupScreen() {
                   {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
                   {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
                   {r.source === "ai_estimate" && (
-                    <Text style={{ fontSize: 11, color: Colors.light.primary, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
                       {t("businessSetup.aiEstimate")}
                     </Text>
                   )}

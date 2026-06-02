@@ -139,14 +139,14 @@ export function DealCardPoster({
               <Text style={{ fontSize: 13, fontWeight: "700", opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 {businessName}
               </Text>
-              {distanceLabel && <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{distanceLabel}</Text>}
+              {distanceLabel && <Text style={{ fontSize: 12, marginTop: 2, color: Colors.light.mutedText }}>{distanceLabel}</Text>}
             </View>
           )}
 
           <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28 }}>{title}</Text>
 
           {price != null && (
-            <Text style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.primary }}>
+            <Text style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.accentText }}>
               ${price.toFixed(2)}
             </Text>
           )}
