@@ -23,6 +23,11 @@
 - Codex decides whether a task is complete.
 - Claude does not self-approve tasks.
 
+Maximum scope per task:
+- Do not modify more than 5 files without stopping.
+- Do not investigate future tasks.
+- Complete one task, validate, then stop.
+
 # TWOFER Task Queue
 
 This file is the working queue for polishing TWOFER until it feels like a company-grade beta. Claude Code should use this as the source of truth for what to build next, what "done" means, and what to report back.
@@ -139,7 +144,7 @@ Expected report:
 
 ## Task 2 - App-Wide Branded Confirmations
 
-Status: Active / in progress.
+Status: Complete / validated 2026-06-03.
 
 Task: Replace native/system-looking confirmation alerts in core flows with TWOFER-branded confirmations.
 
@@ -183,6 +188,12 @@ Expected report:
 - Files converted.
 - Confirmation that action behavior did not change.
 - Remaining native alert inventory.
+
+Findings 2026-06-03:
+
+- Core confirmation flows inspected: sign out/delete account, notification permission explanations, deal lifecycle pause/resume/end/bulk delete, AI draft discard, and wallet pass early close all use `useBrandedConfirm`/`BrandedConfirmModal`.
+- Remaining native `Alert.alert` calls are intentionally left in `app/(tabs)/dashboard.tsx` and `app/deal-analytics/[id].tsx`; both are 3-button export format choosers (`Cancel`/`CSV`/`PDF`), not confirmation flows, and the current branded confirm modal supports one primary action plus an optional neutral secondary action.
+- No code changes were required for Task 2 in this pass; validation was run with `npm run typecheck` and `npm run lint`.
 
 ---
 
