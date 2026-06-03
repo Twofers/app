@@ -679,7 +679,7 @@ Validation results:
 
 ## Task 11 - Release Checklist Automation
 
-Status: Complete / release smoke failed 2026-06-03.
+Status: Complete / release smoke failed 2026-06-03; shop-detail no-live-deal defect fixed 2026-06-03.
 
 Task: Create a repeatable beta release checklist.
 
@@ -744,6 +744,26 @@ Validation results (re-run 2026-06-03):
 - `npx eas-cli build:version:get -p android --profile production --non-interactive` - returned Android versionCode `9`.
 - `npx expo start` was not run because this task changed documentation only.
 - Android smoke was re-run against installed `versionCode=9` after reinstalling `application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk`; fresh screenshots captured successfully, but the result remains failed / partially completed because the Map tab ANR blocked Wallet, Settings, and claim/redeem coverage.
+
+Smoke defect follow-up 2026-06-03:
+
+1. What I found
+   - Business detail always rendered wallet redemption guidance after the live-deals section, even when the filtered active/live deal list was empty.
+2. Why it matters
+   - No-live-deal shops appeared to instruct customers to use or scan a deal that does not exist.
+3. Recommended fix
+   - Gated the redemption guidance card in `app/business/[id].tsx` so it renders only when at least one live deal is present.
+   - Preserved claim logic, navigation, analytics, billing, dashboard, and create-deal behavior.
+4. Files affected
+   - `app/business/[id].tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results (smoke defect fix 2026-06-03):
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Expo/Android smoke was not run in this pass; manual check should open a no-live-deal shop detail and confirm only the empty state appears below active deals, then open a live-deal shop detail and confirm the redemption guidance still appears under the deal card.
 
 ---
 

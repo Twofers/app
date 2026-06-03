@@ -465,30 +465,32 @@ export default function BusinessProfileScreen() {
           )}
         </View>
 
-        <View
-          style={{
-            marginTop: Spacing.xl,
-            borderRadius: Radii.card,
-            borderWidth: 1,
-            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.30)" : "rgba(255,159,28,0.22)",
-            backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.10)" : "rgba(255,159,28,0.08)",
-            padding: Spacing.lg,
-            gap: Spacing.sm,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-            <MaterialIcons name="qr-code-2" size={22} color={theme.accentText} />
-            <Text style={{ flex: 1, color: theme.text, fontSize: 16, lineHeight: 22, fontWeight: "800" }}>
-              {t("consumerWallet.useDealTitle")}
+        {deals.length > 0 ? (
+          <View
+            style={{
+              marginTop: Spacing.xl,
+              borderRadius: Radii.card,
+              borderWidth: 1,
+              borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.30)" : "rgba(255,159,28,0.22)",
+              backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.10)" : "rgba(255,159,28,0.08)",
+              padding: Spacing.lg,
+              gap: Spacing.sm,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <MaterialIcons name="qr-code-2" size={22} color={theme.accentText} />
+              <Text style={{ flex: 1, color: theme.text, fontSize: 16, lineHeight: 22, fontWeight: "800" }}>
+                {t("consumerWallet.useDealTitle")}
+              </Text>
+            </View>
+            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21 }}>
+              {t("consumerWallet.useDealBody")}
+            </Text>
+            <Text style={{ color: theme.accentText, fontSize: 13, lineHeight: 18, fontWeight: "800" }}>
+              {t("consumerWallet.scanQrAtCounter")}
             </Text>
           </View>
-          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21 }}>
-            {t("consumerWallet.useDealBody")}
-          </Text>
-          <Text style={{ color: theme.accentText, fontSize: 13, lineHeight: 18, fontWeight: "800" }}>
-            {t("consumerWallet.scanQrAtCounter")}
-          </Text>
-        </View>
+        ) : null}
       </ScrollView>
     </View>
   );
