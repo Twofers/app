@@ -588,7 +588,7 @@ Validation results:
 
 ## Task 10 - Analytics And Crash Monitoring
 
-Status: Queued.
+Status: Implemented - code validation passed; provider event smoke pending.
 
 Task: Add company-grade observability.
 
@@ -630,6 +630,50 @@ Verification:
 - Show event names and where fired.
 - Show test event evidence from the chosen tool/provider.
 - Confirm source maps/release config if crash monitoring supports it.
+
+Findings 2026-06-03:
+
+1. What I found
+   - Existing analytics used `app_analytics_events` through `ingest-analytics-event`, but the edge allowlist only accepted the older deal/wallet/redeem events.
+   - Pre-auth funnel events such as `app_opened`, `signup_started`, and `signup_completed` could not be recorded because the ingest function required an authenticated user before reading the event name.
+   - There was no crash/error telemetry path carrying app version/build context.
+2. Why it matters
+   - The pilot needs drop-off visibility across app open, signup, onboarding, favorites, alerts, shop views, deal creation, claims, and redemption.
+   - Production crashes need to be visible by app version/build without logging raw errors, tokens, emails, addresses, ZIP coordinates, or full URLs.
+3. Recommended fix
+   - Added best-effort Supabase network observability in `lib/supabase.ts` for `app_opened`, `signup_started`, `signup_completed`, `role_selected`, `shop_viewed`, `favorite_added`, `favorite_removed`, `alert_opt_in_accepted`, `alert_opt_in_declined`, `deal_redeemed`, and `business_deal_created`.
+   - Preserved existing `deal_viewed` and `deal_claimed` call sites and added explicit onboarding tracking for `onboarding_completed`, `location_permission_allowed`, and `location_permission_denied`.
+   - Expanded `ingest-analytics-event` to document/allow the Task 10 event names, permit safe pre-auth events with `user_id = null`, and sanitize context server-side.
+   - Added `app_error` crash/error monitoring through React Native `ErrorUtils` with `app_version`, `device_platform`, `app_build`, `fatal`, `error_name`, and a non-PII `error_hash`.
+4. Files affected
+   - `lib/supabase.ts`
+   - `supabase/functions/ingest-analytics-event/index.ts`
+   - `app/onboarding.tsx`
+5. MVP priority: High
+
+Event map:
+
+- `app_opened`: `lib/supabase.ts` module initialization.
+- `signup_started`, `signup_completed`: Supabase auth signup request/response observed in `lib/supabase.ts`.
+- `role_selected`: `profiles.app_tab_mode` upsert observed in `lib/supabase.ts`.
+- `onboarding_completed`, `location_permission_allowed`, `location_permission_denied`: `app/onboarding.tsx`.
+- `deal_viewed`: existing home/map tracking in `app/(tabs)/index.tsx` and `components/map/map-native-screen.tsx`.
+- `shop_viewed`: single business detail fetch observed in `lib/supabase.ts`.
+- `favorite_added`, `favorite_removed`: favorites insert/delete observed in `lib/supabase.ts`.
+- `alert_opt_in_accepted`, `alert_opt_in_declined`: exact `deal_alerts_enabled` toggle observed in `lib/supabase.ts`.
+- `deal_claimed`: existing claim tracking in `app/(tabs)/index.tsx`, `app/deal/[id].tsx`, and `app/(tabs)/wallet.tsx`.
+- `deal_redeemed`: `redeem-token` and `complete-visual-redeem` function success observed in `lib/supabase.ts`.
+- `business_deal_created`: deals insert observed in `lib/supabase.ts`.
+- `app_error`: React Native `ErrorUtils` handler in `lib/supabase.ts`.
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Vitest was not run because no test wrapper was added and Task 10 did not require additional tests.
+- `npx expo start` was not run; no manual UI check was required for this observability-only change.
+- Provider event evidence was not captured in this pass; verify against local/deployed Supabase by exercising signup, onboarding, favorite, alert toggle, shop detail, create deal, claim, redeem, and a forced JS error, then querying `app_analytics_events`.
+- Source maps were not configured because this uses the existing Supabase analytics table rather than an external crash provider with source-map upload support; release context is stored as `app_version`, `device_platform`, and `context.app_build`.
 
 ---
 

@@ -25,6 +25,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
+import { trackAppAnalyticsEvent, type AppAnalyticsEventName } from "@/lib/app-analytics";
 
 function sanitizeZipInput(raw: string): string {
   const cleaned = raw.replace(/[^\d-]/g, "");
@@ -116,6 +117,23 @@ export default function OnboardingScreen() {
     setSelectedShopIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   }
 
+  function trackOnboardingEvent(
+    eventName: "onboarding_completed" | "location_permission_allowed" | "location_permission_denied",
+    context?: Record<string, string | number | boolean>,
+  ) {
+    trackAppAnalyticsEvent({
+      event_name: eventName as AppAnalyticsEventName,
+      context: {
+        source: "onboarding",
+        location_mode: locationMode,
+        radius_miles: radius,
+        categories_count: categories.length,
+        selected_shops_count: selectedShopIds.length,
+        ...context,
+      },
+    });
+  }
+
   // Step 2 → done: write favorites, save prefs, finish onboarding.
   async function handleFinish() {
     setBusy(true);
@@ -133,10 +151,12 @@ export default function OnboardingScreen() {
         ...(categories.length ? { categoryTags: categories } : {}),
       });
       await setOnboardingComplete(true);
+      trackOnboardingEvent("onboarding_completed");
       router.replace("/(tabs)");
     } catch (err) {
       if (__DEV__) console.warn("[onboarding] finish error:", err);
       await setOnboardingComplete(true);
+      trackOnboardingEvent("onboarding_completed", { finish_fallback: true });
       router.replace("/(tabs)");
     } finally {
       setBusy(false);
@@ -150,10 +170,12 @@ export default function OnboardingScreen() {
       if (locationMode === "gps") {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
+          trackOnboardingEvent("location_permission_denied", { permission_status: status });
           setHint(t("onboarding.locationDenied"));
           setLocationMode("zip");
           return;
         }
+        trackOnboardingEvent("location_permission_allowed", { permission_status: status });
         await setConsumerLocationMode("gps");
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         await goToShops({ lat: pos.coords.latitude, lng: pos.coords.longitude });
