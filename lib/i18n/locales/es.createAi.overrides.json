@@ -4,7 +4,7 @@
   "titleMain": "Anuncios con IA para tu oferta",
   "intro": "Sube una foto del producto. Una nota corta ayuda, pero puedes dejarla vacía: inferimos desde la imagen. Obtendrás tres enfoques; elige uno, ajusta y publica.",
   "demoModeTitle": "Cuenta demo",
-  "demoModeBody": "Salvo que tu proyecto en Supabase tenga OPENAI_API_KEY y AI_ADS_DEMO_USE_LIVE=true, esta cuenta recibe plantillas integradas, no GPT. El resto de cuentas necesitan OPENAI_API_KEY en los secretos de Edge Functions para IA real.",
+  "demoModeBody": "Estás en la cuenta de demostración, por eso las ideas de anuncio usan ejemplos integrados. Todo lo demás funciona con normalidad.",
   "qaToggle": "QA manual (validación)",
   "qaHelp": "Etiqueta ejecuciones para los 12 casos de prueba (ver docs/ai-ad-validation). Aparece en logs de Supabase y analíticas de desarrollo. Opcional — déjalo vacío en uso normal.",
   "capturePhoto": "Capturar foto",
