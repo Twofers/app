@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
@@ -130,25 +130,32 @@ export default function WalletScreen() {
     }
     setBanner(null);
     setLoadFailed(false);
-    await finalizeStaleRedeems();
-    const { data, error } = await supabase
-      .from("deal_claims")
-      .select(
-        "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(120);
+    try {
+      await finalizeStaleRedeems();
+      const { data, error } = await supabase
+        .from("deal_claims")
+        .select(
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(120);
 
-    if (error) {
-      logPostgrestError("wallet deal_claims", error);
+      if (error) {
+        logPostgrestError("wallet deal_claims", error);
+        setLoadFailed(true);
+        setClaims([]);
+        return;
+      }
+      setClaims((data ?? []) as unknown as ClaimRow[]);
+    } catch (error) {
+      const err = error instanceof Error ? { message: error.message } : { message: "Unknown wallet load error" };
+      logPostgrestError("wallet deal_claims", err);
       setLoadFailed(true);
       setClaims([]);
+    } finally {
       setLoading(false);
-      return;
     }
-    setClaims((data ?? []) as unknown as ClaimRow[]);
-    setLoading(false);
   }, [userId]);
 
   useFocusEffect(
@@ -161,8 +168,11 @@ export default function WalletScreen() {
 
   async function onRefresh() {
     setRefreshing(true);
-    await loadClaims();
-    setRefreshing(false);
+    try {
+      await loadClaims();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   function openVerifyForClaim(row: ClaimRow) {
@@ -677,7 +687,12 @@ export default function WalletScreen() {
           onAction={() => void onRefresh()}
         />
       ) : claims.length === 0 ? (
-        <EmptyState title={t("consumerWallet.emptyClaimsTitle")} message={t("consumerWallet.emptyClaimsSub")} />
+        <EmptyState
+          title={t("consumerWallet.emptyClaimsTitle")}
+          message={t("consumerWallet.emptyClaimsSub")}
+          actionLabel={t("consumerWallet.browseOffers")}
+          onAction={() => router.push("/(tabs)" as Href)}
+        />
       ) : (
         <SectionList<WalletListItem, WalletListSection>
           sections={sections}

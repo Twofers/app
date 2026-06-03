@@ -323,6 +323,11 @@ export default function HomeScreen() {
       const filtered = rows.filter((deal) => isDealActiveNow(deal));
       setDeals(filtered);
       await loadUserClaims(filtered.map((d) => d.id));
+    } catch (error) {
+      const err = error instanceof Error ? { message: error.message } : { message: "Unknown deals load error" };
+      logPostgrestError("home screen deals", err);
+      setBanner(t("consumerHome.loadDealsError"));
+      setDeals([]);
     } finally {
       setLoadingDeals(false);
     }
@@ -1192,8 +1197,8 @@ export default function HomeScreen() {
                     <EmptyState
                       title={t("consumerHome.emptyLiveTitle")}
                       message={t("consumerHome.emptyLiveBody")}
-                      actionLabel={businesses.length > 0 ? t("consumerHome.browseShopsCta") : undefined}
-                      onAction={businesses.length > 0 ? () => setFeedSegment("shops") : undefined}
+                      actionLabel={businesses.length > 0 ? t("consumerHome.browseShopsCta") : t("commonUi.tryAgain")}
+                      onAction={businesses.length > 0 ? () => setFeedSegment("shops") : () => void onPullToRefresh()}
                     />
                   )
               : loadingBiz && businesses.length === 0

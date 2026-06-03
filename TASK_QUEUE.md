@@ -240,6 +240,14 @@ Expected report:
 - Which screens got error states.
 - Any states that could not be triggered and why.
 
+Findings 2026-06-03:
+
+- Scoped pass completed for Home Deals, Wallet, and Settings only; Shops, Map, Business dashboard, Create deal, and Claim/redeem were intentionally left for later Task 3 work.
+- Home Deals now keeps the existing skeleton/banner states and adds a retry action to the no-deals empty state when there are no shops available to browse.
+- Wallet load now catches unexpected stale-redeem or query failures, keeps users on a friendly retry state, and gives the empty wallet a "Browse Offers" next action.
+- Settings now shows an explicit loading card, a friendly retryable load error state, and friendly dialogs for failed preference/location/locale/sign-out saves instead of silent failures or raw messages.
+- Validation passed with `npm run typecheck` and `npm run lint`; empty/offline states were not manually forced in Expo during this scoped pass.
+
 ---
 
 ## Task 4 - Auth And Onboarding Polish

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -28,6 +28,7 @@ import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
@@ -52,6 +53,7 @@ export default function SettingsScreen() {
   const { confirm, confirmModal } = useBrandedConfirm();
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
@@ -61,14 +63,21 @@ export default function SettingsScreen() {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
-    setAlertsEnabledState(a);
-    setLocationModeState(p.locationMode);
-    setZip(p.zipCode);
-    setRadius(p.radiusMiles);
-    setNotifModeState(p.notificationPrefs.mode);
-    setConsumerSession(!!session?.user);
-    setLoading(false);
+    setLoadFailed(false);
+    try {
+      const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
+      setAlertsEnabledState(a);
+      setLocationModeState(p.locationMode);
+      setZip(p.zipCode);
+      setRadius(p.radiusMiles);
+      setNotifModeState(p.notificationPrefs.mode);
+      setConsumerSession(!!session?.user);
+    } catch (err: unknown) {
+      devWarn("[settings] reload failed", err);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, [session?.user]);
 
   useFocusEffect(
@@ -85,53 +94,72 @@ export default function SettingsScreen() {
     }
   }
 
+  function showSettingsSaveError() {
+    confirm({
+      iconName: "error-outline",
+      title: t("settingsScreen.saveErrorTitle", { defaultValue: "Couldn't save settings" }),
+      message: t("settingsScreen.saveErrorBody", { defaultValue: "Check your connection and try again." }),
+      confirmLabel: t("commonUi.ok"),
+    });
+  }
+
   async function toggleAlerts(next: boolean) {
-    if (next) {
-      const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
-      if (skippedBecauseExpoGo) {
-        confirm({
-          iconName: "notifications-off",
-          title: t("settingsScreen.alertsPermissionTitle"),
-          message: t("settingsScreen.alertsExpoGoBody"),
-          confirmLabel: t("commonUi.ok"),
-        });
-        return;
+    try {
+      if (next) {
+        const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
+        if (skippedBecauseExpoGo) {
+          confirm({
+            iconName: "notifications-off",
+            title: t("settingsScreen.alertsPermissionTitle"),
+            message: t("settingsScreen.alertsExpoGoBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
+          return;
+        }
+        if (status !== "granted") {
+          confirm({
+            iconName: "notifications-off",
+            title: t("settingsScreen.alertsPermissionTitle"),
+            message: t("settingsScreen.alertsPermissionBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
+          return;
+        }
       }
-      if (status !== "granted") {
-        confirm({
-          iconName: "notifications-off",
-          title: t("settingsScreen.alertsPermissionTitle"),
-          message: t("settingsScreen.alertsPermissionBody"),
-          confirmLabel: t("commonUi.ok"),
-        });
-        return;
-      }
+      await setAlertsEnabled(next);
+      setAlertsEnabledState(next);
+    } catch (err: unknown) {
+      devWarn("[settings] deal alerts update failed", err);
+      showSettingsSaveError();
     }
-    await setAlertsEnabled(next);
-    setAlertsEnabledState(next);
   }
 
   async function applyLocationMode(mode: ConsumerLocationMode) {
-    await setConsumerLocationMode(mode);
-    setLocationModeState(mode);
-    if (mode === "gps") {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        try {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
-        } catch (err: unknown) {
-          devWarn("[settings] GPS lookup failed", err);
-          confirm({
-            iconName: "location-off",
-            title: t("consumerSettings.gpsErrorTitle"),
-            message: t("consumerSettings.gpsErrorBody"),
-            confirmLabel: t("commonUi.ok"),
-          });
+    try {
+      await setConsumerLocationMode(mode);
+      setLocationModeState(mode);
+      if (mode === "gps") {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          try {
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
+          } catch (err: unknown) {
+            devWarn("[settings] GPS lookup failed", err);
+            confirm({
+              iconName: "location-off",
+              title: t("consumerSettings.gpsErrorTitle"),
+              message: t("consumerSettings.gpsErrorBody"),
+              confirmLabel: t("commonUi.ok"),
+            });
+          }
         }
       }
+      await persistCoords();
+    } catch (err: unknown) {
+      devWarn("[settings] location mode update failed", err);
+      showSettingsSaveError();
     }
-    await persistCoords();
   }
 
   async function saveZip() {
@@ -145,38 +173,67 @@ export default function SettingsScreen() {
       });
       return;
     }
-    const geo = await geocodeUsZip(trimmed);
-    if (!geo.ok) {
+    try {
+      const geo = await geocodeUsZip(trimmed);
+      if (!geo.ok) {
+        confirm({
+          iconName: "error-outline",
+          title: t("consumerSettings.zipSaveFailTitle"),
+          message: geo.failure === "invalid_format" ? t("consumerSettings.zipInvalid") : t("consumerSettings.zipLookupFail"),
+          confirmLabel: t("commonUi.ok"),
+        });
+        return;
+      }
+      await setConsumerZipCode(trimmed);
+      if (session?.user?.id) {
+        await updateConsumerProfileZip(session.user.id, trimmed);
+      }
+      await setLastKnownConsumerCoords(geo.lat, geo.lng);
+    } catch (err: unknown) {
+      devWarn("[settings] ZIP save failed", err);
       confirm({
         iconName: "error-outline",
         title: t("consumerSettings.zipSaveFailTitle"),
-        message: geo.failure === "invalid_format" ? t("consumerSettings.zipInvalid") : t("consumerSettings.zipLookupFail"),
+        message: t("consumerSettings.zipLookupFail"),
         confirmLabel: t("commonUi.ok"),
       });
-      return;
     }
-    await setConsumerZipCode(trimmed);
-    if (session?.user?.id) {
-      await updateConsumerProfileZip(session.user.id, trimmed);
-    }
-    await setLastKnownConsumerCoords(geo.lat, geo.lng);
   }
 
   async function applyRadius(m: ConsumerRadiusMiles) {
+    const previous = radius;
     setRadius(m);
-    await setConsumerRadiusMiles(m);
-    void syncConsumerPrefsToServer(session?.user?.id ?? null);
+    try {
+      await setConsumerRadiusMiles(m);
+      void syncConsumerPrefsToServer(session?.user?.id ?? null);
+    } catch (err: unknown) {
+      devWarn("[settings] radius update failed", err);
+      setRadius(previous);
+      showSettingsSaveError();
+    }
   }
 
   async function applyNotifMode(m: ConsumerNotificationMode) {
+    const previous = notifMode;
     setNotifModeState(m);
-    await setConsumerNotificationPrefs({ v: 1, mode: m });
-    void syncConsumerPrefsToServer(session?.user?.id ?? null);
+    try {
+      await setConsumerNotificationPrefs({ v: 1, mode: m });
+      void syncConsumerPrefsToServer(session?.user?.id ?? null);
+    } catch (err: unknown) {
+      devWarn("[settings] notification mode update failed", err);
+      setNotifModeState(previous);
+      showSettingsSaveError();
+    }
   }
 
   async function chooseAppLocale(locale: AppLocale) {
-    await setUiLocalePreference(locale, { manual: true });
-    await i18n.changeLanguage(locale);
+    try {
+      await setUiLocalePreference(locale, { manual: true });
+      await i18n.changeLanguage(locale);
+    } catch (err: unknown) {
+      devWarn("[settings] locale update failed", err);
+      showSettingsSaveError();
+    }
   }
 
   async function performSignOut() {
@@ -197,6 +254,14 @@ export default function SettingsScreen() {
           confirmLabel: t("commonUi.ok"),
         });
       }
+    } catch (err: unknown) {
+      devWarn("[settings] logout failed", err);
+      confirm({
+        iconName: "error-outline",
+        title: t("account.errLogoutFailed"),
+        message: t("settingsScreen.saveErrorBody", { defaultValue: "Check your connection and try again." }),
+        confirmLabel: t("commonUi.ok"),
+      });
     } finally {
       setLogoutBusy(false);
     }
@@ -244,6 +309,32 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
+        {loading ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.xxl,
+              alignItems: "center",
+              gap: Spacing.md,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={{ color: theme.text, fontWeight: "700", fontSize: 16 }}>
+              {t("settingsScreen.loading", { defaultValue: "Loading settings..." })}
+            </Text>
+          </View>
+        ) : loadFailed ? (
+          <EmptyState
+            title={t("settingsScreen.loadErrorTitle", { defaultValue: "Couldn't load settings" })}
+            message={t("settingsScreen.loadErrorBody", { defaultValue: "Check your connection and try again." })}
+            actionLabel={t("commonUi.tryAgain")}
+            onAction={() => void reload()}
+          />
+        ) : (
+        <>
         {consumerSession ? (
           <Pressable
             onPress={() => router.push("/consumer-profile-setup?edit=1" as Href)}
@@ -516,6 +607,8 @@ export default function SettingsScreen() {
             style={{ marginTop: Spacing.md, backgroundColor: "#222" }}
           />
         ) : null}
+        </>
+        )}
       </ScrollView>
       {confirmModal}
     </View>
