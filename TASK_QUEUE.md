@@ -298,7 +298,7 @@ Verification:
 
 ## Task 5 - Deal And Shop Card Polish
 
-Status: Queued.
+Status: Complete / validated 2026-06-03.
 
 Task: Make deal/shop cards feel like a real marketplace.
 
@@ -333,6 +333,15 @@ Verification:
   - no live deal
   - live deal
   - favorited and unfavorited
+
+Findings 2026-06-03:
+
+- Home deal cards now show clearer marketplace hierarchy: business name, live/claimed/redeemed/expired badge, distance/city metadata, deal title, description, and a clearer time/status row.
+- Deal-card favorite hearts now use a fixed 44px touch target, visible selected border/background, accessibility selected state, and the existing optimistic favorite update remains unchanged.
+- Deal-card missing-photo fallback now uses branded orange treatment with cafe icon, business initial, and business name instead of a plain blank placeholder.
+- Shop cards now include a branded storefront/initial fallback tile, stronger card border/pressed state, clearer distance/address styling, live/no-live deal pills, and fixed favorite-heart target.
+- Preserved business logic, claim logic, favorite persistence, analytics, navigation behavior, onboarding, billing, dashboard, and auth screens.
+- Validation passed with `npm run typecheck` and `npm run lint`; Expo/manual Android screenshots were not captured in this pass.
 
 ---
 

@@ -727,6 +727,43 @@ export default function HomeScreen() {
       const offerText = localizedTitle(item, i18n.language) || t("dealDetail.dealFallback");
       const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
       const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
+      const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
+      const businessLocation = item.businesses?.location?.trim() || null;
+      const isFavorite = favoriteBusinessIds.includes(item.business_id);
+      const isLive = st === "live";
+      const statusLabel =
+        st === "live"
+          ? t("dealStatus.live")
+          : st === "claimed"
+            ? t("dealStatus.claimed")
+            : st === "redeemed"
+              ? t("dealStatus.redeemed")
+              : t("dealStatus.expired");
+      const claimButtonTitle =
+        claimingDealId === item.id
+          ? t("dealsBrowse.statusClaiming")
+          : st === "claimed"
+            ? t("dealStatus.claimed")
+            : st === "redeemed"
+              ? t("dealStatus.redeemed")
+              : st === "expired"
+                ? t("dealStatus.expired")
+                : t("dealDetail.claimButton");
+      const statusColor =
+        st === "live"
+          ? { background: theme.successSurface, border: theme.successBorder, text: theme.success }
+          : st === "claimed"
+            ? {
+                background: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.14)",
+                border: colorScheme === "dark" ? "rgba(255,180,84,0.36)" : "rgba(180,83,9,0.22)",
+                text: theme.accentText,
+              }
+            : {
+                background: theme.surfaceMuted,
+                border: theme.border,
+                text: theme.mutedText,
+              };
+      const businessInitial = businessName.trim().charAt(0).toUpperCase() || "T";
       return (
         <View
           style={{
@@ -751,13 +788,34 @@ export default function HomeScreen() {
                 style={{
                   width: "100%",
                   height: heroImageHeight,
-                  backgroundColor: theme.surfaceMuted,
+                  backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.12)" : "rgba(255,159,28,0.09)",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.border,
                 }}
               >
-                <MaterialIcons name="local-cafe" size={40} color={theme.primary} />
+                <View
+                  style={{
+                    width: 68,
+                    height: 68,
+                    borderRadius: 34,
+                    backgroundColor: theme.surface,
+                    borderWidth: 1,
+                    borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.36)" : "rgba(255,159,28,0.28)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialIcons name="local-cafe" size={30} color={theme.primary} />
+                  <Text style={{ color: theme.accentText, fontSize: 17, fontWeight: "900" }} numberOfLines={1}>
+                    {businessInitial}
+                  </Text>
+                </View>
+                <Text style={{ color: theme.text, fontSize: 14, fontWeight: "800" }} numberOfLines={1}>
+                  {businessName}
+                </Text>
                 <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
                   {t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
                 </Text>
@@ -767,19 +825,66 @@ export default function HomeScreen() {
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
               <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
-                {item.businesses?.name ?? t("dealDetail.localBusiness")}
+                {businessName}
               </Text>
               <Pressable
                 onPress={() => void toggleFavorite(item.business_id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isFavorite }}
+                accessibilityLabel={isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
+                style={({ pressed }) => ({
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isFavorite
+                    ? colorScheme === "dark"
+                      ? "rgba(240,70,122,0.18)"
+                      : "rgba(224,36,94,0.12)"
+                    : pressed
+                      ? theme.surfaceMuted
+                      : theme.surface,
+                  borderWidth: 1,
+                  borderColor: isFavorite ? theme.favorite : theme.border,
+                })}
               >
                 <MaterialIcons
-                  name={favoriteBusinessIds.includes(item.business_id) ? "favorite" : "favorite-border"}
-                  size={24}
-                  color={favoriteBusinessIds.includes(item.business_id) ? theme.favorite : theme.icon}
+                  name={isFavorite ? "favorite" : "favorite-border"}
+                  size={25}
+                  color={isFavorite ? theme.favorite : theme.icon}
                 />
               </Pressable>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
+              <View
+                style={{
+                  borderRadius: Radii.md,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: 5,
+                  backgroundColor: statusColor.background,
+                  borderWidth: 1,
+                  borderColor: statusColor.border,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: statusColor.text }}>
+                  {statusLabel}
+                </Text>
+              </View>
+              {distanceLabel ? (
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 13 }} numberOfLines={1}>
+                  {distanceLabel}
+                </Text>
+              ) : null}
+              {businessLocation ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0, maxWidth: "100%" }}>
+                  <MaterialIcons name="place" size={15} color={theme.mutedText} />
+                  <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 13, flexShrink: 1 }} numberOfLines={1}>
+                    {businessLocation}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2}>
               {bogoText}
@@ -787,12 +892,10 @@ export default function HomeScreen() {
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
               {localizedDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
-            <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.md, flexWrap: "wrap" }}>
-              {distanceLabel ? (
-                <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>{distanceLabel}</Text>
-              ) : null}
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>
-                {st === "live" ? formatTimeLeft(item.end_time) : t("dealDetail.expired")}
+            <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
+              <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
+              <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14 }}>
+                {isLive ? formatTimeLeft(item.end_time) : statusLabel}
               </Text>
             </View>
             {claimStatus[item.id]?.message ? (
@@ -802,7 +905,7 @@ export default function HomeScreen() {
             ) : null}
             <View style={{ marginTop: Spacing.sm }}>
               <PrimaryButton
-                title={claimingDealId === item.id ? t("dealsBrowse.statusClaiming") : t("dealDetail.claimButton")}
+                title={claimButtonTitle}
                 onPress={() => void doClaim(item.id)}
                 disabled={claimingDealId === item.id || st !== "live"}
               />
@@ -827,6 +930,7 @@ export default function HomeScreen() {
       nowTick,
       favoriteBusinessIds,
       theme,
+      colorScheme,
       heroImageHeight,
       heroCardHeight,
       toggleFavorite,

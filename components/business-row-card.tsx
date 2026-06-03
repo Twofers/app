@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -28,31 +28,53 @@ export function BusinessRowCard({
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const initial = name.trim().charAt(0).toUpperCase() || "T";
 
   return (
     <HapticScalePressable
       onPress={onPress}
-      style={{
-        borderRadius: 18,
+      style={({ pressed }) => ({
+        borderRadius: Radii.card,
         backgroundColor: theme.surface,
+        borderWidth: 1,
+        borderColor: pressed ? theme.primary : theme.border,
         padding: Spacing.md,
         marginBottom: Spacing.md,
-        boxShadow: "0px 3px 10px rgba(0,0,0,0.07)",
-        elevation: 2,
-      }}
+        ...Shadows.soft,
+      })}
     >
-      <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "flex-start" }}>
+      <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "stretch" }}>
+        <View
+          style={{
+            width: 58,
+            minHeight: 76,
+            borderRadius: Radii.xl,
+            backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.12)",
+            borderWidth: 1,
+            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.32)" : "rgba(255,159,28,0.24)",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+          }}
+        >
+          <MaterialIcons name="storefront" size={22} color={theme.primary} />
+          <Text style={{ fontSize: 18, fontWeight: "900", color: theme.accentText }} numberOfLines={1}>
+            {initial}
+          </Text>
+        </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontWeight: "700", fontSize: 17 }} numberOfLines={2}>
+          <Text style={{ fontWeight: "800", fontSize: 17, lineHeight: 22, color: theme.text }} numberOfLines={2}>
             {name}
           </Text>
           {address ? (
-            <Text style={{ marginTop: Spacing.xs, opacity: 0.65, fontSize: 14 }} numberOfLines={2}>
+            <Text style={{ marginTop: Spacing.xs, color: theme.mutedText, fontSize: 14, lineHeight: 19 }} numberOfLines={2}>
               {address}
             </Text>
           ) : null}
           {distanceLabel ? (
-            <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.5 }}>{distanceLabel}</Text>
+            <Text style={{ marginTop: Spacing.xs, fontSize: 13, color: theme.accentText, fontWeight: "700" }} numberOfLines={1}>
+              {distanceLabel}
+            </Text>
           ) : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm }}>
             {hasLiveDeal ? (
@@ -61,11 +83,11 @@ export function BusinessRowCard({
                   alignSelf: "flex-start",
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: 4,
-                  borderRadius: 8,
-                  backgroundColor: "#dcfce7",
+                  borderRadius: Radii.md,
+                  backgroundColor: theme.successSurface,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.success }}>
                   {t("dealStatus.liveDeal")}
                 </Text>
               </View>
@@ -75,11 +97,13 @@ export function BusinessRowCard({
                   alignSelf: "flex-start",
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: 4,
-                  borderRadius: 8,
-                  backgroundColor: "#f4f4f5",
+                  borderRadius: Radii.md,
+                  backgroundColor: theme.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: theme.border,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#52525b" }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText }}>
                   {t("dealStatus.noLiveDeal")}
                 </Text>
               </View>
@@ -93,9 +117,20 @@ export function BusinessRowCard({
           accessibilityState={{ selected: isFavorite }}
           accessibilityLabel={isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
           style={({ pressed }) => ({
-            padding: 6,
+            width: 44,
+            height: 44,
             borderRadius: 22,
-            backgroundColor: isFavorite ? "rgba(224,36,94,0.12)" : pressed ? "#f4f4f5" : "transparent",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isFavorite
+              ? colorScheme === "dark"
+                ? "rgba(240,70,122,0.18)"
+                : "rgba(224,36,94,0.12)"
+              : pressed
+                ? theme.surfaceMuted
+                : theme.surface,
+            borderWidth: 1,
+            borderColor: isFavorite ? theme.favorite : theme.border,
           })}
         >
           <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={26} color={isFavorite ? theme.favorite : theme.icon} />
