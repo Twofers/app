@@ -289,6 +289,99 @@ function MetricTile({
   );
 }
 
+function SnapshotMetric({
+  label,
+  value,
+  sublabel,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sublabel?: string;
+  accent?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flexBasis: "47%",
+        flexGrow: 1,
+        minHeight: 86,
+        borderRadius: Radii.lg,
+        borderWidth: 1,
+        borderColor: accent ? "rgba(255,159,28,0.42)" : Colors.light.border,
+        backgroundColor: accent ? "rgba(255,159,28,0.12)" : Colors.light.surfaceMuted,
+        padding: Spacing.md,
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.light.mutedText }}>
+        {label}
+      </Text>
+      <Text
+        style={{
+          marginTop: 4,
+          fontSize: 24,
+          fontWeight: "900",
+          color: accent ? Colors.light.accentText : Colors.light.text,
+        }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
+      >
+        {value}
+      </Text>
+      {sublabel ? (
+        <Text style={{ marginTop: 4, fontSize: 12, fontWeight: "600", color: Colors.light.mutedText }} numberOfLines={2}>
+          {sublabel}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function DealStatPill({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flexGrow: 1,
+        flexBasis: "30%",
+        minWidth: 86,
+        borderRadius: Radii.md,
+        backgroundColor: accent ? "rgba(255,159,28,0.14)" : Colors.light.surfaceMuted,
+        borderWidth: 1,
+        borderColor: accent ? "rgba(255,159,28,0.34)" : Colors.light.border,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 8,
+      }}
+    >
+      <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.light.mutedText }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text
+        style={{
+          marginTop: 2,
+          fontSize: 15,
+          fontWeight: "900",
+          color: accent ? Colors.light.accentText : Colors.light.text,
+        }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 function ScrollFilterRow({
   items,
   selected,
@@ -368,6 +461,7 @@ export default function BusinessDashboard() {
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [exportingAnalytics, setExportingAnalytics] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const primary = Colors.light.primary;
 
@@ -491,6 +585,7 @@ export default function BusinessDashboard() {
       } else {
         setInsights(null);
       }
+      setLastUpdatedAt(new Date());
     } catch (err: unknown) {
       setInsights(null);
       setDealsHasMore(false);
@@ -835,6 +930,63 @@ export default function BusinessDashboard() {
     return result;
   }, [deals, dealFilter, dealSort]);
 
+  const liveDeals = useMemo(
+    () => deals.filter((d) => dealScheduleStatus(d) === "live" && !isDealPaused(d)),
+    [deals],
+  );
+
+  const engagementSnapshot = useMemo(() => {
+    if (monthOpens > 0) {
+      return {
+        value: String(monthOpens),
+        sublabel: t("offersDashboard.engagementOpensSub", {
+          defaultValue: "Deal opens this month",
+        }),
+      };
+    }
+    if (monthClaims > 0) {
+      return {
+        value: `${monthRedemptionPct}%`,
+        sublabel: t("offersDashboard.engagementRedemptionSub", {
+          defaultValue: "Claims redeemed this month",
+        }),
+      };
+    }
+    return {
+      value: t("offersDashboard.engagementWaitingValue", {
+        defaultValue: "Waiting",
+      }),
+      sublabel: t("offersDashboard.engagementWaitingSub", {
+        defaultValue: "Shows after customers open or claim a deal",
+      }),
+    };
+  }, [monthClaims, monthOpens, monthRedemptionPct, t]);
+
+  const lastUpdatedLabel = lastUpdatedAt
+    ? t("offersDashboard.lastUpdatedAt", {
+        defaultValue: "Updated {{time}}",
+        time: format(lastUpdatedAt, "h:mm a"),
+      })
+    : t("offersDashboard.lastUpdatedPending", {
+        defaultValue: "Refresh to load latest",
+      });
+
+  const dashboardNextActionTitle =
+    liveDeals.length > 0
+      ? t("offersDashboard.reviewLiveDeal", { defaultValue: "Review live deal" })
+      : deals.length === 0
+        ? t("offersDashboard.createFirstDeal")
+        : t("offersDashboard.createDealCta");
+
+  const handleDashboardNextAction = useCallback(() => {
+    const firstLiveDeal = liveDeals[0];
+    if (firstLiveDeal) {
+      router.push(`/deal-analytics/${firstLiveDeal.id}`);
+      return;
+    }
+    router.push("/create/ai");
+  }, [liveDeals, router]);
+
   const doExportAnalytics = useCallback(async (format: "csv" | "pdf") => {
     setExportingAnalytics(true);
     setBanner(null);
@@ -876,10 +1028,101 @@ export default function BusinessDashboard() {
   const listTop = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
-        <PrimaryButton
-          title={t("offersDashboard.createDealCta")}
-          onPress={() => router.push("/create/ai")}
-        />
+        <CardShell>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: Colors.light.accentText }}>
+                {t("offersDashboard.snapshotEyebrow", { defaultValue: "Merchant snapshot" })}
+              </Text>
+              <Text style={{ marginTop: 4, fontSize: 21, fontWeight: "900", color: Colors.light.text, letterSpacing: -0.2 }}>
+                {liveDeals.length > 0
+                  ? liveDeals.length === 1
+                    ? t("offersDashboard.snapshotLiveTitleOne", {
+                        defaultValue: "1 live deal ready for customers",
+                      })
+                    : t("offersDashboard.snapshotLiveTitleMany", {
+                        defaultValue: "{{count}} live deals ready for customers",
+                        count: liveDeals.length,
+                      })
+                  : t("offersDashboard.snapshotNoLiveTitle", {
+                      defaultValue: "No live deal right now",
+                    })}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+                {lastUpdatedLabel}
+              </Text>
+            </View>
+            <View
+              style={{
+                borderRadius: Radii.pill,
+                backgroundColor: liveDeals.length > 0 ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                borderWidth: 1,
+                borderColor: liveDeals.length > 0 ? "rgba(255,159,28,0.36)" : Colors.light.border,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: 7,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "900",
+                  color: liveDeals.length > 0 ? Colors.light.accentText : Colors.light.mutedText,
+                }}
+              >
+                {t("offersDashboard.liveDealCount", {
+                  defaultValue: "{{count}} live",
+                  count: liveDeals.length,
+                })}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.lg }}>
+            <SnapshotMetric
+              label={t("offersDashboard.metricLiveDeals", { defaultValue: "Live deals" })}
+              value={String(liveDeals.length)}
+              sublabel={
+                deals.length > 0
+                  ? t("offersDashboard.metricLiveDealsSub", {
+                      defaultValue: "{{count}} total deals",
+                      count: deals.length,
+                    })
+                  : t("offersDashboard.metricLiveDealsEmptySub", {
+                      defaultValue: "Create one to start tracking",
+                    })
+              }
+              accent={liveDeals.length > 0}
+            />
+            <SnapshotMetric
+              label={t("offersDashboard.metricClaimsMonth", { defaultValue: "Claims" })}
+              value={String(monthClaims)}
+              sublabel={t("offersDashboard.metricMonthToDate", { defaultValue: "This month" })}
+            />
+            <SnapshotMetric
+              label={t("offersDashboard.metricRedeemsMonth", { defaultValue: "Redemptions" })}
+              value={String(monthRedeems)}
+              sublabel={t("offersDashboard.metricMonthToDate", { defaultValue: "This month" })}
+            />
+            <SnapshotMetric
+              label={t("offersDashboard.metricEngagement", { defaultValue: "Engagement" })}
+              value={engagementSnapshot.value}
+              sublabel={engagementSnapshot.sublabel}
+              accent={monthOpens > 0 || monthClaims > 0}
+            />
+          </View>
+
+          <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: Colors.light.mutedText }}>
+            {t("offersDashboard.dashboardDataNote", {
+              defaultValue: "Claims and redemptions use customer activity. Engagement shows opens when available, otherwise redemption rate after claims.",
+            })}
+          </Text>
+
+          <PrimaryButton
+            title={dashboardNextActionTitle}
+            onPress={handleDashboardNextAction}
+            style={{ marginTop: Spacing.md }}
+          />
+        </CardShell>
         {billingBlocked ? (
           <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
             <CardShell variant="muted">
@@ -971,7 +1214,26 @@ export default function BusinessDashboard() {
         ) : null}
       </View>
     ),
-    [t, router, billingBlocked, deals.length, dealFilter, dealSort, bulkSelectMode, selectedDealIds.size, filteredDeals, primary],
+    [
+      t,
+      router,
+      billingBlocked,
+      deals.length,
+      dealFilter,
+      dealSort,
+      bulkSelectMode,
+      selectedDealIds.size,
+      filteredDeals,
+      primary,
+      liveDeals.length,
+      lastUpdatedLabel,
+      monthClaims,
+      monthRedeems,
+      monthOpens,
+      engagementSnapshot,
+      dashboardNextActionTitle,
+      handleDashboardNextAction,
+    ],
   );
 
   const listFooter = useMemo(
@@ -1038,9 +1300,13 @@ export default function BusinessDashboard() {
               delay={160}
             />
             <MetricTile
-              label={t("offersDashboard.metricNewCustomers")}
+              label={t("offersDashboard.metricUniqueRedeemers", {
+                defaultValue: "Unique redeemers",
+              })}
               value={String(uniqueRedeemers)}
-              sublabel={t("offersDashboard.metricNewCustomersSub")}
+              sublabel={t("offersDashboard.metricUniqueRedeemersSub", {
+                defaultValue: "Customers with a redeemed claim",
+              })}
               delay={200}
             />
             <MetricTile
@@ -1067,7 +1333,7 @@ export default function BusinessDashboard() {
         ) : null}
 
         <Animated.View entering={FadeInDown.duration(440).delay(120).springify()}>
-          <CardShell>
+          <CardShell variant="muted">
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
               <View
                 style={{
@@ -1078,11 +1344,13 @@ export default function BusinessDashboard() {
                 }}
               />
               <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text, flex: 1 }}>
-                {t("offersDashboard.inventorySaved")}
+                {t("offersDashboard.dataCoverageTitle", { defaultValue: "What this dashboard can prove" })}
               </Text>
             </View>
             <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600" }}>
-              {t("offersDashboard.inventoryPlaceholder")}
+              {t("offersDashboard.dataCoverageBody", {
+                defaultValue: "TWOFER shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
+              })}
             </Text>
           </CardShell>
         </Animated.View>
@@ -1232,7 +1500,16 @@ export default function BusinessDashboard() {
                 const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
                 return (
                   <Animated.View entering={FadeInDown.duration(360).delay(60).springify()}>
-                    <CardShell>
+                    <CardShell
+                      style={
+                        active
+                          ? {
+                              borderWidth: 2,
+                              borderColor: "rgba(255,159,28,0.56)",
+                            }
+                          : undefined
+                      }
+                    >
                       <HapticScalePressable
                         onPress={() => {
                           if (bulkSelectMode) {
@@ -1336,18 +1613,27 @@ export default function BusinessDashboard() {
                                 marginTop: Spacing.md,
                               }}
                             >
-                              <Text style={{ fontSize: 12, opacity: 0.62, fontWeight: "600" }}>
-                                {t("offersDashboard.rowClaims", { count: item.claims })}
-                              </Text>
-                              <Text style={{ fontSize: 12, opacity: 0.62, fontWeight: "600" }}>
-                                · {t("offersDashboard.rowRedeems", { count: item.redeems })}
-                              </Text>
-                              <Text style={{ fontSize: 12, opacity: 0.62, fontWeight: "600" }}>
-                                · {t("offersDashboard.rowExpired", { count: item.expiredUnredeemed })}
-                              </Text>
-                              <Text style={{ fontSize: 12, opacity: 0.62, fontWeight: "600" }}>
-                                · {t("offersDashboard.rowConv", { pct: item.conversion })}
-                              </Text>
+                              <DealStatPill
+                                label={t("offersDashboard.dealStatClaims", { defaultValue: "Claims" })}
+                                value={String(item.claims)}
+                                accent={active}
+                              />
+                              <DealStatPill
+                                label={t("offersDashboard.dealStatRedeems", { defaultValue: "Redeemed" })}
+                                value={String(item.redeems)}
+                              />
+                              <DealStatPill
+                                label={t("offersDashboard.dealStatConversion", { defaultValue: "Redeem rate" })}
+                                value={
+                                  item.claims > 0
+                                    ? `${item.conversion}%`
+                                    : t("offersDashboard.noClaimsYetShort", { defaultValue: "No claims" })
+                                }
+                              />
+                              <DealStatPill
+                                label={t("offersDashboard.dealStatExpired", { defaultValue: "Expired" })}
+                                value={String(item.expiredUnredeemed)}
+                              />
                             </View>
                           </View>
                         </View>
@@ -1370,24 +1656,54 @@ export default function BusinessDashboard() {
                 );
               }}
               ListEmptyComponent={
-                <View style={{ gap: Spacing.md }}>
-                  <Text style={{ opacity: 0.68, fontSize: 15, fontWeight: "500" }}>
-                    {t("offersDashboard.emptyDeals")}
-                  </Text>
-                  <HapticScalePressable
-                    onPress={() => router.push("/create/ai")}
-                    style={{
-                      borderRadius: 16,
-                      padding: Spacing.lg,
-                      backgroundColor: primary,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
-                      {t("offersDashboard.createFirstDeal")}
+                deals.length === 0 ? (
+                  <CardShell>
+                    <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text, letterSpacing: -0.2 }}>
+                      {t("offersDashboard.emptyFirstDealTitle", {
+                        defaultValue: "Launch your first TWOFER deal",
+                      })}
                     </Text>
-                  </HapticScalePressable>
-                </View>
+                    <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, fontWeight: "600", color: Colors.light.mutedText }}>
+                      {t("offersDashboard.emptyFirstDealBody", {
+                        defaultValue: "Create one strong 2-for-1 offer. After customers claim or redeem it, this dashboard will show the real activity.",
+                      })}
+                    </Text>
+                    <View style={{ marginTop: Spacing.md, gap: Spacing.xs }}>
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: Colors.light.text }}>
+                        {t("offersDashboard.emptyNextStep", { defaultValue: "Next step: publish a deal customers can claim today." })}
+                      </Text>
+                      <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: "600", color: Colors.light.mutedText }}>
+                        {t("offersDashboard.emptyMetricsNote", {
+                          defaultValue: "Claims, redemptions, and engagement will stay blank until there is customer activity.",
+                        })}
+                      </Text>
+                    </View>
+                    <PrimaryButton
+                      title={t("offersDashboard.createFirstDeal")}
+                      onPress={() => router.push("/create/ai")}
+                      style={{ marginTop: Spacing.md }}
+                    />
+                  </CardShell>
+                ) : (
+                  <CardShell variant="muted">
+                    <Text style={{ fontSize: 17, fontWeight: "900", color: Colors.light.text }}>
+                      {t("offersDashboard.noFilteredDealsTitle", { defaultValue: "No deals match this view" })}
+                    </Text>
+                    <Text style={{ marginTop: Spacing.sm, fontSize: 14, lineHeight: 20, fontWeight: "600", color: Colors.light.mutedText }}>
+                      {t("offersDashboard.noFilteredDealsBody", {
+                        defaultValue: "Clear filters to see all existing deals and their activity.",
+                      })}
+                    </Text>
+                    <SecondaryButton
+                      title={t("offersDashboard.clearFilters", { defaultValue: "Clear filters" })}
+                      onPress={() => {
+                        setDealFilter("all");
+                        setDealSort("newest");
+                      }}
+                      style={{ marginTop: Spacing.md }}
+                    />
+                  </CardShell>
+                )
               }
             />
           )}

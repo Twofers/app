@@ -525,7 +525,7 @@ Validation results:
 
 ## Task 9 - Business Dashboard Polish
 
-Status: Queued.
+Status: Implemented - code validation passed; manual Android screenshots pending.
 
 Task: Make the business dashboard feel like a real merchant tool.
 
@@ -557,6 +557,32 @@ Verification:
   - dashboard with data
   - live deal visible
   - deal action menu/confirmation
+
+Findings:
+
+1. What I found
+   - The dashboard already loaded real month-to-date claims, redemptions, deal opens, per-deal conversion, and deal status data.
+   - The first screen did not summarize live deals or show when the data last refreshed.
+   - The empty state was generic, and filtered-empty results used the same message as a brand-new business.
+   - The dashboard included a hardcoded inventory-saved estimate that was not backed by current data.
+2. Why it matters
+   - Founding cafes need to know quickly whether a live offer exists and whether customers are claiming or redeeming it.
+   - Fake or implied metrics can reduce trust when the app only has TWOFER activity data.
+3. Recommended fix
+   - Added a merchant snapshot with live deal count, claims, redemptions, conservative engagement, last updated time, and one clear next action.
+   - Improved live deal cards with stronger live treatment and labeled claim/redeem/redeem-rate pills.
+   - Added a first-deal empty state with explicit next steps and a separate clear-filters state.
+   - Replaced the hardcoded inventory estimate with a data-coverage note.
+4. Files affected
+   - `app/(tabs)/dashboard.tsx`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Vitest was not run because dashboard calculations were not changed.
+- `npx expo start` and screenshots were not run in this pass; manual Android screenshots remain for empty dashboard, dashboard with data, live deal visible, and deal action menu/confirmation.
 
 ---
 
