@@ -105,11 +105,14 @@ function RoleCard({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  // Selected cards use an OPAQUE light-orange fill. A translucent rgba fill let the
+  // Android elevation shadow bleed through the card body, producing a muddy beige block
+  // behind the text; an opaque tint keeps the border, shadow, and text clean.
   const fill =
     selected && colorScheme === "dark"
-      ? "rgba(255,159,28,0.14)"
+      ? "#3B301F"
       : selected
-        ? "rgba(255,159,28,0.1)"
+        ? "#FFF3E0"
         : theme.surface;
   return (
     <View style={{ flex: 1 }}>

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -28,6 +27,7 @@ import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Banner } from "@/components/ui/banner";
 import { QrModal } from "@/components/qr-modal";
+import { BrandedConfirmModal } from "@/components/ui/branded-confirm-modal";
 import { BusinessRowCard } from "@/components/business-row-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -186,6 +186,9 @@ export default function HomeScreen() {
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
+  // Branded deal-alert dialog (replaces native Alert.alert): "consent" asks to opt in,
+  // "permissionDenied" explains when the OS permission was declined.
+  const [alertDialog, setAlertDialog] = useState<null | "consent" | "permissionDenied">(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
@@ -436,21 +439,18 @@ export default function HomeScreen() {
   const enableDealAlerts = useCallback(async () => {
     const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
     if (skippedBecauseExpoGo || status !== "granted") {
-      Alert.alert(t("consumerHome.alertConsentTitle"), t("settingsScreen.alertsPermissionBody"));
+      setAlertDialog("permissionDenied");
       return;
     }
     await setAlertsEnabled(true);
     await setConsumerNotificationPrefs({ v: 1, mode: "favorites_only" });
-  }, [t]);
+  }, []);
   const maybeOfferDealAlerts = useCallback(async () => {
     if (alertConsentAskedRef.current) return;
     if (await getAlertsEnabled()) return; // already opted in — don't nag
     alertConsentAskedRef.current = true;
-    Alert.alert(t("consumerHome.alertConsentTitle"), t("consumerHome.alertConsentBody"), [
-      { text: t("consumerHome.alertConsentDecline"), style: "cancel" },
-      { text: t("consumerHome.alertConsentAccept"), onPress: () => void enableDealAlerts() },
-    ]);
-  }, [t, enableDealAlerts]);
+    setAlertDialog("consent");
+  }, []);
 
   const toggleFavorite = useCallback(
     async (businessId: string) => {
@@ -912,9 +912,13 @@ export default function HomeScreen() {
           >
             <MaterialIcons name="place" size={18} color={theme.primary} />
             <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }} numberOfLines={1}>
-              {userGeo
-                ? t("consumerHome.locationChipWithRadius", { miles: radiusMiles })
-                : t("consumerHome.locationChipNoLocation")}
+              {!userGeo
+                ? t("consumerHome.locationChipNoLocation")
+                : feedSegment === "shops"
+                  ? // Shops is intentionally metro-wide (not radius-filtered), so don't
+                    // imply the 5 mi radius applies here — only Deals are radius-filtered.
+                    t("consumerHome.shopsLocationChipMetro")
+                  : t("consumerHome.locationChipWithRadius", { miles: radiusMiles })}
             </Text>
           </Pressable>
         </View>
@@ -1217,6 +1221,28 @@ export default function HomeScreen() {
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
+      />
+
+      <BrandedConfirmModal
+        visible={alertDialog === "consent"}
+        iconName="notifications-active"
+        title={t("consumerHome.alertConsentTitle")}
+        message={t("consumerHome.alertConsentBody")}
+        confirmLabel={t("consumerHome.alertConsentAccept")}
+        cancelLabel={t("consumerHome.alertConsentDecline")}
+        onConfirm={() => {
+          setAlertDialog(null);
+          void enableDealAlerts();
+        }}
+        onCancel={() => setAlertDialog(null)}
+      />
+      <BrandedConfirmModal
+        visible={alertDialog === "permissionDenied"}
+        iconName="notifications-off"
+        title={t("consumerHome.alertsDeniedTitle")}
+        message={t("settingsScreen.alertsPermissionBody")}
+        confirmLabel={t("commonUi.ok")}
+        onConfirm={() => setAlertDialog(null)}
       />
     </View>
     </KeyboardScreen>
