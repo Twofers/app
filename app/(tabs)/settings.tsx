@@ -35,6 +35,7 @@ import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useTabMode } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -47,6 +48,7 @@ export default function SettingsScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const { confirm, confirmModal } = useBrandedConfirm();
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
@@ -86,11 +88,21 @@ export default function SettingsScreen() {
     if (next) {
       const { status, skippedBecauseExpoGo } = await requestNotificationPermissionsSafe();
       if (skippedBecauseExpoGo) {
-        Alert.alert(t("settingsScreen.alertsPermissionTitle"), t("settingsScreen.alertsExpoGoBody"));
+        confirm({
+          iconName: "notifications-off",
+          title: t("settingsScreen.alertsPermissionTitle"),
+          message: t("settingsScreen.alertsExpoGoBody"),
+          confirmLabel: t("commonUi.ok"),
+        });
         return;
       }
       if (status !== "granted") {
-        Alert.alert(t("settingsScreen.alertsPermissionTitle"), t("settingsScreen.alertsPermissionBody"));
+        confirm({
+          iconName: "notifications-off",
+          title: t("settingsScreen.alertsPermissionTitle"),
+          message: t("settingsScreen.alertsPermissionBody"),
+          confirmLabel: t("commonUi.ok"),
+        });
         return;
       }
     }
@@ -178,14 +190,14 @@ export default function SettingsScreen() {
   }
 
   function confirmLogout() {
-    Alert.alert(t("account.logoutConfirmTitle"), t("account.logoutConfirmBody"), [
-      { text: t("commonUi.cancel"), style: "cancel" },
-      {
-        text: t("account.logoutConfirmCta"),
-        style: "destructive",
-        onPress: () => void performSignOut(),
-      },
-    ]);
+    confirm({
+      iconName: "logout",
+      title: t("account.logoutConfirmTitle"),
+      message: t("account.logoutConfirmBody"),
+      confirmLabel: t("account.logoutConfirmCta"),
+      onConfirm: () => void performSignOut(),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   // FIX: Added key parameter to fix React "unique key" warning on radius pills
@@ -490,6 +502,7 @@ export default function SettingsScreen() {
           />
         ) : null}
       </ScrollView>
+      {confirmModal}
     </View>
     </KeyboardScreen>
   );

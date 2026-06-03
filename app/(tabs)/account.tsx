@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -32,6 +32,7 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { aiGenerateDealCopy, aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
@@ -88,6 +89,7 @@ export default function AccountScreen() {
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const { confirm, confirmModal } = useBrandedConfirm();
 
   const completeness = useMemo(
     () => calculateProfileCompleteness(businessProfile),
@@ -295,14 +297,14 @@ export default function AccountScreen() {
   }
 
   function confirmLogout() {
-    Alert.alert(t("account.logoutConfirmTitle"), t("account.logoutConfirmBody"), [
-      { text: t("commonUi.cancel"), style: "cancel" },
-      {
-        text: t("account.logoutConfirmCta"),
-        style: "destructive",
-        onPress: () => void performSignOut(),
-      },
-    ]);
+    confirm({
+      iconName: "logout",
+      title: t("account.logoutConfirmTitle"),
+      message: t("account.logoutConfirmBody"),
+      confirmLabel: t("account.logoutConfirmCta"),
+      onConfirm: () => void performSignOut(),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   function confirmDeleteAccount() {
@@ -313,14 +315,14 @@ export default function AccountScreen() {
     const message = businessId
       ? t("deleteAccount.body")
       : t("deleteAccount.bodyConsumer");
-    Alert.alert(t("deleteAccount.title"), message, [
-      { text: t("commonUi.cancel"), style: "cancel" },
-      {
-        text: t("deleteAccount.confirmDestructive"),
-        style: "destructive",
-        onPress: () => void runDeleteAccount(),
-      },
-    ]);
+    confirm({
+      iconName: "delete-forever",
+      title: t("deleteAccount.title"),
+      message,
+      confirmLabel: t("deleteAccount.confirmDestructive"),
+      onConfirm: () => void runDeleteAccount(),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   async function runDeleteAccount() {
@@ -334,10 +336,14 @@ export default function AccountScreen() {
       const code = e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined;
       if (code === DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER) {
         setBanner({ message: t("deleteAccount.businessOwnerBlockedShort"), tone: "info" });
-        Alert.alert(t("deleteAccount.businessOwnerBlockedTitle"), t("deleteAccount.businessOwnerBlockedBody"), [
-          { text: t("deleteAccount.alertDismiss"), style: "cancel" },
-          { text: t("deleteAccount.contactSupportCta"), onPress: () => void openWebsiteUrl(SUPPORT_URL) },
-        ]);
+        confirm({
+          iconName: "info-outline",
+          title: t("deleteAccount.businessOwnerBlockedTitle"),
+          message: t("deleteAccount.businessOwnerBlockedBody"),
+          confirmLabel: t("deleteAccount.contactSupportCta"),
+          onConfirm: () => void openWebsiteUrl(SUPPORT_URL),
+          cancelLabel: t("deleteAccount.alertDismiss"),
+        });
         return;
       }
       // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner
@@ -346,13 +352,14 @@ export default function AccountScreen() {
       const raw = e instanceof Error ? e.message : "";
       const msg = raw ? translateKnownApiMessage(raw, t) : t("deleteAccount.errFailed");
       setBanner({ message: msg, tone: "error" });
-      Alert.alert(t("deleteAccount.errFailed"), t("deleteAccount.fallbackWebBody"), [
-        { text: t("deleteAccount.alertDismiss"), style: "cancel" },
-        {
-          text: t("deleteAccount.openWebsiteFallbackCta"),
-          onPress: () => void openWebsiteUrl(DELETE_ACCOUNT_URL),
-        },
-      ]);
+      confirm({
+        iconName: "error-outline",
+        title: t("deleteAccount.errFailed"),
+        message: t("deleteAccount.fallbackWebBody"),
+        confirmLabel: t("deleteAccount.openWebsiteFallbackCta"),
+        onConfirm: () => void openWebsiteUrl(DELETE_ACCOUNT_URL),
+        cancelLabel: t("deleteAccount.alertDismiss"),
+      });
     } finally {
       setBusy(false);
     }
@@ -1310,6 +1317,7 @@ export default function AccountScreen() {
           ) : null}
         </ScrollView>
       )}
+      {confirmModal}
     </View>
     </KeyboardScreen>
   );

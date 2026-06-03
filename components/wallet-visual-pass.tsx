@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Text,
   View,
@@ -22,6 +21,7 @@ import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { completeVisualRedeem } from "@/lib/functions";
 import { Spacing } from "@/lib/screen-layout";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 
 type WalletVisualPassModalProps = {
   visible: boolean;
@@ -70,6 +70,7 @@ export function WalletVisualPassModal({
 }: WalletVisualPassModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { confirm, confirmModal } = useBrandedConfirm();
   const pulseScale = useSharedValue(1);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
@@ -159,14 +160,14 @@ export function WalletVisualPassModal({
   function confirmClose() {
     if (completing || completingRef.current) return;
     if (remainingSec > 0) {
-      Alert.alert(t("consumerWallet.passCloseEarlyTitle"), t("consumerWallet.passCloseEarlyBody"), [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        {
-          text: t("consumerWallet.passCloseEarlyConfirm"),
-          style: "default",
-          onPress: () => onClose(),
-        },
-      ]);
+      confirm({
+        iconName: "schedule",
+        title: t("consumerWallet.passCloseEarlyTitle"),
+        message: t("consumerWallet.passCloseEarlyBody"),
+        confirmLabel: t("consumerWallet.passCloseEarlyConfirm"),
+        onConfirm: () => onClose(),
+        cancelLabel: t("commonUi.cancel"),
+      });
       return;
     }
     onClose();
@@ -276,6 +277,7 @@ export function WalletVisualPassModal({
           </Text>
         </HapticScalePressable>
       </View>
+      {confirmModal}
     </Modal>
   );
 }

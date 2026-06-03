@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   Text,
@@ -30,6 +29,7 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors } from "@/constants/theme";
 import {
   aiGenerateAd,
@@ -239,6 +239,7 @@ const IMAGE_PRESET_KEYS_PHOTO = [
 export default function AiDealScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const { confirm, confirmModal } = useBrandedConfirm();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const params = useLocalSearchParams<{
     templateId?: string;
@@ -472,16 +473,16 @@ export default function AiDealScreen() {
     composeDirty,
     useCallback(
       ({ data }) => {
-        Alert.alert(t("dealDraft.unsavedTitle"), t("dealDraft.unsavedBody"), [
-          { text: t("dealDraft.keepEditing"), style: "cancel" },
-          {
-            text: t("dealDraft.discard"),
-            style: "destructive",
-            onPress: () => navigation.dispatch(data.action),
-          },
-        ]);
+        confirm({
+          iconName: "edit-off",
+          title: t("dealDraft.unsavedTitle"),
+          message: t("dealDraft.unsavedBody"),
+          confirmLabel: t("dealDraft.discard"),
+          onConfirm: () => navigation.dispatch(data.action),
+          cancelLabel: t("dealDraft.keepEditing"),
+        });
       },
-      [navigation, t],
+      [navigation, t, confirm],
     ),
   );
 
@@ -2001,6 +2002,7 @@ export default function AiDealScreen() {
           </>
         )}
       </ScrollView>
+      {confirmModal}
     </KeyboardScreen>
   );
 }

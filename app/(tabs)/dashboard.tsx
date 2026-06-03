@@ -27,6 +27,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Fonts, Radii } from "@/constants/theme";
 import { canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useTabMode } from "@/lib/tab-mode";
 import {
@@ -328,6 +329,7 @@ export default function BusinessDashboard() {
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { mode, ready: modeReady } = useTabMode();
   const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { confirm, confirmModal } = useBrandedConfirm();
 
   const [banner, setBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -555,18 +557,14 @@ export default function BusinessDashboard() {
 
   function endDealEarly(dealId: string) {
     if (!businessId || endingDealId) return;
-    Alert.alert(
-      t("offersDashboard.endDealConfirmTitle"),
-      t("offersDashboard.endDealConfirmBody"),
-      [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        {
-          text: t("offersDashboard.endDealEarly"),
-          style: "destructive",
-          onPress: () => void doEndDealEarly(dealId),
-        },
-      ],
-    );
+    confirm({
+      iconName: "stop-circle",
+      title: t("offersDashboard.endDealConfirmTitle"),
+      message: t("offersDashboard.endDealConfirmBody"),
+      confirmLabel: t("offersDashboard.endDealEarly"),
+      onConfirm: () => void doEndDealEarly(dealId),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   async function doEndDealEarly(dealId: string) {
@@ -591,17 +589,14 @@ export default function BusinessDashboard() {
 
   function pauseDeal(dealId: string) {
     if (!businessId || pausingDealId) return;
-    Alert.alert(
-      t("offersDashboard.pauseConfirmTitle", "Pause this deal?"),
-      t("offersDashboard.pauseConfirmBody", "The deal will be hidden from customers but can be resumed later."),
-      [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        {
-          text: t("offersDashboard.pauseDeal", "Pause"),
-          onPress: () => void doPauseDeal(dealId),
-        },
-      ],
-    );
+    confirm({
+      iconName: "pause-circle-filled",
+      title: t("offersDashboard.pauseConfirmTitle", "Pause this deal?"),
+      message: t("offersDashboard.pauseConfirmBody", "The deal will be hidden from customers but can be resumed later."),
+      confirmLabel: t("offersDashboard.pauseDeal", "Pause"),
+      onConfirm: () => void doPauseDeal(dealId),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   async function doPauseDeal(dealId: string) {
@@ -625,17 +620,14 @@ export default function BusinessDashboard() {
 
   function resumeDeal(dealId: string) {
     if (!businessId || pausingDealId) return;
-    Alert.alert(
-      t("offersDashboard.resumeConfirmTitle", "Resume this deal?"),
-      t("offersDashboard.resumeConfirmBody", "The deal will be visible to customers again."),
-      [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        {
-          text: t("offersDashboard.resumeDeal", "Resume"),
-          onPress: () => void doResumeDeal(dealId),
-        },
-      ],
-    );
+    confirm({
+      iconName: "play-circle-filled",
+      title: t("offersDashboard.resumeConfirmTitle", "Resume this deal?"),
+      message: t("offersDashboard.resumeConfirmBody", "The deal will be visible to customers again."),
+      confirmLabel: t("offersDashboard.resumeDeal", "Resume"),
+      onConfirm: () => void doResumeDeal(dealId),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   async function doResumeDeal(dealId: string) {
@@ -737,18 +729,14 @@ export default function BusinessDashboard() {
   function bulkDelete() {
     if (!businessId || selectedDealIds.size === 0) return;
     const count = selectedDealIds.size;
-    Alert.alert(
-      t("offersDashboard.bulkDeleteConfirmTitle", { defaultValue: "Delete {{count}} deals?", count }),
-      t("offersDashboard.bulkDeleteConfirmBody", "This cannot be undone. Active claims can still be redeemed."),
-      [
-        { text: t("commonUi.cancel"), style: "cancel" },
-        {
-          text: t("offersDashboard.bulkDelete", { defaultValue: "Delete ({{count}})", count }),
-          style: "destructive",
-          onPress: () => void doBulkDelete(),
-        },
-      ],
-    );
+    confirm({
+      iconName: "delete",
+      title: t("offersDashboard.bulkDeleteConfirmTitle", { defaultValue: "Delete {{count}} deals?", count }),
+      message: t("offersDashboard.bulkDeleteConfirmBody", "This cannot be undone. Active claims can still be redeemed."),
+      confirmLabel: t("offersDashboard.bulkDelete", { defaultValue: "Delete ({{count}})", count }),
+      onConfirm: () => void doBulkDelete(),
+      cancelLabel: t("commonUi.cancel"),
+    });
   }
 
   async function doBulkDelete() {
@@ -1573,6 +1561,7 @@ export default function BusinessDashboard() {
           ) : null}
         </View>
       </Modal>
+      {confirmModal}
     </View>
     </AppErrorBoundary>
   );
