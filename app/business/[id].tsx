@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { formatValiditySummary, isDealActiveNow } from "@/lib/deal-time";
 import { Banner } from "@/components/ui/banner";
@@ -16,6 +16,7 @@ import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type BizRow = {
   id: string;
@@ -27,6 +28,7 @@ type BizRow = {
   phone: string | null;
   hours_text: string | null;
   short_description: string | null;
+  logo_url: string | null;
 };
 
 type DealRow = {
@@ -48,12 +50,16 @@ type DealRow = {
 export default function BusinessProfileScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
+  const { id: idParam, distance: distanceParam } = useLocalSearchParams<{ id: string | string[]; distance?: string | string[] }>();
   const id = typeof idParam === "string" ? idParam : idParam?.[0] ?? "";
+  const distanceLabel =
+    typeof distanceParam === "string" ? distanceParam.trim() : distanceParam?.[0]?.trim() ?? "";
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { userId, isLoggedIn, loading: authLoading } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [biz, setBiz] = useState<BizRow | null>(null);
-  const [deal, setDeal] = useState<DealRow | null>(null);
+  const [deals, setDeals] = useState<DealRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -61,7 +67,7 @@ export default function BusinessProfileScreen() {
   const load = useCallback(async () => {
     if (!id?.trim()) {
       setBiz(null);
-      setDeal(null);
+      setDeals([]);
       setBanner(t("businessProfile.notFound"));
       setLoading(false);
       return;
@@ -70,12 +76,12 @@ export default function BusinessProfileScreen() {
     setBanner(null);
     const { data: b, error: eb } = await supabase
       .from("businesses")
-      .select("id,name,address,location,latitude,longitude,phone,hours_text,short_description")
+      .select("id,name,address,location,latitude,longitude,phone,hours_text,short_description,logo_url")
       .eq("id", id)
       .maybeSingle();
     if (eb || !b) {
       setBiz(null);
-      setDeal(null);
+      setDeals([]);
       // Don't leak Postgres details into the banner. Translate known patterns so
       // RLS / network / "not found" all render as friendly localized text.
       setBanner(eb?.message ? translateKnownApiMessage(eb.message, t) : t("businessProfile.notFound"));
@@ -96,8 +102,7 @@ export default function BusinessProfileScreen() {
       .limit(12);
 
     const raw = (deals ?? []) as DealRow[];
-    const live = raw.find((d) => isDealActiveNow(d)) ?? null;
-    setDeal(live);
+    setDeals(raw.filter((d) => isDealActiveNow(d)));
 
     if (userId) {
       const { data: fav } = await supabase
@@ -129,6 +134,13 @@ export default function BusinessProfileScreen() {
     if (Number.isFinite(lat) && Number.isFinite(lng)) return true;
     return !!(biz.address?.trim() || biz.location?.trim());
   }, [biz]);
+
+  const displayAddress = useMemo(() => {
+    if (!biz) return "";
+    return biz.address?.trim() || biz.location?.trim() || "";
+  }, [biz]);
+
+  const logoUri = useMemo(() => biz?.logo_url?.trim() || null, [biz]);
 
   async function toggleFavorite() {
     if (!userId || !id) {
@@ -184,8 +196,8 @@ export default function BusinessProfileScreen() {
 
   if (authLoading) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" />
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -196,16 +208,36 @@ export default function BusinessProfileScreen() {
 
   if (loading) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <Text style={{ fontSize: 18, fontWeight: "700" }}>{t("businessProfile.loading")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: Spacing.md, fontSize: 16, fontWeight: "700", color: theme.text }}>
+          {t("businessProfile.loading")}
+        </Text>
       </View>
     );
   }
 
   if (!biz) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg }}>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg, backgroundColor: theme.background }}>
         {banner ? <Banner message={banner} tone="error" /> : null}
+        <View
+          style={{
+            borderRadius: Radii.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            padding: Spacing.xxl,
+            alignItems: "center",
+            gap: Spacing.sm,
+            ...Shadows.soft,
+          }}
+        >
+          <MaterialIcons name="storefront" size={34} color={theme.primary} />
+          <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text, textAlign: "center" }}>
+            {t("businessProfile.notFound")}
+          </Text>
+        </View>
         <SecondaryButton
           title={t("commonUi.goBack")}
           onPress={() => {
@@ -218,7 +250,7 @@ export default function BusinessProfileScreen() {
   }
 
   return (
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -227,114 +259,279 @@ export default function BusinessProfileScreen() {
       >
         <View
           style={{
-            height: 80,
-            borderRadius: 16,
+            height: 158,
+            borderRadius: Radii.card,
             marginBottom: Spacing.lg,
             backgroundColor: "rgba(255,159,28,0.10)",
             alignItems: "center",
             justifyContent: "center",
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.26)" : "rgba(255,159,28,0.18)",
           }}
         >
-          <Image
-            source={require("../../assets/images/splash-icon.png")}
-            style={{ width: 56, height: 56, opacity: 0.45 }}
-            contentFit="contain"
-          />
+          {logoUri ? (
+            <Image source={{ uri: logoUri }} style={{ width: "100%", height: "100%" }} contentFit="contain" />
+          ) : (
+            <Image
+              source={require("../../assets/images/splash-icon.png")}
+              style={{ width: 76, height: 76, opacity: 0.34 }}
+              contentFit="contain"
+            />
+          )}
         </View>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{biz.name}</Text>
+        <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: "800", color: theme.text }}>{biz.name}</Text>
+        {biz.short_description?.trim() ? (
+          <Text style={{ marginTop: Spacing.sm, color: theme.mutedText, fontSize: 16, lineHeight: 24 }}>
+            {biz.short_description}
+          </Text>
+        ) : null}
 
         <Pressable
           onPress={toggleFavorite}
-          style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.md, minHeight: 44 }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isFavorite }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: Spacing.sm,
+            marginTop: Spacing.lg,
+            minHeight: 54,
+            borderRadius: Radii.lg,
+            borderWidth: 1,
+            borderColor: isFavorite ? theme.favorite : theme.border,
+            backgroundColor: isFavorite
+              ? colorScheme === "dark"
+                ? "rgba(240,70,122,0.16)"
+                : "rgba(224,36,94,0.10)"
+              : theme.surface,
+            paddingHorizontal: Spacing.md,
+          }}
         >
-          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? Colors.light.favorite : Colors.light.icon} />
+          <MaterialIcons name={isFavorite ? "favorite" : "favorite-border"} size={24} color={isFavorite ? theme.favorite : theme.icon} />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600" }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
               {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
             </Text>
-            <Text style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>{t("consumerHome.favoriteAlertsHint")}</Text>
+            <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: 2 }}>{t("consumerHome.favoriteAlertsHint")}</Text>
           </View>
         </Pressable>
 
-        {biz.address || biz.location ? (
-          <Text style={{ marginTop: Spacing.lg, fontSize: 16, lineHeight: 24, opacity: 0.85 }}>
-            {biz.address?.trim() || biz.location}
-          </Text>
-        ) : null}
-
-        <View style={{ marginTop: Spacing.md }}>
-          <PrimaryButton title={t("businessProfile.directions")} onPress={openDirections} disabled={!canOpenDirections} />
-        </View>
-
-        <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 15, fontWeight: "700" }}>{t("businessProfile.hours")}</Text>
-          <Text style={{ opacity: 0.75, lineHeight: 22 }}>
-            {biz.hours_text?.trim() ? biz.hours_text : t("businessProfile.notProvided")}
-          </Text>
-        </View>
-
-        <View style={{ marginTop: Spacing.lg, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 15, fontWeight: "700" }}>{t("businessProfile.phone")}</Text>
-          {biz.phone?.trim() ? (
-            <Pressable onPress={dialPhone}>
-              <Text style={{ fontSize: 16, color: "#2563eb", fontWeight: "600" }}>{biz.phone}</Text>
-            </Pressable>
-          ) : (
-            <Text style={{ opacity: 0.75 }}>{t("businessProfile.notProvided")}</Text>
-          )}
-        </View>
-
-        {biz.short_description?.trim() ? (
-          <View style={{ marginTop: Spacing.lg }}>
-            <Text style={{ opacity: 0.8, lineHeight: 22 }}>{biz.short_description}</Text>
+        <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
+          <View
+            style={{
+              borderRadius: Radii.card,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              padding: Spacing.lg,
+              gap: Spacing.md,
+              ...Shadows.soft,
+            }}
+          >
+            <InfoRow
+              icon="location-on"
+              label={t("businessSetup.address")}
+              value={displayAddress || t("businessProfile.notProvided")}
+              theme={theme}
+            />
+            {distanceLabel ? (
+              <InfoRow icon="near-me" value={distanceLabel} theme={theme} emphasize />
+            ) : null}
+            <PrimaryButton title={t("businessProfile.directions")} onPress={openDirections} disabled={!canOpenDirections} />
+            {!canOpenDirections ? (
+              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 19 }}>
+                {t("businessProfile.mapsUnavailable")}
+              </Text>
+            ) : null}
           </View>
-        ) : null}
 
-        <View style={{ marginTop: Spacing.xxl, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: "#eee" }}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: Spacing.md }}>{t("businessProfile.liveDeal")}</Text>
-          {deal ? (
-            <Pressable
-              onPress={() => router.push(`/deal/${deal.id}` as Href)}
+          <View
+            style={{
+              borderRadius: Radii.card,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              padding: Spacing.lg,
+              gap: Spacing.lg,
+            }}
+          >
+            <InfoRow
+              icon="schedule"
+              label={t("businessProfile.hours")}
+              value={biz.hours_text?.trim() ? biz.hours_text : t("businessProfile.notProvided")}
+              theme={theme}
+            />
+            <View style={{ height: 1, backgroundColor: theme.border }} />
+            <InfoRow
+              icon="call"
+              label={t("businessProfile.phone")}
+              value={biz.phone?.trim() ? biz.phone : t("businessProfile.notProvided")}
+              theme={theme}
+              onPress={biz.phone?.trim() ? dialPhone : undefined}
+              emphasize={!!biz.phone?.trim()}
+            />
+          </View>
+        </View>
+
+        <View style={{ marginTop: Spacing.xxl, gap: Spacing.md }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
+            <Text style={{ flex: 1, fontSize: 20, lineHeight: 26, fontWeight: "800", color: theme.text }}>
+              {deals.length > 0
+                ? t("consumerWallet.activeDeals", { count: deals.length })
+                : t("businessProfile.liveDeal")}
+            </Text>
+            {deals.length > 0 ? <DealStatusPill status="live" /> : null}
+          </View>
+          {deals.length > 0 ? (
+            <View style={{ gap: Spacing.lg }}>
+              {deals.map((deal) => {
+                const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+                return (
+                  <Pressable
+                    key={deal.id}
+                    onPress={() => router.push(`/deal/${deal.id}` as Href)}
+                    accessibilityRole="button"
+                    accessibilityLabel={deal.title ?? t("dealDetail.dealFallback")}
+                    style={{
+                      borderRadius: Radii.card,
+                      overflow: "hidden",
+                      backgroundColor: theme.surface,
+                      ...Shadows.soft,
+                    }}
+                  >
+                    {uri ? (
+                      <Image source={{ uri }} style={{ width: "100%", aspectRatio: 16 / 9 }} contentFit="cover" />
+                    ) : (
+                      <View
+                        style={{
+                          height: 140,
+                          backgroundColor: "rgba(255,159,28,0.10)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Image
+                          source={require("../../assets/images/splash-icon.png")}
+                          style={{ width: 58, height: 58, opacity: 0.3 }}
+                          contentFit="contain"
+                        />
+                      </View>
+                    )}
+                    <View style={{ padding: Spacing.lg, gap: Spacing.sm }}>
+                      <Text style={{ fontSize: 19, lineHeight: 25, fontWeight: "800", color: theme.text }}>
+                        {deal.title ?? t("dealDetail.dealFallback")}
+                      </Text>
+                      {deal.description?.trim() ? (
+                        <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21 }} numberOfLines={3}>
+                          {deal.description}
+                        </Text>
+                      ) : null}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.xs }}>
+                        <MaterialIcons name="schedule" size={17} color={theme.accentText} />
+                        <Text style={{ flex: 1, color: theme.accentText, fontSize: 13, lineHeight: 18, fontWeight: "800" }}>
+                          {formatValiditySummary(deal, {
+                            lang: i18n.language,
+                            endsVerb: t("commonUi.dealEndsVerb"),
+                            t,
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <View
               style={{
-                borderRadius: 18,
-                overflow: "hidden",
-                backgroundColor: "#fff",
-                boxShadow: "0px 2px 8px rgba(0,0,0,0.06)",
-                elevation: 2,
+                borderRadius: Radii.card,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+                padding: Spacing.xxl,
+                alignItems: "center",
+                gap: Spacing.sm,
               }}
             >
-              {(() => {
-                const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
-                return uri ? (
-                  <Image source={{ uri }} style={{ width: "100%", aspectRatio: 16 / 9 }} contentFit="cover" />
-                ) : (
-                  <View
-                    style={{ height: 120, backgroundColor: "#ececec", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Text style={{ opacity: 0.5 }}>{t("dealDetail.noImage")}</Text>
-                  </View>
-                );
-              })()}
-              <View style={{ padding: Spacing.md, gap: Spacing.sm }}>
-                <DealStatusPill status="live" />
-                <Text style={{ fontSize: 18, fontWeight: "700" }}>{deal.title ?? t("dealDetail.dealFallback")}</Text>
-                <Text style={{ opacity: 0.7, fontSize: 14 }} numberOfLines={3}>
-                  {deal.description ?? ""}
-                </Text>
-                <Text style={{ opacity: 0.65, fontSize: 13 }}>
-                  {formatValiditySummary(deal, {
-                    lang: i18n.language,
-                    endsVerb: t("commonUi.dealEndsVerb"),
-                    t,
-                  })}
-                </Text>
-              </View>
-            </Pressable>
-          ) : (
-            <Text style={{ opacity: 0.72, lineHeight: 22 }}>{t("businessProfile.noLiveDeal")}</Text>
+              <MaterialIcons name="confirmation-number" size={34} color={theme.icon} />
+              <Text style={{ fontSize: 17, lineHeight: 23, fontWeight: "800", color: theme.text, textAlign: "center" }}>
+                {t("dealStatus.noLiveDeal")}
+              </Text>
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21, textAlign: "center" }}>
+                {t("businessProfile.noLiveDeal")}
+              </Text>
+            </View>
           )}
+        </View>
+
+        <View
+          style={{
+            marginTop: Spacing.xl,
+            borderRadius: Radii.card,
+            borderWidth: 1,
+            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.30)" : "rgba(255,159,28,0.22)",
+            backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.10)" : "rgba(255,159,28,0.08)",
+            padding: Spacing.lg,
+            gap: Spacing.sm,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <MaterialIcons name="qr-code-2" size={22} color={theme.accentText} />
+            <Text style={{ flex: 1, color: theme.text, fontSize: 16, lineHeight: 22, fontWeight: "800" }}>
+              {t("consumerWallet.useDealTitle")}
+            </Text>
+          </View>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21 }}>
+            {t("consumerWallet.useDealBody")}
+          </Text>
+          <Text style={{ color: theme.accentText, fontSize: 13, lineHeight: 18, fontWeight: "800" }}>
+            {t("consumerWallet.scanQrAtCounter")}
+          </Text>
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+type InfoRowProps = {
+  icon: ComponentProps<typeof MaterialIcons>["name"];
+  label?: string;
+  value: string;
+  theme: typeof Colors.light;
+  onPress?: () => void;
+  emphasize?: boolean;
+};
+
+function InfoRow({ icon, label, value, theme, onPress, emphasize }: InfoRowProps) {
+  const content = (
+    <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "flex-start" }}>
+      <MaterialIcons name={icon} size={21} color={emphasize ? theme.accentText : theme.icon} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {label ? (
+          <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 17, fontWeight: "800", textTransform: "uppercase" }}>
+            {label}
+          </Text>
+        ) : null}
+        <Text
+          style={{
+            marginTop: label ? 2 : 0,
+            color: emphasize ? theme.accentText : theme.text,
+            fontSize: 15,
+            lineHeight: 22,
+            fontWeight: emphasize ? "800" : "600",
+          }}
+        >
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+
+  if (!onPress) return content;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button">
+      {content}
+    </Pressable>
   );
 }

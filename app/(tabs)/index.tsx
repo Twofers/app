@@ -63,6 +63,14 @@ const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
 const NEARBY_FETCH_MILES = 60;
 const FEED_DEAL_SELECT =
   "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+
+function businessDetailHref(businessId: string, distanceLabel?: string | null): Href {
+  const encodedId = encodeURIComponent(businessId);
+  return (distanceLabel
+    ? `/business/${encodedId}?distance=${encodeURIComponent(distanceLabel)}`
+    : `/business/${encodedId}`) as Href;
+}
+
 type Deal = {
   id: string;
   title: string | null;
@@ -911,7 +919,7 @@ export default function HomeScreen() {
               />
             </View>
             <Pressable
-              onPress={() => router.push(`/business/${item.business_id}` as Href)}
+              onPress={() => router.push(businessDetailHref(item.business_id, distanceLabel))}
               accessibilityRole="button"
               accessibilityLabel={t("consumerHome.shopInfoLink")}
               style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
@@ -963,7 +971,7 @@ export default function HomeScreen() {
           hasLiveDeal={liveDealIds.has(b.id)}
           isFavorite={favoriteBusinessIds.includes(b.id)}
           distanceLabel={distanceLabel}
-          onPress={() => router.push(`/business/${b.id}` as Href)}
+          onPress={() => router.push(businessDetailHref(b.id, distanceLabel))}
           onToggleFavorite={() => void toggleFavorite(b.id)}
         />
       );
@@ -1225,7 +1233,7 @@ export default function HomeScreen() {
                 return (
                   <Pressable
                     key={fid}
-                    onPress={() => router.push(`/business/${fid}` as Href)}
+                    onPress={() => router.push(businessDetailHref(fid))}
                     style={{
                       paddingVertical: Spacing.sm,
                       paddingHorizontal: Spacing.md,

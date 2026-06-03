@@ -28,6 +28,11 @@ Maximum scope per task:
 - Do not investigate future tasks.
 - Complete one task, validate, then stop.
 
+If a task requires discovery:
+- Identify candidate files once.
+- Do not perform repeated repository-wide searches.
+- Move immediately to implementation.
+
 # TWOFER Task Queue
 
 This file is the working queue for polishing TWOFER until it feels like a company-grade beta. Claude Code should use this as the source of truth for what to build next, what "done" means, and what to report back.
@@ -347,7 +352,7 @@ Findings 2026-06-03:
 
 ## Task 6 - Shop Detail Screen
 
-Status: Queued.
+Status: Completed.
 
 Task: Add or polish a real shop detail screen.
 
@@ -374,8 +379,8 @@ Acceptance:
 
 Verification:
 
-- Run typecheck.
-- Run lint.
+- Run typecheck. Passed: `npm run typecheck`.
+- Run lint. Passed: `npm run lint`.
 - Run vitest if navigation/data tests are added.
 - Run `npx expo start` only if runtime behavior changed and a manual UI check is needed.
 - Android smoke from Shops list to detail and back.
@@ -384,6 +389,19 @@ Verification:
   - shop without deal
   - favorited state
   - missing logo/photo fallback
+
+Findings:
+
+- Existing `/business/[id]` route was present, so Task 6 was a focused polish pass rather than new navigation.
+- Business detail now shows a larger logo/fallback hero, clearer favorite state, visible address/directions card, optional distance when opened from the consumer feed, active deal cards, no-live-deal empty state, and localized redemption guidance using existing wallet copy.
+- Claim flow, deal detail navigation, analytics, billing, onboarding, and dashboard behavior were not changed.
+
+Validation results:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- Vitest was not run because no tests were added.
+- Expo/Android smoke was not run in this pass; manual smoke should verify Shops list to detail and back, favorited state, missing-logo fallback, and shop with/without live deals.
 
 ---
 
