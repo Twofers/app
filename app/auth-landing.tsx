@@ -58,12 +58,20 @@ function ScalePressable({
   style,
   children,
   accessibilityLabel,
+  accessibilityState,
+  onFocus,
+  onBlur,
+  onPressStateChange,
 }: {
   onPress: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
   accessibilityLabel?: string;
+  accessibilityState?: { disabled?: boolean; selected?: boolean; busy?: boolean };
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onPressStateChange?: (pressed: boolean) => void;
 }) {
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -71,14 +79,19 @@ function ScalePressable({
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
       onPress={onPress}
       disabled={disabled}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onPressIn={() => {
         if (disabled) return;
+        onPressStateChange?.(true);
         triggerLightHaptic();
         scale.value = springPressIn();
       }}
       onPressOut={() => {
+        onPressStateChange?.(false);
         scale.value = springPressOut();
       }}
       style={[style, rStyle]}
@@ -105,6 +118,8 @@ function RoleCard({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
+  const [pressed, setPressed] = useState(false);
   // Selected cards use an OPAQUE light-orange fill. A translucent rgba fill let the
   // Android elevation shadow bleed through the card body, producing a muddy beige block
   // behind the text; an opaque tint keeps the border, shadow, and text clean.
@@ -119,21 +134,50 @@ function RoleCard({
       <ScalePressable
         disabled={disabled}
         onPress={onPress}
+        accessibilityLabel={`${title}. ${hint}`}
+        accessibilityState={{ selected, disabled }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onPressStateChange={setPressed}
         style={{
           flex: 1,
-          minHeight: 90,
-          borderRadius: Radii.lg,
+          minHeight: 96,
+          borderRadius: Radii.card,
           borderWidth: selected ? 2 : 1,
-          borderColor: selected ? theme.primary : theme.border,
-          backgroundColor: fill,
+          borderColor: selected || focused || pressed ? theme.primary : theme.border,
+          backgroundColor: pressed && !selected ? theme.surfaceMuted : fill,
           padding: Spacing.md,
           justifyContent: "center",
-          boxShadow: selected ? "0px 6px 16px rgba(255,159,28,0.2)" : "0px 2px 8px rgba(0,0,0,0.06)",
-          elevation: selected ? 4 : 1,
-          opacity: disabled ? 0.55 : 1,
+          boxShadow: selected ? "0px 8px 18px rgba(255,159,28,0.18)" : "0px 2px 8px rgba(0,0,0,0.06)",
+          elevation: selected ? 4 : pressed ? 2 : 1,
+          opacity: disabled ? 0.6 : 1,
         }}
       >
-        <Text style={{ fontWeight: "900", fontSize: 16, color: theme.text, marginBottom: 4 }}>{title}</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: Spacing.sm,
+            marginBottom: 6,
+          }}
+        >
+          <Text style={{ flex: 1, fontWeight: "900", fontSize: 16, lineHeight: 20, color: theme.text }}>{title}</Text>
+          <View
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              borderWidth: 2,
+              borderColor: selected ? theme.primary : theme.border,
+              backgroundColor: selected ? theme.primary : theme.surface,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {selected ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primaryText }} /> : null}
+          </View>
+        </View>
         <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>{hint}</Text>
       </ScalePressable>
     </View>
@@ -332,6 +376,12 @@ export default function AuthLandingScreen() {
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
   const mutedLegal = colorScheme === "dark" ? "rgba(236,237,238,0.55)" : "rgba(17,24,28,0.55)";
+  const consumerSubtitle = t("authLanding.subtitleConsumerPolished", {
+    defaultValue: "Claim high-value local BOGO deals nearby.",
+  });
+  const businessSubtitle = t("authLanding.subtitleBusinessPolished", {
+    defaultValue: "Create simple BOGO offers and redeem customer tickets.",
+  });
 
   async function chooseLocale(locale: AppLocale) {
     await setUiLocalePreference(locale, { manual: true });
@@ -349,30 +399,25 @@ export default function AuthLandingScreen() {
             // FIX: Reduced top padding from xxl to sm to push penguin up.
             // Keeps content higher so Login button is visible without scrolling.
             paddingTop: Math.max(insets.top, Spacing.xs),
-            paddingBottom: insets.bottom + Spacing.xxl,
-            paddingHorizontal: Spacing.xxl,
+            paddingBottom: insets.bottom + Spacing.xxxl * 3,
+            paddingHorizontal: Spacing.lg,
           }}
         >
-          <View style={{ alignItems: "center", marginBottom: Spacing.sm }}>
-            {/* FIX: Penguin enlarged significantly. Container clips the "TWOFER"
-                text baked into splash-icon.png so it doesn't duplicate the
-                orange Text below. Penguin is now the dominant hero element. */}
-            <View style={{ maxWidth: "75%", aspectRatio: 360 / 160, overflow: "hidden", alignItems: "center" }}>
-              <Image
-                source={require("../assets/images/splash-icon.png")}
-                style={{ width: 300, height: 330 }}
-                resizeMode="contain"
-                accessibilityIgnoresInvertColors
-                accessibilityLabel={t("authLanding.heroA11y")}
-              />
-            </View>
+          <View style={{ alignItems: "center", marginBottom: Spacing.md }}>
+            <Image
+              source={require("../assets/images/android-icon-foreground.png")}
+              style={{ width: 118, height: 118, marginBottom: -Spacing.sm }}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={t("authLanding.heroA11y")}
+            />
             <Text
               style={{
-                fontSize: 36,
+                fontSize: 34,
+                lineHeight: 38,
                 fontWeight: "900",
                 color: theme.primary,
-                letterSpacing: 2,
-                marginTop: 2,
+                letterSpacing: 1.5,
               }}
             >
               TWOFER
@@ -386,11 +431,9 @@ export default function AuthLandingScreen() {
                 textAlign: "center",
               }}
             >
-              {selectedMode === "business"
-                ? t("authLanding.subtitleBusiness")
-                : t("authLanding.subtitle")}
+              {selectedMode === "business" ? businessSubtitle : consumerSubtitle}
             </Text>
-            <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
+            <View style={{ marginTop: Spacing.md, alignItems: "center" }}>
               <View style={{ flexDirection: "row", gap: Spacing.sm }}>
                 {APP_LOCALES.map((locale) => {
                   const active = i18n.language.startsWith(locale);
@@ -403,6 +446,8 @@ export default function AuthLandingScreen() {
                       accessibilityState={{ selected: active }}
                       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                       style={{
+                        minHeight: 44,
+                        minWidth: 48,
                         borderRadius: Radii.sm,
                         // Border grows 1→2 when active; padding shrinks 3→2 so the
                         // outer size stays fixed and the row doesn't shift.
@@ -415,6 +460,8 @@ export default function AuthLandingScreen() {
                           ? "0px 4px 10px rgba(255,159,28,0.25)"
                           : "0px 1px 3px rgba(0,0,0,0.08)",
                         elevation: active ? 3 : 1,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
                       <View style={{ borderRadius: Radii.sm - 2, overflow: "hidden" }}>
@@ -477,7 +524,9 @@ export default function AuthLandingScreen() {
                   colorScheme={colorScheme}
                   selected={selectedMode === "customer"}
                   title={t("authLanding.roleCustomer")}
-                  hint={t("authLanding.roleCustomerHint")}
+                  hint={t("authLanding.roleCustomerPolishedHint", {
+                    defaultValue: "Find nearby offers, claim tickets, and redeem in person.",
+                  })}
                   onPress={() => void selectRole("customer")}
                   disabled={busy || roleBusy}
                 />
@@ -486,7 +535,9 @@ export default function AuthLandingScreen() {
                   colorScheme={colorScheme}
                   selected={selectedMode === "business"}
                   title={t("authLanding.roleBusiness")}
-                  hint={t("authLanding.roleBusinessHint")}
+                  hint={t("authLanding.roleBusinessPolishedHint", {
+                    defaultValue: "Post BOGO offers, track claims, and scan redemptions.",
+                  })}
                   onPress={() => void selectRole("business")}
                   disabled={busy || roleBusy}
                 />
@@ -653,7 +704,16 @@ export default function AuthLandingScreen() {
                 disabled={busy}
                 accessibilityRole="link"
                 accessibilityLabel={t("authLanding.forgotPassword")}
-                style={{ alignSelf: "center", marginTop: Spacing.sm, marginBottom: Spacing.md, paddingVertical: 4 }}
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+                style={{
+                  alignSelf: "center",
+                  minHeight: 44,
+                  marginTop: Spacing.sm,
+                  marginBottom: Spacing.sm,
+                  paddingVertical: Spacing.sm,
+                  paddingHorizontal: Spacing.md,
+                  justifyContent: "center",
+                }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: theme.accentText, opacity: busy ? 0.45 : 1 }}>
                   {t("authLanding.forgotPassword")}
@@ -681,6 +741,7 @@ export default function AuthLandingScreen() {
                 disabled={!canSubmit}
                 onPress={() => void handleLogIn()}
                 accessibilityLabel={busyAction === "login" ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
+                accessibilityState={{ disabled: !canSubmit, busy: busyAction === "login" }}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,
@@ -692,7 +753,7 @@ export default function AuthLandingScreen() {
                   boxShadow: "0px 4px 10px rgba(0,0,0,0.15)",
                   elevation: 3,
                   opacity: canSubmit ? 1 : 0.5,
-                  marginBottom: Spacing.md,
+                  marginBottom: Spacing.sm,
                 }}
               >
                 {busyAction === "login" ? <ActivityIndicator color={theme.primaryText} /> : null}
@@ -705,22 +766,23 @@ export default function AuthLandingScreen() {
                 disabled={!canSubmit}
                 onPress={() => void handleSignUp()}
                 accessibilityLabel={t("authLanding.createAccount")}
+                accessibilityState={{ disabled: !canSubmit, busy: busyAction === "signup" }}
                 style={{
-                  minHeight: 58,
+                  minHeight: 52,
                   borderRadius: Radii.lg,
                   backgroundColor: theme.surface,
-                  borderWidth: 2,
+                  borderWidth: 1.5,
                   borderColor: theme.primary,
                   justifyContent: "center",
                   alignItems: "center",
                   flexDirection: "row",
                   gap: Spacing.sm,
                   opacity: canSubmit ? 1 : 0.5,
-                  marginBottom: Spacing.xl,
+                  marginBottom: Spacing.lg,
                 }}
               >
                 {busyAction === "signup" ? <ActivityIndicator color={theme.primary} /> : null}
-                <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 18 }}>
+                <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 16 }}>
                   {t("authLanding.createAccount")}
                 </Text>
               </ScalePressable>
@@ -731,7 +793,7 @@ export default function AuthLandingScreen() {
             <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }}>
               {t("authLanding.legalFooter")}
             </Text>
-            <LegalExternalLinks align="center" />
+            <LegalExternalLinks align="center" showSupport={false} />
           </View>
         </ScrollView>
       </KeyboardScreen>

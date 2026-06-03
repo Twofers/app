@@ -40,6 +40,10 @@ function toIsoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function sanitizeZipInput(raw: string): string {
+  return raw.replace(/[^\d-]/g, "").slice(0, 10);
+}
+
 export default function ConsumerProfileSetupScreen() {
   const { t } = useTranslation();
   const { session, isInitialLoading: authLoading } = useAuthSession();
@@ -151,7 +155,6 @@ export default function ConsumerProfileSetupScreen() {
 
   return (
     <KeyboardScreen>
-    {/* FIX: Added theme colors (C.text, C.mutedText, C.background) for dark mode support */}
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>
         {isEdit ? t("consumerProfile.editTitle") : t("consumerProfile.title")}
@@ -168,22 +171,22 @@ export default function ConsumerProfileSetupScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.lg }}
+        contentContainerStyle={{ paddingBottom: scrollBottom + Spacing.xxxl, gap: Spacing.lg }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
         <View>
           <Text style={{ fontWeight: "700", marginBottom: 6, color: C.text }}>{t("consumerProfile.zipLabel")}</Text>
-          {/* FIX: Changed keyboardType to number-pad and autoCapitalize to none for ZIP */}
           <TextInput
             value={zip}
-            onChangeText={setZip}
+            onChangeText={(value) => setZip(sanitizeZipInput(value))}
             placeholder={t("consumerProfile.zipPh")}
             placeholderTextColor={C.mutedText}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="number-pad"
-            maxLength={12}
+            returnKeyType="done"
+            maxLength={10}
             style={{
               borderWidth: 1,
               borderColor: C.border,
@@ -195,6 +198,28 @@ export default function ConsumerProfileSetupScreen() {
               color: C.text,
             }}
           />
+          <View
+            style={{
+              marginTop: Spacing.sm,
+              borderRadius: Radii.lg,
+              borderWidth: 1,
+              borderColor: C.border,
+              backgroundColor: C.surfaceMuted,
+              padding: Spacing.md,
+            }}
+          >
+            <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText }}>
+              {isEdit
+                ? t("consumerProfile.zipWhyEdit", {
+                    defaultValue:
+                      "TWOFER uses your ZIP as a general area so nearby deals and alerts stay relevant. You can change your radius in Settings.",
+                  })
+                : t("consumerProfile.zipWhy", {
+                    defaultValue:
+                      "TWOFER uses your ZIP as a general area so nearby deals and alerts start relevant. You can choose your browsing radius next.",
+                  })}
+            </Text>
+          </View>
         </View>
 
         <View>

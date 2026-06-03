@@ -41,6 +41,8 @@ export default function OnboardingScreen() {
   const { session } = useAuthSession();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const C = Colors[colorScheme];
+  const selectedSurface = colorScheme === "dark" ? "#3B301F" : "#FFF3E0";
+  const selectedBorder = colorScheme === "dark" ? "#6B4A1E" : "#FFD59A";
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
 
   const [locationMode, setLocationMode] = useState<"gps" | "zip">("gps");
@@ -197,33 +199,38 @@ export default function OnboardingScreen() {
       {step === "setup" ? (
       <ScrollView
         style={{ flex: 1, marginTop: Spacing.lg }}
-        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.lg }}
+        contentContainerStyle={{ paddingBottom: scrollBottom + Spacing.xxxl, gap: Spacing.lg }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
         {/* Location mode toggle */}
         <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, color: C.text }}>{t("onboarding.locationBody")}</Text>
+          <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>
+            {t("onboarding.locationChoice", { defaultValue: "Choose your location method" })}
+          </Text>
+          <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText, marginBottom: Spacing.sm }}>
+            {t("onboarding.locationBody")}
+          </Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
               onPress={() => { setLocationMode("gps"); setHint(null); }}
               style={{
                 flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.lg, alignItems: "center",
                 borderWidth: 2, borderColor: locationMode === "gps" ? C.primary : C.border,
-                backgroundColor: locationMode === "gps" ? "rgba(255,159,28,0.08)" : C.surface,
+                backgroundColor: locationMode === "gps" ? selectedSurface : C.surface,
               }}
             >
-              <Text style={{ fontWeight: "700", color: locationMode === "gps" ? C.primary : C.text }}>{t("onboarding.useGps")}</Text>
+              <Text style={{ fontWeight: "700", color: locationMode === "gps" ? C.accentText : C.text }}>{t("onboarding.useGps")}</Text>
             </Pressable>
             <Pressable
               onPress={() => { setLocationMode("zip"); setHint(null); }}
               style={{
                 flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.lg, alignItems: "center",
                 borderWidth: 2, borderColor: locationMode === "zip" ? C.primary : C.border,
-                backgroundColor: locationMode === "zip" ? "rgba(255,159,28,0.08)" : C.surface,
+                backgroundColor: locationMode === "zip" ? selectedSurface : C.surface,
               }}
             >
-              <Text style={{ fontWeight: "700", color: locationMode === "zip" ? C.primary : C.text }}>{t("onboarding.useZipInstead")}</Text>
+              <Text style={{ fontWeight: "700", color: locationMode === "zip" ? C.accentText : C.text }}>{t("onboarding.useZipInstead")}</Text>
             </Pressable>
           </View>
         </View>
@@ -231,6 +238,10 @@ export default function OnboardingScreen() {
         {/* ZIP input (shown only in zip mode) */}
         {locationMode === "zip" ? (
           <View>
+            <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>{t("onboarding.zipTitle")}</Text>
+            <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText, marginBottom: Spacing.sm }}>
+              {t("onboarding.zipBody")}
+            </Text>
             <TextInput
               value={zip}
               onChangeText={(value) => setZip(sanitizeZipInput(value))}
@@ -239,6 +250,7 @@ export default function OnboardingScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="number-pad"
+              returnKeyType="done"
               maxLength={10}
               style={{
                 borderWidth: 1, borderColor: C.border, borderRadius: Radii.lg,
@@ -251,7 +263,10 @@ export default function OnboardingScreen() {
 
         {/* Search radius */}
         <View>
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, color: C.text }}>{t("onboarding.radiusTitle")}</Text>
+          <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>{t("onboarding.radiusTitle")}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText, marginBottom: Spacing.sm }}>
+            {t("onboarding.radiusBody")}
+          </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm }}>
             {CONSUMER_RADIUS_MILES_OPTIONS.map((m) => {
               const active = radius === m;
@@ -261,11 +276,11 @@ export default function OnboardingScreen() {
                   onPress={() => setRadius(m)}
                   style={{
                     paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill,
-                    backgroundColor: active ? "rgba(255,159,28,0.16)" : C.surfaceMuted,
-                    borderWidth: 1, borderColor: active ? "rgba(255,159,28,0.4)" : C.border,
+                    backgroundColor: active ? selectedSurface : C.surfaceMuted,
+                    borderWidth: 1, borderColor: active ? selectedBorder : C.border,
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: active ? C.primary : C.text }}>
+                  <Text style={{ fontWeight: "700", color: active ? C.accentText : C.text }}>
                     {t("onboarding.radiusMiles", { miles: m })}
                   </Text>
                 </Pressable>
@@ -287,11 +302,11 @@ export default function OnboardingScreen() {
                   onPress={() => setCategories((prev) => (active ? prev.filter((c) => c !== key) : [...prev, key]))}
                   style={{
                     paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill,
-                    backgroundColor: active ? "rgba(255,159,28,0.16)" : C.surfaceMuted,
-                    borderWidth: 1, borderColor: active ? "rgba(255,159,28,0.4)" : C.border,
+                    backgroundColor: active ? selectedSurface : C.surfaceMuted,
+                    borderWidth: 1, borderColor: active ? selectedBorder : C.border,
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: active ? C.primary : C.text }}>
+                  <Text style={{ fontWeight: "700", color: active ? C.accentText : C.text }}>
                     {t(`businessSetup.cat.${key}`)}
                   </Text>
                 </Pressable>
@@ -331,7 +346,7 @@ export default function OnboardingScreen() {
                   flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                   paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, borderRadius: Radii.lg,
                   borderWidth: 2, borderColor: selected ? C.primary : C.border,
-                  backgroundColor: selected ? "rgba(255,159,28,0.08)" : C.surface,
+                  backgroundColor: selected ? selectedSurface : C.surface,
                 }}
               >
                 <View style={{ flex: 1, paddingRight: Spacing.sm }}>
@@ -340,7 +355,7 @@ export default function OnboardingScreen() {
                     <Text style={{ fontSize: 13, color: C.mutedText }} numberOfLines={1}>{shop.location}</Text>
                   ) : null}
                 </View>
-                <Text style={{ fontSize: 20, fontWeight: "800", color: selected ? C.primary : C.mutedText }}>
+                <Text style={{ fontSize: 20, fontWeight: "800", color: selected ? C.accentText : C.mutedText }}>
                   {selected ? "♥" : "♡"}
                 </Text>
               </Pressable>

@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import { Linking, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   DELETE_ACCOUNT_URL,
   PRIVACY_POLICY_URL,
@@ -25,6 +27,8 @@ export function LegalExternalLinks({
   showDeleteAccount = false,
 }: Props) {
   const { t } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const C = Colors[colorScheme];
 
   const entries: { url: string; label: string }[] = [
     { url: PRIVACY_POLICY_URL, label: t("legal.privacyPolicy") },
@@ -58,16 +62,23 @@ export function LegalExternalLinks({
       {entries.map((item, i) => (
         <Fragment key={item.url}>
           {i > 0 ? (
-            <Text style={{ fontSize: 14, opacity: 0.35 }} aria-hidden>
+            <Text style={{ fontSize: 14, color: C.mutedText, opacity: 0.45 }} aria-hidden>
               ·
             </Text>
           ) : null}
           <HapticScalePressable
             accessibilityRole="link"
             onPress={() => void open(item.url)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              paddingHorizontal: 8,
+              paddingVertical: 10,
+              justifyContent: "center",
+              opacity: pressed ? 0.7 : 1,
+            })}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>{item.label}</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: C.accentText }}>{item.label}</Text>
           </HapticScalePressable>
         </Fragment>
       ))}

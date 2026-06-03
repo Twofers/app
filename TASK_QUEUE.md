@@ -252,7 +252,13 @@ Findings 2026-06-03:
 
 ## Task 4 - Auth And Onboarding Polish
 
-Status: Queued.
+Status: Completed.
+
+Completed notes:
+
+- Polished auth spacing, mascot presentation, role card states, CTA hierarchy, keyboard scroll room, and legal link tap targets.
+- Clarified consumer ZIP setup and onboarding ZIP/radius purpose copy.
+- Verified with `npm run typecheck` and `npm run lint`.
 
 Task: Make auth and onboarding feel premium and stable on Android.
 
