@@ -3,6 +3,7 @@ import { Alert, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { devWarn } from "@/lib/dev-log";
 import { Banner } from "@/components/ui/banner";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -139,8 +140,8 @@ export default function DealAnalyticsDetail() {
         }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("dealAnalytics.errLoad");
-      setBanner(msg);
+      devWarn("[deal-analytics] load failed", err);
+      setBanner(t("dealAnalytics.errLoad"));
     } finally {
       setLoading(false);
     }

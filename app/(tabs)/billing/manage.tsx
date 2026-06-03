@@ -10,7 +10,7 @@ import { Colors, Spacing } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
+import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
@@ -57,13 +57,9 @@ export default function ManageSubscriptionScreen() {
         );
       }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
-    } catch (err) {
+    } catch {
       setBanner({
-        message:
-          err instanceof Error
-            ? err.message
-            : parseFunctionError(err) ||
-              t("billingManage.errPortal", { defaultValue: "Unable to open Stripe portal." }),
+        message: t("billingManage.errPortal", { defaultValue: "Unable to open Stripe portal." }),
         tone: "error",
       });
     } finally {
@@ -89,13 +85,9 @@ export default function ManageSubscriptionScreen() {
         );
       }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
-    } catch (err) {
+    } catch {
       setBanner({
-        message:
-          err instanceof Error
-            ? err.message
-            : parseFunctionError(err) ||
-              t("billingManage.errUpgrade", { defaultValue: "Unable to start upgrade checkout." }),
+        message: t("billingManage.errUpgrade", { defaultValue: "Unable to start upgrade checkout." }),
         tone: "error",
       });
     } finally {

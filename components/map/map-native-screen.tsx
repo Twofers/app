@@ -640,7 +640,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       ) : null}
       {dataError ? (
         <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
-          <Banner message={dataError} tone="error" />
+          <Banner message={dataError} tone="error" onRetry={() => void loadMapData()} />
         </View>
       ) : null}
       <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>

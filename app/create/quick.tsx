@@ -392,7 +392,6 @@ function friendlyGenerateError(err: unknown, t: (k: string, o?: Record<string, u
   if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) {
     return t("createAi.friendlyTimeout");
   }
-  if (raw && raw.length <= 120) return raw;
   return t("createQuick.errGenerate");
 }
 

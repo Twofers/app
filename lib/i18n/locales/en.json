@@ -1131,6 +1131,7 @@
     "titleEdit": "Edit deal",
     "saveDealChanges": "Save changes",
     "loadingDeal": "Loading deal…",
+    "errLoadDeal": "Couldn’t load this deal. Go back and try again.",
     "menuOfferScheduleHint": "Set when this offer runs below — one-time dates or a recurring weekly window — then generate ads and publish.",
     "savingTemplate": "Saving...",
     "saveTemplate": "Save as Template",
@@ -1207,7 +1208,8 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Ends",
     "modalTitle": "Modal",
-    "tapToRetry": "Tap to retry"
+    "tapToRetry": "Tap to retry",
+    "tryAgain": "Try again"
   },
   "debugDiagnostics": {
     "title": "Diagnostics"
@@ -1248,6 +1250,8 @@
     "emptyLoginMessage": "Log in to see deals you've claimed and open your QR at checkout.",
     "guestSignInCta": "Sign in or create account",
     "loadError": "Couldn’t load your wallet. Try again.",
+    "loadErrorTitle": "Couldn’t load your wallet",
+    "loadErrorBody": "Check your connection and try again.",
     "dealFallback": "Deal",
     "localBusiness": "Local business",
     "claimedRecord": "Claimed {{datetime}}",

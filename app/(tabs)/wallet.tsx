@@ -106,6 +106,7 @@ export default function WalletScreen() {
   const nowMs = useSecondTick();
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
@@ -128,6 +129,7 @@ export default function WalletScreen() {
       return;
     }
     setBanner(null);
+    setLoadFailed(false);
     await finalizeStaleRedeems();
     const { data, error } = await supabase
       .from("deal_claims")
@@ -140,14 +142,14 @@ export default function WalletScreen() {
 
     if (error) {
       logPostgrestError("wallet deal_claims", error);
-      setBanner(t("consumerWallet.loadError"));
+      setLoadFailed(true);
       setClaims([]);
       setLoading(false);
       return;
     }
     setClaims((data ?? []) as unknown as ClaimRow[]);
     setLoading(false);
-  }, [userId, t]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -667,6 +669,13 @@ export default function WalletScreen() {
 
       {loading ? (
         <LoadingSkeleton rows={4} />
+      ) : loadFailed ? (
+        <EmptyState
+          title={t("consumerWallet.loadErrorTitle")}
+          message={t("consumerWallet.loadErrorBody")}
+          actionLabel={t("commonUi.tryAgain")}
+          onAction={() => void onRefresh()}
+        />
       ) : claims.length === 0 ? (
         <EmptyState title={t("consumerWallet.emptyClaimsTitle")} message={t("consumerWallet.emptyClaimsSub")} />
       ) : (

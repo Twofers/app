@@ -17,6 +17,7 @@ import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } fr
 import { format, startOfDay, startOfMonth, subDays } from "date-fns";
 
 import { AppErrorBoundary } from "@/components/app-error-boundary";
+import { devWarn } from "@/lib/dev-log";
 import { Banner } from "@/components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -49,6 +50,11 @@ import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/an
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+function friendlyDashboardError(err: unknown, fallback: string): string {
+  devWarn("[dashboard]", err);
+  return fallback;
+}
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -488,7 +494,7 @@ export default function BusinessDashboard() {
     } catch (err: unknown) {
       setInsights(null);
       setDealsHasMore(false);
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errLoadDashboard"));
       setBanner(msg);
       setWeekCounts(weekDays.map(() => 0));
     } finally {
@@ -518,7 +524,7 @@ export default function BusinessDashboard() {
       setDeals((prev) => [...prev, ...hydrateDealRows(chunk, map)]);
       setDealsHasMore(chunk.length === DASHBOARD_DEALS_PAGE_SIZE);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errLoadDashboard");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errLoadDashboard"));
       setBanner(msg);
     } finally {
       setDealsLoadingMore(false);
@@ -580,7 +586,7 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errEndDeal");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errEndDeal"));
       setBanner(msg);
     } finally {
       setEndingDealId(null);
@@ -611,7 +617,7 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errPauseDeal", "Could not pause deal.");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errPauseDeal", "Could not pause deal."));
       setBanner(msg);
     } finally {
       setPausingDealId(null);
@@ -642,7 +648,7 @@ export default function BusinessDashboard() {
       if (error) throw error;
       await loadMetrics();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errResumeDeal", "Could not resume deal.");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errResumeDeal", "Could not resume deal."));
       setBanner(msg);
     } finally {
       setPausingDealId(null);
@@ -698,7 +704,7 @@ export default function BusinessDashboard() {
       await loadMetrics();
       exitBulkMode();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkPause", "Could not pause some deals.");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errBulkPause", "Could not pause some deals."));
       setBanner(msg);
     } finally {
       setBulkBusy(false);
@@ -719,7 +725,7 @@ export default function BusinessDashboard() {
       await loadMetrics();
       exitBulkMode();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkResume", "Could not resume some deals.");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errBulkResume", "Could not resume some deals."));
       setBanner(msg);
     } finally {
       setBulkBusy(false);
@@ -752,7 +758,7 @@ export default function BusinessDashboard() {
       await loadMetrics();
       exitBulkMode();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errBulkDelete", "Could not delete some deals.");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errBulkDelete", "Could not delete some deals."));
       setBanner(msg);
     } finally {
       setBulkBusy(false);
@@ -778,7 +784,7 @@ export default function BusinessDashboard() {
         },
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("offersDashboard.errFlyer");
+      const msg = friendlyDashboardError(err, t("offersDashboard.errFlyer"));
       setBanner(msg);
     } finally {
       setGeneratingFlyerId(null);
@@ -847,7 +853,7 @@ export default function BusinessDashboard() {
         await exportAnalyticsPdf(rows, businessName ?? "");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t("dealAnalytics.errExport", "Could not generate export.");
+      const msg = friendlyDashboardError(err, t("dealAnalytics.errExport", "Could not generate export."));
       setBanner(msg);
     } finally {
       setExportingAnalytics(false);

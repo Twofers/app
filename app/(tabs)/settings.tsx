@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -39,6 +39,7 @@ import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { devWarn } from "@/lib/dev-log";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -120,13 +121,13 @@ export default function SettingsScreen() {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
         } catch (err: unknown) {
-          const detail = err instanceof Error ? err.message : "";
-          Alert.alert(
-            t("consumerSettings.gpsErrorTitle"),
-            detail
-              ? `${t("consumerSettings.gpsErrorBody")} (${detail})`
-              : t("consumerSettings.gpsErrorBody"),
-          );
+          devWarn("[settings] GPS lookup failed", err);
+          confirm({
+            iconName: "location-off",
+            title: t("consumerSettings.gpsErrorTitle"),
+            message: t("consumerSettings.gpsErrorBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
         }
       }
     }
@@ -136,15 +137,22 @@ export default function SettingsScreen() {
   async function saveZip() {
     const trimmed = zip.trim();
     if (!trimmed) {
-      Alert.alert(t("consumerSettings.zipSaveFailTitle"), t("consumerSettings.zipEmpty"));
+      confirm({
+        iconName: "error-outline",
+        title: t("consumerSettings.zipSaveFailTitle"),
+        message: t("consumerSettings.zipEmpty"),
+        confirmLabel: t("commonUi.ok"),
+      });
       return;
     }
     const geo = await geocodeUsZip(trimmed);
     if (!geo.ok) {
-      Alert.alert(
-        t("consumerSettings.zipSaveFailTitle"),
-        geo.failure === "invalid_format" ? t("consumerSettings.zipInvalid") : t("consumerSettings.zipLookupFail"),
-      );
+      confirm({
+        iconName: "error-outline",
+        title: t("consumerSettings.zipSaveFailTitle"),
+        message: geo.failure === "invalid_format" ? t("consumerSettings.zipInvalid") : t("consumerSettings.zipLookupFail"),
+        confirmLabel: t("commonUi.ok"),
+      });
       return;
     }
     await setConsumerZipCode(trimmed);
@@ -182,7 +190,12 @@ export default function SettingsScreen() {
       if (!result.ok) {
         // result.message can come straight from supabase.auth.signOut() — translate
         // through the api-messages layer so JWT/network errors render as friendly text.
-        Alert.alert(t("account.errLogoutFailed"), translateKnownApiMessage(result.message, t));
+        confirm({
+          iconName: "error-outline",
+          title: t("account.errLogoutFailed"),
+          message: translateKnownApiMessage(result.message, t),
+          confirmLabel: t("commonUi.ok"),
+        });
       }
     } finally {
       setLogoutBusy(false);
@@ -486,10 +499,12 @@ export default function SettingsScreen() {
             title={t("settingsScreen.checkStatus")}
             onPress={async () => {
               const enabled = await getAlertsEnabled();
-              Alert.alert(
-                t("settingsScreen.statusAlertTitle"),
-                enabled ? t("settingsScreen.statusOn") : t("settingsScreen.statusOff"),
-              );
+              confirm({
+                iconName: "notifications",
+                title: t("settingsScreen.statusAlertTitle"),
+                message: enabled ? t("settingsScreen.statusOn") : t("settingsScreen.statusOff"),
+                confirmLabel: t("commonUi.ok"),
+              });
             }}
           />
         ) : null}

@@ -48,8 +48,14 @@ npx expo start -c     # -c clears the Metro cache
 ## Project Rules for Claude Code
 
 - This is a React Native Expo app with Expo Router and Supabase backend
-- ALWAYS run `npx expo start` after making changes to verify the app still starts
-- NEVER make changes to more than 3 files without testing in between
+- Use lightweight validation by default instead of starting Expo after every task
+- For docs-only edits, verify the file was created or updated, then run `git diff --stat` and `git diff`
+- For code edits, run `npx tsc --noEmit` and `npm run lint` if available; run focused tests when the touched behavior has tests
+- Run `npx expo start` only when the task changes runtime app behavior and a manual UI check is needed
+- Run `npx expo prebuild` or EAS build only during final release validation
+- NEVER make changes to more than 3 files without lightweight testing in between
+- If Claude Code returns a usage-limit, rate-limit, quota, overloaded, or retry-later error, stop the current task, do not mark it complete, record the failed task and timestamp in `TASK_QUEUE.md`, wait 60 minutes, then retry the same task with a shorter prompt
+- Do not retry Claude-limit failures more than once per hour
 - If a fix requires changing navigation structure, test navigation BEFORE fixing anything else
 - Show user-friendly error messages, never raw error objects
 - Android is the primary test target

@@ -255,10 +255,9 @@ export default function BusinessBillingScreen() {
         throw new Error(t("billing.errSubscribe"));
       }
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : parseFunctionError(err);
+    } catch {
       setBanner({
-        message: detail || t("billing.errSubscribe"),
+        message: t("billing.errSubscribe"),
         tone: "error",
       });
     } finally {

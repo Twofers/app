@@ -986,7 +986,8 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "Termina",
     "modalTitle": "Modal",
-    "tapToRetry": "Toca para reintentar"
+    "tapToRetry": "Toca para reintentar",
+    "tryAgain": "Reintentar"
   },
   "debugDiagnostics": {
     "title": "Diagnósticos"
@@ -1027,6 +1028,8 @@
     "emptyLoginMessage": "Inicia sesión para ver las ofertas que reclamaste y abrir tu QR al pagar.",
     "guestSignInCta": "Iniciar sesión o crear cuenta",
     "loadError": "No se pudo cargar la billetera. Inténtalo de nuevo.",
+    "loadErrorTitle": "No se pudo cargar la billetera",
+    "loadErrorBody": "Revisa tu conexión e inténtalo de nuevo.",
     "dealFallback": "Oferta",
     "localBusiness": "Negocio local",
     "claimedRecord": "Reclamada {{datetime}}",

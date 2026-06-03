@@ -388,6 +388,7 @@ export default function AiDealScreen() {
   const menuOfferScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
+  const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
 
   /** Stable English — shipped to the AI. Do not localize. */
@@ -509,7 +510,7 @@ export default function AiDealScreen() {
           .maybeSingle();
         if (cancelled) return;
         if (error || !data) {
-          setDealLoadError(error?.message ?? "Not found");
+          setDealLoadError(t("createAi.errLoadDeal"));
           setEditingDealId(null);
           return;
         }
@@ -568,7 +569,7 @@ export default function AiDealScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [dealIdFromRoute, businessId]);
+  }, [dealIdFromRoute, businessId, dealLoadNonce, t]);
 
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
@@ -907,8 +908,7 @@ export default function AiDealScreen() {
       return t("createAi.friendlySession");
     }
     if (lower.includes("photo")) return t("createAi.friendlyPhoto");
-    if (lower.length > 120) return t("createAi.friendlyGenerationLongError");
-    return raw || t("createAi.fallbackIntro");
+    return t("createAi.friendlyGenerationLongError");
   }
 
   function cancelGeneration() {
@@ -1218,8 +1218,6 @@ export default function AiDealScreen() {
           detail = t("createAi.errPublishPhoto");
         } else if (m.includes("network") || m.includes("fetch")) {
           detail = t("createAi.errPublishNetwork");
-        } else if (err.message.length <= 120) {
-          detail = err.message;
         }
       }
       setBanner({
@@ -1360,7 +1358,7 @@ export default function AiDealScreen() {
         ) : null}
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
-        {dealLoadError ? <Banner message={dealLoadError} tone="error" /> : null}
+        {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
 
         {showCamera ? (
           <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>

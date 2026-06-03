@@ -46,6 +46,15 @@ type Deal = {
   timezone?: string | null;
 };
 
+function messageFromThrown(value: unknown): string | null {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "message" in value && typeof (value as { message?: unknown }).message === "string") {
+    return (value as { message: string }).message;
+  }
+  return null;
+}
+
 export default function DealDetail() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -175,12 +184,7 @@ export default function DealDetail() {
       setQrShortCode(out.short_code ?? null);
       setQrVisible(true);
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === "string"
-            ? e
-            : JSON.stringify(e, null, 2);
+      const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setIsClaiming(false);
@@ -210,12 +214,7 @@ export default function DealDetail() {
         setBanner(t("dealDetail.noActiveClaim"));
       }
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === "string"
-            ? e
-            : t("commonUi.genericError");
+      const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);

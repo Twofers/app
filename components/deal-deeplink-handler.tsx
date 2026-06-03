@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { Alert } from "react-native";
 import * as Linking from "expo-linking";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 import { claimInitialUrl } from "@/lib/initial-url-guard";
 
@@ -40,6 +40,7 @@ function extractDealId(url: string | null): string | null {
 export function DealDeepLinkHandler() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { confirm, confirmModal } = useBrandedConfirm();
   const initialDone = useRef(false);
 
   useEffect(() => {
@@ -47,7 +48,12 @@ export function DealDeepLinkHandler() {
       const dealId = extractDealId(url);
       if (!dealId) return;
       if (!UUID_RE.test(dealId)) {
-        Alert.alert(t("commonUi.invalidDealLinkTitle"), t("commonUi.invalidDealLinkBody"));
+        confirm({
+          iconName: "link-off",
+          title: t("commonUi.invalidDealLinkTitle"),
+          message: t("commonUi.invalidDealLinkBody"),
+          confirmLabel: t("commonUi.ok"),
+        });
         return;
       }
       router.push(`/deal/${dealId}` as Href);
@@ -68,7 +74,7 @@ export function DealDeepLinkHandler() {
     return () => {
       sub.remove();
     };
-  }, [router, t]);
+  }, [confirm, router, t]);
 
-  return null;
+  return confirmModal;
 }

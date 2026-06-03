@@ -149,6 +149,15 @@ function classifyClaimBlockReason(message: string): string {
   return "unknown";
 }
 
+function messageFromThrown(value: unknown): string | null {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "message" in value && typeof (value as { message?: unknown }).message === "string") {
+    return (value as { message: string }).message;
+  }
+  return null;
+}
+
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -519,12 +528,7 @@ export default function HomeScreen() {
           dealTitle: claimedDeal ? localizedTitle(claimedDeal, i18n.language) : null,
         });
       } catch (e: unknown) {
-        const msg =
-          typeof (e as { message?: string })?.message === "string"
-            ? (e as { message: string }).message
-            : typeof e === "string"
-              ? e
-              : JSON.stringify(e, null, 2);
+        const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
         const businessIdForDeal = dealsRef.current.find((d) => d.id === dealId)?.business_id ?? null;
         trackAppAnalyticsEvent({
           event_name: "claim_blocked",
@@ -559,12 +563,7 @@ export default function HomeScreen() {
       setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
     } catch (e: unknown) {
-      const msg =
-        typeof (e as { message?: string })?.message === "string"
-          ? (e as { message: string }).message
-          : typeof e === "string"
-            ? e
-            : JSON.stringify(e, null, 2);
+      const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
       setBanner(mapClaimError(msg));
     } finally {
       setRefreshingQr(false);

@@ -986,7 +986,8 @@
     "charCount": "{{current}}/100",
     "dealEndsVerb": "종료",
     "modalTitle": "모달",
-    "tapToRetry": "다시 시도하려면 탭하세요"
+    "tapToRetry": "다시 시도하려면 탭하세요",
+    "tryAgain": "다시 시도"
   },
   "debugDiagnostics": {
     "title": "진단"
@@ -1027,6 +1028,8 @@
     "emptyLoginMessage": "로그인하면 클레임한 딜과 결제 시 사용할 QR을 확인할 수 있습니다.",
     "guestSignInCta": "로그인 또는 가입",
     "loadError": "지갑을 불러오지 못했습니다. 다시 시도해 주세요.",
+    "loadErrorTitle": "지갑을 불러오지 못했습니다",
+    "loadErrorBody": "연결을 확인하고 다시 시도해 주세요.",
     "dealFallback": "딜",
     "localBusiness": "로컬 매장",
     "claimedRecord": "클레임 {{datetime}}",
