@@ -462,7 +462,7 @@ Validation results:
 
 ## Task 8 - Business Create Deal Polish
 
-Status: Queued.
+Status: Implemented - code validation passed; manual Android screenshots pending.
 
 Task: Make business deal creation feel guided and professional.
 
@@ -497,6 +497,29 @@ Verification:
   - validation
   - preview
   - success
+
+Findings:
+
+1. What I found
+   - Quick create already used the existing client strong-deal checks before insert.
+   - The screen published immediately after validation, so merchants had no customer-card preview or post-publish success state.
+   - Weak or incomplete edits were mostly surfaced through a top banner, not inline near the fields.
+2. Why it matters
+   - Merchants had to guess the exact strong-offer wording, and published deals could not be opened directly from the publish result.
+3. Recommended fix
+   - Added inline headline/offer validation, strong TWOFER guidance, a required preview step before publish, and a post-publish success state with View live deal.
+   - Strong-deal validation was not weakened; publish still runs `assessDealQuality` and `validateStrongDealOnly` before insert.
+4. Files affected
+   - `app/create/quick.tsx`
+   - `components/deal-preview-modal.tsx`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npx vitest run lib/strong-deal-guard.test.ts lib/deal-quality.english-regression.test.ts lib/menu-offer.test.ts` - passed, 49 tests.
+- `npx expo start` and screenshots were not run in this pass; manual Android screenshots remain for form, validation, preview, and success.
 
 ---
 

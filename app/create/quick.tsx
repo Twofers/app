@@ -21,6 +21,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
+import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { supabase } from "@/lib/supabase";
@@ -44,7 +45,7 @@ export default function QuickDealExpress() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
-  const { businessId, businessContextForAi, businessPreferredLocale } = useBusiness();
+  const { businessId, businessName, businessContextForAi, businessPreferredLocale } = useBusiness();
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
   const theme = Colors.light;
 
@@ -57,15 +58,30 @@ export default function QuickDealExpress() {
   const [title, setTitle] = useState("");
   const [offerLine, setOfferLine] = useState("");
   const [banner, setBanner] = useState<BannerState | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [publishedDealId, setPublishedDealId] = useState<string | null>(null);
+  const [publishedDealTitle, setPublishedDealTitle] = useState("");
 
   const posterUri = draft?.poster_storage_path
     ? buildPublicDealPhotoUrl(draft.poster_storage_path)
     : photoUri;
+  const previewEndTime = new Date(Date.now() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   function resetDraft() {
     setDraft(null);
     setTitle("");
     setOfferLine("");
+    setPreviewVisible(false);
+  }
+
+  function resetForAnotherDeal() {
+    setHint("");
+    setPhotoUri(null);
+    setPhotoPath(null);
+    setBanner(null);
+    setPublishedDealId(null);
+    setPublishedDealTitle("");
+    resetDraft();
   }
 
   async function onPickPhoto(fromCamera: boolean) {
@@ -127,32 +143,57 @@ export default function QuickDealExpress() {
     }
   }
 
-  async function onPublish() {
-    if (!businessId || !draft) return;
+  function validateDraftForPublish() {
+    if (!draft) return null;
     const cleanTitle = title.trim();
     const cleanOffer = offerLine.trim();
     if (!cleanTitle) {
       setBanner({ message: t("createQuick.needTitle"), tone: "info" });
-      return;
+      return null;
+    }
+    if (!cleanOffer) {
+      setBanner({
+        message: t("createQuick.needOffer", {
+          defaultValue: "Spell out the offer before previewing, like BOGO lattes or buy one croissant, get one free.",
+        }),
+        tone: "info",
+      });
+      return null;
     }
 
-    // Same composition the full editor uses: the CTA is included only for the
-    // guard checks (so an offer phrase living in the CTA still validates), while
-    // the stored description omits it (the card renders its own Claim button).
     const guardDescription = composeListingDescription(cleanOffer, draft.cta ?? "", "");
     const listingDescription = cleanOffer;
 
     const quality = assessDealQuality({ title: cleanTitle, description: guardDescription, price: null });
     if (quality.blocked) {
       setBanner({ message: translateDealQualityBlock(quality, dealOutputLang), tone: "error" });
-      return;
+      return null;
     }
     const guard = validateStrongDealOnly({ title: cleanTitle, description: guardDescription });
     if (!guard.ok) {
       const key = `dealQuality.strongGuard.${guard.reason}`;
       setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
+      return null;
+    }
+
+    return { cleanTitle, listingDescription, quality };
+  }
+
+  function onPreview() {
+    const ready = validateDraftForPublish();
+    if (!ready) return;
+    setBanner(null);
+    setPreviewVisible(true);
+  }
+
+  async function onPublish() {
+    if (!businessId || !draft) return;
+    const ready = validateDraftForPublish();
+    if (!ready) {
+      setPreviewVisible(false);
       return;
     }
+    const { cleanTitle, listingDescription, quality } = ready;
 
     setPublishing(true);
     setBanner(null);
@@ -188,13 +229,15 @@ export default function QuickDealExpress() {
       if (error) throw error;
 
       const id = data?.[0]?.id as string | undefined;
-      if (id) {
-        void notifyDealPublished(id);
-        void translateDeal(id);
-      }
+      if (!id) throw new Error("Missing published deal id.");
+      void notifyDealPublished(id);
+      void translateDeal(id);
       await markRecentPublish(cleanTitle);
-      router.replace("/(tabs)");
+      setPublishedDealId(id);
+      setPublishedDealTitle(cleanTitle);
+      setPreviewVisible(false);
     } catch (err) {
+      setPreviewVisible(false);
       setBanner({ message: publishErrorMessage(err, t), tone: "error" });
     } finally {
       setPublishing(false);
@@ -212,6 +255,86 @@ export default function QuickDealExpress() {
           description: composeListingDescription(offerLine.trim(), draft.cta ?? "", ""),
         })
       : null;
+  const cleanTitle = title.trim();
+  const cleanOffer = offerLine.trim();
+  const currentGuardDescription = draft ? composeListingDescription(cleanOffer, draft.cta ?? "", "") : "";
+  const inlineQuality =
+    draft && cleanTitle.length >= 8 && cleanOffer
+      ? assessDealQuality({ title: cleanTitle, description: currentGuardDescription, price: null })
+      : null;
+  const titleValidationMessage =
+    draft && !cleanTitle
+      ? t("createQuick.needTitle")
+      : draft && cleanTitle.length > 0 && cleanTitle.length < 8
+      ? t("createQuick.titleTooShort", {
+          defaultValue: "Use a specific headline with the item and value, like BOGO iced latte.",
+        })
+      : null;
+  const offerValidationMessage =
+    draft && !cleanOffer
+      ? t("createQuick.needOffer", {
+          defaultValue: "Spell out the offer, like BOGO lattes or buy one croissant, get one free.",
+        })
+      : inlineQuality?.blocked
+      ? translateDealQualityBlock(inlineQuality, dealOutputLang)
+      : strongHint && !strongHint.ok
+      ? t(`dealQuality.strongGuard.${strongHint.reason}`, { defaultValue: t("dealQuality.strongDealMessage") })
+      : draft && !titleValidationMessage && cleanTitle && cleanOffer
+      ? t("createQuick.strongDealReady", { defaultValue: "Looks strong. Preview the customer card before publishing." })
+      : null;
+  const offerValidationTone = offerValidationMessage && strongHint?.ok && !inlineQuality?.blocked ? theme.success : theme.danger;
+
+  if (publishedDealId) {
+    return (
+      <KeyboardScreen>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: theme.background }}
+          {...FORM_SCROLL_KEYBOARD_PROPS}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: top, paddingHorizontal: horizontal, paddingBottom: scrollBottom }}
+        >
+          <View
+            style={{
+              marginTop: Spacing.xl,
+              borderRadius: 24,
+              backgroundColor: theme.surface,
+              padding: Spacing.xl,
+              boxShadow: "0px 12px 26px rgba(0,0,0,0.14)",
+              elevation: 10,
+            }}
+          >
+            <Text style={{ fontSize: 24, fontWeight: "900", color: theme.text, lineHeight: 30 }}>
+              {t("createQuick.publishSuccessTitle", { defaultValue: "Deal published" })}
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 15, lineHeight: 22, color: theme.mutedText }}>
+              {t("createQuick.publishSuccessBody", {
+                defaultValue: "Your deal is live for customers now.",
+              })}
+            </Text>
+            <Text
+              numberOfLines={3}
+              style={{ marginTop: Spacing.md, fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text }}
+            >
+              {publishedDealTitle}
+            </Text>
+          </View>
+
+          <View style={{ marginTop: Spacing.lg }}>
+            <PrimaryButton
+              title={t("createQuick.viewLiveDeal", { defaultValue: "View live deal" })}
+              onPress={() => router.push(`/deal/${publishedDealId}` as Href)}
+            />
+          </View>
+          <View style={{ marginTop: Spacing.sm }}>
+            <SecondaryButton
+              title={t("createQuick.createAnotherDeal", { defaultValue: "Create another deal" })}
+              onPress={resetForAnotherDeal}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardScreen>
+    );
+  }
 
   return (
     <KeyboardScreen>
@@ -305,6 +428,32 @@ export default function QuickDealExpress() {
               {t("createQuick.aiNote")}
             </Text>
 
+            <View
+              style={{
+                marginTop: Spacing.md,
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: "rgba(255,159,28,0.35)",
+                backgroundColor: "#fff8ed",
+                padding: Spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "900", color: theme.text }}>
+                {t("createQuick.strongGuidanceTitle", { defaultValue: "Strong TWOFER requirement" })}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 13, lineHeight: 19, color: theme.text }}>
+                {t("createQuick.strongGuidanceBody", {
+                  defaultValue:
+                    "Use BOGO, 2-for-1, buy one get one, a clearly free item, or 40%+ off. Put that value in the headline or offer so customers see it immediately.",
+                })}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.mutedText }}>
+                {t("createQuick.strongGuidanceExamples", {
+                  defaultValue: "Good: BOGO iced lattes. Weak: 10% off or buy one + 20% off another item.",
+                })}
+              </Text>
+            </View>
+
             {posterUri ? (
               <Image
                 source={{ uri: posterUri }}
@@ -319,10 +468,11 @@ export default function QuickDealExpress() {
             <TextInput
               value={title}
               onChangeText={setTitle}
+              maxLength={90}
               style={{
                 marginTop: 6,
                 borderWidth: 1.5,
-                borderColor: theme.border,
+                borderColor: titleValidationMessage ? theme.danger : theme.border,
                 borderRadius: Radii.md,
                 paddingHorizontal: 14,
                 paddingVertical: 12,
@@ -332,6 +482,11 @@ export default function QuickDealExpress() {
                 backgroundColor: theme.surface,
               }}
             />
+            {titleValidationMessage ? (
+              <Text style={{ marginTop: 7, fontSize: 12, lineHeight: 17, color: theme.danger }}>
+                {titleValidationMessage}
+              </Text>
+            ) : null}
 
             <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 13, color: theme.text }}>
               {t("createQuick.offerLineLabel")}
@@ -340,10 +495,11 @@ export default function QuickDealExpress() {
               value={offerLine}
               onChangeText={setOfferLine}
               multiline
+              maxLength={260}
               style={{
                 marginTop: 6,
                 borderWidth: 1.5,
-                borderColor: theme.border,
+                borderColor: offerValidationMessage && offerValidationTone === theme.danger ? theme.danger : theme.border,
                 borderRadius: Radii.md,
                 paddingHorizontal: 14,
                 paddingVertical: 12,
@@ -355,16 +511,16 @@ export default function QuickDealExpress() {
               }}
             />
 
-            {strongHint && !strongHint.ok ? (
-              <Text style={{ marginTop: 8, fontSize: 12, color: theme.danger }}>
-                {t("dealQuality.strongDealMessage")}
+            {offerValidationMessage ? (
+              <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 17, color: offerValidationTone }}>
+                {offerValidationMessage}
               </Text>
             ) : null}
 
             <View style={{ marginTop: Spacing.lg }}>
               <PrimaryButton
-                title={publishing ? t("createAi.publishing") : t("createAi.publishDeal")}
-                onPress={() => void onPublish()}
+                title={t("createQuick.previewDeal", { defaultValue: "Preview deal" })}
+                onPress={onPreview}
                 disabled={publishing}
               />
             </View>
@@ -379,6 +535,21 @@ export default function QuickDealExpress() {
           </>
         )}
       </ScrollView>
+      {draft ? (
+        <DealPreviewModal
+          visible={previewVisible}
+          onDismiss={() => setPreviewVisible(false)}
+          onPublish={() => void onPublish()}
+          publishing={publishing}
+          title={cleanTitle}
+          description={cleanOffer}
+          businessName={businessName}
+          posterUrl={posterUri}
+          price={null}
+          endTime={previewEndTime}
+          remainingClaims={EXPRESS_MAX_CLAIMS}
+        />
+      ) : null}
     </KeyboardScreen>
   );
 }

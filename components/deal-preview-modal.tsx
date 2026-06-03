@@ -40,7 +40,13 @@ export function DealPreviewModal({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" accessibilityViewIsModal={true}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      accessibilityViewIsModal={true}
+      onRequestClose={onDismiss}
+    >
       <View
         style={{
           flex: 1,
@@ -72,13 +78,13 @@ export function DealPreviewModal({
             }}
           >
             <Text style={{ fontWeight: "800", fontSize: 17, color: Colors.light.text }}>
-              {t("createQuick.previewTitle")}
+              {t("createQuick.previewTitle", { defaultValue: "Deal preview" })}
             </Text>
             <Text
               onPress={onDismiss}
               style={{ fontSize: 15, fontWeight: "700", color: Colors.light.mutedText }}
             >
-              {t("createQuick.previewGoBack")}
+              {t("createQuick.previewGoBack", { defaultValue: "Back" })}
             </Text>
           </View>
 
@@ -96,10 +102,10 @@ export function DealPreviewModal({
                 textAlign: "center",
               }}
             >
-              {t("createQuick.previewHint")}
+              {t("createQuick.previewHint", { defaultValue: "Review what customers will see before publishing." })}
             </Text>
             <DealCardPoster
-              title={title || t("createQuick.placeholderTitle")}
+              title={title || t("createQuick.placeholderTitle", { defaultValue: "Deal title" })}
               description={description || null}
               businessName={businessName}
               distanceLabel={null}
@@ -129,12 +135,16 @@ export function DealPreviewModal({
             }}
           >
             <PrimaryButton
-              title={publishing ? t("createQuick.publishing") : t("createQuick.previewPublish")}
+              title={
+                publishing
+                  ? t("createQuick.publishing", { defaultValue: "Publishing..." })
+                  : t("createQuick.previewPublish", { defaultValue: "Publish deal" })
+              }
               onPress={onPublish}
               disabled={publishing}
               style={{ height: 56, borderRadius: 18 }}
             />
-            <SecondaryButton title={t("createQuick.previewGoBack")} onPress={onDismiss} />
+            <SecondaryButton title={t("createQuick.previewGoBack", { defaultValue: "Back" })} onPress={onDismiss} />
           </View>
         </View>
       </View>
