@@ -679,7 +679,7 @@ Validation results:
 
 ## Task 11 - Release Checklist Automation
 
-Status: Queued.
+Status: Complete / validated 2026-06-03.
 
 Task: Create a repeatable beta release checklist.
 
@@ -711,6 +711,37 @@ Verification:
 
 - Run the checklist once against the current beta candidate.
 - Include the resulting release report in the task handoff.
+
+Findings 2026-06-03:
+
+1. What I found
+   - Release validation steps were spread across existing deployment, migration, smoke-test, and proof-check docs, but there was no single beta release report format.
+   - The current repo is clean: `git status --short --untracked-files=all` and `git ls-files --others --exclude-standard` returned no changes/untracked files before Task 11 edits.
+   - Production EAS environment inspection returned Android versionCode `8` and did not list demo/debug public flags; `eas.json` keeps demo/debug flags in development/preview only.
+   - Supabase migration list showed all 63 local migrations applied remotely, ending with `20260708150000_weekly_digest_cron`.
+   - Android emulator `emulator-5554` is connected, but the installed TWOFER app is stale at versionCode `1`, so it was not used for current-candidate smoke.
+   - `npx supabase secrets list` could not verify remote secret names because this shell is not authenticated with Supabase CLI access.
+2. Why it matters
+   - Every beta build now has one consistent handoff covering git state, EAS context, validation, Android smoke, Supabase migrations/secrets, digest cron/vault, versionCode/build URL, and known issues.
+   - The report avoids secret values and gives Dan readable pass/blocker language.
+3. Recommended fix
+   - Added `docs/beta-release-checklist.md` with a reusable release report template plus the 2026-06-03 current-run report.
+   - The checklist records secret checks by name only and marks remote-only checks as manual or blocked when the local shell cannot verify them.
+4. Files affected
+   - `docs/beta-release-checklist.md`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npm test` - passed, 23 files and 171 tests.
+- `npx supabase migration list` - passed; all 63 local migrations had matching remote entries.
+- `npx supabase secrets list` - blocked by missing Supabase CLI auth token; no secret values were exposed.
+- `npx eas-cli build:version:get -p android --profile production --non-interactive` - returned Android versionCode `8`.
+- `npx expo start` was not run because this task changed documentation only.
+- Android smoke was not run because the connected emulator has a stale versionCode `1` app installed, not the current versionCode `8` candidate.
 
 ---
 
