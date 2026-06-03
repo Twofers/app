@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -37,6 +37,7 @@ export default function RedeemScanner() {
   const [mode, setMode] = useState<RedeemMode>("scan");
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const processingRef = useRef(false);
   const [success, setSuccess] = useState<{ dealTitle: string; redeemedAt: string; claimId: string | null } | null>(null);
   const [claimCodeInput, setClaimCodeInput] = useState("");
   const [reportVisible, setReportVisible] = useState(false);
@@ -47,6 +48,7 @@ export default function RedeemScanner() {
       setSuccess(null);
       setBanner(null);
       setScanned(false);
+      processingRef.current = false;
     }, []),
   );
 
@@ -56,7 +58,8 @@ export default function RedeemScanner() {
   }, [mode]);
 
   async function runRedeem(body: { token?: string; short_code?: string }) {
-    if (processing) return;
+    if (processingRef.current) return;
+    processingRef.current = true;
     setProcessing(true);
     setBanner(null);
     try {
@@ -72,6 +75,7 @@ export default function RedeemScanner() {
       setBanner({ message: translateKnownApiMessage(String(raw), t), tone: "error" });
       setScanned(false);
     } finally {
+      processingRef.current = false;
       setProcessing(false);
     }
   }
@@ -89,6 +93,7 @@ export default function RedeemScanner() {
   }
 
   async function onManualRedeem() {
+    if (processingRef.current) return;
     const code = normalizeClaimCode(claimCodeInput);
     if (code.length < 4) {
       setBanner({ message: t("redeem.errCodeRequired"), tone: "error" });
@@ -126,10 +131,26 @@ export default function RedeemScanner() {
             style={{
               borderRadius: 18,
               padding: Spacing.lg,
-              backgroundColor: colorScheme === "dark" ? "#1b3a1f" : "#e8f5e9",
+              backgroundColor: colorScheme === "dark" ? "#2b1c08" : "#fff7ed",
+              borderWidth: 1,
+              borderColor: "#FF9F1C",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("redeem.redeemed")}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#FF9F1C",
+                }}
+              >
+                <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>OK</Text>
+              </View>
+              <Text style={{ fontWeight: "900", fontSize: 18, color: theme.text }}>{t("redeem.redeemed")}</Text>
+            </View>
             <Text style={{ marginTop: Spacing.sm, fontSize: 16, color: theme.text }}>{success.dealTitle}</Text>
             <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 14, color: theme.text }}>
               {t("redeem.redeemedAt")}{" "}
@@ -166,24 +187,28 @@ export default function RedeemScanner() {
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
             <Pressable
               onPress={() => setMode("scan")}
+              disabled={processing}
               style={{
                 flex: 1,
                 paddingVertical: Spacing.sm,
                 borderRadius: 12,
                 backgroundColor: mode === "scan" ? theme.text : theme.surfaceMuted,
                 alignItems: "center",
+                opacity: processing && mode !== "scan" ? 0.5 : 1,
               }}
             >
               <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.background : theme.text }}>{t("redeem.modeScan")}</Text>
             </Pressable>
             <Pressable
               onPress={() => setMode("manual")}
+              disabled={processing}
               style={{
                 flex: 1,
                 paddingVertical: Spacing.sm,
                 borderRadius: 12,
                 backgroundColor: mode === "manual" ? theme.text : theme.surfaceMuted,
                 alignItems: "center",
+                opacity: processing && mode !== "manual" ? 0.5 : 1,
               }}
             >
               <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.background : theme.text }}>{t("redeem.modeManual")}</Text>

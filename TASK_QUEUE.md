@@ -407,7 +407,7 @@ Validation results:
 
 ## Task 7 - Claim And Redeem Flow Polish
 
-Status: Queued.
+Status: Complete / validated 2026-06-03.
 
 Task: Polish the claim/redeem money moment.
 
@@ -442,6 +442,21 @@ Verification:
   - QR
   - redeemed
   - expired/already-used if test data allows
+
+Findings 2026-06-03:
+
+- Claim QR confirmation now uses localized copy, keeps the existing branded animation, shows an active/expired badge, frames the QR in TWOFER orange, and gives staff-facing verification guidance.
+- Wallet tickets now make the active money moment clearer with scan-at-counter treatment, visible claim code, single-use/expiration note, clearer busy state text, and disabled backup QR while a redemption action is already busy.
+- Wallet QR display now uses orange active-state treatment, scan-at-counter guidance, branded QR frame, and disables QR refresh while refresh is already in progress.
+- Merchant redeem now has ref-level processing protection for scan/manual redemption, disables scan/manual mode switching while processing, and shows a more branded redemption success receipt.
+- Preserved Supabase claim/redeem calls, analytics events, billing, onboarding, dashboard, auth, deal claiming rules, and navigation behavior.
+
+Validation results:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- Vitest was not run because Supabase claim/redeem business logic was not changed.
+- Expo/Android smoke and screenshots were not run in this pass; manual smoke should verify claim success, active wallet ticket, QR backup, redeemed success, and expired/already-used states if test data allows.
 
 ---
 

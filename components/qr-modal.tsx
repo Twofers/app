@@ -74,7 +74,7 @@ export function QrModal({
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const [remaining, setRemaining] = useState<string | null>(null);
-  const [tick, setTick] = useState(false);
+  const tick = false;
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +110,7 @@ export function QrModal({
   const codeDisplay = shortCode
     ? `${shortCode.slice(0, 3)} ${shortCode.slice(3)}`
     : t("consumerWallet.codeLegacyQrOnly");
+  const qrExpired = !redeemByIso || Date.now() >= new Date(redeemByIso).getTime();
 
   useEffect(() => {
     if (!redeemByIso) {
@@ -126,7 +127,6 @@ export function QrModal({
       } else {
         setRemaining(`${mins}:${secs.toString().padStart(2, "0")}`);
       }
-      setTick((prev) => !prev);
     };
     tickRemaining();
     const interval = setInterval(tickRemaining, 1000);
@@ -242,8 +242,8 @@ export function QrModal({
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: -0.2 }}>
-                    Deal Claimed!
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+                    {t("dealStatus.claimed")}
                   </Text>
                   <Text style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }}>
                     {t("consumerWallet.qrModalTitle")}
@@ -257,7 +257,7 @@ export function QrModal({
                     backgroundColor: Colors.light.primary,
                   }}
                 >
-                  <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>OK</Text>
+                  <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>{t("commonUi.ok")}</Text>
                 </View>
               </View>
 
@@ -287,12 +287,38 @@ export function QrModal({
             maxWidth: 400,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
-            {t("consumerWallet.qrModalTitle")}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <Text style={{ flex: 1, fontSize: 18, fontWeight: "800", color: "#11181C" }}>
+              {t("consumerWallet.qrModalTitle")}
+            </Text>
+            <View
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                backgroundColor: qrExpired ? "#fee2e2" : "#dcfce7",
+                borderWidth: 1,
+                borderColor: qrExpired ? "#fecaca" : "#bbf7d0",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "900", color: qrExpired ? "#991b1b" : "#166534" }}>
+                {qrExpired ? t("consumerWallet.verifyExpired") : t("consumerWallet.verifyActive")}
+              </Text>
+            </View>
+          </View>
           <View style={{ alignItems: "center", marginBottom: 10 }}>
-            {token && redeemByIso && Date.now() < new Date(redeemByIso).getTime() ? (
-              <QRCode value={token} size={220} />
+            {token && !qrExpired ? (
+              <View
+                style={{
+                  padding: 12,
+                  borderRadius: 18,
+                  borderWidth: 2,
+                  borderColor: Colors.light.primary,
+                  backgroundColor: "#fff",
+                }}
+              >
+                <QRCode value={token} size={210} />
+              </View>
             ) : token ? (
               <View
                 style={{
@@ -310,7 +336,7 @@ export function QrModal({
               </View>
             ) : null}
           </View>
-          <Text style={{ opacity: 0.75, textAlign: "center" }}>
+          <Text style={{ opacity: qrExpired ? 0.95 : 0.75, textAlign: "center", fontWeight: qrExpired ? "800" : "600" }}>
             {t("consumerWallet.qrValidUntil", {
               time: `${remaining ?? "--"}${tick ? " •" : " "}`,
             })}
@@ -322,6 +348,9 @@ export function QrModal({
               })}
             </Text>
           ) : null}
+          <Text style={{ opacity: 0.62, textAlign: "center", marginTop: 8, lineHeight: 18, fontSize: 12, color: "#334155" }}>
+            {t("consumerWallet.verifyStaffHint")}
+          </Text>
 
           <View
             style={{
@@ -367,10 +396,12 @@ export function QrModal({
             {onRefresh ? (
               <HapticScalePressable
                 onPress={onRefresh}
+                disabled={refreshing}
                 style={{
                   paddingVertical: 12,
                   borderRadius: 12,
                   backgroundColor: "#eee",
+                  opacity: refreshing ? 0.6 : 1,
                 }}
               >
                 <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>

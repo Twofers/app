@@ -108,13 +108,15 @@ export function WalletRedeemModal({
             width: "100%",
             maxWidth: 400,
             borderWidth: 3,
-            borderColor: expired ? "#7f1d1d" : "#16a34a",
+            borderColor: expired ? "#7f1d1d" : "#FF9F1C",
           }}
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <View
               style={{
-                backgroundColor: expired ? "#450a0a" : "#dcfce7",
+                backgroundColor: expired ? "#450a0a" : "#fff7ed",
+                borderWidth: 1,
+                borderColor: expired ? "#7f1d1d" : "#fed7aa",
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: 8,
@@ -125,7 +127,7 @@ export function WalletRedeemModal({
                   fontWeight: "900",
                   fontSize: 12,
                   letterSpacing: 0.6,
-                  color: expired ? "#fecaca" : "#166534",
+                  color: expired ? "#fecaca" : "#9a3412",
                 }}
               >
                 {expired ? t("consumerWallet.verifyExpired") : t("consumerWallet.verifyActive")}
@@ -166,7 +168,24 @@ export function WalletRedeemModal({
               opacity: expired ? 0.35 : 1,
             }}
           >
-            {token && !expired ? <QRCode value={token} size={200} /> : null}
+            {!expired ? (
+              <Text style={{ textAlign: "center", fontSize: 12, fontWeight: "900", color: "#9a3412", marginBottom: 8 }}>
+                {t("consumerWallet.scanQrAtCounter")}
+              </Text>
+            ) : null}
+            {token && !expired ? (
+              <View
+                style={{
+                  padding: 10,
+                  borderRadius: 18,
+                  borderWidth: 2,
+                  borderColor: "#FF9F1C",
+                  backgroundColor: "#fff",
+                }}
+              >
+                <QRCode value={token} size={190} />
+              </View>
+            ) : null}
             {token && expired ? (
               <View style={{ width: 200, height: 200, backgroundColor: "#333", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ color: "#94a3b8", fontWeight: "700", textAlign: "center", padding: 16 }}>
@@ -251,10 +270,12 @@ export function WalletRedeemModal({
           {onRefresh && !expired ? (
             <HapticScalePressable
               onPress={onRefresh}
+              disabled={refreshing}
               style={{
                 paddingVertical: 12,
                 borderRadius: 12,
                 backgroundColor: "#e5e5e5",
+                opacity: refreshing ? 0.6 : 1,
               }}
             >
               <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>

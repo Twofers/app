@@ -556,12 +556,12 @@ export default function WalletScreen() {
               style={{
                 borderRadius: Radii.md,
                 borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
+                borderColor: "#fed7aa",
+                backgroundColor: "#fff7ed",
                 padding: Spacing.md,
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, opacity: 0.65, color: theme.text }}>
+              <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
                 {t("consumerWallet.scanQrAtCounter")}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
@@ -578,29 +578,32 @@ export default function WalletScreen() {
                     backgroundColor: "#f9fafb",
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: "700", opacity: 0.55, color: theme.text }}>QR</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "800", opacity: 0.7, color: "#9a3412" }}>QR</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, opacity: 0.58, color: theme.text }}>
+                  <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
                     {t("consumerWallet.verifyCodeLabel")}
                   </Text>
-                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: theme.text }}>
+                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: "#111827" }}>
                     {shortLabel}
                   </Text>
                 </View>
               </View>
+              <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
+                {t("consumerWallet.note")}
+              </Text>
             </View>
             <PrimaryButton
-              title={isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
+              title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
               style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
             />
             <Pressable
               onPress={() => openVerifyForClaim(row)}
-              disabled={isRedeeming}
+              disabled={isRedeeming || useDealBusy}
               accessibilityRole="button"
-              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: isRedeeming ? 0.45 : 1 }}
+              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: isRedeeming || useDealBusy ? 0.45 : 1 }}
             >
               <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
                 {t("consumerWallet.qrFallbackLabel")}
@@ -610,11 +613,11 @@ export default function WalletScreen() {
         ) : null}
         {bucket === "active" && tokenDead && !redeemed ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <Text style={{ fontSize: 13, opacity: 0.65 }}>{t("consumerWallet.qrExpired")}</Text>
+            <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text }}>{t("consumerWallet.qrExpired")}</Text>
             <PrimaryButton
               title={claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
-              disabled={claimingRefreshId === row.id}
+              disabled={claimingRefreshId !== null}
               style={{ backgroundColor: "#111", borderRadius: Radii.lg }}
             />
           </View>
