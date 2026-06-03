@@ -169,32 +169,34 @@ List issues that testers and Dan need to know before inviting cafes.
 
 ## Current Run - 2026-06-03
 
+Checklist executed against the current beta candidate at commit `ec621fb` (the commit that added this checklist), branch `fix/production-clean-copy`.
+
 ### 1. Release Metadata
 
 - Release date: 2026-06-03
-- Current commit SHA: `1ee7eaf`
+- Final commit SHA: `ec621fba43dcf0440ac3c9f41449b6be52863e6d` (`ec621fb`)
 - Branch: `fix/production-clean-copy`
 - EAS profile checked: `production`
-- Android versionCode from EAS: `8`
-- EAS build URL: not created in this task
-- Tester / device: Android emulator `emulator-5554`; installed app was stale `versionCode=1`
+- Android versionCode from EAS: `9`
+- EAS build URL: not created in this task (no build was started)
+- APK used for smoke: `C:\Users\unvme\Downloads\twoforone\application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk`
+- Tester / device: Android emulator `emulator-5554`; installed app is `versionCode=9`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 18:23:21`
 
 ### 2. Git And EAS Context
 
-Result: Passed.
+Result: Passed for committed files; local ignored smoke artifacts are present.
 
-- `git status --short --untracked-files=all` printed no changes.
-- `git ls-files --others --exclude-standard` printed no untracked files.
-- `.easignore` is absent, so the release context should rely on Git / `.gitignore` defaults unless EAS is configured differently.
+- Earlier static release checks ran from a clean tree before Task 11 report edits.
+- Current working tree contains only the Task 11 report edits plus ignored local smoke artifacts.
+- Ignored local artifacts used in this smoke run include `application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk` and `qa-screens/task-11-release-smoke/`; do not commit them and remove or confirm EAS ignores them before starting a new release build.
 
 ### 3. Demo UI Production Check
 
-Result: Static check passed; production APK UI smoke still needed.
+Result: Static check passed; production APK UI smoke failed on ANR/data/layout coverage below.
 
-- `eas.json` enables demo/debug flags only in `development` and `preview`.
-- The production EAS environment loaded these public variable names: `EXPO_PUBLIC_DELETE_ACCOUNT_URL`, `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY`, `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPPORT_URL`, `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`.
-- The production EAS environment output did not list demo/debug public flags.
-- Source still contains demo-account paths and strings, but the production check found them tied to runtime gating or real demo-account handling. Verify the production APK auth screen before inviting testers.
+- `eas.json` sets `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER`, `EXPO_PUBLIC_SHOW_DEBUG_PANEL`, `EXPO_PUBLIC_DEBUG_BOOT_LOG`, and `EXPO_PUBLIC_PREVIEW_MATCHES_DEV` only in the `development` and `preview` profiles; the `production` profile sets none of them.
+- The production EAS environment loaded only these public variable names: `EXPO_PUBLIC_DELETE_ACCOUNT_URL`, `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY`, `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPPORT_URL`, `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`. No demo/debug public flags were present.
+- Earlier production auth captures on the installed versionCode `9` APK did not show demo credential helper UI after relaunch. The fresh follow-up cold launch preserved the signed-in demo business session, so signed-out auth was not revalidated in this pass.
 
 ### 4. Static Validation
 
@@ -208,49 +210,67 @@ Result: Passed.
 
 Result: Not run.
 
-- `npx expo start` was not started because Task 11 changed only documentation and release reporting.
+- `npx expo start` was not started because this candidate changed documentation/release reporting only; no runtime app behavior changed.
 
 ### 6. Android Smoke
 
-Result: Not run for the current beta candidate.
+Result: Failed / partially completed on current versionCode `9` APK.
 
-- `adb devices` showed emulator `emulator-5554`.
-- `com.unvmex2.twoforone` is installed, but it is `versionCode=1` from 2026-04-07.
-- Current EAS production Android versionCode is `8`, so smoke-testing the installed app would not validate this candidate.
+- `adb devices` showed emulator `emulator-5554` online.
+- Local current APK exists: `application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk`.
+- `aapt dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=9`, `versionName=1.0.0`.
+- Reinstalled with `adb install -r` and launched with `adb shell monkey -p com.unvmex2.twoforone -c android.intent.category.LAUNCHER 1`.
+- Installed package after reinstall: `versionCode=9`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 18:23:21`.
+- Fresh screenshot capture worked in this follow-up. New current-run screenshots captured under `qa-screens/task-11-release-smoke/`: `01-cold-launch.png`, `08-current-business-create.png`, `09-current-business-redeem.png`, `10-current-business-my-offers.png`, `11-current-business-billing.png`, `12-current-business-account.png`, `13-current-customer-home.png`, `14-current-customer-shops.png`, `15-current-shop-detail.png`, `16-current-shop-detail-deal-section.png`, `17-current-back-to-shops.png`, `18-current-map-tab.png`, and `21-current-anr-dialog.png`.
+- Cold launch after reinstall preserved the signed-in demo business session and opened the business Create hub.
+- Business Create, merchant Redeem, My offers/dashboard, Billing, and business Account loaded without raw error text.
+- Business Account showed `demo@demo.com`, the business/customer mode control, and demo-named business profile data. Switching to customer mode worked.
+- Customer Home loaded a friendly no-live-deals state; no raw Supabase/RLS/stack text was visible.
+- Shops loaded two businesses and shop detail opened/back navigation worked.
+- Shop detail for a no-live-deal business showed the no-live-deal empty state, but still displayed "Use this deal" / "Scan QR at counter" redemption guidance underneath. That is a missing-data layout problem.
+- Customer Map loaded Google map tiles and pins, then Android showed a `TWOFER isn't responding` ANR dialog. Screenshot: `21-current-anr-dialog.png`.
+- Wallet and Settings were not verified in the fresh follow-up because the Map ANR blocked the pass before those tabs could be reached.
+- Claim -> wallet -> QR/redeem could not be completed because no live deal / active wallet ticket was reachable before the Map ANR.
+- Production data still includes demo-named business/deal surfaces because the tested account/business is demo data.
 
 ### 7. Supabase Migrations
 
 Result: Passed.
 
-- `npx supabase migration list` showed all 63 local migrations with matching remote entries.
-- Last remote migration listed: `20260708150000_weekly_digest_cron`.
+- `npx supabase migration list` showed every local migration with a matching remote entry (no drift).
+- Last migration applied remotely: `20260708150000_weekly_digest_cron`.
 
 ### 8. Supabase Secrets By Name Only
 
-Result: Blocked for actual remote secret listing.
+Result: Blocked for remote listing.
 
-- `npx supabase secrets list` could not run because this shell is not authenticated with `supabase login` / `SUPABASE_ACCESS_TOKEN`.
-- Source env-name inventory was captured by name only; no values were read or reported.
+- `npx supabase secrets list` returned "Access token not provided" because this shell has no `supabase login` session / `SUPABASE_ACCESS_TOKEN`. (Migration list works via the linked database; secrets need a Management API token.)
+- No secret values were read or printed. Verify the section 8 names from an authenticated shell before the release build.
 
 ### 9. Digest Cron And Vault Secret
 
 Result: Partially passed.
 
-- Migration `20260708150000_weekly_digest_cron.sql` is present locally and listed as applied remotely.
-- The migration creates Vault secret name `weekly_digest_cron_secret`, RPC `verify_weekly_digest_secret`, status RPC `weekly_digest_cron_status`, and cron job `weekly-deal-digest`.
-- Active cron status was not queried in this run; verify with `select * from public.weekly_digest_cron_status();`.
+- Migration `20260708150000_weekly_digest_cron` is applied remotely (see section 7).
+- That migration provisions Vault secret name `weekly_digest_cron_secret`, RPC `verify_weekly_digest_secret`, status RPC `weekly_digest_cron_status`, and cron job `weekly-deal-digest` (expected schedule: Saturdays 17:00 UTC).
+- Live cron status was not queried in this run. Confirm from an authenticated SQL session with `select * from public.weekly_digest_cron_status();`.
 
 ### 10. VersionCode And Build URL
 
-Result: Partially passed.
+Result: Passed for versionCode match; no build URL created.
 
-- `npx eas-cli build:version:get -p android --profile production --non-interactive` returned Android versionCode `8`.
-- No build was started, so there is no new build URL to report.
-- Installed emulator APK is stale at versionCode `1`; install the versionCode `8` APK before Android smoke.
+- `npx eas-cli build:version:get -p android --profile production --non-interactive` returned Android versionCode `9` (advanced from `8` in the prior recorded run; the `production` profile uses `autoIncrement: true`).
+- No build was started, so there is no new EAS build URL to report.
+- Installed emulator APK matches the report versionCode: `versionCode=9`, `versionName=1.0.0`.
 
 ### 11. Known Issues
 
-- Android smoke is pending for the current beta candidate because no versionCode `8` APK was installed during this docs-only task.
-- Supabase secrets could not be listed without Supabase CLI authentication; verify names only before the release build.
-- Production APK auth screen still needs a visual confirmation that no demo credentials/helper UI appears.
+- Android smoke FAILED on the current versionCode `9` APK: the customer Map tab raised a visible `TWOFER isn't responding` ANR after the map loaded, blocking Wallet, Settings, and claim/redeem coverage in the fresh follow-up.
+- No live deal / active wallet ticket was reachable for claim -> wallet -> QR/redeem coverage before the Map ANR.
+- Shop detail shows redemption guidance under a no-live-deal empty state.
+- Fresh screenshots captured successfully in this follow-up; keep the current-run screenshots listed in section 6 and ignore earlier black-frame notes from the prior attempt.
+- Production data still has demo-named businesses/deals on the tested account. Confirm whether this is acceptable only for the demo account before inviting external testers.
+- Supabase secret names could not be verified remotely without Supabase CLI auth; verify names only before the release build.
+- Signed-out production auth was not revalidated in the fresh follow-up because `adb install -r` preserved the logged-in demo session.
+- Live digest cron status (`weekly_digest_cron_status()`) has not been queried for this run.
 - Final EAS build URL must be pasted into the release report after the beta APK is built.
