@@ -46,6 +46,13 @@ type Deal = {
   timezone?: string | null;
 };
 
+type ActiveClaim = {
+  id: string;
+  token: string;
+  expires_at: string;
+  short_code: string | null;
+};
+
 function messageFromThrown(value: unknown): string | null {
   if (value instanceof Error) return value.message;
   if (typeof value === "string") return value;
@@ -53,6 +60,10 @@ function messageFromThrown(value: unknown): string | null {
     return (value as { message: string }).message;
   }
   return null;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function DealDetail() {
@@ -89,6 +100,31 @@ export default function DealDetail() {
       setClaimsCount(count);
     }
   }, []);
+
+  async function loadActiveClaimForDeal(dealId: string, ownerUserId: string, attempts = 1): Promise<ActiveClaim | null> {
+    for (let i = 0; i < attempts; i++) {
+      const { data } = await supabase
+        .from("deal_claims")
+        .select("id,token,expires_at,short_code")
+        .eq("deal_id", dealId)
+        .eq("user_id", ownerUserId)
+        .eq("claim_status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.token) return data as ActiveClaim;
+      if (i < attempts - 1) await sleep(800);
+    }
+    return null;
+  }
+
+  function openClaimQr(claim: { token: string; expires_at: string; short_code?: string | null }, showSuccessToast: boolean) {
+    setQrToken(claim.token);
+    setQrExpires(claim.expires_at);
+    setQrShortCode(claim.short_code ?? null);
+    if (showSuccessToast) setClaimSuccessToastNonce((n) => n + 1);
+    setQrVisible(true);
+  }
 
   const loadDeal = useCallback(async () => {
     if (!id) {
@@ -161,11 +197,10 @@ export default function DealDetail() {
       if (!deal) return;
       if (isClaiming) return;
       setIsClaiming(true);
-      const telem = await buildClaimDealTelemetry(isFavorite ? "favorite" : "direct");
-      // FIX: Add a 15s client-side timeout so the UI never gets stuck on
-      // "Claiming..." indefinitely if the Edge Function hangs or the network
-      // drops. The server-side timeout is 45s which is too long for UX.
-      const claimPromise = claimDeal(deal.id, telem);
+      const claimPromise = (async () => {
+        const telem = await buildClaimDealTelemetry(isFavorite ? "favorite" : "direct");
+        return claimDeal(deal.id, telem);
+      })();
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(t("dealDetail.claimTimedOut"))), 15_000),
       );
@@ -177,14 +212,20 @@ export default function DealDetail() {
           business_id: deal.business_id,
           claim_id: out.claim_id,
         });
-        setClaimSuccessToastNonce((n) => n + 1);
       }
-      setQrToken(out.token);
-      setQrExpires(out.expires_at);
-      setQrShortCode(out.short_code ?? null);
-      setQrVisible(true);
+      openClaimQr(out, true);
+      void loadClaimCount(deal.id);
     } catch (e: unknown) {
       const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
+      if (deal && userId) {
+        const existing = await loadActiveClaimForDeal(deal.id, userId, 4);
+        if (existing) {
+          setBanner(null);
+          openClaimQr(existing, true);
+          void loadClaimCount(deal.id);
+          return;
+        }
+      }
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setIsClaiming(false);
@@ -197,19 +238,9 @@ export default function DealDetail() {
     setRefreshingQr(true);
     try {
       // Look up existing active claim instead of creating a new one.
-      const { data: existing } = await supabase
-        .from("deal_claims")
-        .select("token,expires_at,short_code")
-        .eq("deal_id", deal.id)
-        .eq("user_id", userId)
-        .eq("claim_status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (existing?.token) {
-        setQrToken(existing.token);
-        setQrExpires(existing.expires_at);
-        setQrShortCode(existing.short_code ?? null);
+      const existing = await loadActiveClaimForDeal(deal.id, userId);
+      if (existing) {
+        openClaimQr(existing, false);
       } else {
         setBanner(t("dealDetail.noActiveClaim"));
       }

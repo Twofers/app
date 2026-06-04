@@ -415,6 +415,7 @@ export default function WalletScreen() {
           : bucket === "canceled"
             ? ("canceled" as const)
             : ("expired" as const);
+    const verifyDisabled = isRedeeming || useDealBusy;
 
     return (
       <View
@@ -551,14 +552,20 @@ export default function WalletScreen() {
         </Pressable>
         {bucket === "active" && !redeemed && !tokenDead ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <View
-              style={{
+            <Pressable
+              onPress={() => openVerifyForClaim(row)}
+              disabled={verifyDisabled}
+              accessibilityRole="button"
+              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
                 borderRadius: Radii.md,
                 borderWidth: 1,
-                borderColor: "#fed7aa",
-                backgroundColor: "#fff7ed",
+                borderColor: pressed ? theme.primary : "#fed7aa",
+                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
                 padding: Spacing.md,
-              }}
+                opacity: verifyDisabled ? 0.45 : 1,
+              })}
             >
               <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
                 {t("consumerWallet.scanQrAtCounter")}
@@ -591,7 +598,7 @@ export default function WalletScreen() {
               <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
                 {t("consumerWallet.note")}
               </Text>
-            </View>
+            </Pressable>
             <PrimaryButton
               title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
@@ -600,9 +607,20 @@ export default function WalletScreen() {
             />
             <Pressable
               onPress={() => openVerifyForClaim(row)}
-              disabled={isRedeeming || useDealBusy}
+              disabled={verifyDisabled}
               accessibilityRole="button"
-              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: isRedeeming || useDealBusy ? 0.45 : 1 }}
+              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                minHeight: 50,
+                borderRadius: Radii.lg,
+                borderWidth: 1.5,
+                borderColor: theme.primary,
+                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: verifyDisabled ? 0.45 : 1,
+              })}
             >
               <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
                 {t("consumerWallet.qrFallbackLabel")}

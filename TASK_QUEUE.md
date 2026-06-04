@@ -1109,6 +1109,38 @@ Screenshots captured in `qa-screens/final-money-flow-retest/`:
 - `16_business_dashboard_after_redeem_relaunch.png`
 - `17_business_dashboard_after_redeem_count.png`
 
+Release blocker follow-up 2026-06-04:
+
+1. What I found
+   - `claude -p` was attempted for the requested investigation/implementation, but Claude Code is not authenticated in this shell and returned `Not logged in - Please run /login`; the fix was completed locally with Codex after that blocker.
+   - Deal detail only opened the QR modal from the direct `claim-deal` response. If the backend created the claim but the client response timed out or failed to finish cleanly, the screen could remain in the claim path until relaunch even though Wallet/dashboard had the persisted claim.
+   - Wallet's active ticket already had the token and short code, but the dedicated `Show QR & code` action was a small text-only press target. The displayed QR/code evidence panel itself was not tappable.
+2. Why it matters
+   - A real shopper can think a claim failed or is still processing after TWOFER already created a live ticket.
+   - A backup QR/code action needs to be easy to open during a business-owner demo, especially if staff asks for the QR modal rather than reading the card code.
+3. Recommended fix
+   - Completed: deal detail now races the whole claim operation against the existing 15-second UX timeout, then checks for a newly-created active claim for the same user/deal and opens the QR modal if the backend already persisted it.
+   - Completed: deal detail refresh and claim recovery share the same active-claim lookup and QR-opening helper; successful claim count refresh remains best-effort and claim creation logic is unchanged.
+   - Completed: Wallet now lets the visible scan/code panel open the same QR/code modal, and the `Show QR & code` backup action is a larger bordered 50px target with hit slop.
+   - Left alone: demo data cleanup, billing, Supabase schema, edge functions, merchant redeem, dashboard counts, onboarding, and navigation.
+4. Files affected
+   - `app/deal/[id].tsx`
+   - `app/(tabs)/wallet.tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npx vitest run lib/claim-redeem-deadline.test.ts` - passed, 5 tests.
+- Focused claim/wallet interaction tests were not found in the current test suite.
+- Expo/Android smoke was not run in this pass.
+
+APK requirement:
+
+- A new APK is required. These are runtime app code changes in deal detail and Wallet, so the already-installed versionCode `10` APK will not include the fixes.
+
 ---
 
 ## Recommended Order
