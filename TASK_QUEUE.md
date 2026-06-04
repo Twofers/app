@@ -1376,6 +1376,39 @@ Screenshots captured in `qa-screens/final-owner-demo-smoke/`:
 - `25_dashboard_after_relaunch_redemptions_updated.png`
 - `26_wallet_redeemed_state_stale_data.png`
 
+QR/modal blocker follow-up 2026-06-04:
+
+1. What I found
+   - `claude -p` is installed, but the scoped QR/modal prompt timed out after 184 seconds; Codex completed the fix directly.
+   - The shared `QrModal` used by deal detail and Home did not wire `onRequestClose`, so Android Back had no reliable modal-close path.
+   - Wallet was using a separate `WalletRedeemModal` path for the QR/code backup, even though the deal-detail shared `QrModal` was the modal proven to open during the versionCode `11` smoke.
+   - The Wallet QR/code panel and `Show QR & code` button used the animated haptic pressable wrapper in the failing path; the controls now use native press targets while preserving the same active-ticket guards.
+2. Why it matters
+   - The owner-demo operator must be able to close the QR/code modal with either Hide or Android Back.
+   - Wallet needs the same reliable QR/code modal path as deal detail so staff can scan the ticket or read the short code during a live demo.
+3. Recommended fix
+   - Completed: shared `QrModal` now handles Android Back with `onRequestClose={onHide}`.
+   - Completed: Wallet now renders the shared `QrModal` persistently and drives it from the QR/code panel and `Show QR & code` button.
+   - Completed: Wallet passes the raw claim expiry plus grace minutes into `QrModal`, avoiding double-added grace time while preserving existing claim and redeem deadlines.
+   - Left alone: hosted data, billing, analytics, dashboard counts, Supabase schema, edge functions, merchant redeem, onboarding, auth, and navigation structure.
+4. Files affected
+   - `components/qr-modal.tsx`
+   - `app/(tabs)/wallet.tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npx vitest run lib/claim-redeem-deadline.test.ts supabase/functions/_shared/claim-redeem.test.ts supabase/functions/_shared/claim-limits.test.ts` - passed, 13 tests.
+- Focused Wallet/modal interaction tests were not found in the current test suite.
+- Expo/Android smoke was not run in this pass; the next owner-demo APK smoke should verify claim QR Hide, Android Back from the QR modal, Wallet QR/code panel open, and Wallet `Show QR & code` open with real Android taps.
+
+APK requirement:
+
+- A new APK is required. These are runtime app code changes in the shared QR modal and Wallet QR/code controls, so the installed versionCode `11` APK will not include the fixes.
+
 ---
 
 ## Recommended Order

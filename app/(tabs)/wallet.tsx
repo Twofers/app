@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { RefreshControl, SectionList, Text, View } from "react-native";
+import { Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -24,7 +24,7 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { WalletRedeemModal } from "@/components/wallet-redeem-modal";
+import { QrModal } from "@/components/qr-modal";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
 import { useBusiness } from "@/hooks/use-business";
@@ -113,9 +113,7 @@ export default function WalletScreen() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
-  const [qrClaimedAt, setQrClaimedAt] = useState<string | null>(null);
-  const [qrBusinessName, setQrBusinessName] = useState("");
-  const [qrDealTitle, setQrDealTitle] = useState("");
+  const [qrGraceMinutes, setQrGraceMinutes] = useState(DEFAULT_CLAIM_GRACE_MINUTES);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
@@ -181,10 +179,8 @@ export default function WalletScreen() {
     if (row.claim_status === "redeeming") return;
     setQrToken(row.token);
     setQrShortCode(row.short_code);
-    setQrExpires(getClaimRedeemDeadlineIso(row.expires_at, row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES));
-    setQrClaimedAt(row.created_at);
-    setQrBusinessName(businessName(row));
-    setQrDealTitle(dealTitle(row));
+    setQrExpires(row.expires_at);
+    setQrGraceMinutes(row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES);
     setActiveDealId(row.deal_id);
     setQrVisible(true);
   }
@@ -208,8 +204,9 @@ export default function WalletScreen() {
         business_id: businessIdForDeal,
       });
       setQrToken(out.token);
-      setQrExpires(getClaimRedeemDeadlineIso(out.expires_at, DEFAULT_CLAIM_GRACE_MINUTES));
+      setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
+      setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       await loadClaims();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : t("consumerWallet.errRefreshQr");
@@ -240,11 +237,9 @@ export default function WalletScreen() {
         business_id: row.deals?.business_id ?? null,
       });
       setQrToken(out.token);
-      setQrExpires(getClaimRedeemDeadlineIso(out.expires_at, DEFAULT_CLAIM_GRACE_MINUTES));
+      setQrExpires(out.expires_at);
       setQrShortCode(out.short_code ?? null);
-      setQrClaimedAt(row.created_at);
-      setQrBusinessName(businessName(row));
-      setQrDealTitle(dealTitle(row));
+      setQrGraceMinutes(DEFAULT_CLAIM_GRACE_MINUTES);
       setActiveDealId(row.deal_id);
       setQrVisible(true);
       await loadClaims();
@@ -552,7 +547,7 @@ export default function WalletScreen() {
         </Pressable>
         {bucket === "active" && !redeemed && !tokenDead ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <Pressable
+            <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
               accessibilityRole="button"
@@ -598,14 +593,14 @@ export default function WalletScreen() {
               <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
                 {t("consumerWallet.note")}
               </Text>
-            </Pressable>
+            </NativePressable>
             <PrimaryButton
               title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
               style={{ borderRadius: Radii.lg }}
             />
-            <Pressable
+            <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
               accessibilityRole="button"
@@ -625,7 +620,7 @@ export default function WalletScreen() {
               <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
                 {t("consumerWallet.qrFallbackLabel")}
               </Text>
-            </Pressable>
+            </NativePressable>
           </View>
         ) : null}
         {bucket === "active" && tokenDead && !redeemed ? (
@@ -819,21 +814,16 @@ export default function WalletScreen() {
         />
       ) : null}
 
-      {qrVisible ? (
-        <WalletRedeemModal
-          visible
-          token={qrToken}
-          shortCode={qrShortCode}
-          expiresAt={qrExpires}
-          claimedAt={qrClaimedAt}
-          businessName={qrBusinessName}
-          dealTitle={qrDealTitle}
-          nowMs={nowMs}
-          onHide={() => setQrVisible(false)}
-          onRefresh={refreshQr}
-          refreshing={refreshingQr}
-        />
-      ) : null}
+      <QrModal
+        visible={qrVisible}
+        token={qrToken}
+        shortCode={qrShortCode}
+        expiresAt={qrExpires}
+        graceMinutes={qrGraceMinutes}
+        onHide={() => setQrVisible(false)}
+        onRefresh={refreshQr}
+        refreshing={refreshingQr}
+      />
     </View>
   );
 }
