@@ -1145,7 +1145,7 @@ APK requirement:
 
 ## Merchant Demo / Business Data Cleanup
 
-Status: Implemented - source cleanup validated; hosted demo data still needs refresh.
+Status: Partially fixed - demo-owned hosted data refreshed; unowned stale public row still needs service-role cleanup.
 
 Findings 2026-06-04:
 
@@ -1185,6 +1185,48 @@ Manual check:
 
 - After refreshing hosted demo data, open Business mode -> Account. Expected result: the business card and editable profile show `Cedar & Bean Cafe`, `120 S Main St`, `Cafe & Bakery`, `Maya Patel`, `hello@cedarbean.cafe`, Grapevine location, clean hours, and no `Met` / `E` values.
 - Home/Shops/Dashboard demo deal surfaces should show polished BOGO deal titles without `Demo`, `(live)`, `(scheduled)`, timestamp suffixes, or preview-tester copy.
+
+Hosted refresh follow-up 2026-06-04:
+
+1. What I found
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` were not present in the shell environment; no secret values were printed.
+   - The local `.env` public Expo Supabase values were available for a normal anon/RLS demo sign-in path; no service-role key was used.
+   - Read-only anon/RLS probe confirmed the demo account owned the stale `Demo Roasted Bean Coffee` business, the `business_profiles` row with `Met` / `E`, and old/timestamped deal rows.
+   - A separate public stale business row still exists as `My Coffee`, address/location `124`, contact `Demo Owner`, `hello@demo.twofer.app`, id prefix `a0000000`; it is not owned by the demo account under RLS.
+2. Why it matters
+   - The main demo-owned business/profile/deal surfaces now show polished Cedar & Bean data, but consumer discovery can still expose the unowned stale `My Coffee` / `124` public business until an admin/service-role cleanup removes it.
+3. Recommended fix
+   - Completed via normal anon/RLS: updated the hosted demo-owned business to `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Grapevine, TX`, polished hours, category, and description.
+   - Completed via normal anon/RLS: updated the hosted demo `business_profiles` display row to `Cedar & Bean Cafe`, `120 S Main St`, `Cafe & Bakery`, preserving existing `active` / `premium` billing state.
+   - Completed via normal anon/RLS: replaced the demo-owned stale/timestamped deal rows with `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`, `BOGO Iced Tea Launch Special`, `Weekday Cold Brew 2-for-1`, and `Saturday Bakery Box BOGO`.
+   - Blocked by RLS: anon delete of the exact stale `My Coffee` / `124` row returned zero deletable rows because it is not demo-owned. Run this admin SQL in Supabase SQL Editor, then rerun `npm run seed:demo` with service-role env if you want a service-role refresh:
+
+```sql
+DELETE FROM public.businesses
+WHERE id = 'a0000000-0000-4000-8000-00000000c0de'
+  AND name = 'My Coffee'
+  AND address = '124'
+  AND business_email = 'hello@demo.twofer.app';
+```
+
+```powershell
+$env:SUPABASE_URL = "https://<project-ref>.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"
+npm run seed:demo
+```
+
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+5. MVP priority: High
+
+Validation results:
+
+- Anon/RLS hosted refresh command - passed; no service-role key was used.
+- Read-only anon/RLS verification - passed for demo-owned data: Cedar & Bean Cafe business/profile values are present, Maya Patel and `hello@cedarbean.cafe` are present, Grapevine location is present, and demo-owned stale strings/deal titles are absent.
+- Final public stale scan - still finds only the unowned `My Coffee` / `124` row; stale deal title scan returns no old/timestamped deal titles.
+- `npm run seed:demo` - not run because `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are missing from the shell.
+- Typecheck/lint were not run because no app/source code changed; this pass refreshed hosted data and updated release docs only.
 
 ---
 

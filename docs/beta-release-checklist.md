@@ -513,3 +513,51 @@ Result: Not rerun.
 - First-impression issues: stale/junk business names and profile fields, timestamped deal names, preview-tester shop copy, clipped claim CTA, clipped Settings mode-switch button, and broken Android Back from shop detail.
 - Non-blocking pass: Map responsiveness appears fixed in this APK for the tested 30-second scenario.
 - Screenshots and APKs are local release artifacts and should not be committed.
+
+## Current Run - 2026-06-04 Hosted Demo Data Refresh
+
+Focused hosted data refresh was run after the versionCode `11` owner-demo smoke found stale remote demo data. No service-role secret was available in the shell, so this pass used only the normal demo account anon/RLS path and did not print any secret values.
+
+### 1. Environment And Command
+
+Result: Partially passed.
+
+- Shell env check showed `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` were not present.
+- `npm run seed:demo` was not run because the required service-role env was missing.
+- Used the local public Expo Supabase env values for a signed-in demo account anon/RLS refresh; no service-role key was used.
+- Command run: inline Node anon/RLS hosted refresh using `@supabase/supabase-js`, the documented demo account, and the same Cedar & Bean Cafe data from the seed files.
+
+### 2. Hosted Data Result
+
+Result: Demo-owned data fixed; one unowned public stale row remains.
+
+- Fixed: demo-owned `businesses` row now shows `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Grapevine, TX`, polished hours, category, and description.
+- Fixed: demo-owned `business_profiles` row now shows `Cedar & Bean Cafe`, `120 S Main St`, `Cafe & Bakery`; existing `active` / `premium` billing state was preserved.
+- Fixed: demo-owned deal rows now show professional titles: `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`, `BOGO Iced Tea Launch Special`, `Weekday Cold Brew 2-for-1`, and `Saturday Bakery Box BOGO`.
+- Fixed: read-only stale deal title scan found no `BOGO: 2-for-1 Cold Brew Pair ...`, `2-for-1 Latte Pair`, `BOGO Coffee Special!`, or old seed deal titles.
+- Still blocked: public stale business `My Coffee`, address/location `124`, contact `Demo Owner`, `hello@demo.twofer.app`, id prefix `a0000000`, remains visible and is not owned by the demo account under RLS.
+- A tightly constrained anon/RLS delete attempt for that exact `My Coffee` / `124` row returned zero deletable rows.
+
+### 3. Manual Admin Cleanup Needed
+
+Run this in Supabase SQL Editor with admin/service-role privileges, then rerun `npm run seed:demo` if a full service-role refresh is desired:
+
+```sql
+DELETE FROM public.businesses
+WHERE id = 'a0000000-0000-4000-8000-00000000c0de'
+  AND name = 'My Coffee'
+  AND address = '124'
+  AND business_email = 'hello@demo.twofer.app';
+```
+
+```powershell
+$env:SUPABASE_URL = "https://<project-ref>.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"
+npm run seed:demo
+```
+
+### 4. Readiness
+
+- Owner-demo readiness from data alone: Not fully ready until the unowned `My Coffee` / `124` public row is removed.
+- Demo-owned business/account/deal data: Ready for Cedar & Bean Cafe verification.
+- Other versionCode `11` blockers from the smoke remain separate: Wallet QR/code modal controls, claim QR dismiss/back behavior, in-session dashboard redemption refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.
