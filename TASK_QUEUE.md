@@ -1231,6 +1231,83 @@ Manual check:
 
 ---
 
+## Final Owner-Demo Smoke - versionCode 11
+
+Status: Failed - not owner-demo ready 2026-06-04.
+
+Findings 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and used for scoped reconnaissance before Codex completed the APK/device smoke directly.
+   - Newest APK found in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-11538fb6-92fc-469f-8fe9-5d41e82433e0.apk`.
+   - APK metadata from `aapt dump badging`: package `com.unvmex2.twoforone`, `versionCode=11`, `versionName=1.0.0`.
+   - Installed on Android emulator `emulator-5554` with `adb install -r`; installed package matched the APK with `versionCode=11`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 15:56:02`.
+   - Screenshots were captured under ignored local folder `qa-screens/final-owner-demo-smoke/`.
+   - Recent runtime fixes included in this APK: deal detail claim succeeded and opened the QR/code modal instead of staying stuck on `Claiming...`; Billing Pro card says `Included in Premium`; Premium is the only Billing card that says `Current plan`.
+   - Recent runtime fixes still failing in this APK: Wallet QR/code panel did not open the QR/code modal, and Wallet `Show QR & code` did not open the QR/code modal.
+   - Business-owner path covered: signed-out auth landing, login, business mode, business dashboard, create deal hub, Billing, Account/Settings, and merchant manual Ticket code screen.
+   - Consumer proof path covered: Home deals, Shops, shop detail, fresh live deal claim, claim QR/code modal, Wallet active ticket, Wallet QR/code controls, merchant manual redeem, Wallet redeemed state, and business dashboard redemption count.
+   - Map passed the 30-second responsiveness check on `emulator-5554`; no ANR, app fatal exception, or `Application Not Responding` logcat match was observed during the wait.
+   - Merchant-facing demo data is not clean. Visible first-impression failures include `Demo Roasted Bean Coffee`, `Met`, `E`, `My Coffee`, address `124`, old preview-tester copy, timestamped deal names, and no `Cedar & Bean Cafe` where expected.
+2. Why it matters
+   - Real cafe or restaurant owners would see stale demo names and profile values that make the product feel unfinished.
+   - The claim success modal now proves the new deal-detail fix is present, but the Wallet QR/code modal controls are still a direct demo blocker.
+   - The QR modal `Hide` control and Android Back did not dismiss reliably after claim, which can trap the owner/demo operator in a poor state.
+   - Dashboard redemption counts eventually refresh after app relaunch, but the in-session business dashboard stayed stale immediately after merchant manual redeem.
+3. Recommended fix
+   - Refresh hosted demo data before the next APK smoke so business and consumer surfaces show `Cedar & Bean Cafe` or another polished merchant-demo account, clean profile fields, clean addresses, and customer-facing deal titles.
+   - Fix and manually verify the Wallet QR/code panel and `Show QR & code` button with real Android taps.
+   - Fix the claim QR/code modal dismiss path for `Hide` and Android Back.
+   - Refresh business dashboard stats after a successful redeem or when returning to the dashboard.
+   - Address first-impression UI issues found in smoke: clipped claim CTA near the bottom tab bar, clipped Settings mode-switch button, and Android Back not returning from shop detail.
+   - Rerun this owner-demo smoke against versionCode `11` or newer after the hosted demo data and Wallet/modal fixes are complete.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-owner-demo-smoke/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `aapt dump badging` confirmed the APK package and version: `com.unvmex2.twoforone`, `versionCode=11`, `versionName=1.0.0`.
+- `adb -s emulator-5554 install -r` passed.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed app matched `versionCode=11`, `versionName=1.0.0`.
+- Screens passed: signed-out auth landing, normal login, business create hub, Billing Premium copy, merchant manual Ticket code screen, fresh claim success QR modal, Map 30-second no-ANR check, merchant manual redeem success, Wallet redeemed state, and business dashboard redemption count after app relaunch.
+- Screens failed or blocked: hosted demo data cleanliness, Wallet QR/code panel modal open, Wallet `Show QR & code` modal open, claim QR/code modal dismiss/back behavior, in-session dashboard redemption count refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.
+- Typecheck/lint were not run because no app code was changed; this pass updated release documentation only after APK smoke testing.
+- Owner-demo ready: No.
+
+Screenshots captured in `qa-screens/final-owner-demo-smoke/`:
+
+- `01_signed_out_auth_landing.png`
+- `02_business_create_hub_after_login.png`
+- `03_business_dashboard_tour.png`
+- `04_business_dashboard_stale_demo_data_FAIL.png`
+- `05_billing_premium_copy_PASS.png`
+- `06_account_stale_met_e_FAIL.png`
+- `07_merchant_manual_ticket_code.png`
+- `08_consumer_onboarding.png`
+- `09_consumer_onboarding_stale_shops_FAIL.png`
+- `10_home_no_live_stale_favorite_FAIL.png`
+- `11_home_all_deals_stale_claimed_FAIL.png`
+- `12_live_deal_timestamp_claim_button_partially_clipped_FAIL.png`
+- `13_claim_success_qr_modal_PASS.png`
+- `14_claim_qr_hide_back_nonresponsive_FAIL.png`
+- `15_wallet_active_ticket_stale_data.png`
+- `16_wallet_qr_panel_tap_no_modal_FAIL.png`
+- `17_wallet_show_qr_button_no_modal_FAIL.png`
+- `18_shops_list_stale_junk_FAIL.png`
+- `19_shop_detail_stale_preview_copy_FAIL.png`
+- `20_map_initial.png`
+- `21_map_after_30s.png`
+- `22_map_live_filter_after_30s.png`
+- `23_merchant_manual_redeem_success.png`
+- `24_dashboard_after_redeem_stale_count_FAIL.png`
+- `25_dashboard_after_relaunch_redemptions_updated.png`
+- `26_wallet_redeemed_state_stale_data.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

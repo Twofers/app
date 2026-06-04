@@ -398,3 +398,118 @@ Screenshots captured under `qa-screens/final-money-flow-retest/`:
 - Follow up separately on the deal-detail post-claim loading state; the claim was created, but the detail screen stayed on `Claiming...` until relaunch.
 - Follow up separately on the Wallet `Show QR & code` backup button hit/open behavior; Wallet still rendered the active ticket QR area and claim code, so manual redeem was not blocked.
 - The improved client-side fallback copy for failed `redeem-token` responses still requires a new APK to validate, as expected from the backend-fix follow-up.
+
+## Current Run - 2026-06-04 Final Owner-Demo Smoke
+
+Final owner-demo smoke was executed against the newest local APK in the TWOFER folder. This pass used `claude -p` for scoped reconnaissance, then Codex completed the APK install, Android smoke, screenshot capture, and release documentation directly.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-04 local owner-demo smoke run
+- Final commit SHA: not changed for app code in this validation pass
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this smoke-only pass
+- Android versionCode from APK: `11`
+- Android versionName from APK: `1.0.0`
+- Package from APK: `com.unvmex2.twoforone`
+- EAS build URL: not available from the local APK folder metadata
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-11538fb6-92fc-469f-8fe9-5d41e82433e0.apk`
+- Screenshots folder: `qa-screens/final-owner-demo-smoke/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=11`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 15:56:02`
+
+### 2. APK Verification And Install
+
+Result: Passed for APK metadata, install, launch, and installed version match.
+
+- Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-11538fb6-92fc-469f-8fe9-5d41e82433e0.apk`, modified 2026-06-04 15:44:19 local time.
+- `aapt dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=11`, `versionName=1.0.0`.
+- Installed on `emulator-5554` with `adb install -r`.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed package matched `versionCode=11`, `versionName=1.0.0`.
+- App data was cleared before launch to validate the signed-out first-run path.
+
+### 3. Owner Demo Smoke
+
+Result: Failed - not ready to show real business owners.
+
+- Passed: signed-out auth landing opened with TWOFER branding and no demo credential helper UI.
+- Passed: login through the normal email/password form.
+- Passed: business mode opened; create deal hub, business dashboard, Billing, Account/Settings, and merchant manual Ticket code screen were reachable.
+- Passed: Billing recent fix is included. The Pro card says `Included in Premium`, and Premium is the only card that says `Current plan`.
+- Passed: merchant manual redeem screen accepted a ticket code and showed a branded `Redeemed` success receipt.
+- Failed: business dashboard still showed `Welcome back, Demo Roasted Bean Coffee`.
+- Failed: Account still showed stale profile data including `Your Coffee Shop`, `Met`, and `E`.
+- Failed: business dashboard deal titles still included timestamped smoke-test copy such as `BOGO: 2-for-1 Cold Brew Pair 20260604034035`.
+- Failed: hosted demo data did not show `Cedar & Bean Cafe` or another polished merchant-demo business where expected.
+- Failed: the in-session business dashboard did not refresh redemption counts immediately after merchant manual redeem; it refreshed after force-stop/relaunch.
+
+### 4. Consumer Proof Path
+
+Result: Failed with QR modal and demo-data blockers, though the fresh claim and manual redeem money flow completed.
+
+- Passed: consumer onboarding, Home, Shops, shop detail, Wallet, and Settings were reachable.
+- Passed: a fresh live deal could be claimed, and the deal detail opened the QR/code modal instead of staying stuck on `Claiming...`.
+- Passed: Wallet showed the active ticket and later showed redeemed state after merchant manual redeem.
+- Passed: merchant manual redeem completed successfully for the fresh claimed code.
+- Failed: claim QR/code modal `Hide` did not dismiss reliably, and Android Back did not close the modal in this run.
+- Failed: Wallet QR/code panel did not open the QR/code modal.
+- Failed: Wallet `Show QR & code` button did not open the QR/code modal.
+- Failed: after Wallet QR/code button attempts, bottom-tab navigation stopped responding until app relaunch.
+- Failed: consumer-facing demo data still included `Demo Roasted Bean Coffee`, `My Coffee`, address `124`, preview-tester description copy, stale favorite shops, and timestamped deal titles.
+- Failed: the live deal claim CTA was partially clipped near the bottom tab bar before a slight scroll.
+- Failed: Android Back from shop detail did not return to Shops, though the visible navigate-up control worked.
+
+### 5. Map Responsiveness
+
+Result: Passed.
+
+- Map opened with Google tiles and a marker.
+- Map remained responsive after a 30-second wait.
+- Live-deals filter interaction stayed responsive after the wait.
+- Logcat check during the 30-second wait did not show a `com.unvmex2.twoforone` ANR, fatal exception, or `Application Not Responding` entry.
+
+### 6. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-owner-demo-smoke/`:
+
+- `01_signed_out_auth_landing.png`
+- `02_business_create_hub_after_login.png`
+- `03_business_dashboard_tour.png`
+- `04_business_dashboard_stale_demo_data_FAIL.png`
+- `05_billing_premium_copy_PASS.png`
+- `06_account_stale_met_e_FAIL.png`
+- `07_merchant_manual_ticket_code.png`
+- `08_consumer_onboarding.png`
+- `09_consumer_onboarding_stale_shops_FAIL.png`
+- `10_home_no_live_stale_favorite_FAIL.png`
+- `11_home_all_deals_stale_claimed_FAIL.png`
+- `12_live_deal_timestamp_claim_button_partially_clipped_FAIL.png`
+- `13_claim_success_qr_modal_PASS.png`
+- `14_claim_qr_hide_back_nonresponsive_FAIL.png`
+- `15_wallet_active_ticket_stale_data.png`
+- `16_wallet_qr_panel_tap_no_modal_FAIL.png`
+- `17_wallet_show_qr_button_no_modal_FAIL.png`
+- `18_shops_list_stale_junk_FAIL.png`
+- `19_shop_detail_stale_preview_copy_FAIL.png`
+- `20_map_initial.png`
+- `21_map_after_30s.png`
+- `22_map_live_filter_after_30s.png`
+- `23_merchant_manual_redeem_success.png`
+- `24_dashboard_after_redeem_stale_count_FAIL.png`
+- `25_dashboard_after_relaunch_redemptions_updated.png`
+- `26_wallet_redeemed_state_stale_data.png`
+
+### 7. Static Validation
+
+Result: Not rerun.
+
+- No app code was modified during this final owner-demo smoke.
+- Per the task instruction, `npm run typecheck` and `npm run lint` were not rerun.
+- This pass updated only `TASK_QUEUE.md` and `docs/beta-release-checklist.md` after device validation.
+
+### 8. Known Issues And Readiness
+
+- Owner-demo readiness: No. This APK should not be shown to real business owners yet.
+- Release blockers: stale hosted demo data, Wallet QR/code modal controls not opening, claim QR/code modal dismiss/back failure, and in-session dashboard redemption count not refreshing after redeem.
+- First-impression issues: stale/junk business names and profile fields, timestamped deal names, preview-tester shop copy, clipped claim CTA, clipped Settings mode-switch button, and broken Android Back from shop detail.
+- Non-blocking pass: Map responsiveness appears fixed in this APK for the tested 30-second scenario.
+- Screenshots and APKs are local release artifacts and should not be committed.
