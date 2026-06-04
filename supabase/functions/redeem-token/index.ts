@@ -244,7 +244,8 @@ serve(async (req) => {
     }
 
     // 💾 Mark as redeemed (idempotent: same claim id, only if still null)
-    const redeemMethod = shortCodeNorm.length >= 4 ? "short_code" : "qr";
+    // Manual short-code entry is the backup path for staff QR redemption.
+    const redeemMethod = "qr";
     const { data: updated, error: updateError } = await supabase
       .from("deal_claims")
       .update({
@@ -278,7 +279,7 @@ serve(async (req) => {
         business_id: deal.business_id ?? null,
         deal_id: deal.id ?? null,
         claim_id: claimId,
-        context: { method: "qr" },
+        context: { method: redeemMethod },
       });
     } catch (err) {
       console.error("[redeem-token] analytics insert failed", err);

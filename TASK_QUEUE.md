@@ -1018,6 +1018,40 @@ Screenshots captured in `qa-screens/final-money-flow/`:
 - `10_merchant_ticket_code_entry_step.png`
 - `11_merchant_redeem_failed_raw_error_step.png`
 
+Fix follow-up 2026-06-04:
+
+1. What I found
+   - `supabase/functions/redeem-token/index.ts` selected claims by either full QR token or normalized `short_code`, but wrote `redeem_method = "short_code"` for manual staff entry.
+   - The live constraint `deal_claims_redeem_method_check` from `20260327120000_launch_visual_redeem_analytics.sql` allows only `NULL`, `visual`, and `qr`; Wallet display and visual redeem code also treat stored methods as `visual` or `qr`.
+   - The manual short code is a fallback input path for the same staff QR redemption channel, not a separate stored redeem method.
+   - `lib/functions.ts` did not read non-2xx Edge Function response bodies for `redeem-token`, so Supabase's wrapper message could reach `app/(tabs)/redeem.tsx` as raw copy.
+2. Why it matters
+   - Manual merchant redeem failed after all ownership, expiration, and race checks passed because the final update violated the database constraint.
+   - Staff could see raw infrastructure copy instead of a clear redeem failure message when the Edge Function returned a non-2xx response.
+3. Recommended fix
+   - Completed: manual short-code redeem now stores `redeem_method = "qr"` and analytics uses the same stored method. Existing visual/pass redemption remains `visual`.
+   - Completed: `redeemToken` now reads the Edge JSON error body when available and normalizes generic non-2xx or failed-update redeem errors to the existing friendly ticket failure message.
+   - No migration was added; changing the function value is the correct fix because the existing constraint matches the app's two stored redeem method states.
+4. Files affected
+   - `supabase/functions/redeem-token/index.ts`
+   - `lib/functions.ts`
+   - `lib/i18n/api-messages.test.ts`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npx vitest run lib/i18n/api-messages.test.ts supabase/functions/_shared/claim-redeem.test.ts` - passed, 16 tests.
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npm run typecheck:functions` - blocked because `deno` is not installed on PATH in this shell.
+
+Remaining blockers / deploy notes:
+
+- Deploy `redeem-token` before retesting merchant manual redeem against Supabase.
+- No database migration is required for this fix.
+- A new APK or app update is required to validate the improved friendly client-side redeem failure copy. Backend-only deploy should be enough to make the existing versionCode `10` APK complete manual redeem successfully, but it will not contain the client fallback-copy fix.
+
 ---
 
 ## Recommended Order

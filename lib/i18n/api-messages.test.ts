@@ -38,6 +38,12 @@ describe("translateKnownApiMessage", () => {
     expect(translateKnownApiMessage(raw, t)).toBe(raw);
   });
 
+  it("maps generic redeem failure fallback in English", async () => {
+    await i18n.changeLanguage("en");
+    const t = i18n.t.bind(i18n);
+    expect(translateKnownApiMessage("Token redemption failed", t)).toBe("Couldn't redeem this ticket.");
+  });
+
   it("maps cutoff prefix with interpolated time", async () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);
@@ -71,7 +77,7 @@ describe("translateKnownApiMessage", () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);
     expect(translateKnownApiMessage("AI response was invalid JSON.", t)).toBe(
-      "AI returned invalid data. Try again.",
+      "We couldn't prepare ad options. Try again.",
     );
   });
 });

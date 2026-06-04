@@ -224,7 +224,12 @@ export async function redeemToken(body: { token?: string; short_code?: string })
   });
 
   if (error) {
-    throw new Error(parseFunctionError(error));
+    const fromBody = await readInvokeErrorBody(error);
+    const parsed = fromBody.message ?? parseFunctionError(error);
+    const message = /edge function returned a non-2xx status code|^Failed to redeem token:/i.test(parsed)
+      ? "Token redemption failed"
+      : parsed;
+    throw new Error(message || "Token redemption failed");
   }
 
   // Check if data itself contains an error
