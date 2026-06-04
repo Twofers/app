@@ -4,32 +4,32 @@ import { DEMO_PREVIEW_EMAIL, isDemoPreviewAccountEmail } from "@/lib/demo-accoun
 
 /** Matches `supabase/seed_demo_coffee_business.sql` (canonical preview business + deals). */
 const CANONICAL_BUSINESS = {
-  name: "Demo Roasted Bean Coffee",
-  address: "1234 Commerce St",
-  location: "Dallas, TX",
-  latitude: 32.7831,
-  longitude: -96.8067,
-  phone: "(214) 555-0100",
-  hours_text: "Mon–Fri 7 AM – 7 PM · Sat–Sun 8 AM – 6 PM",
-  short_description: "Neighborhood espresso bar for Twofer preview testers.",
-  category: "Coffee shop",
-  contact_name: "Demo Owner",
-  business_email: "hello@demo.twofer.app",
+  name: "Cedar & Bean Cafe",
+  address: "120 S Main St",
+  location: "Grapevine, TX",
+  latitude: 32.9407,
+  longitude: -97.0781,
+  phone: "(817) 555-0148",
+  hours_text: "Mon-Fri 7 AM - 7 PM | Sat-Sun 8 AM - 6 PM",
+  short_description: "Neighborhood cafe serving espresso, scratch pastries, and quick lunch plates in downtown Grapevine.",
+  category: "Cafe & Bakery",
+  contact_name: "Maya Patel",
+  business_email: "hello@cedarbean.cafe",
 } as const;
 
 const CANONICAL_BUSINESS_PROFILE = {
-  name: "Demo Roasted Bean Coffee",
-  address: "1234 Commerce St",
-  category: "Coffee Shop",
+  name: "Cedar & Bean Cafe",
+  address: "120 S Main St",
+  category: "Cafe & Bakery",
   setup_completed: true,
 } as const;
 
 const DEMO_LOCATION = {
-  name: "Downtown Dallas Cafe",
-  address: "1234 Commerce St, Dallas, TX 75202",
-  phone: "(214) 555-0100",
-  lat: 32.7831,
-  lng: -96.8067,
+  name: "Grapevine Main Street",
+  address: "120 S Main St, Grapevine, TX 76051",
+  phone: "(817) 555-0148",
+  lat: 32.9407,
+  lng: -97.0781,
 } as const;
 
 const DEMO_MENU_ITEMS = [
@@ -43,8 +43,8 @@ const DEMO_MENU_ITEMS = [
 
 const DEMO_DEALS = [
   {
-    title: "2-for-1 oat milk lattes (live)",
-    description: "Buy one oat milk latte, get one free for your coworker.",
+    title: "Buy One Latte, Get One Free",
+    description: "Bring a friend: buy any handcrafted latte and get a second latte free.",
     price: 6.5,
     max_claims: 220,
     poster_url: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=1200&q=80",
@@ -52,18 +52,18 @@ const DEMO_DEALS = [
     durationDays: 20,
   },
   {
-    title: "Morning pastry pair + drip (live)",
-    description: "Two pastries and two medium drips for one combo price before noon.",
-    price: 7.5,
+    title: "2-for-1 Pastry Pair Before Noon",
+    description: "Buy one fresh-baked pastry before noon and get a second pastry free.",
+    price: 4.75,
     max_claims: 180,
     poster_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80",
     kind: "live" as const,
     durationDays: 16,
   },
   {
-    title: "After-school iced latte happy hour (scheduled)",
-    description: "Starts this week: buy one iced latte, get a second 50% off.",
-    price: 6.0,
+    title: "BOGO Iced Tea Launch Special",
+    description: "Starts this week: buy one house iced tea and get a second free.",
+    price: 4.5,
     max_claims: 140,
     poster_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1200&q=80",
     kind: "scheduled" as const,
@@ -71,8 +71,8 @@ const DEMO_DEALS = [
     endOffsetDays: 12,
   },
   {
-    title: "Weekday 2-for-1 cold brew window (recurring)",
-    description: "Recurring Mon-Fri 2:00-5:00 PM cold brew 2-for-1 special.",
+    title: "Weekday Cold Brew 2-for-1",
+    description: "Monday-Friday from 2-5 PM, buy one cold brew and get one free.",
     price: 5.75,
     max_claims: 260,
     poster_url: "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=1200&q=80",
@@ -83,8 +83,8 @@ const DEMO_DEALS = [
     durationDays: 30,
   },
   {
-    title: "Saturday bakery box bogo (recurring)",
-    description: "Every Saturday morning: buy one pastry box, get one free.",
+    title: "Saturday Bakery Box BOGO",
+    description: "Every Saturday morning, buy one pastry box and get a second box free.",
     price: 12.0,
     max_claims: 120,
     poster_url: "https://images.unsplash.com/photo-1483695028939-5bb13f8648b0?w=1200&q=80",
@@ -96,16 +96,30 @@ const DEMO_DEALS = [
   },
 ] as const;
 
-const SEEDED_DEAL_TITLES = DEMO_DEALS.map((d) => d.title);
+const LEGACY_BUSINESS_NAMES = new Set(["Demo Roasted Bean Coffee", "Your Coffee Shop"]);
+const LEGACY_DEAL_TITLES = [
+  "2-for-1 oat milk lattes (live)",
+  "Morning pastry pair + drip (live)",
+  "After-school iced latte happy hour (scheduled)",
+  "Weekday 2-for-1 cold brew window (recurring)",
+  "Saturday bakery box bogo (recurring)",
+  "2-for-1 Latte Pair",
+] as const;
+const LEGACY_DEAL_TITLE_PREFIXES = [
+  "BOGO: 2-for-1 Cold Brew Pair",
+] as const;
+const SEEDED_DEAL_TITLES = Array.from(new Set([...DEMO_DEALS.map((d) => d.title), ...LEGACY_DEAL_TITLES]));
 const DEMO_ANALYTICS_EVENT_SEED = "demo_business_seed_v2";
 
 function isLegacyAccountStub(row: {
+  name: string | null;
   category: string | null;
   business_email: string | null;
   location: string | null;
 }): boolean {
+  if (row.name && LEGACY_BUSINESS_NAMES.has(row.name.trim())) return true;
   if (row.category?.trim() === "Demo") return true;
-  if (row.business_email?.trim().toLowerCase() === "hello@demo.twofer.app" && row.location?.includes("Austin")) {
+  if (row.business_email?.trim().toLowerCase() === "hello@demo.twofer.app") {
     return true;
   }
   return false;
@@ -166,7 +180,7 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
 
   const { data: biz, error: bizReadErr } = await client
     .from("businesses")
-    .select("id,category,business_email,location")
+    .select("id,name,category,business_email,location")
     .eq("owner_id", uid)
     .maybeSingle();
 
@@ -283,6 +297,9 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
 
   const now = new Date();
   await client.from("deals").delete().eq("business_id", businessId).in("title", SEEDED_DEAL_TITLES);
+  for (const prefix of LEGACY_DEAL_TITLE_PREFIXES) {
+    await client.from("deals").delete().eq("business_id", businessId).like("title", `${prefix}%`);
+  }
   const dealRows = buildSeedDealRows(now, businessId, locationId);
   const { data: insertedDeals, error: dealsInsertErr } = await client
     .from("deals")

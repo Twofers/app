@@ -34,35 +34,42 @@ BEGIN
       phone,
       hours_text,
       short_description,
-      category
+      category,
+      contact_name,
+      business_email,
+      subscription_tier
     )
     VALUES (
       preferred_id,
       demo_uid,
-      'Demo Roasted Bean Coffee',
-      '1234 Commerce St',
-      'Dallas, TX',
-      32.7831,
-      -96.8067,
-      '(214) 555-0100',
-      'Mon–Fri 7:00–19:00 · Sat–Sun 8:00–18:00',
-      'Neighborhood espresso bar for Twofer preview testers.',
-      'Coffee shop',
+      'Cedar & Bean Cafe',
+      '120 S Main St',
+      'Grapevine, TX',
+      32.9407,
+      -97.0781,
+      '(817) 555-0148',
+      'Mon-Fri 7 AM - 7 PM | Sat-Sun 8 AM - 6 PM',
+      'Neighborhood cafe serving espresso, scratch pastries, and quick lunch plates in downtown Grapevine.',
+      'Cafe & Bakery',
+      'Maya Patel',
+      'hello@cedarbean.cafe',
       'pro'
     );
     bid := preferred_id;
   ELSE
     UPDATE public.businesses
     SET
-      name = 'Demo Roasted Bean Coffee',
-      address = '1234 Commerce St',
-      location = 'Dallas, TX',
-      latitude = 32.7831,
-      longitude = -96.8067,
-      phone = '(214) 555-0100',
-      hours_text = 'Mon–Fri 7:00–19:00 · Sat–Sun 8:00–18:00',
-      short_description = 'Neighborhood espresso bar for Twofer preview testers.',
-      category = 'Coffee shop',
+      name = 'Cedar & Bean Cafe',
+      address = '120 S Main St',
+      location = 'Grapevine, TX',
+      latitude = 32.9407,
+      longitude = -97.0781,
+      phone = '(817) 555-0148',
+      hours_text = 'Mon-Fri 7 AM - 7 PM | Sat-Sun 8 AM - 6 PM',
+      short_description = 'Neighborhood cafe serving espresso, scratch pastries, and quick lunch plates in downtown Grapevine.',
+      category = 'Cafe & Bakery',
+      contact_name = 'Maya Patel',
+      business_email = 'hello@cedarbean.cafe',
       subscription_tier = 'pro',
       updated_at = NOW()
     WHERE id = bid;
@@ -83,9 +90,9 @@ BEGIN
   VALUES (
     demo_uid,
     demo_uid,
-    'Demo Roasted Bean Coffee',
-    '1234 Commerce St',
-    'Coffee Shop',
+    'Cedar & Bean Cafe',
+    '120 S Main St',
+    'Cafe & Bakery',
     true,
     'trial',
     'pro',
@@ -115,21 +122,21 @@ BEGIN
       INSERT INTO public.business_locations (business_id, name, address, phone, lat, lng)
       VALUES (
         bid,
-        'Downtown Dallas Cafe',
-        '1234 Commerce St, Dallas, TX 75202',
-        '(214) 555-0100',
-        32.7831,
-        -96.8067
+        'Grapevine Main Street',
+        '120 S Main St, Grapevine, TX 76051',
+        '(817) 555-0148',
+        32.9407,
+        -97.0781
       )
       RETURNING id INTO loc_id;
     ELSE
       UPDATE public.business_locations
       SET
-        name = 'Downtown Dallas Cafe',
-        address = '1234 Commerce St, Dallas, TX 75202',
-        phone = '(214) 555-0100',
-        lat = 32.7831,
-        lng = -96.8067
+        name = 'Grapevine Main Street',
+        address = '120 S Main St, Grapevine, TX 76051',
+        phone = '(817) 555-0148',
+        lat = 32.9407,
+        lng = -97.0781
       WHERE id = loc_id;
     END IF;
   EXCEPTION WHEN undefined_table THEN
@@ -163,12 +170,21 @@ BEGIN
 
   DELETE FROM public.deals
   WHERE business_id = bid
-    AND title IN (
-      '2-for-1 oat milk lattes (live)',
-      'Morning pastry pair + drip (live)',
-      'After-school iced latte happy hour (scheduled)',
-      'Weekday 2-for-1 cold brew window (recurring)',
-      'Saturday bakery box bogo (recurring)'
+    AND (
+      title IN (
+        'Buy One Latte, Get One Free',
+        '2-for-1 Pastry Pair Before Noon',
+        'BOGO Iced Tea Launch Special',
+        'Weekday Cold Brew 2-for-1',
+        'Saturday Bakery Box BOGO',
+        '2-for-1 oat milk lattes (live)',
+        'Morning pastry pair + drip (live)',
+        'After-school iced latte happy hour (scheduled)',
+        'Weekday 2-for-1 cold brew window (recurring)',
+        'Saturday bakery box bogo (recurring)',
+        '2-for-1 Latte Pair'
+      )
+      OR title LIKE 'BOGO: 2-for-1 Cold Brew Pair%'
     );
 
   INSERT INTO public.deals (
@@ -195,8 +211,8 @@ BEGIN
     (
       bid,
       loc_id,
-      '2-for-1 oat milk lattes (live)',
-      'Buy one oat milk latte, get one free for your coworker.',
+      'Buy One Latte, Get One Free',
+      'Bring a friend: buy any handcrafted latte and get a second latte free.',
       6.50,
       NOW(),
       NOW() + INTERVAL '20 days',
@@ -215,9 +231,9 @@ BEGIN
     (
       bid,
       loc_id,
-      'Morning pastry pair + drip (live)',
-      'Two pastries and two medium drips for one combo price before noon.',
-      7.50,
+      '2-for-1 Pastry Pair Before Noon',
+      'Buy one fresh-baked pastry before noon and get a second pastry free.',
+      4.75,
       NOW(),
       NOW() + INTERVAL '16 days',
       30,
@@ -235,9 +251,9 @@ BEGIN
     (
       bid,
       loc_id,
-      'After-school iced latte happy hour (scheduled)',
-      'Starts this week: buy one iced latte, get a second 50% off.',
-      6.00,
+      'BOGO Iced Tea Launch Special',
+      'Starts this week: buy one house iced tea and get a second free.',
+      4.50,
       NOW() + INTERVAL '2 days',
       NOW() + INTERVAL '12 days',
       30,
@@ -255,8 +271,8 @@ BEGIN
     (
       bid,
       loc_id,
-      'Weekday 2-for-1 cold brew window (recurring)',
-      'Recurring Mon-Fri 2:00-5:00 PM cold brew 2-for-1 special.',
+      'Weekday Cold Brew 2-for-1',
+      'Monday-Friday from 2-5 PM, buy one cold brew and get one free.',
       5.75,
       NOW(),
       NOW() + INTERVAL '30 days',
@@ -275,8 +291,8 @@ BEGIN
     (
       bid,
       loc_id,
-      'Saturday bakery box bogo (recurring)',
-      'Every Saturday morning: buy one pastry box, get one free.',
+      'Saturday Bakery Box BOGO',
+      'Every Saturday morning, buy one pastry box and get a second box free.',
       12.00,
       NOW(),
       NOW() + INTERVAL '45 days',
@@ -293,8 +309,8 @@ BEGIN
       'America/Chicago'
     );
 
-  SELECT id INTO deal_live_1 FROM public.deals WHERE business_id = bid AND title = '2-for-1 oat milk lattes (live)' LIMIT 1;
-  SELECT id INTO deal_live_2 FROM public.deals WHERE business_id = bid AND title = 'Morning pastry pair + drip (live)' LIMIT 1;
+  SELECT id INTO deal_live_1 FROM public.deals WHERE business_id = bid AND title = 'Buy One Latte, Get One Free' LIMIT 1;
+  SELECT id INTO deal_live_2 FROM public.deals WHERE business_id = bid AND title = '2-for-1 Pastry Pair Before Noon' LIMIT 1;
 
   BEGIN
     DELETE FROM public.deal_claims

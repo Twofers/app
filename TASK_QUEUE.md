@@ -1143,6 +1143,51 @@ APK requirement:
 
 ---
 
+## Merchant Demo / Business Data Cleanup
+
+Status: Implemented - source cleanup validated; hosted demo data still needs refresh.
+
+Findings 2026-06-04:
+
+1. What I found
+   - `claude -p` is installed and authenticated in this shell. A narrow reconnaissance prompt was attempted, but it timed out after 124 seconds without returning findings, so Codex completed the scoped inspection and implementation directly.
+   - `Met` / `E` are not hardcoded Account UI strings. A read-only anon/RLS probe of the existing hosted demo account showed they currently live in `business_profiles.name = Met` and `business_profiles.address = E`.
+   - The same hosted demo account still has `businesses` values from the old seed: `Demo Roasted Bean Coffee`, `Demo Owner`, `hello@demo.twofer.app`, Dallas address/hours, and preview-tester description copy.
+   - The old demo business/deal values came from `scripts/seed-demo.cjs`, `lib/demo-preview-seed.ts`, and `supabase/seed_demo_coffee_business.sql`. The timestamped smoke-test deal names came from prior manual validation data, so the updated seeds now remove those legacy titles/prefixes before inserting the polished demo deal set.
+   - `app/(tabs)/account.tsx` displays the business profile snapshot returned from `business_profiles`; no Account display bug was found in this scoped pass.
+2. Why it matters
+   - A real cafe or restaurant owner seeing `Met`, `E`, `Demo Roasted Bean Coffee`, or timestamped test deal names would immediately read the product as unfinished.
+   - Cleaning both `businesses` and `business_profiles` is required because the Account summary uses the profile table while other merchant/marketplace surfaces use the business row.
+3. Recommended fix
+   - Completed: replaced the canonical demo business with `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, Grapevine address/location, clean ASCII hours, and polished cafe description/category values.
+   - Completed: replaced visible demo deal titles with merchant-ready BOGO titles: `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`, `BOGO Iced Tea Launch Special`, `Weekday Cold Brew 2-for-1`, and `Saturday Bakery Box BOGO`.
+   - Completed: updated the demo-login helper to treat old demo names/contact email as legacy data, refresh the `business_profiles` display fields, and delete known old/smoke-test deal titles before inserting the polished set.
+   - Existing hosted remote demo data still needs to be refreshed manually because this shell does not have `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` for `npm run seed:demo`. Run the updated `npm run seed:demo` with service-role env, or sign into the demo account from a new build containing the updated `ensureDemoCoffeePreview` helper.
+4. Files affected
+   - `scripts/seed-demo.cjs`
+   - `lib/demo-preview-seed.ts`
+   - `supabase/seed_demo_coffee_business.sql`
+   - `docs/DEMO_SEED.md`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `node -c scripts/seed-demo.cjs` - passed.
+- Focused static seed scan - passed; required polished values exist in Node, TS helper, and SQL seed, and old non-legacy display strings are absent.
+- Hosted demo read-only probe through normal anon/RLS - confirmed current remote data still has old `businesses` values and `business_profiles` values `Met` / `E`; no secrets were printed.
+- Service-role seed execution - not available in this shell because `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are not both present.
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Expo/Android smoke was not run; this was demo seed/helper data cleanup and no manual UI session was started.
+
+Manual check:
+
+- After refreshing hosted demo data, open Business mode -> Account. Expected result: the business card and editable profile show `Cedar & Bean Cafe`, `120 S Main St`, `Cafe & Bakery`, `Maya Patel`, `hello@cedarbean.cafe`, Grapevine location, clean hours, and no `Met` / `E` values.
+- Home/Shops/Dashboard demo deal surfaces should show polished BOGO deal titles without `Demo`, `(live)`, `(scheduled)`, timestamp suffixes, or preview-tester copy.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
