@@ -769,7 +769,7 @@ Validation results (smoke defect fix 2026-06-03):
 
 ## Task 12 - Copywriting Pass
 
-Status: Queued.
+Status: Complete (lightweight validation).
 
 Task: Rewrite rough user-facing copy across consumer and business flows.
 
@@ -800,12 +800,32 @@ Acceptance:
 
 Verification:
 
-- Run typecheck.
-- Run lint.
-- Run i18n/key-parity tests if available.
-- Run `npx expo start` only if runtime behavior changed and a manual UI check is needed.
-- Screenshots of changed screens.
-- List changed copy keys/files.
+- Typecheck: Passed (`npm run typecheck`).
+- Lint: Passed (`npm run lint`).
+- Locale parity: Passed custom English/Spanish/Korean key parity check.
+- Technical-copy scan: Passed for obvious raw terms (`server`, `token`, `deal_id`, `claim_id`, `Supabase`, `QA`, `pilot`, etc.).
+- Expo/screenshots: Not run; changes were limited to locale copy and no manual UI session was started.
+
+Task 12 findings:
+
+1. What I found
+   Rough copy was concentrated in auth/demo messages, onboarding empty states, API error translations, wallet/QR/redeem labels, create-deal helper text, dashboard metrics, billing, and settings. Spanish and Korean also had missing keys plus leftover technical wording in the same areas.
+2. Why it matters
+   Customers and business owners could see internal terms like server, token, IDs, dev/QA labels, pilot billing language, or awkward claim/redeem phrasing.
+3. Recommended fix
+   Completed: rewrote affected locale copy to be shorter, more confident, and non-technical; added missing Spanish/Korean keys to match English.
+4. Files affected
+   `lib/i18n/locales/en.json`, `lib/i18n/locales/es.json`, `lib/i18n/locales/ko.json`.
+5. MVP priority: High
+
+Changed copy key groups:
+
+- `tabs.tabMode`, `dealsBrowse`, `consumerHome`, `consumerMap`, `onboarding`, `consumerProfile`, `businessProfile`
+- `apiErrors`, `auth`, `authLanding`, `account`, `settingsScreen`
+- `consumerWallet`, `consumerQr`, `redeem`
+- `createHub`, `menuScan`, `menuWorkflow`, `menuOffer`, `aiCompose`, `createAi`, `createDeal`
+- `offersDashboard`, `merchantInsights`, `businessScan`, `businessAiSelection`, `businessTemplates`, `dealAnalytics`
+- `businessSetup`, `billing`, `billingManage`, `commonUi`, `consumerDealDetail`, `report`
 
 ---
 
