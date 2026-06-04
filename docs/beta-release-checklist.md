@@ -167,110 +167,101 @@ List issues that testers and Dan need to know before inviting cafes.
 - Workaround:
 - Owner / next step:
 
-## Current Run - 2026-06-03
+## Current Run - 2026-06-03 Final RC Smoke
 
-Checklist executed against the current beta candidate at commit `ec621fb` (the commit that added this checklist), branch `fix/production-clean-copy`.
+Final Android release-candidate smoke was executed against the fresh local APK in the TWOFER folder. This pass used Claude Code via `claude -p` for APK install, launch, navigation, and screenshot capture.
 
 ### 1. Release Metadata
 
-- Release date: 2026-06-03
-- Final commit SHA: `ec621fba43dcf0440ac3c9f41449b6be52863e6d` (`ec621fb`)
+- Release date: 2026-06-03 local smoke run
+- Final commit SHA: `3504faa06eca69f1d6662be1b7df93ba7737d431` (`3504faa`)
 - Branch: `fix/production-clean-copy`
-- EAS profile checked: `production`
-- Android versionCode from EAS: `9`
-- EAS build URL: not created in this task (no build was started)
-- APK used for smoke: `C:\Users\unvme\Downloads\twoforone\application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk`
-- Tester / device: Android emulator `emulator-5554`; installed app is `versionCode=9`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 18:23:21`
+- EAS profile checked: not rechecked in this smoke-only pass
+- Android versionCode from APK: `10`
+- EAS build URL: not available from the local APK folder metadata
+- APK used for smoke: `C:\Users\unvme\Downloads\twoforone\application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk`
+- Screenshots folder: `qa-screens/final-rc-smoke/`
+- Tester / device: Android emulator `emulator-5554`; installed app is `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`
 
 ### 2. Git And EAS Context
 
-Result: Passed for committed files; local ignored smoke artifacts are present.
+Result: Passed for source tree before report edits; local ignored smoke artifacts are present.
 
-- Earlier static release checks ran from a clean tree before Task 11 report edits.
-- Current working tree contains only the Task 11 report edits plus ignored local smoke artifacts.
-- Ignored local artifacts used in this smoke run include `application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk` and `qa-screens/task-11-release-smoke/`; do not commit them and remove or confirm EAS ignores them before starting a new release build.
+- `git status --short --untracked-files=all` was clean before updating this report.
+- Ignored local artifacts used in this smoke run include the APK and `qa-screens/final-rc-smoke/`; do not commit screenshots or APKs.
+- Full EAS context checks were not repeated because the requested scope was final Android APK smoke only.
 
 ### 3. Demo UI Production Check
 
-Result: Static check passed; production APK UI smoke failed on ANR/data/layout coverage below.
+Result: Passed for the production APK UI surfaces inspected.
 
-- `eas.json` sets `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER`, `EXPO_PUBLIC_SHOW_DEBUG_PANEL`, `EXPO_PUBLIC_DEBUG_BOOT_LOG`, and `EXPO_PUBLIC_PREVIEW_MATCHES_DEV` only in the `development` and `preview` profiles; the `production` profile sets none of them.
-- The production EAS environment loaded only these public variable names: `EXPO_PUBLIC_DELETE_ACCOUNT_URL`, `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY`, `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPPORT_URL`, `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`. No demo/debug public flags were present.
-- Earlier production auth captures on the installed versionCode `9` APK did not show demo credential helper UI after relaunch. The fresh follow-up cold launch preserved the signed-in demo business session, so signed-out auth was not revalidated in this pass.
+- Signed-out auth landing was captured in `signed_out_auth_landing.png`.
+- The auth screen did not show demo credential helper UI or a demo-login helper button.
+- Login succeeded through the normal email/password form using the locally documented seeded demo account; no password values are recorded here.
+- Demo-named business/account data appears after login because the tested account is the seeded demo account.
 
 ### 4. Static Validation
 
-Result: Passed.
+Result: Not rerun in this pass.
 
-- `npm run typecheck` passed.
-- `npm run lint` passed.
-- `npm test` passed: 23 files, 171 tests.
+- No app code was modified during final RC smoke.
+- This task updated only release documentation after the device smoke.
 
 ### 5. Expo Start Rule
 
 Result: Not run.
 
-- `npx expo start` was not started because this candidate changed documentation/release reporting only; no runtime app behavior changed.
+- `npx expo start` was not started. The smoke test used the installed production-like APK on Android.
 
 ### 6. Android Smoke
 
-Result: Failed / partially completed on current versionCode `9` APK.
+Result: Passed with data-limited claim and redeem coverage on current versionCode `10` APK.
 
-- `adb devices` showed emulator `emulator-5554` online.
-- Local current APK exists: `application-e0d34c3b-102e-498d-b81b-45ebd0b59ea8.apk`.
-- `aapt dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=9`, `versionName=1.0.0`.
-- Reinstalled with `adb install -r` and launched with `adb shell monkey -p com.unvmex2.twoforone -c android.intent.category.LAUNCHER 1`.
-- Installed package after reinstall: `versionCode=9`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 18:23:21`.
-- Fresh screenshot capture worked in this follow-up. New current-run screenshots captured under `qa-screens/task-11-release-smoke/`: `01-cold-launch.png`, `08-current-business-create.png`, `09-current-business-redeem.png`, `10-current-business-my-offers.png`, `11-current-business-billing.png`, `12-current-business-account.png`, `13-current-customer-home.png`, `14-current-customer-shops.png`, `15-current-shop-detail.png`, `16-current-shop-detail-deal-section.png`, `17-current-back-to-shops.png`, `18-current-map-tab.png`, and `21-current-anr-dialog.png`.
-- Cold launch after reinstall preserved the signed-in demo business session and opened the business Create hub.
-- Business Create, merchant Redeem, My offers/dashboard, Billing, and business Account loaded without raw error text.
-- Business Account showed `demo@demo.com`, the business/customer mode control, and demo-named business profile data. Switching to customer mode worked.
-- Customer Home loaded a friendly no-live-deals state; no raw Supabase/RLS/stack text was visible.
-- Shops loaded two businesses and shop detail opened/back navigation worked.
-- Shop detail for a no-live-deal business showed the no-live-deal empty state, but still displayed "Use this deal" / "Scan QR at counter" redemption guidance underneath. That is a missing-data layout problem.
-- Customer Map loaded Google map tiles and pins, then Android showed a `TWOFER isn't responding` ANR dialog. Screenshot: `21-current-anr-dialog.png`.
-- Wallet and Settings were not verified in the fresh follow-up because the Map ANR blocked the pass before those tabs could be reached.
-- Claim -> wallet -> QR/redeem could not be completed because no live deal / active wallet ticket was reachable before the Map ANR.
-- Production data still includes demo-named business/deal surfaces because the tested account/business is demo data.
+- Newest APK found in the TWOFER folder: `application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk`.
+- `aapt dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=10`, `versionName=1.0.0`.
+- Claude Code recovered `emulator-5554`, installed the APK with `adb install -r`, and launched TWOFER.
+- Installed package after reinstall matched the APK: `versionCode=10`, `versionName=1.0.0`.
+- Screens passed: signed-out auth landing, login, consumer Home deals, Shops, shop detail/back navigation, Map, Map 30-second wait, Map pins/toggles, Wallet, Settings, business mode switch, merchant Redeem manual Ticket code screen, business dashboard/My offers, Create deal hub, Billing, and business Account.
+- Consumer onboarding was not shown because the returning demo account was already onboarded.
+- Wallet opened and showed no active deals plus expired tickets. QR/pass could not be opened because there was no active ticket.
+- Claim -> wallet -> QR/pass -> merchant redeem could not be fully tested because the account had no active live deal or active wallet ticket.
+- Prior Map ANR result: fixed for this APK. Map stayed responsive after loading Google tiles and pins, after a 30-second wait, and after pin/toggle interaction. Recent logcat checks did not show a `com.unvmex2.twoforone` ANR or fatal exception.
+- No crashes, ANRs, raw Supabase/RLS errors, stack traces, demo helper UI, black screens, broken navigation, or release-blocking missing-data layout problems were observed.
+- Screenshots captured under `qa-screens/final-rc-smoke/`: `signed_out_auth_landing.png`, `completed_login.png`, `04_home_deals.png`, `05_shops_tab.png`, `06_shop_detail.png`, `07_map_tab.png`, `07b_map_30s.png`, `07c_map_pin_tap.png`, `07d_map_livedeals.png`, `08_wallet.png`, `09_merchant_redeem.png`, `redeem_ticket_code.png`, `10_business_mode_switch.png`, `11_business_dashboard.png`, `13_create_deal_hub.png`, `billing_tab.png`, `12_settings.png`, `12b_settings_scrolled.png`, `12c_settings_scrolled2.png`, and `business_account_tab.png`.
 
 ### 7. Supabase Migrations
 
-Result: Passed.
+Result: Not rerun in this pass.
 
-- `npx supabase migration list` showed every local migration with a matching remote entry (no drift).
-- Last migration applied remotely: `20260708150000_weekly_digest_cron`.
+- Final RC smoke did not query migration state; use the template section above for release-build validation.
 
 ### 8. Supabase Secrets By Name Only
 
-Result: Blocked for remote listing.
+Result: Not rerun in this pass.
 
-- `npx supabase secrets list` returned "Access token not provided" because this shell has no `supabase login` session / `SUPABASE_ACCESS_TOKEN`. (Migration list works via the linked database; secrets need a Management API token.)
-- No secret values were read or printed. Verify the section 8 names from an authenticated shell before the release build.
+- No secret values were read or printed.
+- Verify secret names only from an authenticated shell before the external beta release if this has not been done for the final build.
 
 ### 9. Digest Cron And Vault Secret
 
-Result: Partially passed.
+Result: Not rerun in this pass.
 
-- Migration `20260708150000_weekly_digest_cron` is applied remotely (see section 7).
-- That migration provisions Vault secret name `weekly_digest_cron_secret`, RPC `verify_weekly_digest_secret`, status RPC `weekly_digest_cron_status`, and cron job `weekly-deal-digest` (expected schedule: Saturdays 17:00 UTC).
-- Live cron status was not queried in this run. Confirm from an authenticated SQL session with `select * from public.weekly_digest_cron_status();`.
+- Live cron/vault status was outside the requested final Android smoke scope.
 
 ### 10. VersionCode And Build URL
 
-Result: Passed for versionCode match; no build URL created.
+Result: Passed for versionCode match; build URL still needs release handoff value.
 
-- `npx eas-cli build:version:get -p android --profile production --non-interactive` returned Android versionCode `9` (advanced from `8` in the prior recorded run; the `production` profile uses `autoIncrement: true`).
-- No build was started, so there is no new EAS build URL to report.
-- Installed emulator APK matches the report versionCode: `versionCode=9`, `versionName=1.0.0`.
+- APK versionCode: `10`
+- Installed emulator versionCode: `10`
+- APK versionName: `1.0.0`
+- Installed emulator versionName: `1.0.0`
+- EAS build URL: not available from the local APK folder metadata.
 
 ### 11. Known Issues
 
-- Android smoke FAILED on the current versionCode `9` APK: the customer Map tab raised a visible `TWOFER isn't responding` ANR after the map loaded, blocking Wallet, Settings, and claim/redeem coverage in the fresh follow-up.
-- No live deal / active wallet ticket was reachable for claim -> wallet -> QR/redeem coverage before the Map ANR.
-- Shop detail shows redemption guidance under a no-live-deal empty state.
-- Fresh screenshots captured successfully in this follow-up; keep the current-run screenshots listed in section 6 and ignore earlier black-frame notes from the prior attempt.
-- Production data still has demo-named businesses/deals on the tested account. Confirm whether this is acceptable only for the demo account before inviting external testers.
-- Supabase secret names could not be verified remotely without Supabase CLI auth; verify names only before the release build.
-- Signed-out production auth was not revalidated in the fresh follow-up because `adb install -r` preserved the logged-in demo session.
-- Live digest cron status (`weekly_digest_cron_status()`) has not been queried for this run.
-- Final EAS build URL must be pasted into the release report after the beta APK is built.
+- Claim -> wallet -> QR/pass -> merchant redeem was not fully tested because the demo account has no active live deal or active wallet ticket. Seed/create active claim data before final money-flow proof.
+- Billing UI shows "Free trial active" on the Twofer Pro card while "Current plan" is highlighted on Twofer Premium. Confirm whether this reflects the actual seeded subscription state.
+- Business Account shows demo profile values `Met` / `E` under "Your Coffee Shop". This appears to be demo profile/seed data, but should be cleaned up if the demo account will be shown to non-engineering testers.
+- Demo-named businesses/deals are visible because the seeded demo account was used for smoke.
+- Final EAS build URL must be pasted into the release report once the beta APK's build record is available.

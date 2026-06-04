@@ -831,7 +831,7 @@ Changed copy key groups:
 
 ## Map tab ANR follow-up
 
-Status: Implemented - static validation passed; updated-build Android smoke still blocked.
+Status: Implemented - updated-build Android smoke passed 2026-06-03.
 
 Findings 2026-06-04:
 
@@ -857,10 +857,12 @@ Validation results:
 - Android smoke was attempted but not completed: `adb shell` commands timed out, the Android emulator MCP UI dump timed out, and after `adb kill-server` / `adb start-server`, `emulator-5554` reported `offline`; `adb wait-for-device` timed out.
 - The installed versionCode `9` APK from Task 11 does not contain this source fix, so launching that APK would not validate the change. A new build or dev-client session containing this patch is required for a meaningful Map smoke.
 
-Remaining blockers:
+Updated-build smoke result:
 
-- Rebuild/install a build that includes this patch, or run an updated dev-client session, then smoke test: open Map, interact with pins/toggles, navigate to Wallet, then navigate to Settings.
-- Map no longer has the identified JS animation ANR source in code, but updated-build Android smoke is still required before saying Map no longer blocks release smoke.
+- VersionCode `10` APK `application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk` was installed on `emulator-5554` during the final RC smoke.
+- Map opened with Google tiles and pins, remained responsive after a 30-second wait, and allowed All businesses / Live deals toggle interaction.
+- No Android `TWOFER isn't responding` dialog appeared, and recent logcat checks did not show a `com.unvmex2.twoforone` ANR or fatal exception.
+- Map no longer blocks release smoke for this APK.
 
 ---
 
@@ -896,6 +898,69 @@ Validation results:
 Manual check:
 
 - Android smoke should verify Home live deal cards, Shops row cards, Wallet active/ended tickets, Dashboard snapshot metrics, and the Dashboard Manage Deal sheet. Expected result: cards use the same rounded 24px shape and lift, pills are consistently rounded, hearts have the same bordered/favorited treatment, and wallet primary actions are orange.
+
+---
+
+## Final RC Smoke Test
+
+Status: Complete / passed with data-limited claim and redeem coverage on 2026-06-03.
+
+Findings 2026-06-03:
+
+1. What I found
+   - Newest APK in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk`.
+   - `aapt dump badging` reported package `com.unvmex2.twoforone`, `versionCode=10`, `versionName=1.0.0`.
+   - Claude Code was used via `claude -p` for the final Android smoke. It recovered `emulator-5554`, installed the APK with `adb install -r`, launched TWOFER, navigated the app, and captured screenshots under `qa-screens/final-rc-smoke/`.
+   - Installed package verification matched the APK: `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`.
+   - Screens passed: signed-out auth landing, login, consumer Home, Shops, shop detail/back navigation, Map, Map 30-second wait, Map pins/toggles, Wallet, Settings, business mode switch, merchant redeem manual Ticket code, business dashboard/My offers, Create hub, Billing, and business Account.
+   - Consumer onboarding was not shown for the returning demo account.
+   - Claim -> wallet -> QR/pass -> redeem could not be fully tested because the account had no active live deal or active wallet ticket. Wallet showed no active deals and only expired tickets.
+   - The prior Map ANR did not reproduce on the versionCode `10` APK. Map stayed responsive after the 30-second wait and interactions, and recent logcat did not show a `com.unvmex2.twoforone` ANR or fatal exception.
+   - No crashes, ANRs, raw Supabase/RLS errors, stack traces, demo helper login UI, black screens, or broken navigation were observed.
+   - Known non-blocking issues: Billing shows "Free trial active" on the Twofer Pro card while "Current plan" is highlighted on Twofer Premium; business Account shows demo profile values `Met` / `E` under "Your Coffee Shop", likely demo seed/profile data.
+2. Why it matters
+   - This validates that the fresh release-candidate APK includes the Map ANR fix and can complete the main consumer and merchant navigation smoke that versionCode `9` could not complete.
+   - The remaining money-flow gap is data setup, not a crash found in this APK.
+3. Recommended fix
+   - No app code changes were made during final smoke.
+   - Before inviting external testers, seed or create one active live deal and active ticket to complete claim -> wallet -> QR/pass -> merchant redeem proof.
+   - Review the Billing plan state and demo Account profile data in a follow-up polish task if this demo account will be shown to non-engineering testers.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-rc-smoke/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `claude -p` final smoke run - completed, with two focused follow-up runs for signed-out auth/login/Billing and merchant manual redeem/business Account screenshots.
+- `aapt dump badging application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk` - package `com.unvmex2.twoforone`, `versionCode=10`, `versionName=1.0.0`.
+- `adb -s emulator-5554 shell dumpsys package com.unvmex2.twoforone` - installed `versionCode=10`, `versionName=1.0.0`.
+- Recent logcat scan - no `com.unvmex2.twoforone` ANR or fatal exception found.
+- Typecheck/lint were not run because this task modified release docs only and did not change app code.
+
+Screenshots captured:
+
+- `signed_out_auth_landing.png`
+- `completed_login.png`
+- `04_home_deals.png`
+- `05_shops_tab.png`
+- `06_shop_detail.png`
+- `07_map_tab.png`
+- `07b_map_30s.png`
+- `07c_map_pin_tap.png`
+- `07d_map_livedeals.png`
+- `08_wallet.png`
+- `09_merchant_redeem.png`
+- `redeem_ticket_code.png`
+- `10_business_mode_switch.png`
+- `11_business_dashboard.png`
+- `13_create_deal_hub.png`
+- `billing_tab.png`
+- `12_settings.png`
+- `12b_settings_scrolled.png`
+- `12c_settings_scrolled2.png`
+- `business_account_tab.png`
 
 ---
 
