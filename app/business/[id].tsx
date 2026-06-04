@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
-import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -126,6 +126,21 @@ export default function BusinessProfileScreen() {
     }
     void load();
   }, [load, authLoading, isLoggedIn, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace("/(tabs)" as Href);
+        }
+        return true;
+      });
+      return () => sub.remove();
+    }, [router]),
+  );
 
   const canOpenDirections = useMemo(() => {
     if (!biz) return false;

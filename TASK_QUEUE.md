@@ -1445,6 +1445,44 @@ Manual check:
 - Return to Business Dashboard without force-stopping or relaunching the app.
 - Expected result: the dashboard refreshes on focus and the monthly redemption count plus the affected deal row update in the same app session.
 
+Owner-demo visual/back polish follow-up 2026-06-04:
+
+1. What I found
+   - `claude -p` was available, but the scoped reconnaissance prompt timed out after 124 seconds; Codex completed the fix directly.
+   - The clipped claim CTA screenshot was the Home live-deal card inside the bottom-tab feed, not the `/deal/[id]` stack detail. The card used `marginTop: "auto"` before the countdown row, which pushed the countdown, CTA, and shop link toward the bottom tab bar on tall/long deal cards.
+   - The consumer Settings mode-switch CTA used the shared secondary button inside a compact card; the button needed more fixed vertical room so the label and tap target do not look clipped on Android.
+   - Shop detail relied on the normal stack back behavior, but the mounted tab layout also registers an Android hardware-back handler to prevent exiting from tab screens. The shop detail route needed its own focused hardware-back handler so it wins while the detail screen is open.
+2. Why it matters
+   - These are first-impression owner-demo issues: the customer-facing claim CTA must be visibly tappable, Settings/App mode must look deliberate, and Android Back from shop detail must return to the previous screen reliably.
+3. Recommended fix
+   - Completed: Home live-deal card countdown/CTA now follows the deal copy instead of being pushed to the bottom of the card.
+   - Completed: Settings `Switch to Business mode` button now has a taller tap target and spacing inside the App mode card.
+   - Completed: Shop detail now handles Android hardware Back while focused, popping to the prior screen or falling back to the tabs route if there is no stack history.
+   - Left alone: hosted data, billing, QR modal, wallet QR controls, dashboard metrics, Supabase schema, edge functions, analytics, auth, onboarding, claim/redeem logic, wallet, create deal, map, and broader navigation structure.
+4. Files affected
+   - `app/(tabs)/index.tsx`
+   - `app/(tabs)/settings.tsx`
+   - `app/business/[id].tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npx vitest run lib/tab-mode-redirect.test.ts` - passed, 13 tests.
+- Expo/Android smoke was not run in this pass; the next owner-demo APK smoke should verify the three fixes with real Android taps/back.
+
+APK requirement:
+
+- A new APK is required. These are runtime app code changes, so the installed versionCode `11` APK will not include the fixes.
+
+Manual check:
+
+- Home deals: open customer Home with at least one live deal. Expected result: the live deal countdown and orange `Claim` CTA sit clearly above the bottom tab bar and the button text is fully visible/tappable.
+- Settings: open customer Settings and scroll to App mode. Expected result: `Switch to Business mode` is fully visible, centered, and tappable with no clipped border/text.
+- Shops: open the Shops segment, tap a shop, then press Android Back. Expected result: the app returns to the previous Shops/Home screen instead of staying on shop detail or exiting.
+
 ---
 
 ## Recommended Order

@@ -506,6 +506,7 @@ export default function SettingsScreen() {
               await setTabMode("business");
               router.replace("/(tabs)/dashboard" as Href);
             }}
+            style={{ minHeight: 66, paddingVertical: Spacing.md, marginTop: Spacing.xs }}
           />
         </View>
 

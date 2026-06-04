@@ -904,7 +904,7 @@ export default function HomeScreen() {
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
               {localizedDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
-            <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
+            <View style={{ marginTop: Spacing.xs, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
               <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
               <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14 }}>
                 {isLive ? formatTimeLeft(item.end_time) : statusLabel}
