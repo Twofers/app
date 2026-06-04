@@ -1188,6 +1188,49 @@ Manual check:
 
 ---
 
+## Billing Plan State Cleanup
+
+Status: Complete - source cleanup validated 2026-06-04.
+
+Findings 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and used for a scoped billing-state reconnaissance prompt.
+   - The canonical demo seed data in `scripts/seed-demo.cjs` and `supabase/seed_demo_coffee_business.sql` sets the demo business to `subscription_status = trial` and `subscription_tier = pro`; `lib/demo-preview-seed.ts` only backfills missing billing defaults and does not overwrite an existing hosted active/premium state.
+   - The confusing final-smoke state is a Billing UI labeling issue for a valid `active` + `premium` account. The Pro card did not qualify as the active Pro plan, then fell through to the pilot billing gate and showed `Free trial active`, while the Premium card correctly showed `Current plan`.
+   - No payment provider logic, Stripe checkout/portal logic, billing access gate, auth, onboarding, wallet, claim/redeem, analytics, dashboard, deal creation, or navigation behavior needed to change.
+2. Why it matters
+   - A real business owner seeing `Free trial active` on Pro and `Current plan` on Premium can read Billing as contradictory, especially during a merchant demo.
+3. Recommended fix
+   - Completed: Premium-tier accounts now see a neutral `Included in Premium` state on the Pro card instead of the pilot trial banner.
+   - Completed: English, Spanish, and Korean Billing locale keys were kept in sync.
+   - Left alone: demo seed defaults, hosted demo data, pricing helpers, subscription access gating, and payment provider functions.
+4. Files affected
+   - `app/(tabs)/billing.tsx`
+   - `lib/i18n/locales/en.json`
+   - `lib/i18n/locales/es.json`
+   - `lib/i18n/locales/ko.json`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- Locale JSON parse check - passed for `en`, `es`, and `ko`.
+- `npx vitest run lib/billing/access.test.ts` - passed, 10 tests.
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+
+APK requirement:
+
+- A new APK is required to see the Billing UI copy fix because this changes runtime app code and localized strings. No backend deploy or payment-provider change is required.
+
+Manual check:
+
+- Open Business mode -> Billing with an active Premium account. Expected result: the Pro card says `Included in Premium` and the Premium card is the only card showing `Current plan`; there should be no `Free trial active` message next to a current Premium plan.
+- Open Business mode -> Billing with a trial Pro account. Expected result: the Pro card still shows the pilot/free-trial access message, and Premium remains hidden during the single-location pilot unless the account is already Premium.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

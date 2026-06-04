@@ -404,7 +404,16 @@ export default function BusinessBillingScreen() {
                   ))}
                 </View>
                 <View style={{ marginTop: 14 }}>
-                  {subscriptionStatus === "active" && subscriptionTier === "pro" ? (
+                  {subscriptionTier === "premium" ? (
+                    <View style={{ borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, padding: 12 }}>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
+                        {t("billing.includedInPremium")}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
+                        {t("billing.includedInPremiumBody")}
+                      </Text>
+                    </View>
+                  ) : subscriptionStatus === "active" && subscriptionTier === "pro" ? (
                     <View style={{ height: 62, borderRadius: 22, backgroundColor: Colors.light.successSurface, alignItems: "center", justifyContent: "center" }}>
                       <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.success }}>
                         {t("billing.currentPlan")}

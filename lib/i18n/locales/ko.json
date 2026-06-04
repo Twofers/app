@@ -1801,6 +1801,8 @@
     "premiumFeatureLocationLimit": "매장 위치 한도: 최대 3개",
     "premiumFeatureAdvancedAi": "고급 AI 딜 기능",
     "premiumFeatureAnalytics": "전체 분석 + 확장 도구",
+    "includedInPremium": "Premium에 포함됨",
+    "includedInPremiumBody": "현재 Premium 이용 권한에 모든 Pro 기능이 포함됩니다.",
     "a11ySubscribeProLabel": "TWOFER Pro 구독하기",
     "a11ySubscribeProHint": "Pro 월간 플랜의 보안 결제창을 엽니다",
     "a11ySubscribePremiumLabel": "TWOFER Premium 구독하기",

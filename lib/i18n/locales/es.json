@@ -1801,6 +1801,8 @@
     "premiumFeatureLocationLimit": "Límite de ubicaciones: hasta 3",
     "premiumFeatureAdvancedAi": "Funciones avanzadas de IA para ofertas",
     "premiumFeatureAnalytics": "Analíticas completas y herramientas ampliadas",
+    "includedInPremium": "Incluido en Premium",
+    "includedInPremiumBody": "Tu acceso Premium incluye todas las funciones Pro.",
     "a11ySubscribeProLabel": "Suscribirse a TWOFER Pro",
     "a11ySubscribeProHint": "Abre el checkout seguro para el plan Pro mensual",
     "a11ySubscribePremiumLabel": "Suscribirse a TWOFER Premium",

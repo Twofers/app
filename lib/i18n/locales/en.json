@@ -1801,6 +1801,8 @@
     "premiumFeatureLocationLimit": "Up to 3 locations",
     "premiumFeatureAdvancedAi": "Advanced AI deal tools",
     "premiumFeatureAnalytics": "Full analytics + expanded tools",
+    "includedInPremium": "Included in Premium",
+    "includedInPremiumBody": "Your Premium access includes every Pro feature.",
     "a11ySubscribeProLabel": "Subscribe to TWOFER Pro",
     "a11ySubscribeProHint": "Opens secure checkout for Pro",
     "a11ySubscribePremiumLabel": "Subscribe to TWOFER Premium",
