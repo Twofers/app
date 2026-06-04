@@ -327,3 +327,74 @@ Screenshots captured under `qa-screens/final-money-flow/`:
 - Backend blocker: deployed `redeem-token` writes `redeem_method = "short_code"` for manual code redemption, while the database `deal_claims_redeem_method_check` constraint rejects that value.
 - User-facing blocker: the APK surfaces the raw `Edge Function returned a non-2xx status code` message on merchant redeem failure.
 - Wallet `Use deal` and `Show QR & code` controls appeared enabled but did not respond to MCP or raw adb taps in this run after Wallet was opened; rerun after the backend redeem fix to confirm whether this is automation-only or a Wallet interaction defect.
+
+## Current Run - 2026-06-04 Final Money-Flow Retest
+
+Focused retest was run against the already-installed versionCode `10` APK after the `redeem-token` backend fix was deployed. This pass used Claude Code via `claude -p` for scoped retest confirmation, then used the installed APK on Android emulator `emulator-5554` for the app flow.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-04 local retest run
+- Final commit SHA: not changed for app code in this validation pass
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this money-flow-only pass
+- Android versionCode from installed APK: `10`
+- Android versionName from installed APK: `1.0.0`
+- APK used: existing installed `C:\Users\unvme\Downloads\twoforone\application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk`; no reinstall was needed
+- Screenshots folder: `qa-screens/final-money-flow-retest/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`
+- Backend function tested: `redeem-token`
+
+### 2. Data Setup
+
+Result: Passed for creating a fresh claimable live deal and fresh active claim using the normal anon/RLS path.
+
+- No service-role secret was read or printed.
+- Used the existing demo account through normal Supabase anon/RLS.
+- Marked one stale unredeemed demo claim from the prior failed run as `canceled` so a fresh same-business claim could be created.
+- Inserted one fresh strong live deal under `Demo Roasted Bean Coffee`: `BOGO: 2-for-1 Cold Brew Pair 20260604034035`, price `$5.75`, max claims `25`, active through `2026-06-11T03:40:35.739Z`.
+- The installed APK created the fresh active claim; Wallet showed claim code `8RT XUC`.
+
+### 3. Android Smoke
+
+Result: Passed.
+
+- Fresh deal detail opened in the installed APK and showed `Claims remaining: 25 / 25`.
+- Tapping `Claim` created a backend active claim with code `8RT XUC`, but the deal-detail screen stayed on `Claiming...` until app relaunch.
+- Wallet after relaunch showed the active ticket, QR area, and code `8RT XUC`.
+- The dedicated Wallet `Show QR & code` button still did not open a modal via MCP/raw tap, but the Wallet card rendered the QR/code evidence needed for staff manual redeem.
+- Business dashboard before redeem showed the fresh deal with `Claims 1`, `Redeemed 0`.
+- Merchant Redeem manual Ticket code accepted `8RTXUC` and passed against deployed `redeem-token`; the app showed the branded `Redeemed` receipt.
+- Direct backend verification showed the fresh claim as `claim_status = redeemed`, `redeem_method = qr`, with non-null `redeemed_at`.
+- Consumer Wallet after redeem showed no active deals, `Deals redeemed: 1`, `$5.75` estimated savings, and the fresh ticket under Ended deals as `Redeemed by staff scan`.
+- Business dashboard after a fresh load showed global `Redemptions: 1`; the fresh deal row showed `Claims 1`, `Redeemed 1`, `Redeem rate 100%`.
+
+### 4. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-money-flow-retest/`:
+
+- `00_stale_previous_redeem_error.png`
+- `01_relaunch_consumer_home.png`
+- `02_fresh_deal_detail_claim_cta.png`
+- `03_fresh_deal_claim_cta_visible.png`
+- `04_after_claim_detail_still_claiming.png`
+- `05_claim_still_waiting_or_result.png`
+- `06_relaunch_after_claim.png`
+- `07_wallet_active_ticket_qr_code.png`
+- `08_wallet_active_ticket_buttons.png`
+- `09_show_qr_code_tap_result.png`
+- `10_business_mode_relaunch.png`
+- `11_settings_switch_to_business_visible.png`
+- `12_business_dashboard_pre_redeem_claim_count.png`
+- `13_merchant_ticket_code_entered.png`
+- `14_merchant_redeem_success.png`
+- `15_wallet_redeemed_state.png`
+- `16_business_dashboard_after_redeem_relaunch.png`
+- `17_business_dashboard_after_redeem_count.png`
+
+### 5. Known Issues
+
+- The prior manual redeem backend blocker is resolved for the deployed `redeem-token` function on the existing versionCode `10` APK.
+- Follow up separately on the deal-detail post-claim loading state; the claim was created, but the detail screen stayed on `Claiming...` until relaunch.
+- Follow up separately on the Wallet `Show QR & code` backup button hit/open behavior; Wallet still rendered the active ticket QR area and claim code, so manual redeem was not blocked.
+- The improved client-side fallback copy for failed `redeem-token` responses still requires a new APK to validate, as expected from the backend-fix follow-up.

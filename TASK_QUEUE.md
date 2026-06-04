@@ -966,7 +966,7 @@ Screenshots captured:
 
 ## Final Money-Flow Validation
 
-Status: Blocked at merchant manual redeem on versionCode `10` APK.
+Status: Complete / passed on versionCode `10` APK after `redeem-token` backend deploy.
 
 Findings 2026-06-03 local device run:
 
@@ -1046,11 +1046,68 @@ Validation results:
 - `npm run lint` - passed.
 - `npm run typecheck:functions` - blocked because `deno` is not installed on PATH in this shell.
 
-Remaining blockers / deploy notes:
+Historical deploy notes:
 
-- Deploy `redeem-token` before retesting merchant manual redeem against Supabase.
+- `redeem-token` needed to be deployed before retesting merchant manual redeem against Supabase; the 2026-06-04 retest below confirms the deployed function now passes.
 - No database migration is required for this fix.
 - A new APK or app update is required to validate the improved friendly client-side redeem failure copy. Backend-only deploy should be enough to make the existing versionCode `10` APK complete manual redeem successfully, but it will not contain the client fallback-copy fix.
+
+Retest result 2026-06-04:
+
+1. What I found
+   - Claude Code was used via `claude -p` for scoped retest confirmation. The Android validation was run against the already-installed APK on `emulator-5554`; no reinstall was needed.
+   - Installed package verification returned `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`.
+   - Backend function tested: deployed `redeem-token`.
+   - Data setup used the normal Supabase anon/RLS path with the existing demo account. One stale unredeemed demo claim from the prior failed run was marked `canceled`, then a fresh live deal was inserted under `Demo Roasted Bean Coffee`: `BOGO: 2-for-1 Cold Brew Pair 20260604034035`, price `$5.75`, max claims `25`, active through `2026-06-11T03:40:35.739Z`.
+   - The fresh deal detail opened in the installed APK via deep link and showed `Claims remaining: 25 / 25`. Tapping `Claim` created a fresh active backend claim with code `8RT XUC`, but the deal-detail screen stayed visually stuck on `Claiming...` until app relaunch.
+   - After relaunch, Wallet showed the fresh active ticket, visible QR area, and code `8RT XUC`. The dedicated `Show QR & code` backup button still did not open a modal via MCP or raw `adb shell input tap`; the Wallet card itself displayed the QR/code evidence.
+   - Business dashboard before redeem showed the fresh deal with `Claims 1`, `Redeemed 0`.
+   - Merchant Redeem manual Ticket code accepted `8RTXUC`, reached deployed `redeem-token`, and passed. The app showed the branded `Redeemed` success receipt for the fresh deal.
+   - Backend verification showed the fresh claim `claim_status = redeemed`, `redeem_method = qr`, and a non-null `redeemed_at`.
+   - Consumer Wallet after redeem showed no active deals, `Deals redeemed: 1`, `$5.75` estimated savings, and the fresh ticket under Ended deals as `Redeemed by staff scan`.
+   - Business dashboard after a fresh load showed global `Redemptions: 1`; the fresh deal row showed `Claims 1`, `Redeemed 1`, `Redeem rate 100%`.
+2. Why it matters
+   - The backend/manual redemption blocker from the previous money-flow run is resolved for the deployed backend against the existing versionCode `10` APK.
+   - The final money-flow proof now covers claim -> wallet -> QR/code -> merchant manual redeem -> wallet redeemed state -> business dashboard redemption count.
+3. Recommended fix
+   - No app code changes were made in this retest.
+   - Follow up separately on the deal-detail post-claim loading state and Wallet `Show QR & code` button hit/open behavior; neither blocked manual redeem because Wallet rendered the active ticket code and QR area.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-money-flow-retest/` and should not be committed.
+5. MVP priority: High
+
+Validation results (retest 2026-06-04):
+
+- APK version - installed package reports `versionCode=10`, `versionName=1.0.0`.
+- Backend function tested - deployed `redeem-token`.
+- Claim -> Wallet -> QR/code - passed, with active Wallet ticket and code `8RT XUC`.
+- Merchant manual redeem - passed in the APK and stored `redeem_method = qr`.
+- Wallet redeemed state - passed.
+- Business dashboard redemption count - passed after fresh dashboard load.
+- Typecheck/lint were not run because no app code was changed; this pass updated release documentation only after device validation.
+
+Screenshots captured in `qa-screens/final-money-flow-retest/`:
+
+- `00_stale_previous_redeem_error.png`
+- `01_relaunch_consumer_home.png`
+- `02_fresh_deal_detail_claim_cta.png`
+- `03_fresh_deal_claim_cta_visible.png`
+- `04_after_claim_detail_still_claiming.png`
+- `05_claim_still_waiting_or_result.png`
+- `06_relaunch_after_claim.png`
+- `07_wallet_active_ticket_qr_code.png`
+- `08_wallet_active_ticket_buttons.png`
+- `09_show_qr_code_tap_result.png`
+- `10_business_mode_relaunch.png`
+- `11_settings_switch_to_business_visible.png`
+- `12_business_dashboard_pre_redeem_claim_count.png`
+- `13_merchant_ticket_code_entered.png`
+- `14_merchant_redeem_success.png`
+- `15_wallet_redeemed_state.png`
+- `16_business_dashboard_after_redeem_relaunch.png`
+- `17_business_dashboard_after_redeem_count.png`
 
 ---
 
