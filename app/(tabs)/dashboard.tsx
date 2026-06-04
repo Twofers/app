@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -627,10 +627,12 @@ export default function BusinessDashboard() {
     }
   }, [businessId, deals.length, dealsHasMore, dealsLoadingMore, loadingMetrics, t]);
 
-  useEffect(() => {
-    if (!businessId) return;
-    void loadMetrics();
-  }, [businessId, loadMetrics]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!businessId) return;
+      void loadMetrics();
+    }, [businessId, loadMetrics]),
+  );
 
   // Show walkthrough for first-time business owners
   const WALKTHROUGH_KEY = "twoforone_walkthrough_complete";

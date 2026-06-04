@@ -1409,6 +1409,42 @@ APK requirement:
 
 - A new APK is required. These are runtime app code changes in the shared QR modal and Wallet QR/code controls, so the installed versionCode `11` APK will not include the fixes.
 
+Dashboard redemption refresh blocker follow-up 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and used for the scoped dashboard/redeem prompt. It identified the same one-file focus-refresh fix but could not edit without a permission prompt, so Codex applied and validated the change directly.
+   - Business dashboard metrics were loaded on mount/business change and by pull-to-refresh only.
+   - The bottom-tab dashboard remains mounted while the merchant uses the Redeem tab, so returning to Business Dashboard after a successful manual redeem did not rerun `loadMetrics()`.
+   - Merchant manual redeem already updates the backend successfully; the stale count was a client refresh timing issue, not a redeem-token, schema, hosted data, billing, wallet, QR, analytics, onboarding, auth, or navigation issue.
+2. Why it matters
+   - In an owner demo, a merchant expects the dashboard to reflect the ticket they just redeemed without a force-stop/relaunch.
+3. Recommended fix
+   - Completed: Business Dashboard now uses the existing Expo Router focus-effect pattern to run `loadMetrics()` whenever the dashboard tab receives focus with a business id.
+   - Completed: the existing pull-to-refresh path and deal-management refreshes remain unchanged.
+   - Left alone: hosted demo data, billing, QR modal, wallet QR controls, Supabase schema, edge functions, merchant redeem success UI, manual ticket-code validation, backend claim/redeem logic, analytics, onboarding, auth, wallet, and navigation behavior.
+4. Files affected
+   - `app/(tabs)/dashboard.tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Focused dashboard/redeem refresh tests were not found in the current test suite.
+- Expo/Android smoke was not run in this pass; the next owner-demo APK smoke should verify the in-session dashboard count refresh with real Android taps.
+
+APK requirement:
+
+- A new APK is required. This changes runtime app code in Business Dashboard, so the installed versionCode `11` APK will not include the focus-refresh fix.
+
+Manual check:
+
+- Open Business Dashboard and note the current monthly/deal redemption count.
+- Go to Redeem, enter an active customer ticket code, and confirm the branded `Redeemed` receipt appears.
+- Return to Business Dashboard without force-stopping or relaunching the app.
+- Expected result: the dashboard refreshes on focus and the monthly redemption count plus the affected deal row update in the same app session.
+
 ---
 
 ## Recommended Order
