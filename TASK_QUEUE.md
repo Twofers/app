@@ -964,6 +964,62 @@ Screenshots captured:
 
 ---
 
+## Final Money-Flow Validation
+
+Status: Blocked at merchant manual redeem on versionCode `10` APK.
+
+Findings 2026-06-03 local device run:
+
+1. What I found
+   - Claude Code was used via `claude -p` for scoped data/setup reconnaissance. It identified `npm run seed:demo` as the preferred reset path when service-role env is available.
+   - The local `.env` for this run had the APK-facing public Supabase URL/anon key and demo credentials, but did not have `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`, so `npm run seed:demo` was not usable without adding secrets.
+   - Using the existing demo account through the normal Supabase anon client/RLS path, the current demo business had no active owned deals and no active unredeemed claims.
+   - Minimum data setup used: inserted one strong live deal under `Demo Roasted Bean Coffee`: `2-for-1 Latte Pair`, price `$6.50`, max claims `25`, active now through `2026-06-11T02:54:02.823Z`, with BOGO/free-item copy that passes the strong-deal guardrail. The remote schema cache did not expose optional `deals.location_id`, so the row was inserted without that field.
+   - Installed APK verification via `adb -s emulator-5554 shell dumpsys package com.unvmex2.twoforone` returned `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`. `aapt` was not available on PATH in this shell.
+   - Consumer Home displayed the seeded live deal; Claim Deal succeeded; the app immediately displayed the active QR and claim code `BH2 4NS`.
+   - After relaunch, Home showed the deal as `Claimed`, Wallet showed the active ticket with code `BH2 4NS`, and Business dashboard showed `Claims: 1`.
+   - Wallet `Use deal` and `Show QR & code` controls appeared enabled but did not respond to MCP or raw `adb shell input tap` in this run after Wallet was opened. The QR/pass evidence captured is the QR modal that opened immediately after claim plus the active Wallet ticket.
+   - Merchant Redeem manual Ticket code flow accepted `BH24NS`, reached the deployed `redeem-token` function, then failed with visible raw copy: `Edge Function returned a non-2xx status code`.
+   - A direct signed-in Supabase function invocation with the same short code showed the underlying 500 response body: `Failed to redeem token: new row for relation "deal_claims" violates check constraint "deal_claims_redeem_method_check"`.
+   - The claim remains active and unredeemed after the failed manual redeem attempt.
+2. Why it matters
+   - The data gap from the final RC smoke is resolved: current versionCode `10` can show a live claimable deal, create a claim, persist it into Wallet, and reflect the claim on the merchant dashboard.
+   - The money flow is still not beta-ready because merchant manual redemption cannot complete against the deployed backend/database combination, and the APK surfaces a raw edge-function error instead of friendly staff guidance.
+3. Recommended fix
+   - Align the deployed `redeem-token` function and database `deal_claims_redeem_method_check` constraint. The current function writes `redeem_method = "short_code"` for manual code redemption, while the database constraint rejects that value.
+   - After fixing/deploying the backend, rerun this exact versionCode `10` APK money-flow smoke with one fresh active claim and verify Wallet QR/pass buttons, manual Ticket code redeem, post-redeem Wallet state, and dashboard redemptions.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-money-flow/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `claude -p` scoped reconnaissance - completed.
+- Data setup - completed through Supabase anon/RLS using the existing demo account; no service-role key was used or printed.
+- APK version - installed package reports `versionCode=10`, `versionName=1.0.0`.
+- Claim -> Wallet -> QR evidence - passed through claim success QR and active Wallet ticket.
+- Merchant manual redeem - failed / blocked by deployed backend/database mismatch.
+- Typecheck/lint were not run because no app code was changed; this pass changed release documentation only after device validation.
+
+Screenshots captured in `qa-screens/final-money-flow/`:
+
+- `00_initial_state_step.png`
+- `01_home_live_deal_seeded_step.png`
+- `02_claim_cta_visible_step.png`
+- `03_after_claim_blank_or_transition_step.png`
+- `04_after_hide_qr_state_step.png`
+- `05_hide_retry_state_step.png`
+- `06_back_after_qr_state_step.png`
+- `07_after_adb_hide_visible_step.png`
+- `08_wallet_active_ticket_step.png`
+- `09_business_dashboard_claim_count_step.png`
+- `10_merchant_ticket_code_entry_step.png`
+- `11_merchant_redeem_failed_raw_error_step.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

@@ -265,3 +265,65 @@ Result: Passed for versionCode match; build URL still needs release handoff valu
 - Business Account shows demo profile values `Met` / `E` under "Your Coffee Shop". This appears to be demo profile/seed data, but should be cleaned up if the demo account will be shown to non-engineering testers.
 - Demo-named businesses/deals are visible because the seeded demo account was used for smoke.
 - Final EAS build URL must be pasted into the release report once the beta APK's build record is available.
+
+## Current Run - 2026-06-03 Final Money-Flow Validation
+
+Focused validation was run against the installed versionCode `10` APK to close the prior claim/redeem data gap. This pass used Claude Code via `claude -p` for scoped data/setup reconnaissance, then used the current APK on Android emulator `emulator-5554` for the app flow.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-03 local device run
+- Final commit SHA: not changed for app code in this validation pass
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this money-flow-only pass
+- Android versionCode from installed APK: `10`
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-b6700649-9ac5-4227-8fd8-6089d3746ed7.apk`
+- Screenshots folder: `qa-screens/final-money-flow/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=10`, `versionName=1.0.0`, `lastUpdateTime=2026-06-03 21:09:06`
+
+### 2. Data Setup
+
+Result: Passed for creating a claimable money-flow test deal without service-role writes.
+
+- Preferred reset path `npm run seed:demo` was identified, but this shell did not have `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`; no service-role secret was read or printed.
+- Used the existing demo account with the normal Supabase anon client/RLS path.
+- Verified the demo business had no active owned deals and no active unredeemed claims.
+- Inserted one strong live deal under `Demo Roasted Bean Coffee`: `2-for-1 Latte Pair`, price `$6.50`, max claims `25`, active through `2026-06-11T02:54:02.823Z`.
+- The remote schema cache did not expose optional `deals.location_id`, so the row was inserted without that field.
+
+### 3. Android Smoke
+
+Result: Failed / blocked at merchant manual redeem.
+
+- Consumer Home displayed the seeded live deal.
+- Claim Deal succeeded and opened an active QR modal with claim code `BH2 4NS`.
+- After app relaunch, Home showed the deal as `Claimed`.
+- Wallet showed the active ticket for `2-for-1 Latte Pair`, code `BH2 4NS`, and redeem-by timing.
+- Business dashboard showed `Claims: 1` for the live deal.
+- Merchant Redeem manual Ticket code screen accepted `BH24NS`, reached the deployed `redeem-token` function, and failed with visible raw copy: `Edge Function returned a non-2xx status code`.
+- Direct signed-in function probe with the same short code returned HTTP 500 with body: `Failed to redeem token: new row for relation "deal_claims" violates check constraint "deal_claims_redeem_method_check"`.
+- The claim remained active and unredeemed after the failed attempt.
+
+### 4. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-money-flow/`:
+
+- `00_initial_state_step.png`
+- `01_home_live_deal_seeded_step.png`
+- `02_claim_cta_visible_step.png`
+- `03_after_claim_blank_or_transition_step.png`
+- `04_after_hide_qr_state_step.png`
+- `05_hide_retry_state_step.png`
+- `06_back_after_qr_state_step.png`
+- `07_after_adb_hide_visible_step.png`
+- `08_wallet_active_ticket_step.png`
+- `09_business_dashboard_claim_count_step.png`
+- `10_merchant_ticket_code_entry_step.png`
+- `11_merchant_redeem_failed_raw_error_step.png`
+
+### 5. Known Issues
+
+- Claim -> Wallet -> QR evidence passed, but merchant manual redeem did not pass on the current backend/database state.
+- Backend blocker: deployed `redeem-token` writes `redeem_method = "short_code"` for manual code redemption, while the database `deal_claims_redeem_method_check` constraint rejects that value.
+- User-facing blocker: the APK surfaces the raw `Edge Function returned a non-2xx status code` message on merchant redeem failure.
+- Wallet `Use deal` and `Show QR & code` controls appeared enabled but did not respond to MCP or raw adb taps in this run after Wallet was opened; rerun after the backend redeem fix to confirm whether this is automation-only or a Wallet interaction defect.
