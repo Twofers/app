@@ -1,5 +1,5 @@
 /**
- * Preview/dev: create demo@demo.com if missing, then seed a polished Dallas demo business.
+ * Preview/dev: create demo@demo.com if missing, then seed a polished DFW cafe demo.
  * Includes location, menu library, mixed-status deals, billing trial defaults, and analytics data.
  * Requires service role (same as Supabase SQL Editor power).
  */
@@ -13,25 +13,25 @@ const PREFERRED_BID = "a0000000-0000-4000-8000-00000000c0de";
 const ANALYTICS_SEED = "demo_business_seed_v2";
 
 const BUSINESS = {
-  name: "Demo Roasted Bean Coffee",
-  address: "1234 Commerce St",
-  location: "Dallas, TX",
-  latitude: 32.7831,
-  longitude: -96.8067,
-  phone: "(214) 555-0100",
-  hours_text: "Mon–Fri 7:00–19:00 · Sat–Sun 8:00–18:00",
-  short_description: "Neighborhood espresso bar for Twofer preview testers.",
-  category: "Coffee shop",
-  contact_name: "Demo Owner",
-  business_email: "hello@demo.twofer.app",
+  name: "Cedar & Bean Cafe",
+  address: "120 S Main St",
+  location: "Grapevine, TX",
+  latitude: 32.9407,
+  longitude: -97.0781,
+  phone: "(817) 555-0148",
+  hours_text: "Mon-Fri 7 AM - 7 PM | Sat-Sun 8 AM - 6 PM",
+  short_description: "Neighborhood cafe serving espresso, scratch pastries, and quick lunch plates in downtown Grapevine.",
+  category: "Cafe & Bakery",
+  contact_name: "Maya Patel",
+  business_email: "hello@cedarbean.cafe",
 };
 
 const LOCATION = {
-  name: "Downtown Dallas Cafe",
-  address: "1234 Commerce St, Dallas, TX 75202",
-  phone: "(214) 555-0100",
-  lat: 32.7831,
-  lng: -96.8067,
+  name: "Grapevine Main Street",
+  address: "120 S Main St, Grapevine, TX 76051",
+  phone: "(817) 555-0148",
+  lat: 32.9407,
+  lng: -97.0781,
 };
 
 const MENU_ITEMS = [
@@ -45,8 +45,8 @@ const MENU_ITEMS = [
 
 const DEALS = [
   {
-    title: "2-for-1 oat milk lattes (live)",
-    description: "Buy one oat milk latte, get one free for your coworker.",
+    title: "Buy One Latte, Get One Free",
+    description: "Bring a friend: buy any handcrafted latte and get a second latte free.",
     price: 6.5,
     max_claims: 220,
     poster_url: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=1200&q=80",
@@ -54,18 +54,18 @@ const DEALS = [
     durationDays: 20,
   },
   {
-    title: "Morning pastry pair + drip (live)",
-    description: "Two pastries and two medium drips for one combo price before noon.",
-    price: 7.5,
+    title: "2-for-1 Pastry Pair Before Noon",
+    description: "Buy one fresh-baked pastry before noon and get a second pastry free.",
+    price: 4.75,
     max_claims: 180,
     poster_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80",
     kind: "live",
     durationDays: 16,
   },
   {
-    title: "After-school iced latte happy hour (scheduled)",
-    description: "Starts this week: buy one iced latte, get a second 50% off.",
-    price: 6.0,
+    title: "BOGO Iced Tea Launch Special",
+    description: "Starts this week: buy one house iced tea and get a second free.",
+    price: 4.5,
     max_claims: 140,
     poster_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1200&q=80",
     kind: "scheduled",
@@ -73,8 +73,8 @@ const DEALS = [
     endOffsetDays: 12,
   },
   {
-    title: "Weekday 2-for-1 cold brew window (recurring)",
-    description: "Recurring Mon-Fri 2:00-5:00 PM cold brew 2-for-1 special.",
+    title: "Weekday Cold Brew 2-for-1",
+    description: "Monday-Friday from 2-5 PM, buy one cold brew and get one free.",
     price: 5.75,
     max_claims: 260,
     poster_url: "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=1200&q=80",
@@ -85,8 +85,8 @@ const DEALS = [
     durationDays: 30,
   },
   {
-    title: "Saturday bakery box bogo (recurring)",
-    description: "Every Saturday morning: buy one pastry box, get one free.",
+    title: "Saturday Bakery Box BOGO",
+    description: "Every Saturday morning, buy one pastry box and get a second box free.",
     price: 12.0,
     max_claims: 120,
     poster_url: "https://images.unsplash.com/photo-1483695028939-5bb13f8648b0?w=1200&q=80",
@@ -96,6 +96,18 @@ const DEALS = [
     window_end_minutes: 12 * 60,
     durationDays: 45,
   },
+];
+
+const LEGACY_DEAL_TITLES = [
+  "2-for-1 oat milk lattes (live)",
+  "Morning pastry pair + drip (live)",
+  "After-school iced latte happy hour (scheduled)",
+  "Weekday 2-for-1 cold brew window (recurring)",
+  "Saturday bakery box bogo (recurring)",
+  "2-for-1 Latte Pair",
+];
+const LEGACY_DEAL_TITLE_PREFIXES = [
+  "BOGO: 2-for-1 Cold Brew Pair",
 ];
 
 async function findDemoUserId(adminClient) {
@@ -161,7 +173,9 @@ async function main() {
 
   const trialEndsAtIso = new Date(Date.now() + 30 * 86400000).toISOString();
   const profilePayload = {
-    business_id: bid,
+    name: BUSINESS.name,
+    address: BUSINESS.address,
+    category: BUSINESS.category,
     setup_completed: true,
     subscription_status: "trial",
     subscription_tier: "pro",
@@ -250,8 +264,13 @@ async function main() {
     console.log("business_menu_items unavailable, skipping menu seed.");
   }
 
-  const { error: delErr } = await supabase.from("deals").delete().eq("business_id", bid).in("title", DEALS.map((d) => d.title));
+  const dealTitlesToReplace = Array.from(new Set([...DEALS.map((d) => d.title), ...LEGACY_DEAL_TITLES]));
+  const { error: delErr } = await supabase.from("deals").delete().eq("business_id", bid).in("title", dealTitlesToReplace);
   if (delErr) throw delErr;
+  for (const prefix of LEGACY_DEAL_TITLE_PREFIXES) {
+    const { error: prefixDelErr } = await supabase.from("deals").delete().eq("business_id", bid).like("title", `${prefix}%`);
+    if (prefixDelErr) throw prefixDelErr;
+  }
 
   const now = new Date();
   const rows = DEALS.map((d) => ({

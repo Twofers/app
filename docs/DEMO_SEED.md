@@ -13,7 +13,7 @@ Constants in code: `lib/demo-account.ts` (`DEMO_PREVIEW_EMAIL`, `DEMO_PREVIEW_PA
 
 ## How the auth user is created
 
-1. **CLI (service role, recommended once per project):** `npm run seed:demo` creates `demo@demo.com` if missing and seeds the coffee business + deals (`scripts/seed-demo.cjs`).
+1. **CLI (service role, recommended once per project):** `npm run seed:demo` creates `demo@demo.com` if missing and seeds the polished Cedar & Bean Cafe business + deals (`scripts/seed-demo.cjs`).
 2. **Supabase Dashboard:** Manually create Auth user `demo@demo.com` with password `demo12345` (and confirm email if your project requires it).
 3. **Manual sign-up:** On the **Create account** tab, a tester may `signUp` with `demo@demo.com` / `demo12345` once (sends confirmation email if enabled in Supabase). **Demo login** uses only `signInWithPassword` via `signInDemoPreviewUser` — no automatic `signUp` after failed login.
 
@@ -21,11 +21,12 @@ Constants in code: `lib/demo-account.ts` (`DEMO_PREVIEW_EMAIL`, `DEMO_PREVIEW_PA
 
 **Automatic (recommended for testers):** After a successful demo sign-in, `ensureDemoCoffeePreview` runs (`lib/demo-preview-seed.ts`):
 
-- If the user has **no** business row, it inserts **Demo Roasted Bean Coffee** with `owner_id = auth.uid()` (same fields as SQL seed).
-- If a **legacy stub** exists (category `Demo`, or Austin location + `hello@demo.twofer.app`), it **updates** the row to the canonical Dallas coffee profile.
-- If the business has **zero** deals, it inserts **three** active deals with public Unsplash `poster_url` values (no storage upload).
+- If the user has **no** business row, it inserts **Cedar & Bean Cafe** with `owner_id = auth.uid()` (same fields as SQL seed).
+- If a **legacy stub** exists (old demo business name, category `Demo`, or old `hello@demo.twofer.app` contact email), it **updates** the row to the canonical Grapevine cafe profile.
+- It refreshes the demo business profile row to replace stale Account values such as `Met` / `E` with polished merchant-facing data.
+- It replaces old seed/smoke-test deal titles with the canonical Cedar & Bean Cafe BOGO deal set using public Unsplash `poster_url` values (no storage upload).
 
-**Operator reset (replaces all deals on that business):** Run `npm run seed:demo` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, or run `supabase/seed_demo_coffee_business.sql` in the SQL Editor (user must exist first unless you used the CLI script, which creates the user).
+**Operator reset (refreshes the canonical demo rows):** Run `npm run seed:demo` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, or run `supabase/seed_demo_coffee_business.sql` in the SQL Editor (user must exist first unless you used the CLI script, which creates the user).
 
 ## Exact steps for a clean preview test
 
