@@ -829,6 +829,41 @@ Changed copy key groups:
 
 ---
 
+## Map tab ANR follow-up
+
+Status: Implemented - static validation passed; updated-build Android smoke still blocked.
+
+Findings 2026-06-04:
+
+1. What I found
+   - Task 11 release smoke showed the customer Map tab loading Google map tiles and pins, then Android raised a visible `TWOFER isn't responding` ANR.
+   - Focused Map inspection found the highest-risk path in `components/map/live-deal-halo.tsx`: live-deal halos used `Animated.loop` with `useNativeDriver:false` to animate `react-native-maps` `Circle` radius props. Each live marker rendered two animated map overlays, creating continuous JS-to-native map updates after the map appeared.
+   - Claude Code was used via `claude -p` for investigation and confirmed this as the most likely ANR cause. A second `claude -p --permission-mode acceptEdits` pass implemented the one-file Map fix.
+2. Why it matters
+   - The Map ANR blocked release smoke before Wallet, Settings, and claim/redeem coverage could be completed.
+   - Continuous JS-driven map overlay animation can starve Android input handling, especially on emulator and with multiple live markers.
+3. Recommended fix
+   - Completed: replaced pulsing `AnimatedCircle` live-deal halos with static `Circle` halos.
+   - Kept `useLiveDealPulse` and `LiveDealHaloCircles` exports so `components/map/map-native-screen.tsx`, navigation, analytics, data loading, marker taps, and camera behavior were left unchanged.
+4. Files affected
+   - `components/map/live-deal-halo.tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Android smoke was attempted but not completed: `adb shell` commands timed out, the Android emulator MCP UI dump timed out, and after `adb kill-server` / `adb start-server`, `emulator-5554` reported `offline`; `adb wait-for-device` timed out.
+- The installed versionCode `9` APK from Task 11 does not contain this source fix, so launching that APK would not validate the change. A new build or dev-client session containing this patch is required for a meaningful Map smoke.
+
+Remaining blockers:
+
+- Rebuild/install a build that includes this patch, or run an updated dev-client session, then smoke test: open Map, interact with pins/toggles, navigate to Wallet, then navigate to Settings.
+- Map no longer has the identified JS animation ANR source in code, but updated-build Android smoke is still required before saying Map no longer blocks release smoke.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
