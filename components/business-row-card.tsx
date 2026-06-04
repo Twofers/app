@@ -41,6 +41,10 @@ export function BusinessRowCard({
         padding: Spacing.md,
         marginBottom: Spacing.md,
         ...Shadows.soft,
+        shadowOpacity: 0.09,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 7 },
+        elevation: 4,
       })}
     >
       <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "stretch" }}>
@@ -81,10 +85,12 @@ export function BusinessRowCard({
               <View
                 style={{
                   alignSelf: "flex-start",
-                  paddingHorizontal: Spacing.sm,
+                  paddingHorizontal: Spacing.md,
                   paddingVertical: 4,
-                  borderRadius: Radii.md,
+                  borderRadius: Radii.pill,
                   backgroundColor: theme.successSurface,
+                  borderWidth: 1,
+                  borderColor: theme.successBorder,
                 }}
               >
                 <Text style={{ fontSize: 12, fontWeight: "800", color: theme.success }}>
@@ -95,9 +101,9 @@ export function BusinessRowCard({
               <View
                 style={{
                   alignSelf: "flex-start",
-                  paddingHorizontal: Spacing.sm,
+                  paddingHorizontal: Spacing.md,
                   paddingVertical: 4,
-                  borderRadius: Radii.md,
+                  borderRadius: Radii.pill,
                   backgroundColor: theme.surfaceMuted,
                   borderWidth: 1,
                   borderColor: theme.border,

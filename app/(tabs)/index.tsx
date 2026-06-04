@@ -782,6 +782,10 @@ export default function HomeScreen() {
             borderWidth: 1,
             borderColor: theme.border,
             ...Shadows.soft,
+            shadowOpacity: 0.09,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 5,
           }}
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">
@@ -868,8 +872,8 @@ export default function HomeScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
               <View
                 style={{
-                  borderRadius: Radii.md,
-                  paddingHorizontal: Spacing.sm,
+                  borderRadius: Radii.pill,
+                  paddingHorizontal: Spacing.md,
                   paddingVertical: 5,
                   backgroundColor: statusColor.background,
                   borderWidth: 1,
@@ -1122,8 +1126,11 @@ export default function HomeScreen() {
                 accessibilityState={{ selected: favoritesOnly }}
                 accessibilityLabel={favoritesOnly ? t("consumerHome.favoritesOn") : t("consumerHome.favoritesOff")}
                 style={({ pressed }) => ({
-                  padding: Spacing.sm,
+                  width: 44,
+                  height: 44,
                   borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
                   backgroundColor: favoritesOnly
                     ? colorScheme === "dark"
                       ? "rgba(236,72,153,0.2)"
@@ -1131,6 +1138,8 @@ export default function HomeScreen() {
                     : pressed
                       ? theme.surfaceMuted
                       : "transparent",
+                  borderWidth: 1,
+                  borderColor: favoritesOnly ? theme.favorite : theme.border,
                 })}
               >
                 <MaterialIcons
@@ -1158,6 +1167,7 @@ export default function HomeScreen() {
                   borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.38)" : "rgba(255,159,28,0.22)",
                   gap: Spacing.md,
                   alignItems: "center",
+                  ...Shadows.soft,
                 }}
               >
                 <View
@@ -1237,7 +1247,7 @@ export default function HomeScreen() {
                     style={{
                       paddingVertical: Spacing.sm,
                       paddingHorizontal: Spacing.md,
-                      borderRadius: Radii.md,
+                      borderRadius: Radii.pill,
                       backgroundColor: theme.surface,
                       borderWidth: 1,
                       borderColor: theme.border,

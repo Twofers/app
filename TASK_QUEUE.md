@@ -864,6 +864,41 @@ Remaining blockers:
 
 ---
 
+## Final visual consistency pass
+
+Status: Complete / validated 2026-06-04.
+
+Findings 2026-06-04:
+
+1. What I found
+   - Home deal cards, shop row cards, wallet tickets, dashboard snapshot metrics, dashboard stat pills, and the deal-management bottom sheet were using a mix of `Radii.lg`, `Radii.md`, `999`, shallow shadows, and local button fills.
+   - Wallet primary actions used green and black fills instead of the shared TWOFER orange primary button treatment.
+   - Shared primary buttons, secondary buttons, branded confirm modals, and reusable empty-state cards were already centralized and visually consistent, so their behavior/files were left unchanged.
+2. Why it matters
+   - The beta surfaces looked close, but the mixed card corners, shadows, pills, and wallet button colors made the app feel assembled from separate passes instead of one product system.
+3. Recommended fix
+   - Completed: aligned home deal cards, shop cards, wallet cards, dashboard metric cards, status/stat pills, favorite controls, the local home empty card, and the dashboard modal sheet to the same 24px card radius, branded pill treatment, consistent bordered favorite affordances, and orange primary CTA treatment.
+   - Preserved navigation, Supabase calls, claim/redeem logic, dashboard calculations, favorite persistence, analytics, and modal action behavior.
+4. Files affected
+   - `app/(tabs)/index.tsx`
+   - `components/business-row-card.tsx`
+   - `app/(tabs)/wallet.tsx`
+   - `app/(tabs)/dashboard.tsx`
+   - `TASK_QUEUE.md`
+5. MVP priority: Medium
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- `npx expo start` and Android screenshots were not run; this was a visual-only static pass and no manual UI session was started.
+
+Manual check:
+
+- Android smoke should verify Home live deal cards, Shops row cards, Wallet active/ended tickets, Dashboard snapshot metrics, and the Dashboard Manage Deal sheet. Expected result: cards use the same rounded 24px shape and lift, pills are consistently rounded, hearts have the same bordered/favorited treatment, and wallet primary actions are orange.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

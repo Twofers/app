@@ -25,7 +25,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Fonts, Radii } from "@/constants/theme";
+import { Colors, Fonts, Radii, Shadows } from "@/constants/theme";
 import { canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -306,12 +306,13 @@ function SnapshotMetric({
         flexBasis: "47%",
         flexGrow: 1,
         minHeight: 86,
-        borderRadius: Radii.lg,
+        borderRadius: Radii.card,
         borderWidth: 1,
         borderColor: accent ? "rgba(255,159,28,0.42)" : Colors.light.border,
-        backgroundColor: accent ? "rgba(255,159,28,0.12)" : Colors.light.surfaceMuted,
+        backgroundColor: accent ? "rgba(255,159,28,0.12)" : Colors.light.surface,
         padding: Spacing.md,
         justifyContent: "center",
+        ...Shadows.soft,
       }}
     >
       <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.light.mutedText }}>
@@ -354,11 +355,11 @@ function DealStatPill({
         flexGrow: 1,
         flexBasis: "30%",
         minWidth: 86,
-        borderRadius: Radii.md,
+        borderRadius: Radii.pill,
         backgroundColor: accent ? "rgba(255,159,28,0.14)" : Colors.light.surfaceMuted,
         borderWidth: 1,
         borderColor: accent ? "rgba(255,159,28,0.34)" : Colors.light.border,
-        paddingHorizontal: Spacing.sm,
+        paddingHorizontal: Spacing.md,
         paddingVertical: 8,
       }}
     >
@@ -406,13 +407,13 @@ function ScrollFilterRow({
             style={{
               paddingHorizontal: Spacing.md,
               paddingVertical: 6,
-              borderRadius: 999,
+              borderRadius: Radii.pill,
               borderWidth: active ? 2 : 1,
               borderColor: active ? Colors.light.primary : Colors.light.border,
               backgroundColor: active ? "rgba(255,159,28,0.12)" : Colors.light.surface,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.primary : Colors.light.text }}>
+            <Text style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.accentText : Colors.light.text }}>
               {item.label}
             </Text>
           </Pressable>
@@ -1801,14 +1802,41 @@ export default function BusinessDashboard() {
                 backgroundColor: Colors.light.background,
                 borderTopLeftRadius: Radii.card,
                 borderTopRightRadius: Radii.card,
+                borderWidth: 1,
+                borderBottomWidth: 0,
+                borderColor: Colors.light.border,
                 padding: Spacing.lg,
                 paddingBottom: Spacing.xl,
                 gap: Spacing.sm,
+                ...Shadows.soft,
+                shadowOpacity: 0.16,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: -6 },
+                elevation: 10,
               }}
             >
-              <Text style={{ fontWeight: "800", fontSize: 17, color: Colors.light.text }} numberOfLines={2}>
-                {dealManageFor.title ?? t("offersDashboard.dealFallback")}
-              </Text>
+              <View
+                style={{
+                  alignSelf: "center",
+                  width: 42,
+                  height: 5,
+                  borderRadius: Radii.pill,
+                  backgroundColor: "rgba(17,24,28,0.16)",
+                  marginBottom: Spacing.xs,
+                }}
+              />
+              <View
+                style={{
+                  paddingBottom: Spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: Colors.light.border,
+                  marginBottom: Spacing.xs,
+                }}
+              >
+                <Text style={{ fontWeight: "900", fontSize: 18, lineHeight: 23, color: Colors.light.text }} numberOfLines={2}>
+                  {dealManageFor.title ?? t("offersDashboard.dealFallback")}
+                </Text>
+              </View>
               {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (
                 <SecondaryButton
                   title={t("offersDashboard.editDeal")}

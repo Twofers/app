@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
@@ -419,7 +419,7 @@ export default function WalletScreen() {
     return (
       <View
         style={{
-          borderRadius: Radii.lg,
+          borderRadius: Radii.card,
           backgroundColor:
             bucket === "active" && !redeemed && !tokenDead
               ? urgent
@@ -435,8 +435,7 @@ export default function WalletScreen() {
                 ? "#fb923c"
                 : "#86efac"
               : theme.border,
-          boxShadow: "0px 3px 8px rgba(0,0,0,0.06)",
-          elevation: 2,
+          ...Shadows.soft,
         }}
       >
         {bucket === "active" && !redeemed && !tokenDead && countdown ? (
@@ -491,7 +490,7 @@ export default function WalletScreen() {
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
-                  style={{ width: 88, height: 110, borderRadius: 12, backgroundColor: "#eee" }}
+                  style={{ width: 88, height: 110, borderRadius: Radii.lg, backgroundColor: "#eee" }}
                   contentFit="cover"
                 />
               ) : (
@@ -499,7 +498,7 @@ export default function WalletScreen() {
                   style={{
                     width: 88,
                     height: 110,
-                    borderRadius: 12,
+                    borderRadius: Radii.lg,
                     backgroundColor: "#ececec",
                     alignItems: "center",
                     justifyContent: "center",
@@ -597,7 +596,7 @@ export default function WalletScreen() {
               title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
-              style={{ backgroundColor: "#16a34a", borderRadius: Radii.lg }}
+              style={{ borderRadius: Radii.lg }}
             />
             <Pressable
               onPress={() => openVerifyForClaim(row)}
@@ -618,7 +617,7 @@ export default function WalletScreen() {
               title={claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
               disabled={claimingRefreshId !== null}
-              style={{ backgroundColor: "#111", borderRadius: Radii.lg }}
+              style={{ borderRadius: Radii.lg }}
             />
           </View>
         ) : null}
@@ -658,11 +657,12 @@ export default function WalletScreen() {
             gap: Spacing.md,
             marginTop: Spacing.md,
             marginBottom: Spacing.lg,
-            borderRadius: Radii.lg,
+            borderRadius: Radii.card,
             borderWidth: 1,
             borderColor: theme.border,
             padding: Spacing.md,
-            backgroundColor: theme.surfaceMuted,
+            backgroundColor: theme.surface,
+            ...Shadows.soft,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -730,9 +730,18 @@ export default function WalletScreen() {
                 ? { title: t("consumerWallet.emptyActiveTitle"), sub: t("consumerWallet.emptyActiveSub") }
                 : { title: t("consumerWallet.emptyEndedTitle"), sub: t("consumerWallet.emptyEndedSub") };
             return (
-              <View style={{ marginBottom: Spacing.lg, opacity: 0.72 }}>
-                <Text style={{ fontWeight: "600", color: theme.text }}>{msg.title}</Text>
-                <Text style={{ marginTop: 4, fontSize: 14, color: theme.text }}>{msg.sub}</Text>
+              <View
+                style={{
+                  marginBottom: Spacing.lg,
+                  borderRadius: Radii.card,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceMuted,
+                  padding: Spacing.md,
+                }}
+              >
+                <Text style={{ fontWeight: "800", color: theme.text }}>{msg.title}</Text>
+                <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: theme.mutedText }}>{msg.sub}</Text>
               </View>
             );
           }}
