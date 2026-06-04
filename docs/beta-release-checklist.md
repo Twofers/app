@@ -561,3 +561,34 @@ npm run seed:demo
 - Owner-demo readiness from data alone: Not fully ready until the unowned `My Coffee` / `124` public row is removed.
 - Demo-owned business/account/deal data: Ready for Cedar & Bean Cafe verification.
 - Other versionCode `11` blockers from the smoke remain separate: Wallet QR/code modal controls, claim QR dismiss/back behavior, in-session dashboard redemption refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.
+
+## Current Run - 2026-06-04 Hosted Demo Data Cleanup Verification
+
+Focused read-only verification was run after the admin SQL removal of the stale unowned `My Coffee` row. `claude -p` was available and was attempted first for the narrow verification, but it timed out after 184 seconds without returning findings, so Codex completed the check directly.
+
+### 1. Scope And Method
+
+Result: Passed.
+
+- Used only public anon/RLS reads plus the normal demo account anon session.
+- No service-role key was used.
+- No secret values, API keys, passwords, or `.env` contents were printed.
+- `npx expo start`, typecheck, and lint were not run because no app/source code changed.
+
+### 2. Hosted Data Result
+
+Result: Passed - hosted owner-demo data is clean.
+
+- Unauthenticated public Shops-visible `businesses` scan found zero stale matches across 2 visible rows.
+- Authenticated public Shops-visible `businesses` scan found zero stale matches across 2 visible rows.
+- Authenticated Home-visible/public `deals` scan found zero stale matches across 5 visible rows.
+- Demo-owned `businesses` row shows `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, and `Grapevine`.
+- Demo-owned `business_profiles` row shows `Cedar & Bean Cafe`, `120 S Main St`, and `Cafe & Bakery`.
+- Demo-owned deal rows show professional titles: `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`, `BOGO Iced Tea Launch Special`, `Weekday Cold Brew 2-for-1`, and `Saturday Bakery Box BOGO`.
+- Public Shops/Home data no longer shows `My Coffee`, address `124`, `Demo Roasted Bean Coffee`, `Met`, `E`, timestamped smoke-test deal names, or preview-tester copy.
+
+### 3. Readiness
+
+- Owner-demo readiness from hosted data alone: Yes.
+- Stale hosted demo data is no longer a release blocker.
+- Other versionCode `11` runtime/UI blockers from the owner-demo smoke remain separate: Wallet QR/code modal controls, claim QR dismiss/back behavior, in-session dashboard redemption refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.

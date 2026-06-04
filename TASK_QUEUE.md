@@ -1145,7 +1145,7 @@ APK requirement:
 
 ## Merchant Demo / Business Data Cleanup
 
-Status: Partially fixed - demo-owned hosted data refreshed; unowned stale public row still needs service-role cleanup.
+Status: Complete - hosted owner-demo data verified clean after admin stale-row removal 2026-06-04.
 
 Findings 2026-06-04:
 
@@ -1227,6 +1227,34 @@ Validation results:
 - Final public stale scan - still finds only the unowned `My Coffee` / `124` row; stale deal title scan returns no old/timestamped deal titles.
 - `npm run seed:demo` - not run because `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are missing from the shell.
 - Typecheck/lint were not run because no app/source code changed; this pass refreshed hosted data and updated release docs only.
+
+Hosted admin cleanup verification 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and was attempted for this narrow verification, but it timed out after 184 seconds without returning findings; Codex completed the read-only verification directly.
+   - Verification used only public anon/RLS reads plus the normal demo account anon session. No service-role key was used and no secret values were printed.
+   - Unauthenticated public Shops-visible `businesses` scan found zero stale matches across 2 visible rows.
+   - Authenticated public Shops-visible `businesses` scan found zero stale matches across 2 visible rows.
+   - Authenticated Home-visible/public `deals` scan found zero stale matches across 5 visible rows.
+   - Demo-owned business data now shows `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, and `Grapevine`.
+   - Demo-owned `business_profiles` data now shows `Cedar & Bean Cafe`, `120 S Main St`, and `Cafe & Bakery`.
+   - Demo-owned deals now show the professional title set: `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`, `BOGO Iced Tea Launch Special`, `Weekday Cold Brew 2-for-1`, and `Saturday Bakery Box BOGO`.
+2. Why it matters
+   - The admin SQL cleanup removed the unowned stale public `My Coffee` / `124` row that previously blocked owner-demo readiness from a data standpoint.
+   - Public Shops/Home data no longer exposes `My Coffee`, address `124`, `Demo Roasted Bean Coffee`, `Met`, `E`, timestamped smoke-test deal names, or preview-tester copy.
+3. Recommended fix
+   - No further hosted demo data cleanup is required from the read-only verification result.
+   - Continue tracking the remaining versionCode `11` runtime/UI blockers separately: Wallet QR/code modal controls, claim QR dismiss/back behavior, in-session dashboard redemption refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+5. MVP priority: High
+
+Validation results:
+
+- Read-only hosted demo data verification - passed.
+- Owner-demo clean from hosted data alone: Yes.
+- Typecheck/lint were not run because no app/source code changed; this pass updated release documentation only.
 
 ---
 
