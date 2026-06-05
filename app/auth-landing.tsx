@@ -9,6 +9,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -109,6 +110,7 @@ function RoleCard({
   hint,
   onPress,
   disabled,
+  stacked,
 }: {
   theme: (typeof Colors)["light"];
   colorScheme: "light" | "dark";
@@ -117,6 +119,7 @@ function RoleCard({
   hint: string;
   onPress: () => void;
   disabled?: boolean;
+  stacked?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -130,7 +133,7 @@ function RoleCard({
         ? "#FFF3E0"
         : theme.surface;
   return (
-    <View style={{ flex: 1 }}>
+    <View style={stacked ? { width: "100%" } : { flex: 1 }}>
       <ScalePressable
         disabled={disabled}
         onPress={onPress}
@@ -162,7 +165,14 @@ function RoleCard({
             marginBottom: 6,
           }}
         >
-          <Text style={{ flex: 1, fontWeight: "900", fontSize: 16, lineHeight: 20, color: theme.text }}>{title}</Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+            style={{ flex: 1, fontWeight: "900", fontSize: 16, lineHeight: 20, color: theme.text }}
+          >
+            {title}
+          </Text>
           <View
             style={{
               width: 18,
@@ -197,6 +207,12 @@ export default function AuthLandingScreen() {
   const theme = Colors[colorScheme];
   const params = useLocalSearchParams<{ next?: string | string[] }>();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  // Account-type cards stay side-by-side by default. On narrow phones we tighten
+  // the gap, and on very narrow widths we stack them so "Shopper"/"Business" keep
+  // a comfortable, readable card instead of being squeezed.
+  const stackRoleCards = windowWidth < 340;
+  const roleCardGap = windowWidth < 360 ? Spacing.sm : Spacing.md;
   const { mode, setMode, ready: tabModeReady } = useTabMode();
   // FIX: Default to "customer" so Login/Create buttons are active immediately.
   // Most users are consumers; business owners can switch before signing in.
@@ -518,7 +534,13 @@ export default function AuthLandingScreen() {
                 {t("authLanding.roleTitle")}
               </Text>
 
-              <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: Spacing.md }}>
+              <View
+                style={{
+                  flexDirection: stackRoleCards ? "column" : "row",
+                  gap: roleCardGap,
+                  marginBottom: Spacing.md,
+                }}
+              >
                 <RoleCard
                   theme={theme}
                   colorScheme={colorScheme}
@@ -529,6 +551,7 @@ export default function AuthLandingScreen() {
                   })}
                   onPress={() => void selectRole("customer")}
                   disabled={busy || roleBusy}
+                  stacked={stackRoleCards}
                 />
                 <RoleCard
                   theme={theme}
@@ -540,6 +563,7 @@ export default function AuthLandingScreen() {
                   })}
                   onPress={() => void selectRole("business")}
                   disabled={busy || roleBusy}
+                  stacked={stackRoleCards}
                 />
               </View>
               {!tabModeReady ? (
