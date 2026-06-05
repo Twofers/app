@@ -863,3 +863,117 @@ Result: Not rerun.
 - Follow-up required: rerun with a fresh shopper account or approved admin/service-role data reset that guarantees a claimable live Cedar deal before launch.
 - Follow-up recommended: investigate Quick Deal publish failure and route/input recovery if Create is part of the owner demo.
 - Screenshots and APKs are local release artifacts and should not be committed.
+
+## Current Run - 2026-06-05 Final Owner-Demo Retest v4
+
+Focused owner-demo retest was run against the newest local APK after the claim error fallback fix and source-readiness pass. `claude -p` was attempted first for emulator setup, but Claude Code could not run `aapt`/`adb` because of a permission block, so Codex stopped that Claude attempt and completed the blocked emulator work directly.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-05 local owner-demo retest run
+- Final commit SHA from APK config: `e0cef26cfbba`
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this retest-only pass
+- Android versionCode from APK: `14`
+- Android versionName from APK: `1.0.0`
+- Package from APK: `com.unvmex2.twoforone`
+- EAS build URL: not available from the local APK folder metadata
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-8cd97c6a-8892-44d9-96f2-58a6e8364dbf.apk`
+- APK modified time: 2026-06-05 07:47:53 local time
+- Screenshots folder: `qa-screens/final-owner-demo-retest-v3/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=14`, `versionName=1.0.0`, `lastUpdateTime=2026-06-05 08:11:03`
+
+### 2. APK Verification And Install
+
+Result: Passed for APK metadata, install, launch, installed version match, and fallback-code inclusion.
+
+- Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-8cd97c6a-8892-44d9-96f2-58a6e8364dbf.apk`.
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=14`, `versionName=1.0.0`, app label `TWOFER`, and launch activity `com.unvmex2.twoforone.MainActivity`.
+- Installed on `emulator-5554` with `adb install -r`.
+- App data was cleared before launch with `adb shell pm clear com.unvmex2.twoforone`.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed package matched `versionCode=14`, `versionName=1.0.0`.
+- Claim fallback inclusion was verified from the APK bundle: `assets/index.android.bundle` contains `We couldn't claim this deal right now. Please try again.`
+
+### 3. Data Setup
+
+Result: Passed with no secrets and no service-role access.
+
+- This shell did not have `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY`, so `npm run seed:demo` was not run.
+- A fresh shopper fallback was attempted through the APK, but hosted auth required email confirmation, so that path was blocked.
+- Direct anon/RLS verification found the demo-owned business row clean: `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Grapevine, TX`.
+- The demo account had only backdated redeemed Cedar claims and no active/same-day claim on the canonical Cedar deals.
+- To make the proof claimable without Quick Deal or service-role writes, one clean live Cedar deal was inserted through the demo owner's normal anon/RLS session: `Cedar Morning Espresso BOGO`.
+
+### 4. Owner Demo Retest
+
+Result: Passed with visual/UX caveats.
+
+- Passed: signed-out auth landing opened with TWOFER branding and no demo credential helper UI.
+- Passed: normal email/password login.
+- Passed: ZIP onboarding and favorite-shop step showed clean Cedar & Bean Cafe / Grapevine data.
+- Passed: Home showed the fresh live Cedar deal with unclipped/tappable Claim CTA.
+- Passed: fresh claim succeeded and opened QR/code modal with claim code `SD9 H6A`.
+- Passed: no raw `Edge Function returned a non-2xx status code` text appeared during the claim.
+- Passed: claim QR modal Hide closed the modal.
+- Caveat: after Hide, the Home card remained stuck on `Claiming...` until navigating away; Wallet navigation still worked and the proof path was not blocked.
+- Passed: Wallet showed the active ticket and code `SD9 H6A`.
+- Passed: Wallet QR/code panel opened the QR modal when the visible QR square was tapped. A first tap on the text side of the panel did not appear to open it, so the hit area may still be narrower than the visible panel.
+- Passed: Android Back closed the QR modal.
+- Passed: Wallet `Show QR & code` opened the QR modal.
+- Passed: Business mode opened; merchant manual Ticket code redeem with `SD9H6A` showed the branded `Redeemed` receipt.
+- Passed: returning to Business Dashboard without force-stop/relaunch updated Redemptions from `2` to `3` in-session.
+- Passed: Consumer Wallet after redeem showed no active deals, Deals redeemed `3`, estimated savings `$17.50`, and the fresh ticket under Ended deals as `Redeemed by staff scan`.
+- Caveat: Account still does not visibly show `Maya Patel` or `hello@cedarbean.cafe`; this matters only if the owner demo needs to show the business contact person/email in-app, because hosted data is clean.
+- Caveat: dashboard metric-card beige pressed/overlay artifacts are still visible on the Live deals and Engagement cards.
+
+### 5. Map Responsiveness
+
+Result: Passed.
+
+- Map opened with Google tiles and pins.
+- Map remained responsive after a 30-second wait.
+- Live deals filter toggled after the wait.
+- Recent logcat scan did not show a `com.unvmex2.twoforone` ANR, fatal exception, or `Application Not Responding` entry during the Map check.
+
+### 6. Screenshots Captured
+
+New screenshots captured in `qa-screens/final-owner-demo-retest-v3/` for this v4 pass:
+
+- `00_setup_launch.png`
+- `01_onboarding_zip_clean.png`
+- `03_home_cedar_clean_first_view.png`
+- `10_home_fresh_live_cedar_deal.png`
+- `11_fresh_claim_cta_visible.png`
+- `12_after_claim_attempt.png`
+- `13_claim_modal_hide_closed_home_still_claiming.png`
+- `14_wallet_tap_retry_state.png`
+- `16_wallet_qr_square_tap_result.png`
+- `17_android_back_closed_wallet_qr_modal.png`
+- `18_wallet_show_qr_button_visible.png`
+- `19_wallet_show_qr_button_opens_modal.png`
+- `23_business_dashboard_baseline_after_skip.png`
+- `27_merchant_manual_redeem_result.png`
+- `28_dashboard_after_redeem_in_session.png`
+- `30_business_account_after_correct_tap.png`
+- `32_wallet_redeemed_state.png`
+- `33_map_initial.png`
+- `34_map_after_30s.png`
+- `36_map_live_deals_filter_tapped.png`
+
+### 7. Static Validation
+
+Result: Not rerun.
+
+- No app code was modified during this retest.
+- Per the task instruction, typecheck/lint were not run.
+- This pass updated only `TASK_QUEUE.md` and `docs/beta-release-checklist.md` after device validation.
+
+### 8. Known Issues And Readiness
+
+- Owner-demo readiness: Functionally yes for the money-flow proof on versionCode `14`; visually conditional because the dashboard beige artifact remains.
+- APK includes the claim fallback fix: Yes, verified from bundled friendly fallback string and live claim proof with no raw non-2xx text.
+- Hosted demo data clean: Yes by visible UI and direct anon/RLS verification.
+- Follow-up recommended before a polished external demo: fix/suppress dashboard metric-card beige overlay artifacts and the Home post-claim stuck `Claiming...` state.
+- Repeat-test note: after this successful proof, the demo account has a same-day Cedar claim again. A repeat fresh-claim proof on 2026-06-05 requires the service-role `seed:demo` reset, a fresh confirmed shopper, or waiting for the America/Chicago calendar day to roll over.
+- Follow-up optional: make Account visibly show `Maya Patel` and `hello@cedarbean.cafe` if Dan wants that in the owner demo.
+- Screenshots and APKs are local release artifacts and should not be committed.

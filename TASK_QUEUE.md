@@ -1720,6 +1720,85 @@ Fallback - no service role available (anon/RLS-safe, no secrets):
 
 ---
 
+## Final Owner-Demo Retest v4 - versionCode 14
+
+Status: Passed with caveats - functional owner-demo money-flow proof completed 2026-06-05 local run.
+
+Findings 2026-06-05:
+
+1. What I found
+   - `claude -p` was attempted first for the APK install/launch/screenshot setup, but Claude Code hit a permission block for `aapt` and `adb` and returned instructions to allowlist those tools. Per the task instruction, that Claude attempt was stopped and Codex completed the blocked emulator work directly.
+   - Newest APK found in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-8cd97c6a-8892-44d9-96f2-58a6e8364dbf.apk`, modified 2026-06-05 07:47:53 local time.
+   - APK metadata from `aapt.exe dump badging`: package `com.unvmex2.twoforone`, `versionCode=14`, `versionName=1.0.0`, label `TWOFER`, launch activity `com.unvmex2.twoforone.MainActivity`.
+   - APK config commit: `e0cef26cfbba`. The APK bundle contains the friendly claim fallback string `We couldn't claim this deal right now. Please try again.`
+   - Installed on Android emulator `emulator-5554` with `adb install -r`, app data was cleared before launch, and `dumpsys package` confirmed the installed app matched `versionCode=14`, `versionName=1.0.0`, `lastUpdateTime=2026-06-05 08:11:03`.
+   - Hosted Cedar & Bean data is clean by visible UI and direct anon/RLS verification: `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Grapevine, TX`; no service-role key was present or used.
+   - The shell did not have `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY`, so `npm run seed:demo` could not be run. A fresh shopper fallback was attempted through the APK, but hosted auth required email confirmation and blocked that path.
+   - To complete the proof without secrets or Quick Deal, Codex inserted one clean live Cedar deal through the demo owner's normal anon/RLS session: `Cedar Morning Espresso BOGO`. The demo account had only backdated redeemed Cedar claims and no same-day/active claim, so the APK could claim this fresh deal normally.
+   - Claiming the fresh live deal succeeded in the installed APK, opened the QR/code modal, and did not surface raw `Edge Function returned a non-2xx status code` text. Claim code: `SD9 H6A`.
+   - Claim QR modal Hide closed the modal. After Hide, the Home card remained stuck showing `Claiming...`; Wallet navigation still worked after a direct tab tap, so the proof path was not blocked, but this is a follow-up UI issue.
+   - Wallet showed the active ticket for `Cedar Morning Espresso BOGO`, code `SD9 H6A`.
+   - Wallet QR/code panel opened the QR modal when the visible QR square was tapped. A first tap on the text side of the panel did not appear to open it, so the hit area may still be narrower than the visible panel.
+   - Android Back closed the QR modal.
+   - Wallet `Show QR & code` opened the QR modal.
+   - Business mode opened in-session. Merchant manual Ticket code redemption with `SD9H6A` succeeded and showed the branded `Redeemed` receipt.
+   - Returning to the Business Dashboard without force-stop/relaunch updated Redemptions from `2` to `3` in-session.
+   - Consumer Wallet after redeem showed no active deals, Deals redeemed `3`, estimated savings `$17.50`, and the fresh ticket under Ended deals as `Redeemed by staff scan`.
+   - Quick Map check passed: Map opened with Google tiles/pins, stayed responsive for 30 seconds, Live deals filter toggled, and logcat scan showed no TWOFER ANR/fatal exception.
+   - Account still does not visibly show `Maya Patel` or `hello@cedarbean.cafe`; it does show Cedar & Bean Cafe, address, and category. This is a UI coverage gap, not a hosted-data cleanliness blocker.
+   - Dashboard metric-card beige pressed/overlay artifacts are still visible on the Live deals and Engagement cards even after the dashboard settles.
+2. Why it matters
+   - The previously blocked claim -> QR/code -> Wallet QR/code -> merchant manual redeem -> Wallet redeemed -> dashboard focus-refresh proof path is now functionally proven on versionCode `14`.
+   - The claim fallback fix is effectively validated by success-path behavior: no raw Edge Function non-2xx text appeared during the fresh claim.
+   - Remaining issues are visual/UX polish rather than money-flow blockers, but the dashboard artifact is visible on the owner-facing first screen.
+3. Recommended fix
+   - Treat versionCode `14` as functionally ready for an owner-demo money-flow walkthrough if the dashboard artifact and Home post-claim `Claiming...` state are acceptable.
+   - Before a polished external owner demo, fix or suppress the dashboard metric-card beige overlay artifact and the Home post-claim stuck `Claiming...` state.
+   - Keep the clean `Cedar Morning Espresso BOGO` deal only if the extra professional test deal is acceptable in hosted demo data; otherwise deactivate/remove it through normal owner/admin tooling before the next demo.
+   - After this successful proof, the demo account has a same-day Cedar claim again. A repeat fresh-claim proof on 2026-06-05 requires the service-role `seed:demo` reset, a fresh confirmed shopper, or waiting for the America/Chicago calendar day to roll over.
+   - Follow up separately if Account must visibly show `Maya Patel` and `hello@cedarbean.cafe`.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-owner-demo-retest-v3/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=14`, `versionName=1.0.0`.
+- `adb -s emulator-5554 install -r` passed.
+- `adb -s emulator-5554 shell pm clear com.unvmex2.twoforone` passed before launch.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed app matched `versionCode=14`, `versionName=1.0.0`.
+- Direct anon/RLS verification confirmed `Cedar Morning Espresso BOGO` claim status `redeemed`, redeemed timestamp present, and code `SD9H6A`.
+- Map logcat scan after the 30-second wait found no `com.unvmex2.twoforone` ANR, fatal exception, or `Application Not Responding` entry.
+- Typecheck/lint were not run because no app code was changed.
+- Owner-demo ready: Functionally yes for the money-flow proof; visually conditional because the dashboard beige artifact remains.
+
+New screenshots captured in `qa-screens/final-owner-demo-retest-v3/` for this v4 pass:
+
+- `00_setup_launch.png`
+- `01_onboarding_zip_clean.png`
+- `03_home_cedar_clean_first_view.png`
+- `10_home_fresh_live_cedar_deal.png`
+- `11_fresh_claim_cta_visible.png`
+- `12_after_claim_attempt.png`
+- `13_claim_modal_hide_closed_home_still_claiming.png`
+- `14_wallet_tap_retry_state.png`
+- `16_wallet_qr_square_tap_result.png`
+- `17_android_back_closed_wallet_qr_modal.png`
+- `18_wallet_show_qr_button_visible.png`
+- `19_wallet_show_qr_button_opens_modal.png`
+- `23_business_dashboard_baseline_after_skip.png`
+- `27_merchant_manual_redeem_result.png`
+- `28_dashboard_after_redeem_in_session.png`
+- `30_business_account_after_correct_tap.png`
+- `32_wallet_redeemed_state.png`
+- `33_map_initial.png`
+- `34_map_after_30s.png`
+- `36_map_live_deals_filter_tapped.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
