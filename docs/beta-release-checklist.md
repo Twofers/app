@@ -723,3 +723,107 @@ Result: Passed after the one-file source follow-up.
 - Dashboard refresh pass: Blocked, not verified.
 - Follow-up required: build a new APK with the `lib/functions.ts` claim-error fallback, then rerun the full claim -> QR/code -> Wallet -> merchant manual redeem -> Wallet redeemed -> dashboard refresh path.
 - Screenshots and APKs are local release artifacts and should not be committed.
+
+## Current Run - 2026-06-04 Final Owner-Demo Retest v3
+
+Focused owner-demo retest was run against the newest local APK after the claim error fallback fix. This pass used `claude -p` for scoped reconnaissance, then Codex completed APK verification, install, emulator validation, screenshots, and release documentation directly.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-04 local owner-demo retest run
+- Final commit SHA from APK config: `64d98b7e8253`
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this retest-only pass
+- Android versionCode from APK: `13`
+- Android versionName from APK: `1.0.0`
+- Package from APK: `com.unvmex2.twoforone`
+- EAS build URL: not available from the local APK folder metadata
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-d9e65023-a933-4313-97fc-f0b97e407db6.apk`
+- APK modified time: 2026-06-04 22:33:37 local time
+- Screenshots folder: `qa-screens/final-owner-demo-retest-v3/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=13`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 22:38:46`
+
+### 2. APK Verification And Install
+
+Result: Passed for APK metadata, install, launch, installed version match, and fallback-code inclusion.
+
+- Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-d9e65023-a933-4313-97fc-f0b97e407db6.apk`.
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=13`, `versionName=1.0.0`, app label `TWOFER`, and launch activity `com.unvmex2.twoforone.MainActivity`.
+- Installed on `emulator-5554` with `adb install -r`.
+- App data was cleared before launch with `adb shell pm clear com.unvmex2.twoforone`.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed package matched `versionCode=13`, `versionName=1.0.0`.
+- Claim fallback inclusion was verified from the APK bundle: `assets/app.config` includes git commit `64d98b7e8253`, and `assets/index.android.bundle` contains `We couldn't claim this deal right now. Please try again.`
+
+### 3. Owner Demo Retest
+
+Result: Failed / incomplete - not ready to show real business owners.
+
+- Passed: signed-out auth landing opened with TWOFER branding and no demo credential helper UI.
+- Passed: login through the normal email/password form.
+- Passed: after clearing app data, first-run consumer onboarding appeared and showed clean `Cedar & Bean Cafe` / `Grapevine, TX` hosted data.
+- Passed: Home first view showed Cedar & Bean Cafe data and did not show stale `My Coffee`, `124`, `Demo Roasted Bean Coffee`, `Met`, `E`, timestamped smoke-test titles, or preview-tester copy.
+- Passed: Business mode opened and Business Dashboard showed `Welcome back, Cedar & Bean Cafe`, clean deal data, and current metrics.
+- Partial: dashboard metric cards still showed the beige pressed/overlay artifact previously noted; data remained readable.
+- Blocked: a fresh live Cedar & Bean claim was not completed. The visible customer card was already claimed, other swept cards were expired/off-hours from the customer view, and normal anon/RLS found no active unredeemed demo-user claim to cancel.
+- Setup detour: Quick Deal generated a clean preview for `Cappuccino BOGO at Cedar & Bean`, but publish failed with friendly copy `Couldn't publish this deal.` No raw non-2xx text appeared in that setup failure.
+- Blocked after setup detour: the app/adb interaction became unstable on the Quick Deal screen. MCP/adb input intermittently timed out, the visible back affordance did not leave the screen, and a deep-link attempt did not return to the tab shell.
+
+### 4. Claim, QR, Wallet, Redeem, Dashboard
+
+Result: Blocked in this APK run.
+
+- Actual fresh claim success: Not verified.
+- Raw claim non-2xx fallback in a live claim attempt: Not verified; fallback inclusion was verified from the APK bundle only.
+- Claim QR/code modal open: Not verified.
+- QR modal Hide and Android Back close: Not verified.
+- Wallet active ticket: Not verified.
+- Wallet QR/code panel and `Show QR & code`: Not verified.
+- Merchant manual redeem: Not verified.
+- Wallet redeemed state: Not verified.
+- Business dashboard in-session redemption refresh after returning to Dashboard: Not verified.
+
+### 5. Hosted Demo Data
+
+Result: Passed for visible owner-demo surfaces reached in this run.
+
+- Visible onboarding, Home, and Business Dashboard surfaces showed Cedar & Bean Cafe data.
+- Normal anon/RLS verification using local public Expo Supabase env only found the demo-owned business as `Cedar & Bean Cafe`.
+- Normal anon/RLS verification found clean visible live deal titles: `Saturday Bakery Box BOGO`, `Weekday Cold Brew 2-for-1`, `Buy One Latte, Get One Free`, and `2-for-1 Pastry Pair Before Noon`.
+- No service-role key was present or used.
+
+### 6. Map Responsiveness
+
+Result: Not run in this retest.
+
+- The run did not reach the quick Map check because the required fresh claim proof was already blocked and the app/input path became unstable on the failed Quick Deal screen.
+
+### 7. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-owner-demo-retest-v3/`:
+
+- `01_signed_out_auth_landing_step.png`
+- `02_login_onboarding_start_step.png`
+- `03_onboarding_cedar_data_clean_step.png`
+- `04_home_cedar_deals_clean_first_view_step.png`
+- `05_business_dashboard_cedar_clean_baseline_step.png`
+- `06_created_fresh_cedar_deal_preview_step.png`
+- `07_create_publish_failed_friendly_step.png`
+- `08_state_after_adb_recover_mcp_step.png`
+- `09_after_deeplink_attempt_step.png`
+
+### 8. Static Validation
+
+Result: Not rerun.
+
+- No app code was modified during this retest.
+- Per the task instruction, this pass updated only `TASK_QUEUE.md` and `docs/beta-release-checklist.md` after device validation.
+
+### 9. Known Issues And Readiness
+
+- Owner-demo readiness: No. versionCode `13` should not be treated as ready to show real business owners because the required claim -> QR/code -> Wallet -> merchant redeem -> Wallet redeemed -> dashboard refresh proof was not completed.
+- APK includes the claim fallback fix: Yes, verified from bundled commit/string evidence.
+- Hosted demo data clean: Yes for surfaces reached and normal anon/RLS verification.
+- Release blocker: newest APK proof remains incomplete because no fresh active ticket was created during the retest.
+- Follow-up required: rerun with a fresh shopper account or approved admin/service-role data reset that guarantees a claimable live Cedar deal before launch.
+- Follow-up recommended: investigate Quick Deal publish failure and route/input recovery if Create is part of the owner demo.
+- Screenshots and APKs are local release artifacts and should not be committed.

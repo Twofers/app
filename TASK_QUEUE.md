@@ -1562,6 +1562,63 @@ Screenshots captured in `qa-screens/final-owner-demo-smoke-v2/`:
 
 ---
 
+## Final Owner-Demo Retest v3 - versionCode 13
+
+Status: Failed / incomplete - not owner-demo ready 2026-06-04 local run.
+
+Findings 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and used for scoped reconnaissance; Codex completed APK verification, install, emulator checks, screenshots, and documentation directly.
+   - Newest APK found in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-d9e65023-a933-4313-97fc-f0b97e407db6.apk`, modified 2026-06-04 22:33:37 local time.
+   - APK metadata from `aapt.exe dump badging`: package `com.unvmex2.twoforone`, `versionCode=13`, `versionName=1.0.0`, label `TWOFER`, launch activity `com.unvmex2.twoforone.MainActivity`.
+   - APK includes the claim error fallback fix: `assets/app.config` reports git commit `64d98b7e8253`, and `assets/index.android.bundle` contains the friendly fallback string `We couldn't claim this deal right now. Please try again.`
+   - Installed on Android emulator `emulator-5554` with `adb install -r`, app data cleared before launch, and installed package matched `versionCode=13`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 22:38:46`.
+   - Screenshots were captured under ignored local folder `qa-screens/final-owner-demo-retest-v3/`.
+   - Passed: signed-out auth landing, normal email/password login, first-run onboarding, visible Cedar & Bean Cafe hosted data cleanliness, Home first view with Cedar & Bean data, Business mode switch, and Cedar & Bean business dashboard baseline.
+   - Passed by normal anon/RLS verification using local public Expo Supabase env only: demo-owned business is `Cedar & Bean Cafe`; visible live deal titles were clean (`Saturday Bakery Box BOGO`, `Weekday Cold Brew 2-for-1`, `Buy One Latte, Get One Free`, `2-for-1 Pastry Pair Before Noon`); no service-role key was present or used.
+   - Blocked: the required fresh customer claim was not completed. Existing visible customer cards for the demo user were already claimed or expired, and no active unredeemed demo-user claim existed to cancel through normal RLS.
+   - Setup attempt through the app's Quick Deal flow generated a clean preview (`Cappuccino BOGO at Cedar & Bean`) but publishing failed with friendly copy: `Couldn't publish this deal.` No raw Edge Function non-2xx text appeared in that setup failure.
+   - After the failed setup publish, the app/ADB interaction became unstable on the Quick Deal screen: MCP/adb input calls intermittently timed out, the visible back affordance did not leave the screen, and a deep-link attempt was delivered but did not dislodge the route. ADB recovered after server restarts, but the proof path was not safely resumable.
+   - Not verified in this APK run: fresh claim success, absence of raw claim non-2xx during an actual claim, claim QR/code modal, QR modal Hide, Android Back closing QR modal, Wallet active ticket, Wallet QR/code panel, Wallet `Show QR & code`, merchant manual redeem, Wallet redeemed state, in-session dashboard redemption refresh, and quick Map 30-second responsiveness.
+2. Why it matters
+   - versionCode `13` appears to include the intended claim-error fallback code, but the owner-demo proof still cannot be marked passed until an actual fresh claim creates an active ticket in the installed APK.
+   - The downstream QR, Wallet, merchant redeem, and dashboard refresh fixes remain unproven in the newest APK.
+   - The Quick Deal publish/setup detour exposed a friendly failure rather than raw internals, but the route/input recovery issue makes this run unsuitable as final owner-demo evidence.
+3. Recommended fix
+   - Do not show this APK to real business owners as final proof yet.
+   - Rerun the retest with a truly fresh claimable customer state: use a fresh shopper account, or reset/cancel the demo user's prior per-deal claims with an approved admin/service-role data reset before launch.
+   - Keep the retest scoped to claim -> QR/code -> Wallet QR/code -> merchant manual redeem -> Wallet redeemed -> dashboard focus refresh; avoid Create/AI setup unless the claimable data is missing.
+   - Separately investigate the Quick Deal publish failure and back/recovery behavior if Create will be part of an owner demo.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-owner-demo-retest-v3/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=13`, `versionName=1.0.0`.
+- `adb -s emulator-5554 install -r` passed.
+- `adb -s emulator-5554 shell pm clear com.unvmex2.twoforone` passed before launch.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed app matched `versionCode=13`, `versionName=1.0.0`.
+- Typecheck/lint were not run because no app code was changed.
+- Owner-demo ready: No.
+
+Screenshots captured in `qa-screens/final-owner-demo-retest-v3/`:
+
+- `01_signed_out_auth_landing_step.png`
+- `02_login_onboarding_start_step.png`
+- `03_onboarding_cedar_data_clean_step.png`
+- `04_home_cedar_deals_clean_first_view_step.png`
+- `05_business_dashboard_cedar_clean_baseline_step.png`
+- `06_created_fresh_cedar_deal_preview_step.png`
+- `07_create_publish_failed_friendly_step.png`
+- `08_state_after_adb_recover_mcp_step.png`
+- `09_after_deeplink_attempt_step.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
