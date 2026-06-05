@@ -79,6 +79,8 @@ type TemplateRow = {
   timezone?: string | null;
 };
 
+type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
+
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
 };
@@ -380,6 +382,9 @@ export default function AiDealScreen() {
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
+  const [publishStatusMessage, setPublishStatusMessage] = useState<string | null>(null);
+  const publishInFlightRef = useRef(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
@@ -432,6 +437,64 @@ export default function AiDealScreen() {
     return title.trim().length > 0 && listingBody.trim().length > 0;
   }, [title, listingBody]);
 
+  const displayedPublishStatus = useMemo<PublishStatus>(() => {
+    if (publishing) return "publishing";
+    if (publishStatus === "success" || publishStatus === "error") return publishStatus;
+    if (!canPublish) return "missing";
+    return "ready";
+  }, [canPublish, publishing, publishStatus]);
+
+  const publishStatusCard = useMemo(() => {
+    switch (displayedPublishStatus) {
+      case "publishing":
+        return {
+          icon: "hourglass-empty" as const,
+          title: t("createAi.publishBusyTitle"),
+          body: t("createAi.publishBusyBody"),
+          backgroundColor: Colors.light.surfaceMuted,
+          borderColor: Colors.light.border,
+          titleColor: Colors.light.text,
+        };
+      case "success":
+        return {
+          icon: "check-circle" as const,
+          title: editingDealId ? t("createAi.publishUpdateSuccessTitle") : t("createAi.publishSuccessTitle"),
+          body: publishStatusMessage ?? t("createAi.publishSuccessBody"),
+          backgroundColor: Colors.light.successSurface,
+          borderColor: Colors.light.successBorder,
+          titleColor: Colors.light.success,
+        };
+      case "error":
+        return {
+          icon: "error-outline" as const,
+          title: t("createAi.publishFailedTitle"),
+          body: publishStatusMessage ?? t("createAi.errPublishFailed"),
+          backgroundColor: Colors.light.surfaceMuted,
+          borderColor: Colors.light.danger,
+          titleColor: Colors.light.danger,
+        };
+      case "missing":
+        return {
+          icon: "edit" as const,
+          title: t("createAi.publishMissingTitle"),
+          body: t("createAi.publishMissingBody"),
+          backgroundColor: Colors.light.surfaceMuted,
+          borderColor: Colors.light.border,
+          titleColor: Colors.light.mutedText,
+        };
+      case "ready":
+      default:
+        return {
+          icon: "assignment-turned-in" as const,
+          title: editingDealId ? t("createAi.publishUpdateReadyTitle") : t("createAi.publishReadyTitle"),
+          body: editingDealId ? t("createAi.publishUpdateReadyBody") : t("createAi.publishReadyBody"),
+          backgroundColor: "#FFF7ED",
+          borderColor: Colors.light.primary,
+          titleColor: Colors.light.accentText,
+        };
+    }
+  }, [displayedPublishStatus, editingDealId, publishStatusMessage, t]);
+
   const showDraftEditor =
     templateLoaded ||
     editingDealId != null ||
@@ -441,6 +504,29 @@ export default function AiDealScreen() {
     ctaText.trim().length > 0 ||
     description.trim().length > 0 ||
     manualDraftUnlocked;
+
+  useEffect(() => {
+    setPublishStatus((current) => {
+      if (current === "success" || current === "error") return "idle";
+      return current;
+    });
+    setPublishStatusMessage(null);
+  }, [
+    title,
+    promoLine,
+    ctaText,
+    description,
+    price,
+    maxClaims,
+    cutoffMins,
+    validityMode,
+    startTime,
+    endTime,
+    daysOfWeek,
+    windowStart,
+    windowEnd,
+    publishLocationIds,
+  ]);
 
   const composeDirty = useMemo(() => {
     if (photoUri || hintText.trim() || price.trim()) return true;
@@ -1055,6 +1141,8 @@ export default function AiDealScreen() {
     if (!generatedAd) return;
     applyAdToDraft(generatedAd);
     setAdAccepted(true);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
     trackEvent(AiAdsEvents.AD_SELECTED, {
       screen: "create_ai",
       creative_lane: "single",
@@ -1066,19 +1154,33 @@ export default function AiDealScreen() {
     }, 200);
   }
 
+  function showPublishError(message: string, tone: "error" | "warning" = "error") {
+    setPublishStatus("error");
+    setPublishStatusMessage(message);
+    setBanner({ message, tone });
+  }
+
   async function publishDeal() {
-    if (!validateInputs()) return;
-    if (!businessId) {
-      setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
+    if (publishInFlightRef.current) return;
+    setPublishStatusMessage(null);
+    if (!canPublish) {
+      const message = t("createAi.publishMissingBody");
+      setPublishStatus("missing");
+      setBanner({ message, tone: "error" });
       return;
     }
-    if (!canPublish) {
-      setBanner({ message: t("createAi.errPublishDraft"), tone: "error" });
+    if (!validateInputs()) {
+      setPublishStatus("error");
+      setPublishStatusMessage(t("createAi.publishValidationBody"));
+      return;
+    }
+    if (!businessId) {
+      showPublishError(t("createAi.errCreateBusinessFirst"));
       return;
     }
     const priceNum = parseOptionalPriceInput(price);
     if (priceNum !== null && Number.isNaN(priceNum)) {
-      setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
+      showPublishError(t("createAi.errPriceNumber"));
       return;
     }
 
@@ -1096,10 +1198,7 @@ export default function AiDealScreen() {
       price: priceNum,
     });
     if (quality.blocked) {
-      setBanner({
-        message: translateDealQualityBlock(quality, dealOutputLang),
-        tone: "error",
-      });
+      showPublishError(translateDealQualityBlock(quality, dealOutputLang));
       return;
     }
 
@@ -1109,17 +1208,19 @@ export default function AiDealScreen() {
     });
     if (!strongGuard.ok) {
       const key = `dealQuality.strongGuard.${strongGuard.reason}`;
-      setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
+      showPublishError(t(key, { defaultValue: t("dealQuality.strongDealMessage") }), "warning");
       return;
     }
 
     const isRecurring = validityMode === "recurring";
     if (!isRecurring && endTime.getTime() <= Date.now()) {
-      setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
+      showPublishError(t("createAi.errEndAfterStart"));
       return;
     }
 
+    publishInFlightRef.current = true;
     setPublishing(true);
+    setPublishStatus("publishing");
     setBanner(null);
     try {
       const path = await ensureUploadedPhoto();
@@ -1195,7 +1296,15 @@ export default function AiDealScreen() {
       // Hand off a one-shot success flash to whichever tab the owner lands on
       // (usually dashboard). Without this the redirect is silent — nervous pilots
       // need a "yes, it worked" moment.
+      const successMessage = editingDealId
+        ? t("createAi.publishUpdateSuccessBody")
+        : t("createAi.publishSuccessBody");
+      setPublishing(false);
+      setPublishStatus("success");
+      setPublishStatusMessage(successMessage);
+      setBanner({ message: successMessage, tone: "success" });
       await markRecentPublish(title.trim());
+      await new Promise((resolve) => setTimeout(resolve, 700));
       router.replace("/(tabs)");
     } catch (err: unknown) {
       let detail = "";
@@ -1220,14 +1329,13 @@ export default function AiDealScreen() {
           detail = t("createAi.errPublishNetwork");
         }
       }
-      setBanner({
-        message: detail
-          ? `${t("createAi.errPublishFailed")} ${detail}`
-          : t("createAi.errPublishFailed"),
-        tone: "error",
-      });
+      const message = detail
+        ? `${t("createAi.errPublishFailed")} ${detail}`
+        : t("createAi.errPublishFailed");
+      showPublishError(message);
     } finally {
       setPublishing(false);
+      publishInFlightRef.current = false;
     }
   }
 
@@ -1983,10 +2091,40 @@ export default function AiDealScreen() {
                 <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} multiline style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90 }} />
 
                 <View style={{ marginTop: 16, gap: 8 }}>
+                  <View
+                    style={{
+                      padding: 14,
+                      borderRadius: 16,
+                      backgroundColor: publishStatusCard.backgroundColor,
+                      borderWidth: 1,
+                      borderColor: publishStatusCard.borderColor,
+                      flexDirection: "row",
+                      gap: 10,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <MaterialIcons name={publishStatusCard.icon} size={22} color={publishStatusCard.titleColor} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
+                        {publishStatusCard.title}
+                      </Text>
+                      <Text style={{ marginTop: 4, color: Colors.light.mutedText, lineHeight: 19 }}>
+                        {publishStatusCard.body}
+                      </Text>
+                    </View>
+                  </View>
                   <PrimaryButton
-                    title={publishing ? t("createAi.publishing") : editingDealId ? t("createAi.saveDealChanges") : t("createAi.publishDeal")}
+                    title={
+                      displayedPublishStatus === "publishing"
+                        ? t("createAi.publishing")
+                        : displayedPublishStatus === "success"
+                          ? editingDealId
+                            ? t("createAi.publishUpdateSuccessTitle")
+                            : t("createAi.publishSuccessTitle")
+                          : editingDealId ? t("createAi.saveDealChanges") : t("createAi.publishDeal")
+                    }
                     onPress={() => void publishDeal()}
-                    disabled={publishing}
+                    disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
                     style={{ height: 66, borderRadius: 20 }}
                   />
                   <SecondaryButton
