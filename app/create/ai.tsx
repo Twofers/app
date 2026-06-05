@@ -109,6 +109,15 @@ function formatMinutes(minutes: number) {
   return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
+function isMissingDealLocationColumn(error: { code?: string; message?: string } | null | undefined) {
+  return error?.code === "PGRST204" && error.message?.includes("location_id");
+}
+
+function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
+  const { location_id: _locationId, ...rest } = row;
+  return rest;
+}
+
 /**
  * English-only schedule summary sent to the AI so its copy can ground in the deal window.
  * Stable English keeps the model's behavior predictable across user locales.
@@ -1267,7 +1276,11 @@ export default function AiDealScreen() {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        const { data: dealsOut, error } = await supabase.from("deals").insert(rows).select("id");
+        let insertResult = await supabase.from("deals").insert(rows).select("id");
+        if (isMissingDealLocationColumn(insertResult.error)) {
+          insertResult = await supabase.from("deals").insert(rows.map(omitDealLocationId)).select("id");
+        }
+        const { data: dealsOut, error } = insertResult;
         if (error) throw error;
         for (const row of dealsOut ?? []) {
           if (row?.id) {
