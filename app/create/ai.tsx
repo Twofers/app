@@ -394,6 +394,7 @@ export default function AiDealScreen() {
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [publishStatusMessage, setPublishStatusMessage] = useState<string | null>(null);
   const publishInFlightRef = useRef(false);
+  const [allowPostPublishNavigation, setAllowPostPublishNavigation] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
@@ -566,7 +567,7 @@ export default function AiDealScreen() {
   ]);
 
   usePreventRemove(
-    composeDirty,
+    composeDirty && !allowPostPublishNavigation,
     useCallback(
       ({ data }) => {
         confirm({
@@ -1317,9 +1318,11 @@ export default function AiDealScreen() {
       setPublishStatusMessage(successMessage);
       setBanner({ message: successMessage, tone: "success" });
       await markRecentPublish(title.trim());
+      setAllowPostPublishNavigation(true);
       await new Promise((resolve) => setTimeout(resolve, 700));
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
+      setAllowPostPublishNavigation(false);
       let detail = "";
       if (err instanceof Error) {
         const m = err.message.toLowerCase();
