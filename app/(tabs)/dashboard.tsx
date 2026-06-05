@@ -49,6 +49,7 @@ import { printDealFlyer } from "@/lib/deal-flyer";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
+import { consumeRecentPublish } from "@/lib/recent-publish";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function friendlyDashboardError(err: unknown, fallback: string): string {
@@ -432,6 +433,7 @@ export default function BusinessDashboard() {
   const { confirm, confirmModal } = useBrandedConfirm();
 
   const [banner, setBanner] = useState<string | null>(null);
+  const [publishSuccessBanner, setPublishSuccessBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [deals, setDeals] = useState<DealRow[]>([]);
@@ -477,7 +479,7 @@ export default function BusinessDashboard() {
   );
 
   const loadMetrics = useCallback(async () => {
-    if (!businessId) return;
+    if (!businessId) return false;
     setLoadingMetrics(true);
     setBanner(null);
     setDealsHasMore(false);
@@ -587,12 +589,14 @@ export default function BusinessDashboard() {
         setInsights(null);
       }
       setLastUpdatedAt(new Date());
+      return true;
     } catch (err: unknown) {
       setInsights(null);
       setDealsHasMore(false);
       const msg = friendlyDashboardError(err, t("offersDashboard.errLoadDashboard"));
       setBanner(msg);
       setWeekCounts(weekDays.map(() => 0));
+      return false;
     } finally {
       setLoadingMetrics(false);
     }
@@ -630,8 +634,19 @@ export default function BusinessDashboard() {
   useFocusEffect(
     useCallback(() => {
       if (!businessId) return;
-      void loadMetrics();
-    }, [businessId, loadMetrics]),
+      let cancelled = false;
+      setPublishSuccessBanner(null);
+      void (async () => {
+        const metricsLoaded = await loadMetrics();
+        const title = await consumeRecentPublish();
+        if (!cancelled && metricsLoaded && title) {
+          setPublishSuccessBanner(t("offersDashboard.publishSuccessBanner", { title }));
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [businessId, loadMetrics, t]),
   );
 
   // Show walkthrough for first-time business owners
@@ -655,6 +670,7 @@ export default function BusinessDashboard() {
 
   async function onRefresh() {
     setRefreshing(true);
+    setPublishSuccessBanner(null);
     await loadMetrics();
     setRefreshing(false);
   }
@@ -1452,6 +1468,7 @@ export default function BusinessDashboard() {
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
           {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
+          {publishSuccessBanner ? <Banner message={publishSuccessBanner} tone="success" /> : null}
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={4} />

@@ -1347,6 +1347,7 @@
     "yourDealsCount": "Tus ofertas ({{count}})",
     "loadMoreDeals": "Cargar más ofertas",
     "showingAllDeals": "Mostrando las {{count}} ofertas",
+    "publishSuccessBanner": "{{title}} ya está activa para los clientes.",
     "dealFallback": "Oferta",
     "rowClaims": "Reclamaciones {{count}}",
     "rowRedeems": "Canjes {{count}}",

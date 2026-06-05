@@ -1305,7 +1305,7 @@ export default function AiDealScreen() {
       setBanner({ message: successMessage, tone: "success" });
       await markRecentPublish(title.trim());
       await new Promise((resolve) => setTimeout(resolve, 700));
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
       let detail = "";
       if (err instanceof Error) {

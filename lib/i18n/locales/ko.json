@@ -1347,6 +1347,7 @@
     "yourDealsCount": "내 딜 ({{count}})",
     "loadMoreDeals": "더 많은 딜 불러오기",
     "showingAllDeals": "전체 {{count}}개 딜 표시 중",
+    "publishSuccessBanner": "{{title}} 딜이 고객에게 공개되었습니다.",
     "dealFallback": "딜",
     "rowClaims": "클레임 {{count}}",
     "rowRedeems": "사용 {{count}}",

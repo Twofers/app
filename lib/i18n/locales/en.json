@@ -1583,6 +1583,7 @@
     "yourDealsCount": "Your deals ({{count}})",
     "loadMoreDeals": "Load more deals",
     "showingAllDeals": "Showing all {{count}} deals",
+    "publishSuccessBanner": "{{title}} is now live for customers.",
     "dealFallback": "Deal",
     "rowClaims": "Claims {{count}}",
     "rowRedeems": "Redemptions {{count}}",
