@@ -44,6 +44,24 @@ describe("translateKnownApiMessage", () => {
     expect(translateKnownApiMessage("Token redemption failed", t)).toBe("Couldn't redeem this ticket.");
   });
 
+  it("masks the bare non-2xx Edge Function wrapper in English", async () => {
+    await i18n.changeLanguage("en");
+    const t = i18n.t.bind(i18n);
+    expect(
+      translateKnownApiMessage("Edge Function returned a non-2xx status code", t),
+    ).toBe("Something went wrong. Try again.");
+  });
+
+  it("never leaks the raw non-2xx wrapper to localized users", async () => {
+    for (const lang of ["en", "es", "ko"]) {
+      await i18n.changeLanguage(lang);
+      const t = i18n.t.bind(i18n);
+      const out = translateKnownApiMessage("Edge Function returned a non-2xx status code", t);
+      expect(out).not.toMatch(/non-?2xx/i);
+      expect(out).not.toMatch(/edge function/i);
+    }
+  });
+
   it("maps cutoff prefix with interpolated time", async () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);

@@ -617,6 +617,42 @@ Final owner-demo smoke was executed against the newest local APK in the TWOFER f
 Result: Passed for APK metadata, install, launch, and installed version match.
 
 - Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-3a86ffab-9316-4683-891d-e3ef01333341.apk`.
+
+## Next Smoke Setup - Guaranteeing a fresh claimable deal + ticket (2026-06-04)
+
+The owner-demo proof path (claim -> QR/code modal -> Wallet active ticket -> Wallet QR/code modal -> merchant manual redeem -> Wallet redeemed -> in-session Dashboard refresh) repeatedly could not be completed because the single demo account (owner AND shopper) could not create a fresh claim on the same local day it was seeded.
+
+Why: `supabase/functions/claim-deal` enforces (a) at most one active claim app-wide and (b) one claim per business per local day (America/Chicago). The old seed left a same-day active claim plus same-day redeemed claims on Cedar & Bean, which trip both guards.
+
+Source fix in this repo (no APK rebuilt yet): `scripts/seed-demo.cjs` now backdates the 2 redeemed wallet-history claims 1-2 days and seeds NO active claim, leaving the demo account free to perform exactly one fresh claim per smoke.
+
+### Preferred: operator reset with service role (claim-clean account)
+
+```powershell
+$env:SUPABASE_URL = "https://<project-ref>.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"   # never echo/commit the value
+npm run seed:demo
+```
+
+Then, on the next APK:
+
+1. `adb shell pm clear com.unvmex2.twoforone`, launch, Demo login.
+2. Consumer Home -> open a LIVE deal ("Buy One Latte, Get One Free") -> Claim -> QR/code modal opens. Confirm Hide AND Android Back both close it.
+3. Wallet -> active ticket -> tap the QR/code panel and "Show QR & code" -> modal opens from both.
+4. Business mode -> Redeem -> enter the short code -> branded Redeemed receipt.
+5. Wallet shows the ticket as Redeemed.
+6. Return to Business Dashboard WITHOUT relaunch -> redemption count increments on focus.
+
+### Fallback: no service role (anon/RLS-safe, no secrets)
+
+- The demo account can claim Cedar only once per local day. If it already claimed today, use a fresh shopper: Create account with a throwaway email, finish onboarding, claim a live Cedar deal, then redeem as the demo owner (Business -> Redeem) using the shopper's short code.
+- Or rerun the demo flow after the America/Chicago calendar day rolls over.
+- Do NOT use Quick Deal/Create to manufacture claimable data; its publish/route-recovery issue is a separate follow-up.
+
+### Readiness
+
+- Source is ready for the next APK build. Blockers 2/3/4 (claim QR modal back/hide/open, Wallet shared QrModal panel + button, in-session dashboard focus refresh) are confirmed correct in source; blocker 2's no-raw-leak path is hardened in `lib/i18n/api-messages.ts`; blocker 1's fresh-claim setup is now repeatable via the corrected `seed:demo`.
+- Remaining non-blocking: dashboard metric-card entering-animation can read as a faint beige overlay in a screenshot (settles on-device); Quick Deal publish/route recovery is a separate follow-up. See `TASK_QUEUE.md` -> "Source-Readiness Pass - Pre-APK blocker fixes 2026-06-04".
 - `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=12`, `versionName=1.0.0`, app label `TWOFER`, and launch activity `com.unvmex2.twoforone.MainActivity`.
 - Installed on `emulator-5554` with `adb install -r`.
 - App data was cleared before launch with `adb shell pm clear com.unvmex2.twoforone`.

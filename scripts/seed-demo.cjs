@@ -303,21 +303,36 @@ async function main() {
   const { data: insertedDeals, error: dealErr } = await supabase.from("deals").insert(rows).select("id,title,end_time");
   if (dealErr) throw dealErr;
 
-  const claimSeedRows = (insertedDeals || []).slice(0, 3).map((d, i) => ({
-    deal_id: d.id,
-    user_id: userId,
-    token: `demo${Date.now()}${i}${Math.random().toString(36).slice(2, 8)}`.slice(0, 32),
-    expires_at: new Date(new Date(d.end_time).getTime() - 15 * 60 * 1000).toISOString(),
-    redeemed_at: i < 2 ? new Date(now.getTime() - (i + 1) * 3 * 60 * 60 * 1000).toISOString() : null,
-    claim_status: i < 2 ? "redeemed" : "active",
-    redeem_method: i < 2 ? "visual" : null,
-    grace_period_minutes: 10,
-    acquisition_source: "demo_seed",
-    device_platform_at_claim: "demo",
-  }));
-  if (claimSeedRows.length > 0) {
-    const { error: clearClaimsErr } = await supabase.from("deal_claims").delete().eq("user_id", userId).in("deal_id", claimSeedRows.map((r) => r.deal_id));
+  // Demo wallet history: two *redeemed* claims, backdated to prior local days.
+  // Backdating keeps them as redeemed history in the wallet/dashboard while
+  // leaving today free for a fresh claim — the claim-deal guards reject another
+  // claim if the user already has an active claim app-wide OR any non-canceled
+  // claim on this business *today* (see supabase/functions/claim-deal). We do NOT
+  // seed an active claim; the owner-demo proof creates the active ticket live.
+  const claimSeedRows = (insertedDeals || []).slice(0, 2).map((d, i) => {
+    const claimedAt = new Date(now.getTime() - (i + 1) * 24 * 60 * 60 * 1000); // 1-2 days ago
+    return {
+      deal_id: d.id,
+      user_id: userId,
+      token: `demo${Date.now()}${i}${Math.random().toString(36).slice(2, 8)}`.slice(0, 32),
+      created_at: claimedAt.toISOString(),
+      expires_at: new Date(claimedAt.getTime() + 12 * 60 * 60 * 1000).toISOString(),
+      redeemed_at: new Date(claimedAt.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+      claim_status: "redeemed",
+      redeem_method: "visual",
+      grace_period_minutes: 10,
+      acquisition_source: "demo_seed",
+      device_platform_at_claim: "demo",
+    };
+  });
+  // Clear ALL of the demo user's claims on canonical deals first so a stale
+  // active claim from a prior smoke can't block the next fresh-claim proof.
+  const seededDealIds = (insertedDeals || []).map((d) => d.id);
+  if (seededDealIds.length > 0) {
+    const { error: clearClaimsErr } = await supabase.from("deal_claims").delete().eq("user_id", userId).in("deal_id", seededDealIds);
     if (clearClaimsErr) throw clearClaimsErr;
+  }
+  if (claimSeedRows.length > 0) {
     const { error: claimErr } = await supabase.from("deal_claims").insert(claimSeedRows);
     if (claimErr) throw claimErr;
   }

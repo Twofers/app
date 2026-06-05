@@ -28,6 +28,8 @@ Constants in code: `lib/demo-account.ts` (`DEMO_PREVIEW_EMAIL`, `DEMO_PREVIEW_PA
 
 **Operator reset (refreshes the canonical demo rows):** Run `npm run seed:demo` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, or run `supabase/seed_demo_coffee_business.sql` in the SQL Editor (user must exist first unless you used the CLI script, which creates the user).
 
+**Claim state after `seed:demo` (matters for the owner-demo proof):** the CLI reset leaves the demo account **claim-clean** — two *redeemed* wallet-history claims backdated 1-2 days, and **no** active or same-day claim. This is deliberate: `supabase/functions/claim-deal` blocks a fresh claim if the user already has an active claim app-wide **or** any non-canceled claim on the same business on the same local day (America/Chicago). A same-day or active seed claim would block the very claim the smoke needs, so the proof creates the active ticket live. Because the demo account is both owner and shopper, it can claim Cedar **once per local day**; if you need to repeat the proof the same day without a re-seed, use a fresh throwaway shopper account for the claim and redeem it as the demo owner. See `docs/beta-release-checklist.md` -> "Next Smoke Setup".
+
 ## Exact steps for a clean preview test
 
 1. Point the app at your Supabase project (`.env` / EAS secrets: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`).

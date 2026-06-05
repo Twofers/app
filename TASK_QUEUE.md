@@ -1619,6 +1619,103 @@ Screenshots captured in `qa-screens/final-owner-demo-retest-v3/`:
 
 ---
 
+## Source-Readiness Pass - Pre-APK blocker fixes 2026-06-04
+
+Status: Source ready for the next APK build; on-device proof still pending (no APK built this pass).
+
+Scope: make the source ready and the fresh-claim smoke repeatable BEFORE building the next APK. No APK was built, no `eas build` was run, and nothing was committed.
+
+### 1. Root cause of the incomplete v13 proof path
+
+- The owner-demo proof keeps stalling at the claim step, not because of a UI bug, but because the demo account cannot create a fresh claim on the same local day it is seeded.
+- `supabase/functions/claim-deal/index.ts` enforces two guards that the seeded demo account trips:
+  - App-wide single active claim (line ~433): "You already have an active claim..." if any unredeemed, non-canceled, non-expired claim exists on ANY deal.
+  - One claim per business per local day (line ~469, `_shared/claim-limits.ts`): blocks a second non-canceled claim on the same business on the same local calendar day (America/Chicago).
+- Both seed paths left the demo account in a blocked state:
+  - `scripts/seed-demo.cjs` seeded 2 redeemed + 1 ACTIVE claim, all `created_at = now` on Cedar & Bean. The active claim trips the app-wide guard; the same-day claims trip the per-business-per-day guard.
+  - `lib/demo-preview-seed.ts` `ensureDemoCoffeePreview` claims deals[0..2] live; its 3rd target is the SCHEDULED Iced Tea deal, so `claim-deal` returns "This deal has not started yet" and the function `return`s early (also skipping analytics seeding). It still leaves 2 same-day redeemed Cedar claims, which trip the per-business-per-day guard.
+- Net: after either seed, the single demo account (owner AND shopper) cannot claim a fresh Cedar deal that day, so claim -> QR -> wallet -> redeem -> dashboard could not be exercised.
+
+### 2. Blockers 2/3/4 - source confirmed already correct (no behavior change needed)
+
+These fixes landed in earlier runs; this pass re-verified them in source by reading the files:
+
+- Claim QR/code modal (`components/qr-modal.tsx`, `app/deal/[id].tsx`):
+  - Android Back closes the modal: `Modal ... onRequestClose={onHide}` (qr-modal.tsx:191).
+  - Hide closes reliably: `onHide={() => setQrVisible(false)}` (deal/[id].tsx:495).
+  - Deal detail opens the modal after a successful claim (`openClaimQr(out, true)`, deal/[id].tsx:216) AND after recovering a persisted claim in the catch path (`loadActiveClaimForDeal` -> `openClaimQr`, deal/[id].tsx:221-226).
+- Wallet QR/code modal (`app/(tabs)/wallet.tsx`):
+  - Wallet renders the shared `QrModal` (wallet.tsx:817) with `onRequestClose` via the shared component.
+  - The visible scan/code panel opens it (`NativePressable onPress={openVerifyForClaim}`, wallet.tsx:550) and the "Show QR & code" button opens it (wallet.tsx:603). Both are native `Pressable` targets with `hitSlop` 8.
+  - Active-ticket guards preserved: `openVerifyForClaim` no-ops on dead/redeemed/redeeming claims (wallet.tsx:176-186); redeem deadlines use `getClaimRedeemDeadlineIso` + grace unchanged.
+- Dashboard redemption refresh (`app/(tabs)/dashboard.tsx`):
+  - `useFocusEffect(() => { if (businessId) void loadMetrics(); })` (dashboard.tsx:630-635) re-pulls metrics every time the dashboard tab regains focus, so an in-session merchant redeem is reflected without relaunch. Calculations unchanged.
+
+### 3. What changed this pass
+
+1. `lib/i18n/api-messages.ts` - defense-in-depth so the bare Supabase wrapper "Edge Function returned a non-2xx status code" can never reach a user, even if a future/edge caller skips its own mapping. Added one infra pattern mapping it to the existing friendly `apiErrors.operationFailedTryAgain`. `claimDeal`/`redeemToken` already map it inline; this hardens every other surface that funnels through `translateKnownApiMessage` (deal detail, wallet refresh/use-deal).
+2. `lib/i18n/api-messages.test.ts` - added tests: exact mask in English, and a no-raw-leak assertion across en/es/ko (output never matches `non-2xx` or `edge function`).
+3. `scripts/seed-demo.cjs` - the operator reset now produces a claim-clean demo account:
+   - Seeds only 2 *redeemed* wallet-history claims, backdated 1-2 days, so they stay as redeemed history but do NOT count as a same-day Cedar claim.
+   - No longer seeds an active claim (was the app-wide blocker); the owner-demo proof creates the active ticket live.
+   - Clears ALL demo-user claims on canonical deals first, so a stale active claim from a prior smoke cannot block the next fresh claim.
+
+### 4. Blocker 5 - first-impression review (no code change)
+
+- Dashboard metric-card beige pressed/overlay artifact: inspected `app/(tabs)/dashboard.tsx`, `components/ui/card-shell.tsx`, and `constants/theme.ts`. The metric cards are plain Views (no Pressable ripple). The accent metric/snapshot cards use a translucent orange fill (`rgba(255,159,28,0.12)`) and the dashboard sections animate in with `FadeInDown.springify()`. A screenshot captured mid-entering-animation can read as a faint beige overlay; it settles once the animation completes. No functional defect found in source, so no speculative change was made. Recommend confirming on-device (let the dashboard settle ~1s before judging); if undesired, the follow-up is to drop the entering animation on the snapshot card only.
+- Quick Deal publish failure / route recovery: intentionally NOT investigated. The recommended fresh-claim setup uses `seed:demo` (or a fresh shopper), so Create is not part of the proof path or data setup. Left as the existing separate follow-up.
+
+### 5. Files changed
+
+- `lib/i18n/api-messages.ts`
+- `lib/i18n/api-messages.test.ts`
+- `scripts/seed-demo.cjs`
+- `docs/DEMO_SEED.md`
+- `docs/beta-release-checklist.md`
+- `TASK_QUEUE.md`
+
+No runtime navigation, auth, onboarding, wallet, claim/redeem, billing, analytics, dashboard, deal-creation, strong-deal, or map behavior was changed.
+
+### 6. Validation results
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed (exit 0).
+- `npx vitest run lib/i18n/api-messages.test.ts lib/claim-redeem-deadline.test.ts supabase/functions/_shared/claim-limits.test.ts supabase/functions/_shared/claim-redeem.test.ts` - passed, 25 tests (4 files), including the 2 new non-2xx mask tests.
+- `node -c scripts/seed-demo.cjs` - syntax OK.
+- No Expo start, no APK build, no `eas build`, no commit.
+
+### 7. Source readiness
+
+- Source is ready for the next APK build. Blockers 2/3/4 are confirmed correct in source; blocker 2's no-raw-leak requirement is hardened; blocker 1's repeatable fresh-claim setup is now achievable via the corrected `seed:demo`.
+- The only thing that cannot be proven without a device is the end-to-end run itself, which needs the next APK plus the setup steps below.
+
+### 8. Exact next smoke setup steps (guarantee a fresh claimable deal + ticket)
+
+Preferred - operator reset with service role (claim-clean demo account):
+
+1. In a shell with Supabase service role (do not print the values):
+   - `$env:SUPABASE_URL = "https://<project-ref>.supabase.co"`
+   - `$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"`
+2. `npm run seed:demo`
+   - Result: Cedar & Bean Cafe with live BOGO deals, 2 backdated redeemed wallet-history claims, and NO active/same-day claim on the demo account.
+3. Build/install the next APK, `adb shell pm clear com.unvmex2.twoforone`, launch, Demo login.
+4. Consumer Home -> open a LIVE deal ("Buy One Latte, Get One Free") -> Claim -> the QR/code modal should open. Confirm Hide closes it AND Android Back closes it.
+5. Wallet -> active ticket -> tap the QR/code panel, then "Show QR & code" -> the QR/code modal opens from both.
+6. Settings -> switch to Business mode -> Redeem -> enter the ticket short code -> branded Redeemed receipt.
+7. Wallet -> the ticket now shows Redeemed.
+8. Return to Business Dashboard WITHOUT relaunch -> the in-session redemption count increases by 1 on focus.
+
+Fallback - no service role available (anon/RLS-safe, no secrets):
+
+- The demo account can only claim Cedar once per local day, so if it already claimed today, use a fresh shopper instead of forcing Create:
+  1. On the auth screen, Create account with a throwaway email/password and finish consumer onboarding.
+  2. Claim a live Cedar deal -> claim QR modal -> Wallet active ticket (steps 4-5 above).
+  3. For merchant redeem, sign in as the demo owner (Business mode -> Redeem) and enter the shopper's short code, then verify the shopper's Wallet redeemed state and the owner Dashboard count.
+- Or simply rerun the demo-account flow after the local calendar day (America/Chicago) rolls over.
+- Do NOT use Quick Deal/Create to manufacture claimable data; its publish/route-recovery issue is a separate follow-up.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

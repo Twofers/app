@@ -84,7 +84,7 @@ const CUTOFF_PREFIX = "Claiming has closed. Cutoff was ";
 const FAILED_CREATE_CLAIM_PREFIX = "Failed to create claim: ";
 const FAILED_REDEEM_PREFIX = "Failed to redeem token: ";
 
-/** Substrings / patterns for Postgres, PostgREST, auth, and network (EN). */
+/** Substrings / patterns for Postgres, PostgREST, auth, network, and Edge Function infra (EN). */
 const DB_OR_INFRA_HINTS: { pattern: RegExp; key: string }[] = [
   { pattern: /row-level security|RLS|permission denied for table/i, key: "apiErrors.dbRlsViolation" },
   { pattern: /duplicate key|unique constraint/i, key: "apiErrors.dbDuplicate" },
@@ -96,6 +96,9 @@ const DB_OR_INFRA_HINTS: { pattern: RegExp; key: string }[] = [
   },
   { pattern: /network request failed|Failed to fetch|NetworkError/i, key: "apiErrors.networkFailed" },
   { pattern: /violates check constraint/i, key: "apiErrors.dbCheckViolation" },
+  // Defense-in-depth: never surface the bare Supabase wrapper if a non-2xx
+  // edge response slips past a caller's own mapping (e.g. claimDeal/redeemToken).
+  { pattern: /edge function returned a non-?2xx status/i, key: "apiErrors.operationFailedTryAgain" },
 ];
 
 function looksLikeInternalOrDbMessage(s: string): boolean {
