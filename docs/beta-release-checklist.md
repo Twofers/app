@@ -1032,3 +1032,91 @@ Result: Passed.
 - Dashboard: Live deals and Engagement metric cards should render as clean white tiles with orange accents and no beige overlay artifacts.
 - Account: in business mode, Cedar & Bean Cafe should visibly show `Maya Patel` and `hello@cedarbean.cafe` when the hosted values are present.
 - Hosted data: `Cedar Morning Espresso BOGO` should not appear as an active customer-facing deal unless demo data is reseeded or the deal is intentionally reactivated.
+
+## Current Run - 2026-06-05 Final Owner-Demo Visual Polish Retest v15
+
+Focused owner-demo visual polish retest was run against the newest local APK after the final polish fixes. `claude -p` was attempted first with a narrow emulator prompt, but Claude Code was blocked by `adb`/`aapt` permission approval, so Codex completed the emulator work directly.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-05 local visual polish retest
+- Final commit SHA from APK config: `9e495d704845`
+- Current source HEAD: `9e495d704845`
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this retest-only pass
+- Android versionCode from APK: `15`
+- Android versionName from APK: `1.0.0`
+- Package from APK: `com.unvmex2.twoforone`
+- EAS build URL: not available from the local APK folder metadata
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-0836d1bb-a001-4cb4-ae61-4d666d70febd.apk`
+- APK modified time: 2026-06-05 12:11:25 PM local time
+- Screenshots folder: `qa-screens/final-owner-demo-visual-polish/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=15`, `versionName=1.0.0`, `lastUpdateTime=2026-06-05 12:15:53`
+
+### 2. APK Verification And Install
+
+Result: Passed for APK metadata, install, launch, installed version match, and source-commit inclusion.
+
+- Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-0836d1bb-a001-4cb4-ae61-4d666d70febd.apk`.
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=15`, `versionName=1.0.0`, app label `TWOFER`, and launch activity `com.unvmex2.twoforone.MainActivity`.
+- APK `assets/app.config` contains git commit `9e495d704845`, matching current source HEAD after the final polish fixes.
+- Installed on `emulator-5554` with `adb install -r`.
+- App data was cleared before launch with `adb shell pm clear com.unvmex2.twoforone`.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed package matched `versionCode=15`, `versionName=1.0.0`.
+
+### 3. Owner Demo Visual Retest
+
+Result: Passed for final visual polish fixes; data-limited for fresh claim and active Wallet QR panel coverage.
+
+- Passed: signed-out auth landing opened with TWOFER branding and no demo credential helper UI.
+- Passed: login through the normal email/password form using the documented demo account.
+- Passed: ZIP onboarding and favorite-shop step showed clean Cedar & Bean Cafe / Grapevine, TX hosted data.
+- Passed: Home showed Cedar & Bean Cafe data. `Cedar Morning Espresso BOGO` did not appear as an active customer-facing Home deal.
+- Passed: direct anon/RLS read-only verification found hosted business data clean: `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Cafe & Bakery`.
+- Passed: direct anon/RLS read-only verification found `Cedar Morning Espresso BOGO` inactive (`active=false`). It appeared only as an ended redeemed Wallet ticket and a paused owner-side deal, not as an active customer-facing deal.
+- Blocked by data state: a fresh Cedar claim was not attempted because the demo account already has a same-day redeemed Cedar claim from the prior proof. Same-business same-day claim rules would block a new claim, and no junk demo data was created.
+- Blocked by data state: Wallet active-ticket QR/code panel tapping could not be verified because Wallet had no active deals. Wallet showed `No active deals` and ended redeemed Cedar tickets.
+- Passed: Dashboard Live deals and Engagement metric cards rendered as clean white tiles with orange borders/text accents and no beige overlay artifacts after settling.
+- Passed: Business Account visibly showed `Owner / contact name: Maya Patel` and `Business email: hello@cedarbean.cafe`.
+- Non-target observation: the first current-location onboarding attempt stayed on `Saving...`; the deterministic ZIP onboarding path completed and was used for this retest.
+
+### 4. Map Responsiveness
+
+Result: Passed.
+
+- Map opened with Google Map content and controls.
+- Map remained responsive after a 30-second wait.
+- Live deals filter toggled after the wait and map markers remained exposed.
+- Recent logcat scan found no `FATAL EXCEPTION`, `ANR`, or `Application Not Responding` entry.
+
+### 5. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-owner-demo-visual-polish/`:
+
+- `01_auth_landing.png`
+- `09_onboarding_cedar_clean.png`
+- `10_home_cedar_feed_initial.png`
+- `11_wallet_no_active_ticket.png`
+- `13_dashboard_settled_metric_tiles.png`
+- `14_account_contact_email_visible.png`
+- `15_map_initial.png`
+- `16_map_after_30s.png`
+- `17_map_live_filter_toggled.png`
+
+### 6. Static Validation
+
+Result: Not rerun.
+
+- No app code was modified during this retest.
+- Per the task instruction, typecheck/lint were not run.
+- This pass updated only `TASK_QUEUE.md` and `docs/beta-release-checklist.md` after device validation.
+
+### 7. Known Issues And Readiness
+
+- Owner-demo readiness: Yes for the final visual owner-demo and polished owner surfaces on versionCode `15`.
+- Data caveat: a same-day fresh claim and active Wallet QR panel proof still requires either the approved service-role `seed:demo` reset or a fresh confirmed shopper account. Do not create another ad hoc Cedar proof deal.
+- Hosted demo data clean: Yes. `Cedar Morning Espresso BOGO` is inactive and not an active customer-facing deal.
+- Dashboard beige artifact: Fixed in APK v15.
+- Account contact/email visibility: Fixed in APK v15.
+- Map responsiveness: Passed.
+- Screenshots and APKs are local release artifacts and should not be committed.

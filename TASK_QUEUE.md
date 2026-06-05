@@ -1850,6 +1850,66 @@ Android retest checklist for the next APK:
 
 ---
 
+## Final Owner-Demo Visual Polish Retest - versionCode 15
+
+Status: Passed for final visual polish fixes with data-limited claim/Wallet QR coverage - validated 2026-06-05 local run.
+
+Findings 2026-06-05:
+
+1. What I found
+   - `claude -p` was attempted first with the narrow APK/emulator retest prompt. Claude Code was available but blocked on `adb` and `aapt` permission approval, so Codex completed the emulator work directly per the task instruction.
+   - Newest APK found in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-0836d1bb-a001-4cb4-ae61-4d666d70febd.apk`, modified 2026-06-05 12:11:25 PM local time.
+   - APK metadata from `aapt.exe dump badging`: package `com.unvmex2.twoforone`, `versionCode=15`, `versionName=1.0.0`, label `TWOFER`, launch activity `com.unvmex2.twoforone.MainActivity`.
+   - APK `assets/app.config` contains git commit `9e495d704845`, matching current source HEAD, so the final Home/Dashboard/Wallet/Account polish fixes are included in the installed APK.
+   - Installed on Android emulator `emulator-5554` with `adb install -r`, app data was cleared before launch, and `dumpsys package` confirmed installed `versionCode=15`, `versionName=1.0.0`, `lastUpdateTime=2026-06-05 12:15:53`.
+   - Login through the normal email/password form succeeded. ZIP onboarding showed clean hosted Cedar & Bean data: `Cedar & Bean Cafe`, `Grapevine, TX`.
+   - Direct anon/RLS read-only verification found the hosted business row clean: `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, `Cafe & Bakery`.
+   - Direct anon/RLS read-only verification found `Cedar Morning Espresso BOGO` present but inactive (`active=false`). It did not appear as an active customer-facing Home deal. It appeared only as a redeemed ended Wallet ticket and as a paused owner-side dashboard deal.
+   - A fresh claim was not attempted or created. The demo account has a same-day redeemed Cedar claim for `Cedar Morning Espresso BOGO` from the prior proof, and `claim-deal` blocks another same-business claim on the same local day. No junk demo data was created.
+   - Because no active claim/ticket exists, the Wallet active QR/code panel tap test was blocked by data state. Wallet correctly showed `No active deals` and ended redeemed Cedar tickets.
+   - Dashboard visual polish passed: Live deals and Engagement metric cards render as clean white tiles with orange borders/text accents and no beige overlay artifact after the dashboard settles.
+   - Account visual polish passed: Business Account visibly shows `Owner / contact name: Maya Patel` and `Business email: hello@cedarbean.cafe` under Cedar & Bean Cafe.
+   - Quick Map check passed: Map opened, remained responsive for 30 seconds, the Live deals filter toggled, and recent logcat showed no `FATAL EXCEPTION`, `ANR`, or `Application Not Responding` entry.
+   - Non-target observation: the first current-location onboarding attempt remained on `Saving...`; the deterministic ZIP onboarding path completed and was used for this retest. No code was changed for this observation.
+2. Why it matters
+   - The newest APK includes and visually validates the exact final polish fixes that were pending after versionCode `14`: Home source inclusion, Dashboard card artifact removal, Account contact/email display, and Map responsiveness.
+   - The only unproven final item is the active-ticket Wallet QR panel hit-area behavior, because same-day claim rules correctly prevented generating a new active Cedar ticket without reseeding or creating extra data.
+3. Recommended fix
+   - Treat versionCode `15` as ready for a real-owner visual demo of the polished owner surfaces.
+   - If the live walkthrough must include a fresh claim and active Wallet QR panel today, first run the approved service-role `seed:demo` reset or use a fresh confirmed shopper account. Do not create another ad hoc Cedar proof deal.
+   - Track the current-location onboarding `Saving...` hang separately if Dan expects to show first-run onboarding with GPS instead of ZIP.
+4. Files affected
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-owner-demo-visual-polish/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=15`, `versionName=1.0.0`.
+- `adb -s emulator-5554 install -r` passed.
+- `adb -s emulator-5554 shell pm clear com.unvmex2.twoforone` passed before launch.
+- `adb -s emulator-5554 shell dumpsys package com.unvmex2.twoforone` confirmed installed `versionCode=15`, `versionName=1.0.0`.
+- APK config commit `9e495d704845` matched current source HEAD.
+- Direct anon/RLS hosted-data verification passed; no service-role/admin path was used.
+- Map 30-second wait and Live deals filter interaction passed; recent logcat scan found no ANR/fatal entries.
+- Typecheck/lint were not run because no app code was changed.
+- Owner-demo ready: Yes for the final visual owner-demo and owner surfaces; data-limited for a same-day fresh claim/Wallet QR-panel proof until the demo account is reset or a fresh confirmed shopper is used.
+
+Screenshots captured in `qa-screens/final-owner-demo-visual-polish/`:
+
+- `01_auth_landing.png`
+- `09_onboarding_cedar_clean.png`
+- `10_home_cedar_feed_initial.png`
+- `11_wallet_no_active_ticket.png`
+- `13_dashboard_settled_metric_tiles.png`
+- `14_account_contact_email_visible.png`
+- `15_map_initial.png`
+- `16_map_after_30s.png`
+- `17_map_live_filter_toggled.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
