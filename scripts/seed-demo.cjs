@@ -6,6 +6,7 @@
 
 /* eslint-disable no-console */
 const { createClient } = require("@supabase/supabase-js");
+const { randomUUID } = require("node:crypto");
 
 const DEMO_EMAIL = "demo@demo.com";
 const DEMO_PASSWORD = "demo12345";
@@ -272,10 +273,29 @@ async function main() {
     if (prefixDelErr) throw prefixDelErr;
   }
 
+  /**
+   * Insert deals, retrying without location_id if that column is absent from the
+   * PostgREST schema cache (PGRST204 on hosted projects that don't expose it).
+   */
+  async function insertDealsWithFallback(client, dealRows) {
+    const { data, error } = await client.from("deals").insert(dealRows).select("id,title,end_time");
+    if (!error) return { data, error };
+    if (error.code === "PGRST204" && error.message && error.message.includes("location_id")) {
+      console.log("location_id not in schema cache - retrying deal insert without it.");
+      const stripped = dealRows.map((r) => {
+        const copy = { ...r };
+        delete copy.location_id;
+        return copy;
+      });
+      return client.from("deals").insert(stripped).select("id,title,end_time");
+    }
+    return { data, error };
+  }
+
   const now = new Date();
   const rows = DEALS.map((d) => ({
     business_id: bid,
-    location_id: locationId,
+    ...(locationId != null ? { location_id: locationId } : {}),
     title: d.title,
     description: d.description,
     price: d.price,
@@ -300,7 +320,7 @@ async function main() {
     timezone: d.kind === "recurring" ? "America/Chicago" : null,
   }));
 
-  const { data: insertedDeals, error: dealErr } = await supabase.from("deals").insert(rows).select("id,title,end_time");
+  const { data: insertedDeals, error: dealErr } = await insertDealsWithFallback(supabase, rows);
   if (dealErr) throw dealErr;
 
   // Demo wallet history: two *redeemed* claims, backdated to prior local days.
@@ -314,7 +334,9 @@ async function main() {
     return {
       deal_id: d.id,
       user_id: userId,
-      token: `demo${Date.now()}${i}${Math.random().toString(36).slice(2, 8)}`.slice(0, 32),
+      // deal_claims.token is a uuid column in prod (claim-deal edge fn uses
+      // crypto.randomUUID()); a non-uuid string here fails with 22P02.
+      token: randomUUID(),
       created_at: claimedAt.toISOString(),
       expires_at: new Date(claimedAt.getTime() + 12 * 60 * 60 * 1000).toISOString(),
       redeemed_at: new Date(claimedAt.getTime() + 2 * 60 * 60 * 1000).toISOString(),
@@ -361,7 +383,11 @@ async function main() {
       deal_id: row.deal_id,
       context: { source: "demo_seed", seed: ANALYTICS_SEED, ordinal: i + 1 },
       app_version: "demo-seed",
-      device_platform: "demo",
+      // deal_viewed has a unique index on (user_id, deal_id, device_platform, UTC
+      // day) -- uq_app_analytics_deal_viewed_daily. Give each seeded impression a
+      // distinct synthetic device so the same-day rows don't collide (23505); other
+      // event types are unconstrained and keep the plain "demo" platform.
+      device_platform: row.event_name === "deal_viewed" ? `demo-${i + 1}` : "demo",
     })),
   );
   const { error: analyticsErr } = await supabase.from("app_analytics_events").insert(analyticsRows);

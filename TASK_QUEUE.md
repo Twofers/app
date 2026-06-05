@@ -1659,6 +1659,10 @@ These fixes landed in earlier runs; this pass re-verified them in source by read
    - Seeds only 2 *redeemed* wallet-history claims, backdated 1-2 days, so they stay as redeemed history but do NOT count as a same-day Cedar claim.
    - No longer seeds an active claim (was the app-wide blocker); the owner-demo proof creates the active ticket live.
    - Clears ALL demo-user claims on canonical deals first, so a stale active claim from a prior smoke cannot block the next fresh claim.
+   - Fixed `22P02 invalid input syntax for type uuid` on the claim insert: the seeded wallet-history `token` now uses `crypto.randomUUID()` (matching the `claim-deal` edge function) instead of a `demo<timestamp>...` string, because `deal_claims.token` is a uuid column in prod. Claim-clean behavior (redeemed-only, backdated, clear-first) is unchanged.
+   - Schema-safe deal insert: omits `location_id` when no location row exists, and retries the insert without `location_id` if the hosted `deals` table doesn't expose that column (PGRST204), so `seed:demo` no longer hard-fails on projects whose schema cache lacks `deals.location_id`.
+   - The same schema-safe `location_id` handling was applied to the in-app demo-login refresh (`lib/demo-preview-seed.ts` `ensureDemoCoffeePreview`): omit `location_id` when no location resolved, retry without it on PGRST204, so the anon/RLS seed no longer fails silently on a hosted schema that lacks `deals.location_id`.
+   - Analytics idempotency: seeded `deal_viewed` impressions now use a distinct synthetic `device_platform` per row so the same-day rows don't collide on `uq_app_analytics_deal_viewed_daily` (23505); the existing seed-context delete still clears only seeded rows, and the same fix is mirrored in `lib/demo-preview-seed.ts`.
 
 ### 4. Blocker 5 - first-impression review (no code change)
 

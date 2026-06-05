@@ -301,10 +301,29 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
     await client.from("deals").delete().eq("business_id", businessId).like("title", `${prefix}%`);
   }
   const dealRows = buildSeedDealRows(now, businessId, locationId);
-  const { data: insertedDeals, error: dealsInsertErr } = await client
+  const dealRowsWithoutLocation = dealRows.map((row) => {
+    const copy: Record<string, unknown> = { ...row };
+    delete copy.location_id;
+    return copy;
+  });
+  // Hosted projects may not expose deals.location_id in the PostgREST schema cache.
+  // Skip it when no location row resolved, and retry without it on PGRST204 so the
+  // demo-login refresh still seeds deals instead of failing silently.
+  let dealsInsert = await client
     .from("deals")
-    .insert(dealRows)
+    .insert(locationId != null ? dealRows : dealRowsWithoutLocation)
     .select("id,title,start_time,end_time");
+  if (
+    dealsInsert.error &&
+    dealsInsert.error.code === "PGRST204" &&
+    dealsInsert.error.message.includes("location_id")
+  ) {
+    dealsInsert = await client
+      .from("deals")
+      .insert(dealRowsWithoutLocation)
+      .select("id,title,start_time,end_time");
+  }
+  const { data: insertedDeals, error: dealsInsertErr } = dealsInsert;
   if (dealsInsertErr) return;
   const seededDeals = insertedDeals ?? [];
   if (seededDeals.length === 0) return;
@@ -375,7 +394,11 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
           ordinal: i + 1,
         },
         app_version: "demo-seed",
-        device_platform: "demo",
+        // deal_viewed has a unique index on (user_id, deal_id, device_platform, UTC
+        // day) -- uq_app_analytics_deal_viewed_daily. Give each seeded impression a
+        // distinct synthetic device so the same-day rows don't collide (23505) and
+        // fail the whole batch; other event types keep the plain "demo" platform.
+        device_platform: row.event_name === "deal_viewed" ? `demo-${i + 1}` : "demo",
       })),
     );
     await client.from("app_analytics_events").insert(analyticsRows);
