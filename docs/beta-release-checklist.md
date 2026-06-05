@@ -977,3 +977,58 @@ Result: Not rerun.
 - Repeat-test note: after this successful proof, the demo account has a same-day Cedar claim again. A repeat fresh-claim proof on 2026-06-05 requires the service-role `seed:demo` reset, a fresh confirmed shopper, or waiting for the America/Chicago calendar day to roll over.
 - Follow-up optional: make Account visibly show `Maya Patel` and `hello@cedarbean.cafe` if Dan wants that in the owner demo.
 - Screenshots and APKs are local release artifacts and should not be committed.
+
+## Current Run - 2026-06-05 Owner-Demo Polish Fixes After v14
+
+Focused source cleanup was completed for the remaining owner-demo polish issues from the versionCode `14` retest. `claude -p` was attempted first with a narrow inspect-only prompt, but it timed out after 124 seconds without returning findings or edits, so Codex completed the scoped implementation directly per the task instruction.
+
+### 1. Scope And Files
+
+Result: Passed for requested scope; no billing, auth, onboarding, map, schema, edge functions, analytics, or create-deal code was modified.
+
+- `app/(tabs)/index.tsx` - Home post-claim state.
+- `app/(tabs)/dashboard.tsx` - owner snapshot metric card styling.
+- `app/(tabs)/wallet.tsx` - Wallet QR/code panel press target.
+- `app/(tabs)/account.tsx` - business Account contact/email summary.
+- `TASK_QUEUE.md` - validation and release notes.
+- `docs/beta-release-checklist.md` - validation and release notes.
+
+### 2. Fixes
+
+Result: Implemented in source; Android APK retest still required.
+
+- Home now marks a claimed deal locally, clears `Claiming...` before opening the QR modal, and refreshes claim state again when the QR modal is hidden.
+- Dashboard accented snapshot cards now use a white surface with orange border/text accents instead of translucent orange fills, removing the beige overlay look on Live deals and Engagement.
+- Wallet QR/code panel now has a full-width minimum-height press target with retained press area and non-intercepting child content, so tapping anywhere on the visible panel should open the QR modal.
+- Business Account now shows already-loaded `contact_name` and `business_email` values when present, so Cedar & Bean can visibly show `Maya Patel` and `hello@cedarbean.cafe` without a new query.
+
+### 3. Hosted Demo Data
+
+Result: Changed through the safest normal owner/RLS path available in this shell.
+
+- Decision: do not keep `Cedar Morning Espresso BOGO` active for the next owner-demo APK because it was ad hoc proof data, even though the title was polished.
+- Action: deactivated 1 `Cedar Morning Espresso BOGO` row through normal demo-owner anon/RLS access.
+- No service-role key, admin SQL, or secret-backed path was used.
+- Hosted data changed: Yes, only the ad hoc proof deal was deactivated. The redeemed proof claim history was not deleted.
+
+### 4. Static Validation
+
+Result: Passed.
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Focused tests: no direct screen-level tests were found for Home post-claim QR state, Dashboard snapshot styling, Wallet QR panel hit area, or Account summary rendering, so no vitest target was run.
+- `npx expo start` was not run, and no APK was built in this pass.
+
+### 5. Readiness
+
+- New APK required: Yes. Runtime app code changed in Home, Dashboard, Wallet, and Account.
+- Owner-demo readiness from source: Ready for next APK build and Android retest.
+
+### 6. Android Retest Items For Next APK
+
+- Home: claim a live Cedar deal, hide the QR/code modal, and confirm the card does not remain on `Claiming...`.
+- Wallet: tap the active ticket QR/code panel on the QR square, code text, and note text; every tap should open the QR/code modal, and Android Back should close it.
+- Dashboard: Live deals and Engagement metric cards should render as clean white tiles with orange accents and no beige overlay artifacts.
+- Account: in business mode, Cedar & Bean Cafe should visibly show `Maya Patel` and `hello@cedarbean.cafe` when the hosted values are present.
+- Hosted data: `Cedar Morning Espresso BOGO` should not appear as an active customer-facing deal unless demo data is reseeded or the deal is intentionally reactivated.

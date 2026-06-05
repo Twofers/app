@@ -90,6 +90,8 @@ export default function AccountScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const visibleBusinessContactName = businessProfile?.contact_name?.trim() || null;
+  const visibleBusinessEmail = businessProfile?.business_email?.trim() || null;
 
   const completeness = useMemo(
     () => calculateProfileCompleteness(businessProfile),
@@ -741,6 +743,16 @@ export default function AccountScreen() {
                   {businessProfileSnapshot?.category ? (
                     <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
                       {t("account.bizCategory")}: {businessProfileSnapshot.category}
+                    </Text>
+                  ) : null}
+                  {visibleBusinessContactName ? (
+                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                      {t("account.fieldContactName")}: {visibleBusinessContactName}
+                    </Text>
+                  ) : null}
+                  {visibleBusinessEmail ? (
+                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                      {t("account.fieldBusinessEmail")}: {visibleBusinessEmail}
                     </Text>
                   ) : null}
                   <ProfileCompletenessBar

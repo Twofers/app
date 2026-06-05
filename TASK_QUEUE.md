@@ -1799,6 +1799,57 @@ New screenshots captured in `qa-screens/final-owner-demo-retest-v3/` for this v4
 
 ---
 
+## Owner-Demo Polish Fixes After v14 Retest - 2026-06-05
+
+Status: Implemented - source validation passed; hosted cleanup completed; new APK required.
+
+Findings 2026-06-05:
+
+1. What I found
+   - `claude -p` was attempted first with a narrow inspect-only prompt for Home claim state, Dashboard metric cards, Wallet QR panel press handling, Account display, and demo data cleanup. It timed out after 124 seconds without returning findings or making edits, so Codex completed the scoped implementation directly per the task instruction.
+   - Home claim success was still waiting on the post-claim `loadUserClaims` refresh while the QR modal was visible. If that refresh was slow or stalled, the Home card could keep rendering the `Claiming...` CTA after the modal was hidden.
+   - Dashboard snapshot metric cards used a translucent orange background for accented Live deals / Engagement tiles. On the owner dashboard this read as a beige overlay artifact rather than intentional brand styling.
+   - Wallet already had a QR/code panel press handler, but the visible panel did not enforce a full-width/min-height press target and the child content could make text-side taps feel inconsistent on Android.
+   - Account already receives `contact_name` and `business_email` from the existing owner business row through `useBusiness()`, so no new query or secret-backed access was needed to show `Maya Patel` and `hello@cedarbean.cafe`.
+   - `Cedar Morning Espresso BOGO` was a clean/professional proof deal, but it was ad hoc hosted test data. It was safer to deactivate it before the next owner-demo APK so first impressions rely on canonical Cedar & Bean seed/demo data.
+2. Why it matters
+   - These were not money-flow blockers, but they are visible owner-demo first-impression issues on Home, Wallet, Dashboard, and Account.
+   - Deactivating the ad hoc proof deal keeps hosted demo data cleaner without deleting the redeemed proof claim history.
+3. Recommended fix
+   - Home now marks the deal claimed optimistically, clears the busy claim state before opening the QR modal, and refreshes claim state again when the modal is hidden.
+   - Dashboard accented snapshot cards now use a clean white card with orange border/text accent, removing the beige fill artifact while preserving hierarchy.
+   - Wallet QR/code panel now uses a full-width, minimum-height press target with retained press area and non-intercepting child content so tapping anywhere on the visible panel opens the modal.
+   - Account business summary now renders the already-loaded business contact name and business email only when those values are present.
+   - `Cedar Morning Espresso BOGO` was deactivated through the normal demo-owner anon/RLS path. No service-role key or admin SQL was used.
+4. Files affected
+   - `app/(tabs)/index.tsx`
+   - `app/(tabs)/dashboard.tsx`
+   - `app/(tabs)/wallet.tsx`
+   - `app/(tabs)/account.tsx`
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+5. MVP priority: High
+
+Validation results:
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+- Focused tests: no direct screen-level tests were found for Home post-claim QR state, Dashboard snapshot tile styling, Wallet QR panel hit area, or Account summary rendering, so no vitest target was run.
+- Hosted data cleanup: normal demo-owner anon/RLS access deactivated 1 `Cedar Morning Espresso BOGO` deal row. Hosted data changed: Yes, only this deal was deactivated; no service-role/admin path was used.
+- `npx expo start` was not run in this pass. No APK was built.
+
+New APK required: Yes. Runtime app code changed in Home, Dashboard, Wallet, and Account, so the next owner-demo APK must include this source before retesting.
+
+Android retest checklist for the next APK:
+
+1. Home -> claim a live Cedar deal -> QR/code modal opens -> tap Hide. Expected: modal closes and the Home card immediately shows Claimed/redeem-ready state, not `Claiming...`.
+2. Wallet -> active ticket -> tap the QR/code panel on the QR square, code text, and note text. Expected: every tap opens the QR/code modal; Android Back closes it.
+3. Business Dashboard -> open the snapshot card and let it settle. Expected: Live deals and Engagement cards are clean white tiles with orange accents, no beige overlay artifacts.
+4. Business Account -> open Account in business mode. Expected: Cedar & Bean Cafe shows address/category plus `Maya Patel` and `hello@cedarbean.cafe` when those hosted values are present.
+5. Hosted data check: `Cedar Morning Espresso BOGO` should not appear as an active customer-facing Home deal after the cleanup unless the demo data is reseeded or intentionally reactivated.
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.

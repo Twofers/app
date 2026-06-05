@@ -553,46 +553,52 @@ export default function WalletScreen() {
               accessibilityRole="button"
               accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => ({
+                width: "100%",
+                minHeight: 136,
                 borderRadius: Radii.md,
                 borderWidth: 1,
                 borderColor: pressed ? theme.primary : "#fed7aa",
                 backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
                 padding: Spacing.md,
+                justifyContent: "center",
                 opacity: verifyDisabled ? 0.45 : 1,
               })}
             >
-              <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
-                {t("consumerWallet.scanQrAtCounter")}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
-                <View
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 12,
-                    borderWidth: 2,
-                    borderColor: "#111827",
-                    borderStyle: "dashed",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#f9fafb",
-                  }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: "800", opacity: 0.7, color: "#9a3412" }}>QR</Text>
+              <View pointerEvents="none">
+                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
+                  {t("consumerWallet.scanQrAtCounter")}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: "#111827",
+                      borderStyle: "dashed",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#f9fafb",
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "800", opacity: 0.7, color: "#9a3412" }}>QR</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
+                      {t("consumerWallet.verifyCodeLabel")}
+                    </Text>
+                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: "#111827" }}>
+                      {shortLabel}
+                    </Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
-                    {t("consumerWallet.verifyCodeLabel")}
-                  </Text>
-                  <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: "#111827" }}>
-                    {shortLabel}
-                  </Text>
-                </View>
+                <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
+                  {t("consumerWallet.note")}
+                </Text>
               </View>
-              <Text style={{ marginTop: Spacing.sm, fontSize: 12, lineHeight: 17, color: "#9a3412", opacity: 0.78 }}>
-                {t("consumerWallet.note")}
-              </Text>
             </NativePressable>
             <PrimaryButton
               title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}

@@ -527,12 +527,22 @@ export default function HomeScreen() {
         setQrExpires(out.expires_at);
         setQrShortCode(out.short_code ?? null);
         setLastClaimDealId(dealId);
+        setUserClaimsByDeal((prev) => {
+          const next = new Map(prev);
+          next.set(dealId, {
+            redeemed_at: null,
+            expires_at: out.expires_at,
+            grace_period_minutes: DEFAULT_CLAIM_GRACE_MINUTES,
+          });
+          return next;
+        });
+        setClaimingDealId(null);
         setQrVisible(true);
         setClaimStatus((prev) => ({
           ...prev,
           [dealId]: { message: t("dealsBrowse.statusClaimedShowQr"), tone: "success" },
         }));
-        await loadUserClaims(dealsRef.current.map((d) => d.id));
+        void loadUserClaims(dealsRef.current.map((d) => d.id));
         // Retention nudge: remind ~1h before this claim's redemption deadline.
         const claimedDeal = dealsRef.current.find((d) => d.id === dealId);
         void scheduleClaimExpiryReminder({
@@ -562,6 +572,12 @@ export default function HomeScreen() {
     },
     [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t, i18n.language],
   );
+
+  const hideClaimQrModal = useCallback(() => {
+    setQrVisible(false);
+    setClaimingDealId(null);
+    void loadUserClaims(dealsRef.current.map((d) => d.id));
+  }, [loadUserClaims]);
 
   async function refreshQr() {
     if (!lastClaimDealId) {
@@ -1344,7 +1360,7 @@ export default function HomeScreen() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
-        onHide={() => setQrVisible(false)}
+        onHide={hideClaimQrModal}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
       />
