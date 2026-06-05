@@ -197,12 +197,18 @@ export async function claimDeal(dealId: string, extra?: ClaimDealExtraBody) {
   });
 
   if (error) {
-    throw new Error(parseFunctionError(error));
+    const fromBody = await readInvokeErrorBody(error);
+    const parsed = fromBody.message ?? parseFunctionError(error);
+    const message = /edge function returned a non-2xx status code/i.test(parsed)
+      ? "We couldn't claim this deal right now. Please try again."
+      : parsed;
+    throwInvokeError(message, fromBody.code ?? getErrorCode(error));
   }
 
   // Check if data itself contains an error (shouldn't happen with proper function, but be safe)
   if (data && typeof data === "object" && "error" in data) {
-    throw new Error((data as { error?: string }).error || "Server returned an error");
+    const body = data as { error?: string; error_code?: string };
+    throwInvokeError(body.error || "Server returned an error", body.error_code);
   }
 
   if (!data || !data.token) {

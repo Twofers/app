@@ -592,3 +592,134 @@ Result: Passed - hosted owner-demo data is clean.
 - Owner-demo readiness from hosted data alone: Yes.
 - Stale hosted demo data is no longer a release blocker.
 - Other versionCode `11` runtime/UI blockers from the owner-demo smoke remain separate: Wallet QR/code modal controls, claim QR dismiss/back behavior, in-session dashboard redemption refresh, clipped claim CTA, clipped Settings mode switch, and Android Back from shop detail.
+
+## Current Run - 2026-06-04 Final Owner-Demo Smoke v2
+
+Final owner-demo smoke was executed against the newest local APK in the TWOFER folder after the hosted-data cleanup and runtime/UI fixes. This pass used `claude -p` for scoped reconnaissance, then Codex completed APK install, Android smoke, screenshots, a one-file source follow-up for the claim error, validation, and release documentation directly.
+
+### 1. Release Metadata
+
+- Release date: 2026-06-04 local owner-demo smoke run
+- Final commit SHA: not changed before APK validation; one source follow-up was made after the APK failed claim
+- Branch: `fix/production-clean-copy`
+- EAS profile checked: not rechecked in this smoke-only pass
+- Android versionCode from APK: `12`
+- Android versionName from APK: `1.0.0`
+- Package from APK: `com.unvmex2.twoforone`
+- EAS build URL: not available from the local APK folder metadata
+- APK used: `C:\Users\unvme\Downloads\twoforone\application-3a86ffab-9316-4683-891d-e3ef01333341.apk`
+- APK modified time: 2026-06-04 19:03:29 local time
+- Screenshots folder: `qa-screens/final-owner-demo-smoke-v2/`
+- Tester / device: Android emulator `emulator-5554`; installed app reports `versionCode=12`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 21:22:22`
+
+### 2. APK Verification And Install
+
+Result: Passed for APK metadata, install, launch, and installed version match.
+
+- Newest APK in `C:\Users\unvme\Downloads\twoforone`: `application-3a86ffab-9316-4683-891d-e3ef01333341.apk`.
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=12`, `versionName=1.0.0`, app label `TWOFER`, and launch activity `com.unvmex2.twoforone.MainActivity`.
+- Installed on `emulator-5554` with `adb install -r`.
+- App data was cleared before launch with `adb shell pm clear com.unvmex2.twoforone`.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed package matched `versionCode=12`, `versionName=1.0.0`.
+
+### 3. Owner Demo Smoke
+
+Result: Failed - not ready to show real business owners.
+
+- Passed: signed-out auth landing opened with TWOFER branding and no demo credential helper UI.
+- Passed: login through the normal email/password form.
+- Passed: after clearing app data, first-run consumer onboarding appeared and the ZIP/favorite-shop flow showed clean `Cedar & Bean Cafe` data.
+- Passed: Settings mode switch was fully visible and tappable when centered, and Business mode opened.
+- Passed: Business dashboard showed `Welcome back, Cedar & Bean Cafe`, visible metrics, and clean deal titles.
+- Passed: Account/Settings showed `Cedar & Bean Cafe`, `120 S Main St`, `Cafe & Bakery`, and no `Met` / `E`.
+- Partial: Account/Settings did not visibly show `Maya Patel` or `hello@cedarbean.cafe`, although direct hosted data verification found both values on the demo-owned `businesses` row.
+- Visual caveat: dashboard metric-card screenshots showed beige pressed/overlay artifacts across parts of the metrics; the dashboard was readable enough for smoke, but this should be reviewed before an owner demo.
+- Passed: Billing showed Pro as `Included in Premium`, and Premium was the only `Current plan`.
+- Passed: Create deal hub opened cleanly.
+- Passed: merchant manual Ticket code screen opened cleanly.
+- Blocked: merchant manual redeem success was not retested because the consumer fresh-claim step failed before an active ticket/code could be created.
+- Blocked: business dashboard in-session redemption refresh was not retested because no successful fresh redeem occurred.
+
+### 4. Consumer Proof Path
+
+Result: Failed with a raw claim error; several downstream QR/redeem checks were blocked.
+
+- Passed: Home deals loaded with professional Cedar & Bean deal titles.
+- Passed: Home Claim CTA was not clipped and was tappable.
+- Passed: Shops list was clean and did not show `My Coffee`, `124`, `Demo Roasted Bean Coffee`, timestamped smoke-test deals, or preview-tester copy.
+- Passed: shop detail opened for Cedar & Bean Cafe.
+- Passed: Android Back from shop detail returned reliably to the prior Shops/Home screen.
+- Failed: claiming a fresh live Cedar & Bean deal displayed raw text: `Edge Function returned a non-2xx status code`.
+- Blocked: claim QR/code modal open, QR modal Hide, Android Back closing the QR modal, Wallet active ticket, Wallet QR/code panel, Wallet `Show QR & code`, merchant manual redeem success, Wallet redeemed state, and dashboard focus-refresh after redeem.
+- Data note: a temporary clean Cedar & Bean claim-test deal was inserted through the normal anon/RLS path for the claim attempt and removed afterward.
+
+### 5. Hosted Demo Data
+
+Result: Passed for owner-demo data cleanliness.
+
+- Cedar & Bean Cafe appeared in onboarding, Home, Shops, business dashboard, Account/Settings, Billing, and Create/Redeem owner surfaces where expected.
+- Visible public Shops/Home surfaces showed no `My Coffee`, `124`, `Demo Roasted Bean Coffee`, `Met`, `E`, timestamped smoke-test deal names, or preview-tester copy.
+- Direct anon/RLS verification found the demo-owned `businesses` row contains `Cedar & Bean Cafe`, `Maya Patel`, `hello@cedarbean.cafe`, `120 S Main St`, and `Cafe & Bakery`/Grapevine data.
+- The visible Account UI still does not render `Maya Patel` or `hello@cedarbean.cafe`; treat that as a UI coverage gap, not a hosted-data cleanup failure.
+
+### 6. QR Controls And Dashboard Refresh
+
+Result: Blocked in this APK.
+
+- QR controls pass: Not verified. The current APK could not create a fresh active ticket because claim failed with raw non-2xx text.
+- Dashboard refresh pass: Not verified. No fresh redeem occurred in-session, so the dashboard redemption refresh fix could not be proven from the APK.
+- Source follow-up completed after the APK failure: `lib/functions.ts` now reads failed edge-function response bodies and maps bare non-2xx wrapper text to friendly claim copy for the next APK.
+
+### 7. Map Responsiveness
+
+Result: Passed.
+
+- Map opened with Google tiles and a marker.
+- Map remained responsive after a 30-second wait.
+- Live-deals filter interaction changed state after the wait.
+- Recent logcat scan did not show a `com.unvmex2.twoforone` ANR, fatal exception, or `Application Not Responding` entry during the Map check.
+
+### 8. Screenshots Captured
+
+Screenshots captured under `qa-screens/final-owner-demo-smoke-v2/`:
+
+- `01_signed_out_auth_landing_step.png`
+- `02_consumer_onboarding_after_login_step.png`
+- `03_onboarding_clean_cedar_shop_step.png`
+- `04_home_cedar_deals_initial_step.png`
+- `05_settings_mode_switch_unclipped_PASS_step.png`
+- `06_settings_mode_switch_centered_PASS_step.png`
+- `07_business_dashboard_tour_step.png`
+- `08_business_dashboard_cedar_baseline_PASS_step.png`
+- `09_business_dashboard_cedar_settled_PASS_step.png`
+- `10_business_account_cedar_profile_card_PASS_step.png`
+- `11_business_edit_profile_clean_top_PASS_step.png`
+- `12_billing_premium_current_plan_PASS_step.png`
+- `13_create_deal_hub_PASS_step.png`
+- `14_merchant_manual_ticket_code_PASS_step.png`
+- `15_shops_list_clean_cedar_PASS_step.png`
+- `16_shop_detail_cedar_PASS_step.png`
+- `17_android_back_from_shop_detail_PASS_step.png`
+- `18_home_claim_cta_unclipped_PASS_step.png`
+- `19_claim_raw_edge_error_FAIL_step.png`
+- `20_map_initial_step.png`
+- `21_map_after_30s_no_anr_PASS_step.png`
+- `22_map_live_deals_filter_responsive_PASS_step.png`
+
+### 9. Static Validation
+
+Result: Passed after the one-file source follow-up.
+
+- `npm run typecheck` - passed.
+- `npm run lint` - passed.
+
+### 10. Known Issues And Readiness
+
+- Owner-demo readiness: No. versionCode `12` should not be shown to real business owners.
+- Release blocker: fresh deal claim can surface raw `Edge Function returned a non-2xx status code` in the current APK.
+- Blocked proof items: QR modal controls, Wallet QR/code controls, merchant manual redeem success from a fresh active ticket, Wallet redeemed state, and in-session dashboard redemption refresh.
+- Hosted demo data is clean: Yes.
+- QR controls pass: Blocked, not verified.
+- Dashboard refresh pass: Blocked, not verified.
+- Follow-up required: build a new APK with the `lib/functions.ts` claim-error fallback, then rerun the full claim -> QR/code -> Wallet -> merchant manual redeem -> Wallet redeemed -> dashboard refresh path.
+- Screenshots and APKs are local release artifacts and should not be committed.

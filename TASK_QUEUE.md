@@ -1485,6 +1485,83 @@ Manual check:
 
 ---
 
+## Final Owner-Demo Smoke - versionCode 12
+
+Status: Failed - not owner-demo ready 2026-06-04.
+
+Findings 2026-06-04:
+
+1. What I found
+   - `claude -p` was available and used for scoped APK/source reconnaissance; Codex completed the emulator install, Android smoke, screenshots, blocker fix, validation, and release documentation directly.
+   - Newest APK found in the TWOFER folder: `C:\Users\unvme\Downloads\twoforone\application-3a86ffab-9316-4683-891d-e3ef01333341.apk`, modified 2026-06-04 19:03:29 local time.
+   - APK metadata from `aapt.exe dump badging`: package `com.unvmex2.twoforone`, `versionCode=12`, `versionName=1.0.0`, label `TWOFER`, launch activity `com.unvmex2.twoforone.MainActivity`.
+   - Installed on Android emulator `emulator-5554` with `adb install -r`, app data cleared before launch, and installed package matched the APK with `versionCode=12`, `versionName=1.0.0`, `lastUpdateTime=2026-06-04 21:22:22`.
+   - Screenshots were captured under ignored local folder `qa-screens/final-owner-demo-smoke-v2/`.
+   - Business-owner path passed for signed-out auth landing, normal email/password login, Business mode switch, Cedar & Bean Cafe dashboard, Billing Premium plan copy, Create deal hub, and merchant manual Ticket code screen.
+   - Hosted demo data is clean in the visible app surfaces tested: Cedar & Bean Cafe appears, public Shops/Home data did not show `My Coffee`, `124`, `Demo Roasted Bean Coffee`, `Met`, `E`, timestamped smoke-test titles, or preview-tester copy. A temporary clean claim-test deal was inserted through normal anon/RLS and removed after the failed claim attempt.
+   - Business Account/Settings showed `Cedar & Bean Cafe`, `120 S Main St`, and `Cafe & Bakery`, and no `Met` / `E`; however, the visible Account UI did not show `Maya Patel` or `hello@cedarbean.cafe` even though the hosted `businesses` row contains those values.
+   - Visual caveat: dashboard metric-card screenshots showed beige pressed/overlay artifacts across parts of the metrics; the dashboard was readable enough for smoke, but this should be reviewed before an owner demo.
+   - Consumer proof path passed for clean Home deals, unclipped/tappable Home Claim CTA, clean Shops list, shop detail open, Android Back from shop detail, Map open, Map 30-second responsiveness, and Map Live deals filter interaction.
+   - Consumer proof path failed when attempting to claim a fresh live Cedar & Bean deal: the current APK displayed the raw message `Edge Function returned a non-2xx status code`.
+   - Because the claim failed and the demo account had no active unredeemed ticket, claim QR/code modal open/Hide/Android Back, Wallet active ticket, Wallet QR/code panel, Wallet `Show QR & code`, merchant manual redeem success, Wallet redeemed state, and in-session dashboard redemption refresh were blocked in this APK.
+2. Why it matters
+   - The prior versionCode `11` data, QR/modal, dashboard refresh, and visual/back blockers are mostly addressed in versionCode `12`, but a raw claim failure is still a business-owner demo blocker.
+   - QR controls and dashboard refresh cannot be called passed until the APK can create a fresh active ticket during the same demo session.
+3. Recommended fix
+   - Current APK result: do not show versionCode `12` to real business owners.
+   - Completed source follow-up for the next APK only: `claimDeal` now reads edge-function error bodies, preserves server error codes, and maps bare non-2xx wrapper text to friendly customer copy instead of surfacing the raw Supabase wrapper.
+   - Build a new APK and rerun the claim -> QR/code modal -> Wallet QR/code -> merchant manual redeem -> Wallet redeemed -> Dashboard focus-refresh proof with an account that can claim a fresh live deal.
+   - Follow up separately if Account must visibly show `Maya Patel` and `hello@cedarbean.cafe`; the hosted data contains those values, but this APK did not render them in the visible Account UI.
+4. Files affected
+   - `lib/functions.ts`
+   - `TASK_QUEUE.md`
+   - `docs/beta-release-checklist.md`
+   - Screenshots captured under ignored local folder `qa-screens/final-owner-demo-smoke-v2/` and should not be committed.
+5. MVP priority: High
+
+Validation results:
+
+- `C:\Users\unvme\AppData\Local\Android\Sdk\build-tools\36.1.0\aapt.exe dump badging` confirmed package `com.unvmex2.twoforone`, `versionCode=12`, `versionName=1.0.0`.
+- `adb -s emulator-5554 install -r` passed.
+- `adb -s emulator-5554 shell pm clear com.unvmex2.twoforone` passed before launch.
+- `adb shell dumpsys package com.unvmex2.twoforone` confirmed the installed app matched `versionCode=12`, `versionName=1.0.0`.
+- Map logcat scan after the 30-second wait found no `com.unvmex2.twoforone` ANR, fatal exception, or `Application Not Responding` entry.
+- Screens passed: signed-out auth landing, normal login, first-run onboarding with clean Cedar shop, Home Cedar deals, Settings mode switch unclipped, Business dashboard Cedar header/metrics, Business Account clean Cedar profile fields, Billing Premium current plan, Create deal hub, merchant manual Ticket code screen, clean Shops list, shop detail, Android Back from shop detail, Home Claim CTA unclipped/tappable, Map 30-second responsiveness, and Map Live deals filter.
+- Screens failed or blocked: fresh live deal claim failed with raw `Edge Function returned a non-2xx status code`; claim QR/code modal controls, Wallet active ticket, Wallet QR/code panel, Wallet `Show QR & code`, merchant manual redeem success, Wallet redeemed state, and in-session dashboard redemption refresh were blocked.
+- Hosted demo data clean: Yes for the visible owner-demo surfaces and direct anon/RLS verification; the temporary claim-test deal was removed.
+- QR controls pass: Blocked, not verified in versionCode `12`.
+- Dashboard refresh pass: Blocked, not verified in versionCode `12`.
+- `npm run typecheck` - passed after the one-file source fix.
+- `npm run lint` - passed after the one-file source fix.
+- Owner-demo ready: No.
+
+Screenshots captured in `qa-screens/final-owner-demo-smoke-v2/`:
+
+- `01_signed_out_auth_landing_step.png`
+- `02_consumer_onboarding_after_login_step.png`
+- `03_onboarding_clean_cedar_shop_step.png`
+- `04_home_cedar_deals_initial_step.png`
+- `05_settings_mode_switch_unclipped_PASS_step.png`
+- `06_settings_mode_switch_centered_PASS_step.png`
+- `07_business_dashboard_tour_step.png`
+- `08_business_dashboard_cedar_baseline_PASS_step.png`
+- `09_business_dashboard_cedar_settled_PASS_step.png`
+- `10_business_account_cedar_profile_card_PASS_step.png`
+- `11_business_edit_profile_clean_top_PASS_step.png`
+- `12_billing_premium_current_plan_PASS_step.png`
+- `13_create_deal_hub_PASS_step.png`
+- `14_merchant_manual_ticket_code_PASS_step.png`
+- `15_shops_list_clean_cedar_PASS_step.png`
+- `16_shop_detail_cedar_PASS_step.png`
+- `17_android_back_from_shop_detail_PASS_step.png`
+- `18_home_claim_cta_unclipped_PASS_step.png`
+- `19_claim_raw_edge_error_FAIL_step.png`
+- `20_map_initial_step.png`
+- `21_map_after_30s_no_anr_PASS_step.png`
+- `22_map_live_deals_filter_responsive_PASS_step.png`
+
+---
+
 ## Recommended Order
 
 1. Task 1 - Production UI Cleanup.
