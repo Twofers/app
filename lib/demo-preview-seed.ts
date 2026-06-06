@@ -49,7 +49,7 @@ const DEMO_DEALS = [
     max_claims: 220,
     poster_url: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=1200&q=80",
     kind: "live" as const,
-    durationDays: 20,
+    durationMinutes: 120,
   },
   {
     title: "2-for-1 Pastry Pair Before Noon",
@@ -58,7 +58,7 @@ const DEMO_DEALS = [
     max_claims: 180,
     poster_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80",
     kind: "live" as const,
-    durationDays: 16,
+    durationMinutes: 90,
   },
   {
     title: "BOGO Iced Tea Launch Special",
@@ -137,6 +137,8 @@ function buildSeedDealRows(now: Date, businessId: string, locationId: string | n
     if (d.kind === "scheduled") {
       start.setUTCDate(start.getUTCDate() + (d.startOffsetDays ?? 0));
       end.setUTCDate(end.getUTCDate() + (d.endOffsetDays ?? 14));
+    } else if ("durationMinutes" in d) {
+      end.setTime(end.getTime() + d.durationMinutes * 60_000);
     } else {
       end.setUTCDate(end.getUTCDate() + (d.durationDays ?? 14));
     }
@@ -307,7 +309,7 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
     return copy;
   });
   // Hosted projects may not expose deals.location_id in the PostgREST schema cache.
-  // Skip it when no location row resolved, and retry without it on PGRST204 so the
+  // Skip it when no location row resolved, and retry without it on PGRST204/42703 so the
   // demo-login refresh still seeds deals instead of failing silently.
   let dealsInsert = await client
     .from("deals")
@@ -315,7 +317,7 @@ export async function ensureDemoCoffeePreview(client: SupabaseClient): Promise<v
     .select("id,title,start_time,end_time");
   if (
     dealsInsert.error &&
-    dealsInsert.error.code === "PGRST204" &&
+    (dealsInsert.error.code === "PGRST204" || dealsInsert.error.code === "42703") &&
     dealsInsert.error.message.includes("location_id")
   ) {
     dealsInsert = await client

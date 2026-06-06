@@ -52,7 +52,7 @@ const DEALS = [
     max_claims: 220,
     poster_url: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=1200&q=80",
     kind: "live",
-    durationDays: 20,
+    durationMinutes: 120,
   },
   {
     title: "2-for-1 Pastry Pair Before Noon",
@@ -61,7 +61,7 @@ const DEALS = [
     max_claims: 180,
     poster_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80",
     kind: "live",
-    durationDays: 16,
+    durationMinutes: 90,
   },
   {
     title: "BOGO Iced Tea Launch Special",
@@ -275,12 +275,12 @@ async function main() {
 
   /**
    * Insert deals, retrying without location_id if that column is absent from the
-   * PostgREST schema cache (PGRST204 on hosted projects that don't expose it).
+   * PostgREST schema cache (PGRST204/42703 on hosted projects that don't expose it).
    */
   async function insertDealsWithFallback(client, dealRows) {
     const { data, error } = await client.from("deals").insert(dealRows).select("id,title,end_time");
     if (!error) return { data, error };
-    if (error.code === "PGRST204" && error.message && error.message.includes("location_id")) {
+    if ((error.code === "PGRST204" || error.code === "42703") && error.message && error.message.includes("location_id")) {
       console.log("location_id not in schema cache - retrying deal insert without it.");
       const stripped = dealRows.map((r) => {
         const copy = { ...r };
@@ -306,7 +306,12 @@ async function main() {
     end_time:
       d.kind === "scheduled"
         ? new Date(now.getTime() + (d.endOffsetDays || 14) * 24 * 60 * 60 * 1000).toISOString()
-        : new Date(now.getTime() + (d.durationDays || 14) * 24 * 60 * 60 * 1000).toISOString(),
+        : new Date(
+            now.getTime() +
+              (d.durationMinutes
+                ? d.durationMinutes * 60 * 1000
+                : (d.durationDays || 14) * 24 * 60 * 60 * 1000),
+          ).toISOString(),
     claim_cutoff_buffer_minutes: 30,
     max_claims: d.max_claims,
     is_active: true,
