@@ -41,6 +41,18 @@ const EXPRESS_CUTOFF_MINUTES = 15;
 
 type BannerState = { message: string; tone: "error" | "success" | "info" | "warning" };
 
+function isMissingDealLocationColumn(error: { code?: string; message?: string } | null | undefined) {
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    error.message?.includes("location_id")
+  );
+}
+
+function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
+  const { location_id: _locationId, ...rest } = row;
+  return rest;
+}
+
 export default function QuickDealExpress() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -203,29 +215,32 @@ export default function QuickDealExpress() {
       const now = new Date();
       const end = new Date(now.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
-      const { data, error } = await supabase
-        .from("deals")
-        .insert({
-          business_id: businessId,
-          title: cleanTitle,
-          description: listingDescription,
-          price: null,
-          start_time: now.toISOString(),
-          end_time: end.toISOString(),
-          claim_cutoff_buffer_minutes: EXPRESS_CUTOFF_MINUTES,
-          max_claims: EXPRESS_MAX_CLAIMS,
-          is_active: true,
-          poster_url: posterPublic,
-          poster_storage_path: posterPath,
-          is_recurring: false,
-          days_of_week: null,
-          window_start_minutes: null,
-          window_end_minutes: null,
-          timezone: null,
-          quality_tier: quality.tier,
-          location_id: null,
-        })
-        .select("id");
+      const row = {
+        business_id: businessId,
+        title: cleanTitle,
+        description: listingDescription,
+        price: null,
+        start_time: now.toISOString(),
+        end_time: end.toISOString(),
+        claim_cutoff_buffer_minutes: EXPRESS_CUTOFF_MINUTES,
+        max_claims: EXPRESS_MAX_CLAIMS,
+        is_active: true,
+        poster_url: posterPublic,
+        poster_storage_path: posterPath,
+        is_recurring: false,
+        days_of_week: null,
+        window_start_minutes: null,
+        window_end_minutes: null,
+        timezone: null,
+        quality_tier: quality.tier,
+        location_id: null,
+      };
+
+      let insertResult = await supabase.from("deals").insert(row).select("id");
+      if (isMissingDealLocationColumn(insertResult.error)) {
+        insertResult = await supabase.from("deals").insert(omitDealLocationId(row)).select("id");
+      }
+      const { data, error } = insertResult;
       if (error) throw error;
 
       const id = data?.[0]?.id as string | undefined;

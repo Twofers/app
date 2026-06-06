@@ -110,7 +110,10 @@ function formatMinutes(minutes: number) {
 }
 
 function isMissingDealLocationColumn(error: { code?: string; message?: string } | null | undefined) {
-  return error?.code === "PGRST204" && error.message?.includes("location_id");
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    error.message?.includes("location_id")
+  );
 }
 
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
