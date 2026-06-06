@@ -346,7 +346,7 @@
     "errMaxClaims": "El máximo de reclamos debe ser mayor que 0.",
     "errCutoff": "El margen de corte debe ser 0 o más.",
     "errEndFuture": "La hora de fin debe ser en el futuro.",
-    "errCutoffDuration": "El corte debe ser menor que la duración de la oferta.",
+    "errCutoffDuration": "El corte de canje debe ser menor que la duración de la oferta.",
     "errPriceNumber": "El precio debe ser un número.",
     "errPublishFailed": "Error al publicar.",
     "confirmPublishTitle": "¿Publicar esta oferta?",

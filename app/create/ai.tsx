@@ -81,6 +81,8 @@ type TemplateRow = {
 
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
 
+const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
+
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
 };
@@ -912,10 +914,9 @@ export default function AiDealScreen() {
         setBanner({ message: t("createAi.errEndAfterStart"), tone: "error" });
         return false;
       }
-      const now = new Date();
-      const durationMinutes = Math.floor((endTime.getTime() - now.getTime()) / 60000);
+      const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
       if (cutoffNum >= durationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
+        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
         return false;
       }
     } else {
@@ -931,7 +932,7 @@ export default function AiDealScreen() {
       }
       const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
       if (cutoffNum >= windowDurationMinutes) {
-        setBanner({ message: t("createQuick.errCutoffDuration"), tone: "error" });
+        setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
         return false;
       }
     }

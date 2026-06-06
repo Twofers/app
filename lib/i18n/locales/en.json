@@ -346,7 +346,7 @@
     "errMaxClaims": "Max claims must be greater than 0.",
     "errCutoff": "Cutoff buffer must be 0 or more.",
     "errEndFuture": "End time must be in the future.",
-    "errCutoffDuration": "Cutoff must be less than the deal duration.",
+    "errCutoffDuration": "Redemption cutoff must be shorter than the deal duration.",
     "errNoDays": "Pick at least one day.",
     "errPriceNumber": "Price must be a number.",
     "errPublishFailed": "Publish failed.",

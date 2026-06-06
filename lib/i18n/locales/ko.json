@@ -346,7 +346,7 @@
     "errMaxClaims": "최대 사용 횟수는 0보다 커야 합니다.",
     "errCutoff": "마감 여유는 0 이상이어야 합니다.",
     "errEndFuture": "종료 시각은 미래여야 합니다.",
-    "errCutoffDuration": "마감 여유는 딜 기간보다 짧아야 합니다.",
+    "errCutoffDuration": "사용 마감 여유는 딜 기간보다 짧아야 합니다.",
     "errPriceNumber": "가격은 숫자여야 합니다.",
     "errPublishFailed": "게시에 실패했습니다.",
     "confirmPublishTitle": "이 딜을 게시할까요?",
