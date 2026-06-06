@@ -602,7 +602,7 @@ export default function AiDealScreen() {
         const { data, error } = await supabase
           .from("deals")
           .select(
-            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
+            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
           )
           .eq("id", dealIdFromRoute)
           .eq("business_id", businessId)
@@ -1268,12 +1268,20 @@ export default function AiDealScreen() {
         quality_tier: quality.tier,
       };
       if (editingDealId) {
-        const { error } = await supabase
+        const updateRow = { ...baseRow, location_id: publishLocationIds[0] ?? null };
+        let updateResult = await supabase
           .from("deals")
-          .update({ ...baseRow, location_id: publishLocationIds[0] ?? null })
+          .update(updateRow)
           .eq("id", editingDealId)
           .eq("business_id", businessId);
-        if (error) throw error;
+        if (isMissingDealLocationColumn(updateResult.error)) {
+          updateResult = await supabase
+            .from("deals")
+            .update(omitDealLocationId(updateRow))
+            .eq("id", editingDealId)
+            .eq("business_id", businessId);
+        }
+        if (updateResult.error) throw updateResult.error;
         void notifyDealPublished(editingDealId);
         void translateDeal(editingDealId);
       } else {
