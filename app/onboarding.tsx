@@ -176,9 +176,18 @@ export default function OnboardingScreen() {
           return;
         }
         trackOnboardingEvent("location_permission_allowed", { permission_status: status });
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          mayShowUserSettingsDialog: false,
+        });
+        const coords = pos?.coords;
+        if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+          setHint(t("onboarding.locationError"));
+          setLocationMode("zip");
+          return;
+        }
         await setConsumerLocationMode("gps");
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        await goToShops({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        await goToShops({ lat: coords.latitude, lng: coords.longitude });
       } else {
         const z = zip.trim();
         if (!z) {
@@ -198,6 +207,7 @@ export default function OnboardingScreen() {
       }
     } catch (err: unknown) {
       if (__DEV__) console.warn("Onboarding error:", err);
+      if (locationMode === "gps") setLocationMode("zip");
       setHint(t("onboarding.locationError"));
     } finally {
       setBusy(false);

@@ -46,7 +46,10 @@ export async function resolveConsumerCoordinates(
     return null;
   }
   try {
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      mayShowUserSettingsDialog: false,
+    });
     return {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,

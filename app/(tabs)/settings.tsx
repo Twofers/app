@@ -91,9 +91,9 @@ export default function SettingsScreen() {
     }, [reload]),
   );
 
-  async function persistCoords() {
+  async function persistCoords(nextLocationMode: ConsumerLocationMode = locationMode) {
     const prefs = await getConsumerPreferences();
-    const coords = await resolveConsumerCoordinates({ ...prefs, zipCode: zip, locationMode });
+    const coords = await resolveConsumerCoordinates({ ...prefs, zipCode: zip, locationMode: nextLocationMode });
     if (coords) {
       await setLastKnownConsumerCoords(coords.lat, coords.lng);
     }
@@ -144,26 +144,47 @@ export default function SettingsScreen() {
 
   async function applyLocationMode(mode: ConsumerLocationMode) {
     try {
-      await setConsumerLocationMode(mode);
-      setLocationModeState(mode);
       if (mode === "gps") {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          try {
-            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            await setLastKnownConsumerCoords(pos.coords.latitude, pos.coords.longitude);
-          } catch (err: unknown) {
-            devWarn("[settings] GPS lookup failed", err);
-            confirm({
-              iconName: "location-off",
-              title: t("consumerSettings.gpsErrorTitle"),
-              message: t("consumerSettings.gpsErrorBody"),
-              confirmLabel: t("commonUi.ok"),
-            });
+        if (status !== "granted") {
+          await setConsumerLocationMode("zip");
+          setLocationModeState("zip");
+          confirm({
+            iconName: "location-off",
+            title: t("consumerSettings.gpsErrorTitle"),
+            message: t("consumerSettings.gpsErrorBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
+          await persistCoords("zip");
+          return;
+        }
+        try {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            mayShowUserSettingsDialog: false,
+          });
+          const coords = pos?.coords;
+          if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+            throw new Error("GPS lookup returned no usable coordinates");
           }
+          await setLastKnownConsumerCoords(coords.latitude, coords.longitude);
+        } catch (err: unknown) {
+          devWarn("[settings] GPS lookup failed", err);
+          await setConsumerLocationMode("zip");
+          setLocationModeState("zip");
+          confirm({
+            iconName: "location-off",
+            title: t("consumerSettings.gpsErrorTitle"),
+            message: t("consumerSettings.gpsErrorBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
+          await persistCoords("zip");
+          return;
         }
       }
-      await persistCoords();
+      await setConsumerLocationMode(mode);
+      setLocationModeState(mode);
+      await persistCoords(mode);
     } catch (err: unknown) {
       devWarn("[settings] location mode update failed", err);
       showSettingsSaveError();
