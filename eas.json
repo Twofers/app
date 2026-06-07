@@ -36,6 +36,9 @@
       "extends": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true"
       }
     },
     "apk": {
