@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 import { claimInitialUrl } from "@/lib/initial-url-guard";
 
@@ -45,6 +46,8 @@ export function BillingDeepLinkHandler() {
   const initialDone = useRef(false);
 
   useEffect(() => {
+    if (!PAID_BILLING_ENABLED) return;
+
     function navigate(url: string | null) {
       const data = parseBillingDeepLink(url);
       if (!data) return;

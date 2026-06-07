@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, AppState, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { MaterialIcons } from "@expo/vector-icons";
 import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser";
@@ -16,7 +16,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
 import type { SubscriptionPricing } from "@/lib/billing/subscription-pricing";
 import { devError, devLog } from "@/lib/dev-log";
-import { PILOT_DISABLE_BILLING_GATE, isTrialExpired } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, PILOT_DISABLE_BILLING_GATE, isTrialExpired } from "@/lib/billing/access";
 
 function daysBetween(nowMs: number, targetIso: string | null): number | null {
   if (!targetIso) return null;
@@ -61,6 +61,12 @@ export default function BusinessBillingScreen() {
   }, [subscriptionStatus, trialExpired]);
 
   useEffect(() => {
+    if (!PAID_BILLING_ENABLED) {
+      setPricing(null);
+      setPricingLoading(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       setPricingLoading(true);
@@ -151,6 +157,8 @@ export default function BusinessBillingScreen() {
   }, [t, retryKey]);
 
   useEffect(() => {
+    if (!PAID_BILLING_ENABLED) return;
+
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         void refresh();
@@ -160,6 +168,7 @@ export default function BusinessBillingScreen() {
   }, [refresh]);
 
   useEffect(() => {
+    if (!PAID_BILLING_ENABLED) return;
     if (!checkout) return;
     if (checkout === "cancel") {
       setBanner({
@@ -220,6 +229,7 @@ export default function BusinessBillingScreen() {
   }, [checkout, refresh, t, userId]);
 
   useEffect(() => {
+    if (!PAID_BILLING_ENABLED) return;
     if (reason === "reactivate") {
       setBanner({
         message: t("billing.paywallExpiredMessage"),
@@ -334,6 +344,10 @@ export default function BusinessBillingScreen() {
     boxShadow: "0px 6px 18px rgba(0,0,0,0.10)",
     elevation: 6,
   };
+
+  if (!PAID_BILLING_ENABLED) {
+    return <Redirect href="/(tabs)/account" />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>

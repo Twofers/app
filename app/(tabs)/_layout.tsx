@@ -13,7 +13,7 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import {
   deriveTabFromSegments,
@@ -192,7 +192,7 @@ export default function TabLayout() {
           options={{
             title: t("tabs.billing"),
             tabBarIcon: renderBillingTabIcon,
-            ...hideWhen(mode === "customer"),
+            ...hideWhen(mode === "customer" || !PAID_BILLING_ENABLED),
           }}
         />
         <Tabs.Screen
@@ -234,6 +234,7 @@ function TabModeRedirect() {
     isDev: __DEV__,
   });
   const businessBillingBlocked =
+    PAID_BILLING_ENABLED &&
     mode === "business" &&
     !billingLoading &&
     !canCreateDeal({
@@ -286,6 +287,10 @@ function TabModeRedirect() {
       lastRedirectRef.current = target;
       router.replace(target as Href);
     };
+    if (!PAID_BILLING_ENABLED && tab === "billing") {
+      redirectTo(mode === "business" ? "/(tabs)/account" : "/(tabs)");
+      return;
+    }
     const target = resolveTabModeRedirectTarget({
       mode,
       tab,

@@ -15,7 +15,7 @@ import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
-import { canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
 
 
 export default function CreateDeal() {
@@ -114,8 +114,8 @@ export default function CreateDeal() {
             title={t("billing.goToBilling")}
             onPress={() =>
               router.replace({
-                pathname: "/(tabs)/billing",
-                params: { reason: "reactivate" },
+                pathname: PAID_BILLING_ENABLED ? "/(tabs)/billing" : "/(tabs)/account",
+                params: PAID_BILLING_ENABLED ? { reason: "reactivate" } : {},
               } as unknown as Href)
             }
           />

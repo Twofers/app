@@ -33,6 +33,7 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
@@ -784,7 +785,7 @@ export default function AccountScreen() {
             </View>
           ) : null}
 
-          {tabMode === "business" && businessId ? (
+          {PAID_BILLING_ENABLED && tabMode === "business" && businessId ? (
             <Pressable
               onPress={() => router.push("/(tabs)/billing" as Href)}
               accessibilityRole="button"

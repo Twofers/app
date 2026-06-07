@@ -1,14 +1,16 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
 
 /**
- * Pilot launch flag. While true, the trial-end paywall does not block deal
- * creation: any logged-in business user can keep working past their trial
- * expiration. Subscribe buttons are also hidden in `app/(tabs)/billing.tsx`.
- *
- * Flip to `false` for v1.1 once Stripe live mode is wired (see
- * `docs/stripe-setup.md`) and pilot cafes have signed paid agreements.
+ * V1 App Store pilot is free. Keep paid tiers, checkout, and customer portal
+ * code in place for a later release, but make every paid surface unreachable.
  */
-export const PILOT_DISABLE_BILLING_GATE = true;
+export const PAID_BILLING_ENABLED = false;
+
+/**
+ * While true, trial-end status does not block deal creation: any logged-in
+ * business user can keep working during the free pilot.
+ */
+export const PILOT_DISABLE_BILLING_GATE = !PAID_BILLING_ENABLED;
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {
   if (!__DEV__) return false;

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser";
 
@@ -11,6 +11,7 @@ import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
@@ -95,6 +96,10 @@ export default function ManageSubscriptionScreen() {
       void refresh();
     }
   };
+
+  if (!PAID_BILLING_ENABLED) {
+    return <Redirect href="/(tabs)/account" />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>

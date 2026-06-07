@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useBusiness } from "@/hooks/use-business";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateLayout() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -41,7 +41,11 @@ export default function CreateLayout() {
   if (blocked) {
     return (
       <Redirect
-        href={{ pathname: "/(tabs)/billing", params: { reason: "reactivate" } } as unknown as Href}
+        href={
+          PAID_BILLING_ENABLED
+            ? ({ pathname: "/(tabs)/billing", params: { reason: "reactivate" } } as unknown as Href)
+            : "/(tabs)/account"
+        }
       />
     );
   }

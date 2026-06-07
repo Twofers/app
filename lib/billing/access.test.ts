@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PILOT_DISABLE_BILLING_GATE, canCreateDeal, isTrialExpired } from "./access";
+import { PAID_BILLING_ENABLED, PILOT_DISABLE_BILLING_GATE, canCreateDeal, isTrialExpired } from "./access";
 
 describe("isTrialExpired", () => {
   it("returns false for a future trial end", () => {
@@ -21,6 +21,11 @@ describe("isTrialExpired", () => {
 });
 
 describe("canCreateDeal", () => {
+  it("keeps paid billing surfaces disabled for the free pilot", () => {
+    expect(PAID_BILLING_ENABLED).toBe(false);
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  });
+
   it("blocks unauthenticated callers regardless of any other state", () => {
     expect(
       canCreateDeal({

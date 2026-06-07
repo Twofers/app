@@ -26,7 +26,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Fonts, Radii, Shadows } from "@/constants/theme";
-import { canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -469,7 +469,8 @@ export default function BusinessDashboard() {
   const primary = Colors.light.primary;
 
   const billingBlocked = Boolean(
-    businessId &&
+    PAID_BILLING_ENABLED &&
+      businessId &&
       !canCreateDeal({
         isLoggedIn,
         subscriptionStatus,
