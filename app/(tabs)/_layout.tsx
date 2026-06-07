@@ -38,6 +38,7 @@ const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
 const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
 const renderBillingTabIcon = createTabIconRenderer("heart.fill");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
+const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <HapticTab {...props} />;
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
@@ -121,7 +122,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: theme.primary,
           tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
-          tabBarButton: HapticTab,
+          tabBarButton: renderHapticTabBarButton,
           tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
           tabBarItemStyle: { paddingVertical: 2 },
           tabBarStyle: { backgroundColor: theme.background },
