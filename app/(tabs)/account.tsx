@@ -3,6 +3,7 @@ import { ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -193,6 +194,9 @@ export default function AccountScreen() {
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);
+    if (next && userId) {
+      void registerPushTokenIfNeeded(userId);
+    }
     setBanner({ message: next ? t("account.alertsOn") : t("account.alertsOff"), tone: "success" });
   }
 

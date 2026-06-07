@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
+import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -52,7 +52,7 @@ serve(async (req) => {
 
     const { data: deal, error: dealErr } = await admin
       .from("deals")
-      .select("id, title, business_id, businesses(name, latitude, longitude, owner_id)")
+      .select("id, title, business_id, businesses(name, owner_id)")
       .eq("id", dealId)
       .single();
 
@@ -62,8 +62,6 @@ serve(async (req) => {
 
     const biz = deal.businesses as unknown as {
       name: string | null;
-      latitude: number | null;
-      longitude: number | null;
       owner_id: string;
     } | null;
 
@@ -71,10 +69,6 @@ serve(async (req) => {
       return jsonResponse({ error: "Not your deal" }, 403);
     }
 
-    const bizLat =
-      typeof biz.latitude === "number" ? biz.latitude : null;
-    const bizLng =
-      typeof biz.longitude === "number" ? biz.longitude : null;
     const businessName = biz.name ?? "TWOFER";
     const dealTitle = deal.title ?? "New deal available!";
 
@@ -86,65 +80,40 @@ serve(async (req) => {
 
     const favUserIds = new Set((favRows ?? []).map((r: { user_id: string }) => r.user_id));
 
-    // --- 2. Radius audience (notification_mode = 'all_nearby' with stored location) ---
-    const radiusUserIds = new Set<string>();
-
-    if (bizLat != null && bizLng != null) {
-      const { data: consumerRows } = await admin
-        .from("consumer_profiles")
-        .select("user_id, last_latitude, last_longitude, radius_miles")
-        .eq("notification_mode", "all_nearby")
-        .not("last_latitude", "is", null)
-        .not("last_longitude", "is", null);
-
-      for (const row of consumerRows ?? []) {
-        const lat = Number(row.last_latitude);
-        const lng = Number(row.last_longitude);
-        const radius = Number(row.radius_miles) || 3;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        const dist = haversineMiles(bizLat, bizLng, lat, lng);
-        if (dist <= radius) {
-          radiusUserIds.add(row.user_id);
-        }
-      }
+    if (favUserIds.size === 0) {
+      return jsonResponse({ sent: 0, errors: 0, audience: 0 });
     }
 
-    // --- 3. Merge + exclude merchant ---
-    const allUserIds = new Set([...favUserIds, ...radiusUserIds]);
+    // --- 2. Server-side opt-in gate ---
+    const { data: optedInRows } = await admin
+      .from("consumer_profiles")
+      .select("user_id")
+      .in("user_id", [...favUserIds])
+      .eq("deal_alerts_enabled", true)
+      .neq("notification_mode", "none");
+
+    const allUserIds = new Set((optedInRows ?? []).map((r: { user_id: string }) => r.user_id));
     allUserIds.delete(user.id);
-
-    // Also exclude users with notification_mode = 'none'
-    if (allUserIds.size > 0) {
-      const { data: optedOut } = await admin
-        .from("consumer_profiles")
-        .select("user_id")
-        .in("user_id", [...allUserIds])
-        .eq("notification_mode", "none");
-
-      for (const row of optedOut ?? []) {
-        allUserIds.delete(row.user_id);
-      }
-    }
 
     if (allUserIds.size === 0) {
       return jsonResponse({ sent: 0, errors: 0, audience: 0 });
     }
 
-    // --- 4. Fetch push tokens ---
+    // --- 3. Fetch push tokens ---
     const { data: tokenRows } = await admin
       .from("push_tokens")
       .select("expo_push_token")
       .in("user_id", [...allUserIds]);
 
-    const tokens = (tokenRows ?? []).map(
-      (r: { expo_push_token: string }) => r.expo_push_token,
-    );
+    const tokens = (tokenRows ?? [])
+      .map((r: { expo_push_token: string }) => r.expo_push_token?.trim())
+      .filter((token): token is string => Boolean(token));
 
     if (tokens.length === 0) {
       return jsonResponse({ sent: 0, errors: 0, audience: allUserIds.size });
     }
 
-    // --- 5. Send push ---
+    // --- 4. Send push ---
     const result = await sendExpoPushBatch(tokens, businessName, dealTitle, {
       dealId: deal.id,
       path: `/deal/${deal.id}`,

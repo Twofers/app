@@ -25,6 +25,7 @@ import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -128,6 +129,9 @@ export default function SettingsScreen() {
       }
       await setAlertsEnabled(next);
       setAlertsEnabledState(next);
+      if (next && session?.user?.id) {
+        void registerPushTokenIfNeeded(session.user.id);
+      }
     } catch (err: unknown) {
       devWarn("[settings] deal alerts update failed", err);
       showSettingsSaveError();

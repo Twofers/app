@@ -1283,7 +1283,6 @@ export default function AiDealScreen() {
             .eq("business_id", businessId);
         }
         if (updateResult.error) throw updateResult.error;
-        void notifyDealPublished(editingDealId);
         void translateDeal(editingDealId);
       } else {
         const locTargets =

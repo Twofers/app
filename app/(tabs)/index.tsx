@@ -39,6 +39,7 @@ import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
+import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -466,7 +467,10 @@ export default function HomeScreen() {
     }
     await setAlertsEnabled(true);
     await setConsumerNotificationPrefs({ v: 1, mode: "favorites_only" });
-  }, []);
+    if (userId) {
+      void registerPushTokenIfNeeded(userId);
+    }
+  }, [userId]);
   const maybeOfferDealAlerts = useCallback(async () => {
     if (alertConsentAskedRef.current) return;
     if (await getAlertsEnabled()) return; // already opted in — don't nag
