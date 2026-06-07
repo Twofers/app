@@ -1,0 +1,23 @@
+# Local dependencies and generated build output
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+*.apk
+*.aab
+
+# Local QA and release-prep artifacts
+artifacts/
+notification_emulator_*/
+twofer_rc_qa_*/
+share_deal_*/
+meeting minutes/
+docs/store-release-prep.md
+
+# Common local junk
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
