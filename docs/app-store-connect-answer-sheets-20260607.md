@@ -62,7 +62,8 @@ Answer No for these unless the app changes before submission:
 Draft posture:
 - Not in the Kids category.
 - Not directed to children.
-- No gambling, simulated gambling, loot boxes, contests, unrestricted web access, ads, mature themes, medical content, violence, sexual content, nudity, drug use, or tobacco content by design.
+- No gambling, simulated gambling, loot boxes, contests, unrestricted web access, ads, mature themes, medical content, violence, sexual content, nudity, or tobacco/drug content by design.
+- Alcohol-related deal references are allowed on the platform, but expected to be infrequent.
 - User-generated content: Yes. Business users can publish deal text and photos that customers can see.
 - Sharing: Yes. Share Deal lets a user share a public deal link through the native share sheet. It does not share private claim codes.
 - Location: Yes. The app uses optional GPS or ZIP code for nearby sorting, maps, and alerts.
@@ -82,16 +83,17 @@ Recommended draft answers:
 | Unrestricted web access | No. External links are limited to policy/support URLs, maps/directions, and share links. |
 | Advertising | No. |
 | Commerce or payments | No in-app purchase or payment path in v1. |
-| Alcohol, tobacco, drug references | No for the current cafe pilot, unless any launch business will publish alcohol, tobacco, or drug-related offers. |
+| Alcohol, tobacco, drug references | Infrequent or Mild. Alcohol-related deal references are allowed on the platform, but expected to be infrequent. Tobacco and drug references remain No by design. |
 | Gambling or contests | No. |
 | Profanity or crude humor | No by design. UGC could contain inappropriate text, so reports are available. |
 | Medical or wellness content | No. |
 | Sexual content or nudity | No. |
 | Violence, weapons, horror, fear themes | No. |
 
-Open confirmation for Dan:
-- Confirm whether any launch business will post alcohol-related deals. If yes, update the age-rating answers.
-- Confirm whether you want a manual minimum age rating, such as 13+, even if Apple calculates a lower rating.
+Rating confirmation:
+- Alcohol-related deals are allowed on the platform, but will be infrequent.
+- The expected Apple global age rating is 13+ on the current App Store age-rating scale.
+- No other current draft answer is expected to push the rating higher.
 
 ## Export Compliance
 
