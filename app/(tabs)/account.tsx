@@ -54,7 +54,7 @@ export default function AccountScreen() {
     loading,
     refresh,
   } = useBusiness();
-  const blockInAppSelfDelete = Boolean(businessId || businessOwnershipAmbiguous);
+  const deleteMayIncludeBusinessData = Boolean(businessId || businessOwnershipAmbiguous);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -318,7 +318,7 @@ export default function AccountScreen() {
     // claim history will also be removed"). Consumers see the simpler copy.
     // Apple/Google both require the dialog to make the cascade consequences
     // clear before destruction; the deleteAccount.body string already does that.
-    const message = businessId
+    const message = deleteMayIncludeBusinessData
       ? t("deleteAccount.body")
       : t("deleteAccount.bodyConsumer");
     confirm({
@@ -1256,81 +1256,59 @@ export default function AccountScreen() {
           </Pressable>
 
           {advancedOpen ? (
-            <>
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              gap: Spacing.sm,
-            }}
-          >
-            <Text style={{ fontWeight: "700", color: theme.text }}>{t("legal.sectionTitle")}</Text>
-            <LegalExternalLinks />
-          </View>
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: theme.text }}>{t("legal.sectionTitle")}</Text>
+              <LegalExternalLinks />
+            </View>
+          ) : null}
 
           <View
             style={{
               borderWidth: 1,
-              borderColor: blockInAppSelfDelete ? "#e5e5e5" : "#f3d4d4",
+              borderColor: "#f3d4d4",
               borderRadius: Radii.lg,
               padding: Spacing.md,
               gap: Spacing.sm,
-              backgroundColor: blockInAppSelfDelete ? "#fafafa" : "#fffafa",
+              backgroundColor: "#fffafa",
             }}
           >
             <Text
               style={{
                 fontWeight: "700",
-                color: blockInAppSelfDelete ? "#444" : "#7f1d1d",
+                color: "#7f1d1d",
               }}
             >
               {t("deleteAccount.sectionTitle")}
             </Text>
-            {blockInAppSelfDelete ? (
-              <>
-                <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.88, color: "#333" }}>
-                  {businessId
-                    ? t("deleteAccount.businessOwnerBlockedBody")
-                    : t("deleteAccount.ownershipAmbiguousBlockedBody")}
-                </Text>
-                <Pressable
-                  onPress={() => void openWebsiteUrl(SUPPORT_URL)}
-                  style={{ alignSelf: "flex-start", paddingVertical: 4 }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>
-                    {t("deleteAccount.contactSupportCta")}
-                  </Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.85, color: "#444" }}>
-                  {t("deleteAccount.sectionBodyConsumer")}
-                </Text>
-                <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75, color: "#444" }}>
-                  {t("deleteAccount.fallbackWebHint")}
-                </Text>
-                <Pressable
-                  onPress={() => void openWebsiteUrl(DELETE_ACCOUNT_URL)}
-                  style={{ alignSelf: "flex-start", paddingVertical: 4 }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>
-                    {t("legal.deleteAccount")}
-                  </Text>
-                </Pressable>
-                <PrimaryButton
-                  title={t("deleteAccount.cta")}
-                  onPress={confirmDeleteAccount}
-                  disabled={busy || loading}
-                  style={{ backgroundColor: "#b91c1c" }}
-                />
-              </>
-            )}
+            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.85, color: "#444" }}>
+              {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
+            </Text>
+            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75, color: "#444" }}>
+              {t("deleteAccount.fallbackWebHint")}
+            </Text>
+            <Pressable
+              onPress={() => void openWebsiteUrl(DELETE_ACCOUNT_URL)}
+              style={{ alignSelf: "flex-start", paddingVertical: 4 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>
+                {t("legal.deleteAccount")}
+              </Text>
+            </Pressable>
+            <PrimaryButton
+              title={t("deleteAccount.cta")}
+              onPress={confirmDeleteAccount}
+              disabled={busy || loading}
+              style={{ backgroundColor: "#b91c1c" }}
+            />
           </View>
-            </>
-          ) : null}
         </ScrollView>
       )}
       {confirmModal}

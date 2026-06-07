@@ -39,7 +39,10 @@ import { useTabMode } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { deleteUserAccount } from "@/lib/functions";
+import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
+import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
 
@@ -61,6 +64,7 @@ export default function SettingsScreen() {
   const [notifMode, setNotifModeState] = useState<ConsumerNotificationMode>("all_nearby");
   const [consumerSession, setConsumerSession] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -278,6 +282,41 @@ export default function SettingsScreen() {
       message: t("account.logoutConfirmBody"),
       confirmLabel: t("account.logoutConfirmCta"),
       onConfirm: () => void performSignOut(),
+      cancelLabel: t("commonUi.cancel"),
+    });
+  }
+
+  async function performDeleteAccount() {
+    setDeleteBusy(true);
+    try {
+      await deleteUserAccount();
+      await supabase.auth.signOut();
+      await setTabMode("customer");
+      router.replace("/auth-landing" as Href);
+    } catch (err: unknown) {
+      devWarn("[settings] delete account failed", err);
+      const raw = err instanceof Error ? err.message : "";
+      const friendly = raw ? translateKnownApiMessage(raw, t) : "";
+      confirm({
+        iconName: "error-outline",
+        title: t("deleteAccount.errFailed"),
+        message: friendly && friendly !== raw ? friendly : t("deleteAccount.fallbackWebBody"),
+        confirmLabel: t("deleteAccount.openWebsiteFallbackCta"),
+        onConfirm: () => void openWebsiteUrl(DELETE_ACCOUNT_URL),
+        cancelLabel: t("deleteAccount.alertDismiss"),
+      });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  function confirmDeleteAccount() {
+    confirm({
+      iconName: "delete-forever",
+      title: t("deleteAccount.title"),
+      message: t("deleteAccount.bodyConsumer"),
+      confirmLabel: t("deleteAccount.confirmDestructive"),
+      onConfirm: () => void performDeleteAccount(),
       cancelLabel: t("commonUi.cancel"),
     });
   }
@@ -528,7 +567,42 @@ export default function SettingsScreen() {
             <SecondaryButton
               title={t("account.logOut")}
               onPress={confirmLogout}
-              disabled={loading || logoutBusy}
+              disabled={loading || logoutBusy || deleteBusy}
+            />
+          </View>
+        ) : null}
+
+        {consumerSession ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#f3d4d4",
+              borderRadius: Radii.lg,
+              padding: Spacing.lg,
+              gap: Spacing.sm,
+              backgroundColor: "#fffafa",
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 17, color: "#7f1d1d" }}>
+              {t("deleteAccount.sectionTitle")}
+            </Text>
+            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: "#444" }}>
+              {t("deleteAccount.sectionBodyConsumer")}
+            </Text>
+            <Pressable
+              onPress={() => void openWebsiteUrl(DELETE_ACCOUNT_URL)}
+              accessibilityRole="link"
+              style={{ alignSelf: "flex-start", paddingVertical: Spacing.xs }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563eb" }}>
+                {t("legal.deleteAccount")}
+              </Text>
+            </Pressable>
+            <PrimaryButton
+              title={t("deleteAccount.cta")}
+              onPress={confirmDeleteAccount}
+              disabled={loading || logoutBusy || deleteBusy}
+              style={{ backgroundColor: "#b91c1c" }}
             />
           </View>
         ) : null}
