@@ -3,6 +3,14 @@ import { getConsumerPreferences } from "./consumer-preferences";
 import { getAlertsEnabled } from "./notifications";
 import { devWarn } from "@/lib/dev-log";
 
+function toServerRadiusMiles(radiusMiles: number): number {
+  if (!Number.isFinite(radiusMiles)) return 3;
+  if (radiusMiles <= 1) return 1;
+  if (radiusMiles <= 3) return 3;
+  if (radiusMiles <= 5) return 5;
+  return 10;
+}
+
 /**
  * Sync the consumer's AsyncStorage notification prefs + last-known coords
  * to `consumer_profiles` in Supabase so the server can target push notifications.
@@ -19,7 +27,9 @@ export async function syncConsumerPrefsToServer(
 
     const update: Record<string, unknown> = {
       notification_mode: prefs.notificationPrefs.mode,
-      radius_miles: prefs.radiusMiles,
+      // Hosted schema currently allows 1/3/5/10; keep wider local browsing radii
+      // from failing the server-side push preference sync.
+      radius_miles: toServerRadiusMiles(prefs.radiusMiles),
       deal_alerts_enabled: await getAlertsEnabled(),
     };
 
