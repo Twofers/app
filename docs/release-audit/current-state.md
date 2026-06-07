@@ -61,7 +61,7 @@ This document reflects the repository after the launch-hardening pass. Routes an
 - **Supabase Auth** email/password (`(tabs)/auth`).
 - **Forgot / reset**: `forgot-password`, `reset-password` + `AuthRecoveryLinkHandler` in root layout.
 - **Sign out**: `supabase.auth.signOut()` from account screen.
-- **Delete account**: **Consumers** (no `businesses` row for `owner_id`): in-app via Edge `delete-user-account` → `auth.admin.deleteUser`; on failure, alert + link to the configured delete-account URL. **Business owners** (≥1 business row) or **ambiguous** business lookup: in-app self-delete **blocked** with localized **contact support** (`SUPPORT_URL`); Edge returns **403** with `code: BUSINESS_OWNER_DELETE_BLOCKED` if the function is called anyway. See `docs/deployment-notes.md`.
+- **Delete account**: Consumers use Settings tab → **Delete my account**; business owners use Account tab → **Delete my account**. Both paths show a destructive confirmation, call Edge `delete-user-account` → `auth.admin.deleteUser`, and show a friendly alert plus a configured delete-account URL link on failure. Business-owner confirmation warns that the business, deals, and related claim history are also removed. See `docs/deployment-notes.md`.
 
 ## Onboarding fields (launch scope)
 
@@ -88,7 +88,7 @@ This document reflects the repository after the launch-hardening pass. Routes an
 
 ## Settings / account
 
-- Settings tabs for consumer/business; profile edit routes. **Legal & support** (`lib/legal-urls.ts`, defaults `https://www.twoferapp.com/...`): privacy, terms, support, delete-account — overridable via `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`, `EXPO_PUBLIC_SUPPORT_URL`, `EXPO_PUBLIC_DELETE_ACCOUNT_URL`. `LegalExternalLinks` (privacy + terms + support) on auth, account (signed-out), settings, business setup, forgot-password, reset-password. Delete-account web link in Account’s delete section (**consumer** self-delete path) and in the alert after failed in-app deletion.
+- Settings tabs for consumer/business; profile edit routes. **Legal & support** (`lib/legal-urls.ts`, defaults `https://www.twoferapp.com/...`): privacy, terms, support, delete-account — overridable via `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`, `EXPO_PUBLIC_SUPPORT_URL`, `EXPO_PUBLIC_DELETE_ACCOUNT_URL`. `LegalExternalLinks` (privacy + terms + support) on auth, account (signed-out), settings, business setup, forgot-password, reset-password. Delete-account web link appears in consumer Settings and the business Account delete section, plus the alert after failed in-app deletion.
 
 ## Supabase tables used by the app (direct `.from(...)` in app/lib)
 

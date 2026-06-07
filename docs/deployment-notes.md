@@ -100,7 +100,7 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 
 | Function | Purpose |
 |----------|---------|
-| `delete-user-account` | Auth user deletion (blocks business owners — see policy below) |
+| `delete-user-account` | Auth user deletion for consumers and business owners |
 | `ingest-analytics-event` | Append-only client analytics |
 | `deal-link` | Deep-link redirect for deal sharing |
 | `send-deal-push` | Push notifications when a deal goes live |
@@ -192,8 +192,8 @@ If you have **old** `deal_claims` rows created under a prior interpretation wher
 
 ## Account deletion policy (deployed behavior)
 
-- **Consumer-only** (no `businesses` row with `owner_id = auth user`): in-app delete calls `delete-user-account` → `auth.admin.deleteUser`. DB may still CASCADE related rows per your schema; this pass does **not** add new business CASCADE behavior.
-- **Business owner** (≥1 business row for that user): Edge returns **403** with `code: BUSINESS_OWNER_DELETE_BLOCKED`; app shows localized **contact support** messaging and does not delete. Client also hides the destructive delete CTA when a business profile is loaded or ownership lookup fails (**fail-safe**).
+- **Consumers and business owners**: Consumer Settings and the business Account tab both expose delete-account controls that call `delete-user-account` → `auth.admin.deleteUser`. The confirmation dialog warns business owners that their business, deals, and related claim history will also be removed.
+- Deleting the auth user relies on the deployed schema's cascade behavior for owned rows. If the Edge function fails, the app shows a friendly error and links to the configured delete-account web URL.
 
 ## Public website URLs (app + store listings)
 
@@ -232,7 +232,7 @@ Run on a **physical** device (iOS + Android if you ship both). Check off each it
 | Redeem | Stale `redeeming` auto-finalizes (~30s / `finalize-stale-redeems`) |
 | Wallet | Expired claim (past redeem-by) shows as ended / correct copy |
 | Deals | Ended / past campaign deals — browse + detail behavior |
-| Account | Delete account (**consumer-only** account completes; **business owner** sees support message, no delete) |
+| Account | Delete account completes for consumer and business-owner accounts after explicit confirmation |
 | Merchant | Dashboard / deal analytics: **merchant insights** visible when RPC + migrations applied; aggregates only |
 
 ---

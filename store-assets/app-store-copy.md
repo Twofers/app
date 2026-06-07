@@ -99,7 +99,7 @@ Delete:  `https://www.twoferapp.com/delete-account`
 Minimum required disclosures:
 - Location data is used only to sort nearby deals; not stored or shared
 - Camera access is used only to scan QR codes for deal redemption
-- Microphone access is used only for voice input in AI Compose (on-device, not stored)
+- Microphone access is used only for voice input in AI Compose; audio is sent to the app's AI transcription service to turn speech into offer text and is not sold
 - No personal data is sold to third parties
 
 ---

@@ -6,8 +6,8 @@ Legend: **Green** = verified in this codebase. **Yellow** = ops / device QA / pr
 
 - **Recurring deals:** Each claim stores a concrete `expires_at` (one-time = `deal.end_time`; recurring = today’s window end in deal TZ, capped by campaign `end_time`). Redemption is allowed until **`expires_at` + `grace_period_minutes` (default 10)** on the server.
 - **Visual redeem:** `active → redeeming → redeemed`. No revert to `active`. **`finalize-stale-redeems`**, **`begin-visual-redeem`**, **`complete-visual-redeem`**, and **`redeem-token`** auto-finalize `redeeming` claims **~30s** after `redeem_started_at` as **`redeemed`** / `redeem_method: visual`.
-- **Privacy / Terms / Support / Delete (web):** `LegalExternalLinks` + `lib/legal-urls.ts`; production defaults `https://www.twoferapp.com/privacy`, `/terms`, `/support`, `/delete-account` (each overridable with matching `EXPO_PUBLIC_*`). Links on auth, account, settings, business setup, forgot-password, reset-password; delete web URL in Account delete section (consumer path) and failure alert.
-- **Delete account:** **Consumers** (no owned business row): Account → **Delete my account** → confirms → `delete-user-account` Edge → `auth.admin.deleteUser`. **Business owners** (or ambiguous ownership load): in-app self-delete **blocked** with localized **contact support** copy; Edge returns **403** `BUSINESS_OWNER_DELETE_BLOCKED` if invoked. See `docs/deployment-notes.md` and `docs/release-audit/current-state.md`.
+- **Privacy / Terms / Support / Delete (web):** `LegalExternalLinks` + `lib/legal-urls.ts`; production defaults `https://www.twoferapp.com/privacy`, `/terms`, `/support`, `/delete-account` (each overridable with matching `EXPO_PUBLIC_*`). Links on auth, account, settings, business setup, forgot-password, reset-password; delete web URL in consumer Settings, the business Account delete section, and failure alerts.
+- **Delete account:** Consumers: Settings → **Delete my account** → destructive confirmation → `delete-user-account` Edge → `auth.admin.deleteUser`. Business owners: Account → **Delete my account** → destructive confirmation → the same Edge deletion path, with a warning that business, deals, and related claim history are also removed. See `docs/deployment-notes.md` and `docs/release-audit/current-state.md`.
 - **Merchant analytics:** Aggregated only via RPC `merchant_business_insights` / `merchant_deal_insights` (masked ZIP prefixes, banded age, mixes, hourly counts). No raw user lists in UI.
 
 ## True launch blockers (ops / config)
@@ -24,7 +24,7 @@ Legend: **Green** = verified in this codebase. **Yellow** = ops / device QA / pr
 | Item | Status |
 |------|--------|
 | Sign up / log in / log out / reset password | **Green** |
-| Delete account: consumer in-app + Edge; business owner blocked + support guidance | **Green** |
+| Delete account: consumer and business-owner in-app path + Edge deletion after confirmation | **Green** |
 
 ## Legal (app-side)
 
@@ -55,7 +55,7 @@ Legend: **Green** = verified in this codebase. **Yellow** = ops / device QA / pr
 
 | Item | Status |
 |------|--------|
-| New strings: delete account (incl. business-owner block), merchant insights, pass close copy | **Green** |
+| New strings: delete account, merchant insights, pass close copy | **Green** |
 
 ## Store readiness
 
