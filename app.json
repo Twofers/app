@@ -17,7 +17,7 @@
       "associatedDomains": [
         "applinks:www.twoferapp.com"
       ],
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "TWOFER uses your location to sort nearby deals and match your area to business profile locations.",
         "NSCameraUsageDescription": "TWOFER uses your camera to scan QR codes for redeeming deals and to capture menu photos for AI menu extraction.",
