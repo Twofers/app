@@ -1,23 +1,45 @@
-# Local dependencies and generated build output
+# Local dependencies, generated build output, and native caches
 node_modules/
+.git/
 .expo/
+.expo-shared/
 dist/
 web-build/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+**/.gradle/
+**/.cxx/
+**/build/
 *.tsbuildinfo
 *.apk
 *.aab
+*.apks
+*.zip
 
-# Local QA and release-prep artifacts
+# Local QA, release-prep, and agent artifacts
 artifacts/
 notification_emulator_*/
 twofer_rc_qa_*/
-share_deal_*/
+share_deal_*
 meeting minutes/
 docs/store-release-prep.md
+qa-screens/
+screenshots/
+.claude/
+.codex/
+claude-history-export/
+project-knowledge/
+claude-history-secret-scan.txt
+convert-claude-history.ps1
+/screen*.png
+/test_*.png
 
 # Common local junk
 .DS_Store
 *.log
+*.mp4
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
