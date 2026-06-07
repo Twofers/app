@@ -114,11 +114,10 @@
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
-            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
-              "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-              "NSPrivacyCollectedDataTypePurposeAnalytics"
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
             ]
           },
           {
@@ -131,14 +130,6 @@
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
-            "NSPrivacyCollectedDataTypeLinked": false,
-            "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": [
-              "NSPrivacyCollectedDataTypePurposeAnalytics"
-            ]
-          },
-          {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
             "NSPrivacyCollectedDataTypeLinked": false,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
