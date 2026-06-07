@@ -24,6 +24,7 @@ subscription data is declared because paid billing is gated off for v1.
 | `NSPrivacyCollectedDataTypeDeviceID` | Yes | App Functionality | Expo push tokens are stored in `push_tokens` with `user_id` so the server can send deal alerts. |
 | `NSPrivacyCollectedDataTypeProductInteraction` | Yes | Analytics | The app records product analytics such as deal viewed, deal opened, deal claimed, wallet opened, and redemption events in `app_analytics_events`. |
 | `NSPrivacyCollectedDataTypeCrashData` | No | Analytics | The custom global error handler records sanitized `app_error` telemetry with error name/hash, fatal flag, app version, and platform. It does not send raw messages, stack traces, tokens, email, phone, address, or location. |
+| `NSPrivacyCollectedDataTypeOtherDataTypes` | Yes | Analytics | Consumer profile setup can collect an optional birthdate. The app stores it with the user's consumer profile for age-range analytics. |
 
 ## Trimmed from the manifest
 
@@ -38,3 +39,4 @@ subscription data is declared because paid billing is gated off for v1.
 - Audio disclosure must say audio is sent to an AI transcription service.
 - Device ID should be answered as linked to the user for push-token storage.
 - Crash data should be answered as not linked to the user based on the current sanitized global error flow.
+- Other Data should be answered as linked to the user for optional birthdate and age-range analytics.
