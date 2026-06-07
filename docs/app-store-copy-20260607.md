@@ -1,0 +1,41 @@
+# App Store copy draft
+
+Date: 2026-06-07
+
+Billing posture: free v1 pilot. No in-app purchase path is exposed.
+
+## Name
+
+TWOFER
+
+## Subtitle
+
+Local deals, live nearby
+
+## Keywords
+
+deals,coupons,restaurants,cafes,food,offers,local,bogo,nearby,wallet,small business
+
+Character count: 83 of 100.
+
+## Promotional text
+
+Find nearby two-for-one style offers, save places you like, and keep claimed deals ready in your wallet.
+
+Character count: 105 of 170.
+
+## Description
+
+TWOFER helps customers find live local offers and helps small businesses publish simple deals without extra tools.
+
+For customers, TWOFER shows nearby offers from participating businesses. You can browse deals, save favorite places, claim an offer, and keep your claimed tickets in your wallet until you redeem them at the counter.
+
+For businesses, TWOFER makes it easier to create clear offers. Add the deal details yourself, add a photo, or record a short voice note. Voice audio is sent to an AI transcription service so the app can turn it into draft offer text. AI-generated drafts are shown for review and editing before you publish.
+
+TWOFER is free to use during this pilot. The first release is focused on local discovery, simple deal creation, wallet claims, redemption, alerts, and business performance basics.
+
+## Notes
+
+- The description says audio is sent to an AI transcription service.
+- The copy avoids paid plan, upgrade, or purchase language.
+- The copy does not claim production readiness.
