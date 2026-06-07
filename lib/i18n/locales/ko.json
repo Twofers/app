@@ -755,6 +755,15 @@
     "reportBusinessLink": "이 매장 신고",
     "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요."
   },
+  "shareDeal": {
+    "shareDeal": "딜 공유",
+    "sendToFriend": "친구에게 보내기",
+    "friendOwnCode": "친구는 자기만의 클레임 코드를 받게 됩니다.",
+    "preparing": "링크 준비 중...",
+    "errCreateLink": "공유 링크를 만들지 못했습니다. 다시 시도해 주세요.",
+    "shareSheetTitle": "이 TWOFER 딜 공유하기",
+    "message": "TWOFER 딜을 찾았어요:\n\n{{businessName}}의 {{dealTitle}}.\n\n친구도 여기에서 자기만의 혜택을 받을 수 있어요:\n{{shareUrl}}"
+  },
   "redeem": {
     "title": "사용",
     "loginPrompt": "딜을 사용하려면 로그인하세요.",

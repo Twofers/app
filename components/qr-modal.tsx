@@ -20,6 +20,9 @@ type QrModalProps = {
   onHide: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
+  onShare?: () => void;
+  sharing?: boolean;
+  shareError?: string | null;
 };
 
 type ConfettiParticleSpec = {
@@ -70,6 +73,9 @@ export function QrModal({
   onHide,
   onRefresh,
   refreshing,
+  onShare,
+  sharing,
+  shareError,
 }: QrModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -415,6 +421,37 @@ export function QrModal({
                   {refreshing ? t("consumerWallet.refreshingQrModal") : t("consumerWallet.refreshQr")}
                 </Text>
               </HapticScalePressable>
+            ) : null}
+            {onShare ? (
+              <>
+                <Text style={{ marginTop: 10, color: "#475569", fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+                  {t("shareDeal.friendOwnCode", { defaultValue: "They'll get their own claim code." })}
+                </Text>
+                <HapticScalePressable
+                  onPress={onShare}
+                  disabled={sharing}
+                  style={{
+                    marginTop: 8,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: Colors.light.primary,
+                    backgroundColor: "#fff",
+                    opacity: sharing ? 0.6 : 1,
+                  }}
+                >
+                  <Text style={{ color: Colors.light.primary, fontWeight: "800", textAlign: "center" }}>
+                    {sharing
+                      ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
+                      : t("shareDeal.sendToFriend", { defaultValue: "Send to a friend" })}
+                  </Text>
+                </HapticScalePressable>
+                {shareError ? (
+                  <Text style={{ marginTop: 8, color: "#b91c1c", fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+                    {shareError}
+                  </Text>
+                ) : null}
+              </>
             ) : null}
           </View>
         </View>

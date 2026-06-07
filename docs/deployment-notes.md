@@ -147,6 +147,7 @@ See `docs/stripe-setup.md` for end-to-end Stripe test-mode bring-up (products, p
 | `EXPO_PUBLIC_GIT_COMMIT` | No | Optional short SHA shown in **Diagnostics** / `app.config.js` `extra.gitCommit` (else `git rev-parse` at config time if available) |
 | `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER` | No | With a preview/dev client profile, when `true`, shows **Demo login** (password sign-in only; no auto–sign-up). **Preview** in `eas.json` sets this; **production** does not. Local Metro (`expo start`) also enables Demo login via `__DEV__` even if unset. |
 | `EXPO_PUBLIC_SHOW_DEBUG_PANEL` | No | Settings → **Diagnostics (build / env)** screen |
+| `EXPO_PUBLIC_ENABLE_SHARE_DEAL` | No | Share Deal kill switch. Only exact value `true` shows Share Deal UI or allows `deal_shares` reads/inserts; unset or any other value keeps the feature off. |
 | `EXPO_PUBLIC_DEBUG_BOOT_LOG` | No | One-shot `[twoforone:boot]` JSON in Metro / Logcat |
 
 ### Production URL defaults vs explicit env

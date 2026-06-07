@@ -755,6 +755,15 @@
     "reportBusinessLink": "Reportar este negocio",
     "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo."
   },
+  "shareDeal": {
+    "shareDeal": "Compartir oferta",
+    "sendToFriend": "Enviar a un amigo",
+    "friendOwnCode": "Recibirá su propio código de reclamo.",
+    "preparing": "Preparando enlace...",
+    "errCreateLink": "No se pudo crear el enlace. Inténtalo de nuevo.",
+    "shareSheetTitle": "Comparte esta oferta TWOFER",
+    "message": "Encontré esta oferta TWOFER:\n\n{{dealTitle}} en {{businessName}}.\n\nPuede reclamar su propia oferta aquí:\n{{shareUrl}}"
+  },
   "redeem": {
     "title": "Canjear",
     "loginPrompt": "Inicia sesión para canjear ofertas.",

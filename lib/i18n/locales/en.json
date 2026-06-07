@@ -755,6 +755,15 @@
     "reportBusinessLink": "Report this business",
     "claimTimedOut": "Claim timed out \u2014 please try again."
   },
+  "shareDeal": {
+    "shareDeal": "Share Deal",
+    "sendToFriend": "Send to a friend",
+    "friendOwnCode": "They'll get their own claim code.",
+    "preparing": "Preparing link...",
+    "errCreateLink": "Couldn't create share link. Try again.",
+    "shareSheetTitle": "Share this TWOFER deal",
+    "message": "I found this TWOFER deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}"
+  },
   "redeem": {
     "title": "Redeem",
     "loginPrompt": "Log in as a business owner to redeem tickets.",

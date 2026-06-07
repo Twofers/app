@@ -23,6 +23,7 @@ import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
+import { isShareDealEnabled } from "@/lib/runtime-env";
 
 type Deal = {
   id: string;
@@ -90,6 +91,9 @@ export default function DealDetail() {
   const [claimsCount, setClaimsCount] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const shareDealEnabled = isShareDealEnabled();
 
   const loadClaimCount = useCallback(async (dealId: string) => {
     const { count, error } = await supabase
@@ -249,6 +253,31 @@ export default function DealDetail() {
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setRefreshingQr(false);
+    }
+  }
+
+  async function handleShare() {
+    if (!shareDealEnabled) return;
+    if (!deal || isSharing) return;
+    setIsSharing(true);
+    setBanner(null);
+    setShareError(null);
+    try {
+      const { buildShareCopy, getOrCreateShareCode, openShareSheet } = await import("@/lib/share-deal");
+      const code = await getOrCreateShareCode(deal.id);
+      const copy = buildShareCopy({
+        shareCode: code,
+        dealTitle: deal.title ?? t("dealDetail.dealFallback"),
+        businessName: deal.businesses?.name ?? t("dealDetail.localBusiness"),
+        t,
+      });
+      await openShareSheet(copy);
+    } catch {
+      const message = t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." });
+      setShareError(message);
+      setBanner(message);
+    } finally {
+      setIsSharing(false);
     }
   }
 
@@ -453,6 +482,17 @@ export default function DealDetail() {
               {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
             </Text>
           </Pressable>
+          {shareDealEnabled ? (
+            <SecondaryButton
+              title={
+                isSharing
+                  ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
+                  : t("shareDeal.shareDeal", { defaultValue: "Share Deal" })
+              }
+              onPress={handleShare}
+              disabled={isSharing}
+            />
+          ) : null}
         </View>
 
         <Pressable
@@ -495,6 +535,9 @@ export default function DealDetail() {
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
+        onShare={shareDealEnabled ? handleShare : undefined}
+        sharing={shareDealEnabled ? isSharing : undefined}
+        shareError={shareDealEnabled ? shareError : undefined}
       />
     </View>
   );
