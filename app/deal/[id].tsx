@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, BackHandler, Platform, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -94,6 +94,54 @@ export default function DealDetail() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
+
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)" as Href);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (qrVisible) {
+        setQrVisible(false);
+        return true;
+      }
+      if (reportVisible) {
+        setReportVisible(false);
+        return true;
+      }
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goBack, qrVisible, reportVisible]);
+
+  function renderBackAction() {
+    return (
+      <Pressable
+        onPress={goBack}
+        accessibilityRole="button"
+        accessibilityLabel={t("commonUi.goBack")}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{
+          minHeight: 44,
+          minWidth: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: Radii.lg,
+          backgroundColor: theme.surfaceMuted,
+          borderWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
+        <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+      </Pressable>
+    );
+  }
 
   const loadClaimCount = useCallback(async (dealId: string) => {
     const { count, error } = await supabase
@@ -324,7 +372,7 @@ export default function DealDetail() {
   if (loadStatus === "loading") {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <ScreenHeader title={t("dealDetail.title")} />
+        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
         <Text style={{ marginTop: Spacing.md, opacity: 0.8, color: theme.text }}>{t("dealDetail.loading")}</Text>
       </View>
     );
@@ -333,16 +381,10 @@ export default function DealDetail() {
   if (loadStatus === "failed" || !deal) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg }}>
-        <ScreenHeader title={t("dealDetail.title")} />
+        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
         {banner ? <Banner message={banner} tone="error" /> : null}
         <Text style={{ opacity: 0.78, fontSize: 16, lineHeight: 24, color: theme.text }}>{t("dealDetail.couldNotLoad")}</Text>
-        <SecondaryButton
-          title={t("commonUi.goBack")}
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)");
-          }}
-        />
+        <SecondaryButton title={t("commonUi.goBack")} onPress={goBack} />
       </View>
     );
   }
@@ -358,7 +400,7 @@ export default function DealDetail() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <ScreenHeader title={t("dealDetail.title")} />
+        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
         <Pressable
           onPress={toggleFavorite}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
