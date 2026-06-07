@@ -37,7 +37,9 @@ Notes:
 
 ### Data Not Linked to the User
 
-None declared in the app privacy manifest.
+| App Store category | Data type | Purpose | Notes |
+| --- | --- | --- | --- |
+| Diagnostics | Other Diagnostic Data | App Functionality | The custom `ErrorUtils` hook sends sanitized `app_error` telemetry to Supabase with source, fatal flag, error name, error hash, app version, app build, and platform. It does not send raw error messages, raw stack traces, email, phone, address, token, or location. |
 
 ### Data Not Collected
 
@@ -54,7 +56,6 @@ Answer No for these unless the app changes before submission:
 - Search History
 - Crash Data
 - Performance Data
-- Other Diagnostic Data
 
 ## Age Rating
 
