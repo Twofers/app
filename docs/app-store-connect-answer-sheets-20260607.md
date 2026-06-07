@@ -32,14 +32,12 @@ Notes:
 | User Content | Other User Content | App Functionality | Deal copy, menu items, business descriptions, reports, favorites, claims, and related app content. |
 | Identifiers | User ID | App Functionality, Analytics | Supabase auth user ID links profiles, businesses, claims, favorites, push tokens, and analytics rows. |
 | Identifiers | Device ID | App Functionality | Expo push token stored with `user_id` for deal alerts. |
-| Usage Data | Product Interaction | Analytics | First-party analytics for deal views, opens, claims, wallet activity, and redemption events. |
-| Other Data | Other Data Types | Analytics | Optional consumer birthdate and legacy age range for aggregate age-band analytics. |
+| Usage Data | Product Interaction | Analytics | First-party analytics for deal views, opens, claims, wallet activity, redemption events, and onboarding events through `trackAppAnalyticsEvent` and the Supabase `ingest-analytics-event` function. |
+| Other Data | Other Data Types | Analytics | Optional consumer birthdate for aggregate age-band analytics. Legacy `age_range` rows may be read for old accounts, but the shipping app writes `age_range: null`. |
 
 ### Data Not Linked to the User
 
-| App Store category | Data type | Purpose | Notes |
-| --- | --- | --- | --- |
-| Diagnostics | Crash Data | Analytics | Sanitized first-party `app_error` telemetry with error name/hash, fatal flag, app version, and platform. No raw stack, email, phone, address, token, or location is sent. |
+None declared in the app privacy manifest.
 
 ### Data Not Collected
 
@@ -54,6 +52,7 @@ Answer No for these unless the app changes before submission:
 - Sensitive Info
 - Browsing History
 - Search History
+- Crash Data
 - Performance Data
 - Other Diagnostic Data
 

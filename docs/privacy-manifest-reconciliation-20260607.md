@@ -22,8 +22,7 @@ subscription data is declared because paid billing is gated off for v1.
 | `NSPrivacyCollectedDataTypeOtherUserContent` | Yes | App Functionality | Users create deal copy, menu items, business descriptions, reports, favorites, claims, and other app content stored in Supabase. |
 | `NSPrivacyCollectedDataTypeUserID` | Yes | App Functionality, Analytics | Supabase auth user IDs link profiles, businesses, claims, favorites, push tokens, and analytics events to the signed-in account. |
 | `NSPrivacyCollectedDataTypeDeviceID` | Yes | App Functionality | Expo push tokens are stored in `push_tokens` with `user_id` so the server can send deal alerts. |
-| `NSPrivacyCollectedDataTypeProductInteraction` | Yes | Analytics | The app records product analytics such as deal viewed, deal opened, deal claimed, wallet opened, and redemption events in `app_analytics_events`. |
-| `NSPrivacyCollectedDataTypeCrashData` | No | Analytics | The custom global error handler records sanitized `app_error` telemetry with error name/hash, fatal flag, app version, and platform. It does not send raw messages, stack traces, tokens, email, phone, address, or location. |
+| `NSPrivacyCollectedDataTypeProductInteraction` | Yes | Analytics | The app records product analytics such as deal viewed, deal opened, deal claimed, wallet opened, redemption events, and onboarding events in `app_analytics_events`. |
 | `NSPrivacyCollectedDataTypeOtherDataTypes` | Yes | Analytics | Consumer profile setup can collect an optional birthdate. The app stores it with the user's consumer profile for age-range analytics. |
 
 ## Trimmed from the manifest
@@ -31,6 +30,7 @@ subscription data is declared because paid billing is gated off for v1.
 | Removed data type | Why removed |
 | --- | --- |
 | `NSPrivacyCollectedDataTypePerformanceData` | No performance monitoring SDK or app flow collects launch time, latency, frame rate, battery, or similar performance metrics. |
+| `NSPrivacyCollectedDataTypeCrashData` | No crash or error reporting SDK is installed in `package.json`. The app has a custom `app_error` analytics hook, but under the current submission rule this is not enough to declare Crash Data. |
 
 ## Notes for App Privacy answers
 
@@ -38,5 +38,5 @@ subscription data is declared because paid billing is gated off for v1.
 - Purchases/payment info: No for v1 because paid billing is gated off.
 - Audio disclosure must say audio is sent to an AI transcription service.
 - Device ID should be answered as linked to the user for push-token storage.
-- Crash data should be answered as not linked to the user based on the current sanitized global error flow.
-- Other Data should be answered as linked to the user for optional birthdate and age-range analytics.
+- Crash Data should be answered as not collected unless a crash or error reporting SDK is added.
+- Other Data should be answered as linked to the user for optional birthdate analytics. Legacy `age_range` rows may be read for old accounts, but the shipping app writes `age_range: null`.
