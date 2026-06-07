@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, BackHandler, Image, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
@@ -19,6 +20,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { useTabMode } from "@/lib/tab-mode";
 import {
   BUSINESS_INVITE_PENDING_META_KEY,
   isUserInviteValidated,
@@ -53,6 +55,7 @@ export default function BusinessSetupScreen() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { session, isInitialLoading: authLoading } = useAuthSession();
+  const { setMode: setTabMode } = useTabMode();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
   const primary = Colors.light.primary;
@@ -90,6 +93,28 @@ export default function BusinessSetupScreen() {
       }
     };
   }, []);
+
+  const exitSetup = useCallback(async () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (!session?.user?.id) {
+      router.replace("/auth-landing");
+      return;
+    }
+    await setTabMode("customer");
+    router.replace("/(tabs)/settings" as Href);
+  }, [router, session?.user?.id, setTabMode]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      void exitSetup();
+      return true;
+    });
+    return () => sub.remove();
+  }, [exitSetup]);
 
   const trimmed = useMemo(
     () => ({
@@ -412,6 +437,27 @@ export default function BusinessSetupScreen() {
   return (
     <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+      <Pressable
+        onPress={() => void exitSetup()}
+        accessibilityRole="button"
+        accessibilityLabel={t("commonUi.goBack", { defaultValue: "Back" })}
+        style={{
+          alignSelf: "flex-start",
+          minHeight: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.xs,
+          borderRadius: Radii.pill,
+          backgroundColor: theme.surfaceMuted,
+          paddingHorizontal: Spacing.sm,
+          marginBottom: Spacing.sm,
+        }}
+      >
+        <MaterialIcons name="arrow-back" size={20} color={theme.text} />
+        <Text style={{ color: theme.text, fontWeight: "800" }}>
+          {t("commonUi.goBack", { defaultValue: "Back" })}
+        </Text>
+      </Pressable>
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("businessSetup.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
         {t("businessSetup.subtitle")}
