@@ -168,7 +168,7 @@ async function searchGooglePlaces(
         locationBias: {
           circle: {
             center: { latitude: biasLat, longitude: biasLng },
-            radiusMeters: 50000,
+            radius: 50000,
           },
         },
         maxResultCount: 5,
