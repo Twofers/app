@@ -14,31 +14,16 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import {
   fetchConsumerProfile,
   isConsumerProfileComplete,
-  isValidBirthdateIso,
   upsertConsumerProfile,
 } from "@/lib/consumer-profile";
+import {
+  defaultConsumerBirthdate,
+  latestValidBirthdate,
+  parseBirthdateIsoToLocalDate,
+  toBirthdateIso,
+} from "@/lib/consumer-birthdate";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-
-function defaultBirthDate() {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 25);
-  d.setHours(12, 0, 0, 0);
-  return d;
-}
-
-function parseIsoToLocalDate(iso: string): Date | null {
-  if (!isValidBirthdateIso(iso)) return null;
-  const [y, m, day] = iso.split("-").map(Number);
-  return new Date(y!, m! - 1, day!, 12, 0, 0, 0);
-}
-
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function sanitizeZipInput(raw: string): string {
   return raw.replace(/[^\d-]/g, "").slice(0, 10);
@@ -55,12 +40,13 @@ export default function ConsumerProfileSetupScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
-  const [birthDate, setBirthDate] = useState(defaultBirthDate);
+  const [birthDate, setBirthDate] = useState(defaultConsumerBirthdate);
   const [birthdateTouched, setBirthdateTouched] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
+  const maximumBirthDate = latestValidBirthdate();
 
   useEffect(() => {
     if (authLoading) return;
@@ -76,7 +62,7 @@ export default function ConsumerProfileSetupScreen() {
       const row = await fetchConsumerProfile(uid);
       if (row) {
         setZip(row.zip_code ?? "");
-        const parsed = row.birthdate ? parseIsoToLocalDate(row.birthdate) : null;
+        const parsed = row.birthdate ? parseBirthdateIsoToLocalDate(row.birthdate) : null;
         if (parsed) {
           setBirthDate(parsed);
           setBirthdateTouched(true);
@@ -106,7 +92,7 @@ export default function ConsumerProfileSetupScreen() {
       setBanner({ message: t("consumerProfile.errLogin"), tone: "error" });
       return;
     }
-    const iso = birthdateTouched ? toIsoDate(birthDate) : undefined;
+    const iso = birthdateTouched ? toBirthdateIso(birthDate) : undefined;
     setBusy(true);
     try {
       const { error } = await upsertConsumerProfile({
@@ -143,6 +129,12 @@ export default function ConsumerProfileSetupScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openBirthdatePicker() {
+    setBirthDate((current) => (current.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : current));
+    if (Platform.OS === "ios") setBirthdateTouched(true);
+    setShowPicker((visible) => !visible);
   }
 
   if (loading) {
@@ -230,33 +222,37 @@ export default function ConsumerProfileSetupScreen() {
           <Text style={{ fontSize: 13, marginBottom: Spacing.sm, lineHeight: 18, color: C.mutedText }}>
             {t("consumerProfile.birthdateHint")}
           </Text>
-          {!showPicker ? (
-            <Pressable
-              onPress={() => setShowPicker(true)}
-              style={{
-                borderWidth: 1,
-                borderColor: C.border,
-                borderRadius: Radii.lg,
-                paddingVertical: Spacing.md,
-                paddingHorizontal: Spacing.md,
-                backgroundColor: C.surface,
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "600", color: C.text }}>
-                {birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={openBirthdatePicker}
+            accessibilityRole="button"
+            accessibilityLabel={t("consumerProfile.birthdateTitle")}
+            style={{
+              borderWidth: 1,
+              borderColor: C.border,
+              borderRadius: Radii.lg,
+              paddingVertical: Spacing.md,
+              paddingHorizontal: Spacing.md,
+              backgroundColor: C.surface,
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "600", color: birthdateTouched ? C.text : C.mutedText }}>
+              {birthdateTouched
+                ? birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+                : t("consumerProfile.addBirthdate", { defaultValue: "Add birthday" })}
+            </Text>
+          </Pressable>
           {showPicker ? (
             <DateTimePicker
               value={birthDate}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              maximumDate={new Date()}
+              maximumDate={maximumBirthDate}
               minimumDate={new Date(1900, 0, 1)}
-              onChange={(_, d) => {
+              onChange={(event, d) => {
                 if (Platform.OS === "android") setShowPicker(false);
-                if (d) { setBirthDate(d); setBirthdateTouched(true); }
+                if (event.type === "dismissed" || !d) return;
+                setBirthDate(d.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : d);
+                setBirthdateTouched(true);
               }}
             />
           ) : null}

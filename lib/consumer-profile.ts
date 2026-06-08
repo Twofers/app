@@ -1,6 +1,9 @@
 import { supabase } from "./supabase";
 import { setConsumerZipCode } from "./consumer-preferences";
 import { isValidUsZipFormat, normalizeUsZipInput } from "./us-zip";
+import { isValidBirthdateIso } from "./consumer-birthdate";
+
+export { isValidBirthdateIso } from "./consumer-birthdate";
 
 /** Legacy age bands (onboarding previously used chips). */
 export const CONSUMER_AGE_RANGE_VALUES = [
@@ -21,23 +24,6 @@ export type ConsumerProfileRow = {
   birthdate: string | null;
   age_range: string | null;
 };
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-export function isValidBirthdateIso(s: string): boolean {
-  if (!ISO_DATE.test(s.trim())) return false;
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(y!, m! - 1, d!);
-  if (Number.isNaN(dt.getTime())) return false;
-  if (dt.getFullYear() !== y || dt.getMonth() !== m! - 1 || dt.getDate() !== d!) return false;
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (dt.getTime() > today.getTime()) return false;
-  if (y! < 1900) return false;
-  const currentYear = new Date().getFullYear();
-  if (y! > currentYear - 13) return false; // minimum age 13
-  return true;
-}
 
 export function isConsumerProfileComplete(
   row: { zip_code?: string | null; birthdate?: string | null; age_range?: string | null } | null | undefined,
