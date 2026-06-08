@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasClaimOnLocalBusinessDay } from "./claim-limits";
+import { hasClaimOnLocalBusinessDay } from "./claim-limits.ts";
 
 describe("hasClaimOnLocalBusinessDay", () => {
   it("blocks another claim when one was already redeemed today", () => {

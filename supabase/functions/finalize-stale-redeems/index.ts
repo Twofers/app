@@ -3,6 +3,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
+type ClaimWithDeal = {
+  id: string;
+  deal_id: string | null;
+  expires_at: string;
+  grace_period_minutes: number | null;
+  claim_status: string | null;
+  deal?: { business_id?: string | null } | null;
+};
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -70,7 +79,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } else if (staleRedeemingClaims && staleRedeemingClaims.length > 0) {
-      const toRedeem = staleRedeemingClaims.filter((r: {
+      const staleClaimRows = staleRedeemingClaims as ClaimWithDeal[];
+
+      const toRedeem = staleClaimRows.filter((r: {
         id: string;
         expires_at: string;
         grace_period_minutes: number | null;
@@ -79,7 +90,7 @@ serve(async (req) => {
         return !isPastRedeemDeadline(nowMs, r.expires_at, g);
       });
 
-      const toExpire = staleRedeemingClaims.filter((r: {
+      const toExpire = staleClaimRows.filter((r: {
         id: string;
         expires_at: string;
         grace_period_minutes: number | null;
@@ -166,14 +177,9 @@ serve(async (req) => {
       .is("redeemed_at", null);
 
     if (!openErr && openClaims && openClaims.length > 0) {
-      const toExpire = openClaims.filter((r: {
-        id: string;
-        deal_id: string | null;
-        expires_at: string;
-        grace_period_minutes: number | null;
-        claim_status: string | null;
-        deal?: { business_id?: string | null } | null;
-      }) => {
+      const openClaimRows = openClaims as ClaimWithDeal[];
+
+      const toExpire = openClaimRows.filter((r) => {
         if (r.claim_status === "canceled" || r.claim_status === "redeemed" || r.claim_status === "expired") return false;
         const g = typeof r.grace_period_minutes === "number" ? r.grace_period_minutes : 10;
         return isPastRedeemDeadline(nowMs, r.expires_at, g);

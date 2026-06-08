@@ -20,7 +20,7 @@ function esc(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function htmlResponse(html: string, status = 200) {
+function htmlResponse(html: string, corsHeaders: Record<string, string>, status = 200) {
   return new Response(html, {
     status,
     headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
@@ -126,6 +126,7 @@ serve(async (req) => {
   if (!dealId) {
     return htmlResponse(
       buildLandingPage("", "TWOFER Deals", "TWOFER", "https://www.twoferapp.com"),
+      corsHeaders,
       200,
     );
   }
@@ -152,5 +153,5 @@ serve(async (req) => {
 
   const fallbackUrl = `${FALLBACK_BASE}/${encodeURIComponent(dealId)}`;
 
-  return htmlResponse(buildLandingPage(dealId, dealTitle, businessName, fallbackUrl));
+  return htmlResponse(buildLandingPage(dealId, dealTitle, businessName, fallbackUrl), corsHeaders);
 });

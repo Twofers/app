@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "./digest-targeting";
+import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "./digest-targeting.ts";
 
 // DFW-ish reference point and helpers.
 const HOME = { lat: 32.97, lng: -96.9 };

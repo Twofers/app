@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { selectMonthlyTierPriceId } from "./stripe-price-selection";
+import { selectMonthlyTierPriceId } from "./stripe-price-selection.ts";
 
 describe("selectMonthlyTierPriceId", () => {
   it("chooses exact lookup key match when amount collides", () => {

@@ -7,7 +7,7 @@ export type SubscriptionPricing = {
 type SupabaseLike = {
   from: (table: string) => {
     select: (cols: string) => {
-      maybeSingle: () => Promise<{ data: any; error: { message: string } | null }>;
+      maybeSingle: () => PromiseLike<{ data: any; error: { message: string } | null }>;
     };
   };
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redeemDeadlineMs, isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "./claim-redeem-logic";
+import { redeemDeadlineMs, isPastRedeemDeadline, VISUAL_REDEEM_AUTO_FINALIZE_MS } from "./claim-redeem-logic.ts";
 
 describe("redeemDeadlineMs", () => {
   it("adds grace minutes to expires_at", () => {

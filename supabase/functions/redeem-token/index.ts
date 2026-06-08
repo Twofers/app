@@ -176,7 +176,13 @@ serve(async (req) => {
     const nowIso = now.toISOString();
 
     // 🔒 Verify token belongs to a deal owned by this business
-    const deal = claim.deal as { business?: { owner_id?: string }; max_claims?: number | null } | null;
+    const deal = claim.deal as {
+      id?: string | null;
+      business_id?: string | null;
+      title?: string | null;
+      business?: { owner_id?: string };
+      max_claims?: number | null;
+    } | null;
     if (!deal || deal.business?.owner_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "This token does not belong to your business" }),

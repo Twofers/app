@@ -14,7 +14,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import { isDemoUserEmail } from "./demo-variants.ts";
@@ -364,7 +364,7 @@ async function generateCopy(params: {
 
 // ─── Stage 3: image ────────────────────────────────────────────────────────
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
 
 async function produceImage(params: {
   openAiKey: string;
@@ -792,7 +792,7 @@ serve(async (req) => {
     }
 
     // ── Build a SingleAd by running the right stages ──
-    const previousAd = isRevision ? coerceSingleAd(previousAdRaw) : null;
+    const previousAd = isRevision ? coerceSingleAd(previousAdRaw as Record<string, unknown>) : null;
     const sourceHint = hintText || previousAd?.item_research.item_name || "";
 
     let research: ItemResearch;

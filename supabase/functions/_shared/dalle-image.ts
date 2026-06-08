@@ -358,7 +358,7 @@ export async function enhanceUploadedPhoto(params: {
     if (!isDalle2(model)) {
       form.append("input_fidelity", "high");
     }
-    const blob = new Blob([imageBytes], { type: normalizeEditMime(imageMime) || "image/png" });
+    const blob = new Blob([imageBytes as BlobPart], { type: normalizeEditMime(imageMime) || "image/png" });
     form.append("image", blob, editFilenameForMime(imageMime));
 
     const res = await fetch("https://api.openai.com/v1/images/edits", {

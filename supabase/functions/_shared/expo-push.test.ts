@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { sendExpoPushMessages, type ExpoPushMessage } from "./expo-push";
+import { sendExpoPushMessages, type ExpoPushMessage } from "./expo-push.ts";
 
 const EXPO_URL = "https://exp.host/--/api/v2/push/send";
 const msg = (to: string): ExpoPushMessage => ({ to, title: "t", body: "b", sound: "default", channelId: "deal-alerts" });
