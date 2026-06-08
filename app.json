@@ -195,7 +195,10 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "blockedPermissions": [
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "package": "com.unvmex2.twoforone",
       "intentFilters": [
@@ -277,7 +280,17 @@
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to suggest nearby deals using your area and business locations in profiles."
         }
       ],
-      "expo-notifications"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "TWOFER uses your microphone only for the AI Compose voice input feature, which transcribes your spoken offer into deal copy.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-notifications",
+      "./plugins/with-android-audio-service-cleanup"
     ],
     "experiments": {
       "typedRoutes": true,
