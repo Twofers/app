@@ -203,6 +203,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.unvmex2.twoforone",
+      "versionCode": 1,
       "intentFilters": [
         {
           "action": "VIEW",
