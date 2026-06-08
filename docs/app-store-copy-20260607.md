@@ -2,7 +2,7 @@
 
 Date: 2026-06-07
 
-Billing posture: free v1 pilot. No in-app purchase path is exposed.
+Billing posture: free v1 pilot. No in-app purchase, paid upgrade, external payment, or subscription flow is exposed.
 
 ## Name
 
@@ -37,5 +37,5 @@ TWOFER is free to use during this pilot. The first release is focused on local d
 ## Notes
 
 - The description says audio is sent to an AI transcription service.
-- The copy avoids paid plan, upgrade, or purchase language.
+- The copy avoids paid plan, upgrade, pricing, payment, or subscription language.
 - The copy does not claim production readiness.

@@ -2,8 +2,8 @@
 
 Date: 2026-06-07
 
-Scope: iOS App Store submission draft answers for the free v1 pilot. These are
-drafts for Dan to paste into App Store Connect. They match the trimmed privacy
+Scope: iOS App Store submission answer drafts for the free v1 pilot. These are
+ready for Dan to paste into App Store Connect after the demo login is verified. They match the trimmed privacy
 manifest in `app.json` and `docs/privacy-manifest-reconciliation-20260607.md`.
 
 ## App Privacy
@@ -39,7 +39,7 @@ Notes:
 
 | App Store category | Data type | Purpose | Notes |
 | --- | --- | --- | --- |
-| Diagnostics | Other Diagnostic Data | App Functionality | The custom `ErrorUtils` hook sends sanitized `app_error` telemetry to Supabase with source, fatal flag, error name, error hash, app version, app build, and platform. It does not send raw error messages, raw stack traces, email, phone, address, token, or location. |
+| Diagnostics | Other Diagnostic Data | App Functionality | The custom `ErrorUtils` hook sends sanitized `app_error` telemetry to Supabase with source, fatal flag, error name, error hash, app version, app build, and platform. It is not linked to the user's identity, is not used for tracking, and is used only to diagnose errors and improve reliability. It does not send raw error messages, raw stack traces, email, phone, address, token, or location. |
 
 ### Data Not Collected
 
@@ -94,6 +94,7 @@ Rating confirmation:
 - Alcohol-related deals are allowed on the platform, but will be infrequent.
 - The expected Apple global age rating is 13+ on the current App Store age-rating scale.
 - No other current draft answer is expected to push the rating higher.
+- If App Store Connect asks for the age rating result, use 13+.
 
 ## Export Compliance
 
@@ -108,42 +109,39 @@ Recommended App Store Connect posture:
 
 ## Reviewer App Access Notes
 
-Use dedicated review accounts. Do not use personal accounts.
+Use the dedicated demo review account. Do not use personal accounts.
 
 Paste-ready draft:
 
 ```
 TWOFER uses email and password login. There is no social login.
+There is no email link login or one-time code login for reviewer access.
 
 This first iOS release is a free pilot. No in-app purchase, paid upgrade, external payment, or subscription flow is exposed.
 
-Please use these review accounts:
+Please use this demo login:
 
-Consumer account:
-Email: [DAN_TO_PROVIDE_CONSUMER_EMAIL]
-Password: [DAN_TO_PROVIDE_CONSUMER_PASSWORD]
+Email: demo@demo.com
+Password: [DAN_TO_PASTE_REVIEWER_PASSWORD]
 
-Business account:
-Email: [DAN_TO_PROVIDE_BUSINESS_EMAIL]
-Password: [DAN_TO_PROVIDE_BUSINESS_PASSWORD]
+This demo login reaches both the consumer side and the business side. Demo deals are already posted for review.
 
 Suggested review path:
-1. Log in with the consumer account.
-2. Browse nearby deals, open a deal, claim it, view it in Wallet, and use Share Deal if desired.
-3. Log out.
-4. Log in with the business account.
-5. Open Dashboard to view active deals and performance basics.
-6. Open Create to draft a deal. The AI draft flow can use typed text, a photo, or a short voice note.
-7. If you use the voice input, the audio is sent to an AI transcription service and the transcript is shown for review before publishing.
-8. Account deletion is available in the app. Please do not delete the main review accounts unless requested. We can provide separate deletion-test accounts if needed.
+1. Log in with demo@demo.com through the normal email and password form.
+2. On the consumer side, browse nearby deals, open a deal, claim it, view it in Wallet, and use Share Deal if desired.
+3. Switch to the business side.
+4. Open Dashboard to view posted deals and performance basics.
+5. Open Create to draft a deal. The AI draft flow can use typed text, a photo, or a short voice note.
+6. If you use voice input, the audio is sent to an AI transcription service and the transcript is shown for review before publishing.
+7. Account deletion is available in the app. Please do not delete the main review account unless requested. We can provide a separate deletion-test account if needed.
 
-Business accounts are invite-only during the pilot, so please use the supplied business account rather than creating a new one.
+Business accounts are invite-only during the pilot, so please use the supplied demo login rather than creating a new account.
 ```
 
-Open items for Dan:
-- Provide stable consumer reviewer credentials.
-- Provide stable business reviewer credentials with seeded demo data.
-- Decide whether to provide separate account-deletion test credentials.
+Before pasting:
+- Verify demo@demo.com works on the review environment with the reviewer password.
+- Verify the account can reach both sides and has posted demo deals.
+- Paste the reviewer password into App Store Connect.
 - Provide the support contact email and phone used in App Store Connect.
 
 ## Other Declarations
