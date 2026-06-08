@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -37,7 +37,8 @@ import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
-import { aiGenerateDealCopy, aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
+import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
+import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -88,6 +89,7 @@ export default function AccountScreen() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [lookupSearching, setLookupSearching] = useState(false);
+  const [lookupDetailsPlaceId, setLookupDetailsPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -411,6 +413,61 @@ export default function AccountScreen() {
       setBanner({ message: t("account.aiDescFailed"), tone: "error" });
     } finally {
       setGeneratingDescription(false);
+    }
+  }
+
+  async function lookupBusinessProfileByName() {
+    const name = profileBusinessName.trim();
+    if (!name) {
+      setBanner({ message: t("businessSetup.errEnterName"), tone: "error" });
+      return;
+    }
+    setLookupSearching(true);
+    setLookupResults(null);
+    setBanner(null);
+    try {
+      const results = await aiBusinessLookup({ business_name: name });
+      if (results.length === 0) setBanner({ message: t("businessSetup.noResults"), tone: "info" });
+      setLookupResults(results.length > 0 ? results : null);
+    } catch (err) {
+      if (__DEV__) console.warn("[account] Business lookup error:", err);
+      setBanner({ message: t("businessSetup.lookupError"), tone: "error" });
+    } finally {
+      setLookupSearching(false);
+    }
+  }
+
+  async function applyBusinessLookupResult(result: BusinessLookupResult) {
+    if (lookupDetailsPlaceId !== null) return;
+    if (!isVerifiedBusinessLookupResult(result)) {
+      setBanner({ message: t("businessSetup.unverifiedResult"), tone: "info" });
+      return;
+    }
+
+    setLookupDetailsPlaceId(result.place_id);
+    setBanner(null);
+    try {
+      const details = await aiBusinessLookupDetails({ place_id: result.place_id });
+      if (!isVerifiedBusinessLookupResult(details)) {
+        setBanner({ message: t("businessSetup.unverifiedResult"), tone: "info" });
+        return;
+      }
+
+      setProfileBusinessName(details.name);
+      setProfileAddress(details.formatted_address);
+      setProfileLocation(details.formatted_address);
+      setProfilePhone(details.phone);
+      if (details.category) setProfileCategory(details.category);
+      if (details.hours_text) setProfileHours(details.hours_text);
+      setProfileLatitude(details.lat != null ? String(details.lat) : "");
+      setProfileLongitude(details.lng != null ? String(details.lng) : "");
+      setLookupResults(null);
+      setBanner({ message: t("businessSetup.infoFilled"), tone: "success" });
+    } catch (err) {
+      if (__DEV__) console.warn("[account] Place details error:", err);
+      setBanner({ message: t("businessSetup.lookupDetailsError"), tone: "error" });
+    } finally {
+      setLookupDetailsPlaceId(null);
     }
   }
 
@@ -941,23 +998,8 @@ export default function AccountScreen() {
 
               <SecondaryButton
                 title={lookupSearching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
-                onPress={async () => {
-                  const name = profileBusinessName.trim();
-                  if (!name) { setBanner({ message: t("businessSetup.errEnterName") }); return; }
-                  setLookupSearching(true);
-                  setLookupResults(null);
-                  setBanner(null);
-                  try {
-                    const results = await aiBusinessLookup({ business_name: name });
-                    if (results.length === 0) setBanner({ message: t("businessSetup.noResults"), tone: "info" });
-                    setLookupResults(results.length > 0 ? results : null);
-                  } catch {
-                    setBanner({ message: t("businessSetup.lookupError") });
-                  } finally {
-                    setLookupSearching(false);
-                  }
-                }}
-                disabled={lookupSearching || !profileBusinessName.trim()}
+                onPress={() => void lookupBusinessProfileByName()}
+                disabled={lookupSearching || lookupDetailsPlaceId !== null || !profileBusinessName.trim()}
               />
 
               {lookupResults && lookupResults.length > 0 && (
@@ -967,24 +1009,8 @@ export default function AccountScreen() {
                   </Text>
                   {lookupResults.map((r, i) => (
                     <Pressable
-                      key={i}
-                      onPress={() => {
-                        setProfileBusinessName(r.name);
-                        setProfileAddress(r.formatted_address);
-                        setProfileLocation(r.formatted_address);
-                        if (r.phone) setProfilePhone(r.phone);
-                        if (r.category) setProfileCategory(r.category);
-                        if (r.hours_text) setProfileHours(r.hours_text);
-                        if (r.lat != null) setProfileLatitude(String(r.lat));
-                        if (r.lng != null) setProfileLongitude(String(r.lng));
-                        setLookupResults(null);
-                        setBanner({
-                          message: r.source === "ai_estimate"
-                            ? t("businessSetup.estimatedInfo")
-                            : t("businessSetup.infoFilled"),
-                          tone: r.source === "ai_estimate" ? "info" : "success",
-                        });
-                      }}
+                      key={r.place_id || i}
+                      onPress={() => void applyBusinessLookupResult(r)}
                     >
                       <View
                         style={{
@@ -998,11 +1024,12 @@ export default function AccountScreen() {
                         <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
                         <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
                         {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
-                        {r.source === "ai_estimate" && (
-                          <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
-                            {t("businessSetup.aiEstimate")}
-                          </Text>
-                        )}
+                        <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
+                          {t("businessSetup.verifiedSource")}
+                        </Text>
+                        {lookupDetailsPlaceId === r.place_id ? (
+                          <ActivityIndicator color={Colors.light.primary} style={{ marginTop: Spacing.xs }} />
+                        ) : null}
                       </View>
                     </Pressable>
                   ))}

@@ -1509,12 +1509,15 @@
     "inviteCodeHint": "파일럿 기간 동안 비즈니스 계정은 초대제로만 운영됩니다. 받으신 코드를 입력해 계속 진행하세요.",
     "lookupButton": "Look up my business",
     "searching": "Searching…",
-    "selectResult": "Tap to auto-fill your info:",
-    "noResults": "No results found. Enter your info manually.",
-    "lookupError": "Lookup failed. Enter your info manually.",
-    "infoFilled": "Info filled! Review and edit if needed.",
+    "selectResult": "Choose the matching Google Places result:",
+    "noResults": "We could not verify this business. Try another search or enter details manually.",
+    "lookupError": "Business lookup failed. Try another search or enter details manually.",
+    "lookupDetailsError": "We could not verify this business. Try another search or enter details manually.",
+    "unverifiedResult": "We could not verify this business. Try another search or enter details manually.",
+    "infoFilled": "Verified details added. Review and edit if needed.",
     "estimatedInfo": "Info is estimated — please verify before saving.",
-    "aiEstimate": "Estimated by AI"
+    "aiEstimate": "Estimated by AI",
+    "verifiedSource": "Verified by Google Places"
   },
   "settingsConsumer": {
     "editTitle": "쇼퍼 프로필",

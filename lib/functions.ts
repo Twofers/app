@@ -1,19 +1,23 @@
 import { FunctionsFetchError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { devWarn } from "@/lib/dev-log";
-import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
+import { devWarn } from "./dev-log";
+import { isDemoPreviewAccountEmail } from "./demo-account";
 import type {
   BusinessContextPayload,
   GeneratedAd,
   PhotoTreatment,
 } from "./ad-variants";
+import {
+  normalizeBusinessLookupResults,
+  type BusinessLookupResult,
+} from "./business-lookup";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import {
   EDGE_FN_TIMEOUT_DEFAULT_MS,
   EDGE_FN_TIMEOUT_AI_MS as _EDGE_FN_TIMEOUT_AI_MS,
   EDGE_FN_TIMEOUT_FAST_MS,
-} from "@/constants/timing";
+} from "../constants/timing";
 
 // ── Client-side demo session helper ──────────────────────────
 let _cachedDemoEmail: string | null | undefined;
@@ -364,19 +368,9 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
   }
 }
 
-export type BusinessLookupResult = {
-  name: string;
-  formatted_address: string;
-  phone: string;
-  lat: number | null;
-  lng: number | null;
-  category: string;
-  hours_text: string;
-  website: string;
-  source: "google_places" | "ai_estimate";
-};
+export type { BusinessLookupResult } from "./business-lookup";
 
-/** Look up a business by name using Google Places + AI fallback. */
+/** Look up verified Google Places candidates by business name. */
 export async function aiBusinessLookup(body: {
   business_name: string;
   lat?: number | null;
@@ -393,32 +387,51 @@ export async function aiBusinessLookup(body: {
     });
 
     if (error) {
-      throw new Error(parseFunctionError(error));
+      const fromBody = await readInvokeErrorBody(error);
+      throw new Error(fromBody.message ?? parseFunctionError(error));
     }
     if (data && typeof data === "object" && "error" in data) {
       throw new Error(String((data as { error?: string }).error ?? "Lookup failed"));
     }
-    const d = data as { results?: BusinessLookupResult[] };
-    return Array.isArray(d.results) ? d.results : [];
-  } catch (err) {
-    const isDemoUser = await isCurrentUserDemo();
-    if (!isDemoUser) {
-      devWarn("[aiBusinessLookup] Edge function failed:", err);
-      throw err;
+    const results = normalizeBusinessLookupResults(data);
+    const rawResults = data && typeof data === "object" && Array.isArray((data as { results?: unknown }).results)
+      ? (data as { results: unknown[] }).results
+      : [];
+    if (rawResults.length > 0 && results.length === 0) {
+      devWarn("[aiBusinessLookup] Ignored unverified business lookup results.");
     }
-    devWarn("[aiBusinessLookup] Edge function failed, using demo fallback:", err);
-    return [{
-      name: body.business_name,
-      formatted_address: "123 Main St, Irving, TX 75038",
-      phone: "(972) 555-0100",
-      lat: 32.8140,
-      lng: -96.9489,
-      category: "Coffee shop",
-      hours_text: "Mon\u2013Fri 6 AM\u20136 PM, Sat\u2013Sun 7 AM\u20134 PM",
-      website: "",
-      source: "ai_estimate",
-    }];
+    return results;
+  } catch (err) {
+    devWarn("[aiBusinessLookup] Edge function failed:", err);
+    throw err;
   }
+}
+
+/** Fetch verified Google Place details after the owner selects a candidate. */
+export async function aiBusinessLookupDetails(body: {
+  place_id: string;
+}): Promise<BusinessLookupResult> {
+  const { data, error } = await supabase.functions.invoke("ai-business-lookup", {
+    body: {
+      action: "details",
+      place_id: body.place_id,
+    },
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throw new Error(fromBody.message ?? parseFunctionError(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error(String((data as { error?: string }).error ?? "Lookup failed"));
+  }
+
+  const result = normalizeBusinessLookupResults(data)[0] ?? null;
+  if (!result) {
+    throw new Error("We could not verify this business. Enter details manually.");
+  }
+  return result;
 }
 
 /**

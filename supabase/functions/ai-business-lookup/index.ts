@@ -1,10 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
-import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-type BusinessResult = {
+type BusinessLookupResult = {
   name: string;
   formatted_address: string;
   phone: string;
@@ -13,10 +11,24 @@ type BusinessResult = {
   category: string;
   hours_text: string;
   website: string;
-  source: "google_places" | "ai_estimate";
+  place_id: string;
+  source: "google_places";
 };
 
-/** Map Google Places types to user-friendly categories. */
+type JsonHeaders = Record<string, string>;
+
+type GooglePlace = {
+  id?: unknown;
+  name?: unknown;
+  displayName?: unknown;
+  formattedAddress?: unknown;
+  nationalPhoneNumber?: unknown;
+  types?: unknown;
+  location?: unknown;
+  regularOpeningHours?: unknown;
+  websiteUri?: unknown;
+};
+
 const TYPE_MAP: Record<string, string> = {
   cafe: "Cafe",
   coffee_shop: "Coffee shop",
@@ -29,17 +41,199 @@ const TYPE_MAP: Record<string, string> = {
   store: "Store",
 };
 
-function mapCategory(types: string[]): string {
+const DFW_LAT = 32.85;
+const DFW_LNG = -96.97;
+const SEARCH_FIELD_MASK =
+  "places.id,places.displayName,places.formattedAddress,places.types,places.location";
+const DETAILS_FIELD_MASK =
+  "id,displayName,formattedAddress,nationalPhoneNumber,types,location,regularOpeningHours,websiteUri";
+
+function jsonResponse(
+  corsHeaders: JsonHeaders,
+  status: number,
+  body: Record<string, unknown>,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function logLookup(event: string, details: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({ tag: "business_lookup", event, ...details }));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanPlaceId(value: unknown): string {
+  const raw = cleanString(value).replace(/^places\//, "");
+  if (!raw || raw.length > 256 || /[\s/]/.test(raw)) return "";
+  return raw;
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function mapCategory(types: unknown): string {
+  if (!Array.isArray(types)) return "Local business";
   for (const t of types) {
+    if (typeof t !== "string") continue;
     const mapped = TYPE_MAP[t];
     if (mapped) return mapped;
   }
   return "Local business";
 }
 
-/** DFW center coordinates (Irving/Coppell area). */
-const DFW_LAT = 32.85;
-const DFW_LNG = -96.97;
+function normalizeGooglePlace(
+  place: GooglePlace,
+  fallbackName: string,
+  explicitPlaceId?: string,
+): BusinessLookupResult | null {
+  const displayName = asRecord(place.displayName);
+  const loc = asRecord(place.location);
+  const hours = asRecord(place.regularOpeningHours);
+  const weekdayDescriptions = hours?.weekdayDescriptions;
+  const placeId = cleanPlaceId(explicitPlaceId) || cleanPlaceId(place.id) || cleanPlaceId(place.name);
+  const name = cleanString(displayName?.text) || fallbackName.trim();
+  const formattedAddress = cleanString(place.formattedAddress);
+
+  if (!placeId || !name || !formattedAddress) return null;
+
+  return {
+    name,
+    formatted_address: formattedAddress,
+    phone: cleanString(place.nationalPhoneNumber),
+    lat: finiteNumber(loc?.latitude),
+    lng: finiteNumber(loc?.longitude),
+    category: mapCategory(place.types),
+    hours_text: Array.isArray(weekdayDescriptions)
+      ? weekdayDescriptions.filter((item) => typeof item === "string" && item.trim()).join("\n")
+      : "",
+    website: cleanString(place.websiteUri),
+    place_id: placeId,
+    source: "google_places",
+  };
+}
+
+function googleKeyMissing(corsHeaders: JsonHeaders): Response {
+  logLookup("google_places_config_missing");
+  return jsonResponse(corsHeaders, 503, {
+    error: "Business lookup is temporarily unavailable. Enter details manually or try again later.",
+    error_code: "BUSINESS_LOOKUP_CONFIG_MISSING",
+  });
+}
+
+function googleFailure(
+  corsHeaders: JsonHeaders,
+  event: string,
+  status: number,
+  details: Record<string, unknown> = {},
+): Response {
+  logLookup(event, details);
+  return jsonResponse(corsHeaders, status, {
+    error: "We could not verify this business. Try another search or enter details manually.",
+    error_code: status === 404 ? "BUSINESS_NOT_FOUND" : "BUSINESS_LOOKUP_API_FAILURE",
+  });
+}
+
+async function searchGooglePlaces(
+  corsHeaders: JsonHeaders,
+  googleKey: string,
+  businessName: string,
+  lat: number | null,
+  lng: number | null,
+): Promise<Response> {
+  const biasLat = lat ?? DFW_LAT;
+  const biasLng = lng ?? DFW_LNG;
+
+  try {
+    const placesRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": googleKey,
+        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+      },
+      body: JSON.stringify({
+        textQuery: businessName,
+        locationBias: {
+          circle: {
+            center: { latitude: biasLat, longitude: biasLng },
+            radiusMeters: 50000,
+          },
+        },
+        maxResultCount: 5,
+      }),
+    });
+
+    if (!placesRes.ok) {
+      return googleFailure(corsHeaders, "google_places_search_error", 502, {
+        status: placesRes.status,
+      });
+    }
+
+    const placesJson = await placesRes.json();
+    const places = Array.isArray(placesJson?.places) ? placesJson.places as GooglePlace[] : [];
+    const results = places
+      .map((place) => normalizeGooglePlace(place, businessName))
+      .filter((row): row is BusinessLookupResult => row !== null);
+
+    if (results.length === 0) {
+      logLookup(places.length > 0 ? "google_places_search_unusable_results" : "google_places_search_no_results", {
+        candidate_count: places.length,
+      });
+    }
+
+    return jsonResponse(corsHeaders, 200, { ok: true, results });
+  } catch (err) {
+    return googleFailure(corsHeaders, "google_places_search_exception", 502, {
+      err: String(err),
+    });
+  }
+}
+
+async function getGooglePlaceDetails(
+  corsHeaders: JsonHeaders,
+  googleKey: string,
+  placeId: string,
+): Promise<Response> {
+  try {
+    const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": googleKey,
+        "X-Goog-FieldMask": DETAILS_FIELD_MASK,
+      },
+    });
+
+    if (!detailsRes.ok) {
+      return googleFailure(corsHeaders, "google_place_details_error", detailsRes.status === 404 ? 404 : 502, {
+        status: detailsRes.status,
+      });
+    }
+
+    const detailsJson = await detailsRes.json();
+    const result = normalizeGooglePlace(detailsJson as GooglePlace, "", placeId);
+    if (!result) {
+      return googleFailure(corsHeaders, "google_place_details_unusable_result", 404);
+    }
+
+    return jsonResponse(corsHeaders, 200, { ok: true, results: [result] });
+  } catch (err) {
+    return googleFailure(corsHeaders, "google_place_details_exception", 502, {
+      err: String(err),
+    });
+  }
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -49,10 +243,7 @@ serve(async (req) => {
   }
 
   if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse(corsHeaders, 405, { error: "Method not allowed" });
   }
 
   try {
@@ -69,234 +260,44 @@ serve(async (req) => {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized. Please log in." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse(corsHeaders, 401, { error: "Unauthorized. Please log in." });
     }
 
     let body: Record<string, unknown>;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse(corsHeaders, 400, { error: "Invalid JSON in request body" });
     }
 
-    const business_name = typeof body.business_name === "string" ? body.business_name.trim() : "";
-    if (!business_name) {
-      return new Response(
-        JSON.stringify({ error: "Missing business_name." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const googleKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
+    if (!googleKey) return googleKeyMissing(corsHeaders);
 
-    const lat = typeof body.lat === "number" && Number.isFinite(body.lat) ? body.lat : null;
-    const lng = typeof body.lng === "number" && Number.isFinite(body.lng) ? body.lng : null;
+    const action = cleanString(body.action) === "details" || cleanString(body.place_id)
+      ? "details"
+      : "search";
 
-    // Demo account: return mock DFW coffee shop data
-    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
-    if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ms = 500 + Math.floor(Math.random() * 400);
-      await new Promise((r) => setTimeout(r, ms));
-      const demoResults: BusinessResult[] = [
-        {
-          name: business_name,
-          formatted_address: "123 Main St, Irving, TX 75038",
-          phone: "(972) 555-0123",
-          lat: 32.8140,
-          lng: -96.9489,
-          category: "Cafe",
-          hours_text: "Mon-Fri: 6 AM - 8 PM\nSat-Sun: 7 AM - 6 PM",
-          website: "",
-          source: "google_places",
-        },
-      ];
-      return new Response(
-        JSON.stringify({ ok: true, results: demoResults }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Try Google Places first
-    const googleKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
-    if (googleKey) {
-      try {
-        const biasLat = lat ?? DFW_LAT;
-        const biasLng = lng ?? DFW_LNG;
-
-        const placesRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": googleKey,
-            "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.types,places.location,places.regularOpeningHours,places.websiteUri",
-          },
-          body: JSON.stringify({
-            textQuery: `${business_name} Texas`,
-            locationBias: {
-              circle: {
-                center: { latitude: biasLat, longitude: biasLng },
-                radiusMeters: 50000,
-              },
-            },
-            maxResultCount: 3,
-          }),
+    if (action === "details") {
+      const placeId = cleanPlaceId(body.place_id);
+      if (!placeId) {
+        return jsonResponse(corsHeaders, 400, {
+          error: "Missing place_id.",
+          error_code: "BUSINESS_LOOKUP_MISSING_PLACE_ID",
         });
-
-        if (placesRes.ok) {
-          const placesJson = await placesRes.json();
-          const places = placesJson.places;
-          if (Array.isArray(places) && places.length > 0) {
-            const results: BusinessResult[] = places.slice(0, 3).map((p: Record<string, unknown>) => {
-              const loc = p.location as { latitude?: number; longitude?: number } | undefined;
-              const hours = p.regularOpeningHours as { weekdayDescriptions?: string[] } | undefined;
-              const displayName = p.displayName as { text?: string } | undefined;
-              return {
-                name: displayName?.text ?? business_name,
-                formatted_address: typeof p.formattedAddress === "string" ? p.formattedAddress : "",
-                phone: typeof p.nationalPhoneNumber === "string" ? p.nationalPhoneNumber : "",
-                lat: typeof loc?.latitude === "number" ? loc.latitude : null,
-                lng: typeof loc?.longitude === "number" ? loc.longitude : null,
-                category: mapCategory(Array.isArray(p.types) ? p.types as string[] : []),
-                hours_text: Array.isArray(hours?.weekdayDescriptions)
-                  ? hours!.weekdayDescriptions.join("\n")
-                  : "",
-                website: typeof p.websiteUri === "string" ? p.websiteUri : "",
-                source: "google_places" as const,
-              };
-            });
-
-            return new Response(
-              JSON.stringify({ ok: true, results }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-            );
-          }
-        } else {
-          console.log(JSON.stringify({
-            tag: "ai_business_lookup",
-            event: "google_places_error",
-            status: placesRes.status,
-          }));
-        }
-      } catch (e) {
-        console.log(JSON.stringify({ tag: "ai_business_lookup", event: "google_places_exception", err: String(e) }));
       }
+      return await getGooglePlaceDetails(corsHeaders, googleKey, placeId);
     }
 
-    // Fallback: use OpenAI to estimate business info
-    const openAiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "No API keys configured for business lookup." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    const businessName = cleanString(body.business_name);
+    if (!businessName) {
+      return jsonResponse(corsHeaders, 400, { error: "Missing business_name." });
     }
 
-    const CHAT_MODEL = resolveOpenAiChatModel();
-    const locationHint = lat && lng
-      ? `near coordinates ${lat}, ${lng}`
-      : "in the DFW (Dallas-Fort Worth) area of Texas";
-
-    const aiBody = {
-      model: CHAT_MODEL,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "business_lookup",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              results: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    formatted_address: { type: "string" },
-                    phone: { type: "string" },
-                    lat: { type: "number" },
-                    lng: { type: "number" },
-                    category: { type: "string" },
-                    hours_text: { type: "string" },
-                    website: { type: "string" },
-                  },
-                  required: ["name", "formatted_address", "phone", "lat", "lng", "category", "hours_text", "website"],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ["results"],
-            additionalProperties: false,
-          },
-        },
-      },
-      messages: [
-        {
-          role: "system",
-          content: [
-            "You help find real business information for local cafes, bakeries, and restaurants.",
-            "Given a business name and location, return your best guess at the business details.",
-            "If you're unsure, provide your best estimate but keep it realistic.",
-            "Return 1-3 results. Include realistic Texas addresses, phone numbers, and hours.",
-            "For category, use simple labels like: Cafe, Bakery, Coffee shop, Restaurant, Bar.",
-            "For hours_text, use format like: Mon-Fri: 6 AM - 8 PM\\nSat-Sun: 7 AM - 6 PM",
-            "Return JSON only with a results array.",
-          ].join(" "),
-        },
-        {
-          role: "user",
-          content: `Find business info for "${business_name}" ${locationHint}.`,
-        },
-      ],
-      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1536 }),
-    };
-
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(aiBody),
-    });
-
-    if (!aiRes.ok) {
-      return new Response(
-        JSON.stringify({ error: "Business lookup failed. Try again." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const aiJson = await aiRes.json();
-    const content = aiJson?.choices?.[0]?.message?.content ?? "";
-    let parsed: { results: Omit<BusinessResult, "source">[] };
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Could not parse lookup results." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const results: BusinessResult[] = (parsed.results ?? []).slice(0, 3).map((r) => ({
-      ...r,
-      source: "ai_estimate" as const,
-    }));
-
-    return new Response(
-      JSON.stringify({ ok: true, results }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    const lat = finiteNumber(body.lat);
+    const lng = finiteNumber(body.lng);
+    return await searchGooglePlaces(corsHeaders, googleKey, businessName, lat, lng);
   } catch (err) {
-    console.log(JSON.stringify({ tag: "ai_business_lookup", event: "error", err: String(err) }));
-    return new Response(
-      JSON.stringify({ error: "Server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    logLookup("server_error", { err: String(err) });
+    return jsonResponse(corsHeaders, 500, { error: "Server error" });
   }
 });

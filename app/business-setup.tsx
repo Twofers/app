@@ -18,7 +18,8 @@ import { supabase } from "@/lib/supabase";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { aiBusinessLookup, type BusinessLookupResult } from "@/lib/functions";
+import { aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
+import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { useTabMode } from "@/lib/tab-mode";
 import {
@@ -49,6 +50,21 @@ const HOURS_PRESET_KEYS = [
   "custom_prompt",
 ] as const;
 
+type CategoryKey = (typeof CATEGORY_KEYS)[number];
+
+function categoryKeyFromLookup(value: string): CategoryKey | null {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes("cafe") || normalized.includes("coffee")) return "cafe";
+  if (normalized.includes("bakery")) return "bakery";
+  if (normalized.includes("restaurant") || normalized.includes("bar") || normalized.includes("food")) return "restaurant";
+  if (normalized.includes("store") || normalized.includes("retail")) return "retail";
+  if (normalized.includes("salon") || normalized.includes("spa")) return "salon";
+  if (normalized.includes("gym") || normalized.includes("fitness")) return "gym";
+  if (normalized.includes("service")) return "services";
+  return null;
+}
+
 export default function BusinessSetupScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -73,6 +89,7 @@ export default function BusinessSetupScreen() {
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: Tone } | null>(null);
   const [searching, setSearching] = useState(false);
+  const [detailsLoadingPlaceId, setDetailsLoadingPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
@@ -264,19 +281,51 @@ export default function BusinessSetupScreen() {
     }
   }
 
-  function applyLookupResult(result: BusinessLookupResult) {
-    setBusinessName(result.name);
-    setAddress(result.formatted_address);
-    if (result.phone) setPhone(result.phone);
-    if (result.category) setShortDescription(result.category);
-    setLookupResults(null);
-    const isEstimate = result.source === "ai_estimate";
-    setBanner({
-      message: isEstimate
-        ? t("businessSetup.estimatedInfo")
-        : t("businessSetup.infoFilled"),
-      tone: isEstimate ? "info" : "success",
-    });
+  function applyCategoryFromLookup(categoryLabel: string) {
+    const key = categoryKeyFromLookup(categoryLabel);
+    if (key) {
+      setCategory(key);
+      setCustomCategory("");
+      return;
+    }
+    if (categoryLabel.trim()) {
+      setCategory("other");
+      setCustomCategory(categoryLabel.trim());
+    }
+  }
+
+  async function applyLookupResult(result: BusinessLookupResult) {
+    if (detailsLoadingPlaceId !== null) return;
+    if (!isVerifiedBusinessLookupResult(result)) {
+      setBanner({ message: t("businessSetup.unverifiedResult"), tone: "info" });
+      return;
+    }
+
+    setDetailsLoadingPlaceId(result.place_id);
+    setBanner(null);
+    try {
+      const details = await aiBusinessLookupDetails({ place_id: result.place_id });
+      if (!isVerifiedBusinessLookupResult(details)) {
+        setBanner({ message: t("businessSetup.unverifiedResult"), tone: "info" });
+        return;
+      }
+
+      setBusinessName(details.name);
+      setAddress(details.formatted_address);
+      setPhone(details.phone);
+      applyCategoryFromLookup(details.category);
+      if (details.hours_text) {
+        setHoursPreset("custom_prompt");
+        setCustomHours(details.hours_text);
+      }
+      setLookupResults(null);
+      setBanner({ message: t("businessSetup.infoFilled"), tone: "success" });
+    } catch (e: unknown) {
+      if (__DEV__) console.warn("[business-setup] Place details error:", e);
+      setBanner({ message: t("businessSetup.lookupDetailsError"), tone: "error" });
+    } finally {
+      setDetailsLoadingPlaceId(null);
+    }
   }
 
   async function onSubmit() {
@@ -566,7 +615,7 @@ export default function BusinessSetupScreen() {
         <SecondaryButton
           title={searching ? t("businessSetup.searching") : t("businessSetup.lookupButton")}
           onPress={() => void onLookup()}
-          disabled={searching || !businessName.trim()}
+          disabled={searching || detailsLoadingPlaceId !== null || !businessName.trim()}
         />
 
         {searching && (
@@ -581,7 +630,7 @@ export default function BusinessSetupScreen() {
               {t("businessSetup.selectResult")}
             </Text>
             {lookupResults.map((r, i) => (
-              <Pressable key={i} onPress={() => applyLookupResult(r)}>
+              <Pressable key={r.place_id || i} onPress={() => void applyLookupResult(r)}>
                 <View
                   style={{
                     backgroundColor: Colors.light.surface,
@@ -596,11 +645,12 @@ export default function BusinessSetupScreen() {
                   <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>{r.formatted_address}</Text>
                   {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
                   {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
-                  {r.source === "ai_estimate" && (
-                    <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
-                      {t("businessSetup.aiEstimate")}
-                    </Text>
-                  )}
+                  <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
+                    {t("businessSetup.verifiedSource")}
+                  </Text>
+                  {detailsLoadingPlaceId === r.place_id ? (
+                    <ActivityIndicator color={Colors.light.primary} style={{ marginTop: Spacing.xs }} />
+                  ) : null}
                 </View>
               </Pressable>
             ))}
