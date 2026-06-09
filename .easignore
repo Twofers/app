@@ -29,12 +29,15 @@ qa-screens/
 screenshots/
 .claude/
 .codex/
+.codex-remote-attachments/
 claude-history-export/
 project-knowledge/
 claude-history-secret-scan.txt
 convert-claude-history.ps1
 /screen*.png
 /test_*.png
+penguinfalls-build-plan.md
+twofer-audit-setup.js
 
 # Common local junk
 .DS_Store

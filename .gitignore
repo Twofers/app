@@ -59,9 +59,13 @@ claude-history-export/
 project-knowledge/
 
 .codex/
+.codex-remote-attachments/
 
 claude-history-secret-scan.txt
 
 convert-claude-history.ps1
+
+penguinfalls-build-plan.md
+twofer-audit-setup.js
 
 testsprite_tests/tmp/
