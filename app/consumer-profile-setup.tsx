@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -43,6 +43,7 @@ export default function ConsumerProfileSetupScreen() {
   const [email, setEmail] = useState<string | null>(null);
   const [zip, setZip] = useState("");
   const [birthDate, setBirthDate] = useState(defaultConsumerBirthdate);
+  const [draftBirthDate, setDraftBirthDate] = useState(defaultConsumerBirthdate);
   const [birthdateTouched, setBirthdateTouched] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -67,6 +68,7 @@ export default function ConsumerProfileSetupScreen() {
         const parsed = row.birthdate ? parseBirthdateIsoToLocalDate(row.birthdate) : null;
         if (parsed) {
           setBirthDate(parsed);
+          setDraftBirthDate(parsed);
           setBirthdateTouched(true);
         }
         if (isConsumerProfileComplete(row) && !isEdit) {
@@ -134,9 +136,27 @@ export default function ConsumerProfileSetupScreen() {
   }
 
   function openBirthdatePicker() {
-    setBirthDate((current) => (current.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : current));
-    if (Platform.OS === "ios") setBirthdateTouched(true);
+    const current = birthDate.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : birthDate;
+    if (Platform.OS === "ios") {
+      setDraftBirthDate(current);
+      setShowPicker(true);
+      return;
+    }
+    setBirthDate(current);
     setShowPicker((visible) => !visible);
+  }
+
+  function cancelIosBirthdatePicker() {
+    setDraftBirthDate(birthDate);
+    setShowPicker(false);
+  }
+
+  function confirmIosBirthdatePicker() {
+    const next = draftBirthDate.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : draftBirthDate;
+    setBirthDate(next);
+    setDraftBirthDate(next);
+    setBirthdateTouched(true);
+    setShowPicker(false);
   }
 
   if (loading) {
@@ -247,15 +267,15 @@ export default function ConsumerProfileSetupScreen() {
                 : t("consumerProfile.addBirthdate", { defaultValue: "Add birthday" })}
             </Text>
           </Pressable>
-          {showPicker ? (
+          {showPicker && Platform.OS === "android" ? (
             <DateTimePicker
               value={birthDate}
               mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
+              display="default"
               maximumDate={maximumBirthDate}
               minimumDate={new Date(1900, 0, 1)}
               onChange={(event, d) => {
-                if (Platform.OS === "android") setShowPicker(false);
+                setShowPicker(false);
                 if (event.type === "dismissed" || !d) return;
                 setBirthDate(d.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : d);
                 setBirthdateTouched(true);
@@ -270,6 +290,67 @@ export default function ConsumerProfileSetupScreen() {
           disabled={busy}
         />
       </ScrollView>
+      <Modal
+        visible={showPicker && Platform.OS === "ios"}
+        transparent
+        animationType="slide"
+        onRequestClose={cancelIosBirthdatePicker}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
+          <View
+            style={{
+              borderTopLeftRadius: Radii.xl,
+              borderTopRightRadius: Radii.xl,
+              backgroundColor: C.surface,
+              paddingTop: Spacing.sm,
+              paddingHorizontal: horizontal,
+              paddingBottom: scrollBottom,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingVertical: Spacing.sm,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                onPress={cancelIosBirthdatePicker}
+                style={{ minHeight: 44, justifyContent: "center", paddingRight: Spacing.md }}
+              >
+                <Text style={{ color: C.mutedText, fontSize: 16, fontWeight: "700" }}>
+                  {t("commonUi.cancel")}
+                </Text>
+              </Pressable>
+              <Text style={{ color: C.text, fontSize: 16, fontWeight: "800" }}>
+                {t("consumerProfile.birthdateTitle")}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={confirmIosBirthdatePicker}
+                style={{ minHeight: 44, justifyContent: "center", paddingLeft: Spacing.md }}
+              >
+                <Text style={{ color: C.primary, fontSize: 16, fontWeight: "800" }}>
+                  {t("commonUi.done", { defaultValue: "Done" })}
+                </Text>
+              </Pressable>
+            </View>
+            <DateTimePicker
+              value={draftBirthDate}
+              mode="date"
+              display="spinner"
+              maximumDate={maximumBirthDate}
+              minimumDate={new Date(1900, 0, 1)}
+              onChange={(_event, d) => {
+                if (!d) return;
+                setDraftBirthDate(d.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : d);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
     </KeyboardScreen>
   );
