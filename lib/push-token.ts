@@ -8,18 +8,33 @@ import { devLog, devWarn } from "@/lib/dev-log";
 
 let lastRegisteredToken: string | null = null;
 
+export const PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE =
+  "We couldn't turn on deal alerts because this device did not finish push setup. Check your connection and try again.";
+
+export type PushTokenRegistrationResult =
+  | { ok: true; token: string | null }
+  | {
+      ok: false;
+      reason:
+        | "missing-user"
+        | "permission-not-granted"
+        | "token-unavailable"
+        | "store-failed"
+        | "registration-failed";
+    };
+
 /**
  * Register for Expo push notifications and store the token in Supabase.
  * Safe to call on every app launch — deduplicates via upsert and local cache.
  *
- * Returns the token string if registered, null if skipped or failed.
+ * Returns structured status for user-facing alert opt-in flows.
  */
-export async function registerPushTokenIfNeeded(userId: string | null): Promise<string | null> {
-  if (!userId) return null;
-  if (Platform.OS === "web") return null;
+export async function registerPushTokenWithResult(userId: string | null): Promise<PushTokenRegistrationResult> {
+  if (!userId) return { ok: false, reason: "missing-user" };
+  if (Platform.OS === "web") return { ok: true, token: null };
   if (isExpoGo() && Platform.OS === "android") {
     devLog("[push-token] Skipped: Android Expo Go does not support remote push.");
-    return null;
+    return { ok: true, token: null };
   }
 
   try {
@@ -27,7 +42,7 @@ export async function registerPushTokenIfNeeded(userId: string | null): Promise<
     const Constants = await import("expo-constants");
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    if (existingStatus !== "granted") return null;
+    if (existingStatus !== "granted") return { ok: false, reason: "permission-not-granted" };
 
     const projectId = Constants.default.expirationDate
       ? undefined
@@ -38,7 +53,8 @@ export async function registerPushTokenIfNeeded(userId: string | null): Promise<
     });
 
     const token = tokenData.data;
-    if (!token || token === lastRegisteredToken) return token ?? null;
+    if (!token) return { ok: false, reason: "token-unavailable" };
+    if (token === lastRegisteredToken) return { ok: true, token };
 
     const platform = Platform.OS;
     const { error } = await supabase.from("push_tokens").upsert(
@@ -52,16 +68,26 @@ export async function registerPushTokenIfNeeded(userId: string | null): Promise<
     );
 
     if (error) {
-      devWarn("[push-token] Failed to store push token:", error.message);
+      devWarn("[push-token] Failed to store push token.");
+      return { ok: false, reason: "store-failed" };
     } else {
       lastRegisteredToken = token;
     }
 
-    return token;
-  } catch (err) {
-    devWarn("[push-token] Registration failed (non-fatal):", err);
-    return null;
+    return { ok: true, token };
+  } catch {
+    devWarn("[push-token] Registration failed (non-fatal).");
+    return { ok: false, reason: "registration-failed" };
   }
+}
+
+/**
+ * Backward-compatible helper for background registration paths.
+ * Call `registerPushTokenWithResult` from user-facing alert opt-in flows.
+ */
+export async function registerPushTokenIfNeeded(userId: string | null): Promise<string | null> {
+  const result = await registerPushTokenWithResult(userId);
+  return result.ok ? result.token : null;
 }
 
 /** Remove all push tokens for the current user (call on sign-out). */

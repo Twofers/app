@@ -28,6 +28,7 @@ export type ConsumerProfileRow = {
 export function isConsumerProfileComplete(
   row: { zip_code?: string | null; birthdate?: string | null; age_range?: string | null } | null | undefined,
 ): boolean {
+  // Birthday is optional for v1; only a valid ZIP is required to pass the consumer gate.
   const zip = row?.zip_code?.trim();
   if (!zip) return false;
   return true;

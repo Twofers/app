@@ -11,6 +11,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
+import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
@@ -59,7 +60,11 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
     if (forceBypass) return;
     const user = session?.user;
     if (user) {
-      void registerPushTokenIfNeeded(user.id);
+      void (async () => {
+        if (await getAlertsEnabled()) {
+          await registerPushTokenIfNeeded(user.id);
+        }
+      })();
       void syncConsumerPrefsToServer(user.id);
     }
   }, [forceBypass, session?.user]);

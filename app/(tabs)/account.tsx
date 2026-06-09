@@ -3,7 +3,10 @@ import { ActivityIndicator, ScrollView, Switch, Text, TextInput, View } from "re
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
-import { registerPushTokenIfNeeded } from "@/lib/push-token";
+import {
+  PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
+  registerPushTokenWithResult,
+} from "@/lib/push-token";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
@@ -194,12 +197,19 @@ export default function AccountScreen() {
         setBanner({ message: t("account.alertsEnableHint"), tone: "info" });
         return;
       }
+      const registration = await registerPushTokenWithResult(userId);
+      if (!registration.ok) {
+        setBanner({
+          message: t("settingsScreen.alertsRegistrationFailed", {
+            defaultValue: PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
+          }),
+          tone: "error",
+        });
+        return;
+      }
     }
     await setAlertsEnabled(next);
     setAlertsEnabledState(next);
-    if (next && userId) {
-      void registerPushTokenIfNeeded(userId);
-    }
     setBanner({ message: next ? t("account.alertsOn") : t("account.alertsOff"), tone: "success" });
   }
 

@@ -39,7 +39,10 @@ import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
-import { registerPushTokenIfNeeded } from "@/lib/push-token";
+import {
+  PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
+  registerPushTokenWithResult,
+} from "@/lib/push-token";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
@@ -204,9 +207,8 @@ export default function HomeScreen() {
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [feedSegment, setFeedSegment] = useState<"deals" | "shops">("deals");
-  // Branded deal-alert dialog (replaces native Alert.alert): "consent" asks to opt in,
-  // "permissionDenied" explains when the OS permission was declined.
-  const [alertDialog, setAlertDialog] = useState<null | "consent" | "permissionDenied">(null);
+  // Branded deal-alert dialog (replaces native Alert.alert) for opt-in, denied permission, and registration retry.
+  const [alertDialog, setAlertDialog] = useState<null | "consent" | "permissionDenied" | "registrationFailed">(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
@@ -465,11 +467,15 @@ export default function HomeScreen() {
       setAlertDialog("permissionDenied");
       return;
     }
+    if (userId) {
+      const registration = await registerPushTokenWithResult(userId);
+      if (!registration.ok) {
+        setAlertDialog("registrationFailed");
+        return;
+      }
+    }
     await setAlertsEnabled(true);
     await setConsumerNotificationPrefs({ v: 1, mode: "favorites_only" });
-    if (userId) {
-      void registerPushTokenIfNeeded(userId);
-    }
   }, [userId]);
   const maybeOfferDealAlerts = useCallback(async () => {
     if (alertConsentAskedRef.current) return;
@@ -1387,6 +1393,16 @@ export default function HomeScreen() {
         iconName="notifications-off"
         title={t("consumerHome.alertsDeniedTitle")}
         message={t("settingsScreen.alertsPermissionBody")}
+        confirmLabel={t("commonUi.ok")}
+        onConfirm={() => setAlertDialog(null)}
+      />
+      <BrandedConfirmModal
+        visible={alertDialog === "registrationFailed"}
+        iconName="notifications-off"
+        title={t("consumerHome.alertsDeniedTitle")}
+        message={t("settingsScreen.alertsRegistrationFailed", {
+          defaultValue: PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
+        })}
         confirmLabel={t("commonUi.ok")}
         onConfirm={() => setAlertDialog(null)}
       />

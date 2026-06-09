@@ -17,7 +17,7 @@ const SKIP_ROOTS = new Set([
 ]);
 
 /**
- * Customer mode: logged-in users must complete Supabase consumer profile (ZIP + birthday, or legacy age range),
+ * Customer mode: logged-in users must complete Supabase consumer profile (ZIP only; birthday is optional),
  * then local onboarding (location radius + notifications). No consumer onboarding before auth.
  */
 export function ConsumerOnboardingGate() {
