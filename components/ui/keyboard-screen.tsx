@@ -1,7 +1,12 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import {
+  InputAccessoryView,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  Text,
+  View,
   type KeyboardAvoidingViewProps,
   type ScrollViewProps,
   type StyleProp,
@@ -45,3 +50,34 @@ export const FORM_SCROLL_KEYBOARD_PROPS: Pick<
   automaticallyAdjustKeyboardInsets: true,
   keyboardDismissMode: "interactive",
 };
+
+export const IOS_DONE_INPUT_ACCESSORY_ID = "twofer-ios-done-input-accessory";
+
+export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: string; onPress?: () => void }) {
+  if (Platform.OS !== "ios") return null;
+  const handlePress = onPress ?? Keyboard.dismiss;
+  return (
+    <InputAccessoryView nativeID={IOS_DONE_INPUT_ACCESSORY_ID}>
+      <View
+        style={{
+          minHeight: 44,
+          alignItems: "flex-end",
+          justifyContent: "center",
+          borderTopWidth: 1,
+          borderTopColor: "#D1D5DB",
+          backgroundColor: "#F9FAFB",
+          paddingHorizontal: 12,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          onPress={handlePress}
+          style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 12 }}
+        >
+          <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>{label}</Text>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}

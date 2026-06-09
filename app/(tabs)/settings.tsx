@@ -22,6 +22,7 @@ import {
 } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
+import { isValidUsZipFormat, normalizeUsZipInput, sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
@@ -30,7 +31,12 @@ import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
@@ -73,7 +79,7 @@ export default function SettingsScreen() {
       const [a, p] = await Promise.all([getAlertsEnabled(), getConsumerPreferences()]);
       setAlertsEnabledState(a);
       setLocationModeState(p.locationMode);
-      setZip(p.zipCode);
+      setZip(sanitizeUsZipInput(p.zipCode));
       setRadius(p.radiusMiles);
       setNotifModeState(p.notificationPrefs.mode);
       setConsumerSession(!!session?.user);
@@ -192,8 +198,8 @@ export default function SettingsScreen() {
   }
 
   async function saveZip() {
-    const trimmed = zip.trim();
-    if (!trimmed) {
+    const normalized = normalizeUsZipInput(zip);
+    if (!normalized) {
       confirm({
         iconName: "error-outline",
         title: t("consumerSettings.zipSaveFailTitle"),
@@ -202,8 +208,17 @@ export default function SettingsScreen() {
       });
       return;
     }
+    if (!isValidUsZipFormat(normalized)) {
+      confirm({
+        iconName: "error-outline",
+        title: t("consumerSettings.zipSaveFailTitle"),
+        message: t("consumerSettings.zipInvalid"),
+        confirmLabel: t("commonUi.ok"),
+      });
+      return;
+    }
     try {
-      const geo = await geocodeUsZip(trimmed);
+      const geo = await geocodeUsZip(normalized);
       if (!geo.ok) {
         confirm({
           iconName: "error-outline",
@@ -213,9 +228,10 @@ export default function SettingsScreen() {
         });
         return;
       }
-      await setConsumerZipCode(trimmed);
+      setZip(normalized);
+      await setConsumerZipCode(normalized);
       if (session?.user?.id) {
-        await updateConsumerProfileZip(session.user.id, trimmed);
+        await updateConsumerProfileZip(session.user.id, normalized);
       }
       await setLastKnownConsumerCoords(geo.lat, geo.lng);
     } catch (err: unknown) {
@@ -436,11 +452,17 @@ export default function SettingsScreen() {
               <Text style={{ fontWeight: "600", marginBottom: Spacing.xs }}>{t("consumerSettings.zipLabel")}</Text>
               <TextInput
                 value={zip}
-                onChangeText={setZip}
-                onEndEditing={() => void saveZip()}
+                onChangeText={(value) => setZip(sanitizeUsZipInput(value))}
                 placeholder={t("onboarding.zipPlaceholder")}
                 autoCapitalize="none"
-                maxLength={10}
+                autoComplete="postal-code"
+                autoCorrect={false}
+                inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                keyboardType="number-pad"
+                maxLength={US_ZIP_MAX_LENGTH}
+                placeholderTextColor={theme.mutedText}
+                returnKeyType="done"
+                textContentType="postalCode"
                 style={{
                   borderWidth: 1,
                   borderColor: theme.border,
@@ -449,6 +471,7 @@ export default function SettingsScreen() {
                   fontSize: 16,
                 }}
               />
+              <IosDoneInputAccessory />
               <View style={{ marginTop: Spacing.sm }}>
                 <PrimaryButton title={t("consumerSettings.saveZip")} onPress={() => void saveZip()} />
               </View>

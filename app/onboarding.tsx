@@ -7,7 +7,12 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
@@ -23,14 +28,10 @@ import {
   setOnboardingComplete,
 } from "@/lib/consumer-preferences";
 import { supabase } from "@/lib/supabase";
+import { sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import { trackAppAnalyticsEvent, type AppAnalyticsEventName } from "@/lib/app-analytics";
-
-function sanitizeZipInput(raw: string): string {
-  const cleaned = raw.replace(/[^\d-]/g, "");
-  return cleaned.slice(0, 10);
-}
 
 // Mirrors the business-setup category keys (minus "other") so a consumer's picks
 // match real business.category values. Labels reuse businessSetup.cat.*.
@@ -59,7 +60,7 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     void getConsumerPreferences().then((p) => {
-      if (p.zipCode.trim()) setZip(p.zipCode.trim());
+      if (p.zipCode.trim()) setZip(sanitizeUsZipInput(p.zipCode));
       if (p.notificationPrefs.categoryTags?.length) setCategories(p.notificationPrefs.categoryTags);
     });
   }, []);
@@ -276,14 +277,17 @@ export default function OnboardingScreen() {
             </Text>
             <TextInput
               value={zip}
-              onChangeText={(value) => setZip(sanitizeZipInput(value))}
+              onChangeText={(value) => setZip(sanitizeUsZipInput(value))}
               placeholder={t("onboarding.zipPlaceholder")}
               placeholderTextColor={C.mutedText}
               autoCapitalize="none"
+              autoComplete="postal-code"
               autoCorrect={false}
+              inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
               keyboardType="number-pad"
+              textContentType="postalCode"
               returnKeyType="done"
-              maxLength={10}
+              maxLength={US_ZIP_MAX_LENGTH}
               style={{
                 borderWidth: 1, borderColor: C.border, borderRadius: Radii.lg,
                 paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md,
@@ -292,6 +296,7 @@ export default function OnboardingScreen() {
             />
           </View>
         ) : null}
+        <IosDoneInputAccessory />
 
         {/* Search radius */}
         <View>

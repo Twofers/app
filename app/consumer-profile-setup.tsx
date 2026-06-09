@@ -7,7 +7,12 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { Banner } from "@/components/ui/banner";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -24,10 +29,7 @@ import {
 } from "@/lib/consumer-birthdate";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-
-function sanitizeZipInput(raw: string): string {
-  return raw.replace(/[^\d-]/g, "").slice(0, 10);
-}
+import { sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 
 export default function ConsumerProfileSetupScreen() {
   const { t } = useTranslation();
@@ -61,7 +63,7 @@ export default function ConsumerProfileSetupScreen() {
       setEmail(session.user.email ?? null);
       const row = await fetchConsumerProfile(uid);
       if (row) {
-        setZip(row.zip_code ?? "");
+        setZip(sanitizeUsZipInput(row.zip_code ?? ""));
         const parsed = row.birthdate ? parseBirthdateIsoToLocalDate(row.birthdate) : null;
         if (parsed) {
           setBirthDate(parsed);
@@ -171,14 +173,17 @@ export default function ConsumerProfileSetupScreen() {
           <Text style={{ fontWeight: "700", marginBottom: 6, color: C.text }}>{t("consumerProfile.zipLabel")}</Text>
           <TextInput
             value={zip}
-            onChangeText={(value) => setZip(sanitizeZipInput(value))}
+            onChangeText={(value) => setZip(sanitizeUsZipInput(value))}
             placeholder={t("consumerProfile.zipPh")}
             placeholderTextColor={C.mutedText}
             autoCapitalize="none"
+            autoComplete="postal-code"
             autoCorrect={false}
+            inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
             keyboardType="number-pad"
+            textContentType="postalCode"
             returnKeyType="done"
-            maxLength={10}
+            maxLength={US_ZIP_MAX_LENGTH}
             style={{
               borderWidth: 1,
               borderColor: C.border,
@@ -190,6 +195,7 @@ export default function ConsumerProfileSetupScreen() {
               color: C.text,
             }}
           />
+          <IosDoneInputAccessory />
           <View
             style={{
               marginTop: Spacing.sm,
