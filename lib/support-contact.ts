@@ -7,12 +7,6 @@
  */
 export const SUPPORT_EMAIL = "support@twoferapp.com";
 
-function readEnv(name: string): string | null {
-  const v = process.env[name];
-  if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  return null;
-}
-
 /** Returns the public support email used by in-app contact actions. */
 export function getSupportEmail(): string {
   return SUPPORT_EMAIL;
@@ -20,5 +14,9 @@ export function getSupportEmail(): string {
 
 /** Returns null when no phone is configured, so the UI hides the phone row. */
 export function getSupportPhone(): string | null {
-  return readEnv("EXPO_PUBLIC_SUPPORT_PHONE");
+  // Must be a static property access: Metro only inlines EXPO_PUBLIC_* vars
+  // written literally, so process.env[name] is always undefined in builds.
+  const v = process.env.EXPO_PUBLIC_SUPPORT_PHONE;
+  if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  return null;
 }
