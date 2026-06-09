@@ -56,7 +56,7 @@ Twofer is free to download and use. No ads. Sign in with an email and password, 
 ### Listing contact and URLs
 
 - Privacy policy URL: https://www.twoferapp.com/privacy
-- Support email: twoferadmin@gmail.com (this is the contact on your live privacy policy, swap it if you want a different one)
+- Support email: support@twoferapp.com
 - Support website, optional: https://www.twoferapp.com/support
 - Phone, optional: Play does not require a phone for the listing, only an email. You can ship without it and add one later.
 

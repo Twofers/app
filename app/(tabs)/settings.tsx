@@ -668,10 +668,8 @@ export default function SettingsScreen() {
         ) : null}
 
         {(() => {
-          // Hide the entire Help & Contact card when neither email nor phone is configured.
-          // Avoids shipping a dead-link row during pilots where the founder handles
-          // support directly (texting cafes, etc.). Set EXPO_PUBLIC_SUPPORT_EMAIL or
-          // EXPO_PUBLIC_SUPPORT_PHONE in the build to make it reappear.
+          // Hide the entire Help & Contact card only when all configured contact
+          // channels are absent. Email is always present via getSupportEmail().
           const supportEmail = getSupportEmail();
           const supportPhone = getSupportPhone();
           if (!supportEmail && !supportPhone) return null;
@@ -688,14 +686,14 @@ export default function SettingsScreen() {
               <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
               <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
               {supportEmail ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
-                  accessibilityRole="link"
-                  accessibilityLabel={t("supportContact.emailA11y")}
-                  style={{ paddingVertical: Spacing.xs }}
-                >
+                <>
+                  <SecondaryButton
+                    title={t("supportContact.contactSupportCta")}
+                    onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+                    accessibilityLabel={t("supportContact.emailA11y")}
+                  />
                   <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
-                </Pressable>
+                </>
               ) : null}
               {supportPhone ? (
                 <Pressable

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
@@ -42,6 +42,7 @@ import { calculateProfileCompleteness } from "@/lib/business-profile-completenes
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
+import { getSupportEmail } from "@/lib/support-contact";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -97,6 +98,7 @@ export default function AccountScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const supportEmail = getSupportEmail();
   const visibleBusinessContactName = businessProfile?.contact_name?.trim() || null;
   const visibleBusinessEmail = businessProfile?.business_email?.trim() || null;
 
@@ -793,6 +795,27 @@ export default function AccountScreen() {
           >
             <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("account.sessionSectionTitle")}</Text>
             <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
+          </View>
+
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              gap: Spacing.sm,
+            }}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("supportContact.sectionTitle")}</Text>
+            <Text style={{ opacity: 0.7, color: theme.text, fontSize: 14, lineHeight: 20 }}>
+              {t("supportContact.sectionHelp")}
+            </Text>
+            <SecondaryButton
+              title={t("supportContact.contactSupportCta")}
+              onPress={() => void Linking.openURL(`mailto:${supportEmail}`)}
+              accessibilityLabel={t("supportContact.emailA11y")}
+            />
+            <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{supportEmail}</Text>
           </View>
 
           {tabMode === "business" ? (
