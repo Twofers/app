@@ -33,10 +33,3 @@ export function getCorsHeaders(req: Request): Record<string, string> {
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   };
 }
-
-/** Legacy constant for edge functions that haven't migrated yet. */
-export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
