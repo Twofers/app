@@ -6,7 +6,7 @@ import { getLastKnownConsumerCoords } from "./consumer-preferences";
 export type ResolvedConsumerCoords = {
   lat: number;
   lng: number;
-  source: "gps" | "zip_geocode";
+  source: "gps" | "zip_geocode" | "cached_gps";
   /**
    * Only true when position came from device GPS with foreground permission.
    * MapView `showsUserLocation` must stay false for ZIP-based coordinates — otherwise Android can crash without location permission.
@@ -39,7 +39,7 @@ export async function resolveConsumerCoordinates(
       return {
         lat: cached.lat,
         lng: cached.lng,
-        source: "gps" as const,
+        source: "cached_gps",
         showsDeviceLocationBlueDot: false,
       };
     }

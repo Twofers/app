@@ -64,6 +64,7 @@ type MapDataPayload = {
   radiusMiles: number;
   userPos: { lat: number; lng: number } | null;
   showDeviceBlueDot: boolean;
+  usingDefaultArea: boolean;
   businesses: MappableBusiness[];
   deals: DealLite[];
   dealsFetchFailed: boolean;
@@ -126,6 +127,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     radiusMiles: prefs.radiusMiles,
     userPos,
     showDeviceBlueDot,
+    usingDefaultArea: !coords,
     businesses,
     deals,
     dealsFetchFailed,
@@ -479,6 +481,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   /** Device blue dot only when GPS + permission; never for ZIP-only mode. */
   const [showDeviceBlueDot, setShowDeviceBlueDot] = useState(false);
+  const [usingDefaultArea, setUsingDefaultArea] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
@@ -494,6 +497,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       setRadiusMiles(payload.radiusMiles);
       setUserPos(payload.userPos);
       setShowDeviceBlueDot(payload.showDeviceBlueDot);
+      setUsingDefaultArea(payload.usingDefaultArea);
       setBusinesses(payload.businesses);
       if (payload.dealsFetchFailed) {
         setDataError(t("consumerMap.dataError"));
@@ -559,6 +563,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
   const subtitleText = mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll");
+  const showDefaultAreaNotice = !loading && androidMapsOk && usingDefaultArea;
   const mapCanvas = renderMapCanvas({
     horizontal,
     loadMapData,
@@ -647,6 +652,48 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
         <Text style={{ fontSize: 22, fontWeight: "800", letterSpacing: -0.2 }}>{t("consumerMap.title")}</Text>
         <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.58, lineHeight: 18 }}>{subtitleText}</Text>
       </View>
+      {showDefaultAreaNotice ? (
+        <View
+          style={{
+            marginHorizontal: horizontal,
+            marginBottom: Spacing.sm,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#FDBA74",
+            backgroundColor: "#FFF7ED",
+            padding: Spacing.md,
+            gap: Spacing.sm,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <MaterialIcons name="location-off" size={18} color="#9A3412" />
+            <Text style={{ flex: 1, fontWeight: "800", color: "#7C2D12" }}>
+              {t("consumerMap.defaultAreaTitle", { defaultValue: "Using default area" })}
+            </Text>
+          </View>
+          <Text style={{ color: "#7C2D12", fontSize: 13, lineHeight: 18 }}>
+            {t("consumerMap.defaultAreaBody", {
+              defaultValue: "Turn on location or add a ZIP in Settings to center nearby deals around you.",
+            })}
+          </Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/settings" as Href)}
+            accessibilityRole="button"
+            style={{
+              alignSelf: "flex-start",
+              minHeight: 36,
+              borderRadius: 10,
+              paddingHorizontal: Spacing.md,
+              justifyContent: "center",
+              backgroundColor: "#111",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800" }}>
+              {t("commonUi.settings", { defaultValue: "Settings" })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
       {androidMapsOk ? (
         <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.md, flexDirection: "row", gap: Spacing.sm }}>
           <Pressable

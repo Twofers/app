@@ -179,28 +179,57 @@ export default function BusinessProfileScreen() {
     }
   }
 
-  function openDirections() {
+  async function openDirections() {
     if (!biz) return;
     const lat = typeof biz.latitude === "number" ? biz.latitude : biz.latitude != null ? Number(biz.latitude) : NaN;
     const lng = typeof biz.longitude === "number" ? biz.longitude : biz.longitude != null ? Number(biz.longitude) : NaN;
-    const label = encodeURIComponent(biz.name ?? "Business");
-    let url: string;
+    const label = (biz.name ?? "Business").trim() || "Business";
+    const encodedLabel = encodeURIComponent(label);
+    let nativeUrl: string;
+    let fallbackUrl: string;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      url =
-        Platform.OS === "ios"
-          ? `maps:0,0?q=${label}@${lat},${lng}`
-          : `geo:0,0?q=${lat},${lng}(${label})`;
+      nativeUrl = Platform.select({
+        ios: `maps://?q=${encodedLabel}&ll=${lat},${lng}`,
+        android: `geo:0,0?q=${lat},${lng}(${encodedLabel})`,
+        default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+      })!;
+      fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     } else {
       const area = (biz.address ?? biz.location)?.trim();
-      if (!area) return;
-      const q = encodeURIComponent(`${biz.name ?? ""} ${area}`.trim());
-      url = Platform.select({
-        ios: `maps:0,0?q=${q}`,
+      if (!area) {
+        setBanner(t("businessProfile.mapsUnavailable"));
+        return;
+      }
+      const q = encodeURIComponent(`${label} ${area}`.trim());
+      nativeUrl = Platform.select({
+        ios: `maps://?q=${q}`,
         android: `geo:0,0?q=${q}`,
         default: `https://www.google.com/maps/search/?api=1&query=${q}`,
       })!;
+      fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${q}`;
     }
-    void Linking.openURL(url);
+    setBanner(null);
+    try {
+      if (await Linking.canOpenURL(nativeUrl)) {
+        await Linking.openURL(nativeUrl);
+        return;
+      }
+      if (nativeUrl !== fallbackUrl && (await Linking.canOpenURL(fallbackUrl))) {
+        await Linking.openURL(fallbackUrl);
+        return;
+      }
+      setBanner(
+        t("businessProfile.mapsOpenFailed", {
+          defaultValue: "We couldn't open maps. Try the address from this page.",
+        }),
+      );
+    } catch {
+      setBanner(
+        t("businessProfile.mapsOpenFailed", {
+          defaultValue: "We couldn't open maps. Try the address from this page.",
+        }),
+      );
+    }
   }
 
   function dialPhone() {
@@ -353,7 +382,7 @@ export default function BusinessProfileScreen() {
             {distanceLabel ? (
               <InfoRow icon="near-me" value={distanceLabel} theme={theme} emphasize />
             ) : null}
-            <PrimaryButton title={t("businessProfile.directions")} onPress={openDirections} disabled={!canOpenDirections} />
+            <PrimaryButton title={t("businessProfile.directions")} onPress={() => void openDirections()} disabled={!canOpenDirections} />
             {!canOpenDirections ? (
               <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 19 }}>
                 {t("businessProfile.mapsUnavailable")}

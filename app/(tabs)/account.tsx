@@ -630,6 +630,9 @@ export default function AccountScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              autoComplete="email"
               style={{
                 borderWidth: 1,
                 borderColor: Colors.light.border,
@@ -646,6 +649,8 @@ export default function AccountScreen() {
               value={pw}
               onChangeText={setPw}
               secureTextEntry
+              textContentType="password"
+              autoComplete="password"
               style={{
                 borderWidth: 1,
                 borderColor: Colors.light.border,
@@ -1062,6 +1067,9 @@ export default function AccountScreen() {
                   placeholder={t("account.phBusinessEmail")}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  autoComplete="email"
                   editable={!savingProfile}
                   style={{
                     borderWidth: 1,

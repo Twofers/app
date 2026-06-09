@@ -317,7 +317,7 @@ export default function AiDealScreen() {
 
   // Voice input
   const recorder = useAudioRecorder(
-    Platform.OS === "android" ? RecordingPresets.HIGH_QUALITY : RecordingPresets.LOW_QUALITY,
+    RecordingPresets.HIGH_QUALITY,
   );
   const [isRecording, setIsRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);

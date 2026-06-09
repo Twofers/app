@@ -20,9 +20,9 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "TWOFER uses your location to sort nearby deals and match your area to business profile locations.",
-        "NSCameraUsageDescription": "TWOFER uses your camera to scan QR codes for redeeming deals and to capture menu photos for AI menu extraction.",
-        "NSMicrophoneUsageDescription": "TWOFER uses your microphone only for the AI Compose voice input feature, which transcribes your spoken offer into deal copy.",
-        "NSPhotoLibraryUsageDescription": "TWOFER uses your photo library to attach photos to your deals and to upload menu photos for AI extraction.",
+        "NSCameraUsageDescription": "TWOFER uses your camera to scan QR codes for redeeming deals and to capture deal, AI offer, and menu photos.",
+        "NSMicrophoneUsageDescription": "TWOFER uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
+        "NSPhotoLibraryUsageDescription": "TWOFER uses your photo library to attach deal photos, AI offer photos, and menu photos for AI extraction.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
@@ -272,7 +272,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for redeeming deals."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for redeeming deals and capture deal, AI offer, and menu photos."
         }
       ],
       "@react-native-community/datetimepicker",
@@ -286,7 +286,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "TWOFER uses your microphone only for the AI Compose voice input feature, which transcribes your spoken offer into deal copy.",
+          "microphonePermission": "TWOFER uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
           "recordAudioAndroid": true,
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false

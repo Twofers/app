@@ -601,6 +601,8 @@ export default function AuthLandingScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoCorrect={false}
+                textContentType="emailAddress"
+                autoComplete="email"
                 editable={!busy}
                 accessibilityLabel={t("authLanding.emailLabel")}
                 placeholder={t("authLanding.emailPlaceholder")}
@@ -635,6 +637,8 @@ export default function AuthLandingScreen() {
                 value={pw}
                 onChangeText={onPwChange}
                 secureTextEntry
+                textContentType="password"
+                autoComplete="password"
                 editable={!busy}
                 accessibilityLabel={t("authLanding.passwordLabel")}
                 placeholder={t("authLanding.passwordPlaceholder")}

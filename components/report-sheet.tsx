@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -91,6 +100,10 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
           paddingBottom: insets.bottom,
         }}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
+        >
         <View
           style={{
             flex: 1,
@@ -104,6 +117,8 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
             style={{ flex: 1 }}
             contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md, paddingBottom: Spacing.xxl }}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+            keyboardDismissMode="interactive"
           >
             <Text style={{ fontSize: 22, fontWeight: "800", color: Colors.light.text }}>{sheetTitle}</Text>
             <Text style={{ fontSize: 13, fontWeight: "700", opacity: 0.65, color: Colors.light.text }}>
@@ -215,6 +230,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
             )}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
