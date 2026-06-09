@@ -11,7 +11,12 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
-import { IOS_DONE_INPUT_ACCESSORY_ID, IosDoneInputAccessory } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -312,7 +317,7 @@ export default function MenuOfferScreen() {
   }
 
   return (
-    <>
+    <KeyboardScreen>
       <ScrollView
         style={{ flex: 1, paddingTop: top }}
         contentContainerStyle={{
@@ -320,7 +325,7 @@ export default function MenuOfferScreen() {
           paddingBottom: scrollBottom,
           gap: Spacing.md,
         }}
-        keyboardShouldPersistTaps="handled"
+        {...FORM_SCROLL_KEYBOARD_PROPS}
       >
       <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("menuOffer.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
@@ -595,6 +600,6 @@ export default function MenuOfferScreen() {
       ) : null}
       </ScrollView>
       <IosDoneInputAccessory />
-    </>
+    </KeyboardScreen>
   );
 }
