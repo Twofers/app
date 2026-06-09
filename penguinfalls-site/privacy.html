@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy | Penguin Falls LLC</title>
+  <meta name="description" content="Privacy Policy for the Penguin Falls LLC informational company website.">
+  <link rel="canonical" href="https://www.penguinfalls.com/privacy.html">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/json" id="site-contact-config">
+    {"companyContactEmail":"contact@penguinfalls.com","twoferSupportEmail":"support@twoferapp.com"}
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="wordmark" href="index.html">Penguin Falls</a>
+    </div>
+  </header>
+
+  <main class="legal-main">
+    <div class="container">
+      <a class="back-link" href="index.html">&larr; Back to Penguin Falls</a>
+      <article class="legal-article">
+        <header>
+          <h1>Privacy Policy</h1>
+          <p class="last-updated">Last updated: June 9, 2026</p>
+          <p class="legal-note">This is a general template for an informational company website and should be reviewed by qualified legal counsel before Penguin Falls LLC relies on it legally.</p>
+        </header>
+
+        <section class="legal-section" aria-labelledby="privacy-who">
+          <h2 id="privacy-who">Who We Are</h2>
+          <p>Penguin Falls LLC is a Texas limited liability company. This Privacy Policy explains how we handle information on the Penguin Falls LLC company website.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-site">
+          <h2 id="privacy-site">This Website</h2>
+          <p>This website is an informational company website. It does not require accounts, does not sell anything on the page, and does not collect personal information beyond what a visitor chooses to send by email.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-email">
+          <h2 id="privacy-email">Email You Send Us</h2>
+          <p>If you email <a href="#" data-email="company"></a>, we use your email address and the contents of your message only to review your inquiry, respond to you, and keep ordinary business records related to the conversation.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-analytics">
+          <h2 id="privacy-analytics">Analytics</h2>
+          <p>Penguin Falls LLC does not currently use analytics on this website. If analytics are added later, this policy should be updated to name the provider and explain what information is collected.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-sharing">
+          <h2 id="privacy-sharing">Sharing and Sale of Data</h2>
+          <p>We do not sell personal information. We may share information only if needed to respond to your inquiry, operate the website, comply with law, or protect our rights, safety, or security.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-twofer">
+          <h2 id="privacy-twofer">Twofer</h2>
+          <p>Twofer is owned and operated by Penguin Falls LLC, but Twofer has its own separate terms and privacy policy for its app and service. This policy covers only the Penguin Falls LLC informational company website.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="privacy-contact">
+          <h2 id="privacy-contact">Contact</h2>
+          <p>Questions about this Privacy Policy can be sent to <a href="#" data-email="company"></a>.</p>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-copy">
+        <p>&copy; 2026 Penguin Falls LLC. All rights reserved.</p>
+        <p>Penguin Falls LLC owns and operates Twofer.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="index.html#contact">Contact</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Use</a>
+        <a href="https://www.twoferapp.com" target="_blank" rel="noopener">Twofer</a>
+      </nav>
+    </div>
+  </footer>
+  <script>
+    (() => {
+      const config = JSON.parse(document.querySelector("#site-contact-config").textContent);
+      const emails = { company: config.companyContactEmail, support: config.twoferSupportEmail };
+      document.querySelectorAll("[data-email]").forEach((link) => {
+        const email = emails[link.dataset.email];
+        if (email) { link.href = `mailto:${email}`; link.textContent = email; }
+      });
+    })();
+  </script>
+</body>
+</html>

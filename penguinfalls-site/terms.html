@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Use | Penguin Falls LLC</title>
+  <meta name="description" content="Terms of Use for the Penguin Falls LLC informational company website.">
+  <link rel="canonical" href="https://www.penguinfalls.com/terms.html">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/json" id="site-contact-config">
+    {"companyContactEmail":"contact@penguinfalls.com","twoferSupportEmail":"support@twoferapp.com"}
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="wordmark" href="index.html">Penguin Falls</a>
+    </div>
+  </header>
+
+  <main class="legal-main">
+    <div class="container">
+      <a class="back-link" href="index.html">&larr; Back to Penguin Falls</a>
+      <article class="legal-article">
+        <header>
+          <h1>Terms of Use</h1>
+          <p class="last-updated">Last updated: June 9, 2026</p>
+          <p class="legal-note">These are general template terms for an informational company website and should be reviewed by qualified legal counsel before Penguin Falls LLC relies on them legally.</p>
+        </header>
+
+        <section class="legal-section" aria-labelledby="terms-use">
+          <h2 id="terms-use">Use of This Site</h2>
+          <p>This website is provided by Penguin Falls LLC for informational purposes. By using the site, you agree to use it only in a lawful and reasonable way.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-as-is">
+          <h2 id="terms-as-is">As Is</h2>
+          <p>The site and its content are provided as is and as available. Penguin Falls LLC does not promise that the site will always be available, error-free, secure, or complete.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-ip">
+          <h2 id="terms-ip">Site Content and Names</h2>
+          <p>Penguin Falls LLC owns the content on this site and the Penguin Falls and Twofer names as used here. You may not copy, modify, or use the site content or names in a way that suggests endorsement or affiliation without written permission.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-links">
+          <h2 id="terms-links">Links to Other Sites</h2>
+          <p>Links to TwoferApp.com and other sites are provided for convenience. Twofer has its own separate terms and privacy policy for its app and service, and other third-party sites are controlled by their own owners.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-liability">
+          <h2 id="terms-liability">Limitation of Liability</h2>
+          <p>To the maximum extent permitted by law, Penguin Falls LLC will not be liable for indirect, incidental, consequential, special, punitive, or similar damages arising from your use of this site.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-law">
+          <h2 id="terms-law">Governing Law</h2>
+          <p>These Terms of Use are governed by the laws of the State of Texas, without regard to conflict of law rules.</p>
+        </section>
+
+        <section class="legal-section" aria-labelledby="terms-contact">
+          <h2 id="terms-contact">Contact</h2>
+          <p>Questions about these Terms of Use can be sent to <a href="#" data-email="company"></a>.</p>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-copy">
+        <p>&copy; 2026 Penguin Falls LLC. All rights reserved.</p>
+        <p>Penguin Falls LLC owns and operates Twofer.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="index.html#contact">Contact</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Use</a>
+        <a href="https://www.twoferapp.com" target="_blank" rel="noopener">Twofer</a>
+      </nav>
+    </div>
+  </footer>
+  <script>
+    (() => {
+      const config = JSON.parse(document.querySelector("#site-contact-config").textContent);
+      const emails = { company: config.companyContactEmail, support: config.twoferSupportEmail };
+      document.querySelectorAll("[data-email]").forEach((link) => {
+        const email = emails[link.dataset.email];
+        if (email) { link.href = `mailto:${email}`; link.textContent = email; }
+      });
+    })();
+  </script>
+</body>
+</html>
