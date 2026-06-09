@@ -25,6 +25,12 @@
         "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true"
       }
     },
+    "ios-sim": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "environment": "production",
       "autoIncrement": true,
