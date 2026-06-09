@@ -353,6 +353,9 @@ export default function ConsumerProfileSetupScreen() {
               value={draftBirthDate}
               mode="date"
               display="spinner"
+              textColor={C.text}
+              themeVariant={colorScheme}
+              style={{ height: 216, alignSelf: "stretch" }}
               maximumDate={maximumBirthDate}
               minimumDate={new Date(1900, 0, 1)}
               onChange={(_event, d) => {

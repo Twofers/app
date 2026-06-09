@@ -92,7 +92,14 @@ function RootNavigationStack() {
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="consumer-profile-setup" options={{ title: t('consumerProfile.navTitle') }} />
+        <Stack.Screen
+          name="consumer-profile-setup"
+          options={{
+            title: t('consumerProfile.navTitle'),
+            headerBackButtonDisplayMode: 'minimal',
+            headerBackTitle: '',
+          }}
+        />
         <Stack.Screen name="business-setup" options={{ title: t('businessSetup.navTitle') }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: t('passwordRecovery.forgotTitle') }} />
