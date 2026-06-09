@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CardShell } from "@/components/ui/card-shell";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
@@ -16,7 +17,16 @@ import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 
+type TemplateRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  poster_url: string | null;
+  price: number | null;
+};
 
 export default function CreateDeal() {
   const { t } = useTranslation();
@@ -25,13 +35,15 @@ export default function CreateDeal() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { isLoggedIn, businessId, loading, subscriptionStatus, trialEndsAt } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
-  const [templates, setTemplates] = useState<{ id: string; title: string | null; description: string | null; poster_url: string | null; price: number | null }[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const { confirm, confirmModal } = useBrandedConfirm();
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
   const blockedSubscription = !canCreateDeal({
@@ -62,24 +74,70 @@ export default function CreateDeal() {
     };
   }, [isLoggedIn, params.skipSetup, params.e2e, bypass]);
 
-  useEffect(() => {
-    if (!businessId) return;
-    (async () => {
-      setTemplatesLoading(true);
-      const { data, error } = await supabase
-        .from("deal_templates")
-        .select("id,title,description,poster_url,price")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (error) {
-        setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
-      } else {
-        setTemplates(data ?? []);
-      }
+  const loadTemplates = useCallback(async () => {
+    if (!businessId) {
+      setTemplates([]);
       setTemplatesLoading(false);
-    })();
+      return;
+    }
+    setTemplatesLoading(true);
+    const { data, error } = await supabase
+      .from("deal_templates")
+      .select("id,title,description,poster_url,price")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (error) {
+      setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+    } else {
+      setTemplates((data ?? []) as TemplateRow[]);
+    }
+    setTemplatesLoading(false);
   }, [businessId, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadTemplates();
+    }, [loadTemplates]),
+  );
+
+  function confirmDeleteTemplate(row: TemplateRow) {
+    if (!businessId || deletingTemplateId) return;
+    confirm({
+      iconName: "delete",
+      title: t("reuseHub.deleteTemplateTitle", { defaultValue: "Delete template?" }),
+      message: t("reuseHub.deleteTemplateBody", {
+        defaultValue: "This removes the saved template. Past and live deals stay unchanged.",
+      }),
+      confirmLabel: t("reuseHub.deleteTemplateCta", { defaultValue: "Delete template" }),
+      cancelLabel: t("commonUi.cancel"),
+      onConfirm: () => void deleteTemplate(row.id),
+    });
+  }
+
+  async function deleteTemplate(templateId: string) {
+    if (!businessId) return;
+    setDeletingTemplateId(templateId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deal_templates")
+        .delete()
+        .eq("id", templateId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      setTemplates((current) => current.filter((row) => row.id !== templateId));
+      setBanner({ message: t("reuseHub.templateDeleted", { defaultValue: "Template deleted." }), tone: "success" });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("reuseHub.deleteTemplateFailed", { defaultValue: "Couldn't delete this template." });
+      setBanner({ message: translateKnownApiMessage(message, t), tone: "error" });
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -224,40 +282,88 @@ export default function CreateDeal() {
               templates.map((tpl) => {
                 const tplPoster = resolveDealPosterDisplayUri(tpl.poster_url, null);
                 return (
-                <Pressable
+                <View
                   key={tpl.id}
-                  onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
                   style={{
                     borderRadius: Radii.lg,
                     backgroundColor: Colors.light.surface,
-                    padding: Spacing.md,
                     marginBottom: Spacing.md,
                     boxShadow: "0px 4px 8px rgba(0,0,0,0.08)",
                     elevation: 2,
                     borderWidth: 1,
                     borderColor: Colors.light.border,
+                    overflow: "hidden",
                   }}
                 >
-                  {tplPoster ? (
-                    <Image
-                      source={{ uri: tplPoster }}
-                      style={{ height: 140, width: "100%", borderRadius: 14 }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={{ height: 140, borderRadius: 14, backgroundColor: "#eee" }} />
-                  )}
-                  <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16 }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
-                  {tpl.price != null ? (
-                    <Text style={{ marginTop: Spacing.xs, opacity: 0.7, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
-                  ) : null}
-                </Pressable>
+                  <Pressable
+                    onPress={() => router.push({ pathname: "/create/ai", params: { templateId: tpl.id } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("reuseHub.openTemplateA11y", {
+                      defaultValue: "Open template {{title}}",
+                      title: tpl.title ?? t("createHub.templateUntitled"),
+                    })}
+                    style={{ padding: Spacing.md }}
+                  >
+                    {tplPoster ? (
+                      <Image
+                        source={{ uri: tplPoster }}
+                        style={{ height: 140, width: "100%", borderRadius: 14 }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={{ height: 140, borderRadius: 14, backgroundColor: "#eee" }} />
+                    )}
+                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16 }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
+                    {tpl.price != null ? (
+                      <Text style={{ marginTop: Spacing.xs, opacity: 0.7, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
+                    ) : null}
+                  </Pressable>
+                  <View
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: theme.border,
+                      paddingHorizontal: Spacing.md,
+                      paddingBottom: Spacing.md,
+                      paddingTop: Spacing.sm,
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => confirmDeleteTemplate(tpl)}
+                      disabled={deletingTemplateId !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("reuseHub.deleteTemplateA11y", {
+                        defaultValue: "Delete template {{title}}",
+                        title: tpl.title ?? t("createHub.templateUntitled"),
+                      })}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{
+                        minHeight: 44,
+                        paddingHorizontal: Spacing.md,
+                        borderRadius: 22,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: Spacing.xs,
+                        backgroundColor: theme.surfaceMuted,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        opacity: deletingTemplateId === tpl.id ? 0.45 : 1,
+                      }}
+                    >
+                      <MaterialIcons name="delete-outline" size={19} color={theme.danger} />
+                      <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>
+                        {t("reuseHub.deleteTemplateShort", { defaultValue: "Delete" })}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
               );
               })
             )}
           </View>
         </ScrollView>
       )}
+      {confirmModal}
     </View>
   );
 }

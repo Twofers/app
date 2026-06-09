@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -12,6 +13,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 
 type TemplateRow = {
   id: string;
@@ -41,6 +43,8 @@ export default function ReuseDealScreen() {
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const { confirm, confirmModal } = useBrandedConfirm();
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -75,6 +79,45 @@ export default function ReuseDealScreen() {
 
   function openTemplate(row: TemplateRow) {
     router.push({ pathname: "/create/ai", params: { templateId: row.id } } as Href);
+  }
+
+  function confirmDeleteTemplate(row: TemplateRow) {
+    if (!businessId || deletingTemplateId) return;
+    confirm({
+      iconName: "delete",
+      title: t("reuseHub.deleteTemplateTitle", { defaultValue: "Delete template?" }),
+      message: t("reuseHub.deleteTemplateBody", {
+        defaultValue: "This removes the saved template. Past and live deals stay unchanged.",
+      }),
+      confirmLabel: t("reuseHub.deleteTemplateCta", { defaultValue: "Delete template" }),
+      cancelLabel: t("commonUi.cancel"),
+      onConfirm: () => void deleteTemplate(row.id),
+    });
+  }
+
+  async function deleteTemplate(templateId: string) {
+    if (!businessId) return;
+    setDeletingTemplateId(templateId);
+    setErr(null);
+    try {
+      const { error } = await supabase
+        .from("deal_templates")
+        .delete()
+        .eq("id", templateId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      setTemplates((current) => current.filter((row) => row.id !== templateId));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("reuseHub.deleteTemplateFailed", {
+              defaultValue: "Couldn't delete this template.",
+            });
+      setErr(translateKnownApiMessage(message, t));
+    } finally {
+      setDeletingTemplateId(null);
+    }
   }
 
   function repeatDeal(row: DealRow) {
@@ -116,11 +159,11 @@ export default function ReuseDealScreen() {
               templates.map((row) => {
                 const tplPoster = resolveDealPosterDisplayUri(row.poster_url, null);
                 return (
-                <Pressable
+                <View
                   key={row.id}
-                  onPress={() => openTemplate(row)}
                   style={{
                     flexDirection: "row",
+                    alignItems: "center",
                     gap: Spacing.md,
                     padding: Spacing.md,
                     borderRadius: 16,
@@ -130,22 +173,55 @@ export default function ReuseDealScreen() {
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  {tplPoster ? (
-                    <Image
-                      source={{ uri: tplPoster }}
-                      style={{ width: 72, height: 72, borderRadius: 12 }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: "#e5e5e5" }} />
-                  )}
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
-                      {row.title ?? t("reuseHub.untitled")}
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.55 }}>{t("reuseHub.openInAiAds")}</Text>
-                  </View>
-                </Pressable>
+                  <Pressable
+                    onPress={() => openTemplate(row)}
+                    style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: Spacing.md }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("reuseHub.openTemplateA11y", {
+                      defaultValue: "Open template {{title}}",
+                      title: row.title ?? t("reuseHub.untitled"),
+                    })}
+                  >
+                    {tplPoster ? (
+                      <Image
+                        source={{ uri: tplPoster }}
+                        style={{ width: 72, height: 72, borderRadius: 12 }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: "#e5e5e5" }} />
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
+                        {row.title ?? t("reuseHub.untitled")}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.55 }}>{t("reuseHub.openInAiAds")}</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => confirmDeleteTemplate(row)}
+                    disabled={deletingTemplateId !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("reuseHub.deleteTemplateA11y", {
+                      defaultValue: "Delete template {{title}}",
+                      title: row.title ?? t("reuseHub.untitled"),
+                    })}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: theme.surface,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      opacity: deletingTemplateId === row.id ? 0.45 : 1,
+                    }}
+                  >
+                    <MaterialIcons name="delete-outline" size={22} color={theme.danger} />
+                  </Pressable>
+                </View>
               );
               })
             )}
@@ -204,6 +280,7 @@ export default function ReuseDealScreen() {
           </Pressable>
         </ScrollView>
       )}
+      {confirmModal}
     </View>
   );
 }
