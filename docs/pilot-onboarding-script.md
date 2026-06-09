@@ -84,7 +84,7 @@ Hand them a printed mini-card (or text it to them):
 
 > **TWOFER for [Cafe Name]**
 > - **Trial ends:** [date 60 days from today]
-> - **Your support contact:** twoferadmin@gmail.com
+> - **Your support contact:** support@twoferapp.com
 > - **First-week goal:** post 1 deal per slow window. Watch what works.
 > - **Need help?** Text Dan: [phone]
 

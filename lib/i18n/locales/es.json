@@ -877,6 +877,7 @@
   "supportContact": {
     "sectionTitle": "Ayuda y contacto",
     "sectionHelp": "¿Atascado o tienes una pregunta? Escríbenos — solemos responder el mismo día.",
+    "contactSupportCta": "Contactar soporte",
     "emailA11y": "Enviar correo al soporte",
     "phoneA11y": "Llamar al soporte"
   },
