@@ -1,0 +1,16 @@
+[
+  {
+    "id": "TS-SMOKE-001",
+    "title": "Initial auth landing smoke test",
+    "description": "Verify the local Expo web app loads without a runtime error and visibly renders the auth landing UI. The test must assert visible text or controls for TWOFER, Email, Password, Log in, and Create account. Do not submit the form.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      "Open the configured local endpoint.",
+      "Wait for the app shell to finish loading.",
+      "Confirm there is no visible runtime error overlay or blank page.",
+      "Assert visible text or controls for TWOFER, Email, Password, Log in, and Create account.",
+      "Do not type credentials and do not submit login or signup."
+    ]
+  }
+]

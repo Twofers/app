@@ -63,3 +63,5 @@ project-knowledge/
 claude-history-secret-scan.txt
 
 convert-claude-history.ps1
+
+testsprite_tests/tmp/

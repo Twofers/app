@@ -1,0 +1,20 @@
+{
+  "title": "TWOFER scoped auth landing smoke test",
+  "scope": "Run one frontend smoke test only against the local Expo web endpoint and assert visible auth UI content.",
+  "requirements": [
+    {
+      "id": "REQ-SMOKE-001",
+      "title": "Initial app load",
+      "description": "The app should load without a runtime crash and show visible auth landing content: TWOFER, Email, Password, Log in, and Create account."
+    }
+  ],
+  "outOfScope": [
+    "Native iOS keyboard behavior",
+    "Native iOS DateTimePicker behavior",
+    "Push notifications",
+    "Universal links",
+    "Full app crawling",
+    "Destructive account actions",
+    "Submitting login or signup forms"
+  ]
+}

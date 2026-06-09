@@ -267,7 +267,7 @@ export default function ConsumerProfileSetupScreen() {
                 : t("consumerProfile.addBirthdate", { defaultValue: "Add birthday" })}
             </Text>
           </Pressable>
-          {showPicker && Platform.OS === "android" ? (
+          {showPicker && Platform.OS !== "ios" ? (
             <DateTimePicker
               value={birthDate}
               mode="date"
