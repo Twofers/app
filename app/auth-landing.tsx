@@ -743,7 +743,13 @@ export default function AuthLandingScreen() {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.accentText, opacity: busy ? 0.45 : 1 }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "700", color: theme.accentText, opacity: busy ? 0.45 : 1, textAlign: "center" }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("authLanding.forgotPassword")}
                 </Text>
               </Pressable>
@@ -756,6 +762,7 @@ export default function AuthLandingScreen() {
                     textAlign: "center",
                     marginBottom: Spacing.md,
                   }}
+                  maxFontSizeMultiplier={1.15}
                 >
                   {email.trim().length === 0 && pw.length === 0
                     ? t("authLanding.hintEnterBoth")
@@ -785,7 +792,13 @@ export default function AuthLandingScreen() {
                 }}
               >
                 {busyAction === "login" ? <ActivityIndicator color={theme.primaryText} /> : null}
-                <Text style={{ color: theme.primaryText, fontWeight: "900", fontSize: 18 }}>
+                <Text
+                  style={{ color: theme.primaryText, fontWeight: "900", fontSize: 18, textAlign: "center", flexShrink: 1 }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {busyAction === "login" ? t("authLanding.pleaseWait") : t("authLanding.logIn")}
                 </Text>
               </ScalePressable>
@@ -810,7 +823,13 @@ export default function AuthLandingScreen() {
                 }}
               >
                 {busyAction === "signup" ? <ActivityIndicator color={theme.primary} /> : null}
-                <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 16 }}>
+                <Text
+                  style={{ color: theme.accentText, fontWeight: "900", fontSize: 16, textAlign: "center", flexShrink: 1 }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("authLanding.createAccount")}
                 </Text>
               </ScalePressable>
@@ -818,7 +837,7 @@ export default function AuthLandingScreen() {
           ) : null}
 
           <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }}>
+            <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
               {t("authLanding.legalFooter")}
             </Text>
             <LegalExternalLinks align="center" showSupport={false} />

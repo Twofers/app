@@ -602,9 +602,18 @@ export default function AccountScreen() {
           borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
+          maxWidth: "100%",
         }}
       >
-        <Text style={{ color: active ? theme.primary : theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
+        <Text
+          style={{ color: active ? theme.primary : theme.text, fontWeight: "700", fontSize: 13 }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          maxFontSizeMultiplier={1.15}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   }
@@ -755,6 +764,10 @@ export default function AccountScreen() {
                   fontSize: 14,
                   color: tabMode === "customer" ? theme.primaryText : theme.text,
                 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
               >
                 {t("tabMode.customer")}
               </Text>
@@ -780,6 +793,10 @@ export default function AccountScreen() {
                   fontSize: 14,
                   color: tabMode === "business" ? theme.primaryText : theme.text,
                 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
               >
                 {t("tabMode.business")}
               </Text>

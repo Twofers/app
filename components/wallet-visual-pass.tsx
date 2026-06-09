@@ -184,38 +184,51 @@ export function WalletVisualPassModal({
           paddingHorizontal: 20,
         }}
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: Spacing.sm, marginBottom: 16 }}>
           <View
             style={{
+              flexShrink: 1,
               backgroundColor: "#22c55e",
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderRadius: 10,
             }}
           >
-            <Text style={{ color: "#052e16", fontWeight: "900", fontSize: 12, letterSpacing: 1 }}>
+            <Text
+              style={{ color: "#052e16", fontWeight: "900", fontSize: 12, letterSpacing: 1 }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              maxFontSizeMultiplier={1.15}
+            >
               {t("consumerWallet.passRedeemingBadge")}
             </Text>
           </View>
-          <Text style={{ color: "#86efac", fontSize: 13, fontWeight: "600" }}>
+          <Text style={{ color: "#86efac", fontSize: 13, fontWeight: "600", flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
             {formatClock(nowMs, i18n.language)}
           </Text>
         </View>
 
-        <Text style={{ color: "#bbf7d0", fontSize: 14 }} numberOfLines={1}>
+        <Text style={{ color: "#bbf7d0", fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
           {businessName}
         </Text>
-        <Text style={{ color: "#fff", fontSize: 22, fontWeight: "900", marginTop: 6, marginBottom: 16 }} numberOfLines={3}>
+        <Text
+          style={{ color: "#fff", fontSize: 22, fontWeight: "900", marginTop: 6, marginBottom: 16 }}
+          numberOfLines={3}
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          maxFontSizeMultiplier={1.15}
+        >
           {dealTitle}
         </Text>
 
         {claimedAt ? (
-          <Text style={{ color: "#86efac", fontSize: 12, opacity: 0.85, marginBottom: 8 }}>
+          <Text style={{ color: "#86efac", fontSize: 12, opacity: 0.85, marginBottom: 8 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
             {t("consumerWallet.claimedRecord", { datetime: formatAppDateTime(claimedAt, i18n.language) })}
           </Text>
         ) : null}
         {redeemByIso ? (
-          <Text style={{ color: "#86efac", fontSize: 12, opacity: 0.85, marginBottom: 20 }}>
+          <Text style={{ color: "#86efac", fontSize: 12, opacity: 0.85, marginBottom: 20 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
             {t("consumerWallet.passRedeemByLine", { datetime: formatAppDateTime(redeemByIso, i18n.language) })}
           </Text>
         ) : null}
@@ -230,13 +243,21 @@ export function WalletVisualPassModal({
             marginBottom: 20,
           }}
         >
-          <Text style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 }}>
+          <Text
+            style={{ color: "#bbf7d0", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            maxFontSizeMultiplier={1.15}
+          >
             {t("consumerWallet.passStaffCountdown")}
           </Text>
           {completing ? (
             <View style={{ marginTop: 16, alignItems: "center", gap: 12 }}>
               <ActivityIndicator color="#fff" size="large" />
-              <Text style={{ color: "#fff", fontWeight: "700" }}>{t("consumerWallet.passCompleting")}</Text>
+              <Text style={{ color: "#fff", fontWeight: "700", textAlign: "center" }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+                {t("consumerWallet.passCompleting")}
+              </Text>
             </View>
           ) : (
             <Text style={{ color: "#fff", fontSize: 56, fontWeight: "900", marginTop: 8 }}>
@@ -251,11 +272,25 @@ export function WalletVisualPassModal({
         </Animated.View>
 
         <View style={{ alignItems: "center", marginBottom: 24 }}>
-          <Text style={{ color: "#86efac", fontSize: 11, fontWeight: "800", letterSpacing: 0.5 }}>
+          <Text
+            style={{ color: "#86efac", fontSize: 11, fontWeight: "800", letterSpacing: 0.5, textAlign: "center" }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            maxFontSizeMultiplier={1.15}
+          >
             {t("consumerWallet.verifyCodeLabel")}
           </Text>
-          <Text style={{ color: "#fff", fontSize: 28, fontWeight: "900", letterSpacing: 6, marginTop: 8 }}>{codeDisplay}</Text>
-          <Text style={{ color: "#86efac", fontSize: 12, marginTop: 12, textAlign: "center", opacity: 0.9 }}>
+          <Text
+            style={{ color: "#fff", fontSize: 28, fontWeight: "900", letterSpacing: 6, marginTop: 8 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            maxFontSizeMultiplier={1.1}
+          >
+            {codeDisplay}
+          </Text>
+          <Text style={{ color: "#86efac", fontSize: 12, marginTop: 12, textAlign: "center", opacity: 0.9 }} maxFontSizeMultiplier={1.15}>
             {t("consumerWallet.passStaffHint")}
           </Text>
         </View>
@@ -272,7 +307,13 @@ export function WalletVisualPassModal({
             opacity: completing ? 0.5 : 1,
           }}
         >
-          <Text style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}>
+          <Text
+            style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.15}
+          >
             {remainingSec > 0 ? t("consumerWallet.passCloseEarly") : t("consumerWallet.passDone")}
           </Text>
         </HapticScalePressable>

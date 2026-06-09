@@ -75,10 +75,19 @@ export function LegalExternalLinks({
               paddingHorizontal: 8,
               paddingVertical: 10,
               justifyContent: "center",
+              maxWidth: "100%",
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: C.accentText }}>{item.label}</Text>
+            <Text
+              style={{ fontSize: 14, fontWeight: "700", color: C.accentText }}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              maxFontSizeMultiplier={1.15}
+            >
+              {item.label}
+            </Text>
           </HapticScalePressable>
         </Fragment>
       ))}

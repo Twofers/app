@@ -75,7 +75,9 @@ export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: str
           onPress={handlePress}
           style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 12 }}
         >
-          <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>{label}</Text>
+          <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+            {label}
+          </Text>
         </Pressable>
       </View>
     </InputAccessoryView>

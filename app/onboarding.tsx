@@ -253,7 +253,15 @@ export default function OnboardingScreen() {
                 backgroundColor: locationMode === "gps" ? selectedSurface : C.surface,
               }}
             >
-              <Text style={{ fontWeight: "700", color: locationMode === "gps" ? C.accentText : C.text }}>{t("onboarding.useGps")}</Text>
+              <Text
+                style={{ fontWeight: "700", color: locationMode === "gps" ? C.accentText : C.text, textAlign: "center" }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
+              >
+                {t("onboarding.useGps")}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => { setLocationMode("zip"); setHint(null); }}
@@ -263,7 +271,15 @@ export default function OnboardingScreen() {
                 backgroundColor: locationMode === "zip" ? selectedSurface : C.surface,
               }}
             >
-              <Text style={{ fontWeight: "700", color: locationMode === "zip" ? C.accentText : C.text }}>{t("onboarding.useZipInstead")}</Text>
+              <Text
+                style={{ fontWeight: "700", color: locationMode === "zip" ? C.accentText : C.text, textAlign: "center" }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
+              >
+                {t("onboarding.useZipInstead")}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -312,12 +328,18 @@ export default function OnboardingScreen() {
                   key={m}
                   onPress={() => setRadius(m)}
                   style={{
-                    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill,
+                    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill, maxWidth: "100%",
                     backgroundColor: active ? selectedSurface : C.surfaceMuted,
                     borderWidth: 1, borderColor: active ? selectedBorder : C.border,
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: active ? C.accentText : C.text }}>
+                  <Text
+                    style={{ fontWeight: "700", color: active ? C.accentText : C.text }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    maxFontSizeMultiplier={1.15}
+                  >
                     {t("onboarding.radiusMiles", { miles: m })}
                   </Text>
                 </Pressable>
@@ -338,12 +360,18 @@ export default function OnboardingScreen() {
                   key={key}
                   onPress={() => setCategories((prev) => (active ? prev.filter((c) => c !== key) : [...prev, key]))}
                   style={{
-                    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill,
+                    paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill, maxWidth: "100%",
                     backgroundColor: active ? selectedSurface : C.surfaceMuted,
                     borderWidth: 1, borderColor: active ? selectedBorder : C.border,
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: active ? C.accentText : C.text }}>
+                  <Text
+                    style={{ fontWeight: "700", color: active ? C.accentText : C.text }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    maxFontSizeMultiplier={1.15}
+                  >
                     {t(`businessSetup.cat.${key}`)}
                   </Text>
                 </Pressable>

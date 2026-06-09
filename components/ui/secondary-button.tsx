@@ -67,6 +67,7 @@ export function SecondaryButton({
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}
+        maxFontSizeMultiplier={1.15}
         style={{
           color: theme.text,
           fontSize: 17,

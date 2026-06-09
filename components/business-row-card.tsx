@@ -91,9 +91,16 @@ export function BusinessRowCard({
                   backgroundColor: theme.successSurface,
                   borderWidth: 1,
                   borderColor: theme.successBorder,
+                  maxWidth: "100%",
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.success }}>
+                <Text
+                  style={{ fontSize: 12, fontWeight: "800", color: theme.success }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("dealStatus.liveDeal")}
                 </Text>
               </View>
@@ -107,9 +114,16 @@ export function BusinessRowCard({
                   backgroundColor: theme.surfaceMuted,
                   borderWidth: 1,
                   borderColor: theme.border,
+                  maxWidth: "100%",
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText }}>
+                <Text
+                  style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("dealStatus.noLiveDeal")}
                 </Text>
               </View>

@@ -77,12 +77,20 @@ export function DealPreviewModal({
               borderBottomColor: Colors.light.border,
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17, color: Colors.light.text }}>
+            <Text
+              style={{ flex: 1, minWidth: 0, fontWeight: "800", fontSize: 17, color: Colors.light.text }}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              maxFontSizeMultiplier={1.15}
+            >
               {t("createQuick.previewTitle", { defaultValue: "Deal preview" })}
             </Text>
             <Text
               onPress={onDismiss}
-              style={{ fontSize: 15, fontWeight: "700", color: Colors.light.mutedText }}
+              style={{ flexShrink: 0, fontSize: 15, fontWeight: "700", color: Colors.light.mutedText }}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.15}
             >
               {t("createQuick.previewGoBack", { defaultValue: "Back" })}
             </Text>
@@ -101,6 +109,7 @@ export function DealPreviewModal({
                 marginBottom: Spacing.sm,
                 textAlign: "center",
               }}
+              maxFontSizeMultiplier={1.15}
             >
               {t("createQuick.previewHint", { defaultValue: "Review what customers will see before publishing." })}
             </Text>

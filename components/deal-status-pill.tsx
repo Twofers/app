@@ -44,9 +44,18 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
         paddingVertical: 5,
         borderRadius: 10,
         backgroundColor: c.background,
+        maxWidth: "100%",
       }}
     >
-      <Text style={{ fontSize: 12, fontWeight: "800", color: c.text, letterSpacing: 0.3 }}>{label}</Text>
+      <Text
+        style={{ fontSize: 12, fontWeight: "800", color: c.text, letterSpacing: 0.3 }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.76}
+        maxFontSizeMultiplier={1.15}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

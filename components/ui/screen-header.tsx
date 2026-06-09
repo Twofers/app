@@ -38,6 +38,10 @@ export function ScreenHeader({
             titleStyle,
           ]}
           accessibilityRole="header"
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          maxFontSizeMultiplier={1.15}
         >
           {title}
         </Text>
@@ -54,12 +58,13 @@ export function ScreenHeader({
               subtitleStyle,
             ]}
             numberOfLines={4}
+            maxFontSizeMultiplier={1.2}
           >
             {subtitle}
           </Text>
         ) : null}
       </View>
-      {rightSlot ? <View style={{ paddingTop: 2 }}>{rightSlot}</View> : null}
+      {rightSlot ? <View style={{ paddingTop: 2, flexShrink: 0 }}>{rightSlot}</View> : null}
     </View>
   );
 }

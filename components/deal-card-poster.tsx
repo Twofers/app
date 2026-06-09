@@ -110,13 +110,21 @@ export function DealCardPoster({
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: "#9ca3af", fontSize: 15, fontWeight: "600" }}>{t("dealDetail.noImage")}</Text>
+            <Text
+              style={{ color: "#9ca3af", fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: Spacing.md }}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={1.15}
+            >
+              {t("dealDetail.noImage")}
+            </Text>
           </View>
         )}
 
         <View style={{ padding: Spacing.xxl }}>
           {/* Status + countdown badge row */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
             <DealStatusPill status={dealStatus} />
             {countdown && (
               <View
@@ -125,9 +133,16 @@ export function DealCardPoster({
                   borderRadius: 999,
                   paddingHorizontal: 12,
                   paddingVertical: 4,
+                  maxWidth: "100%",
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {countdown}
                 </Text>
               </View>
@@ -136,33 +151,49 @@ export function DealCardPoster({
 
           {businessName && (
             <View style={{ marginBottom: Spacing.xs }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <Text
+                style={{ fontSize: 13, fontWeight: "700", opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 }}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.15}
+              >
                 {businessName}
               </Text>
-              {distanceLabel && <Text style={{ fontSize: 12, marginTop: 2, color: Colors.light.mutedText }}>{distanceLabel}</Text>}
+              {distanceLabel && (
+                <Text style={{ fontSize: 12, marginTop: 2, color: Colors.light.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                  {distanceLabel}
+                </Text>
+              )}
             </View>
           )}
 
-          <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28 }}>{title}</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28 }} numberOfLines={3} maxFontSizeMultiplier={1.15}>
+            {title}
+          </Text>
 
           {price != null && (
-            <Text style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.accentText }}>
+            <Text
+              style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.accentText }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={1.15}
+            >
               ${price.toFixed(2)}
             </Text>
           )}
 
           {description && (
-            <Text style={{ marginTop: Spacing.sm, opacity: 0.75, fontSize: 15.5, lineHeight: 23 }}>
+            <Text style={{ marginTop: Spacing.sm, opacity: 0.75, fontSize: 15.5, lineHeight: 23 }} maxFontSizeMultiplier={1.15}>
               {description.length > 160 ? `${description.slice(0, 160)}…` : description}
             </Text>
           )}
 
-          <Text style={{ marginTop: Spacing.md, opacity: 0.6, fontSize: 14 }}>
+          <Text style={{ marginTop: Spacing.md, opacity: 0.6, fontSize: 14 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
             {t("dealsBrowse.dealEnds", { time: formatAppDateTime(endTime, i18n.language) })}
           </Text>
 
           {remainingClaims != null && (
-            <Text style={{ marginTop: Spacing.xs, opacity: 0.6, fontSize: 14 }}>
+            <Text style={{ marginTop: Spacing.xs, opacity: 0.6, fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
               {t("dealsBrowse.cardClaimsLeft", { count: remainingClaims })}
             </Text>
           )}
@@ -204,8 +235,14 @@ export function DealCardPoster({
               size={24}
               color={isFavorite ? Colors.light.primary : "#6b7280"}
             />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "600" }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{ fontSize: 16, fontWeight: "600" }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.15}
+              >
                 {isFavorite ? t("dealsBrowse.cardSaved") : t("dealsBrowse.cardSaveFavorite")}
               </Text>
             </View>
@@ -236,7 +273,9 @@ export function DealCardPoster({
 
         {statusMessage && (
           <View style={{ backgroundColor: statusColors.background, borderRadius: 24, padding: Spacing.md }}>
-            <Text style={{ color: statusColors.text, fontWeight: "600" }}>{statusMessage}</Text>
+            <Text style={{ color: statusColors.text, fontWeight: "600" }} maxFontSizeMultiplier={1.15}>
+              {statusMessage}
+            </Text>
           </View>
         )}
       </View>

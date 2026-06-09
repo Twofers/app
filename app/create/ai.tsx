@@ -1685,18 +1685,34 @@ export default function AiDealScreen() {
               <StepBadge n={3} total={3} t={t} />
             </View>
             <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
-                style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? Colors.light.primary : Colors.light.surfaceMuted }}
+                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? Colors.light.primary : Colors.light.surfaceMuted }}
               >
-                <Text style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}>{t("createAi.oneTime")}</Text>
+                <Text
+                  style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
+                  {t("createAi.oneTime")}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => setValidityMode("recurring")}
-                style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? Colors.light.primary : Colors.light.surfaceMuted }}
+                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? Colors.light.primary : Colors.light.surfaceMuted }}
               >
-                <Text style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}>{t("createAi.recurring")}</Text>
+                <Text
+                  style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  maxFontSizeMultiplier={1.15}
+                >
+                  {t("createAi.recurring")}
+                </Text>
               </Pressable>
             </View>
 
@@ -1817,9 +1833,15 @@ export default function AiDealScreen() {
                             setWindowEnd(dateFromMinutes(preset.endMin));
                           }
                         }}
-                        style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted }}
+                        style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted }}
                       >
-                        <Text style={{ color: active ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }}>
+                        <Text
+                          style={{ color: active ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.78}
+                          maxFontSizeMultiplier={1.15}
+                        >
                           {t(`createAi.preset_${preset.key}`)}
                         </Text>
                       </Pressable>
@@ -1848,9 +1870,17 @@ export default function AiDealScreen() {
                             selected ? prev.filter((d) => d !== day.value) : [...prev, day.value],
                           );
                         }}
-                        style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? Colors.light.primary : Colors.light.surfaceMuted }}
+                        style={{ maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? Colors.light.primary : Colors.light.surfaceMuted }}
                       >
-                        <Text style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}>{day.label}</Text>
+                        <Text
+                          style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.78}
+                          maxFontSizeMultiplier={1.15}
+                        >
+                          {day.label}
+                        </Text>
                       </Pressable>
                     );
                   })}

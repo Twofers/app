@@ -56,7 +56,9 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
 
   return (
     <View style={{ gap: Spacing.sm }}>
-      <Text style={{ fontSize: 13, opacity: 0.65, textAlign: "center" }}>{t("consumerWallet.slideHint")}</Text>
+      <Text style={{ fontSize: 13, opacity: 0.65, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+        {t("consumerWallet.slideHint")}
+      </Text>
       <View
         onLayout={onLayout}
         accessibilityRole="adjustable"
@@ -73,13 +75,19 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
         <Text
           style={{
             position: "absolute",
-            alignSelf: "center",
+            left: KNOB + 8,
+            right: KNOB + 8,
+            textAlign: "center",
             pointerEvents: "none",
             fontWeight: "800",
             fontSize: 14,
             color: "#888",
             letterSpacing: 0.3,
           }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          maxFontSizeMultiplier={1.1}
         >
           {t("consumerWallet.slideLabel")}
         </Text>

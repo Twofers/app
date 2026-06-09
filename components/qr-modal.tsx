@@ -254,11 +254,11 @@ export function QrModal({
                     accessibilityIgnoresInvertColors
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.15}>
                     {t("dealStatus.claimed")}
                   </Text>
-                  <Text style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }}>
+                  <Text style={{ color: "rgba(255,255,255,0.72)", marginTop: 2, fontSize: 12, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                     {t("consumerWallet.qrModalTitle")}
                   </Text>
                 </View>
@@ -270,7 +270,9 @@ export function QrModal({
                     backgroundColor: Colors.light.primary,
                   }}
                 >
-                  <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>{t("commonUi.ok")}</Text>
+                  <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                    {t("commonUi.ok")}
+                  </Text>
                 </View>
               </View>
 
@@ -301,7 +303,7 @@ export function QrModal({
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-            <Text style={{ flex: 1, fontSize: 18, fontWeight: "800", color: "#11181C" }}>
+            <Text style={{ flex: 1, fontSize: 18, fontWeight: "800", color: "#11181C" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.15}>
               {t("consumerWallet.qrModalTitle")}
             </Text>
             <View
@@ -314,7 +316,13 @@ export function QrModal({
                 borderColor: qrExpired ? "#fecaca" : "#bbf7d0",
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: "900", color: qrExpired ? "#991b1b" : "#166534" }}>
+              <Text
+                style={{ fontSize: 11, fontWeight: "900", color: qrExpired ? "#991b1b" : "#166534" }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.76}
+                maxFontSizeMultiplier={1.15}
+              >
                 {qrExpired ? t("consumerWallet.verifyExpired") : t("consumerWallet.verifyActive")}
               </Text>
             </View>
@@ -402,7 +410,7 @@ export function QrModal({
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }}>
+              <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                 {t("consumerWallet.hideQr")}
               </Text>
             </HapticScalePressable>
@@ -417,14 +425,14 @@ export function QrModal({
                   opacity: refreshing ? 0.6 : 1,
                 }}
               >
-                <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }}>
+                <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                   {refreshing ? t("consumerWallet.refreshingQrModal") : t("consumerWallet.refreshQr")}
                 </Text>
               </HapticScalePressable>
             ) : null}
             {onShare ? (
               <>
-                <Text style={{ marginTop: 10, color: "#475569", fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+                <Text style={{ marginTop: 10, color: "#475569", fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
                   {t("shareDeal.friendOwnCode", { defaultValue: "They'll get their own claim code." })}
                 </Text>
                 <HapticScalePressable
@@ -440,14 +448,14 @@ export function QrModal({
                     opacity: sharing ? 0.6 : 1,
                   }}
                 >
-                  <Text style={{ color: Colors.light.primary, fontWeight: "800", textAlign: "center" }}>
+                  <Text style={{ color: Colors.light.primary, fontWeight: "800", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                     {sharing
                       ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
                       : t("shareDeal.sendToFriend", { defaultValue: "Send to a friend" })}
                   </Text>
                 </HapticScalePressable>
                 {shareError ? (
-                  <Text style={{ marginTop: 8, color: "#b91c1c", fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+                  <Text style={{ marginTop: 8, color: "#b91c1c", fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
                     {shareError}
                   </Text>
                 ) : null}

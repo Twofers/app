@@ -854,7 +854,7 @@ export default function HomeScreen() {
                 <Text style={{ color: theme.text, fontSize: 14, fontWeight: "800" }} numberOfLines={1}>
                   {businessName}
                 </Text>
-                <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600" }}>
+                <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "600", textAlign: "center" }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
                   {t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
                 </Text>
               </View>
@@ -904,40 +904,47 @@ export default function HomeScreen() {
                   backgroundColor: statusColor.background,
                   borderWidth: 1,
                   borderColor: statusColor.border,
+                  maxWidth: "100%",
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "800", color: statusColor.text }}>
+                <Text
+                  style={{ fontSize: 12, fontWeight: "800", color: statusColor.text }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {statusLabel}
                 </Text>
               </View>
               {distanceLabel ? (
-                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 13 }} numberOfLines={1}>
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 13 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {distanceLabel}
                 </Text>
               ) : null}
               {businessLocation ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0, maxWidth: "100%" }}>
                   <MaterialIcons name="place" size={15} color={theme.mutedText} />
-                  <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 13, flexShrink: 1 }} numberOfLines={1}>
+                  <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 13, flexShrink: 1 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                     {businessLocation}
                   </Text>
                 </View>
               ) : null}
             </View>
-            <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2}>
+            <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
               {bogoText}
             </Text>
-            <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }}>
+            <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }} maxFontSizeMultiplier={1.15}>
               {localizedDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
             <View style={{ marginTop: Spacing.xs, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
               <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
-              <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14 }}>
+              <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14, flexShrink: 1 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
                 {isLive ? formatTimeLeft(item.end_time) : statusLabel}
               </Text>
             </View>
             {claimStatus[item.id]?.message ? (
-              <Text style={{ marginTop: Spacing.sm, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+              <Text style={{ marginTop: Spacing.sm, fontSize: 13, lineHeight: 18, color: theme.mutedText }} maxFontSizeMultiplier={1.15}>
                 {claimStatus[item.id]?.message}
               </Text>
             ) : null}
@@ -954,7 +961,15 @@ export default function HomeScreen() {
               accessibilityLabel={t("consumerHome.shopInfoLink")}
               style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
             >
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
+              <Text
+                style={{ color: theme.accentText, fontWeight: "700", fontSize: 15, textAlign: "center" }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.15}
+              >
+                {t("consumerHome.shopInfoLink")}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -1054,10 +1069,11 @@ export default function HomeScreen() {
               paddingHorizontal: Spacing.md,
               backgroundColor: theme.surfaceMuted,
               gap: Spacing.xs,
+              maxWidth: "100%",
             }}
           >
             <MaterialIcons name="place" size={18} color={theme.primary} />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }} numberOfLines={1}>
+            <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: "700", color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
               {!userGeo
                 ? t("consumerHome.locationChipNoLocation")
                 : feedSegment === "shops"

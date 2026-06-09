@@ -51,16 +51,42 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
           />
         </View>
 
-        <Text style={{ fontSize: 17, fontWeight: "800", color: c.text, textAlign: "center" }}>{title}</Text>
-        <Text style={{ fontSize: 14, opacity: 0.72, lineHeight: 22, color: c.text, textAlign: "center" }}>{message}</Text>
+        <Text
+          style={{ fontSize: 17, fontWeight: "800", color: c.text, textAlign: "center" }}
+          numberOfLines={3}
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          maxFontSizeMultiplier={1.15}
+        >
+          {title}
+        </Text>
+        <Text style={{ fontSize: 14, opacity: 0.72, lineHeight: 22, color: c.text, textAlign: "center" }} maxFontSizeMultiplier={1.2}>
+          {message}
+        </Text>
 
         {actionLabel && onAction ? (
           <Pressable
             onPress={onAction}
             accessibilityRole="button"
-            style={{ marginTop: 10, backgroundColor: c.primary, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
+            style={{
+              marginTop: 10,
+              maxWidth: "100%",
+              backgroundColor: c.primary,
+              borderRadius: 999,
+              paddingVertical: 12,
+              paddingHorizontal: 28,
+              alignItems: "center",
+            }}
           >
-            <Text style={{ color: c.primaryText, fontWeight: "800", fontSize: 15 }}>{actionLabel}</Text>
+            <Text
+              style={{ color: c.primaryText, fontWeight: "800", fontSize: 15, textAlign: "center" }}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              maxFontSizeMultiplier={1.15}
+            >
+              {actionLabel}
+            </Text>
           </Pressable>
         ) : null}
 
@@ -70,10 +96,15 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
             alignItems: "center",
             gap: 8,
             marginTop: 2,
+            maxWidth: "100%",
           }}
         >
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.primary }} />
-          <Text style={{ fontSize: 13, color: c.primary, opacity: 0.95, lineHeight: 18, textAlign: "center" }}>
+          <Text
+            style={{ flexShrink: 1, fontSize: 13, color: c.primary, opacity: 0.95, lineHeight: 18, textAlign: "center" }}
+            numberOfLines={2}
+            maxFontSizeMultiplier={1.15}
+          >
             {t("emptyState.encouragement")}
           </Text>
         </View>

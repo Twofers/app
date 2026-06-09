@@ -38,14 +38,22 @@ export function Banner({ message, tone = "info", onRetry }: BannerProps) {
         marginTop: 12,
       }}
     >
-      <Text style={{ color: stylesByTone.textColor, fontWeight: "600", lineHeight: 20 }}>{message}</Text>
+      <Text style={{ color: stylesByTone.textColor, fontWeight: "600", lineHeight: 20 }} maxFontSizeMultiplier={1.2}>
+        {message}
+      </Text>
       {onRetry ? (
         <Pressable
           onPress={onRetry}
           accessibilityRole="button"
           style={{ marginTop: 6 }}
         >
-          <Text style={{ color: stylesByTone.textColor, fontWeight: "700", textDecorationLine: "underline", fontSize: 13 }}>
+          <Text
+            style={{ color: stylesByTone.textColor, fontWeight: "700", textDecorationLine: "underline", fontSize: 13 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.15}
+          >
             {i18n.t("commonUi.tapToRetry")}
           </Text>
         </Pressable>

@@ -429,7 +429,13 @@ function ScrollFilterRow({
               backgroundColor: active ? "rgba(255,159,28,0.12)" : Colors.light.surface,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.accentText : Colors.light.text }}>
+            <Text
+              style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.accentText : Colors.light.text }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              maxFontSizeMultiplier={1.15}
+            >
               {item.label}
             </Text>
           </Pressable>
@@ -1191,7 +1197,13 @@ export default function BusinessDashboard() {
                 else setBulkSelectMode(true);
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: primary }}>
+              <Text
+                style={{ fontSize: 14, fontWeight: "700", color: primary }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
+              >
                 {bulkSelectMode
                   ? t("offersDashboard.selectDone", "Done")
                   : t("offersDashboard.selectMode", "Select")}
@@ -1206,13 +1218,13 @@ export default function BusinessDashboard() {
                 setSelectedDealIds(new Set(filteredDeals.map((d) => d.id)));
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: primary }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: primary }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                 {t("offersDashboard.selectAll", "Select all")}
               </Text>
             </Pressable>
             {selectedDealIds.size > 0 ? (
               <Pressable onPress={() => setSelectedDealIds(new Set())}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {t("offersDashboard.deselectAll", "Deselect all")}
                 </Text>
               </Pressable>
@@ -1779,7 +1791,13 @@ export default function BusinessDashboard() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+                <Text
+                  style={{ color: "#fff", fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("offersDashboard.bulkPause", { defaultValue: "Pause ({{count}})", count: selectedDealIds.size })}
                 </Text>
               </Pressable>
@@ -1795,7 +1813,13 @@ export default function BusinessDashboard() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: primary, fontWeight: "800", fontSize: 14 }}>
+                <Text
+                  style={{ color: primary, fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("offersDashboard.bulkResume", { defaultValue: "Resume ({{count}})", count: selectedDealIds.size })}
                 </Text>
               </Pressable>
@@ -1811,7 +1835,13 @@ export default function BusinessDashboard() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: "#b71c1c", fontWeight: "800", fontSize: 14 }}>
+                <Text
+                  style={{ color: "#b71c1c", fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {t("offersDashboard.bulkDelete", { defaultValue: "Delete ({{count}})", count: selectedDealIds.size })}
                 </Text>
               </Pressable>

@@ -387,9 +387,18 @@ export default function SettingsScreen() {
           backgroundColor: active ? theme.text : theme.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
+          maxWidth: "100%",
         }}
       >
-        <Text style={{ fontWeight: "700", color: active ? theme.background : theme.text }}>{label}</Text>
+        <Text
+          style={{ fontWeight: "700", color: active ? theme.background : theme.text }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          maxFontSizeMultiplier={1.15}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   }
@@ -397,7 +406,15 @@ export default function SettingsScreen() {
   return (
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("settingsScreen.title")}</Text>
+      <Text
+        style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.78}
+        maxFontSizeMultiplier={1.15}
+      >
+        {t("settingsScreen.title")}
+      </Text>
 
       <ScrollView
         style={{ flex: 1, marginTop: Spacing.lg }}

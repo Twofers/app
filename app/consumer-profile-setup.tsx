@@ -240,8 +240,8 @@ export default function ConsumerProfileSetupScreen() {
           </View>
         </View>
 
-        <View>
-          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginBottom: Spacing.sm }}>
+          <View>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginBottom: Spacing.sm, flexWrap: "wrap" }}>
             <Text style={{ fontWeight: "700", color: C.text }}>{t("consumerProfile.birthdateTitle")}</Text>
             <Text style={{ fontSize: 12, color: C.mutedText }}>({t("consumerProfile.birthdateOptional")})</Text>
           </View>
@@ -261,7 +261,13 @@ export default function ConsumerProfileSetupScreen() {
               backgroundColor: C.surface,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "600", color: birthdateTouched ? C.text : C.mutedText }}>
+            <Text
+              style={{ fontSize: 16, fontWeight: "600", color: birthdateTouched ? C.text : C.mutedText }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              maxFontSizeMultiplier={1.15}
+            >
               {birthdateTouched
                 ? birthDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
                 : t("consumerProfile.addBirthdate", { defaultValue: "Add birthday" })}
@@ -320,11 +326,17 @@ export default function ConsumerProfileSetupScreen() {
                 onPress={cancelIosBirthdatePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingRight: Spacing.md }}
               >
-                <Text style={{ color: C.mutedText, fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: C.mutedText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {t("commonUi.cancel")}
                 </Text>
               </Pressable>
-              <Text style={{ color: C.text, fontSize: 16, fontWeight: "800" }}>
+              <Text
+                style={{ color: C.text, fontSize: 16, fontWeight: "800", flex: 1, textAlign: "center" }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
+              >
                 {t("consumerProfile.birthdateTitle")}
               </Text>
               <Pressable
@@ -332,7 +344,7 @@ export default function ConsumerProfileSetupScreen() {
                 onPress={confirmIosBirthdatePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingLeft: Spacing.md }}
               >
-                <Text style={{ color: C.primary, fontSize: 16, fontWeight: "800" }}>
+                <Text style={{ color: C.primary, fontSize: 16, fontWeight: "800" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {t("commonUi.done", { defaultValue: "Done" })}
                 </Text>
               </Pressable>
