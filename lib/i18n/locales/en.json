@@ -762,7 +762,11 @@
     "preparing": "Preparing link...",
     "errCreateLink": "Couldn't create share link. Try again.",
     "shareSheetTitle": "Share this TWOFER deal",
-    "message": "I found this TWOFER deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}"
+    "message": "I found this TWOFER deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}",
+    "linkUnavailableTitle": "Deal unavailable",
+    "linkUnavailableBody": "This shared deal is no longer available.",
+    "linkErrorTitle": "Couldn't open link",
+    "linkErrorBody": "Check your connection and try again."
   },
   "redeem": {
     "title": "Redeem",

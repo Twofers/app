@@ -4,8 +4,10 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { interpretShareLookup, parseShareLink } from "@/lib/deal-share-link";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 import { claimInitialUrl } from "@/lib/initial-url-guard";
+import { supabase } from "@/lib/supabase";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,8 +36,9 @@ function extractDealId(url: string | null): string | null {
 }
 
 /**
- * Listens for deep links (custom scheme and HTTPS edge function URLs) and
- * navigates to /deal/[id] when a deal link is detected.
+ * Listens for deep links (custom scheme, HTTPS edge function URLs, and public
+ * share links like https://www.twoferapp.com/s/<code>) and navigates to
+ * /deal/[id] when a deal link is detected.
  */
 export function DealDeepLinkHandler() {
   const router = useRouter();
@@ -44,19 +47,64 @@ export function DealDeepLinkHandler() {
   const initialDone = useRef(false);
 
   useEffect(() => {
-    function navigate(url: string | null) {
-      const dealId = extractDealId(url);
-      if (!dealId) return;
-      if (!UUID_RE.test(dealId)) {
-        confirm({
-          iconName: "link-off",
-          title: t("commonUi.invalidDealLinkTitle"),
-          message: t("commonUi.invalidDealLinkBody"),
-          confirmLabel: t("commonUi.ok"),
-        });
+    function showInvalidLink() {
+      confirm({
+        iconName: "link-off",
+        title: t("commonUi.invalidDealLinkTitle"),
+        message: t("commonUi.invalidDealLinkBody"),
+        confirmLabel: t("commonUi.ok"),
+      });
+    }
+
+    async function resolveShareCode(shareCode: string) {
+      const { data, error } = await supabase.rpc("lookup_deal_share", {
+        lookup_code: shareCode,
+      });
+      const resolution = interpretShareLookup(data, error);
+      if (resolution.status === "valid") {
+        router.push(`/deal/${resolution.dealId}` as Href);
         return;
       }
-      router.push(`/deal/${dealId}` as Href);
+      confirm({
+        iconName: "link-off",
+        title:
+          resolution.status === "unavailable"
+            ? t("shareDeal.linkUnavailableTitle")
+            : t("shareDeal.linkErrorTitle"),
+        message:
+          resolution.status === "unavailable"
+            ? t("shareDeal.linkUnavailableBody")
+            : t("shareDeal.linkErrorBody"),
+        confirmLabel: t("commonUi.ok"),
+      });
+    }
+
+    function navigate(url: string | null) {
+      const dealId = extractDealId(url);
+      if (dealId) {
+        if (!UUID_RE.test(dealId)) {
+          showInvalidLink();
+          return;
+        }
+        router.push(`/deal/${dealId}` as Href);
+        return;
+      }
+
+      const share = parseShareLink(url);
+      if (share.type === "invalid") {
+        showInvalidLink();
+        return;
+      }
+      if (share.type === "code") {
+        void resolveShareCode(share.code).catch(() => {
+          confirm({
+            iconName: "link-off",
+            title: t("shareDeal.linkErrorTitle"),
+            message: t("shareDeal.linkErrorBody"),
+            confirmLabel: t("commonUi.ok"),
+          });
+        });
+      }
     }
 
     const sub = Linking.addEventListener("url", ({ url }) => {
