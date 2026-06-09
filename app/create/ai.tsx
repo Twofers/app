@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   ScrollView,
   Text,
@@ -25,7 +26,12 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
 import { Banner } from "../../components/ui/banner";
-import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -222,6 +228,19 @@ function parseOptionalPriceInput(raw: string): number | null {
   return Number.isNaN(n) ? NaN : n;
 }
 
+function sanitizeDecimalInput(raw: string): string {
+  const digitsAndDots = raw.replace(/[^\d.]/g, "");
+  const firstDot = digitsAndDots.indexOf(".");
+  if (firstDot === -1) return digitsAndDots;
+  return `${digitsAndDots.slice(0, firstDot + 1)}${digitsAndDots
+    .slice(firstDot + 1)
+    .replace(/\./g, "")}`;
+}
+
+function sanitizeIntegerInput(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
 type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
 
 const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
@@ -231,6 +250,7 @@ const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
 ];
 
 type RevisionTarget = "copy" | "image" | "both";
+type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 
 const COPY_PRESET_KEYS = [
   "createAi.revisePresetShorter",
@@ -352,6 +372,8 @@ export default function AiDealScreen() {
   const [showWindowEndPicker, setShowWindowEndPicker] = useState(false);
   const [windowStart, setWindowStart] = useState(new Date());
   const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [iosSchedulePicker, setIosSchedulePicker] = useState<IosSchedulePickerTarget | null>(null);
+  const [iosScheduleDraft, setIosScheduleDraft] = useState(new Date());
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
   const [schedulePreset, setSchedulePreset] = useState<string | null>(null);
   const [claimSettingsOpen, setClaimSettingsOpen] = useState(false);
@@ -1466,6 +1488,43 @@ export default function AiDealScreen() {
     image: t("createAi.reviseTargetImage"),
     both: t("createAi.reviseTargetBoth"),
   };
+  const iosSchedulePickerTitle =
+    iosSchedulePicker === "start"
+      ? t("createAi.startTime", { defaultValue: "Start date and time" })
+      : iosSchedulePicker === "end"
+        ? t("createAi.endTime", { defaultValue: "End date and time" })
+        : iosSchedulePicker === "windowStart"
+          ? t("createAi.windowStart", { defaultValue: "Daily start" })
+          : iosSchedulePicker === "windowEnd"
+            ? t("createAi.windowEnd", { defaultValue: "Daily end" })
+            : t("createAi.validity", { defaultValue: "Deal schedule" });
+  const iosSchedulePickerMode =
+    iosSchedulePicker === "windowStart" || iosSchedulePicker === "windowEnd" ? "time" : "datetime";
+
+  function openIosSchedulePicker(target: IosSchedulePickerTarget, value: Date) {
+    setIosScheduleDraft(value);
+    setIosSchedulePicker(target);
+  }
+
+  function cancelIosSchedulePicker() {
+    setIosSchedulePicker(null);
+  }
+
+  function confirmIosSchedulePicker() {
+    if (!iosSchedulePicker) return;
+    if (iosSchedulePicker === "start") {
+      setStartTime(iosScheduleDraft);
+    } else if (iosSchedulePicker === "end") {
+      setEndTime(iosScheduleDraft);
+    } else if (iosSchedulePicker === "windowStart") {
+      setSchedulePreset(null);
+      setWindowStart(iosScheduleDraft);
+    } else {
+      setSchedulePreset(null);
+      setWindowEnd(iosScheduleDraft);
+    }
+    setIosSchedulePicker(null);
+  }
 
   return (
     <KeyboardScreen>
@@ -1611,8 +1670,10 @@ export default function AiDealScreen() {
             <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
             <TextInput
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(value) => setPrice(sanitizeDecimalInput(value))}
               keyboardType="decimal-pad"
+              inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+              returnKeyType="done"
               placeholder={t("createAi.placeholderPrice")}
               style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
             />
@@ -1642,7 +1703,16 @@ export default function AiDealScreen() {
             {validityMode === "one-time" ? (
               <>
                 <Text style={{ marginTop: 12 }}>{t("createAi.startTime")}</Text>
-                <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === "ios") {
+                      openIosSchedulePicker("start", startTime);
+                    } else {
+                      setShowStartPicker(true);
+                    }
+                  }}
+                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                >
                   <Text>{formatAppDateTime(startTime, i18n.language)}</Text>
                 </Pressable>
                 {showStartPicker ? (
@@ -1671,7 +1741,7 @@ export default function AiDealScreen() {
                         }
                       }}
                     />
-                  ) : (
+                  ) : Platform.OS === "ios" ? null : (
                     <DateTimePicker
                       value={startTime}
                       mode="datetime"
@@ -1681,7 +1751,16 @@ export default function AiDealScreen() {
                 ) : null}
 
                 <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
-                <Pressable onPress={() => setShowEndPicker(true)} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === "ios") {
+                      openIosSchedulePicker("end", endTime);
+                    } else {
+                      setShowEndPicker(true);
+                    }
+                  }}
+                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                >
                   <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
                 </Pressable>
                 {showEndPicker ? (
@@ -1710,7 +1789,7 @@ export default function AiDealScreen() {
                         }
                       }}
                     />
-                  ) : (
+                  ) : Platform.OS === "ios" ? null : (
                     <DateTimePicker
                       value={endTime}
                       mode="datetime"
@@ -1778,10 +1857,19 @@ export default function AiDealScreen() {
                 </View>
 
                 <Text style={{ marginTop: 12 }}>{t("createAi.timeWindow")}</Text>
-                <Pressable onPress={() => setShowWindowStartPicker(true)} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === "ios") {
+                      openIosSchedulePicker("windowStart", windowStart);
+                    } else {
+                      setShowWindowStartPicker(true);
+                    }
+                  }}
+                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                >
                   <Text>{t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}</Text>
                 </Pressable>
-                {showWindowStartPicker ? (
+                {showWindowStartPicker && Platform.OS !== "ios" ? (
                   <DateTimePicker
                     value={windowStart}
                     mode="time"
@@ -1789,10 +1877,19 @@ export default function AiDealScreen() {
                   />
                 ) : null}
 
-                <Pressable onPress={() => setShowWindowEndPicker(true)} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === "ios") {
+                      openIosSchedulePicker("windowEnd", windowEnd);
+                    } else {
+                      setShowWindowEndPicker(true);
+                    }
+                  }}
+                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                >
                   <Text>{t("createAi.windowEnd")} {formatPickerTime(windowEnd)}</Text>
                 </Pressable>
-                {showWindowEndPicker ? (
+                {showWindowEndPicker && Platform.OS !== "ios" ? (
                   <DateTimePicker
                     value={windowEnd}
                     mode="time"
@@ -1816,16 +1913,20 @@ export default function AiDealScreen() {
                 <Text style={{ marginTop: 8 }}>{t("createAi.maxClaims")}</Text>
                 <TextInput
                   value={maxClaims}
-                  onChangeText={setMaxClaims}
+                  onChangeText={(value) => setMaxClaims(sanitizeIntegerInput(value))}
                   keyboardType="number-pad"
+                  inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                  returnKeyType="done"
                   placeholder={t("createAi.placeholderMaxClaims")}
                   style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
                 />
                 <Text style={{ marginTop: 8 }}>{t("createAi.cutoffBuffer")}</Text>
                 <TextInput
                   value={cutoffMins}
-                  onChangeText={setCutoffMins}
+                  onChangeText={(value) => setCutoffMins(sanitizeIntegerInput(value))}
                   keyboardType="number-pad"
+                  inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                  returnKeyType="done"
                   placeholder={t("createAi.placeholderCutoff")}
                   style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
                 />
@@ -2165,6 +2266,68 @@ export default function AiDealScreen() {
           </>
         )}
       </ScrollView>
+      <IosDoneInputAccessory />
+      <Modal
+        visible={Platform.OS === "ios" && iosSchedulePicker !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={cancelIosSchedulePicker}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
+          <View
+            style={{
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              backgroundColor: Colors.light.surface,
+              paddingTop: 8,
+              paddingHorizontal: horizontal,
+              paddingBottom: scrollBottom,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingVertical: 8,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                onPress={cancelIosSchedulePicker}
+                style={{ minHeight: 44, justifyContent: "center", paddingRight: 16 }}
+              >
+                <Text style={{ color: Colors.light.mutedText, fontSize: 16, fontWeight: "700" }}>
+                  {t("commonUi.cancel")}
+                </Text>
+              </Pressable>
+              <Text
+                numberOfLines={1}
+                style={{ flex: 1, color: Colors.light.text, fontSize: 16, fontWeight: "800", textAlign: "center" }}
+              >
+                {iosSchedulePickerTitle}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={confirmIosSchedulePicker}
+                style={{ minHeight: 44, justifyContent: "center", paddingLeft: 16 }}
+              >
+                <Text style={{ color: Colors.light.primary, fontSize: 16, fontWeight: "800" }}>
+                  {t("commonUi.done", { defaultValue: "Done" })}
+                </Text>
+              </Pressable>
+            </View>
+            <DateTimePicker
+              value={iosScheduleDraft}
+              mode={iosSchedulePickerMode}
+              display="spinner"
+              onChange={(_event, date) => {
+                if (date) setIosScheduleDraft(date);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
       {confirmModal}
     </KeyboardScreen>
   );

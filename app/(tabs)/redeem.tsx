@@ -12,7 +12,12 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { redeemToken } from "../../lib/functions";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
-import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
+import {
+  FORM_SCROLL_KEYBOARD_PROPS,
+  IOS_DONE_INPUT_ACCESSORY_ID,
+  IosDoneInputAccessory,
+  KeyboardScreen,
+} from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { ReportSheet } from "@/components/report-sheet";
@@ -229,6 +234,9 @@ export default function RedeemScanner() {
                 placeholderTextColor={theme.mutedText}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                returnKeyType="done"
+                onSubmitEditing={() => void onManualRedeem()}
                 maxLength={8}
                 editable={!processing}
                 style={{
@@ -318,6 +326,10 @@ export default function RedeemScanner() {
           });
           return { ok: result.ok };
         }}
+      />
+      <IosDoneInputAccessory
+        label={processing ? t("redeem.redeeming") : t("redeem.redeemButton")}
+        onPress={() => void onManualRedeem()}
       />
     </View>
     </KeyboardScreen>

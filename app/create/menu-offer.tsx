@@ -11,6 +11,7 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
+import { IOS_DONE_INPUT_ACCESSORY_ID, IosDoneInputAccessory } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -49,6 +50,15 @@ type WizardStep =
   | "paired"
   | "pairing"
   | "generate";
+
+function sanitizeDecimalInput(raw: string): string {
+  const digitsAndDots = raw.replace(/[^\d.]/g, "");
+  const firstDot = digitsAndDots.indexOf(".");
+  if (firstDot === -1) return digitsAndDots;
+  return `${digitsAndDots.slice(0, firstDot + 1)}${digitsAndDots
+    .slice(firstDot + 1)
+    .replace(/\./g, "")}`;
+}
 
 function getPairingValidationError(params: {
   pairingType: MenuOfferPairingType;
@@ -302,15 +312,16 @@ export default function MenuOfferScreen() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, paddingTop: top }}
-      contentContainerStyle={{
-        paddingHorizontal: horizontal,
-        paddingBottom: scrollBottom,
-        gap: Spacing.md,
-      }}
-      keyboardShouldPersistTaps="handled"
-    >
+    <>
+      <ScrollView
+        style={{ flex: 1, paddingTop: top }}
+        contentContainerStyle={{
+          paddingHorizontal: horizontal,
+          paddingBottom: scrollBottom,
+          gap: Spacing.md,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
       <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("menuOffer.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
       {loadErr ? <Banner message={loadErr} tone="error" /> : null}
@@ -532,8 +543,10 @@ export default function MenuOfferScreen() {
               <Text style={{ fontWeight: "600" }}>{t("menuOffer.fixedPriceLabel")}</Text>
               <TextInput
                 value={fixedPriceText}
-                onChangeText={setFixedPriceText}
+                onChangeText={(value) => setFixedPriceText(sanitizeDecimalInput(value))}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                returnKeyType="done"
                 placeholder={t("menuOffer.fixedPricePlaceholder")}
                 style={{
                   borderWidth: 1,
@@ -580,6 +593,8 @@ export default function MenuOfferScreen() {
           <SecondaryButton title={t("menuOffer.back")} onPress={() => { setStructuredOffer(null); setStep("pairing"); }} />
         </View>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+      <IosDoneInputAccessory />
+    </>
   );
 }
