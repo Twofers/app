@@ -417,7 +417,7 @@
     "dealAlertsTitle": "딜 알림",
     "dealAlertsSubtitle": "즐겨찾기 매장이 새 딜을 올리면 알려줍니다.",
     "bizProfileHeader": "비즈니스 프로필",
-    "bizProfileHelp": "핵심 정보는 고객과 AI에 도움이 됩니다. 이름, 담당자, 이메일, 전화, 주소, 카테고리, 영업시간은 저장 시 필수입니다.",
+    "bizProfileHelp": "저장하려면 비즈니스 이름과 주소가 필요합니다. 담당자, 이메일, 전화, 카테고리, 영업시간, 소개는 고객과 AI에 도움이 됩니다.",
     "fieldBusinessName": "비즈니스 이름",
     "phBusinessName": "매장 이름",
     "fieldContactName": "대표 / 담당자 이름",

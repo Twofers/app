@@ -421,7 +421,7 @@
     "dealAlertsTitle": "Deal alerts",
     "dealAlertsSubtitle": "Notify me when favorites post new deals.",
     "bizProfileHeader": "Business profile",
-    "bizProfileHelp": "These details help customers find and trust your business. Name, contact, email, phone, address, category, and hours are required.",
+    "bizProfileHelp": "Name and address are required to save. Contact, email, phone, category, hours, and description help customers and AI.",
     "fieldBusinessName": "Business name",
     "phBusinessName": "Your business name",
     "fieldContactName": "Owner / contact name",

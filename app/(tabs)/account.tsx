@@ -39,6 +39,7 @@ import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
+import { validateBusinessProfileSaveDraft } from "@/lib/business-profile-save";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
@@ -507,21 +508,34 @@ export default function AccountScreen() {
         });
         return;
       }
-      const nm = profileBusinessName.trim();
-      const cn = profileContactName.trim();
-      const em = profileBusinessEmail.trim();
-      const ph = profilePhone.trim();
-      const ad = profileAddress.trim();
-      const cat = profileCategory.trim();
-      const hrs = profileHours.trim();
-      if (!nm || !cn || !em || !ph || !ad || !cat || !hrs) {
-        setBanner({ message: t("account.errBizCoreRequired"), tone: "error" });
+      const profileValidation = validateBusinessProfileSaveDraft({
+        name: profileBusinessName,
+        contactName: profileContactName,
+        businessEmail: profileBusinessEmail,
+        phone: profilePhone,
+        address: profileAddress,
+        category: profileCategory,
+        hours: profileHours,
+      });
+      if (!profileValidation.ok) {
+        setBanner({
+          message:
+            profileValidation.reason === "email"
+              ? t("account.errBizEmailInvalid")
+              : t("account.errBizNameAddress"),
+          tone: "error",
+        });
         return;
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-        setBanner({ message: t("account.errBizEmailInvalid"), tone: "error" });
-        return;
-      }
+      const {
+        name: nm,
+        contactName: cn,
+        businessEmail: em,
+        phone: ph,
+        address: ad,
+        category: cat,
+        hours: hrs,
+      } = profileValidation.values;
       const addr = ad;
       const { error } = await supabase
         .from("businesses")
@@ -1133,7 +1147,7 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldPhoneRequired")}</Text>
+                <Text style={{ fontSize: 13 }}>{t("account.fieldPhone")}</Text>
                 <TextInput
                   value={profilePhone}
                   onChangeText={setProfilePhone}
@@ -1168,7 +1182,7 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldHoursRequired")}</Text>
+                <Text style={{ fontSize: 13 }}>{t("account.fieldHours")}</Text>
                 <TextInput
                   value={profileHours}
                   onChangeText={setProfileHours}
