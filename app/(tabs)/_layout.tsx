@@ -2,6 +2,7 @@ import { Tabs, useGlobalSearchParams, useRouter, useSegments, type Href } from "
 import React, { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -103,8 +104,10 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
 export default function TabLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { mode } = useTabMode();
+  const androidTabBottomPadding = Math.max(insets.bottom, 8);
 
   /**
    * Hide tabs from the bar without removing them from the navigator.
@@ -128,9 +131,22 @@ export default function TabLayout() {
           tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
           tabBarButton: renderHapticTabBarButton,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
-          tabBarItemStyle: { paddingVertical: 2 },
-          tabBarStyle: { backgroundColor: theme.background },
+          tabBarAllowFontScaling: false,
+          tabBarLabelStyle: { fontSize: 11, lineHeight: 13, fontWeight: "700" },
+          tabBarItemStyle: {
+            paddingTop: Platform.OS === "android" ? 4 : 2,
+            paddingBottom: Platform.OS === "android" ? 4 : 2,
+          },
+          tabBarStyle: {
+            backgroundColor: theme.background,
+            ...(Platform.OS === "android"
+              ? {
+                  minHeight: 64 + androidTabBottomPadding,
+                  paddingTop: 4,
+                  paddingBottom: androidTabBottomPadding,
+                }
+              : {}),
+          },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
           freezeOnBlur: false,

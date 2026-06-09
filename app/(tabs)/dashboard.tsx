@@ -306,17 +306,25 @@ function SnapshotMetric({
       style={{
         flexBasis: "47%",
         flexGrow: 1,
+        minWidth: 0,
         minHeight: 86,
         borderRadius: Radii.card,
         borderWidth: 1,
         borderColor: accent ? Colors.light.primary : Colors.light.border,
         backgroundColor: Colors.light.surface,
-        padding: Spacing.md,
+        paddingHorizontal: 10,
+        paddingVertical: Spacing.md,
         justifyContent: "center",
         ...Shadows.soft,
       }}
     >
-      <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.light.mutedText }}>
+      <Text
+        style={{ fontSize: 12, lineHeight: 15, fontWeight: "800", color: Colors.light.mutedText }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.68}
+        maxFontSizeMultiplier={1.15}
+      >
         {label}
       </Text>
       <Text
@@ -329,11 +337,18 @@ function SnapshotMetric({
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.72}
+        maxFontSizeMultiplier={1.2}
       >
         {value}
       </Text>
       {sublabel ? (
-        <Text style={{ marginTop: 4, fontSize: 12, fontWeight: "600", color: Colors.light.mutedText }} numberOfLines={2}>
+        <Text
+          style={{ marginTop: 4, fontSize: 12, lineHeight: 15, fontWeight: "600", color: Colors.light.mutedText }}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.74}
+          maxFontSizeMultiplier={1.15}
+        >
           {sublabel}
         </Text>
       ) : null}
