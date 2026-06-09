@@ -1,89 +1,53 @@
-# TWOFER — Claude Code Instructions
+# Agent instructions for the TWOFER repo
 
-## Project Overview
+Save this file at the repo root. Claude Code reads CLAUDE.md automatically each session. Codex reads AGENTS.md. Put a copy under both names so whichever agent runs picks it up.
 
-TWOFER is a local BOGO deals app for independent cafes and bakeries, targeting DFW suburbs (Irving, Coppell, Grapevine, Carrollton). Pilot goal: 10 founding cafes on a 30-day free trial.
+## What you are working from
 
-**Tech stack:** Expo React Native + Expo Router + Supabase (edge functions on Deno)
-**Primary test target:** Android (emulator or physical device)
+The release plan is `docs/twofer-ios-app-store-submission-plan-20260607.md`. Read it before doing anything. Work it one task at a time in order. Each task has an objective, the files involved, a do not list, and an acceptance check.
 
----
+## Decisions locked, 2026-06-07
 
-## Local Setup
+These are settled. Do not reopen or ask about them.
 
-```bash
-npm install
-# Create .env with:
-# EXPO_PUBLIC_SUPABASE_URL=...
-# EXPO_PUBLIC_SUPABASE_ANON_KEY=...
-npx supabase start
-npx expo start        # press 'a' for Android emulator
-```
+- Apple Developer account: enrolled, individual.
+- Sign in with Apple: not needed. Email and password login only. Skip Task 2.6.
+- Billing: v1 is free. Disable the Pro, Premium, and Billing surfaces, see Task 2.11. No Apple In App Purchase. Store copy and privacy answers say there is no charge.
+- iPad: off. Set ios.supportsTablet to false, see Task 2.12. iPhone only.
+- Share Deal: ships in v1. Associated Domains and the apple-app-site-association file are in scope, see Tasks 2.7 and 3.3.
+- Version and build number: still proposed and approved at Task 2.13, the only open versioning item.
 
-To seed the demo account:
-```bash
-npm run seed:demo
-```
+## How to work
 
-To reset and rebuild migrations:
-```bash
-npx supabase stop && npx supabase start
-npx expo start -c     # -c clears the Metro cache
-```
+1. Do one task at a time. Do not jump ahead.
+2. Before changing anything, say which task you are on and what you plan to do.
+3. Make the change, then show me the diff and the acceptance check result. Wait for my approval before moving to the next task.
+4. Stop and wait for my explicit yes at every task marked STOP GATE.
+5. For tasks marked DECISION, do not guess. Ask me.
 
----
+## Standing rules, these override any task
 
-## Brand & Design
+1. Do not run a store bound build until a stop gate approves it.
+2. Do not submit to App Store Connect or push to TestFlight until a stop gate approves it.
+3. Do not bump version or build number unless a stop gate approves the exact values.
+4. Do not change signing, bundle identifier, capabilities, entitlements, EAS profiles, or release config except inside a task that is explicitly preparing a build, and only after that task's stop gate.
+5. Do not push, merge, tag, or release unless I approve it.
+6. Do not apply Supabase migrations unless I asked for them and reviewed them.
+7. Do not print secrets. No Supabase keys, push tokens, auth tokens, the APNs .p8 key, the App Store Connect API key, distribution certificates, provisioning profiles, full google-services.json contents, QR tokens, claim codes, or redemption codes.
+8. Do not delete the untracked local QA and docs artifacts without asking.
+9. Do not claim the app is production or store ready.
+10. Work on the current branch only. Do not create branches without approval. Keep the working tree clean at each checkpoint.
 
-- **Name:** TWOFER (always fully capitalized)
-- **Mascot:** Penguin (prominent on auth screen and branding)
-- **Primary color:** `#FF9F1C` (bright penguin orange)
-- **Background:** pure white
-- **All buttons and accents:** bright orange
-- **Card style:** hero-style, deep shadows, 24px corner radius
-- **Animations:** Reanimated
+## Environment facts
 
----
+- This is a Windows machine. You cannot build or sign an iOS app locally here. iOS builds run on EAS cloud.
+- The stack is Expo and React Native with Supabase. The owner builds with AI assistance and is not a traditional engineer, so explain what you are doing in plain language and flag anything risky before you do it.
 
-## Project Rules for Claude Code
+## Out of scope for you
 
-- This is a React Native Expo app with Expo Router and Supabase backend
-- Use lightweight validation by default instead of starting Expo after every task
-- For docs-only edits, verify the file was created or updated, then run `git diff --stat` and `git diff`
-- For code edits, run `npx tsc --noEmit` and `npm run lint` if available; run focused tests when the touched behavior has tests
-- Run `npx expo start` only when the task changes runtime app behavior and a manual UI check is needed
-- Run `npx expo prebuild` or EAS build only during final release validation
-- NEVER make changes to more than 3 files without lightweight testing in between
-- If Claude Code returns a usage-limit, rate-limit, quota, overloaded, or retry-later error, stop the current task, do not mark it complete, record the failed task and timestamp in `TASK_QUEUE.md`, wait 60 minutes, then retry the same task with a shorter prompt
-- Do not retry Claude-limit failures more than once per hour
-- If a fix requires changing navigation structure, test navigation BEFORE fixing anything else
-- Show user-friendly error messages, never raw error objects
-- Android is the primary test target
-- When you finish a task, tell me exactly how to test it and what I should see on my screen
-
----
-
-## Key Files
-
-| File | Purpose |
-|---|---|
-| `app/_layout.tsx` | Root navigator — auth listener lives here |
-| `app/index.tsx` | Cold-start auth gate — redirects to login or tabs |
-| `app/auth-landing.tsx` | Login/signup screen |
-| `app/business-setup.tsx` | Business onboarding form |
-| `app/(tabs)/_layout.tsx` | Bottom tab navigator |
-| `app/(tabs)/index.tsx` | Consumer deal feed |
-| `app/(tabs)/dashboard.tsx` | Business analytics |
-| `app/create/quick.tsx` | Create a BOGO deal |
-| `hooks/use-business.ts` | Auth + business data hook |
-| `lib/supabase.ts` | Supabase client |
-| `constants/theme.ts` | Colors, spacing, radii |
-| `supabase/migrations/` | All DB migrations (run in order) |
-
----
-
-## Do Not Touch
-
-- **Strong-deal guardrail** — client + server validation that rejects weak deals. Do not weaken or bypass this.
-- **Orange theme** — do not change primary color or button styles without explicit instruction.
-- **Reanimated animations** — preserve existing animations on deal cards and success toasts.
+You cannot do these. Draft what you can, then hand them to me:
+- Apple Developer Program enrollment.
+- App Store Connect forms. Draft the exact text, I will paste it.
+- Screenshots from a real device or simulator.
+- TestFlight install and on device testing.
+- Approving builds and submissions.

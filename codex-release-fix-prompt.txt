@@ -1,0 +1,152 @@
+﻿You are taking over release-fix work for the TWOFER mobile app from Claude.
+
+Repo:
+C:\Users\unvme\Downloads\twoforone
+
+Branch:
+fix/production-clean-copy
+
+Ignore any website or landing-page repo references. This task is mobile app only.
+
+Current known state:
+Latest expected HEAD before your work:
+9b8d230 Fix edit deal schema fallback for missing location column
+
+Claude had completed:
+- typecheck passed
+- lint passed
+- vitest passed 174/174
+- schema drift audit showed hosted public.deals lacks location_id
+- runtime paths were fixed for:
+  - AI new publish insert
+  - Quick publish insert
+  - AI edit-load SELECT
+  - AI edit-save UPDATE
+
+New blocker found manually in vc17:
+On the demo account, editing a deal's start/end time and tapping Save changes shows:
+- Publish failed
+- Raw key shown at top: createQuick.errCutoffDuration
+
+This is release-blocking. A user must never see a raw i18n key.
+
+Additional owner-demo issue:
+Some deals show huge remaining time such as 457 h 17 minutes left. That undermines urgency/scarcity and may be caused by seed data, time formatting, recurring deal display logic, or timezone handling.
+
+Hard restrictions:
+- Do NOT run eas build.
+- Do NOT create APK/AAB/native build artifacts.
+- Do NOT run expo prebuild.
+- Do NOT run expo run:android.
+- Do NOT modify unrelated files.
+- Do NOT commit screenshots or APKs.
+- Leave docs/store-release-prep.md alone unless it is already tracked and directly relevant.
+- If source changes are made, run npm run typecheck, npm run lint, and npm test if practical.
+- Commit focused fixes only.
+
+Start:
+1. git status --short --branch
+2. git log --oneline -12
+3. npm run typecheck
+4. npm run lint
+5. npm test if practical
+
+Task A: Fix createQuick.errCutoffDuration raw key
+1. Search for createQuick.errCutoffDuration and related cutoff/duration validation.
+2. Determine why editing start/end time triggers this validation.
+3. Add missing translation keys to all active locales:
+   - lib/i18n/locales/en.json
+   - lib/i18n/locales/es.json
+   - lib/i18n/locales/ko.json
+4. English copy should be owner-friendly, for example:
+   "Redemption cutoff must be shorter than the deal duration."
+5. Make sure raw key createQuick.errCutoffDuration can never appear in the UI.
+6. Check if this validation/key is used by:
+   - app/create/quick.tsx
+   - app/create/ai.tsx
+   - shared validation helpers
+7. If validation logic is wrong, fix it narrowly:
+   - end_time must be after start_time
+   - claim_cutoff_buffer_minutes must be shorter than the actual deal duration
+   - valid owner edits to start/end time should save
+   - invalid edits should show friendly copy, not raw keys
+
+Task B: Investigate and fix huge time remaining like 457 h 17 minutes left
+1. Inspect the UI code that renders time remaining.
+2. Inspect npm run seed:demo and all demo seed data/scripts.
+3. Determine whether the huge time is caused by:
+   - seeded end_time too far in the future
+   - bad time remaining formatter
+   - recurring deal display logic
+   - timezone issue
+4. Fix the root cause:
+   - If seed data is wrong, make live demo deals have realistic urgency, such as 45 min, 90 min, or 2 h left.
+   - If formatter is wrong, make it owner/customer friendly.
+   - Avoid showing huge hour counts for owner-demo live deals.
+5. Ensure expired/ended deals are not shown as live.
+6. Ensure owner dashboard and customer feed agree on live vs ended status.
+
+Task C: Confirm schema-drift fixes still hold
+1. Confirm all runtime deal write paths are safe if hosted public.deals lacks location_id:
+   - AI new publish insert
+   - Quick publish insert
+   - AI edit-load existing deal
+   - AI edit-save existing deal
+2. Confirm helpers handle both PGRST204 and 42703 where needed.
+3. Do not refactor unless a real blocker is found.
+
+Task D: Validate after fixes
+Run:
+1. npm run typecheck
+2. npm run lint
+3. npm test if practical
+
+Also run a bad-copy scan across app source and locales for:
+- createQuick.errCutoffDuration
+- Deal accepted - finish below
+- Shoppe
+- Busines
+- [object Object]
+- undefined
+- null
+- NaN
+- PGRST
+
+Do not treat legitimate code-only matches as UI defects, but report them.
+
+Task E: Demo data handling
+If seed/demo data changes:
+1. Run npm run seed:demo only if safe and required to update hosted demo data.
+2. Report exactly what seed changed.
+3. Do not create junk demo data.
+4. If test deals are created, clean them up and report IDs.
+
+Commit policy:
+- If fixing raw i18n key only, commit:
+  Fix cutoff duration validation copy
+- If fixing demo seed deal timing only, commit:
+  Fix demo deal timing windows
+- If both are touched in one narrow related fix, commit:
+  Fix deal timing validation and demo windows
+
+Final report:
+- Starting HEAD
+- Ending HEAD
+- Git status
+- Root cause of createQuick.errCutoffDuration
+- Whether missing locale keys were added
+- Whether validation logic changed
+- Root cause of 457 h time remaining
+- Whether seed data changed
+- Files changed
+- Commits created with hashes
+- Typecheck result
+- Lint result
+- Test result
+- Bad-copy scan result
+- Whether npm run seed:demo was run
+- Whether another APK is required
+- Final recommendation exactly:
+  DO NOT BUILD YET
+  or
+  SOURCE IS READY FOR ONE FINAL APK BUILD

@@ -1,0 +1,569 @@
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY EXPO_PUBLIC_DEMO_EMAIL EXPO_PUBLIC_DEMO_PASSWORD
+Starting project at C:\Users\unvme\Downloads\twoforone
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android node_modules\expo-router\entry.js ▓▓░░░░░░░░░░░░░░ 16.0% ( 8/24)
+Android node_modules\expo-router\entry.js ▓▓░░░░░░░░░░░░░░ 16.0% ( 69/246)
+Android node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 26.1% (203/413)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 36.6% (321/546)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53.1% (518/711)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 61.7% (593/829)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 61.7% (756/988)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\US" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./US". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\MX" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./MX". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\KR" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./KR". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65.3% (1008/1519)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 77.7% (1528/1734)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78.4% (1849/2452)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78.4% (2265/2582)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 98.4% (2806/2833)
+Android Bundled 43817ms node_modules\expo-router\entry.js (2950 modules)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 907ms node_modules\expo-secure-store\build\SecureStore.js (613 modules)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+Android node_modules\expo-notifications\build\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 85.3% (580/628)
+Android Bundled 1892ms node_modules\expo-notifications\build\index.js (814 modules)
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "7a7c14a",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "7ed69118-e206-4898-bea7-ae570b8dcd52",
+  "authEmail": "demo@demo.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+Android Bundled 690ms node_modules\expo-constants\build\Constants.js (614 modules)
+Android lib\share-deal.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 792ms lib\share-deal.ts (685 modules)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 1278ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 175ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 75ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 300ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 72ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 64ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 597ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 55ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 37ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": null,
+  "authEmail": null,
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+ LOG  [auth] normal_login — twoferpushqa.owner.pqamq3rp3t6@gmail.com
+ WARN  Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+ WARN  [profiles-app-mode] upsert failed: Could not find the 'app_tab_mode' column of 'profiles' in the schema cache
+Android Bundled 101ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 656ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 44ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 40ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 53ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 315ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 34ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 39ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 39ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 235ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 51ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 38ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "300aecb",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 40ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\US" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./US". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\MX" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./MX". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ WARN  Attempted to import the module "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2\KR" which is not listed in the "exports" of "C:\Users\unvme\Downloads\twoforone\node_modules\country-flag-icons\string\3x2" under the requested subpath "./KR". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+Android Bundled 8656ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 466ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android node_modules\expo-notifications\build\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 639ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 260ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 42ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 71ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  [expo-notifications] Error encountered while updating server registration with latest device push token. [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ WARN  Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "9501527",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+Android Bundled 1150ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+Android lib\share-deal.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 778ms lib\share-deal.ts (1 module)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 317ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 84ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 71ms node_modules\expo-notifications\build\index.js (1 module)
+Android node_modules\expo-notifications\build\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ WARN  [expo-notifications] Error encountered while updating server registration with latest device push token. [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "9501527",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 80ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ WARN  [profiles-app-mode] upsert failed: Could not find the 'app_tab_mode' column of 'profiles' in the schema cache
+ WARN  [useBusiness] refresh completed after unmount/stale
+ WARN  [useBusiness] refresh completed after unmount/stale
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 380ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 66ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 91ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ WARN  [expo-notifications] Error encountered while updating server registration with latest device push token. [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "9501527",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 61ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 249ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-secure-store\build\SecureStore.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 45ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
+Android Bundled 54ms node_modules\expo-notifications\build\index.js (1 module)
+ INFO  🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ WARN  Linking found multiple possible URI schemes in your Expo config.
+Using 'twoforone'. Ignoring: twofer, com.unvmex2.twoforone.
+Provide the preferred URI scheme to the Linking API.
+ LOG  [deeplink] example canonical tab URLs twoforone:///(tabs)/redeem twoforone:///(tabs)/
+ WARN  [expo-notifications] Error encountered while updating server registration with latest device push token. [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ LOG  [twoforone:boot] {
+  "version": "1.0.0",
+  "buildProfile": "development",
+  "nativeBuild": "unknown",
+  "executionEnvironment": "bare",
+  "previewOrDevClientProfile": true,
+  "gitCommit": "9501527",
+  "easBuildProfile": null,
+  "tabMode": "customer",
+  "language": "en",
+  "authUserId": "8b114667-4b27-4762-9e65-3209d0800f62",
+  "authEmail": "twoferpushqa.owner.pqamq3rp3t6@gmail.com",
+  "publicEnv": {
+    "EXPO_PUBLIC_SUPABASE_URL": "kvodhiqhdqnptqovovia.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "set (46 chars)",
+    "EXPO_PUBLIC_PRIVACY_POLICY_URL": "(default)",
+    "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "(default)",
+    "EXPO_PUBLIC_SUPPORT_URL": "(default)",
+    "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "(default)",
+    "EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER": "(unset)",
+    "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
+    "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "(unset)",
+    "EXPO_PUBLIC_DEBUG_BOOT_LOG": "(unset)",
+    "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "(unset)",
+    "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "set",
+    "NODE_ENV": "development"
+  }
+}
+Android Bundled 51ms node_modules\expo-constants\build\Constants.js (1 module)
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
+ WARN  [push-token] Registration failed (non-fatal): [Error: Make sure to complete the guide at https://docs.expo.dev/push-notifications/fcm-credentials/ : Default FirebaseApp is not initialized in this process com.unvmex2.twoforone. Make sure to call FirebaseApp.initializeApp(Context) first.]
+ WARN  [consumer-zip] expo_error {"error": "Error: Call to function 'ExpoLocation.geocodeAsync' has been rejected.
+→ Caused by: Not authorized to use location services", "zip5": "75063"}
+ WARN  [consumer-zip] zippopotam_ok {"lat": 32.9247, "lng": -96.9598, "zip5": "75063"}
