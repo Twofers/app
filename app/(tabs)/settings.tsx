@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
 import * as Location from "expo-location";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { BrandedSwitch } from "@/components/ui/branded-switch";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
@@ -553,7 +554,7 @@ export default function SettingsScreen() {
               <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
               <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
-            <Switch value={alertsEnabled} onValueChange={toggleAlerts} disabled={loading} />
+            <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={loading} />
           </View>
           <Text style={{ fontWeight: "700", marginTop: Spacing.md }}>{t("consumerSettings.notificationModeTitle")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>

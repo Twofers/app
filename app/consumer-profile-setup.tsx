@@ -300,6 +300,8 @@ export default function ConsumerProfileSetupScreen() {
         visible={showPicker && Platform.OS === "ios"}
         transparent
         animationType="slide"
+        presentationStyle="overFullScreen"
+        accessibilityViewIsModal
         onRequestClose={cancelIosBirthdatePicker}
       >
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>

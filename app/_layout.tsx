@@ -20,6 +20,7 @@ import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from '@/constants/theme';
 import { TabModeProvider } from '@/lib/tab-mode';
 import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
 
@@ -70,6 +71,7 @@ export const unstable_settings = {
 
 function RootNavigationStack() {
   const colorScheme = useColorScheme();
+  const uiTheme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
   const { t } = useTranslation();
 
   return (
@@ -87,7 +89,17 @@ function RootNavigationStack() {
       <BillingDeepLinkHandler />
       <AuthStackGate />
       <CreateMenuOfferWizardProvider>
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerBackButtonDisplayMode: 'minimal',
+          headerBackButtonMenuEnabled: false,
+          headerBackTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: uiTheme.background },
+          headerTintColor: uiTheme.primary,
+          headerTitleStyle: { color: uiTheme.text, fontWeight: '700' },
+        }}
+      >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />

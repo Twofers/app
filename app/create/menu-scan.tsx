@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   View,
@@ -12,6 +11,7 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
+import { BrandedSwitch } from "@/components/ui/branded-switch";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -398,7 +398,7 @@ export default function MenuScanScreen() {
             }}
           >
             <Text style={{ flex: 1, fontWeight: "600", fontSize: 14 }}>{t("menuScan.skipDupLabel")}</Text>
-            <Switch value={skipDuplicatesOnSave} onValueChange={setSkipDuplicatesOnSave} />
+            <BrandedSwitch value={skipDuplicatesOnSave} onValueChange={setSkipDuplicatesOnSave} />
           </View>
           <SecondaryButton title={t("menuScan.addRow")} onPress={addRow} />
           {rows.map((item) => (

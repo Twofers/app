@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
+import { BrandedSwitch } from "@/components/ui/branded-switch";
 import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
   registerPushTokenWithResult,
@@ -961,7 +962,7 @@ export default function AccountScreen() {
               <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
               <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
-            <Switch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
+            <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
           </View>
 
           {businessId ? (

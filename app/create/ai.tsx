@@ -2301,6 +2301,8 @@ export default function AiDealScreen() {
         visible={Platform.OS === "ios" && iosSchedulePicker !== null}
         transparent
         animationType="slide"
+        presentationStyle="overFullScreen"
+        accessibilityViewIsModal
         onRequestClose={cancelIosSchedulePicker}
       >
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
@@ -2351,6 +2353,9 @@ export default function AiDealScreen() {
               value={iosScheduleDraft}
               mode={iosSchedulePickerMode}
               display="spinner"
+              textColor={Colors.light.text}
+              themeVariant="light"
+              style={{ height: 216, alignSelf: "stretch" }}
               onChange={(_event, date) => {
                 if (date) setIosScheduleDraft(date);
               }}

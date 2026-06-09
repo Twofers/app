@@ -51,7 +51,17 @@ export default function CreateLayout() {
   }
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerBackButtonDisplayMode: "minimal",
+        headerBackButtonMenuEnabled: false,
+        headerBackTitle: "",
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: theme.background },
+        headerTintColor: theme.primary,
+        headerTitleStyle: { color: theme.text, fontWeight: "700" },
+      }}
+    >
       <Stack.Screen name="quick" options={{ title: t('createQuick.titleScreen') }} />
       <Stack.Screen name="ai" options={{ title: t('createAi.titleScreen') }} />
       <Stack.Screen name="ai-compose" options={{ title: t('aiCompose.title') }} />
