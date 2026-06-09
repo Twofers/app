@@ -271,9 +271,27 @@ serve(async (req) => {
     }
 
     if (now >= claimCutoffTime) {
+      // Format in the deal's timezone — server-side toLocaleString() is UTC,
+      // which reads as the wrong time to the user.
+      const tzForCutoff =
+        typeof deal.timezone === "string" && deal.timezone.trim().length > 0
+          ? deal.timezone.trim()
+          : DEFAULT_BUSINESS_TZ;
+      let cutoffLabel: string;
+      try {
+        cutoffLabel = new Intl.DateTimeFormat("en-US", {
+          timeZone: tzForCutoff,
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(claimCutoffTime);
+      } catch {
+        cutoffLabel = claimCutoffTime.toISOString();
+      }
       return new Response(
         JSON.stringify({
-          error: `Claiming has closed. Cutoff was ${claimCutoffTime.toLocaleString()}`,
+          error: `Claiming has closed. Cutoff was ${cutoffLabel}`,
         }),
         {
           status: 400,
