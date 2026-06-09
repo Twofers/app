@@ -1,8 +1,5 @@
 import { Platform } from "react-native";
-import {
-  isExpoGo,
-  isDevelopmentBuildOrStandalone,
-} from "./expo-notifications-support";
+import { isExpoGo } from "./expo-notifications-support";
 import { supabase } from "./supabase";
 import { devLog, devWarn } from "@/lib/dev-log";
 

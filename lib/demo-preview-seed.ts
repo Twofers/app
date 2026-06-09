@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { DEMO_PREVIEW_EMAIL, isDemoPreviewAccountEmail } from "@/lib/demo-account";
+import { isDemoPreviewAccountEmail } from "@/lib/demo-account";
 
 /** Matches `supabase/seed_demo_coffee_business.sql` (canonical preview business + deals). */
 const CANONICAL_BUSINESS = {
