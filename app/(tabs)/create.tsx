@@ -41,6 +41,7 @@ export default function CreateDeal() {
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -139,6 +140,17 @@ export default function CreateDeal() {
     }
   }
 
+  function toggleMoreTools() {
+    if (moreToolsOpen) {
+      setTemplatesOpen(false);
+    }
+    setMoreToolsOpen((current) => !current);
+  }
+
+  function toggleTemplatesFolder() {
+    setTemplatesOpen((current) => !current);
+  }
+
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <ScreenHeader title={t("createHub.title")} subtitle={t("createHub.subtitle")} />
@@ -233,7 +245,7 @@ export default function CreateDeal() {
 
           {/* ── More Tools (menu features) ── */}
           <Pressable
-            onPress={() => setMoreToolsOpen((v) => !v)}
+            onPress={toggleMoreTools}
             accessibilityRole="button"
             accessibilityState={{ expanded: moreToolsOpen }}
           >
@@ -249,35 +261,96 @@ export default function CreateDeal() {
             <View style={{ gap: Spacing.sm }}>
               <Pressable
                 onPress={() => router.push("/create/menu-offer" as Href)}
-                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border }}
+                style={{
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.md,
+                }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.menuDealFastTitle")}</Text>
-                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
+                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuDealFastTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
               </Pressable>
               <Pressable
                 onPress={() => router.push("/create/menu-scan" as Href)}
-                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border }}
+                style={{
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.md,
+                }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.scanMenuTitle")}</Text>
-                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
+                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.scanMenuTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
               </Pressable>
               <Pressable
                 onPress={() => router.push("/create/menu-manager" as Href)}
-                style={{ borderRadius: Radii.md, padding: Spacing.md, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border }}
+                style={{
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.md,
+                }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createHub.menuManagerTitle")}</Text>
-                <Text style={{ opacity: 0.6, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>
+                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuManagerTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
+              </Pressable>
+              <Pressable
+                onPress={toggleTemplatesFolder}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: templatesOpen }}
+                style={{
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.md,
+                }}
+              >
+                <MaterialIcons name={templatesOpen ? "folder-open" : "folder"} size={22} color={theme.accentText} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.templatesTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("reuseHub.templatesSection")}</Text>
+                </View>
+                <MaterialIcons name={templatesOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={22} color={theme.icon} />
               </Pressable>
             </View>
           ) : null}
 
           {/* ── Templates ── */}
-          <View style={{ marginTop: Spacing.sm }}>
-            <Text style={{ fontSize: 17, fontWeight: "700", marginBottom: Spacing.md }}>{t("createHub.templatesTitle")}</Text>
+          {moreToolsOpen && templatesOpen ? (
+            <View style={{ gap: Spacing.md, paddingTop: Spacing.xs }}>
             {templatesLoading ? (
-              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesLoading")}</Text>
+              <Text style={{ color: theme.mutedText }}>{t("createHub.templatesLoading")}</Text>
             ) : templates.length === 0 ? (
-              <Text style={{ opacity: 0.7 }}>{t("createHub.templatesEmpty")}</Text>
+              <Text style={{ color: theme.mutedText }}>{t("createHub.templatesEmpty")}</Text>
             ) : (
               templates.map((tpl) => {
                 const tplPoster = resolveDealPosterDisplayUri(tpl.poster_url, null);
@@ -286,12 +359,11 @@ export default function CreateDeal() {
                   key={tpl.id}
                   style={{
                     borderRadius: Radii.lg,
-                    backgroundColor: Colors.light.surface,
-                    marginBottom: Spacing.md,
+                    backgroundColor: theme.surface,
                     boxShadow: "0px 4px 8px rgba(0,0,0,0.08)",
                     elevation: 2,
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     overflow: "hidden",
                   }}
                 >
@@ -311,11 +383,11 @@ export default function CreateDeal() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={{ height: 140, borderRadius: 14, backgroundColor: "#eee" }} />
+                      <View style={{ height: 140, borderRadius: 14, backgroundColor: theme.surfaceMuted }} />
                     )}
-                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16 }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
+                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16, color: theme.text }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
                     {tpl.price != null ? (
-                      <Text style={{ marginTop: Spacing.xs, opacity: 0.7, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
+                      <Text style={{ marginTop: Spacing.xs, color: theme.mutedText, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
                     ) : null}
                   </Pressable>
                   <View
@@ -360,7 +432,8 @@ export default function CreateDeal() {
               );
               })
             )}
-          </View>
+            </View>
+          ) : null}
         </ScrollView>
       )}
       {confirmModal}
