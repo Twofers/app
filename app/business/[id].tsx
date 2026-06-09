@@ -17,6 +17,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 
 type BizRow = {
   id: string;
@@ -35,6 +36,10 @@ type DealRow = {
   id: string;
   title: string | null;
   description: string | null;
+  title_es: string | null;
+  title_ko: string | null;
+  description_es: string | null;
+  description_ko: string | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   end_time: string;
@@ -93,7 +98,7 @@ export default function BusinessProfileScreen() {
     const { data: deals } = await supabase
       .from("deals")
       .select(
-        "id,title,description,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,title_es,title_ko,description_es,description_ko,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("business_id", id)
       .eq("is_active", true)
@@ -431,12 +436,14 @@ export default function BusinessProfileScreen() {
             <View style={{ gap: Spacing.lg }}>
               {deals.map((deal) => {
                 const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+                const dealTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
+                const dealDescription = localizedDealDescription(deal, i18n.language);
                 return (
                   <Pressable
                     key={deal.id}
                     onPress={() => router.push(`/deal/${deal.id}` as Href)}
                     accessibilityRole="button"
-                    accessibilityLabel={deal.title ?? t("dealDetail.dealFallback")}
+                    accessibilityLabel={dealTitle}
                     style={{
                       borderRadius: Radii.card,
                       overflow: "hidden",
@@ -464,11 +471,11 @@ export default function BusinessProfileScreen() {
                     )}
                     <View style={{ padding: Spacing.lg, gap: Spacing.sm }}>
                       <Text style={{ fontSize: 19, lineHeight: 25, fontWeight: "800", color: theme.text }}>
-                        {deal.title ?? t("dealDetail.dealFallback")}
+                        {dealTitle}
                       </Text>
-                      {deal.description?.trim() ? (
+                      {dealDescription ? (
                         <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 21 }} numberOfLines={3}>
-                          {deal.description}
+                          {dealDescription}
                         </Text>
                       ) : null}
                       <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.xs }}>

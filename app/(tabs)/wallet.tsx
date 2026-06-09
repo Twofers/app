@@ -32,6 +32,7 @@ import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 type ClaimRow = {
@@ -49,6 +50,8 @@ type ClaimRow = {
     id: string;
     business_id: string;
     title: string | null;
+    title_es: string | null;
+    title_ko: string | null;
     poster_url: string | null;
     poster_storage_path?: string | null;
     end_time: string;
@@ -133,7 +136,7 @@ export default function WalletScreen() {
       const { data, error } = await supabase
         .from("deal_claims")
         .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -258,7 +261,9 @@ export default function WalletScreen() {
   }
 
   function dealTitle(row: ClaimRow) {
-    return row.deals?.title?.trim() || t("consumerWallet.dealFallback");
+    return row.deals
+      ? localizedDealTitle(row.deals, i18n.language) || t("consumerWallet.dealFallback")
+      : t("consumerWallet.dealFallback");
   }
 
   function businessName(row: ClaimRow) {

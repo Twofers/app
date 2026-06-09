@@ -16,6 +16,7 @@ import { isDealActiveNow } from "@/lib/deal-time";
 import { getConsumerPreferences, milesToKm, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { localizedDealTitle } from "@/lib/deal-localization";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature } from "@/lib/map-camera-fit";
 import {
@@ -34,6 +35,8 @@ import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-dea
 type DealLite = {
   id: string;
   title: string | null;
+  title_es: string | null;
+  title_ko: string | null;
   description: string | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
@@ -102,7 +105,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     const { data: dz, error: ed } = await supabase
       .from("deals")
       .select(
-        "id,title,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
@@ -172,6 +175,7 @@ function renderMapCanvas({
   mapReady,
   loading,
   t,
+  language,
   selectedBusiness,
   previewDeal,
   previewPosterUri,
@@ -193,6 +197,7 @@ function renderMapCanvas({
   mapReady: boolean;
   loading: boolean;
   t: (key: string) => string;
+  language: string;
   selectedBusiness: MarkerWithLive | null;
   previewDeal: DealLite | null;
   previewPosterUri: string | null;
@@ -343,7 +348,7 @@ function renderMapCanvas({
                 {selectedBusiness.name}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24 }}>
-                {previewDeal?.title ?? selectedBusiness.name}
+                {previewDeal ? localizedDealTitle(previewDeal, language) || selectedBusiness.name : selectedBusiness.name}
               </Text>
               {typeof previewDeal?.price === "number" ? (
                 <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.accentText }}>
@@ -465,7 +470,7 @@ function renderMapBody({
 }
 
 export default function MapScreenNative() { // NOSONAR - orchestration screen coordinates fetch, map, overlays, and navigation.
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { top, horizontal } = useScreenInsets("tab");
   const androidMapsOk =
@@ -582,6 +587,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     mapReady,
     loading,
     t,
+    language: i18n.language,
     selectedBusiness,
     previewDeal,
     previewPosterUri,

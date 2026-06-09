@@ -20,6 +20,7 @@ import { Colors, Radii } from "../../constants/theme";
 import { formatValiditySummary } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
+import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
@@ -29,6 +30,10 @@ type Deal = {
   id: string;
   title: string | null;
   description: string | null;
+  title_es: string | null;
+  title_ko: string | null;
+  description_es: string | null;
+  description_ko: string | null;
   end_time: string;
   start_time: string;
   poster_url: string | null;
@@ -188,7 +193,7 @@ export default function DealDetail() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
+        "id,title,description,title_es,title_ko,description_es,description_ko,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
       )
       .eq("id", id)
       .single();
@@ -315,7 +320,7 @@ export default function DealDetail() {
       const code = await getOrCreateShareCode(deal.id);
       const copy = buildShareCopy({
         shareCode: code,
-        dealTitle: deal.title ?? t("dealDetail.dealFallback"),
+        dealTitle: localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback"),
         businessName: deal.businesses?.name ?? t("dealDetail.localBusiness"),
         t,
       });
@@ -391,6 +396,8 @@ export default function DealDetail() {
 
   const remaining = Math.max(0, deal.max_claims - claimsCount);
   const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
+  const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
+  const displayDescription = localizedDealDescription(deal, i18n.language);
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -469,15 +476,15 @@ export default function DealDetail() {
           <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
         </Pressable>
         <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
-          {deal.title ?? t("dealDetail.dealFallback")}
+          {displayTitle}
         </Text>
         {deal.price != null ? (
           <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20, color: theme.text }}>
             ${deal.price.toFixed(2)}
           </Text>
         ) : null}
-        {deal.description ? (
-          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24, color: theme.text }}>{deal.description}</Text>
+        {displayDescription ? (
+          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24, color: theme.text }}>{displayDescription}</Text>
         ) : null}
         <View
           style={{

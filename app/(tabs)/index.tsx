@@ -46,6 +46,7 @@ import {
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import type { ConsumerDealStatusKey } from "@/components/deal-status-pill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -104,20 +105,6 @@ type Deal = {
   window_end_minutes: number | null;
   timezone: string | null;
 };
-
-function localizedTitle(deal: Deal, lang: string): string {
-  const l = lang.split("-")[0]?.toLowerCase() ?? "en";
-  if (l === "es" && deal.title_es) return deal.title_es;
-  if (l === "ko" && deal.title_ko) return deal.title_ko;
-  return deal.title ?? "";
-}
-
-function localizedDescription(deal: Deal, lang: string): string {
-  const l = lang.split("-")[0]?.toLowerCase() ?? "en";
-  if (l === "es" && deal.description_es) return deal.description_es;
-  if (l === "ko" && deal.description_ko) return deal.description_ko;
-  return deal.description ?? "";
-}
 
 type BusinessRow = {
   id: string;
@@ -558,7 +545,7 @@ export default function HomeScreen() {
         void scheduleClaimExpiryReminder({
           claimExpiresAt: out.expires_at,
           graceMinutes: DEFAULT_CLAIM_GRACE_MINUTES,
-          dealTitle: claimedDeal ? localizedTitle(claimedDeal, i18n.language) : null,
+          dealTitle: claimedDeal ? localizedDealTitle(claimedDeal, i18n.language) : null,
         });
       } catch (e: unknown) {
         const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
@@ -758,7 +745,7 @@ export default function HomeScreen() {
             })
           : undefined;
       const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
-      const offerText = localizedTitle(item, i18n.language) || t("dealDetail.dealFallback");
+      const offerText = localizedDealTitle(item, i18n.language) || t("dealDetail.dealFallback");
       const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
       const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
@@ -935,7 +922,7 @@ export default function HomeScreen() {
               {bogoText}
             </Text>
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }} maxFontSizeMultiplier={1.15}>
-              {localizedDescription(item, i18n.language) || t("consumerHome.tagline")}
+              {localizedDealDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
             <View style={{ marginTop: Spacing.xs, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
               <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
