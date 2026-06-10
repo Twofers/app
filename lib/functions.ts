@@ -303,29 +303,15 @@ export async function finalizeStaleRedeems(): Promise<void> {
   }
 }
 
-/** Returned by `delete-user-account` when the user owns a business row or ownership could not be verified. */
-export const DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER = "BUSINESS_OWNER_DELETE_BLOCKED";
-
-function throwIfDeleteBlockedBody(body: unknown): void {
-  if (!body || typeof body !== "object") return;
-  const o = body as { code?: string; error?: string };
-  if (o.code !== DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER) return;
-  const err = new Error(typeof o.error === "string" ? o.error : "Account deletion blocked");
-  (err as Error & { code: string }).code = DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER;
-  throw err;
-}
-
 export async function deleteUserAccount(): Promise<void> {
   const { data, error } = await supabase.functions.invoke("delete-user-account", {
     body: {},
     timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) {
-    throwIfDeleteBlockedBody(error.context?.body);
     throw new Error(parseFunctionError(error));
   }
   if (data && typeof data === "object" && "error" in data) {
-    throwIfDeleteBlockedBody(data);
     throw new Error((data as { error?: string }).error ?? "Server returned an error");
   }
 }
