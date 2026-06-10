@@ -33,6 +33,11 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { useBusiness } from "@/hooks/use-business";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  mergeDealsById,
+  readBusinessCoordinates,
+  shouldShowDealInNearbyFeed,
+} from "@/lib/consumer-feed-visibility";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
@@ -114,15 +119,6 @@ type BusinessRow = {
   longitude: number | string | null;
 };
 
-function bizCoords(b: Deal["businesses"]): { lat: number; lng: number } | null {
-  if (!b) return null;
-  const lat = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
-  const lng = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-  return { lat, lng };
-}
-
 function dealStatusForUser(
   dealId: string,
   map: Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>,
@@ -134,6 +130,16 @@ function dealStatusForUser(
   const g = row.grace_period_minutes ?? DEFAULT_CLAIM_GRACE_MINUTES;
   if (isPastClaimRedeemDeadline(row.expires_at, now, g)) return "expired";
   return "claimed";
+}
+
+async function fetchActiveDealsForFeed(nowIso: string, limit = 80) {
+  return await supabase
+    .from("deals")
+    .select(FEED_DEAL_SELECT)
+    .eq("is_active", true)
+    .gte("end_time", nowIso)
+    .order("end_time", { ascending: true })
+    .limit(limit);
 }
 
 function classifyClaimBlockReason(message: string): string {
@@ -277,6 +283,7 @@ export default function HomeScreen() {
   const loadDeals = useCallback(async () => {
     setLoadingDeals(true);
     const geo = geoRef.current;
+    const nowIso = new Date().toISOString();
     try {
       let rows: Deal[] | null = null;
       // Prefer server-side geo filtering: nearest deals within a generous radius plus
@@ -300,16 +307,19 @@ export default function HomeScreen() {
             const { data, error } = await supabase.from("deals").select(FEED_DEAL_SELECT).in("id", ids);
             if (!error && Array.isArray(data)) rows = data as unknown as Deal[];
           }
+          if (rows !== null) {
+            const { data: activeData, error: activeErr } = await fetchActiveDealsForFeed(nowIso);
+            if (!activeErr && Array.isArray(activeData)) {
+              const unlocatedDeals = (activeData as unknown as Deal[]).filter(
+                (deal) => readBusinessCoordinates(deal.businesses) == null,
+              );
+              rows = mergeDealsById(rows, unlocatedDeals);
+            }
+          }
         }
       }
       if (rows === null) {
-        const { data, error } = await supabase
-          .from("deals")
-          .select(FEED_DEAL_SELECT)
-          .eq("is_active", true)
-          .gte("end_time", new Date().toISOString())
-          .order("end_time", { ascending: true })
-          .limit(80);
+        const { data, error } = await fetchActiveDealsForFeed(nowIso);
         if (error) {
           logPostgrestError("home screen deals", error);
           setBanner(t("consumerHome.loadDealsError"));
@@ -405,6 +415,7 @@ export default function HomeScreen() {
   const hydrateLocationFromPrefs = useCallback(async () => {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
+    setFavoritesOnly(prefs.notificationPrefs.mode === "favorites_only");
     setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
     const coords = await resolveConsumerCoordinates(prefs);
     if (coords) {
@@ -425,6 +436,8 @@ export default function HomeScreen() {
         lastFeedFocusHydrateAtRef.current !== 0 &&
         now - lastFeedFocusHydrateAtRef.current < MIN_FEED_FOCUS_REFRESH_MS;
 
+      void hydrateLocationFromPrefs();
+
       if (cooldownActive && !userChanged) {
         return;
       }
@@ -435,7 +448,6 @@ export default function HomeScreen() {
       void loadDeals();
       void loadBusinesses();
       void loadFavorites(userId);
-      void hydrateLocationFromPrefs();
     }, [loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]),
   );
 
@@ -603,13 +615,14 @@ export default function HomeScreen() {
 
   const dealsWithinRadius = useMemo(() => {
     if (!userGeo) return searchFilteredDeals;
-    const fav = new Set(favoriteBusinessIds);
-    return searchFilteredDeals.filter((d) => {
-      if (fav.has(d.business_id)) return true;
-      const c = bizCoords(d.businesses);
-      if (!c) return false;
-      return haversineMiles(userGeo.lat, userGeo.lng, c.lat, c.lng) <= radiusMiles;
-    });
+    return searchFilteredDeals.filter((deal) =>
+      shouldShowDealInNearbyFeed({
+        deal,
+        userGeo,
+        radiusMiles,
+        favoriteBusinessIds,
+      }),
+    );
   }, [searchFilteredDeals, userGeo, radiusMiles, favoriteBusinessIds]);
 
   const liveDealsDisplay = useMemo(() => {
@@ -630,8 +643,8 @@ export default function HomeScreen() {
         if (aCat !== bCat) return aCat - bCat;
       }
       if (userGeo) {
-        const ca = bizCoords(a.businesses);
-        const cb = bizCoords(b.businesses);
+        const ca = readBusinessCoordinates(a.businesses);
+        const cb = readBusinessCoordinates(b.businesses);
         const da = ca ? haversineMiles(userGeo.lat, userGeo.lng, ca.lat, ca.lng) : Number.POSITIVE_INFINITY;
         const db = cb ? haversineMiles(userGeo.lat, userGeo.lng, cb.lat, cb.lng) : Number.POSITIVE_INFINITY;
         if (da !== db) return da - db;
@@ -737,7 +750,7 @@ export default function HomeScreen() {
 
   const renderDealItem = useCallback(
     ({ item }: { item: Deal }) => {
-      const coords = bizCoords(item.businesses);
+      const coords = readBusinessCoordinates(item.businesses);
       const distanceLabel =
         userGeo && coords
           ? t("dealsBrowse.distanceAwayMiles", {

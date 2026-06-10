@@ -14,6 +14,9 @@ export type ItemResearch = {
 export type GeneratedAd = {
   headline: string;
   subheadline: string;
+  short_description?: string;
+  push_notification?: string;
+  terms_summary?: string;
   cta: string;
   /** Storage path in deal-photos bucket; null if image production failed. */
   poster_storage_path?: string | null;
@@ -57,10 +60,12 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   offer_details: string;
 } {
   const hint = ownerOfferHint.trim();
+  const shortDescription = (ad.short_description ?? ad.subheadline).trim();
+  const termsSummary = ad.terms_summary?.trim() ?? "";
   return {
     title: ad.headline.trim(),
-    promo_line: ad.subheadline.trim(),
+    promo_line: shortDescription,
     cta_text: ad.cta.trim(),
-    offer_details: hint || [ad.subheadline, ad.cta].filter(Boolean).join("\n\n"),
+    offer_details: termsSummary || hint || [shortDescription, ad.cta].filter(Boolean).join("\n\n"),
   };
 }

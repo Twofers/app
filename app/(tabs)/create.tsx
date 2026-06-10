@@ -40,7 +40,7 @@ export default function CreateDeal() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
-  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(true);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -260,6 +260,26 @@ export default function CreateDeal() {
           {moreToolsOpen ? (
             <View style={{ gap: Spacing.sm }}>
               <Pressable
+                onPress={() => router.push("/create/ai" as Href)}
+                style={{
+                  borderRadius: Radii.md,
+                  padding: Spacing.md,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.md,
+                }}
+              >
+                <MaterialIcons name="auto-awesome" size={22} color={theme.accentText} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.aiAdsTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.aiAdsSubtitle")}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
+              </Pressable>
+              <Pressable
                 onPress={() => router.push("/create/menu-offer" as Href)}
                 style={{
                   borderRadius: Radii.md,
@@ -272,7 +292,7 @@ export default function CreateDeal() {
                   gap: Spacing.md,
                 }}
               >
-                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <MaterialIcons name="restaurant-menu" size={22} color={theme.accentText} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuDealFastTitle")}</Text>
                   <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
@@ -292,7 +312,7 @@ export default function CreateDeal() {
                   gap: Spacing.md,
                 }}
               >
-                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <MaterialIcons name="document-scanner" size={22} color={theme.accentText} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.scanMenuTitle")}</Text>
                   <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
@@ -312,7 +332,7 @@ export default function CreateDeal() {
                   gap: Spacing.md,
                 }}
               >
-                <MaterialIcons name="folder" size={22} color={theme.accentText} />
+                <MaterialIcons name="menu-book" size={22} color={theme.accentText} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuManagerTitle")}</Text>
                   <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>

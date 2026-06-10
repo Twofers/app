@@ -48,6 +48,20 @@ export function buildPublicDealPhotoUrl(storagePath: string): string | null {
   return `${cleanBase}/storage/v1/object/public/${BUCKET}/${encodedPath}`;
 }
 
+export function resolveCurrentDealPosterStoragePath(params: {
+  aiPosterStoragePath?: string | null;
+  uploadedPhotoStoragePath?: string | null;
+  posterUrl?: string | null;
+}): string | null {
+  const aiPath = params.aiPosterStoragePath?.trim();
+  if (aiPath) return aiPath;
+
+  const uploadedPath = params.uploadedPhotoStoragePath?.trim();
+  if (uploadedPath) return uploadedPath;
+
+  return extractDealPhotoStoragePath(params.posterUrl);
+}
+
 /**
  * URI for <Image source={{ uri }} />: stable public URL from `poster_storage_path` or parsed legacy
  * `poster_url`; otherwise any remaining absolute URL (e.g. external demo image).

@@ -137,11 +137,16 @@ export default function QuickDealExpress() {
         path = await uploadDealPhoto(businessId, photoUri);
         setPhotoPath(path);
       }
+      const startsAt = new Date();
+      const endsAt = new Date(startsAt.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
       const { ad } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hint.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        offer_schedule_summary: `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`,
+        quantity_limit: EXPRESS_MAX_CLAIMS,
+        redemption_limit: `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`,
         ...(path ? { photo_path: path } : {}),
       });
       const d = adToDealDraft(ad, hint);

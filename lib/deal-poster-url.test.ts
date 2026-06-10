@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extractDealPhotoStoragePath, resolveDealPosterDisplayUri } from "./deal-poster-url";
+import {
+  extractDealPhotoStoragePath,
+  resolveCurrentDealPosterStoragePath,
+  resolveDealPosterDisplayUri,
+} from "./deal-poster-url";
 
 describe("extractDealPhotoStoragePath", () => {
   it("parses signed URL path", () => {
@@ -37,5 +41,35 @@ describe("resolveDealPosterDisplayUri", () => {
     expect(resolveDealPosterDisplayUri("https://images.example.com/x.png", null)).toBe(
       "https://images.example.com/x.png",
     );
+  });
+});
+
+describe("resolveCurrentDealPosterStoragePath", () => {
+  it("prefers revised AI poster over the uploaded source photo", () => {
+    expect(
+      resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: "biz-1/ai_ad_enhanced_studiopolish.png",
+        uploadedPhotoStoragePath: "biz-1/original-photo.jpg",
+        posterUrl: null,
+      }),
+    ).toBe("biz-1/ai_ad_enhanced_studiopolish.png");
+  });
+
+  it("falls back to uploaded photo, then legacy poster URL", () => {
+    expect(
+      resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: null,
+        uploadedPhotoStoragePath: "biz-1/original-photo.jpg",
+        posterUrl: null,
+      }),
+    ).toBe("biz-1/original-photo.jpg");
+
+    expect(
+      resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: null,
+        uploadedPhotoStoragePath: null,
+        posterUrl: "https://abc.supabase.co/storage/v1/object/public/deal-photos/biz-1/template.jpg",
+      }),
+    ).toBe("biz-1/template.jpg");
   });
 });

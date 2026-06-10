@@ -649,6 +649,8 @@ export type AiGenerateAdRequest = {
   photo_path?: string;
   photo_treatment?: PhotoTreatment | null;
   offer_schedule_summary?: string;
+  quantity_limit?: number | null;
+  redemption_limit?: string;
 };
 
 export type AiReviseAdRequest = AiGenerateAdRequest & {
@@ -671,6 +673,8 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+    ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
+    ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
   });
 }
 
@@ -689,6 +693,8 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
+    ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
+    ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
   });
 }
 

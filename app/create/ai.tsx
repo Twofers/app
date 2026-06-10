@@ -60,7 +60,11 @@ import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
-import { buildPublicDealPhotoUrl, extractDealPhotoStoragePath } from "../../lib/deal-poster-url";
+import {
+  buildPublicDealPhotoUrl,
+  extractDealPhotoStoragePath,
+  resolveCurrentDealPosterStoragePath,
+} from "../../lib/deal-poster-url";
 import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
 import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
@@ -203,6 +207,13 @@ function buildDisplayScheduleSummary(
     timezone,
     defaultValue: `Recurring: ${dayLabels} · ${startLabel}–${endLabel} (${timezone})`,
   });
+}
+
+function buildRedemptionLimitSummary(cutoffMinutes: number): string {
+  if (!Number.isFinite(cutoffMinutes) || cutoffMinutes <= 0) {
+    return "Claims are available until the deal ends.";
+  }
+  return `Claims close ${cutoffMinutes} minutes before the deal ends.`;
 }
 
 async function fileUriToBase64(uri: string): Promise<string> {
@@ -626,7 +637,7 @@ export default function AiDealScreen() {
         const { data, error } = await supabase
           .from("deals")
           .select(
-            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
           )
           .eq("id", dealIdFromRoute)
           .eq("business_id", businessId)
@@ -1079,6 +1090,8 @@ export default function AiDealScreen() {
       // Snapshot the treatment we're about to send so revisions reference the same one
       // even if the user changes the selector mid-flight.
       const sentTreatment = path ? photoTreatment : null;
+      const maxClaimsNum = Number(maxClaims);
+      const cutoffNum = Number(cutoffMins);
 
       const { ad } = await aiGenerateAd({
         business_id: businessId,
@@ -1087,6 +1100,8 @@ export default function AiDealScreen() {
         output_language: dealOutputLang,
         ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
+        ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
+        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
       });
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1138,6 +1153,8 @@ export default function AiDealScreen() {
      */
     const treatmentForRevision =
       lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
+    const maxClaimsNum = Number(maxClaims);
+    const cutoffNum = Number(cutoffMins);
     try {
       const { ad } = await aiReviseAd({
         business_id: businessId,
@@ -1151,6 +1168,8 @@ export default function AiDealScreen() {
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
         ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
+        ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
+        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1268,7 +1287,11 @@ export default function AiDealScreen() {
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
 
       const aiPosterPath = generatedAd?.poster_storage_path ?? null;
-      const finalStoragePath = aiPosterPath ?? userPhotoStoragePath;
+      const finalStoragePath = resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: aiPosterPath,
+        uploadedPhotoStoragePath: userPhotoStoragePath,
+        posterUrl,
+      });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
 
       const baseRow = {
@@ -1411,7 +1434,12 @@ export default function AiDealScreen() {
       const cutoffNum = Number(cutoffMins);
       const isRecurring = validityMode === "recurring";
       const composedDescription = composeListingDescription(promoLine, ctaText, description);
-      const storagePath = path ?? extractDealPhotoStoragePath(posterUrl);
+      const userPhotoStoragePath = path ?? extractDealPhotoStoragePath(posterUrl);
+      const storagePath = resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: generatedAd?.poster_storage_path ?? null,
+        uploadedPhotoStoragePath: userPhotoStoragePath,
+        posterUrl,
+      });
       const durablePoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
 
       const { error } = await supabase.from("deal_templates").insert({
@@ -1419,7 +1447,8 @@ export default function AiDealScreen() {
         title: title.trim(),
         description: composedDescription.trim(),
         price: priceNum,
-        poster_url: durablePoster ?? signedPoster,
+        poster_url: durablePoster ?? signedPoster ?? posterUrl ?? null,
+        poster_storage_path: storagePath ?? null,
         max_claims: maxClaimsNum,
         claim_cutoff_buffer_minutes: cutoffNum,
         is_recurring: isRecurring,

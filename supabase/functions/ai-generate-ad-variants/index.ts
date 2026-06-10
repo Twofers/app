@@ -25,6 +25,13 @@ import {
   type PhotoTreatment,
 } from "../_shared/dalle-image.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  AD_COPY_PROMPT_VERSION,
+  buildAdCopyPrompt,
+  type BusinessContext,
+  type ItemResearch,
+  type OutputLanguage,
+} from "./prompt.ts";
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
@@ -43,27 +50,14 @@ const VALID_REVISION_TARGETS = new Set(["copy", "image", "both"] as const);
 
 type RevisionTarget = "copy" | "image" | "both";
 
-type BusinessContext = {
-  category?: string;
-  tone?: string;
-  location?: string;
-  description?: string;
-};
-
-type ItemResearch = {
-  /** Cleaned up item name as the AI understood it. */
-  item_name: string;
-  /** 1-2 sentences explaining what the item is + what makes it unique. Empty if unfamiliar. */
-  description: string;
-  /** True if the AI had useful information; false if it gave up. */
-  is_familiar: boolean;
-};
-
 type SingleAd = {
   /** Short, item-forward (≤40 chars). */
   headline: string;
   /** One sentence — explains what the item is OR why it's worth the trip (≤88 chars). */
   subheadline: string;
+  short_description: string;
+  push_notification: string;
+  terms_summary: string;
   /** Verb-first action (≤26 chars). */
   cta: string;
   /** Research the AI used to write the copy. Empty when it skipped/failed research. */
@@ -217,29 +211,6 @@ async function callResearchModel(params: {
 
 // ─── Stage 2: copy ─────────────────────────────────────────────────────────
 
-const COPY_VOICE_RULES = [
-  "Write like the cafe owner would write it — direct, item-forward, confident.",
-  'Headline format: name the item and the offer. Example: "BOGO Large Iced Americano".',
-  'REQUIRED: state the offer with an explicit phrase — "BOGO", "2-for-1", "buy one get one", or "<item> free" — in the headline or subline. A deal with no such phrase cannot be published.',
-  "If the item is unique or unfamiliar (research flagged it), the subline must explain what it is in plain words.",
-  "If the item is common, the subline can lean into what makes their version worth coming for.",
-  "",
-  "BANNED — these are the AI tells we are removing:",
-  "  - No exclamation marks anywhere.",
-  '  - No em dashes ("—") in the copy.',
-  '  - No "treat yourself", "indulge", "amazing", "incredible", "best", "ultimate", "perfect", "experience".',
-  '  - No "hand-pulled", "small-batch", "single-origin", "artisan", "craft" unless the cafe owner used those words.',
-  '  - No "today only", "limited time", "act fast", "don\'t miss out" unless the schedule literally says so.',
-  "  - No rule of three (do not list three adjectives or three benefits in a row).",
-  "  - No emojis.",
-  "  - No questions in the headline.",
-  "",
-  "CTA: a short verb phrase the customer takes. Examples: \"Claim deal\", \"Get yours\", \"Order today\". Not a sentence.",
-  "",
-  "Length limits (hard): headline ≤ 40 chars, subline ≤ 88 chars, CTA ≤ 26 chars.",
-  "If a length is exceeded, rewrite shorter — never truncate mid-word.",
-];
-
 async function generateCopy(params: {
   openAiKey: string;
   itemHint: string;
@@ -247,11 +218,13 @@ async function generateCopy(params: {
   businessName: string;
   businessContext: BusinessContext;
   offerScheduleSummary: string;
-  outputLanguage: "en" | "es" | "ko";
+  quantityLimit: number | null;
+  redemptionLimit: string;
+  outputLanguage: OutputLanguage;
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: SingleAd;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "cta">> {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta">> {
   const {
     openAiKey,
     itemHint,
@@ -259,69 +232,27 @@ async function generateCopy(params: {
     businessName,
     businessContext,
     offerScheduleSummary,
+    quantityLimit,
+    redemptionLimit,
     outputLanguage,
     revisionPreset,
     revisionFeedback,
     previousAd,
   } = params;
 
-  const langName =
-    outputLanguage === "es" ? "Spanish" : outputLanguage === "ko" ? "Korean" : "English";
-
-  const facts: string[] = [];
-  if (businessName) facts.push(`Business name: ${businessName}`);
-  facts.push(`Owner note (highest priority — ground truth on what the deal is): ${itemHint || "(none)"}`);
-  if (research.description) {
-    facts.push(`Item context (use to inform the subline): ${research.description}`);
-  }
-  if (offerScheduleSummary) facts.push(`Schedule: ${offerScheduleSummary}`);
-  if (businessContext.category) facts.push(`Cafe category: ${businessContext.category}`);
-  if (businessContext.location) facts.push(`Neighborhood: ${businessContext.location}`);
-  if (businessContext.tone) facts.push(`Tone hint (style only): ${businessContext.tone}`);
-
-  const isRevision = !!previousAd;
-  const revisionBlock: string[] = [];
-  if (isRevision && previousAd) {
-    revisionBlock.push("");
-    revisionBlock.push("REVISION CONTEXT — the previous draft was:");
-    revisionBlock.push(`  Headline: ${previousAd.headline}`);
-    revisionBlock.push(`  Subline: ${previousAd.subheadline}`);
-    revisionBlock.push(`  CTA: ${previousAd.cta}`);
-    if (revisionPreset) {
-      revisionBlock.push(`Apply this preset adjustment: ${revisionPreset}`);
-    }
-    if (revisionFeedback) {
-      revisionBlock.push(`Apply this user feedback: ${revisionFeedback}`);
-    }
-    revisionBlock.push("Keep the same offer mechanics. Change wording per the adjustment.");
-  }
-
-  const system = [
-    `Write a single mobile ad for a TWOFER cafe deal. Output JSON only. Write all text in ${langName}.`,
-    "",
-    ...COPY_VOICE_RULES,
-  ].join("\n");
-
-  const userText = [
-    "FACTS:",
-    ...facts.map((f) => "  " + f),
-    ...revisionBlock,
-  ].join("\n");
-
-  const jsonSchema = {
-    name: "single_ad",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        headline: { type: "string" },
-        subheadline: { type: "string" },
-        cta: { type: "string" },
-      },
-      required: ["headline", "subheadline", "cta"],
-      additionalProperties: false,
-    },
-  };
+  const { system, userText, jsonSchema } = buildAdCopyPrompt({
+    itemHint,
+    research,
+    businessName,
+    businessContext,
+    offerScheduleSummary,
+    quantityLimit,
+    redemptionLimit,
+    outputLanguage,
+    revisionPreset,
+    revisionFeedback,
+    previousAd,
+  });
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -351,15 +282,26 @@ async function generateCopy(params: {
   const content = json?.choices?.[0]?.message?.content ?? "";
   const parsed = JSON.parse(typeof content === "string" ? content : "{}") as {
     headline?: string;
-    subheadline?: string;
-    cta?: string;
+    short_description?: string;
+    push_notification?: string;
+    terms_summary?: string;
   };
+  const shortDescription = clip(parsed.short_description ?? "", 220);
 
   return {
-    headline: clip(parsed.headline ?? "", 40),
-    subheadline: clip(parsed.subheadline ?? "", 88),
-    cta: clip(parsed.cta ?? "", 26),
+    headline: clip(parsed.headline ?? "", 70),
+    subheadline: shortDescription,
+    short_description: shortDescription,
+    push_notification: clip(parsed.push_notification ?? "", 90),
+    terms_summary: clip(parsed.terms_summary ?? "", 240),
+    cta: defaultCta(outputLanguage),
   };
+}
+
+function defaultCta(lang: OutputLanguage): string {
+  if (lang === "es") return "Reclamar oferta";
+  if (lang === "ko") return "딜 받기";
+  return "Claim deal";
 }
 
 // ─── Stage 3: image ────────────────────────────────────────────────────────
@@ -494,11 +436,17 @@ async function produceImage(params: {
 
 // ─── Demo-mode stub (no OpenAI calls) ──────────────────────────────────────
 
-function buildDemoSingleAd(itemHint: string): SingleAd {
+function buildDemoSingleAd(itemHint: string, offerScheduleSummary = "", quantityLimit: number | null = null): SingleAd {
   const item = itemHint.trim().slice(0, 30) || "your favorite drink";
+  const timeText = offerScheduleSummary.trim() ? ` ${offerScheduleSummary.trim()}` : "";
+  const quantityText = quantityLimit && quantityLimit > 0 ? ` ${Math.floor(quantityLimit)} available.` : "";
+  const shortDescription = clip(`Buy one ${item}, get the second one free.${timeText}${quantityText}`, 220);
   return {
-    headline: clip(`BOGO ${item}`, 40),
-    subheadline: clip(`Buy one ${item}, get the second one free.`, 88),
+    headline: clip(`BOGO ${item}`, 70),
+    subheadline: shortDescription,
+    short_description: shortDescription,
+    push_notification: clip(`BOGO ${item}${quantityLimit ? `, ${Math.floor(quantityLimit)} available` : ""}`, 90),
+    terms_summary: clip(`Buy one ${item}, get one free.${timeText}${quantityText}`, 240),
     cta: "Claim deal",
     item_research: { item_name: item, description: "", is_familiar: false },
     photo_source: "generated",
@@ -528,12 +476,15 @@ function offerFallbackSubline(lang: "en" | "es" | "ko", item: string): string {
 
 /** Guarantee the copy carries a publishable offer phrase; rewrite the subline if not. */
 function ensureOfferPhrase(
-  copy: Pick<SingleAd, "headline" | "subheadline" | "cta">,
-  lang: "en" | "es" | "ko",
+  copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta">,
+  lang: OutputLanguage,
   item: string,
-): Pick<SingleAd, "headline" | "subheadline" | "cta"> {
-  if (STRONG_PHRASE_RE.test(`${copy.headline} ${copy.subheadline} ${copy.cta}`)) return copy;
-  return { ...copy, subheadline: offerFallbackSubline(lang, item) };
+): Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta"> {
+  if (STRONG_PHRASE_RE.test(`${copy.headline} ${copy.subheadline} ${copy.terms_summary} ${copy.cta}`)) {
+    return copy;
+  }
+  const fallback = offerFallbackSubline(lang, item);
+  return { ...copy, subheadline: fallback, short_description: fallback };
 }
 
 // ─── HTTP handler ──────────────────────────────────────────────────────────
@@ -610,10 +561,23 @@ serve(async (req) => {
       ? body.offer_schedule_summary.trim().slice(0, 500)
       : "";
 
+    const rawQuantityLimit = typeof body.quantity_limit === "number"
+      ? body.quantity_limit
+      : typeof body.quantity_limit === "string"
+      ? Number(body.quantity_limit)
+      : NaN;
+    const quantityLimit = Number.isFinite(rawQuantityLimit) && rawQuantityLimit > 0
+      ? Math.floor(rawQuantityLimit)
+      : null;
+
+    const redemptionLimit = typeof body.redemption_limit === "string"
+      ? body.redemption_limit.trim().slice(0, 300)
+      : "";
+
     const rawOutLang = typeof body.output_language === "string"
       ? body.output_language.trim().toLowerCase()
       : "en";
-    const outputLanguage: "en" | "es" | "ko" =
+    const outputLanguage: OutputLanguage =
       rawOutLang === "es" || rawOutLang === "ko" ? rawOutLang : "en";
 
     const previousAdRaw = body.previous_ad;
@@ -763,14 +727,14 @@ serve(async (req) => {
     // Demo account: deterministic stub, no OpenAI cost
     const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
     if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ad = buildDemoSingleAd(hintText);
+      const ad = buildDemoSingleAd(hintText, offerScheduleSummary, quantityLimit);
       await admin.from("ai_generation_logs").insert({
         business_id: businessId,
         user_id: user.id,
         request_type: "ad_variants",
         input_mode: "demo",
         request_hash: "demo_v2",
-        prompt_version: "v2",
+        prompt_version: AD_COPY_PROMPT_VERSION,
         model: "demo_mock",
         success: true,
         openai_called: false,
@@ -808,12 +772,15 @@ serve(async (req) => {
       });
     }
 
-    let copy: Pick<SingleAd, "headline" | "subheadline" | "cta">;
+    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta">;
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
       copy = {
         headline: previousAd.headline,
         subheadline: previousAd.subheadline,
+        short_description: previousAd.short_description || previousAd.subheadline,
+        push_notification: previousAd.push_notification || previousAd.headline,
+        terms_summary: previousAd.terms_summary || previousAd.subheadline,
         cta: previousAd.cta,
       };
     } else {
@@ -825,6 +792,8 @@ serve(async (req) => {
           businessName,
           businessContext,
           offerScheduleSummary,
+          quantityLimit,
+          redemptionLimit,
           outputLanguage,
           revisionPreset: revisionPreset || undefined,
           revisionFeedback: revisionFeedback || undefined,
@@ -839,8 +808,8 @@ serve(async (req) => {
           user_id: user.id,
           request_type: "ad_variants",
           input_mode: photoPath ? "photo" : "text",
-          request_hash: "copy_error_v2",
-          prompt_version: "v2",
+          request_hash: "copy_error_v3",
+          prompt_version: AD_COPY_PROMPT_VERSION,
           model: CHAT_MODEL,
           success: false,
           failure_reason: String(e).slice(0, 100),
@@ -882,6 +851,9 @@ serve(async (req) => {
     const ad: SingleAd = {
       headline: copy.headline,
       subheadline: copy.subheadline,
+      short_description: copy.short_description,
+      push_notification: copy.push_notification,
+      terms_summary: copy.terms_summary,
       cta: copy.cta,
       item_research: research,
       photo_source: imageResult.source,
@@ -902,8 +874,8 @@ serve(async (req) => {
       user_id: user.id,
       request_type: isRevision ? "ad_refine" : "ad_variants",
       input_mode: photoPath ? "photo" : "text",
-      request_hash: `v2:${derivedRevisionCount}:${imageResult.source}`,
-      prompt_version: "v2",
+      request_hash: `v3:${derivedRevisionCount}:${imageResult.source}`,
+      prompt_version: AD_COPY_PROMPT_VERSION,
       model: CHAT_MODEL,
       success: productionSuccess,
       failure_reason: productionSuccess ? null : "IMAGE_NULL",
@@ -944,9 +916,27 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       ? (photoTreatmentRaw as PhotoTreatment)
       : null;
 
+  const shortDescription = clip(
+    typeof raw.short_description === "string"
+      ? raw.short_description
+      : typeof raw.subheadline === "string"
+      ? raw.subheadline
+      : "",
+    220,
+  );
+
   return {
-    headline: clip(typeof raw.headline === "string" ? raw.headline : "", 40),
-    subheadline: clip(typeof raw.subheadline === "string" ? raw.subheadline : "", 88),
+    headline: clip(typeof raw.headline === "string" ? raw.headline : "", 70),
+    subheadline: shortDescription,
+    short_description: shortDescription,
+    push_notification: clip(
+      typeof raw.push_notification === "string" ? raw.push_notification : "",
+      90,
+    ),
+    terms_summary: clip(
+      typeof raw.terms_summary === "string" ? raw.terms_summary : shortDescription,
+      240,
+    ),
     cta: clip(typeof raw.cta === "string" ? raw.cta : "", 26),
     item_research: {
       item_name: clip(typeof research.item_name === "string" ? research.item_name : "", 80),
