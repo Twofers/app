@@ -407,6 +407,8 @@
     "sessionSectionTitle": "Sign-in",
     "dealAlertsTitle": "Deal alerts",
     "dealAlertsSubtitle": "Notify me when favorites post new deals.",
+    "bizClaimNotifTitle": "Business notifications",
+    "bizClaimNotifSubtitle": "Get notified about new claims and sell-outs.",
     "bizProfileHeader": "Business profile",
     "bizProfileHelp": "Name and address are required to save. Contact, email, phone, category, hours, and description help customers and AI.",
     "fieldBusinessName": "Business name",

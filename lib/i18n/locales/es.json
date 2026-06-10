@@ -404,6 +404,8 @@
     "sessionSectionTitle": "Sesión",
     "dealAlertsTitle": "Alertas de ofertas",
     "dealAlertsSubtitle": "Avísame cuando mis favoritos publiquen ofertas nuevas.",
+    "bizClaimNotifTitle": "Notificaciones del negocio",
+    "bizClaimNotifSubtitle": "Avísame de nuevas reclamaciones y cuando se agote una oferta.",
     "bizProfileHeader": "Perfil del negocio",
     "bizProfileHelp": "Nombre y dirección son obligatorios para guardar. Contacto, email, teléfono, categoría, horario y descripción ayudan a clientes e IA.",
     "fieldBusinessName": "Nombre del negocio",

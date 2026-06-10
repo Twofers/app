@@ -3,6 +3,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
 import { hasClaimOnLocalBusinessDay } from "../_shared/claim-limits.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { sendExpoPushBatch } from "../_shared/expo-push.ts";
+import {
+  buildOwnerClaimPushMessage,
+  decideOwnerClaimPush,
+  resolveOwnerPushLocale,
+} from "../_shared/owner-claim-push.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -613,6 +619,74 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // 🔔 Owner notification (new claim / sold out, spec 11.8 minimum).
+    // Server-side only so it cannot be spoofed; best-effort so a push failure
+    // never blocks or fails the claim itself. Until the
+    // 20260713120000_business_claim_notifications migration is applied, the
+    // select below errors on the missing column and the catch keeps this inert.
+    try {
+      const { data: pushRow } = await supabaseAdmin
+        .from("deals")
+        .select("title, claim_push_last_sent_at, businesses(owner_id, preferred_locale, claim_notifications_enabled)")
+        .eq("id", dealId)
+        .single();
+      const ownerBiz = pushRow?.businesses as unknown as {
+        owner_id: string | null;
+        preferred_locale: string | null;
+        claim_notifications_enabled: boolean | null;
+      } | null;
+      // Skip self-claims (legacy accounts where the claimer owns the business).
+      if (pushRow && ownerBiz?.owner_id && ownerBiz.owner_id !== user.id) {
+        let claimCount: number | null = null;
+        if (deal.max_claims !== null && deal.max_claims > 0) {
+          const { count } = await supabaseAdmin
+            .from("deal_claims")
+            .select("*", { count: "exact", head: true })
+            .eq("deal_id", dealId)
+            .neq("claim_status", "canceled");
+          claimCount = count;
+        }
+        const lastSentMs = pushRow.claim_push_last_sent_at
+          ? Date.parse(pushRow.claim_push_last_sent_at)
+          : NaN;
+        const kind = decideOwnerClaimPush({
+          notificationsEnabled: ownerBiz.claim_notifications_enabled !== false,
+          maxClaims: deal.max_claims ?? null,
+          claimCount,
+          nowMs: Date.now(),
+          lastClaimPushAtMs: Number.isFinite(lastSentMs) ? lastSentMs : null,
+        });
+        if (kind) {
+          if (kind === "new_claim") {
+            // Record the send time before sending to narrow the duplicate window.
+            await supabaseAdmin
+              .from("deals")
+              .update({ claim_push_last_sent_at: new Date().toISOString() })
+              .eq("id", dealId);
+          }
+          // Consent gate: push_tokens rows only exist for devices that granted
+          // OS notification permission (and are removed on sign-out).
+          const { data: tokenRows } = await supabaseAdmin
+            .from("push_tokens")
+            .select("expo_push_token")
+            .eq("user_id", ownerBiz.owner_id);
+          const ownerTokens = (tokenRows ?? [])
+            .map((r: { expo_push_token: string | null }) => r.expo_push_token?.trim())
+            .filter((tk): tk is string => Boolean(tk));
+          if (ownerTokens.length > 0) {
+            const msg = buildOwnerClaimPushMessage(
+              kind,
+              resolveOwnerPushLocale(ownerBiz.preferred_locale),
+              pushRow.title as string | null,
+            );
+            await sendExpoPushBatch(ownerTokens, msg.title, msg.body, { path: "/dashboard" });
+          }
+        }
+      }
+    } catch (pushErr) {
+      console.error("[claim-deal] owner push failed (non-fatal):", pushErr);
     }
 
     // ✅ Success

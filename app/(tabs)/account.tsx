@@ -61,6 +61,9 @@ export default function AccountScreen() {
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [alertsLoading, setAlertsLoading] = useState(true);
+  /** null = unknown (no business, or column not deployed yet) — toggle hidden. */
+  const [bizClaimNotif, setBizClaimNotif] = useState<boolean | null>(null);
+  const [bizClaimNotifSaving, setBizClaimNotifSaving] = useState(false);
   const [profileBusinessName, setProfileBusinessName] = useState("");
   const [profileContactName, setProfileContactName] = useState("");
   const [profileBusinessEmail, setProfileBusinessEmail] = useState("");
@@ -181,6 +184,48 @@ export default function AccountScreen() {
       setAlertsLoading(false);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!businessId) {
+      setBizClaimNotif(null);
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from("businesses")
+      .select("claim_notifications_enabled")
+      .eq("id", businessId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        // Hide the toggle when the column isn't readable yet (pre-migration schema).
+        if (error || !data) {
+          setBizClaimNotif(null);
+          return;
+        }
+        const row = data as { claim_notifications_enabled?: boolean | null };
+        setBizClaimNotif(row.claim_notifications_enabled !== false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  async function toggleBizClaimNotif(next: boolean) {
+    if (!businessId || bizClaimNotif === null) return;
+    const previous = bizClaimNotif;
+    setBizClaimNotif(next);
+    setBizClaimNotifSaving(true);
+    const { error } = await supabase
+      .from("businesses")
+      .update({ claim_notifications_enabled: next })
+      .eq("id", businessId);
+    setBizClaimNotifSaving(false);
+    if (error) {
+      setBizClaimNotif(previous);
+      setBanner({ message: t("account.errSaveProfileFailed"), tone: "error" });
+    }
+  }
 
   async function toggleAlerts(next: boolean) {
     if (next) {
@@ -705,6 +750,30 @@ export default function AccountScreen() {
             </View>
             <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
           </View>
+
+          {bizClaimNotif !== null ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+                <Text style={{ fontWeight: "700" }}>{t("account.bizClaimNotifTitle")}</Text>
+                <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.bizClaimNotifSubtitle")}</Text>
+              </View>
+              <BrandedSwitch
+                value={bizClaimNotif}
+                onValueChange={(v) => void toggleBizClaimNotif(v)}
+                disabled={bizClaimNotifSaving}
+              />
+            </View>
+          ) : null}
 
           {businessId ? (
             <View

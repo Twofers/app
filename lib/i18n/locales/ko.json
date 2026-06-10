@@ -404,6 +404,8 @@
     "sessionSectionTitle": "세션",
     "dealAlertsTitle": "딜 알림",
     "dealAlertsSubtitle": "즐겨찾기 매장이 새 딜을 올리면 알려줍니다.",
+    "bizClaimNotifTitle": "비즈니스 알림",
+    "bizClaimNotifSubtitle": "새 수령과 매진 소식을 알려줍니다.",
     "bizProfileHeader": "비즈니스 프로필",
     "bizProfileHelp": "저장하려면 비즈니스 이름과 주소가 필요합니다. 담당자, 이메일, 전화, 카테고리, 영업시간, 소개는 고객과 AI에 도움이 됩니다.",
     "fieldBusinessName": "비즈니스 이름",
