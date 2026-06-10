@@ -229,7 +229,7 @@ async function fileUriToBase64(uri: string): Promise<string> {
 }
 
 const QUOTA_FOCUS_MIN_MS = 30_000;
-const SOFT_REVISION_CAP = 5;
+const SOFT_REVISION_CAP = 2;
 const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
 function parseOptionalPriceInput(raw: string): number | null {

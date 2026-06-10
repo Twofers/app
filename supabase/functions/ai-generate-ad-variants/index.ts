@@ -38,8 +38,8 @@ const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
 
-/** Hard cap to bound abuse. The client enforces a soft cap (5) for UX. */
-const MAX_REVISION_COUNT = 10;
+/** Hard cap to bound abuse. The client enforces a matching soft cap (2) for UX. */
+const MAX_REVISION_COUNT = 2;
 
 const VALID_PHOTO_TREATMENTS: ReadonlySet<PhotoTreatment> = new Set([
   "touchup",
