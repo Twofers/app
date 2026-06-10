@@ -39,6 +39,14 @@ serve(async (req) => {
         },
       }
     );
+    /** Service role — failed_redeem_attempts is RLS default-deny (service role only). */
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    const clientIp = (() => {
+      const fwd = req.headers.get("x-forwarded-for");
+      const first = fwd?.split(",")[0]?.trim();
+      return first || req.headers.get("x-real-ip") || null;
+    })();
 
     // 🔐 Get authenticated business user
     const {
@@ -75,6 +83,48 @@ serve(async (req) => {
     }
 
     const businessIds = (businesses ?? []).map((b) => b.id);
+
+    // 🔒 Brute-force lockout (20260705120007_failed_redeem_attempts.sql):
+    // >= 10 failed attempts in the last 5 minutes for this business (and IP,
+    // when one is available) → 429 before any code lookup happens.
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    let lockoutQuery = supabaseAdmin
+      .from("failed_redeem_attempts")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", business.id)
+      .gte("attempted_at", fiveMinutesAgo);
+    if (clientIp) {
+      lockoutQuery = lockoutQuery.eq("ip_address", clientIp);
+    }
+    const { count: failedCount, error: lockoutErr } = await lockoutQuery;
+    if (lockoutErr) {
+      console.error("[redeem-token] lockout check failed:", lockoutErr);
+    } else if (failedCount !== null && failedCount >= 10) {
+      return new Response(
+        JSON.stringify({ error: "Too many failed attempts. Try again in a few minutes." }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    /** Best-effort failure log feeding the lockout above. Never blocks the response. */
+    const attemptBusinessId = business.id;
+    const attemptUserId = user.id;
+    async function recordFailedAttempt(reason: string): Promise<void> {
+      try {
+        const { error: insErr } = await supabaseAdmin.from("failed_redeem_attempts").insert({
+          business_id: attemptBusinessId,
+          ip_address: clientIp,
+          user_id: attemptUserId,
+          reason,
+        });
+        if (insErr) console.error("[redeem-token] failed-attempt insert error:", insErr);
+      } catch (err) {
+        console.error("[redeem-token] failed-attempt insert threw:", err);
+      }
+    }
 
     // 🚦 Rate limit: max 10 redeem attempts per minute per business owner
     const { data: dealIdsData } = await supabase
@@ -162,6 +212,7 @@ serve(async (req) => {
     }
 
     if (claimError || !claim) {
+      await recordFailedAttempt("unknown_code");
       return new Response(
         JSON.stringify({ error: "Invalid token or claim code" }),
         {
@@ -184,6 +235,7 @@ serve(async (req) => {
       max_claims?: number | null;
     } | null;
     if (!deal || deal.business?.owner_id !== user.id) {
+      await recordFailedAttempt("wrong_business");
       return new Response(
         JSON.stringify({ error: "This token does not belong to your business" }),
         {
@@ -214,6 +266,7 @@ serve(async (req) => {
 
     const claimStatus = String(freshRow?.claim_status ?? claim.claim_status ?? "active");
     if (claimStatus === "canceled" || claimStatus === "expired") {
+      await recordFailedAttempt("expired");
       return new Response(
         JSON.stringify({ error: "This token has expired" }),
         {
@@ -240,6 +293,7 @@ serve(async (req) => {
     const expiresIso = (freshRow?.expires_at ?? claim.expires_at) as string;
     if (isPastRedeemDeadline(now.getTime(), expiresIso, grace)) {
       await supabase.from("deal_claims").update({ claim_status: "expired" }).eq("id", claimId);
+      await recordFailedAttempt("expired");
       return new Response(
         JSON.stringify({ error: "This token has expired" }),
         {

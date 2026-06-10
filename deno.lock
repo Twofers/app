@@ -51,6 +51,7 @@
         "npm:expo-audio@~1.1.1",
         "npm:expo-camera@~17.0.10",
         "npm:expo-constants@~18.0.13",
+        "npm:expo-crypto@~15.0.9",
         "npm:expo-dev-client@~6.0.21",
         "npm:expo-file-system@~19.0.23",
         "npm:expo-font@~14.0.12",

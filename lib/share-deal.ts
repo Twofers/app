@@ -1,4 +1,5 @@
 import { Share } from "react-native";
+import * as Crypto from "expo-crypto";
 import type { TFunction } from "i18next";
 import { supabase } from "./supabase";
 import { isShareDealEnabled } from "./runtime-env";
@@ -17,9 +18,13 @@ type SupabaseErrorLike = {
 };
 
 function randomShareCode(length = SHARE_CODE_LENGTH): string {
+  // CSPRNG (Math.random is guessable). Same alphabet/length as before so
+  // existing codes stay valid. Modulo bias over a 31-char alphabet is
+  // negligible and matches the server short-code generator's idiom.
+  const bytes = Crypto.getRandomBytes(length);
   let out = "";
   for (let i = 0; i < length; i += 1) {
-    out += SHARE_ALPHABET[Math.floor(Math.random() * SHARE_ALPHABET.length)];
+    out += SHARE_ALPHABET[bytes[i]! % SHARE_ALPHABET.length];
   }
   return out;
 }
