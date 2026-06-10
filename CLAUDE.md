@@ -24,16 +24,16 @@ These are settled. Do not reopen, redesign around, or ask about them.
 - All paid surfaces are fully hidden behind `PAID_BILLING_ENABLED=false`. Nothing billing, pricing, upgrade, paywall, checkout, or subscription related is reachable in v1.
 - Pilot businesses are capped to one location.
 
-## Open items — do not guess (spec section 4)
+## Former open items — all decided by Dan on 2026-06-10 (spec section 4)
 
-Surface these and wait for Dan's decision. Never assume.
+These are settled; full detail is in spec section 4. Do not reopen them. Items 2 and 4 are decided but NOT YET IMPLEMENTED — the code still reflects the old behavior until that work lands.
 
-1. Which public support email is live: `support@twoferapp.com` or `twoferadmin@gmail.com`. Do not change any email reference until confirmed.
-2. Whether accounts use a hard Shopper/Business role split or one account that reaches both sides. Verify against the code before building anything role-dependent.
-3. The exact Share Deal feature-flag name. Inspect `eas.json` and the client code, then use that one name everywhere.
-4. Whether the AI usage limits (30 generations per month, 2 regenerations per draft) are actually implemented in code.
-5. Whether AI Compose voice audio is processed ephemerally or stored.
-6. The fix approach for the broken TestFlight email-confirmation flow (spec section 17), before changing any auth behavior.
+1. The public support email is `support@twoferapp.com` everywhere. The live privacy policy still shows `twoferadmin@gmail.com`; fixing that is a website-repo task, not a mobile-repo task.
+2. Hard Shopper/Business role split per account, enforced app-level only: the role is picked once at signup, login shows no picker and routes by the stored role, and existing accounts derive their permanent role from data (owns a `businesses` row → Business, otherwise Customer). The demo account and all demo code paths are to be deleted. Pending implementation — the code still has the soft switchable `profiles.app_tab_mode`.
+3. The Share Deal feature flag is `EXPO_PUBLIC_ENABLE_SHARE_DEAL`, set in `eas.json` and read only in `lib/runtime-env.ts`.
+4. AI usage limits: 30 generations per month per AI feature, and 2 regenerations per deal creation. Pending implementation — deal-copy is still 60/month and the regeneration caps are still 5 (client) / 10 (server).
+5. AI Compose voice audio is processed ephemerally and never stored; only the text transcript is retained in `ai_generation_logs`.
+6. Email confirmation stays on; Dan will configure the Supabase side (custom SMTP, the Confirm email toggle, the redirect-URL allow-list) himself at a later date. No app-code auth changes are needed.
 
 ## How to work
 
