@@ -66,25 +66,25 @@ These are settled. Do not reopen, redesign around, or ask about them. They overr
 | Mobile repo | `C:\Users\unvme\Downloads\twoforone` |
 | Website repo | `C:\Users\unvme\Downloads\twoferwebsite\v0-twofer-landing-page` |
 | Android upload keystore | `C:\Users\unvme\keys\twofer-upload-key.keystore`, alias `twofer-upload` |
-| Demo / reviewer account | `demo@demo.com`, email and password only, no OTP, reaches both sides |
+| Demo / reviewer account | `demo@demo.com` — DECIDED 2026-06-10: delete this account and remove all demo code paths (demo login helper, canned AI responses in edge functions, seed scripts). Until that work lands it still exists and reaches both sides. |
 
 ---
 
-## 4. Open items that need human confirmation
+## 4. Open items — all confirmed by Dan on 2026-06-10
 
-The agent must not guess on these. Surface them and wait for a decision.
+All six items below are decided. Items 2 and 4 require code changes that have not been built yet; the decisions are recorded here and the code still reflects the old behavior until that work lands.
 
-1. **Support email.** This document standardizes on a single public support email, but two values have appeared in project history: `support@twoferapp.com` and `twoferadmin@gmail.com`. [CONFIRM] which email is live on the privacy policy and which should appear in the app, the store listings, and the website. Do not change any email reference until confirmed.
+1. **Support email. RESOLVED: `support@twoferapp.com`.** This is the single public support email for the app, the store listings, and the website. The app constant (`lib/support-contact.ts`) and the Play submission pack already use it. The live privacy policy at `twoferapp.com/privacy` still shows `twoferadmin@gmail.com` (sections 9 and 13) and must be updated — the website is published from a separate repo, so this is a website task, not a mobile-repo task.
 
-2. **Account and role model.** This spec describes a Shopper versus Business role selection. In practice the demo account reaches both the consumer and business sides from one login. [CONFIRM] whether the app uses a hard role split per account or a single account that can access both sides. This decision changes onboarding, navigation, and reviewer notes. Verify against the code before building anything role-dependent.
+2. **Account and role model. DECIDED: hard role split, app-level lock.** One role per account, chosen once at signup. After the account exists there is no switching to the other side; login shows no role picker and routes by the account's stored role. Enforcement is app-level only — no database constraint. Existing accounts get their permanent role derived from data: any account that owns a `businesses` row becomes Business, all others become Customer. The demo account is to be deleted along with all demo code paths (see item on the reference table). NOTE: the current code still implements a soft switchable mode persisted in `profiles.app_tab_mode` (`lib/tab-mode.tsx`, picker in `app/auth-landing.tsx`); the lock is pending implementation.
 
-3. **Share Deal feature flag name.** History records a Share Deal flag added to `eas.json` preview and production profiles. This spec also references `EXPO_PUBLIC_ENABLE_SHARE_DEAL`. [CONFIRM] the exact flag name and where it is read by inspecting `eas.json` and the client code, then use that one name everywhere.
+3. **Share Deal feature flag name. CONFIRMED: `EXPO_PUBLIC_ENABLE_SHARE_DEAL`.** Set in `eas.json` in the preview, production, and dev-client-apk profiles. Read in exactly one place: `lib/runtime-env.ts` `isShareDealEnabled()`, which enables the feature only when the value is the exact string `"true"`.
 
-4. **AI usage limits.** This spec lists 30 generations per month and 2 regenerations per draft. [CONFIRM] whether these limits are actually implemented in code or only intended.
+4. **AI usage limits. DECIDED: 30 generations per month per AI feature, and 2 regenerations per deal creation.** Current code: ad variants and AI Compose already enforce 30 per month server-side via `supabase/functions/_shared/ai-limits.ts`; deal copy has its own 60 per month in `ai-generate-deal-copy` and must drop to 30; the regeneration cap is currently 5 on the client (`app/create/ai.tsx` `SOFT_REVISION_CAP`) and 10 on the server (`ai-generate-ad-variants` `MAX_REVISION_COUNT`) and must become 2 in both places. Pending implementation.
 
-5. **Voice input audio retention.** AI Compose voice input is sent to a transcription provider. [CONFIRM] whether raw audio is processed ephemerally or stored, because the privacy disclosures on both stores depend on the answer.
+5. **Voice input audio retention. CONFIRMED: processed ephemerally, never stored.** Raw audio is decoded in memory inside `ai-compose-offer` and sent directly to OpenAI Whisper; it is never written to Storage or the database (only a SHA-256 hash of the first 4 KB is kept for cooldown dedupe). The text transcript is stored in `ai_generation_logs.voice_transcript`. Provider side follows the OpenAI API data policy: not used for training, retained up to 30 days for abuse monitoring. Store privacy disclosures can state: voice audio is not stored; the transcript is retained.
 
-6. **Email confirmation flow.** This is currently broken for TestFlight users. See section 17. [CONFIRM] the fix approach before changing auth behavior.
+6. **Email confirmation flow. DECIDED: keep email confirmation; Dan configures Supabase later.** Dan will turn email confirmation on and set up the Supabase side (custom SMTP, the Confirm email toggle, and the redirect-URL allow-list) at a later date, before broad distribution. No app code change is needed — the client already handles both the confirmed and unconfirmed signup paths (`app/auth-landing.tsx`, `lib/auth-password-recovery.ts`, `app/auth-callback.tsx`).
 
 ---
 
@@ -173,7 +173,7 @@ Dashboard, Create Deal or AI Create, Active Deals, Redeem or Scan, Business Prof
 Login, signup, account settings, support, privacy, terms, delete account, notification settings, location permissions.
 
 ### 9.4 Entry rule
-The app opens to a branded login screen as the initial route. No feed, deals, or content appear before sign-in. See the account and role [CONFIRM] in section 4 before building a role-selection screen.
+The app opens to a branded login screen as the initial route. No feed, deals, or content appear before sign-in. Role model is decided (section 4, item 2): the role picker appears at signup only; login routes by the account's stored role with no picker.
 
 ---
 
@@ -305,12 +305,12 @@ Edge functions and client wrappers to verify and finish:
 - AI Compose composition for `app/create/ai.tsx`.
 - Menu extraction from a photo.
 - Image polish.
-- Voice input transcription. See the retention [CONFIRM] in section 4.
+- Voice input transcription. Retention confirmed (section 4, item 5): audio is ephemeral, only the transcript is stored.
 - `activate-scheduled-deals` and `generate-recurring-deals` cron functions.
 
 Client wrappers live in `lib/functions.ts`, including `aiGenerateDealCopy()` and `aiGenerateDealPoster()`.
 
-Usage limits to verify: 30 generations per month and 2 regenerations per draft. See the [CONFIRM] in section 4. Token and cost tracking and rate limiting should be confirmed as actually implemented and logged.
+Usage limits (decided, section 4 item 4): 30 generations per month per AI feature and 2 regenerations per deal creation. Monthly limits are already enforced server-side via `ai_generation_logs` counts; the deal-copy 60-per-month and the 5-client / 10-server regeneration caps still need to be brought in line. Token usage is logged per call in `ai_generation_logs`, and 60-second generation cooldowns (10 seconds for revisions) are enforced server-side.
 
 ---
 
@@ -333,7 +333,7 @@ Consumer-side network effects. One user sends a live deal to a friend, who can c
 - Create or reuse a safe share code, then open the native share sheet.
 - Shared URL format: `https://www.twoferapp.com/s/SHARECODE`.
 - The shared text must never include QR tokens, claim codes, redemption codes, auth tokens, or private user data.
-- Controlled by a feature flag. See the flag-name [CONFIRM] in section 4. When the flag is off or missing, the Share Deal UI is hidden and no deal_shares query runs.
+- Controlled by the `EXPO_PUBLIC_ENABLE_SHARE_DEAL` feature flag (confirmed, section 4 item 3). When the flag is off or missing, the Share Deal UI is hidden and no deal_shares query runs.
 
 ### 14.3 Flow
 User taps Share Deal, the app creates or reuses a safe share code, the native share sheet opens, the friend receives the URL, the URL opens the app deep link or the website preview, and the friend claims their own deal if it is still available. The recipient never receives the original user's QR code.
@@ -365,7 +365,7 @@ This section supersedes any earlier Firebase-on-iOS framing.
 
 - Main site: `https://www.twoferapp.com`, on Vercel.
 - Required pages: home or landing, privacy policy, terms, support, delete account, the `/s/` share preview route, and app store links once available.
-- The same public support email appears on the app and the website. See the [CONFIRM] in section 4.
+- The same public support email appears on the app and the website: `support@twoferapp.com` (confirmed, section 4 item 1). The live privacy policy still shows `twoferadmin@gmail.com` and needs a website update.
 - Share deep links resolve as described in section 14.
 - iOS universal links use the AASA file. Android App Links use intent filters for `https://www.twoferapp.com/s` plus an `assetlinks.json` Digital Asset Links file. The assetlinks file needs the Play App Signing key SHA-256 fingerprint, which is only available after Play App Signing enrollment. Until then the file carries a placeholder.
 
@@ -375,11 +375,11 @@ This section supersedes any earlier Firebase-on-iOS framing.
 
 - Email signup, email login, session persistence, logout, password reset, delete account, and links to privacy and terms.
 - Wired to Supabase auth: `signUp`, `signInWithPassword`, `resetPasswordForEmail`. Every flow shows a friendly error on failure. Missing Supabase URL or anon key shows a clear error rather than crashing.
-- Account stores role. See the role [CONFIRM] in section 4.
+- Account stores role. Hard role split decided (section 4, item 2): one role per account, picked at signup, no switching after.
 - Delete-account path exists in the app and on the website.
 - Auth fields carry proper autofill hints.
 
-**Known broken item.** Email confirmation does not work for TestFlight users. The cause is that Supabase default SMTP is test-only and the Confirm email toggle is on, so confirmation emails link nowhere. The demo account is exempt and requires no OTP or email code. Resolve the email confirmation flow before broad distribution. See the [CONFIRM] in section 4 before changing auth behavior.
+**Known broken item.** Email confirmation does not work for TestFlight users. The cause is that Supabase default SMTP is test-only and the Confirm email toggle is on, so confirmation emails link nowhere. DECIDED 2026-06-10 (section 4, item 6): Dan will turn email confirmation on and configure the Supabase side (custom SMTP, Confirm email toggle, redirect-URL allow-list) at a later date, before broad distribution. No app-code auth changes are needed; the client handles both toggle states. The demo-account exemption disappears when the demo account is deleted.
 
 The app must not expose user auth tokens, QR redemption tokens, private user details, business owner private contact info unless intended, or share-sender private details.
 
@@ -431,7 +431,7 @@ All collection is for app functionality, none for tracking, none sold, all encry
 - Location: approximate and precise, both optional, with a ZIP alternative to GPS.
 - Personal info: email (required), business owner or contact name, user IDs, business address (shown publicly with deals), business phone (business listing info), optional consumer birthdate and age range, ZIP.
 - Photos: deal photos, business logos, menu photos. Business-posted images appear publicly.
-- Audio: voice recordings from AI Compose voice input, sent to a transcription provider. See retention [CONFIRM].
+- Audio: voice recordings from AI Compose voice input, sent to a transcription provider. Retention confirmed (section 4, item 5): raw audio is processed ephemerally and never stored; the text transcript is retained.
 - App activity: deals viewed, claimed, redeemed, shared, saved, and businesses viewed, favorited, reported, plus user-generated content such as deal titles, descriptions, prices, menu items, business descriptions, and reports.
 - Diagnostics: sanitized error and diagnostic telemetry only (source, fatal flag, error name, error hash, app version, build, platform). Not raw crash logs and not identity-linked. Declared as Other Diagnostic Data, not Crash Data. There is no crash reporting SDK and no raw crash log flow.
 - Device or other IDs: Expo push tokens for notification delivery, not for tracking or ads.
@@ -472,7 +472,7 @@ Every main screen needs loading, empty, error, and where relevant offline or ret
 - Camera permission copy must describe the app's full camera use, not only QR scanning.
 
 ### 20.9 Role label sizing
-If a role selection screen exists, the labels such as Shopper and Business must fit on small screens without wrapping, truncating, or rendering awkwardly. See the role [CONFIRM] first.
+The role selection on the signup screen (section 4, item 2) must fit its labels, such as Shopper and Business, on small screens without wrapping, truncating, or rendering awkwardly.
 
 ---
 
@@ -504,7 +504,7 @@ Location, notifications, camera for QR scanning, and internet. Do not request a 
 ## 23. Testing requirements
 
 ### 23.1 Consumer flows
-Signup, login, role selection if applicable, location denied, location allowed, notifications denied, notifications allowed, view home deals, view map, claim deal, show QR, redeem QR, share deal, open a shared link, favorite a business, logout, delete account.
+Signup, login, role selection at signup, location denied, location allowed, notifications denied, notifications allowed, view home deals, view map, claim deal, show QR, redeem QR, share deal, open a shared link, favorite a business, logout, delete account.
 
 ### 23.2 Business flows
 Signup, login, create business profile, AI create deal, edit AI copy, publish deal, dashboard success banner, active deal metrics, scan QR, redeem QR, handle invalid QR, pause or expire deal, duplicate deal.
