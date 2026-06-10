@@ -58,6 +58,66 @@ serve(async (req) => {
      * inside the app — the previous "block business owners → contact support"
      * branch was a documented rejection trigger and has been removed.
      */
+
+    // Capture owned business ids before the auth delete cascades the rows away —
+    // every object in both storage buckets lives under a <business_id>/ prefix.
+    const { data: ownedBusinesses, error: bizErr } = await supabaseAdmin
+      .from("businesses")
+      .select("id")
+      .eq("owner_id", user.id);
+    if (bizErr) {
+      console.error("delete-user-account: business lookup failed:", bizErr);
+    }
+
+    // Explicit purge BEFORE the auth delete (20260705120008_purge_user_data_rpc.sql):
+    // anonymizes deal_claims and app_analytics_events so the merchant dashboard
+    // keeps its aggregates, and hard-deletes user-only tables the cascade misses.
+    const { error: purgeErr } = await supabaseAdmin.rpc("purge_user_data", {
+      p_user_id: user.id,
+    });
+    if (purgeErr) {
+      console.error("delete-user-account: purge_user_data failed:", purgeErr);
+      // app_analytics_events.user_id is ON DELETE SET NULL, so its rows survive
+      // the auth delete. Clear the user link (and session_id, if the deployed
+      // schema has that column) directly before proceeding.
+      const { error: anonErr } = await supabaseAdmin
+        .from("app_analytics_events")
+        .update({ user_id: null, session_id: null })
+        .eq("user_id", user.id);
+      if (anonErr) {
+        // Retry without session_id — the repo migrations never add that column
+        // to app_analytics_events, so the update above 400s on a drift-free DB.
+        const { error: retryErr } = await supabaseAdmin
+          .from("app_analytics_events")
+          .update({ user_id: null })
+          .eq("user_id", user.id);
+        if (retryErr) {
+          console.error("delete-user-account: analytics fallback cleanup failed:", retryErr);
+        }
+      }
+    }
+
+    // Best-effort storage cleanup: logos and deal photos under each owned
+    // business's prefix. Failures are logged, never block the deletion itself.
+    for (const biz of ownedBusinesses ?? []) {
+      for (const bucket of ["business-logos", "deal-photos"]) {
+        const { data: objects, error: listErr } = await supabaseAdmin.storage
+          .from(bucket)
+          .list(biz.id, { limit: 1000 });
+        if (listErr) {
+          console.error(`delete-user-account: list ${bucket}/${biz.id} failed:`, listErr);
+          continue;
+        }
+        if (!objects || objects.length === 0) continue;
+        const { error: rmErr } = await supabaseAdmin.storage
+          .from(bucket)
+          .remove(objects.map((o) => `${biz.id}/${o.name}`));
+        if (rmErr) {
+          console.error(`delete-user-account: remove ${bucket}/${biz.id} failed:`, rmErr);
+        }
+      }
+    }
+
     const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
 
     if (delErr) {

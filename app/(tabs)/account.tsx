@@ -22,8 +22,8 @@ import type { AppLocale } from "../../lib/i18n/config";
 import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
 import { clearCachedRole, useTabMode } from "../../lib/tab-mode";
 import { LegalExternalLinks } from "../../components/legal-external-links";
-import { DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER, deleteUserAccount } from "../../lib/functions";
-import { DELETE_ACCOUNT_URL, SUPPORT_URL, openWebsiteUrl } from "../../lib/legal-urls";
+import { deleteUserAccount } from "../../lib/functions";
+import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Radii } from "@/constants/theme";
@@ -266,19 +266,6 @@ export default function AccountScreen() {
       await clearCachedRole();
       router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
-      const code = e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined;
-      if (code === DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER) {
-        setBanner({ message: t("deleteAccount.businessOwnerBlockedShort"), tone: "info" });
-        confirm({
-          iconName: "info-outline",
-          title: t("deleteAccount.businessOwnerBlockedTitle"),
-          message: t("deleteAccount.businessOwnerBlockedBody"),
-          confirmLabel: t("deleteAccount.contactSupportCta"),
-          onConfirm: () => void openWebsiteUrl(SUPPORT_URL),
-          cancelLabel: t("deleteAccount.alertDismiss"),
-        });
-        return;
-      }
       // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner
       // during a sensitive flow. Pass through translateKnownApiMessage so technical
       // messages get a localized friendly equivalent; fall back to the generic copy.
