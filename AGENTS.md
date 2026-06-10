@@ -4,7 +4,7 @@ Save this file at the repo root. Claude Code reads CLAUDE.md automatically each 
 
 ## What you are working from
 
-The release plan is `docs/twofer-ios-app-store-submission-plan-20260607.md`. Read it before doing anything. Work it one task at a time in order. Each task has an objective, the files involved, a do not list, and an acceptance check.
+The release plan is `docs/twofer-ios-app-store-submission-plan-20260607.md`. Read it before doing anything. Work it in plan order. Each task has an objective, the files involved, a do not list, and an acceptance check.
 
 ## Decisions locked, 2026-06-07
 
@@ -19,11 +19,12 @@ These are settled. Do not reopen or ask about them.
 
 ## How to work
 
-1. Do one task at a time. Do not jump ahead.
-2. Before changing anything, say which task you are on and what you plan to do.
-3. Make the change, then show me the diff and the acceptance check result. Wait for my approval before moving to the next task.
-4. Stop and wait for my explicit yes at every task marked STOP GATE.
-5. For tasks marked DECISION, do not guess. Ask me.
+1. You may work through multiple non-gated tasks in one run without pausing. Follow plan order unless I tell you to jump.
+2. State which task you are on in one line before each.
+3. Commit each completed task locally on the current branch with a clear message. Never push.
+4. Stop and wait for my explicit yes at every STOP GATE and before any hard-stop action in the standing rules: build, submit, publish public content, or signing, capability, entitlement, or profile change.
+5. For DECISION tasks, do not guess. Ask me.
+6. At each stop, summarize everything that changed across the batch and the acceptance checks.
 
 ## Standing rules, these override any task
 
