@@ -239,6 +239,9 @@ async function generateCopy(params: {
     previousAd,
   } = params;
 
+  // A previous ad is only passed in on revision calls (see the handler's generateCopy call).
+  const isRevision = previousAd !== undefined;
+
   const { system, userText, jsonSchema } = buildAdCopyPrompt({
     itemHint,
     research,

@@ -23,11 +23,18 @@ if (files.length === 0) {
   process.exit(0);
 }
 
+const failures = [];
 for (const file of files) {
   const result = spawnSync("deno", ["check", file], { stdio: "inherit", shell: true });
   if (result.error || result.status !== 0) {
-    process.exit(result.status || 1);
+    failures.push(file);
   }
+}
+
+if (failures.length > 0) {
+  console.error(`\n${failures.length} of ${files.length} Edge Function files failed typecheck:`);
+  for (const file of failures) console.error(`  ${file}`);
+  process.exit(1);
 }
 
 console.log(`Typechecked ${files.length} Edge Function files.`);
