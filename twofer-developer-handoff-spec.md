@@ -66,25 +66,25 @@ These are settled. Do not reopen, redesign around, or ask about them. They overr
 | Mobile repo | `C:\Users\unvme\Downloads\twoforone` |
 | Website repo | `C:\Users\unvme\Downloads\twoferwebsite\v0-twofer-landing-page` |
 | Android upload keystore | `C:\Users\unvme\keys\twofer-upload-key.keystore`, alias `twofer-upload` |
-| Demo / reviewer account | `demo@demo.com` — DECIDED 2026-06-10: delete this account and remove all demo code paths (demo login helper, canned AI responses in edge functions, seed scripts). Until that work lands it still exists and reaches both sides. |
+| Demo / reviewer account | `demo@demo.com` — DECIDED 2026-06-10: delete this account and remove all demo code paths. The code half is DONE (Batch 2, commit `f5994ad`): the demo login helper, canned AI responses, seed scripts, and all demo branches are removed from the app and edge functions. The Supabase auth account itself still exists and its deletion (plus redeploying the demo-stripped edge functions) is a hard-gated Supabase-side step, sequenced after the reviewer accounts are live. |
 
 ---
 
 ## 4. Open items — all confirmed by Dan on 2026-06-10
 
-All six items below are decided. Items 2 and 4 require code changes that have not been built yet; the decisions are recorded here and the code still reflects the old behavior until that work lands.
+All six items below are decided. The code changes for items 2 and 4 have since been built (Batches 1 and 2, 2026-06-10); the per-item notes below record what landed and what still needs a deploy or migration.
 
 1. **Support email. RESOLVED: `support@twoferapp.com`.** This is the single public support email for the app, the store listings, and the website. The app constant (`lib/support-contact.ts`) and the Play submission pack already use it. The live privacy policy at `twoferapp.com/privacy` still shows `twoferadmin@gmail.com` (sections 9 and 13) and must be updated — the website is published from a separate repo, so this is a website task, not a mobile-repo task.
 
-2. **Account and role model. DECIDED: hard role split, app-level lock.** One role per account, chosen once at signup. After the account exists there is no switching to the other side; login shows no role picker and routes by the account's stored role. Enforcement is app-level only — no database constraint. Existing accounts get their permanent role derived from data: any account that owns a `businesses` row becomes Business, all others become Customer. The demo account is to be deleted along with all demo code paths (see item on the reference table). NOTE: the current code still implements a soft switchable mode persisted in `profiles.app_tab_mode` (`lib/tab-mode.tsx`, picker in `app/auth-landing.tsx`); the lock is pending implementation.
+2. **Account and role model. DECIDED and IMPLEMENTED (Batch 2): hard role split, app-level lock.** One role per account, chosen once at signup and stored in `profiles.role` (`lib/profiles-role.ts`). After the account exists there is no switching to the other side; login shows no role picker and routes by the stored role. Enforcement is app-level only — no database constraint. Existing accounts get their permanent role derived from data: any account that owns a `businesses` row becomes Business, all others become Customer. The soft switchable `profiles.app_tab_mode` and the Settings "Switch to Business" path are gone, and all demo code paths were deleted from the app and edge functions. Migration `20260711120000_profiles_role.sql` is written but NOT yet applied, and the affected edge functions still need a redeploy; the demo account row in section 3 covers the remaining Supabase-side teardown.
 
 3. **Share Deal feature flag name. CONFIRMED: `EXPO_PUBLIC_ENABLE_SHARE_DEAL`.** Set in `eas.json` in the preview, production, and dev-client-apk profiles. Read in exactly one place: `lib/runtime-env.ts` `isShareDealEnabled()`, which enables the feature only when the value is the exact string `"true"`.
 
-4. **AI usage limits. DECIDED: 30 generations per month per AI feature, and 2 regenerations per deal creation.** Current code: ad variants and AI Compose already enforce 30 per month server-side via `supabase/functions/_shared/ai-limits.ts`; deal copy has its own 60 per month in `ai-generate-deal-copy` and must drop to 30; the regeneration cap is currently 5 on the client (`app/create/ai.tsx` `SOFT_REVISION_CAP`) and 10 on the server (`ai-generate-ad-variants` `MAX_REVISION_COUNT`) and must become 2 in both places. Pending implementation.
+4. **AI usage limits. DECIDED and IMPLEMENTED (Batch 1): 30 generations per month per AI feature, and 2 regenerations per deal creation.** All AI features enforce 30 per month server-side via `supabase/functions/_shared/ai-limits.ts`, including `ai-generate-deal-copy` (formerly 60); the regeneration cap is 2 on the client (`app/create/ai.tsx` `SOFT_REVISION_CAP`) and 2 on the server (`ai-generate-ad-variants` `MAX_REVISION_COUNT`). The changed edge functions have not been redeployed yet, so production still serves the old caps until that deploy happens.
 
 5. **Voice input audio retention. CONFIRMED: processed ephemerally, never stored.** Raw audio is decoded in memory inside `ai-compose-offer` and sent directly to OpenAI Whisper; it is never written to Storage or the database (only a SHA-256 hash of the first 4 KB is kept for cooldown dedupe). The text transcript is stored in `ai_generation_logs.voice_transcript`. Provider side follows the OpenAI API data policy: not used for training, retained up to 30 days for abuse monitoring. Store privacy disclosures can state: voice audio is not stored; the transcript is retained.
 
-6. **Email confirmation flow. DECIDED: keep email confirmation; Dan configures Supabase later.** Dan will turn email confirmation on and set up the Supabase side (custom SMTP, the Confirm email toggle, and the redirect-URL allow-list) at a later date, before broad distribution. No app code change is needed — the client already handles both the confirmed and unconfirmed signup paths (`app/auth-landing.tsx`, `lib/auth-password-recovery.ts`, `app/auth-callback.tsx`).
+6. **Email confirmation flow. DECIDED: keep email confirmation; Dan configures Supabase later.** Dan will turn email confirmation on and set up the Supabase side (custom SMTP, the Confirm email toggle, and the redirect-URL allow-list) at a later date, before broad distribution. The client handles both the confirmed and unconfirmed signup paths (`app/auth-landing.tsx`, `lib/auth-password-recovery.ts`, `app/auth-callback.tsx`), and Batch 3 added the two app-side hardening pieces: a resend-confirmation-email action on the auth screen (`supabase.auth.resend()`) and a correct "confirm your email" message when an unconfirmed login fails (previously it surfaced as "wrong email or password").
 
 ---
 
@@ -164,7 +164,7 @@ Owners or operators of coffee shops, bakeries, and cafes. Success: set up a busi
 ## 9. Navigation
 
 ### 9.1 Consumer
-Home or Live Deals, Map or Discover, Claimed Deals or Wallet, Favorites, Profile or Settings.
+Four tabs: Home (live deals feed), Map, Wallet (claimed deals), Settings. There is no dedicated Favorites tab — favorites are integrated into Home: a heart toggle on each card, a favorites-first feed sort, and favorite-shop selection during onboarding and in Settings.
 
 ### 9.2 Business
 Dashboard, Create Deal or AI Create, Active Deals, Redeem or Scan, Business Profile, Settings.
@@ -173,30 +173,29 @@ Dashboard, Create Deal or AI Create, Active Deals, Redeem or Scan, Business Prof
 Login, signup, account settings, support, privacy, terms, delete account, notification settings, location permissions.
 
 ### 9.4 Entry rule
-The app opens to a branded login screen as the initial route. No feed, deals, or content appear before sign-in. Role model is decided (section 4, item 2): the role picker appears at signup only; login routes by the account's stored role with no picker.
+The app opens to a branded login screen as the initial route. No feed, deals, or content appear before sign-in. The role model is implemented (section 4, item 2): the role picker appears at signup only; login routes by the account's stored role with no picker.
 
 ---
 
 ## 10. Consumer features
 
 ### 10.1 Onboarding
-Low friction. Sign up or log in, select the consumer experience, request location permission at the right moment, request notification permission after explaining value, set a deal radius, and optionally favorite businesses.
+Low friction. Sign up, pick the consumer role, then a two-step onboarding (`app/onboarding.tsx`):
+1. Location and preferences: GPS or enter a 5-digit ZIP (valid Texas ZIPs such as 75063 must be accepted), deal radius of 1, 3, 5, or 10 miles (default 3), and optional category preferences.
+2. Favorites: pick from a short list of nearby shops to favorite, then land on the feed.
 
-Onboarding screens confirmed in the build:
-1. Language selection: English, Spanish, Korean. Default English.
-2. Location: GPS or enter a 5-digit ZIP. Valid Texas ZIPs such as 75063 must be accepted.
-3. Radius: 1, 3, 5, or 10 miles. Default 3.
-4. Notification preference. Must not crash if permission is denied.
-5. On completion, navigate to the feed.
+Language selection (English, Spanish, Korean; default English) is a flag switcher on the auth landing screen, before signup — it is not an onboarding step.
+
+Notification consent is deliberately deferred — this is the intended design, not a deviation. Onboarding never asks for notification permission. The app requests it at the first moment notifications have obvious value: when the user favorites their first business on Home, the permission prompt appears and favorites-only alerts are enabled on grant. The same controls live in Settings: an alerts toggle plus an all-nearby / favorites-only / none mode. The app never silently enables notifications, and a denied permission must not crash anything.
 
 Permission copy must explain why. Location is for showing nearby deals and relevant nearby alerts, not unnecessary tracking. Notifications are for live BOGO alerts and favorite-business alerts, controllable later.
 
 ### 10.2 Home feed
 Shows the most relevant live deals immediately. Large deal cards, roughly half-screen height, image-forward, not a dense list.
 
-Each card shows business name, offer title, offer image, distance or location context, time remaining, quantity remaining, a live-now urgency cue, and a clear Claim button. The feed handles closed and expired states and shows a friendly empty state.
+Each card shows business name, offer title, offer image, distance or location context, time remaining, a live-now urgency cue, and a clear Claim button. Quantity scarcity renders as an "Only N left" cue when a capped deal has 1 to 5 claims remaining (Batch 7), fed by the aggregate-only `deal_claim_counts` RPC (migration `20260716120000`); until that migration is applied the cue stays hidden rather than showing a wrong number. The feed handles closed and expired states and shows a friendly empty state.
 
-Image resolution uses `resolveDealPosterDisplayUri()`, which builds a public URL from `deals.poster_storage_path`, and falls back to a generic coffee photo if no poster exists yet. The poster usually lands 10 to 15 seconds after publish.
+Image resolution uses `resolveDealPosterDisplayUri()`, which builds a public URL from `deals.poster_storage_path` (or a parseable legacy `poster_url`). When no poster exists yet the card shows a branded "Photo coming soon" placeholder — there is no generic stock-photo fallback, by design.
 
 Scarcity must be real. Counts and timers reflect actual backend state. No fake countdowns or fake low-stock cues.
 
@@ -206,14 +205,14 @@ Map view of nearby active deals, radius-based, with business pins and deal previ
 ### 10.4 Deal detail
 Business name, address, image or logo, offer image, offer title, offer description, BOGO terms, time window, quantity remaining, distance, expiration status, Claim button, Share Deal button when enabled, directions link, and redemption instructions.
 
-The directions link must be guarded so a missing or malformed address cannot crash the screen.
+The directions link is the shared guarded helper `lib/directions.ts` (Batch 7): coordinates first, name-plus-address text query as the fallback, platform-native maps URL then the Google Maps web URL, and it never throws on missing or malformed input.
 
-Required claim states the screen must handle: available, already claimed by this user, sold out, expired, not started yet, business closed, user not logged in, network error, claim success, claim failure. Users must never have to guess what they get, what they must buy, or when the deal ends.
+Required claim states the screen must handle: available, already claimed by this user, sold out, expired, not started yet, business closed, user not logged in, network error, claim success, claim failure. Sold out, expired, and not-started are pre-rendered on the screen before the user taps Claim (Batch 7, using `deal_claim_counts` for the sold-out check) — they are not discovered as post-tap server errors, though the server still enforces all of them. Users must never have to guess what they get, what they must buy, or when the deal ends.
 
 ### 10.5 Claim flow
 On Claim, the app checks authentication, availability, time window, and quantity remaining, then creates a claim with a unique code and token, displays a QR code, updates remaining quantity, and prevents unintended duplicate claims.
 
-Claim limits enforced server side: one active claim per business at a time, and one new claim per business per calendar day. After claiming, show the QR code, the business name, the offer title, the expiration time, the instruction to show the QR at checkout, a send-to-a-friend option where applicable, and a path back to the claimed deal later.
+Claim limits enforced server side: one active claim at a time app-wide (idempotent when re-claiming the same deal), and one new claim per business per local day. After claiming, show the QR code, the business name, the offer title, the expiration time, the instruction to show the QR at checkout, a send-to-a-friend option where applicable, and a path back to the claimed deal later.
 
 Claims carry a status of claimed, redeemed, expired, or canceled, a timestamp, and an expiration tied to deal rules. Claims must not expose private auth tokens.
 
@@ -223,7 +222,7 @@ Consumer sees a QR code, a 6-character short code, the deal terms, expiration st
 Redemption must be usable by a cashier with minimal training. Fraud prevention must block reusing a redeemed QR, redeeming an expired deal, redeeming at the wrong business, guessing claim codes, and sharing codes that expose sensitive data.
 
 ### 10.7 Wallet (claimed deals)
-A list of active claimed deals with quick QR access, plus expired and redeemed claims, claim status, business name, expiration time, and directions. Consumers should never have to dig through notifications to find a QR.
+A list of active claimed deals with quick QR access, plus expired and redeemed claims, claim status, business name, expiration time, and a directions link on claimed-deal cards (Batch 7, via `lib/directions.ts`). Consumers should never have to dig through notifications to find a QR.
 
 ### 10.8 Favorites
 Favorite and unfavorite a business, view favorites, receive notifications from favorites, and prioritize favorite-business deals on the home feed. Users must be able to manage favorite-driven notifications.
@@ -255,15 +254,16 @@ Business profile fields, required: name, address, phone, category, logo or photo
 Goal: create a high-quality BOGO offer in under 60 seconds. Owner can upload or select a product image, enter the product or offer type, choose the BOGO structure, set start and end time, set quantity and restrictions, generate AI title, description, notification copy, and ad copy, preview the consumer-facing deal, and edit everything before publishing.
 
 There are two creation paths in the code:
-- **Quick Deal** at `app/create/quick.tsx`. The main path. Optional AI title suggestion plus automatic AI poster generation.
-- **AI Compose** at `app/create/ai.tsx`. Full AI offer composition with photo, text, and ad variants.
+- **Quick Deal** at `app/create/quick.tsx`. The main path. AI ad generation (copy plus image in one pipeline) from an offer hint and optional photo.
+- **AI Compose** at `app/create/ai.tsx`. Full AI offer composition with photo, voice, text, and a unified editor. `ai-compose.tsx` is a deliberate redirect into it.
 
 Quick Deal flow:
-1. Owner fills title, offer hint, price, end time, max claims.
-2. Optional Suggest Title with AI calls `aiGenerateDealCopy()` in `lib/functions.ts`, which calls the `ai-generate-deal-copy` edge function and returns title, promo_line, and description. The title auto-fills.
-3. On Publish, the client runs `assessDealQuality` and `validateStrongDealOnly`.
-4. INSERT into the `deals` table returns the deal id and the owner is routed to the dashboard immediately.
-5. Fire-and-forget `aiGenerateDealPoster(dealId)` generates the poster in the background.
+1. Owner enters an offer hint and optionally a product photo, plus price, end time, max claims.
+2. Generation calls `aiGenerateAd()` in `lib/functions.ts`, which calls the `ai-generate-ad-variants` edge function. It returns one ad — copy and a poster image generated inline server-side — which the owner edits with strong-deal hints.
+3. On Publish, the client runs `assessDealQuality` and `validateStrongDealOnly`, mirrored by the SQL strong-deal guard.
+4. INSERT into the `deals` table returns the deal id and the owner is routed to the dashboard immediately; the publish push and deal translation fire and forget.
+
+There is no separate poster step or function: the poster is produced during ad generation, before publish, and if the image stage fails the ad ships imageless by design. `aiGenerateDealCopy()` / `ai-generate-deal-copy` still exists as a lighter single-result copy generator (title, promo_line, description — not multiple variants); its one client caller today is the business-description generator on the Account screen.
 
 **AI quality requirements.** The AI must use full context, not just the image: business name, category, tone, product name, product type, offer structure, time window, quantity, neighborhood, slow-hour goal, image description, owner notes, existing profile data, and menu items when available. The AI must avoid generic hype, unsupported claims, fake facts, fake menu details, overpromising, long copy, and confusing BOGO terms. Output should be specific, local, clear, short, human, and honest.
 
@@ -271,46 +271,46 @@ Good example: "BOGO iced vanilla latte from 11:30 to 1. Only 12 available today 
 
 Required AI output fields: deal title, short description, push notification title, push notification body, in-app promotional copy, optional tone variants, suggested tags, and optionally a suggested time window and quantity if the owner asks for help. The owner can always edit title, description, quantity, time, terms, image, and notification copy.
 
-The `ai-generate-deal-copy` path should accept the business profile context and return 2 to 3 distinct ad variants, each with title, promo_line, description, and a suggested deal structure, labeled by a style lane such as value-focused, neighborhood feel, or premium.
+The `ai-generate-deal-copy` function accepts business profile context and returns one result with title, promo_line, and description. It does not return multiple styled variants — variety in the main creation paths comes from editing and regenerating through `ai-generate-ad-variants` instead.
 
 ### 11.3 Deal controls
 Owner sets offer title, description, category, product image, start date and time, end date and time, quantity available, redemption instructions, terms, active state, shareable flag, notifications flag, and reusable-as-template flag. The flow should feel like a simple operational tool, not a complex ad manager.
 
 ### 11.4 Publishing
-States: draft, preview, scheduled, live, paused, sold out, expired, canceled. Validation before publish: profile complete enough, title present, terms clear, start before end, positive quantity, image present or fallback, required backend fields present, notification copy ready if push is on. After publish: route to the dashboard not back to Create, show a success banner, show live deal performance, and offer a consumer preview, plus pause and duplicate.
+Deal states are derived, not stored. The `deals` row carries `is_active` plus the time window and recurring-window columns; live, upcoming, ended, and expired are computed from those at read time (`lib/deal-time.ts`), sold out is computed from `max_claims` against claim counts, and cancel/pause flips `is_active`. There is no persisted state machine and no draft persistence — preview happens in the create flow before insert. Validation before publish: profile complete enough, title present, terms clear, start before end, positive quantity, image present or the branded placeholder fallback, required backend fields present, notification copy ready if push is on. After publish: route to the dashboard not back to Create, show a success banner, show live deal performance, and offer a consumer preview, plus pause and duplicate.
 
 ### 11.5 Dashboard
 Show whether Twofer is working. Metrics: active offers, claims, redemptions, views, view-to-claim and claim-to-redemption conversion, remaining quantity, expired claims, optional revenue proxy and waste-saved estimate, customer-acquisition proxy, privacy-safe new versus repeat, monthly claims and redemptions, best-performing offer, and slow-hour performance. Metrics must default safely to zero and never show undefined, NaN, or broken values. Prioritize what is live now, how many claimed, how many redeemed, whether it worked, and what to do next.
 
 ### 11.6 Reusable and scheduled offers
-- Duplicate a previous offer, save as template, reuse a weekday midday offer, change quantity or time quickly, and schedule for a future date.
-- Templates store item name, deal structure, ad copy snapshot, and price, sorted by `last_used_at` descending. Reuse regenerates fresh AI copy. Time, duration, and max claims are always set fresh.
-- Scheduling toggle: Go Live Now (default) versus Schedule for Later. Scheduled deals carry status `scheduled` and a `scheduled_start_at`, and poster generation defers to go-live. The `activate-scheduled-deals` cron flips due deals to `live` and triggers poster generation. Cancel sets status `cancelled` as a soft delete.
-- Recurring deals: None, Weekdays (Mon to Fri), Every Day, Weekly, or Custom day-of-week toggles. The `generate-recurring-deals` cron runs daily, creates only that day's deal, never pre-generates future rows, generates fresh copy, and hands off to the scheduled pipeline. The dashboard Recurring section supports Pause, Resume, Cancel.
+- Duplicate a previous offer, save as template, reuse a weekday midday offer, change quantity or time quickly, and schedule for a future date. The reuse hub is `app/create/reuse.tsx` (templates plus run-again from past deals).
+- Templates (`deal_templates`) store title, description, price, poster, max claims, and the recurring-window fields. There is no `last_used_at` column. Reuse regenerates fresh AI copy. Time, duration, and max claims are always set fresh.
+- Scheduling is a future `start_time` on the deal row itself. There is no stored `scheduled` status, no `scheduled_start_at` column, and no `activate-scheduled-deals` cron — a deal whose window has not opened simply derives as upcoming and goes live when the clock reaches its start (section 11.4). The poster exists from creation, since it is generated during ad generation, not at go-live.
+- Recurring deals are columns on `deals`, not a separate table or cron: `is_recurring`, `days_of_week`, `window_start_minutes`, `window_end_minutes`, and `timezone` define a repeating daily window on the one row. No per-day rows are generated; the claim window is enforced server-side in `claim-deal` against the recurring schedule. There is no `generate-recurring-deals` cron.
 - The first key trial window is weekday 11:30 AM to 1:00 PM, based on owner interviews showing a predictable midday gap.
 
 ### 11.7 Business redemption tools
 Open scanner, scan the consumer QR, validate the deal, see claim details, mark redeemed, see error states, and view redemption history. Scanner error states: already redeemed, expired, invalid code, wrong business, deal not live, network unavailable, camera permission denied, claim not found. A manual code-entry fallback must exist for when the scanner fails.
 
 ### 11.8 Business notifications
-Deal went live, deal sold out, new claims, redemption summary, end-of-day performance, trial ending, payment required (later), and error with a published offer. Useful, not noisy.
+The shipped minimum (Batch 5) is two owner pushes sent server-side from `claim-deal`: a new-claim push with a 10-minute per-deal suppression window so a busy deal does not spam, and a sold-out push when a deal hits `max_claims`. Both are localized (en/es/ko via `businesses.preferred_locale`) and deep-link to the dashboard. Owners can opt out with a toggle on the Account screen backed by `businesses.claim_notifications_enabled` (default on). Migration `20260713120000` is written but NOT yet applied; the feature stays inert until it is. The fuller set — deal went live, redemption summary, end-of-day performance, trial ending, payment required, error with a published offer — remains future work. Useful, not noisy.
 
 ---
 
 ## 12. AI system inventory
 
-Edge functions and client wrappers to verify and finish:
-- `ai-generate-deal-copy` (GPT). Input: item name plus business profile context. Output: 2 to 3 ad variants with title, promo_line, description, suggested structure, and a style lane.
-- `ai-generate-deal-poster` (DALL-E 3). Generates a 1024x1024 food image, uploads the PNG to the `deal-photos` bucket, and patches `deals.poster_storage_path`. Skips silently if a poster already exists. Fire-and-forget. Currently swallows errors, which should be reviewed.
-- AI Compose composition for `app/create/ai.tsx`.
-- Menu extraction from a photo.
-- Image polish.
-- Voice input transcription. Retention confirmed (section 4, item 5): audio is ephemeral, only the transcript is stored.
-- `activate-scheduled-deals` and `generate-recurring-deals` cron functions.
+The edge functions that exist:
+- `ai-generate-ad-variants` (GPT). The main creation pipeline behind Quick Deal and AI Compose ad generation: research and copy stages, then an inline image stage. Returns one ad per call; regeneration is the variety mechanism, capped at 2 per deal creation (section 4, item 4).
+- `ai-generate-deal-copy` (GPT). Single result: title, promo_line, description. Auth required, strict JSON-schema output, server-side model allowlist, usage logged.
+- `ai-compose-offer`. Full AI Compose composition for `app/create/ai.tsx`, including photo input, voice transcription (Whisper), and its own inline poster generation. Voice retention confirmed (section 4, item 5): audio is ephemeral, only the transcript is stored.
+- `ai-business-lookup`. Google Places-backed business lookup; never invents business facts.
+- `ai-extract-menu` (menu extraction from a photo), `ai-translate-deal` (es/ko deal translation), `ai-deal-suggestions`, and `ai-create-deal`.
 
-Client wrappers live in `lib/functions.ts`, including `aiGenerateDealCopy()` and `aiGenerateDealPoster()`.
+Poster generation has no dedicated function. There is no `ai-generate-deal-poster`; images are generated inline by `ai-compose-offer` and `ai-generate-ad-variants` through the shared helper `supabase/functions/_shared/dalle-image.ts`. Despite that filename, the model is the gpt-image-1 family (allowlist: `gpt-image-1`, `gpt-image-1-mini`, `gpt-image-1.5`, `chatgpt-image-latest`; fallback `gpt-image-1`), not DALL-E 3. `gpt-image-2` is deliberately excluded — it hangs over 90 seconds on the real production payload (verified 2026-06-02) — do not re-add it without re-running the production-payload probe. If the image stage fails, the ad ships without an image by design. There are also no `activate-scheduled-deals` or `generate-recurring-deals` cron functions (section 11.6).
 
-Usage limits (decided, section 4 item 4): 30 generations per month per AI feature and 2 regenerations per deal creation. Monthly limits are already enforced server-side via `ai_generation_logs` counts; the deal-copy 60-per-month and the 5-client / 10-server regeneration caps still need to be brought in line. Token usage is logged per call in `ai_generation_logs`, and 60-second generation cooldowns (10 seconds for revisions) are enforced server-side.
+Client wrappers live in `lib/functions.ts`, including `aiGenerateAd()`, `aiGenerateDealCopy()`, `aiBusinessLookup()`, and `translateDeal()`. There is no `aiGenerateDealPoster()`.
+
+Usage limits (decided and implemented, section 4 item 4): 30 generations per month per AI feature and 2 regenerations per deal creation, enforced server-side via `ai_generation_logs` counts (`_shared/ai-limits.ts`), with the client mirroring the regeneration cap. Token usage is logged per call in `ai_generation_logs`, and 60-second generation cooldowns (10 seconds for revisions) are enforced server-side. The reduced caps still need an edge-function redeploy to reach production.
 
 ---
 
@@ -318,8 +318,8 @@ Usage limits (decided, section 4 item 4): 30 generations per month per AI featur
 
 - Supported structures: BOGO, Buy 2 Get 1, 50% off second item.
 - Quality gate: weak deals such as a 20% discount are rejected at publish. Strong deals such as BOGO are accepted. Enforced by `assessDealQuality` plus `validateStrongDealOnly`.
-- Deal status values: draft, scheduled, live, ended, expired, cancelled, plus the publishing states in 11.4.
-- Poster pipeline runs after insert for immediate deals, or at go-live for scheduled deals.
+- Deal states (live, upcoming, ended, expired, sold out) are derived from `is_active`, the time window, and claim counts, not stored as a status column. See section 11.4.
+- The poster is generated during ad generation, before the deal row is inserted. There is no post-insert or at-go-live poster pipeline.
 
 ---
 
@@ -339,7 +339,7 @@ Consumer-side network effects. One user sends a live deal to a friend, who can c
 User taps Share Deal, the app creates or reuses a safe share code, the native share sheet opens, the friend receives the URL, the URL opens the app deep link or the website preview, and the friend claims their own deal if it is still available. The recipient never receives the original user's QR code.
 
 ### 14.4 deal_shares table
-Stores a safe share code, associates the sharing user with the deal, prevents duplicate codes, allows reuse for the same user and deal, and allows anonymous public read of safe non-private preview fields only. It never exposes private user data, auth data, QR tokens, claim codes, or redemption codes.
+Stores a safe 7-character share code generated with a CSPRNG (`expo-crypto`, Batch 6), associates the sharing user with the deal, prevents duplicate codes, allows reuse for the same user and deal, and tracks opens with `opened_count`, `first_opened_at`, and `last_opened_at`. Anonymous public read goes through the `lookup_deal_share` RPC, which returns safe non-private preview fields only. Batch 6 hardening (migration `20260715120000`, written but NOT yet applied): the anonymous `opened_count` bump is throttled to one per share row per 30 seconds, and the insert policy only lets senders mint codes for live deals. It never exposes private user data, auth data, QR tokens, claim codes, or redemption codes.
 
 ### 14.5 Website preview
 Route `https://www.twoferapp.com/s/SHARECODE` shows business name, offer, image, and location context, plus an app CTA. It handles expired, invalid, sold-out, inactive, disabled, and network states. It exposes no private data and supports future app store links. The AASA at the well-known path is live and scoped to `/s/*` for `L9DT756YSN.com.unvmex2.twoforone`.
@@ -376,10 +376,10 @@ This section supersedes any earlier Firebase-on-iOS framing.
 - Email signup, email login, session persistence, logout, password reset, delete account, and links to privacy and terms.
 - Wired to Supabase auth: `signUp`, `signInWithPassword`, `resetPasswordForEmail`. Every flow shows a friendly error on failure. Missing Supabase URL or anon key shows a clear error rather than crashing.
 - Account stores role. Hard role split decided (section 4, item 2): one role per account, picked at signup, no switching after.
-- Delete-account path exists in the app and on the website.
+- Delete-account path exists in the app and on the website. The `delete-user-account` edge function (Batch 4/4b) first calls the `purge_user_data` RPC — which anonymizes the user's `deal_claims` and analytics rows so merchant dashboard aggregates survive the deletion, and hard-deletes user-only rows the FK cascade misses — then removes the user's Storage objects (business logos and deal photos) best-effort, then deletes the auth user. Migration `20260714120000_fix_purge_user_data_columns.sql` corrects the original RPC, which referenced an `app_analytics_events.session_id` column that never existed; the function also carries an in-code fallback so deletion still scrubs analytics if the RPC fails.
 - Auth fields carry proper autofill hints.
 
-**Known broken item.** Email confirmation does not work for TestFlight users. The cause is that Supabase default SMTP is test-only and the Confirm email toggle is on, so confirmation emails link nowhere. DECIDED 2026-06-10 (section 4, item 6): Dan will turn email confirmation on and configure the Supabase side (custom SMTP, Confirm email toggle, redirect-URL allow-list) at a later date, before broad distribution. No app-code auth changes are needed; the client handles both toggle states. The demo-account exemption disappears when the demo account is deleted.
+**Known broken item.** Email confirmation does not work for TestFlight users. The cause is that Supabase default SMTP is test-only and the Confirm email toggle is on, so confirmation emails link nowhere. DECIDED 2026-06-10 (section 4, item 6): Dan will turn email confirmation on and configure the Supabase side (custom SMTP, Confirm email toggle, redirect-URL allow-list) at a later date, before broad distribution. The client handles both toggle states, and Batch 3 added a resend-confirmation action plus a correct "confirm your email" message on unconfirmed logins. The demo-account exemption is gone with the rest of the demo code (Batch 2).
 
 The app must not expose user auth tokens, QR redemption tokens, private user details, business owner private contact info unless intended, or share-sender private details.
 
@@ -387,37 +387,39 @@ The app must not expose user auth tokens, QR redemption tokens, private user det
 
 ## 18. Data model
 
-The agent verifies these against the live schema and the generated Supabase types before relying on them. Field names below are the intended shape, not a guaranteed match.
+The agent verifies these against the live schema and the generated Supabase types before relying on them. The names below match the migrations in `supabase/migrations/`; one known production drift is called out at the end.
 
-**profiles / users:** id, email, role, display name, notification preferences, location preferences, created at, updated at.
+**profiles:** id, role (`customer` or `business`, picked once at signup — Batch 2; migration `20260711120000` written but not yet applied), display fields, created at, updated at. Consumer notification and location preferences live on **consumer_profiles**, not profiles: `deal_alerts_enabled` (consent-gated master switch) and `notification_mode` (`all_nearby`, `favorites_only`, `none`), plus radius and location fields.
 
-**businesses:** id, owner user id, name, address, latitude, longitude, phone, website, category, description, image, logo, hours, status, trial status, created at, updated at.
+**businesses:** id, owner_id, name, address, latitude, longitude, phone, website, category, description, logo, hours, status, trial status, `preferred_locale`, `claim_notifications_enabled` (owner push opt-out, Batch 5; migration `20260713120000` not yet applied), created at, updated at.
 
-**deals:** id, business id, title, description, image, offer type, price, start time, end time, scheduled_start_at, quantity total, quantity claimed, quantity redeemed, status, share enabled, notification enabled, terms, poster_storage_path, created by, created at, updated at.
+**deals:** id, business_id, title, description (plus `title_es`/`title_ko`/`description_es`/`description_ko` translations), price, start_time, end_time, is_active, max_claims, claim_cutoff_buffer_minutes, poster_storage_path (and legacy poster_url), and the recurring-window columns `is_recurring`, `days_of_week`, `window_start_minutes`, `window_end_minutes`, `timezone`. There is no `scheduled_start_at`, no stored status column, and no quantity-claimed/redeemed counters — states and counts are derived (sections 11.4 and 11.6), with consumer-visible claim totals served by the aggregate-only `deal_claim_counts` RPC.
 
-**claims:** id, deal id, business id, user id, claim code, qr token, status, claimed at, redeemed at, expires at, redeemed by business user id.
+**deal_claims** (the claims table): id, deal_id, user_id, token (unique QR token), short_code (6-character manual-redeem code), claim_status (claimed, redeemed, expired, canceled) with a `status_changed_at` audit column, created_at, redeemed_at, expires_at.
 
-**deal_shares:** id, share code, deal id, shared by user id, status, created at, last used at.
+**deal_shares:** id, share_code, deal_id, shared_by_user_id, created_at, opened_count, first_opened_at, last_opened_at. There is no status or last-used column; share state is derived from the deal at lookup time.
 
-**deal_templates:** id, business id, item name, deal structure, ad copy snapshot, price, created at, last_used_at.
+**deal_templates:** id, business_id, title, description, price, poster_url, max_claims, claim_cutoff_buffer_minutes, the recurring-window fields, created_at. There is no `last_used_at`.
 
-**recurring_deals:** id, business id, template id (nullable), item name, deal structure, ad copy context, price, recurrence type, recurrence days, start time, duration minutes, quantity limit, status, created at.
+There is **no `recurring_deals` table** — recurrence is the column set on `deals` (section 11.6).
 
-**favorites:** user id, business id, created at.
+**favorites:** id, user_id, business_id, created_at.
 
-**device tokens:** user id, token, platform, enabled, created at, updated at.
+**push_tokens** (device tokens): id, user_id, expo_push_token, platform, created_at, updated_at, unique on (user_id, expo_push_token). There is no `enabled` column on this table — notification opt-in lives on `consumer_profiles.deal_alerts_enabled` / `notification_mode` for consumers and `businesses.claim_notifications_enabled` for owners.
 
-**metrics / events:** event id, user id (nullable), business id, deal id, event type, metadata, timestamp. The telemetry hook posts sanitized app errors to an `ingest-analytics-event` endpoint.
+**metrics / events:** `app_analytics_events` — event id, user id (nullable), business id, deal id, event type, metadata, timestamp. The telemetry hook posts sanitized app errors to the `ingest-analytics-event` endpoint.
+
+**Known production drift:** migration `20260530120000` adds `deals.location_id`, but a hosted probe proved the live database lacks that column (error 42703). Migrations are ahead of production there; reconcile before relying on `location_id` against prod.
 
 ---
 
 ## 19. Security, privacy, and store data declarations
 
 ### 19.1 QR and claim security
-QR codes are unique per claim, hard to guess, expiring, invalid after redemption, scoped to the correct business, and avoid exposing raw database ids where possible.
+QR codes are unique per claim, hard to guess, expiring, invalid after redemption, scoped to the correct business, and avoid exposing raw database ids where possible. Short-code guessing is throttled (Batch 6): `redeem-token` logs failed attempts to `failed_redeem_attempts` and returns 429 after 10 failures within 5 minutes for a business (scoped to the caller IP when one is available), on top of the existing 10-attempts-per-minute rate limit.
 
 ### 19.2 Share security
-Share links use safe codes, expose public preview data only, never expose the original claimer's QR code, and never let one user redeem another user's claim.
+Share links use safe CSPRNG-generated codes (Batch 6), expose public preview data only, never expose the original claimer's QR code, and never let one user redeem another user's claim. The anonymous `lookup_deal_share` open counter is throttled and the insert policy is restricted to live deals (section 14.4).
 
 ### 19.3 Row level security
 Users see only their own private claims. Businesses manage only their own deals. Public share preview reads safe deal fields only. Anonymous users cannot read private user or claim data. Dashboard metrics are scoped to the owning business.
@@ -510,7 +512,7 @@ Signup, login, role selection at signup, location denied, location allowed, noti
 Signup, login, create business profile, AI create deal, edit AI copy, publish deal, dashboard success banner, active deal metrics, scan QR, redeem QR, handle invalid QR, pause or expire deal, duplicate deal.
 
 ### 23.3 Backend
-Quantity decrements correctly, no over-claiming, expired deals cannot be claimed, redeemed QR cannot be reused, share links do not expose private data, RLS protects data, push tokens save correctly, notifications deep-link correctly. Enforce the one-active-claim-per-business and one-new-claim-per-business-per-day limits.
+Quantity decrements correctly, no over-claiming, expired deals cannot be claimed, redeemed QR cannot be reused, share links do not expose private data, RLS protects data, push tokens save correctly, notifications deep-link correctly. Enforce the one-active-claim-at-a-time and one-new-claim-per-business-per-day limits.
 
 ### 23.4 Store readiness
 Android AAB, iOS build, app icon, splash, permissions, privacy links, support links, account deletion, demo accounts, push notifications, deep links.
