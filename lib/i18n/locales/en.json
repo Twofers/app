@@ -118,7 +118,9 @@
     "emptyZeroPenguinHint": "Your favorites help us highlight the shops you care about.",
     "emptyZeroBrowseCta": "Browse cafes and bakeries",
     "timeLeftHM": "{{h}}h {{m}}m left",
-    "timeLeftM": "{{m}}m left"
+    "timeLeftM": "{{m}}m left",
+    "onlyOneLeft": "Only 1 left",
+    "onlyNLeft": "Only {{count}} left"
   },
   "consumerMap": {
     "title": "Map",
@@ -741,6 +743,9 @@
     "claiming": "Claiming...",
     "claim": "Claim",
     "claimButton": "Claim Deal",
+    "soldOut": "Sold out",
+    "claimClosed": "Claiming closed",
+    "notStartedYet": "Not started yet",
     "expired": "Expired",
     "refreshingQr": "Refreshing...",
     "refreshQr": "Refresh QR",

@@ -23,6 +23,7 @@ import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
+import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { isShareDealEnabled } from "@/lib/runtime-env";
 
@@ -44,6 +45,10 @@ type Deal = {
   max_claims: number;
   businesses?: {
     name: string | null;
+    address: string | null;
+    location: string | null;
+    latitude: number | string | null;
+    longitude: number | string | null;
   } | null;
   is_recurring?: boolean;
   days_of_week?: number[] | null;
@@ -94,6 +99,8 @@ export default function DealDetail() {
   const [isFavorite, setIsFavorite] = useState(false);
   const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
+  /** True only when claimsCount came from the deal_claim_counts RPC (full total, not own-claims-only). */
+  const [claimsCountReliable, setClaimsCountReliable] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -149,6 +156,19 @@ export default function DealDetail() {
   }
 
   const loadClaimCount = useCallback(async (dealId: string) => {
+    // True total via the aggregate RPC (20260716120000). RLS hides other users'
+    // claim rows, so the direct count below only ever sees the caller's own
+    // claim — kept as the legacy fallback until the migration is applied, and
+    // never treated as reliable enough to pre-render "sold out".
+    const { data: rpcData, error: rpcErr } = await supabase.rpc("deal_claim_counts", {
+      p_deal_ids: [dealId],
+    });
+    if (!rpcErr && Array.isArray(rpcData)) {
+      const row = (rpcData as { deal_id: string; claim_count: number }[]).find((r) => r.deal_id === dealId);
+      setClaimsCount(row?.claim_count ?? 0);
+      setClaimsCountReliable(true);
+      return;
+    }
     const { count, error } = await supabase
       .from("deal_claims")
       .select("id", { count: "exact", head: true })
@@ -193,7 +213,7 @@ export default function DealDetail() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,title_es,title_ko,description_es,description_ko,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name)",
+        "id,title,description,title_es,title_ko,description_es,description_ko,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude)",
       )
       .eq("id", id)
       .single();
@@ -334,6 +354,17 @@ export default function DealDetail() {
     }
   }
 
+  async function handleDirections() {
+    const result = await openDirectionsToTarget(deal?.businesses ?? null);
+    if (result !== "opened") {
+      setBanner(
+        t("businessProfile.mapsOpenFailed", {
+          defaultValue: "We couldn't open maps. Try the address from this page.",
+        }),
+      );
+    }
+  }
+
   async function toggleFavorite() {
     if (!userId || !deal?.business_id) {
       setBanner(t("dealDetail.errLoginFavorite"));
@@ -395,6 +426,23 @@ export default function DealDetail() {
   }
 
   const remaining = Math.max(0, deal.max_claims - claimsCount);
+  // Pre-rendered claim states so the user sees sold out / closed / not-started
+  // before tapping. Client-side mirror only — the server checks in claim-deal
+  // stay authoritative. Recurring daily windows are left to the server; only the
+  // absolute start/end/cutoff times are evaluated here. Sold out requires the
+  // reliable RPC total: the fallback count only sees the caller's own claims.
+  const renderNowMs = Date.now();
+  const startMs = deal.start_time ? Date.parse(deal.start_time) : NaN;
+  const endMs = Date.parse(deal.end_time);
+  const cutoffMs = Number.isFinite(endMs) ? endMs - (deal.claim_cutoff_buffer_minutes || 15) * 60_000 : NaN;
+  const claimBlockedLabel =
+    claimsCountReliable && deal.max_claims > 0 && remaining <= 0
+      ? t("dealDetail.soldOut")
+      : Number.isFinite(cutoffMs) && renderNowMs >= cutoffMs
+        ? t("dealDetail.claimClosed")
+        : Number.isFinite(startMs) && renderNowMs < startMs
+          ? t("dealDetail.notStartedYet")
+          : null;
   const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
   const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
   const displayDescription = localizedDealDescription(deal, i18n.language);
@@ -471,10 +519,48 @@ export default function DealDetail() {
         <Pressable
           onPress={() => router.push(`/business/${deal.business_id}` as Href)}
           accessibilityRole="button"
-          style={{ marginTop: Spacing.xs, marginBottom: Spacing.sm, alignSelf: "flex-start" }}
+          style={{ marginTop: Spacing.xs, alignSelf: "flex-start" }}
         >
           <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
         </Pressable>
+        {(() => {
+          const biz = deal.businesses;
+          const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
+          const directionsAvailable = hasDirectionsTarget(biz);
+          if (!addressLine && !directionsAvailable) return null;
+          return (
+            <View
+              style={{
+                marginTop: Spacing.xs,
+                marginBottom: Spacing.sm,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flexWrap: "wrap",
+              }}
+            >
+              {addressLine ? (
+                <>
+                  <MaterialIcons name="place" size={16} color={theme.mutedText} />
+                  <Text style={{ color: theme.mutedText, fontSize: 14, flexShrink: 1 }} numberOfLines={1}>
+                    {addressLine}
+                  </Text>
+                </>
+              ) : null}
+              {directionsAvailable ? (
+                <Pressable
+                  onPress={() => void handleDirections()}
+                  accessibilityRole="button"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>
+                    {t("businessProfile.directions")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })()}
         <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
           {displayTitle}
         </Text>
@@ -517,9 +603,9 @@ export default function DealDetail() {
 
         <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
           <PrimaryButton
-            title={isClaiming ? t("dealDetail.claiming") : t("dealDetail.claim")}
+            title={isClaiming ? t("dealDetail.claiming") : claimBlockedLabel ?? t("dealDetail.claim")}
             onPress={doClaim}
-            disabled={isClaiming}
+            disabled={isClaiming || claimBlockedLabel !== null}
           />
           <Pressable
             onPress={refreshQr}

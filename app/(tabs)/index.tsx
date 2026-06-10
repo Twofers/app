@@ -195,6 +195,8 @@ export default function HomeScreen() {
   const [userClaimsByDeal, setUserClaimsByDeal] = useState<
     Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>
   >(() => new Map());
+  /** Total non-canceled claims per capped deal (deal_claim_counts RPC). Empty until the RPC is deployed. */
+  const [claimCountsByDeal, setClaimCountsByDeal] = useState<Map<string, number>>(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
@@ -244,6 +246,38 @@ export default function HomeScreen() {
     const id = setInterval(() => setNowTick(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Scarcity counts for capped deals. RLS hides other users' claim rows, so this
+  // goes through the aggregate-only deal_claim_counts RPC (20260716120000). Until
+  // that migration is applied the call errors and the map stays empty — the feed
+  // simply shows no scarcity line.
+  useEffect(() => {
+    const cappedIds = deals
+      .filter((d) => typeof d.max_claims === "number" && d.max_claims > 0)
+      .map((d) => d.id);
+    if (cappedIds.length === 0) {
+      setClaimCountsByDeal(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase.rpc("deal_claim_counts", { p_deal_ids: cappedIds });
+      if (cancelled || error || !Array.isArray(data)) {
+        if (!cancelled) setClaimCountsByDeal(new Map());
+        return;
+      }
+      const m = new Map<string, number>();
+      for (const row of data as { deal_id: string; claim_count: number }[]) {
+        if (typeof row.deal_id === "string" && typeof row.claim_count === "number") {
+          m.set(row.deal_id, row.claim_count);
+        }
+      }
+      setClaimCountsByDeal(m);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deals]);
 
   const loadUserClaims = useCallback(
     async (dealIds: string[]) => {
@@ -758,6 +792,17 @@ export default function HomeScreen() {
             })
           : undefined;
       const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
+      // Scarcity: "Only N left" when a capped deal is nearly gone (1-5 remaining).
+      // Shows nothing when plentiful, sold out, or counts are unavailable.
+      const cap = typeof item.max_claims === "number" && item.max_claims > 0 ? item.max_claims : null;
+      const countForDeal = cap !== null ? claimCountsByDeal.get(item.id) : undefined;
+      const remainingForDeal = cap !== null && countForDeal !== undefined ? Math.max(0, cap - countForDeal) : null;
+      const scarcityLabel =
+        remainingForDeal !== null && remainingForDeal >= 1 && remainingForDeal <= 5
+          ? remainingForDeal === 1
+            ? t("consumerHome.onlyOneLeft")
+            : t("consumerHome.onlyNLeft", { count: remainingForDeal })
+          : null;
       const offerText = localizedDealTitle(item, i18n.language) || t("dealDetail.dealFallback");
       const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
       const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
@@ -942,6 +987,11 @@ export default function HomeScreen() {
               <Text style={{ color: isLive ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 14, flexShrink: 1 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
                 {isLive ? formatTimeLeft(item.end_time) : statusLabel}
               </Text>
+              {isLive && scarcityLabel ? (
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                  {scarcityLabel}
+                </Text>
+              ) : null}
             </View>
             {claimStatus[item.id]?.message ? (
               <Text style={{ marginTop: Spacing.sm, fontSize: 13, lineHeight: 18, color: theme.mutedText }} maxFontSizeMultiplier={1.15}>
@@ -990,6 +1040,7 @@ export default function HomeScreen() {
       formatTimeLeft,
       claimStatus,
       claimingDealId,
+      claimCountsByDeal,
       doClaim,
       i18n.language,
     ],

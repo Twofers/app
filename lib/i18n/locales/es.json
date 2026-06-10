@@ -118,7 +118,9 @@
     "emptyZeroPenguinHint": "Tus favoritos nos ayudan a destacar las tiendas que te importan.",
     "emptyZeroBrowseCta": "Explorar cafés y panaderías",
     "timeLeftHM": "{{h}}h {{m}}m restantes",
-    "timeLeftM": "{{m}}m restantes"
+    "timeLeftM": "{{m}}m restantes",
+    "onlyOneLeft": "Solo queda 1",
+    "onlyNLeft": "Solo quedan {{count}}"
   },
   "consumerMap": {
     "title": "Mapa",
@@ -741,6 +743,9 @@
     "claiming": "Reclamando...",
     "claim": "Reclamar",
     "claimButton": "Reclamar oferta",
+    "soldOut": "Agotada",
+    "claimClosed": "Reclamos cerrados",
+    "notStartedYet": "Aún no empieza",
     "expired": "Expirada",
     "refreshingQr": "Actualizando...",
     "refreshQr": "Actualizar QR",

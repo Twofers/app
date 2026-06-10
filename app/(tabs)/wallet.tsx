@@ -34,6 +34,7 @@ import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 
 type ClaimRow = {
   id: string;
@@ -57,7 +58,13 @@ type ClaimRow = {
     end_time: string;
     price: number | null;
     timezone: string | null;
-    businesses: { name: string | null } | null;
+    businesses: {
+      name: string | null;
+      address: string | null;
+      location: string | null;
+      latitude: number | string | null;
+      longitude: number | string | null;
+    } | null;
   } | null;
 };
 
@@ -136,7 +143,7 @@ export default function WalletScreen() {
       const { data, error } = await supabase
         .from("deal_claims")
         .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name))",
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude))",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -257,6 +264,17 @@ export default function WalletScreen() {
       setBanner(translateKnownApiMessage(msg, t));
     } finally {
       setClaimingRefreshId(null);
+    }
+  }
+
+  async function openDirectionsForRow(row: ClaimRow) {
+    const result = await openDirectionsToTarget(row.deals?.businesses ?? null);
+    if (result !== "opened") {
+      setBanner(
+        t("businessProfile.mapsOpenFailed", {
+          defaultValue: "We couldn't open maps. Try the address from this page.",
+        }),
+      );
     }
   }
 
@@ -632,6 +650,19 @@ export default function WalletScreen() {
                 {t("consumerWallet.qrFallbackLabel")}
               </Text>
             </NativePressable>
+            {hasDirectionsTarget(row.deals?.businesses) ? (
+              <NativePressable
+                onPress={() => void openDirectionsForRow(row)}
+                accessibilityRole="button"
+                accessibilityLabel={t("businessProfile.directions")}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
+                  {t("businessProfile.directions")}
+                </Text>
+              </NativePressable>
+            ) : null}
           </View>
         ) : null}
         {bucket === "active" && tokenDead && !redeemed ? (

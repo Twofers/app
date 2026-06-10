@@ -118,7 +118,9 @@
     "emptyZeroPenguinHint": "매주 더 많은 카페가 파일럿에 합류하고 있어요 — 즐겨찾기가 여러분 동네에 매장을 더 빨리 가져다줍니다.",
     "emptyZeroBrowseCta": "카페와 베이커리 둘러보기",
     "timeLeftHM": "{{h}}시간 {{m}}분 남음",
-    "timeLeftM": "{{m}}분 남음"
+    "timeLeftM": "{{m}}분 남음",
+    "onlyOneLeft": "1개 남음",
+    "onlyNLeft": "{{count}}개 남음"
   },
   "consumerMap": {
     "title": "지도",
@@ -741,6 +743,9 @@
     "claiming": "받는 중…",
     "claim": "받기",
     "claimButton": "딜 받기",
+    "soldOut": "매진",
+    "claimClosed": "받기 마감",
+    "notStartedYet": "아직 시작 전",
     "expired": "만료됨",
     "refreshingQr": "새로고침 중…",
     "refreshQr": "QR 새로고침",
