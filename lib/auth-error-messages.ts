@@ -36,6 +36,15 @@ type AuthLikeError = {
   code?: string;
 } | null;
 
+/** True when login failed only because the email is not confirmed yet. */
+export function isEmailNotConfirmedError(error: AuthLikeError | undefined): boolean {
+  if (!error) return false;
+  return (
+    lower(error.message ?? "").includes("email not confirmed") ||
+    lower(error.code ?? "") === "email_not_confirmed"
+  );
+}
+
 /** Use for `{ data, error }` results from `supabase.auth.*` so HTTP status (e.g. 429) is respected. */
 export function friendlyAuthError(error: AuthLikeError | undefined, t: TFunction): string {
   if (!error) return t("auth.errGeneric");
@@ -55,6 +64,9 @@ export function friendlyAuthMessage(raw: string, t: TFunction, code?: string): s
     return t("auth.errRateLimited");
   }
   const m = lower(raw);
+  if (m.includes("email not confirmed") || lower(code ?? "") === "email_not_confirmed") {
+    return t("auth.errEmailNotConfirmed");
+  }
   if (m.includes("invalid login credentials") || m.includes("invalid email or password")) {
     return t("auth.errInvalidCredentials");
   }

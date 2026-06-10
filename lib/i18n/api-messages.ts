@@ -89,8 +89,9 @@ const DB_OR_INFRA_HINTS: { pattern: RegExp; key: string }[] = [
   { pattern: /duplicate key|unique constraint/i, key: "apiErrors.dbDuplicate" },
   { pattern: /foreign key constraint/i, key: "apiErrors.dbForeignKey" },
   { pattern: /JWT expired|jwt expired|token expired|session expired|Invalid Refresh Token/i, key: "apiErrors.sessionExpired" },
+  { pattern: /email not confirmed/i, key: "apiErrors.authEmailNotConfirmed" },
   {
-    pattern: /invalid login credentials|Invalid login credentials|User not found|Email not confirmed/i,
+    pattern: /invalid login credentials|Invalid login credentials|User not found/i,
     key: "apiErrors.authInvalidCredentials",
   },
   { pattern: /network request failed|Failed to fetch|NetworkError/i, key: "apiErrors.networkFailed" },

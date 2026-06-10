@@ -23,7 +23,7 @@ import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
 import { useTabMode, type TabMode } from "@/lib/tab-mode";
 import { persistRoleForUser, resolveRoleForUser, SIGNUP_ROLE_META_KEY } from "@/lib/profiles-role";
 import { logAuthPath } from "@/lib/auth-path-log";
-import { friendlyAuthError, friendlyAuthMessage } from "@/lib/auth-error-messages";
+import { friendlyAuthError, friendlyAuthMessage, isEmailNotConfirmedError } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { LegalExternalLinks } from "@/components/legal-external-links";
@@ -222,12 +222,22 @@ export default function AuthLandingScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
   }, []);
+
+  // Count the resend cooldown down once a second so the button label stays live.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
 
   const busy = busyAction !== null;
   const canSubmit = !busy && email.trim().length > 0 && pw.length > 0;
@@ -278,6 +288,12 @@ export default function AuthLandingScreen() {
         password: pw,
       });
       if (error) {
+        if (isEmailNotConfirmedError(error)) {
+          // Show the check-your-email block, which carries the resend action.
+          setResendNotice(null);
+          setSignUpAwaitingVerification(true);
+          return;
+        }
         setAuthError(friendlyAuthError(error, t));
         return;
       }
@@ -336,6 +352,7 @@ export default function AuthLandingScreen() {
         return;
       }
       if (!data.session) {
+        setResendNotice(null);
         setSignUpAwaitingVerification(true);
         return;
       }
@@ -352,6 +369,30 @@ export default function AuthLandingScreen() {
       setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function handleResendConfirmation() {
+    if (resendBusy || resendCooldown > 0) return;
+    setResendBusy(true);
+    setAuthError(null);
+    setResendNotice(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: { emailRedirectTo: getEmailAuthRedirectUrl() },
+      });
+      if (error) {
+        setAuthError(friendlyAuthError(error, t));
+        return;
+      }
+      setResendNotice(t("authLanding.resendConfirmSent"));
+      setResendCooldown(60);
+    } catch (e: unknown) {
+      setAuthError(friendlyAuthMessage(e instanceof Error ? e.message : String(e), t));
+    } finally {
+      setResendBusy(false);
     }
   }
 
@@ -473,9 +514,46 @@ export default function AuthLandingScreen() {
               >
                 {t("authLanding.verifyEmailBody", { email: email.trim() })}
               </Text>
+              {resendNotice ? (
+                <Text
+                  style={{
+                    marginTop: Spacing.sm,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: theme.success,
+                    textAlign: "center",
+                  }}
+                >
+                  {resendNotice}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => void handleResendConfirmation()}
+                disabled={resendBusy || resendCooldown > 0}
+                accessibilityRole="button"
+                accessibilityLabel={t("authLanding.resendConfirmEmail")}
+                accessibilityState={{ disabled: resendBusy || resendCooldown > 0, busy: resendBusy }}
+                style={{ marginTop: Spacing.md, alignSelf: "center", paddingVertical: Spacing.sm }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: theme.accentText,
+                    opacity: resendBusy || resendCooldown > 0 ? 0.45 : 1,
+                  }}
+                >
+                  {resendBusy
+                    ? t("authLanding.pleaseWait")
+                    : resendCooldown > 0
+                      ? t("authLanding.resendConfirmCooldown", { seconds: resendCooldown })
+                      : t("authLanding.resendConfirmEmail")}
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={() => {
                   setSignUpAwaitingVerification(false);
+                  setResendNotice(null);
                   setScreenMode("login");
                   clearFeedback();
                 }}
