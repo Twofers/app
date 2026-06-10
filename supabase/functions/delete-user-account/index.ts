@@ -78,22 +78,13 @@ serve(async (req) => {
     if (purgeErr) {
       console.error("delete-user-account: purge_user_data failed:", purgeErr);
       // app_analytics_events.user_id is ON DELETE SET NULL, so its rows survive
-      // the auth delete. Clear the user link (and session_id, if the deployed
-      // schema has that column) directly before proceeding.
+      // the auth delete. Clear the user link directly before proceeding.
       const { error: anonErr } = await supabaseAdmin
         .from("app_analytics_events")
-        .update({ user_id: null, session_id: null })
+        .update({ user_id: null })
         .eq("user_id", user.id);
       if (anonErr) {
-        // Retry without session_id — the repo migrations never add that column
-        // to app_analytics_events, so the update above 400s on a drift-free DB.
-        const { error: retryErr } = await supabaseAdmin
-          .from("app_analytics_events")
-          .update({ user_id: null })
-          .eq("user_id", user.id);
-        if (retryErr) {
-          console.error("delete-user-account: analytics fallback cleanup failed:", retryErr);
-        }
+        console.error("delete-user-account: analytics fallback cleanup failed:", anonErr);
       }
     }
 
