@@ -4,7 +4,6 @@ export type AuthPath =
   | "normal_login"
   | "signup"
   | "forgot_password"
-  | "demo_login"
   | "session_restore";
 
 export function logAuthPath(path: AuthPath, detail?: string): void {

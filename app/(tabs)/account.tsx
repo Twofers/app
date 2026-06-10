@@ -20,17 +20,11 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import type { AppLocale } from "../../lib/i18n/config";
 import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
-import { useTabMode } from "../../lib/tab-mode";
+import { clearCachedRole, useTabMode } from "../../lib/tab-mode";
 import { LegalExternalLinks } from "../../components/legal-external-links";
 import { DELETE_ACCOUNT_BLOCKED_BUSINESS_OWNER, deleteUserAccount } from "../../lib/functions";
 import { DELETE_ACCOUNT_URL, SUPPORT_URL, openWebsiteUrl } from "../../lib/legal-urls";
-import { DEMO_PREVIEW_EMAIL } from "../../lib/demo-account";
-import { ensureDemoCoffeePreview } from "../../lib/demo-preview-seed";
-import { signInDemoPreviewUser } from "../../lib/demo-auth-signin";
-import { friendlyAuthError, friendlyAuthMessage, friendlyDemoAuthMessage } from "../../lib/auth-error-messages";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
-import { logAuthPath } from "../../lib/auth-path-log";
-import { isDemoAuthHelperEnabled } from "../../lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -49,7 +43,7 @@ import { getSupportEmail } from "@/lib/support-contact";
 export default function AccountScreen() {
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
-  const { mode: tabMode, setMode: setTabMode } = useTabMode();
+  const { mode: tabMode } = useTabMode();
   const { t, i18n } = useTranslation();
   const {
     isLoggedIn,
@@ -63,8 +57,6 @@ export default function AccountScreen() {
     refresh,
   } = useBusiness();
   const deleteMayIncludeBusinessData = Boolean(businessId || businessOwnershipAmbiguous);
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
@@ -217,95 +209,12 @@ export default function AccountScreen() {
     setBanner({ message: next ? t("account.alertsOn") : t("account.alertsOff"), tone: "success" });
   }
 
-  async function signUp() {
-    setBusy(true);
-    setBanner(null);
-    logAuthPath("signup");
-    try {
-      const trimmed = email.trim();
-      if (!trimmed || !pw) {
-        setBanner({ message: t("auth.errFieldsRequired"), tone: "error" });
-        return;
-      }
-      const { error } = await supabase.auth.signUp({
-        email: trimmed,
-        password: pw,
-      });
-      if (error) throw error;
-      setBanner({ message: t("auth.alertSignUpSuccessMsg"), tone: "success" });
-    } catch (e: unknown) {
-      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
-      setBanner({ message: friendlyAuthMessage(raw, t), tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function signIn() {
-    setBusy(true);
-    setBanner(null);
-    try {
-      const emailToUse = email.trim();
-      const pwToUse = pw;
-      if (!emailToUse || !pwToUse) {
-        setBanner({ message: t("auth.errFieldsRequired"), tone: "error" });
-        return;
-      }
-      logAuthPath("normal_login", emailToUse);
-      const isDemoEmail = emailToUse.toLowerCase() === DEMO_PREVIEW_EMAIL;
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: emailToUse,
-        password: pwToUse,
-      });
-
-      if (error) {
-        setBanner({ message: friendlyAuthError(error, t), tone: "error" });
-        return;
-      }
-
-      if (isDemoEmail) {
-        await ensureDemoCoffeePreview(supabase);
-      }
-
-      await refresh();
-      setBanner({ message: t("auth.alertLoggedInMsg"), tone: "success" });
-    } catch (e: unknown) {
-      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
-      setBanner({ message: friendlyAuthMessage(raw, t), tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function demoLoginFromAccount() {
-    if (busy || !isDemoAuthHelperEnabled()) return;
-    setBusy(true);
-    setBanner(null);
-    logAuthPath("demo_login");
-    try {
-      const result = await signInDemoPreviewUser();
-      if (!result.ok) {
-        setBanner({ message: friendlyDemoAuthMessage(result.message, t), tone: "error" });
-        return;
-      }
-      await refresh();
-      setBanner({ message: t("auth.alertLoggedInMsg"), tone: "success" });
-    } catch (e: unknown) {
-      const raw = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : String(e);
-      setBanner({ message: friendlyDemoAuthMessage(raw, t), tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function performSignOut() {
     setBusy(true);
     setBanner(null);
     try {
       const result = await signOutAndRedirectToAuthLanding({
         userId,
-        setTabMode,
         replace: router.replace,
       });
       if (!result.ok) {
@@ -354,6 +263,7 @@ export default function AccountScreen() {
     try {
       await deleteUserAccount();
       await supabase.auth.signOut();
+      await clearCachedRole();
       router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
       const code = e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined;
@@ -626,108 +536,30 @@ export default function AccountScreen() {
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       {!isLoggedIn ? (
-        tabMode === "business" ? (
-          <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
-            <View
-              style={{
-                borderRadius: Radii.lg,
-                padding: Spacing.md,
-                backgroundColor: Colors.light.surface,
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                gap: Spacing.sm,
-              }}
-            >
-              <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
-              <Text style={{ opacity: 0.8, lineHeight: 20 }}>
-                {t("account.bizSignInToContinue")}
-              </Text>
-              <SecondaryButton
-                title={t("account.switchToConsumer")}
-                onPress={async () => {
-                  await setTabMode("customer");
-                  router.replace("/(tabs)");
-                }}
-              />
-            </View>
-          </View>
-        ) : (
-        <ScrollView
-          style={{ marginTop: Spacing.lg, flex: 1 }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
-          {...FORM_SCROLL_KEYBOARD_PROPS}
-          showsVerticalScrollIndicator={false}
-        >
-        <View style={{ gap: Spacing.md }}>
-          <View>
-            <Text>{t("auth.email")}</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoCorrect={false}
-              textContentType="emailAddress"
-              autoComplete="email"
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: 10,
-                padding: 12,
-                marginTop: 6,
-              }}
-            />
-          </View>
-
-          <View>
-            <Text>{t("auth.password")}</Text>
-            <TextInput
-              value={pw}
-              onChangeText={setPw}
-              secureTextEntry
-              textContentType="password"
-              autoComplete="password"
-              style={{
-                borderWidth: 1,
-                borderColor: Colors.light.border,
-                borderRadius: 10,
-                padding: 12,
-                marginTop: 6,
-              }}
-            />
-          </View>
-
-          <Pressable
-            onPress={() => {
-              logAuthPath("forgot_password");
-              router.push("/forgot-password" as Href);
+        // Hard role split: auth-landing is the only sign-in/sign-up surface.
+        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+          <View
+            style={{
+              borderRadius: Radii.lg,
+              padding: Spacing.md,
+              backgroundColor: Colors.light.surface,
+              borderWidth: 1,
+              borderColor: Colors.light.border,
+              gap: Spacing.sm,
             }}
-            style={{ alignSelf: "flex-start", paddingVertical: 4 }}
           >
-            <Text style={{ fontSize: 15, fontWeight: "600", color: "#2563eb" }}>{t("passwordRecovery.forgotLink")}</Text>
-          </Pressable>
-
-          <PrimaryButton title={busy ? t("auth.loggingIn") : t("auth.logIn")} onPress={() => void signIn()} disabled={busy} />
-          <SecondaryButton title={t("auth.createAccountCta")} onPress={() => void signUp()} disabled={busy} />
-          {isDemoAuthHelperEnabled() ? (
+            <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
+            <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+              {t("account.bizSignInToContinue")}
+            </Text>
             <SecondaryButton
-              title={busy ? t("auth.loggingIn") : t("auth.demoLogin")}
-              onPress={() => void demoLoginFromAccount()}
-              disabled={busy}
-              style={{
-                backgroundColor: busy ? "#e5e7eb" : "#eef2ff",
-                borderWidth: 1,
-                borderColor: busy ? "#d4d4d8" : "#6366f1",
+              title={t("auth.logIn")}
+              onPress={() => {
+                router.replace("/auth-landing" as Href);
               }}
             />
-          ) : null}
-          <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.authFooterHint")}</Text>
-            <LegalExternalLinks />
           </View>
         </View>
-        </ScrollView>
-        )
       ) : (
         <ScrollView
           style={{ marginTop: Spacing.lg, flex: 1 }}
@@ -735,75 +567,6 @@ export default function AccountScreen() {
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              borderRadius: Radii.pill,
-              backgroundColor: theme.surfaceMuted,
-              padding: 4,
-              gap: 4,
-            }}
-          >
-            <Pressable
-              onPress={async () => {
-                await setTabMode("customer");
-                router.replace("/(tabs)");
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: tabMode === "customer" }}
-              style={{
-                flex: 1,
-                paddingVertical: Spacing.sm + 2,
-                borderRadius: Radii.md,
-                backgroundColor: tabMode === "customer" ? theme.primary : "transparent",
-              }}
-            >
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontWeight: "800",
-                  fontSize: 14,
-                  color: tabMode === "customer" ? theme.primaryText : theme.text,
-                }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.78}
-                maxFontSizeMultiplier={1.15}
-              >
-                {t("tabMode.customer")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={async () => {
-                await setTabMode("business");
-                router.replace("/(tabs)/create");
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: tabMode === "business" }}
-              style={{
-                flex: 1,
-                paddingVertical: Spacing.sm + 2,
-                borderRadius: Radii.md,
-                backgroundColor: tabMode === "business" ? theme.primary : "transparent",
-              }}
-            >
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontWeight: "800",
-                  fontSize: 14,
-                  color: tabMode === "business" ? theme.primaryText : theme.text,
-                }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.78}
-                maxFontSizeMultiplier={1.15}
-              >
-                {t("tabMode.business")}
-              </Text>
-            </Pressable>
-          </View>
-
           <View
             style={{
               borderWidth: 1,
@@ -898,15 +661,6 @@ export default function AccountScreen() {
                       <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("account.editProfile")}</Text>
                     </Pressable>
                   )}
-                  <Pressable
-                    onPress={async () => {
-                      await setTabMode("customer");
-                      router.replace("/(tabs)");
-                    }}
-                    style={{ paddingVertical: Spacing.sm, alignItems: "center" }}
-                  >
-                    <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 14 }}>{t("account.switchToConsumerShort")}</Text>
-                  </Pressable>
                 </>
               )}
             </View>

@@ -66,7 +66,6 @@ const API_MESSAGE_KEY: Record<string, string> = {
   "You do not own this business.": "apiErrors.notBusinessOwner",
   "Could not access the photo. Upload again.": "apiErrors.photoAccessFailed",
   "Failed to access photo.": "apiErrors.photoAccessFailed",
-  "Demo generation failed.": "apiErrors.aiDemoGenerationFailed",
   "OPENAI_API_KEY is not set. Add it to Supabase secrets.": "apiErrors.aiOpenaiNotConfigured",
   "OPENAI_API_KEY is not set. Please add it to Supabase secrets.": "apiErrors.aiOpenaiNotConfigured",
   "AI generation failed.": "apiErrors.aiGenerationFailed",

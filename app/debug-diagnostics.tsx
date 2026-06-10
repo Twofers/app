@@ -11,7 +11,6 @@ import {
   getExecutionEnvironment,
   getNativeBuildLabel,
   getPublicEnvSnapshot,
-  isDemoAuthHelperEnabled,
   isPreviewOrDevClientProfile,
   isSupabaseConfigured,
 } from "@/lib/runtime-env";
@@ -41,7 +40,6 @@ export default function DebugDiagnosticsScreen() {
     tabModeReady: tabReady,
     tabMode: mode,
     language: i18n.language,
-    demoAuthHelper: isDemoAuthHelperEnabled(),
     supabaseConfigured: isSupabaseConfigured(),
     publicEnv: getPublicEnvSnapshot(),
     auth: authSnap,

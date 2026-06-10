@@ -297,7 +297,7 @@ export default function BusinessBillingScreen() {
       await refresh();
       setBanner({ message: "Trial reset to 30 days.", tone: "success" });
     } catch {
-      setBanner({ message: "Unable to reset trial. Run npm run seed:demo with SUPABASE_SERVICE_ROLE_KEY.", tone: "error" });
+      setBanner({ message: "Unable to reset trial.", tone: "error" });
     } finally {
       setBusy(false);
     }

@@ -83,7 +83,6 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_TERMS_OF_SERVICE_URL: process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
-    EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER: process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER?.trim() ?? "(unset)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
@@ -93,15 +92,6 @@ export function getPublicEnvSnapshot(): Record<string, string> {
       : "(unset)",
     NODE_ENV: process.env.NODE_ENV ?? "unknown",
   };
-}
-
-/**
- * Preview/dev-only demo login (demo@demo.com helper). Never enabled on production store builds.
- * Local `expo start` counts as preview-like via `isPreviewOrDevClientProfile()`.
- */
-export function isDemoAuthHelperEnabled(): boolean {
-  if (!isPreviewOrDevClientProfile()) return false;
-  return __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER === "true";
 }
 
 export function isShareDealEnabled(): boolean {

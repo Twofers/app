@@ -21,7 +21,7 @@ import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-import { useTabMode } from "@/lib/tab-mode";
+import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import {
   BUSINESS_INVITE_PENDING_META_KEY,
   isUserInviteValidated,
@@ -71,7 +71,6 @@ export default function BusinessSetupScreen() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { session, isInitialLoading: authLoading } = useAuthSession();
-  const { setMode: setTabMode } = useTabMode();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
   const primary = Colors.light.primary;
@@ -120,9 +119,10 @@ export default function BusinessSetupScreen() {
       router.replace("/auth-landing");
       return;
     }
-    await setTabMode("customer");
-    router.replace("/(tabs)/settings" as Href);
-  }, [router, session?.user?.id, setTabMode]);
+    // Hard role split: a Business account can't bail into the Shopper side.
+    // With no back stack and an incomplete profile, the only clean exit is sign-out.
+    await signOutAndRedirectToAuthLanding({ userId: session.user.id, replace: router.replace });
+  }, [router, session?.user?.id]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;

@@ -9,192 +9,109 @@ import {
   type ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
-import { fetchAppTabModeForUser, upsertAppTabModeForUser } from "@/lib/profiles-app-mode";
 
-/** Primary store (cleared on uninstall; avoids iOS Keychain “ghost” state after reinstall). */
-export const TAB_MODE_ASYNC_KEY = "twoforone_tab_mode_v2";
-/** Auth screen uses this to know if user has intentionally chosen a role before. */
-export const TAB_MODE_ROLE_COMMITTED_KEY = "twoforone_role_committed_v1";
-/** Legacy SecureStore key from earlier builds. */
-const LEGACY_SECURE_KEY = "twoforone_tab_mode";
 /**
- * SecureStore flag: once set, we never copy legacy tab mode into AsyncStorage again.
- * Survives iOS Keychain across reinstall (like auth), so an empty AsyncStorage + this flag means “fresh UX” → customer.
+ * Hard role split (spec section 4, item 2): the account role is picked once at
+ * signup, stored in `profiles.role`, and never changes. This provider only
+ * mirrors that stored role for routing — there is no in-app switching.
  */
-const LEGACY_IMPORT_DONE_SECURE_KEY = "twoforone_tab_mode_legacy_import_done";
+
+/** Local cache of the last resolved role so cold boots route without a network read. */
+export const TAB_MODE_ASYNC_KEY = "twoforone_tab_mode_v2";
 
 export type TabMode = "customer" | "business";
 
-/**
- * Skip the next remote `profiles.app_tab_mode` fetch for this user (e.g. auth-landing just upserted).
- * Prevents a race where the fetch reads stale "business" and overwrites a fresh "customer" selection.
- */
-let skipNextRemoteTabModeFetchForUserId: string | null = null;
-
-export function skipNextRemoteTabModeFetchForUser(userId: string) {
-  skipNextRemoteTabModeFetchForUserId = userId;
-}
-
 type TabModeContextValue = {
+  /** Resolved account role; defaults to "customer" until known. */
   mode: TabMode;
-  setMode: (next: TabMode) => Promise<void>;
+  /** Set after login/signup once the role is resolved, so routing doesn't wait for the remote fetch. */
+  adoptRole: (role: TabMode) => Promise<void>;
   ready: boolean;
 };
 
 const TabModeContext = createContext<TabModeContextValue | null>(null);
 
-async function loadStoredMode(): Promise<TabMode> {
-  const asyncVal = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
-  if (asyncVal === "business" || asyncVal === "customer") {
-    return asyncVal;
-  }
-
+async function loadCachedRole(): Promise<TabMode | null> {
   try {
-    if (Platform.OS === "web") {
-      // Legacy SecureStore migration does not apply on web.
-      return "customer";
-    }
-    const SecureStore = await import("expo-secure-store");
-    const importDone = await SecureStore.getItemAsync(LEGACY_IMPORT_DONE_SECURE_KEY);
-    if (importDone === "1") {
-      try {
-        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
-      } catch {
-        /* missing */
-      }
-      return "customer";
-    }
-
-    const legacy = await SecureStore.getItemAsync(LEGACY_SECURE_KEY);
-    if (legacy === "business" || legacy === "customer") {
-      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, legacy);
-      try {
-        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
-      } catch {
-        /* missing */
-      }
-    }
-    await SecureStore.setItemAsync(LEGACY_IMPORT_DONE_SECURE_KEY, "1");
+    const cached = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
+    if (cached === "business" || cached === "customer") return cached;
   } catch {
-    /* SecureStore unavailable */
+    /* noop */
   }
-
-  const after = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
-  if (after === "business" || after === "customer") return after;
-  return "customer";
+  return null;
 }
 
-/** Promise-chain mutex so concurrent setMode calls are serialized. */
-let modeQueue = Promise.resolve();
+export async function clearCachedRole(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(TAB_MODE_ASYNC_KEY);
+  } catch {
+    /* noop */
+  }
+}
 
 export function TabModeProvider({ children }: { children: ReactNode }) {
   const { session, isInitialLoading: authLoading } = useAuthSession();
   const [mode, setModeState] = useState<TabMode>("customer");
   const [ready, setReady] = useState(false);
-  /** User picked Customer/Business before persisted mode finished loading — do not overwrite their choice. */
-  const userChoseModeRef = useRef(false);
-  /** Monotonic counter — incremented on every explicit `setMode` call so the remote‐sync effect can detect a concurrent local change and bail out. */
+  /** Bumped by adoptRole so an in-flight remote resolve can't overwrite a fresher local result. */
   const localChangeEpochRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const stored = await loadStoredMode();
-        if (!cancelled && !userChoseModeRef.current) {
-          setModeState(stored);
-        }
-      } finally {
-        if (!cancelled) setReady(true);
+    void (async () => {
+      const cached = await loadCachedRole();
+      if (!cancelled && cached && localChangeEpochRef.current === 0) {
+        setModeState(cached);
       }
+      if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Signed out: revert to the default so the next account starts clean.
+  useEffect(() => {
+    if (authLoading || session?.user) return;
+    setModeState("customer");
+  }, [authLoading, session?.user]);
+
+  // Signed in: resolve the permanent role from the profile (with derive fallback).
   useEffect(() => {
     if (authLoading) return;
-    const uid = session?.user?.id;
-    if (!uid) return;
+    const user = session?.user;
+    if (!user) return;
     let cancelled = false;
-    /** Snapshot the epoch at effect start — if `doSetMode` fires while we're
-     *  waiting or fetching, the epoch will have advanced and we bail out. */
     const epochAtStart = localChangeEpochRef.current;
-    /** Delay so auth-landing can upsert `app_tab_mode` before we read it. */
-    const timer = setTimeout(() => {
-      void (async () => {
-        if (cancelled) return;
-        if (skipNextRemoteTabModeFetchForUserId === uid) {
-          skipNextRemoteTabModeFetchForUserId = null;
-          return;
-        }
-        if (localChangeEpochRef.current !== epochAtStart) return;
-        const remote = await fetchAppTabModeForUser(uid);
-        if (!remote || cancelled) return;
-        // If the user changed mode locally while the fetch was in flight, discard the stale remote value.
-        if (localChangeEpochRef.current !== epochAtStart) return;
-        userChoseModeRef.current = true;
-        setModeState(remote);
-        try {
-          await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, remote);
-        } catch {
-          /* noop */
-        }
-      })();
-    }, 280);
+    void (async () => {
+      const { resolveRoleForUser } = await import("@/lib/profiles-role");
+      const role = await resolveRoleForUser(user);
+      if (cancelled || localChangeEpochRef.current !== epochAtStart) return;
+      setModeState(role);
+      try {
+        await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, role);
+      } catch {
+        /* noop */
+      }
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [authLoading, session?.user?.id]);
+  }, [authLoading, session?.user]);
 
-  const doSetMode = useCallback(async (next: TabMode) => {
+  const adoptRole = useCallback(async (role: TabMode) => {
     localChangeEpochRef.current += 1;
-    userChoseModeRef.current = true;
+    setModeState(role);
     setReady(true);
-    const prev = mode;
-    setModeState(next);
     try {
-      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, next);
-      await AsyncStorage.setItem(TAB_MODE_ROLE_COMMITTED_KEY, "1");
-      const uid = session?.user?.id;
-      if (uid) {
-        await upsertAppTabModeForUser(uid, next);
-      }
-    } catch (e) {
-      setModeState(prev);
-      if (__DEV__) {
-        console.warn("[tab-mode] AsyncStorage.setItem failed; reverted mode", e);
-      }
-      throw e;
+      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, role);
+    } catch {
+      /* cache only; the stored profile role remains authoritative */
     }
-    try {
-      if (Platform.OS !== "web") {
-        const SecureStore = await import("expo-secure-store");
-        await SecureStore.deleteItemAsync(LEGACY_SECURE_KEY);
-      }
-    } catch (e) {
-      if (__DEV__) {
-        console.warn("[tab-mode] SecureStore legacy key cleanup failed", e);
-      }
-    }
-  }, [mode, session?.user?.id]);
+  }, []);
 
-  const setMode = useCallback(
-    (next: TabMode): Promise<void> => {
-      const p = modeQueue.then(() => doSetMode(next)).catch((e) => {
-        if (__DEV__) console.warn("[tab-mode] setMode failed:", e);
-      });
-      modeQueue = p;
-      return p;
-    },
-    [doSetMode],
-  );
-
-  const value = useMemo(() => ({ mode, setMode, ready }), [mode, setMode, ready]);
+  const value = useMemo(() => ({ mode, adoptRole, ready }), [mode, adoptRole, ready]);
 
   return <TabModeContext.Provider value={value}>{children}</TabModeContext.Provider>;
 }

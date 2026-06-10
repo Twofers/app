@@ -66,15 +66,3 @@ export function friendlyAuthMessage(raw: string, t: TFunction, code?: string): s
   }
   return raw?.trim() ? raw : t("auth.errGeneric");
 }
-
-/** When demo password sign-in fails, prefer provisioning instructions over generic invalid password. */
-export function friendlyDemoAuthMessage(raw: string, t: TFunction): string {
-  if (isRateLimitedMessageOrCode(raw, undefined)) {
-    return t("auth.errRateLimited");
-  }
-  const m = lower(raw);
-  if (m.includes("invalid login credentials") || m.includes("invalid email or password") || m.includes("user not found")) {
-    return t("auth.errDemoNotProvisioned");
-  }
-  return friendlyAuthMessage(raw, t);
-}

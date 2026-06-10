@@ -1,24 +1,21 @@
 import type { Href } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { removePushTokensForUser } from "@/lib/push-token";
-import { clearDemoEmailCache } from "@/lib/functions";
-import type { TabMode } from "@/lib/tab-mode";
+import { clearCachedRole } from "@/lib/tab-mode";
 
 /**
- * Full app sign-out: push token cleanup and tab mode reset (while session is valid),
- * then Supabase sign-out and login screen.
+ * Full app sign-out: push token cleanup (while session is valid), local role
+ * cache cleanup, then Supabase sign-out and login screen.
  *
- * FIX: Previously, if setTabMode threw (e.g. missing 'profiles' table in schema
- * cache), the entire sign-out was aborted — users could never log out. Now both
- * push-token removal and tab-mode upsert are best-effort: failures are logged
- * but sign-out always proceeds.
+ * The stored profile role is permanent (hard role split) and is NOT touched
+ * here. Cleanup steps are best-effort: failures are logged but sign-out
+ * always proceeds.
  */
 export async function signOutAndRedirectToAuthLanding(params: {
   userId: string | null | undefined;
-  setTabMode: (next: TabMode) => Promise<void>;
   replace: (href: Href) => void;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { userId, setTabMode, replace } = params;
+  const { userId, replace } = params;
   try {
     // Best-effort: remove push tokens (don't block sign-out on failure)
     if (userId) {
@@ -27,15 +24,10 @@ export async function signOutAndRedirectToAuthLanding(params: {
       });
     }
 
-    // Best-effort: reset tab mode to customer (don't block sign-out on failure).
-    // This can fail if the profiles table hasn't been created yet or if the
-    // PostgREST schema cache is stale.
-    await setTabMode("customer").catch((e) => {
-      if (__DEV__) console.warn("[sign-out] setTabMode reset failed:", e);
-    });
+    // Best-effort: drop the locally cached role so the next account resolves fresh.
+    await clearCachedRole();
 
     // This is the critical step — always attempt sign-out
-    clearDemoEmailCache();
     await supabase.auth.signOut();
     replace("/auth-landing" as Href);
     return { ok: true };

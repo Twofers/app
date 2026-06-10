@@ -17,7 +17,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
-import { isDemoUserEmail } from "./demo-variants.ts";
 import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhoto,
@@ -434,27 +433,6 @@ async function produceImage(params: {
   return { posterStoragePath: generatedPath, source: "generated", treatment: null };
 }
 
-// ─── Demo-mode stub (no OpenAI calls) ──────────────────────────────────────
-
-function buildDemoSingleAd(itemHint: string, offerScheduleSummary = "", quantityLimit: number | null = null): SingleAd {
-  const item = itemHint.trim().slice(0, 30) || "your favorite drink";
-  const timeText = offerScheduleSummary.trim() ? ` ${offerScheduleSummary.trim()}` : "";
-  const quantityText = quantityLimit && quantityLimit > 0 ? ` ${Math.floor(quantityLimit)} available.` : "";
-  const shortDescription = clip(`Buy one ${item}, get the second one free.${timeText}${quantityText}`, 220);
-  return {
-    headline: clip(`BOGO ${item}`, 70),
-    subheadline: shortDescription,
-    short_description: shortDescription,
-    push_notification: clip(`BOGO ${item}${quantityLimit ? `, ${Math.floor(quantityLimit)} available` : ""}`, 90),
-    terms_summary: clip(`Buy one ${item}, get one free.${timeText}${quantityText}`, 240),
-    cta: "Claim deal",
-    item_research: { item_name: item, description: "", is_familiar: false },
-    photo_source: "generated",
-    photo_treatment: null,
-    poster_storage_path: null,
-  };
-}
-
 // ─── Strong-deal phrase guarantee ──────────────────────────────────────────
 // Mirror of lib/strong-deal-guard.ts. The publish guard (client + server)
 // rejects copy that lacks an explicit strong-deal phrase. The model is told to
@@ -722,27 +700,6 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
-    }
-
-    // Demo account: deterministic stub, no OpenAI cost
-    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
-    if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ad = buildDemoSingleAd(hintText, offerScheduleSummary, quantityLimit);
-      await admin.from("ai_generation_logs").insert({
-        business_id: businessId,
-        user_id: user.id,
-        request_type: "ad_variants",
-        input_mode: "demo",
-        request_hash: "demo_v2",
-        prompt_version: AD_COPY_PROMPT_VERSION,
-        model: "demo_mock",
-        success: true,
-        openai_called: false,
-      });
-      return new Response(JSON.stringify({ ad, ads: [ad] }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     if (!openAiKey) {

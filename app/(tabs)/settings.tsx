@@ -45,7 +45,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { useTabMode } from "@/lib/tab-mode";
+import { clearCachedRole } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
@@ -59,7 +59,6 @@ import { devWarn } from "@/lib/dev-log";
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const { session } = useAuthSession();
-  const { setMode: setTabMode } = useTabMode();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -303,7 +302,6 @@ export default function SettingsScreen() {
     try {
       const result = await signOutAndRedirectToAuthLanding({
         userId: session?.user?.id,
-        setTabMode,
         replace: router.replace,
       });
       if (!result.ok) {
@@ -345,7 +343,7 @@ export default function SettingsScreen() {
     try {
       await deleteUserAccount();
       await supabase.auth.signOut();
-      await setTabMode("customer");
+      await clearCachedRole();
       router.replace("/auth-landing" as Href);
     } catch (err: unknown) {
       devWarn("[settings] delete account failed", err);
@@ -608,27 +606,6 @@ export default function SettingsScreen() {
               );
             })}
           </View>
-        </View>
-
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: Colors.light.border,
-            borderRadius: Radii.lg,
-            padding: Spacing.lg,
-            gap: Spacing.sm,
-          }}
-        >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.switchModeTitle")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.switchModeHelp")}</Text>
-          <SecondaryButton
-            title={t("consumerSettings.switchToBusiness")}
-            onPress={async () => {
-              await setTabMode("business");
-              router.replace("/(tabs)/dashboard" as Href);
-            }}
-            style={{ minHeight: 66, paddingVertical: Spacing.md, marginTop: Spacing.xs }}
-          />
         </View>
 
         {consumerSession ? (

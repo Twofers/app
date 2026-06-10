@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
-import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const MODEL = resolveOpenAiChatModel();
@@ -164,7 +163,7 @@ serve(async (req) => {
       );
     }
 
-    // Category-aware sample menus for demo/no-key fallback
+    // Category-aware sample menus for the preview no-key fallback
     const bizCategory = ((biz as { category?: string }).category ?? "").toLowerCase();
     type MenuItem = { name: string; category: string; price_text: string; size_options: string[]; readable: true };
 
@@ -218,18 +217,6 @@ serve(async (req) => {
         { name: "Butter Croissant", category: "Pastry", price_text: "$4.25", size_options: [], readable: true },
         { name: "Blueberry Muffin", category: "Pastry", price_text: "$4.50", size_options: [], readable: true },
       ];
-    }
-
-    // Demo account: return category-appropriate sample menu
-    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
-    if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ms = 700 + Math.floor(Math.random() * 500);
-      await new Promise((r) => setTimeout(r, ms));
-      const items = sampleMenuForCategory(bizCategory);
-      return new Response(
-        JSON.stringify({ ok: true, items, low_legibility: false, menu_notes: `${items.length} items extracted. All prices clearly legible.` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
     }
 
     if (!openAiKey && allowSyntheticWithoutKey) {

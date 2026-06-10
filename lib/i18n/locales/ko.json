@@ -12,14 +12,6 @@
     "billing": "결제",
     "account": "계정"
   },
-  "tabMode": {
-    "title": "하단 탭",
-    "subtitle": "고객: 둘러보기·지갑. 비즈니스: 만들기·사용·내 오퍼.",
-    "customer": "고객 모드",
-    "business": "비즈니스 모드",
-    "currentCustomer": "현재: 고객 탭",
-    "currentBusiness": "현재: 비즈니스 탭"
-  },
   "emptyState": {
     "encouragement": "걱정 마세요. 곧 더 많은 딜이 올라올 거예요."
   },
@@ -168,11 +160,7 @@
     "notifFavoritesOnly": "즐겨찾기만",
     "gpsErrorTitle": "위치를 사용할 수 없음",
     "gpsErrorBody": "현재 위치를 가져올 수 없습니다. 다시 시도하거나 우편번호로 전환하세요.",
-    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요.",
-    "switchModeTitle": "앱 모드",
-    "switchModeHelp": "로그아웃 없이 소비자와 비즈니스 보기를 전환하세요.",
-    "switchToBusiness": "비즈니스 모드로 전환",
-    "switchToConsumer": "소비자 모드로 전환"
+    "notifFavoritesOverride": "즐겨찾기 매장은 반경 밖이어도 알림을 받을 수 있어요."
   },
   "onboarding": {
     "title": "TWOFER에 오신 것을 환영해요",
@@ -289,7 +277,6 @@
     "aiAdsMissingFields": "비즈니스·사진·딜 메모가 필요합니다.",
     "notBusinessOwner": "이 비즈니스의 소유자가 아닙니다.",
     "photoAccessFailed": "사진을 열 수 없습니다. 다시 업로드하세요.",
-    "aiDemoGenerationFailed": "데모 생성에 실패했습니다.",
     "aiOpenaiNotConfigured": "서버에 AI가 아직 설정되지 않았습니다.",
     "aiGenerationFailed": "AI 생성에 실패했습니다. 다시 시도하세요.",
     "aiInvalidJson": "AI 응답이 올바르지 않습니다. 다시 시도하세요.",
@@ -477,7 +464,6 @@
     "errLngRange": "경도는 -180에서 180 사이여야 합니다.",
     "bizCardTitle": "나의 카페",
     "bizSignInToContinue": "로그인하여 초기 설정을 완료하고 첫 딜을 시작하세요.",
-    "switchToConsumer": "소비자 모드로 전환",
     "bizYourBusiness": "내 비즈니스",
     "bizNoAddress": "아직 주소가 없습니다.",
     "bizCategory": "카테고리",
@@ -503,8 +489,7 @@
     "aiDescNeedsNameCategory": "먼저 비즈니스 이름과 카테고리를 추가하세요.",
     "expandBizProfile": "Show all business fields",
     "collapseBizProfile": "Hide business fields",
-    "advancedOptions": "Advanced",
-    "switchToConsumerShort": "Browse as customer"
+    "advancedOptions": "Advanced"
   },
   "settingsScreen": {
     "title": "설정",
@@ -817,12 +802,10 @@
     "signingUp": "계정 만드는 중…",
     "signUp": "가입",
     "createAccountCta": "계정 만들기",
-    "demoLogin": "데모 로그인",
     "errRateLimited": "시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
     "errInvalidCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
     "errGeneric": "문제가 발생했습니다. 다시 시도하세요.",
     "errNetwork": "네트워크 오류입니다. 연결을 확인하세요.",
-    "errDemoNotProvisioned": "지금은 데모 로그인을 사용할 수 없습니다.",
     "errFieldsRequired": "이메일과 비밀번호를 입력하세요.",
     "alertSignUpSuccessTitle": "완료",
     "alertSignUpSuccessMsg": "이메일을 확인한 뒤 로그인하세요.",
@@ -853,11 +836,8 @@
     "roleCustomerHint": "지역 딜을 찾고 사용하세요.",
     "roleBusiness": "비즈니스",
     "roleBusinessHint": "오퍼를 게시하고 티켓을 사용하세요.",
-    "loadingSavedRole": "저장된 선택을 불러오는 중…",
     "createAccount": "계정 만들기",
     "heroA11y": "TWOFER 펭귄",
-    "demoHint": "미리보기/개발 전용",
-    "demoCredentialsHint": "시드 데모 로그인: {{email}} · 비밀번호 {{password}}",
     "emailLabel": "이메일",
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "비밀번호",
@@ -1582,8 +1562,6 @@
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",
     "intro": "메뉴·음료 사진을 올려 주세요. 짧은 설명이 있으면 좋지만, 비워 두면 사진만 보고 제안합니다.",
-    "demoModeTitle": "Demo account",
-    "demoModeBody": "데모 계정이라서 광고 아이디어는 내장 샘플을 사용합니다. 나머지는 모두 정상적으로 작동합니다.",
     "devToolsTitle": "추가 광고 도구",
     "devToolsIntro": "광고 초안을 점검하는 선택 도구입니다. 일반 게시에는 광고 생성 버튼을 사용하세요.",
     "devTestCopy": "Test ai-generate-deal-copy",

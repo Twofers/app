@@ -65,7 +65,6 @@ import {
   extractDealPhotoStoragePath,
   resolveCurrentDealPosterStoragePath,
 } from "../../lib/deal-poster-url";
-import { isDemoPreviewAccountEmail } from "../../lib/demo-account";
 import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import {
@@ -319,11 +318,9 @@ export default function AiDealScreen() {
     businessId,
     businessContextForAi,
     businessPreferredLocale,
-    sessionEmail,
     businessName,
     businessProfile,
   } = useBusiness();
-  const isDemoAiAccount = isDemoPreviewAccountEmail(sessionEmail);
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
 
   // Voice input
@@ -1572,13 +1569,6 @@ export default function AiDealScreen() {
           {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
         </Text>
         <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
-
-        {isDemoAiAccount ? (
-          <View style={{ marginTop: 14, padding: 14, borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border }}>
-            <Text style={{ fontWeight: "700", fontSize: 15, color: Colors.light.text }}>{t("createAi.demoModeTitle")}</Text>
-            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: Colors.light.mutedText }}>{t("createAi.demoModeBody")}</Text>
-          </View>
-        ) : null}
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}

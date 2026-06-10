@@ -12,14 +12,6 @@
     "billing": "Facturación",
     "account": "Cuenta"
   },
-  "tabMode": {
-    "title": "Pestañas inferiores",
-    "subtitle": "Cliente: explorar y billetera. Negocio: crear, canjear y tus ofertas.",
-    "customer": "Modo cliente",
-    "business": "Modo negocio",
-    "currentCustomer": "Actual: pestañas de cliente",
-    "currentBusiness": "Actual: pestañas de negocio"
-  },
   "emptyState": {
     "encouragement": "Sin preocupaciones: aparecerán más ofertas pronto."
   },
@@ -168,11 +160,7 @@
     "notifFavoritesOnly": "Solo favoritos",
     "gpsErrorTitle": "Ubicación no disponible",
     "gpsErrorBody": "No se pudo obtener tu posición. Intenta de nuevo o usa código postal.",
-    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio.",
-    "switchModeTitle": "Modo de la app",
-    "switchModeHelp": "Cambia entre vista de consumidor y negocio sin cerrar sesión.",
-    "switchToBusiness": "Cambiar a modo Negocio",
-    "switchToConsumer": "Cambiar a modo Consumidor"
+    "notifFavoritesOverride": "Los negocios favoritos pueden alertarte aunque estén fuera del radio."
   },
   "onboarding": {
     "title": "Bienvenido a TWOFER",
@@ -289,7 +277,6 @@
     "aiAdsMissingFields": "Faltan negocio, foto o nota de la oferta.",
     "notBusinessOwner": "No eres titular de este negocio.",
     "photoAccessFailed": "No se pudo abrir la foto. Sube otra.",
-    "aiDemoGenerationFailed": "Falló la generación en modo demo.",
     "aiOpenaiNotConfigured": "La IA aún no está configurada en el servidor.",
     "aiGenerationFailed": "Falló la generación con IA. Inténtalo de nuevo.",
     "aiInvalidJson": "La IA devolvió datos no válidos. Inténtalo de nuevo.",
@@ -477,7 +464,6 @@
     "errLngRange": "La longitud debe estar entre -180 y 180.",
     "bizCardTitle": "Tu cafetería",
     "bizSignInToContinue": "Inicia sesión para completar tu configuración y lanzar tu primera oferta.",
-    "switchToConsumer": "Cambiar a modo consumidor",
     "bizYourBusiness": "Tu negocio",
     "bizNoAddress": "Aún no hay dirección.",
     "bizCategory": "Categoría",
@@ -503,8 +489,7 @@
     "aiDescNeedsNameCategory": "Agrega un nombre y categoría primero.",
     "expandBizProfile": "Show all business fields",
     "collapseBizProfile": "Hide business fields",
-    "advancedOptions": "Advanced",
-    "switchToConsumerShort": "Browse as customer"
+    "advancedOptions": "Advanced"
   },
   "settingsScreen": {
     "title": "Ajustes",
@@ -817,12 +802,10 @@
     "signingUp": "Creando cuenta...",
     "signUp": "Registrarse",
     "createAccountCta": "Crear cuenta",
-    "demoLogin": "Entrada demo",
     "errRateLimited": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
     "errInvalidCredentials": "Correo o contraseña incorrectos.",
     "errGeneric": "Algo salió mal. Inténtalo de nuevo.",
     "errNetwork": "Error de red. Revisa la conexión.",
-    "errDemoNotProvisioned": "La cuenta demo no existe en este proyecto. Ejecuta una vez: npm run seed:demo, o crea demo@demo.com en Auth.",
     "errFieldsRequired": "Introduce correo y contraseña.",
     "alertSignUpSuccessTitle": "Listo",
     "alertSignUpSuccessMsg": "Revisa tu correo para confirmar y luego entra.",
@@ -853,11 +836,8 @@
     "roleCustomerHint": "Encuentra y reclama ofertas locales.",
     "roleBusiness": "Negocio",
     "roleBusinessHint": "Publica ofertas y canjea tickets.",
-    "loadingSavedRole": "Cargando tu última selección…",
     "createAccount": "Crear cuenta",
     "heroA11y": "Pingüino de TWOFER",
-    "demoHint": "Solo vista previa / desarrollo",
-    "demoCredentialsHint": "Cuenta demo sembrada: {{email}} · contraseña {{password}}",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@ejemplo.com",
     "passwordLabel": "Contraseña",
@@ -1582,8 +1562,6 @@
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",
     "intro": "Añade una foto del producto. Una nota corta ayuda, pero puedes dejarla en blanco: leeremos la foto.",
-    "demoModeTitle": "Demo account",
-    "demoModeBody": "Estás en la cuenta de demostración, por eso las ideas de anuncio usan ejemplos integrados. Todo lo demás funciona con normalidad.",
     "devToolsTitle": "Herramientas extra de anuncios",
     "devToolsIntro": "Revisiones opcionales para crear anuncios. Usa Generar anuncio para publicar normalmente.",
     "devTestCopy": "Test ai-generate-deal-copy",

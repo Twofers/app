@@ -4,8 +4,6 @@
   "errLoadDeal": "No se pudo cargar esta oferta. Vuelve e inténtalo de nuevo.",
   "titleMain": "Anuncios con IA para tu oferta",
   "intro": "Sube una foto del producto. Una nota corta ayuda, pero puedes dejarla vacía: inferimos desde la imagen. Obtendrás tres enfoques; elige uno, ajusta y publica.",
-  "demoModeTitle": "Cuenta demo",
-  "demoModeBody": "Estás en la cuenta de demostración, por eso las ideas de anuncio usan ejemplos integrados. Todo lo demás funciona con normalidad.",
   "qaToggle": "QA manual (validación)",
   "qaHelp": "Etiqueta ejecuciones para los 12 casos de prueba (ver docs/ai-ad-validation). Aparece en logs de Supabase y analíticas de desarrollo. Opcional — déjalo vacío en uso normal.",
   "capturePhoto": "Capturar foto",

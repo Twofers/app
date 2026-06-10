@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
-import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 // ── Phrase-based translation engine ─────────────────────────
@@ -143,19 +142,6 @@ serve(async (req) => {
     if (!title && !description) {
       return new Response(
         JSON.stringify({ ok: true, skipped: true }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Demo account: phrase-based translations
-    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
-    if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ms = 400 + Math.floor(Math.random() * 300);
-      await new Promise((r) => setTimeout(r, ms));
-      const demoResult = buildTranslationResult(title, description);
-      await admin.from("deals").update(demoResult).eq("id", deal_id);
-      return new Response(
-        JSON.stringify({ ok: true, ...demoResult }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

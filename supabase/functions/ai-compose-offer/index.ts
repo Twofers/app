@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
-import { isDemoUserEmail } from "../ai-generate-ad-variants/demo-variants.ts";
 import { buildPosterImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -169,110 +168,6 @@ serve(async (req) => {
     const audioBase64 = typeof body.audio_base64 === "string" ? body.audio_base64.trim() : "";
     const transcribeOnly = body.transcribe_only === true;
     const generate_poster_image = body.generate_poster_image === true;
-
-    // Demo account: return quality-tone results without calling OpenAI
-    const demoWantsLive = Deno.env.get("AI_ADS_DEMO_USE_LIVE")?.trim().toLowerCase() === "true";
-    if (isDemoUserEmail(user.email) && !demoWantsLive) {
-      const ms = 800 + Math.floor(Math.random() * 600);
-      await new Promise((r) => setTimeout(r, ms));
-
-      if (transcribeOnly) {
-        return new Response(
-          JSON.stringify({ ok: true, transcript: promptTextRaw || "oat milk latte special — freshly pulled" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      const rawInput = (promptTextRaw || voiceTranscriptIn || "").toLowerCase();
-      const demoHasImage = imageBase64.length > 0;
-      const demoHasText = (promptTextRaw + voiceTranscriptIn).trim().length > 0;
-
-      // Detect item from input
-      type ComposeItem = { item: string; offerType: string; display: string };
-      const itemMap: [RegExp, ComposeItem][] = [
-        [/oat\s*milk\s*latte|latte/i, { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte, get one free" }],
-        [/cortado|espresso/i, { item: "vanilla cortado", offerType: "bogo_same_item", display: "Buy one vanilla cortado, get one free" }],
-        [/cold\s*brew|iced/i, { item: "single-origin cold brew", offerType: "bogo_same_item", display: "Buy one cold brew, get one free" }],
-        [/matcha|green\s*tea/i, { item: "matcha latte", offerType: "bogo_same_item", display: "Buy one matcha latte, get one free" }],
-        [/croissant/i, { item: "butter croissant", offerType: "bogo_same_item", display: "Buy one butter croissant, get one free" }],
-        [/muffin|blueberry/i, { item: "blueberry muffin", offerType: "bogo_same_item", display: "Buy one blueberry muffin, get one free" }],
-        [/pastry|baked/i, { item: "pastry", offerType: "bogo_same_item", display: "Buy one pastry, get one free" }],
-        [/combo|pair|\+|and a|with a/i, { item: "latte + pastry", offerType: "free_add_on_with_purchase", display: "Free pastry with any latte purchase" }],
-      ];
-      let matched: ComposeItem = { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte, get one free" };
-      for (const [rx, ci] of itemMap) { if (rx.test(rawInput)) { matched = ci; break; } }
-
-      const demoResult = {
-        detected_items: [matched.item],
-        confidence: 0.92,
-        low_confidence: false,
-        recommendation_reason: `A quality ${matched.item} BOGO highlights your craft and brings new faces through the door.`,
-        recommended_offer: {
-          offer_type: matched.offerType,
-          item_name: matched.item,
-          display_offer: matched.display,
-        },
-        ad_variants: [
-          {
-            variant_id: "A",
-            headline_en: `Handcrafted ${matched.item}, doubled`,
-            headline_es: `${matched.item} artesanal, por partida doble`,
-            headline_ko: `정성 담은 ${matched.item} 1+1`,
-            subheadline_en: `Every ${matched.item} is made fresh with single-origin beans and real ingredients. Now enjoy two for the price of one.`,
-            subheadline_es: `Cada ${matched.item} se prepara con granos de origen único e ingredientes reales. Ahora disfruta dos por el precio de uno.`,
-            subheadline_ko: `싱글 오리진 원두와 신선한 재료로 만든 ${matched.item}. 하나 가격에 둘을 즐기세요.`,
-            cta_en: "Taste the craft",
-            cta_es: "Prueba la calidad",
-            cta_ko: "장인의 맛 경험하기",
-            style_label: "Quality-led",
-            rationale: "Leads with craftsmanship to position the deal as a premium experience, not a discount.",
-            visual_direction: "Tight crop on product texture, natural light, minimal text overlay.",
-          },
-          {
-            variant_id: "B",
-            headline_en: `Made with care at Demo Roasted Bean`,
-            headline_es: `Hecho con cariño en Demo Roasted Bean`,
-            headline_ko: `Demo Roasted Bean의 정성`,
-            subheadline_en: `Small-batch, no shortcuts. Bring a friend and share two ${matched.item}s — second one's on us.`,
-            subheadline_es: `Lotes pequeños, sin atajos. Trae a un amigo y compartan dos ${matched.item}s — el segundo va por la casa.`,
-            subheadline_ko: `소량 생산, 타협 없는 맛. 친구와 함께 ${matched.item} 두 잔을 — 두 번째는 무료.`,
-            cta_en: "Visit us today",
-            cta_es: "Visítanos hoy",
-            cta_ko: "오늘 방문하세요",
-            style_label: "Artisan warmth",
-            rationale: "Combines craft messaging with neighborly warmth — inviting without being pushy.",
-            visual_direction: "Warm café interior, barista at work, soft golden hour light.",
-          },
-          {
-            variant_id: "C",
-            headline_en: `Two for one — real ingredients, real craft`,
-            headline_es: `Dos por uno — ingredientes reales, verdadera calidad`,
-            headline_ko: `1+1 — 진짜 재료, 진짜 정성`,
-            subheadline_en: `We don't cut corners on our ${matched.item}. Now there's twice the reason to stop by Demo Roasted Bean.`,
-            subheadline_es: `No escatimamos en nuestro ${matched.item}. Ahora hay el doble de razones para pasar por Demo Roasted Bean.`,
-            subheadline_ko: `저희 ${matched.item}에는 타협이 없습니다. Demo Roasted Bean에 들를 이유가 두 배가 되었습니다.`,
-            cta_en: "Discover the difference",
-            cta_es: "Descubre la diferencia",
-            cta_ko: "차이를 느껴보세요",
-            style_label: "Premium simplicity",
-            rationale: "Clean, confident tone that trusts the product quality to do the selling.",
-            visual_direction: "Clean layout, single product hero shot, restrained serif typography.",
-          },
-        ],
-        input_type: demoHasImage && demoHasText ? "mixed" : demoHasImage ? "image_only" : "text_only",
-      };
-
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          duplicate_cached: false,
-          result: demoResult,
-          poster_storage_path: null,
-          quota: { used: 0, limit: 30, remaining: 30 },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
 
     if (transcribeOnly) {
       if (!openAiKey) {

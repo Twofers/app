@@ -16,7 +16,6 @@
     "test": "vitest run",
     "test:english": "vitest run lib/deal-quality.english-regression.test.ts",
     "test:watch": "vitest",
-    "seed:demo": "node scripts/seed-demo.cjs",
     "screenshots:pages": "node scripts/screenshot-pages.mjs"
   },
   "dependencies": {

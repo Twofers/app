@@ -266,7 +266,7 @@ async function observeSuccessfulResponse(
 
   if ((method === "POST" || method === "PATCH") && path.endsWith("/rest/v1/profiles")) {
     for (const row of rowsFromBody(requestBody)) {
-      const role = row.app_tab_mode;
+      const role = row.role;
       if (role === "customer" || role === "business") {
         sendObservabilityEvent("role_selected", { authorization, context: { role } });
       }
