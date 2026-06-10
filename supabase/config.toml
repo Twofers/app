@@ -405,6 +405,31 @@ entrypoint = "./functions/redeem-token/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/redeem-token/*.html" ]
 
+[functions.activate-redemption-mode]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/activate-redemption-mode/index.ts"
+
+[functions.exit-redemption-mode]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/exit-redemption-mode/index.ts"
+
+[functions.staff-redemption]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/staff-redemption/index.ts"
+
+[functions.manage-redemption-devices]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/manage-redemption-devices/index.ts"
+
+[functions.owner-redemption-security]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/owner-redemption-security/index.ts"
+
 [functions.ai-create-deal]
 enabled = true
 verify_jwt = false

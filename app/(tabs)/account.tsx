@@ -36,6 +36,7 @@ import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import { validateBusinessProfileSaveDraft } from "@/lib/business-profile-save";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
+import { RedemptionModeSettings } from "@/components/redemption-mode-settings";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { getSupportEmail } from "@/lib/support-contact";
@@ -262,7 +263,7 @@ export default function AccountScreen() {
     setBanner(null);
     try {
       await deleteUserAccount();
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       await clearCachedRole();
       router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
@@ -718,6 +719,8 @@ export default function AccountScreen() {
             </View>
             <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
           </View>
+
+          <RedemptionModeSettings businessId={businessId} businessName={businessName} />
 
           {businessId ? (
             <View

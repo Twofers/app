@@ -19,6 +19,8 @@ import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-han
 import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
+import { OwnerRedemptionSecurityProvider } from '@/components/providers/owner-redemption-security-provider';
+import { RedemptionModeGate, RedemptionModeProvider } from '@/components/providers/redemption-mode-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { TabModeProvider } from '@/lib/tab-mode';
@@ -88,6 +90,7 @@ function RootNavigationStack() {
       <DealDeepLinkHandler />
       <BillingDeepLinkHandler />
       <AuthStackGate />
+      <RedemptionModeGate />
       <CreateMenuOfferWizardProvider>
       <Stack
         screenOptions={{
@@ -104,6 +107,7 @@ function RootNavigationStack() {
         <Stack.Screen name="auth-landing" options={{ headerShown: false }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="redemption-mode" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen
           name="consumer-profile-setup"
           options={{
@@ -145,13 +149,17 @@ export default function RootLayout() {
       <AppI18nGate>
         <SafeAreaProvider>
           <AuthSessionProvider>
-            <TabModeProvider>
-              <DiagnosticBootLog />
-              <AppErrorBoundary>
-                <RootNavigationStack />
-              </AppErrorBoundary>
-              <ConsumerOnboardingGate />
-            </TabModeProvider>
+            <RedemptionModeProvider>
+              <OwnerRedemptionSecurityProvider>
+                <TabModeProvider>
+                  <DiagnosticBootLog />
+                  <AppErrorBoundary>
+                    <RootNavigationStack />
+                  </AppErrorBoundary>
+                  <ConsumerOnboardingGate />
+                </TabModeProvider>
+              </OwnerRedemptionSecurityProvider>
+            </RedemptionModeProvider>
           </AuthSessionProvider>
         </SafeAreaProvider>
       </AppI18nGate>

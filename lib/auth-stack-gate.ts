@@ -2,6 +2,7 @@ const PUBLIC_ROOTS = new Set([
   "index",
   "auth-landing",
   "auth-callback",
+  "redemption-mode",
   "forgot-password",
   "reset-password",
 ]);

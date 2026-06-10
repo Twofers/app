@@ -4,6 +4,7 @@ import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { buildPosterImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
@@ -100,6 +101,9 @@ serve(async (req) => {
         JSON.stringify({ error: "Unauthorized. Please log in.", error_code: "UNAUTHORIZED" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: Record<string, unknown>;

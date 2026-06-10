@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
+import { useRedemptionMode } from "@/components/providers/redemption-mode-provider";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTabMode } from "@/lib/tab-mode";
@@ -17,6 +18,7 @@ import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { isRedeemerSession } from "@/lib/redemption-mode";
 import {
   deriveTabFromSegments,
   resolveTabModeRedirectTarget,
@@ -44,6 +46,7 @@ const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <H
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
+  const { isLocked, loading: redemptionLoading } = useRedemptionMode();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -81,7 +84,7 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
     return <>{children}</>;
   }
 
-  if (isInitialLoading) {
+  if (isInitialLoading || redemptionLoading || isLocked || isRedeemerSession(session)) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator color={theme.primary} />

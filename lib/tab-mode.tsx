@@ -82,6 +82,11 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
     if (authLoading) return;
     const user = session?.user;
     if (!user) return;
+    if ((user.app_metadata as Record<string, unknown> | undefined)?.app_role === "redeemer") {
+      setModeState("business");
+      setReady(true);
+      return;
+    }
     let cancelled = false;
     const epochAtStart = localChangeEpochRef.current;
     void (async () => {

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
 import { hasClaimOnLocalBusinessDay } from "../_shared/claim-limits.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -136,6 +137,9 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     // 📦 Parse request body

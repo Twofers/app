@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 type AiResult = {
   title: string;
@@ -56,6 +57,9 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: any;

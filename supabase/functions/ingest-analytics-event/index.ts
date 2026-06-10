@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 const ALLOWED = new Set([
   "app_opened",
@@ -111,6 +112,9 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (user && isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     const ctx = sanitizeContext(body.context);
