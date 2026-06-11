@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -33,10 +34,10 @@ type Props = {
   businessName?: string | null;
 };
 
-function formatDeviceStatus(device: RedemptionDeviceSummary): string {
-  if (device.active) return "Active";
-  if (device.deactivated_at) return "Inactive";
-  return "Ready";
+function formatDeviceStatus(device: RedemptionDeviceSummary, t: TFunction): string {
+  if (device.active) return t("redemptionMode.statusActive", { defaultValue: "Active" });
+  if (device.deactivated_at) return t("redemptionMode.statusInactive", { defaultValue: "Inactive" });
+  return t("redemptionMode.statusReady", { defaultValue: "Ready" });
 }
 
 export function RedemptionModeSettings({ businessId, businessName }: Props) {
@@ -56,7 +57,8 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   const [ownerDisablePin, setOwnerDisablePin] = useState("");
   const [ownerNewPin, setOwnerNewPin] = useState("");
   const [ownerNewPinConfirm, setOwnerNewPinConfirm] = useState("");
-  const [deviceLabel, setDeviceLabel] = useState("Front Counter iPhone");
+  const defaultDeviceLabel = t("redemptionMode.defaultDeviceLabel", { defaultValue: "Front Counter iPhone" });
+  const [deviceLabel, setDeviceLabel] = useState(defaultDeviceLabel);
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [activating, setActivating] = useState(false);
@@ -65,9 +67,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" | "warning" } | null>(null);
 
   useEffect(() => {
-    if (!businessName || deviceLabel !== "Front Counter iPhone") return;
-    setDeviceLabel(`${businessName.slice(0, 30)} Counter`);
-  }, [businessName, deviceLabel]);
+    if (!businessName || deviceLabel !== defaultDeviceLabel) return;
+    setDeviceLabel(t("redemptionMode.businessCounterLabel", { defaultValue: "{{name}} Counter", name: businessName.slice(0, 30) }));
+  }, [businessName, defaultDeviceLabel, deviceLabel, t]);
 
   const reloadOwnerSecurity = useCallback(async () => {
     if (!businessId) return;
@@ -214,11 +216,11 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       return;
     }
     if (!/^\d{4,6}$/.test(pin.trim())) {
-      setBanner({ message: t("redemptionMode.pinRequired", { defaultValue: "Enter a 4-6 digit exit PIN." }), tone: "error" });
+      setBanner({ message: t("redemptionMode.exitPinSetupRequired", { defaultValue: "Enter a 4-6 digit exit PIN." }), tone: "error" });
       return;
     }
     if (pin.trim() !== pinConfirm.trim()) {
-      setBanner({ message: t("redemptionMode.pinMismatch", { defaultValue: "Exit PINs do not match." }), tone: "error" });
+      setBanner({ message: t("redemptionMode.exitPinMismatch", { defaultValue: "Exit PINs do not match." }), tone: "error" });
       return;
     }
     setActivating(true);
@@ -552,7 +554,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                     {device.device_label}
                   </Text>
                   <Text style={{ color: device.active ? "#1b5e20" : theme.mutedText, fontWeight: "800", fontSize: 12 }}>
-                    {formatDeviceStatus(device)}
+                    {formatDeviceStatus(device, t)}
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: Spacing.sm }}>

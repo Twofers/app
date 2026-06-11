@@ -203,7 +203,7 @@ export default function RedeemScanner() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
           <Banner message={ownerSecurityError} tone="error" />
           <SecondaryButton
-            title={t("commonUi.retry", { defaultValue: "Try again" })}
+            title={t("commonUi.tryAgain", { defaultValue: "Try again" })}
             onPress={() => void loadOwnerSecurity()}
             disabled={ownerSecurityLoading}
           />

@@ -84,7 +84,8 @@ export default function RedemptionModeScreen() {
   }, [loading, router, session, state]);
 
   const statusText = useMemo(() => {
-    if (!state) return t("redemptionMode.locked", { defaultValue: "Redemption Mode" });
+    // redemptionMode.locked is the badge text ("LOCKED"); the subtitle wants the mode name.
+    if (!state) return t("redemptionMode.title", { defaultValue: "Redemption Mode" });
     return state.deviceLabel;
   }, [state, t]);
 
