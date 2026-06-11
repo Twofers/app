@@ -428,9 +428,13 @@ export default function AuthLandingScreen() {
           }}
         >
           <View style={{ alignItems: "center", marginBottom: Spacing.md }}>
+            {/* Dedicated auth-logo asset (NOT the adaptive-icon foreground, which must
+                keep its launcher safe-zone padding). Re-export penguin-logo.png as a
+                tightly cropped penguin with true alpha transparency — the current file
+                still carries a baked-in checkerboard from the original art export. */}
             <Image
-              source={require("../assets/images/android-icon-foreground.png")}
-              style={{ width: 118, height: 118, marginBottom: -Spacing.sm }}
+              source={require("../assets/images/penguin-logo.png")}
+              style={{ width: 88, height: 88, marginBottom: Spacing.xs }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
               accessibilityLabel={t("authLanding.heroA11y")}
