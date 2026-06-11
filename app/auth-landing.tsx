@@ -453,8 +453,8 @@ export default function AuthLandingScreen() {
             <Text
               style={{
                 marginTop: Spacing.xs,
-                fontSize: 14,
-                lineHeight: 20,
+                fontSize: 13,
+                lineHeight: 18,
                 color: theme.mutedText,
                 textAlign: "center",
               }}
@@ -677,7 +677,7 @@ export default function AuthLandingScreen() {
                 </>
               ) : null}
 
-              <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
                 {t("authLanding.emailLabel")}
               </Text>
               <TextInput
@@ -715,7 +715,7 @@ export default function AuthLandingScreen() {
                 </Text>
               ) : null}
 
-              <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
                 {t("authLanding.passwordLabel")}
               </Text>
               <TextInput
@@ -775,7 +775,7 @@ export default function AuthLandingScreen() {
 
               {isSignup && signupRole === "business" ? (
                 <View style={{ marginTop: Spacing.md }}>
-                  <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text, marginBottom: 6 }}>
+                  <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
                     {t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
                   </Text>
                   <TextInput
