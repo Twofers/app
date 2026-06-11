@@ -812,24 +812,6 @@ export default function AuthLandingScreen() {
                 <View style={{ height: Spacing.lg }} />
               )}
 
-              {!canSubmit && !busy ? (
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: theme.mutedText,
-                    textAlign: "center",
-                    marginBottom: Spacing.md,
-                  }}
-                  maxFontSizeMultiplier={1.15}
-                >
-                  {email.trim().length === 0 && pw.length === 0
-                    ? t("authLanding.hintEnterBoth")
-                    : email.trim().length === 0
-                      ? t("authLanding.hintEnterEmail")
-                      : t("authLanding.hintEnterPassword")}
-                </Text>
-              ) : null}
-
               <ScalePressable
                 disabled={!canSubmit}
                 onPress={() => void (isSignup ? handleSignUp() : handleLogIn())}
