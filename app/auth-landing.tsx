@@ -181,7 +181,9 @@ function RoleCard({
             {selected ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primaryText }} /> : null}
           </View>
         </View>
-        <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>{hint}</Text>
+        <Text maxFontSizeMultiplier={1.15} style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+          {hint}
+        </Text>
       </ScalePressable>
     </View>
   );
@@ -631,7 +633,7 @@ export default function AuthLandingScreen() {
                       selected={signupRole === "business"}
                       title={t("authLanding.roleBusiness")}
                       hint={t("authLanding.roleBusinessPolishedHint", {
-                        defaultValue: "Post BOGO offers, track claims, and scan redemptions.",
+                        defaultValue: "Post offers, track claims, and scan redemptions.",
                       })}
                       onPress={() => {
                         setSignupRole("business");

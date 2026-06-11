@@ -919,7 +919,7 @@
     "roleCustomerPolishedHint": "주변 오퍼를 찾고 티켓을 받아 매장에서 사용하세요.",
     "roleBusiness": "비즈니스",
     "roleBusinessHint": "오퍼를 게시하고 티켓을 사용하세요.",
-    "roleBusinessPolishedHint": "1+1 오퍼를 게시하고 클레임 현황을 확인하고 티켓을 스캔하세요.",
+    "roleBusinessPolishedHint": "오퍼를 게시하고 클레임을 확인하고 티켓을 스캔하세요.",
     "createAccount": "계정 만들기",
     "heroA11y": "TWOFER 펭귄",
     "emailLabel": "이메일",
