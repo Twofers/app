@@ -106,6 +106,29 @@ describe("exitRedemptionMode", () => {
     expect(h.secureStore.has(EXIT_TOKEN_KEY)).toBe(true);
   });
 
+  it("treats a 404 (device row gone) as device-gone and un-bricks to logged out", async () => {
+    seedLockedDevice();
+    h.invoke.mockResolvedValueOnce({ data: null, error: invokeError(404, "Device is not active.") });
+
+    await expect(exitRedemptionMode("1234")).resolves.toBeUndefined();
+
+    expect(h.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(h.setSession).not.toHaveBeenCalled();
+    expect(h.asyncStore.has(REDEMPTION_MODE_STATE_KEY)).toBe(false);
+    expect(h.secureStore.has(EXIT_TOKEN_KEY)).toBe(false);
+    expect(h.secureStore.has(STAFF_SESSION_KEY)).toBe(false);
+  });
+
+  it("does not treat non-404 server errors as device-gone", async () => {
+    seedLockedDevice();
+    h.invoke.mockResolvedValueOnce({ data: null, error: invokeError(429, "Too many incorrect PIN attempts. Try again later.") });
+
+    await expect(exitRedemptionMode("1234")).rejects.toThrow("Too many incorrect PIN attempts. Try again later.");
+
+    expect(h.signOut).not.toHaveBeenCalled();
+    expect(h.asyncStore.has(REDEMPTION_MODE_STATE_KEY)).toBe(true);
+  });
+
   it("with missing local exit credentials force-clears to logged out", async () => {
     h.asyncStore.set(REDEMPTION_MODE_STATE_KEY, JSON.stringify(STATE));
     // no exit token in secure storage

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { staffUserIdsToSweep } from "../_shared/redemption-sweep.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -71,6 +72,25 @@ serve(async (req) => {
       .eq("owner_id", user.id);
     if (bizErr) {
       console.error("delete-user-account: business lookup failed:", bizErr);
+    }
+
+    // Sever counter devices BEFORE the owner delete: staff Auth users are
+    // separate auth.users rows no FK cascade removes, and their refresh tokens
+    // must die with the account. Best-effort — never blocks the deletion.
+    // (Table may not exist until the Redemption Mode migration is applied;
+    // a lookup error is logged and skipped.)
+    const { data: staffDevices, error: devicesErr } = await supabaseAdmin
+      .from("redemption_devices")
+      .select("staff_user_id")
+      .eq("owner_id", user.id);
+    if (devicesErr) {
+      console.error("delete-user-account: redemption device lookup failed:", devicesErr);
+    }
+    for (const staffUserId of staffUserIdsToSweep(staffDevices, user.id)) {
+      const { error: staffDelErr } = await supabaseAdmin.auth.admin.deleteUser(staffUserId);
+      if (staffDelErr) {
+        console.error(`delete-user-account: staff user ${staffUserId} delete failed:`, staffDelErr);
+      }
     }
 
     // Explicit purge BEFORE the auth delete (20260705120008_purge_user_data_rpc.sql):

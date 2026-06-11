@@ -148,6 +148,11 @@ function randomInstallId(): string {
   return `${part()}${part()}-${part()}-${part()}-${part()}-${part()}${part()}${part()}`;
 }
 
+function invokeErrorStatus(error: unknown): number | null {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  return typeof Response !== "undefined" && ctx instanceof Response ? ctx.status : null;
+}
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   const ctx = (error as { context?: unknown } | null)?.context;
   if (typeof Response !== "undefined" && ctx instanceof Response) {
@@ -308,6 +313,13 @@ export async function exitRedemptionMode(pin: string): Promise<void> {
     timeout: EDGE_FUNCTION_TIMEOUT_MS,
   });
   if (error) {
+    // 404 means the device row no longer exists (owner/business deleted, or
+    // the device was removed). There is nothing left to protect — release the
+    // device to logged-out instead of bricking it on the PIN screen.
+    if (invokeErrorStatus(error) === 404) {
+      await forceClearRedemptionModeAndSignOut();
+      return;
+    }
     throw new Error(await invokeErrorMessage(error));
   }
 
