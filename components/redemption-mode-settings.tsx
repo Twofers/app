@@ -259,7 +259,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       title: t("redemptionMode.removeDeviceTitle", { defaultValue: "Remove redemption device?" }),
       message: t("redemptionMode.removeDeviceBody", {
         defaultValue:
-          "Removing this device stops future staff redemptions. If the device is lost or no longer in your control, change your account password too, because this app cannot remotely erase any owner session saved on that device.",
+          "Removing this device ends its staff session and stops future staff redemptions. The device holds no owner login.",
       }),
       confirmLabel: t("redemptionMode.removeDeviceCta", { defaultValue: "Remove device" }),
       cancelLabel: t("commonUi.cancel"),

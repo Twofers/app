@@ -815,7 +815,7 @@
     "deviceUpdateFailed": "No se pudo actualizar el dispositivo.",
     "devicesLoadFailed": "No se pudieron cargar los dispositivos de canje.",
     "removeDeviceTitle": "¿Eliminar dispositivo de canje?",
-    "removeDeviceBody": "Eliminar este dispositivo detiene los próximos canjes del personal. Si el dispositivo se perdió o ya no está bajo tu control, cambia también la contraseña de tu cuenta: la app no puede borrar a distancia la sesión del dueño guardada en ese dispositivo.",
+    "removeDeviceBody": "Eliminar este dispositivo cierra su sesión de personal y detiene los próximos canjes. El dispositivo no guarda ningún inicio de sesión del dueño.",
     "removeDeviceCta": "Eliminar dispositivo",
     "ownerPinTitle": "PIN de canje del dueño",
     "ownerPinSubtitle": "Desbloquea la pestaña Canjear una vez por sesión.",

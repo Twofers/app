@@ -169,13 +169,10 @@ export default function RedemptionModeScreen() {
     setExiting(true);
     setBanner(null);
     try {
-      const result = await exitRedemptionMode(exitPin.trim());
+      await exitRedemptionMode(exitPin.trim());
       await refresh();
-      if (result.ownerRestored) {
-        router.replace("/(tabs)/account" as Href);
-      } else {
-        router.replace("/auth-landing" as Href);
-      }
+      // No owner session lives on this device; exit always ends at login.
+      router.replace("/auth-landing" as Href);
     } catch (err) {
       setBanner({
         message: err instanceof Error ? err.message : t("redemptionMode.exitFailed", { defaultValue: "Could not exit Redemption Mode." }),

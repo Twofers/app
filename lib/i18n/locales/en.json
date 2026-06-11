@@ -815,7 +815,7 @@
     "deviceUpdateFailed": "Could not update device.",
     "devicesLoadFailed": "Could not load redemption devices.",
     "removeDeviceTitle": "Remove redemption device?",
-    "removeDeviceBody": "Removing this device stops future staff redemptions. If the device is lost or no longer in your control, change your account password too, because this app cannot remotely erase any owner session saved on that device.",
+    "removeDeviceBody": "Removing this device ends its staff session and stops future staff redemptions. The device holds no owner login.",
     "removeDeviceCta": "Remove device",
     "ownerPinTitle": "Owner redeem PIN",
     "ownerPinSubtitle": "Unlock the Redeem tab once per app session.",

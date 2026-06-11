@@ -7,7 +7,11 @@ import { supabase } from "./supabase";
 
 export const REDEMPTION_MODE_STATE_KEY = "twofer_redemption_mode_state_v1";
 const INSTALL_ID_KEY = "twofer_redemption_install_id_v1";
-const OWNER_SESSION_BACKUP_KEY = "twofer_redemption_owner_session_v1";
+// Deliberately NO owner-session backup key (audit Finding 1 / batch R3): the
+// locked device holds only the staff session and the exit token. Exiting
+// Redemption Mode always ends signed out; the owner logs in fresh.
+// Legacy key from pre-R3 builds, deleted defensively on every clear:
+const LEGACY_OWNER_SESSION_BACKUP_KEY = "twofer_redemption_owner_session_v1";
 const STAFF_SESSION_BACKUP_KEY = "twofer_redemption_staff_session_v1";
 const EXIT_TOKEN_KEY = "twofer_redemption_exit_token_v1";
 
@@ -185,7 +189,7 @@ async function saveRedemptionModeState(state: RedemptionModeState): Promise<void
 export async function clearRedemptionModeStorage(): Promise<void> {
   await Promise.all([
     AsyncStorage.removeItem(REDEMPTION_MODE_STATE_KEY).catch(() => {}),
-    secureDeleteItem(OWNER_SESSION_BACKUP_KEY).catch(() => {}),
+    secureDeleteItem(LEGACY_OWNER_SESSION_BACKUP_KEY).catch(() => {}),
     secureDeleteItem(STAFF_SESSION_BACKUP_KEY).catch(() => {}),
     secureDeleteItem(EXIT_TOKEN_KEY).catch(() => {}),
   ]);
@@ -236,7 +240,6 @@ export async function activateRedemptionMode(args: {
   }
 
   const installId = await getOrCreateRedemptionInstallId();
-  await secureSetItem(OWNER_SESSION_BACKUP_KEY, JSON.stringify(ownerSession));
 
   const { data, error } = await supabase.functions.invoke("activate-redemption-mode", {
     body: {
@@ -249,7 +252,6 @@ export async function activateRedemptionMode(args: {
   });
 
   if (error) {
-    await secureDeleteItem(OWNER_SESSION_BACKUP_KEY).catch(() => {});
     throw new Error(await invokeErrorMessage(error));
   }
 
@@ -259,7 +261,6 @@ export async function activateRedemptionMode(args: {
     exit_token?: string;
   };
   if (!result.session?.access_token || !result.session.refresh_token || !result.device?.id || !result.exit_token) {
-    await secureDeleteItem(OWNER_SESSION_BACKUP_KEY).catch(() => {});
     throw new Error("Server did not return a restricted staff session.");
   }
 
@@ -288,14 +289,14 @@ export async function activateRedemptionMode(args: {
   return state;
 }
 
-export async function exitRedemptionMode(pin: string): Promise<{ ownerRestored: boolean }> {
+export async function exitRedemptionMode(pin: string): Promise<void> {
   const [state, exitToken] = await Promise.all([
     loadRedemptionModeState(),
     secureGetItem(EXIT_TOKEN_KEY),
   ]);
   if (!state || !exitToken) {
     await forceClearRedemptionModeAndSignOut();
-    return { ownerRestored: false };
+    return;
   }
 
   const { error } = await supabase.functions.invoke("exit-redemption-mode", {
@@ -310,22 +311,9 @@ export async function exitRedemptionMode(pin: string): Promise<{ ownerRestored: 
     throw new Error(await invokeErrorMessage(error));
   }
 
-  await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-
-  const ownerSession = safeParseSession(await secureGetItem(OWNER_SESSION_BACKUP_KEY));
-  if (ownerSession) {
-    const { error: restoreError } = await supabase.auth.setSession({
-      access_token: ownerSession.access_token,
-      refresh_token: ownerSession.refresh_token,
-    });
-    if (!restoreError) {
-      await clearRedemptionModeStorage();
-      return { ownerRestored: true };
-    }
-  }
-
+  // The device holds no owner session by design: a successful exit always
+  // ends signed out and the owner logs in fresh.
   await forceClearRedemptionModeAndSignOut();
-  return { ownerRestored: false };
 }
 
 async function invokeStaffRedemption(
