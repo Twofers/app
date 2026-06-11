@@ -113,6 +113,7 @@ The repo carries `CLAUDE.md` and `AGENTS.md` at root. Those rules govern all age
 - iOS cannot be built or signed on the Windows dev machine. All iOS builds run on EAS cloud. All iOS device testing runs through TestFlight on a real iPhone.
 - Preserve the single remaining EAS cloud credit. Prefer local Android builds where possible.
 - Diagnose before building. Run a read-only audit and surface all issues before writing any fix. Review the full fix set for interactions and regressions before applying anything.
+- After applying ANY migration that touches RLS policies or policy helper functions, immediately run `node scripts/probe-rls-smoke.mjs` (signs in with a real user JWT and exercises the core tables). SQL-editor checks run as postgres and bypass RLS, so they cannot catch policy lockouts. Added 2026-06-11 after the `is_redeemer_session()` NULL bug locked every signed-in user out of the app: in policy expressions, a JWT-claim comparison on a missing claim yields NULL, and `NOT NULL` is still NULL, which a RESTRICTIVE policy treats as deny. Always wrap policy-helper boolean returns in `COALESCE(..., false)`.
 
 ---
 
