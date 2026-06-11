@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { hashPin, normalizePin, verifyPin } from "../_shared/redemption-crypto.ts";
+import { pinRotationRequiresCurrentPin } from "../_shared/owner-pin-policy.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_PIN_ATTEMPTS = 5;
@@ -92,7 +93,7 @@ serve(async (req) => {
       return forbiddenForRedeemerResponse(corsHeaders);
     }
 
-    let body: { action?: unknown; business_id?: unknown; pin?: unknown; new_pin?: unknown };
+    let body: { action?: unknown; business_id?: unknown; pin?: unknown; new_pin?: unknown; current_pin?: unknown };
     try {
       body = await req.json();
     } catch {
@@ -162,6 +163,15 @@ serve(async (req) => {
       const pin = normalizePin(body.pin);
       if (!pin) {
         return json({ error: "Redemption PIN must be 4 to 6 digits." }, 400, corsHeaders);
+      }
+      // A stored hash means a PIN is already set: rotating it requires the
+      // current PIN. Missing and wrong current PIN return the exact failed-verify
+      // shape (and count toward its lockout) so there is no oracle.
+      if (pinRotationRequiresCurrentPin(row)) {
+        const currentPin = normalizePin(body.current_pin);
+        if (!currentPin || !(await verifyPin(currentPin, row!.pin_hash as string))) {
+          return failPin(supabaseAdmin, businessId, row!, corsHeaders);
+        }
       }
       const pinHash = await hashPin(pin);
       const nowIso = now.toISOString();
@@ -257,6 +267,10 @@ serve(async (req) => {
           business_id: businessId,
           owner_id: user.id,
           enabled: false,
+          // Clear the hash so a disabled business holds no dormant PIN:
+          // re-enabling is a fresh setup, and "hash exists" always means
+          // "rotation requires the current PIN" (see enable above).
+          pin_hash: null,
           pin_failed_attempts: 0,
           pin_locked_until: null,
           updated_at: now.toISOString(),

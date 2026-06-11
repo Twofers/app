@@ -150,7 +150,8 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     try {
       await disableOwnerRedemptionPin(businessId, pinValue || undefined);
       clearUnlock(businessId);
-      setOwnerSecurity({ enabled: false, hasPin: true, lockedUntil: null });
+      // Server clears pin_hash on disable; re-enabling is a fresh setup.
+      setOwnerSecurity({ enabled: false, hasPin: false, lockedUntil: null });
       setOwnerDisablePin("");
       setBanner({
         message: t("redemptionMode.ownerPinDisabled", { defaultValue: "Owner redemption PIN disabled." }),
