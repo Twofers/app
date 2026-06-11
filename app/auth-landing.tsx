@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -213,6 +214,7 @@ export default function AuthLandingScreen() {
   // picker — it routes by the role stored on the profile.
   const [screenMode, setScreenMode] = useState<AuthScreenMode>("login");
   const [signupRole, setSignupRole] = useState<TabMode>("customer");
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -408,9 +410,13 @@ export default function AuthLandingScreen() {
   const isSignup = screenMode === "signup";
 
   async function chooseLocale(locale: AppLocale) {
+    setLangPickerOpen(false);
     await setUiLocalePreference(locale, { manual: true });
     await i18n.changeLanguage(locale);
   }
+
+  const currentLocale: AppLocale =
+    APP_LOCALES.find((locale) => i18n.language.startsWith(locale)) ?? "en";
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -461,45 +467,6 @@ export default function AuthLandingScreen() {
             >
               {isSignup && signupRole === "business" ? businessSubtitle : consumerSubtitle}
             </Text>
-            <View style={{ marginTop: Spacing.md, alignItems: "center" }}>
-              <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-                {APP_LOCALES.map((locale) => {
-                  const active = i18n.language.startsWith(locale);
-                  return (
-                    <Pressable
-                      key={locale}
-                      onPress={() => void chooseLocale(locale)}
-                      accessibilityRole="button"
-                      accessibilityLabel={LOCALE_LABELS[locale]}
-                      accessibilityState={{ selected: active }}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      style={{
-                        minHeight: 44,
-                        minWidth: 48,
-                        borderRadius: Radii.sm,
-                        // Border grows 1→2 when active; padding shrinks 3→2 so the
-                        // outer size stays fixed and the row doesn't shift.
-                        padding: active ? 2 : 3,
-                        borderWidth: active ? 2 : 1,
-                        borderColor: active ? theme.primary : theme.border,
-                        backgroundColor: theme.surface,
-                        opacity: active ? 1 : 0.6,
-                        boxShadow: active
-                          ? "0px 4px 10px rgba(255,159,28,0.25)"
-                          : "0px 1px 3px rgba(0,0,0,0.08)",
-                        elevation: active ? 3 : 1,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <View style={{ borderRadius: Radii.sm - 2, overflow: "hidden" }}>
-                        <LocaleFlag locale={locale} width={40} />
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
           </View>
 
           {authError ? <Banner message={authError} tone="error" /> : null}
@@ -912,6 +879,92 @@ export default function AuthLandingScreen() {
           </View>
         </ScrollView>
       </KeyboardScreen>
+
+      {/* Compact language selector pinned top-right; the flag cards used to sit
+          inline under the tagline. Same chooseLocale flow, just behind a popover. */}
+      <View
+        style={{
+          position: "absolute",
+          top: insets.top + Spacing.sm,
+          right: Spacing.lg,
+          alignItems: "flex-end",
+          zIndex: 10,
+        }}
+      >
+        <Pressable
+          onPress={() => setLangPickerOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel={t("authLanding.changeLanguage", { defaultValue: "Change language" })}
+          accessibilityState={{ expanded: langPickerOpen }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 2,
+            minHeight: 36,
+            paddingVertical: 4,
+            paddingLeft: 6,
+            paddingRight: 2,
+            borderRadius: Radii.sm,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            boxShadow: "0px 1px 3px rgba(0,0,0,0.08)",
+            elevation: 1,
+          }}
+        >
+          <View style={{ borderRadius: 3, overflow: "hidden" }}>
+            <LocaleFlag locale={currentLocale} width={26} />
+          </View>
+          <MaterialIcons
+            name={langPickerOpen ? "arrow-drop-up" : "arrow-drop-down"}
+            size={20}
+            color={theme.mutedText}
+          />
+        </Pressable>
+        {langPickerOpen ? (
+          <View
+            style={{
+              marginTop: 6,
+              borderRadius: Radii.md,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              boxShadow: "0px 6px 16px rgba(0,0,0,0.14)",
+              elevation: 6,
+              overflow: "hidden",
+            }}
+          >
+            {APP_LOCALES.map((locale) => {
+              const active = locale === currentLocale;
+              return (
+                <Pressable
+                  key={locale}
+                  onPress={() => void chooseLocale(locale)}
+                  accessibilityRole="button"
+                  accessibilityLabel={LOCALE_LABELS[locale]}
+                  accessibilityState={{ selected: active }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: Spacing.sm,
+                    minHeight: 44,
+                    paddingHorizontal: Spacing.md,
+                    backgroundColor: active ? theme.surfaceMuted : theme.surface,
+                  }}
+                >
+                  <View style={{ borderRadius: 2, overflow: "hidden" }}>
+                    <LocaleFlag locale={locale} width={22} />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: active ? "700" : "500", color: theme.text }}>
+                    {LOCALE_LABELS[locale]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

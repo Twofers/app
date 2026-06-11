@@ -908,6 +908,7 @@
   },
   "authLanding": {
     "title": "TWOFER",
+    "changeLanguage": "Cambiar idioma",
     "subtitle": "Ofertas 2x1 de cafeterías y panaderías locales.",
     "subtitleBusiness": "Atrae nuevos clientes con ofertas 2x1.",
     "subtitleConsumerPolished": "Reclama ofertas 2x1 locales de gran valor cerca de ti.",

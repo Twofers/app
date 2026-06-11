@@ -908,6 +908,7 @@
   },
   "authLanding": {
     "title": "TWOFER",
+    "changeLanguage": "Change language",
     "subtitle": "Two-for-one deals from local cafes and bakeries.",
     "subtitleBusiness": "Bring in new customers with two-for-one offers.",
     "roleTitle": "Choose your account type",

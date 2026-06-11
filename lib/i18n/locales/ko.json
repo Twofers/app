@@ -908,6 +908,7 @@
   },
   "authLanding": {
     "title": "TWOFER",
+    "changeLanguage": "언어 변경",
     "subtitle": "동네 카페·베이커리의 1+1 딜.",
     "subtitleBusiness": "1+1 오퍼로 새 고객을 모으세요.",
     "subtitleConsumerPolished": "가까운 곳의 알찬 1+1 딜을 받아보세요.",
