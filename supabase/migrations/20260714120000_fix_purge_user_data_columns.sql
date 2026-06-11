@@ -50,7 +50,9 @@ EXCEPTION
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.purge_user_data(uuid) FROM PUBLIC;
+-- Supabase default privileges grant EXECUTE to anon/authenticated on every new
+-- function, and REVOKE FROM PUBLIC does not remove those explicit grants.
+REVOKE EXECUTE ON FUNCTION public.purge_user_data(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.purge_user_data(uuid) TO service_role;
 
 COMMENT ON FUNCTION public.purge_user_data(uuid)

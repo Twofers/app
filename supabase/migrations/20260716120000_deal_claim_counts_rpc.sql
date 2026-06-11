@@ -23,7 +23,9 @@ AS $$
   GROUP BY dc.deal_id;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.deal_claim_counts(uuid[]) FROM PUBLIC;
+-- Supabase default privileges grant EXECUTE to anon on every new function,
+-- and REVOKE FROM PUBLIC does not remove that explicit grant.
+REVOKE EXECUTE ON FUNCTION public.deal_claim_counts(uuid[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.deal_claim_counts(uuid[]) TO authenticated;
 
 COMMENT ON FUNCTION public.deal_claim_counts(uuid[])
