@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "../lib/supabase";
+import { fetchOwnerBusiness } from "../lib/owner-business";
 import type { BusinessContextPayload } from "../lib/ad-variants";
 
 type BusinessInfo = {
@@ -115,13 +116,11 @@ export function useBusiness() {
     setUserId(uid);
     setSessionEmail(session?.user?.email ?? null);
 
-    const { data, error: bizError } = await supabase
-      .from("businesses")
-      .select(
-        "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text",
-      )
-      .eq("owner_id", uid)
-      .maybeSingle();
+    // PII columns (contact_name, business_email, tone) and owner_id filters are
+    // only readable via the get_my_business() SECURITY DEFINER RPC once the
+    // column-grant migration lands; the helper falls back to a direct select
+    // while the RPC doesn't exist yet.
+    const { row: data, error: bizError } = await fetchOwnerBusiness(supabase, uid);
 
     if (bizError) {
       setBusiness(null);

@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { fetchOwnerBusiness } from "@/lib/owner-business";
 import type { TabMode } from "@/lib/tab-mode";
 
 /** auth user_metadata key set at signUp so the chosen role survives email verification. */
@@ -27,13 +28,11 @@ export async function fetchStoredRoleForUser(userId: string): Promise<TabMode | 
 /** Spec rule for accounts without a stored role: owns a businesses row -> business, else customer. */
 export async function deriveRoleFromData(userId: string): Promise<TabMode> {
   try {
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("id")
-      .eq("owner_id", userId)
-      .limit(1)
-      .maybeSingle();
-    if (!error && data) return "business";
+    // An `owner_id` filter needs column SELECT privilege once the businesses
+    // PII column-grant migration lands; fetchOwnerBusiness routes through the
+    // get_my_business() RPC (with a pre-migration direct-select fallback).
+    const { row, error } = await fetchOwnerBusiness(supabase, userId);
+    if (!error && row) return "business";
   } catch {
     /* fall through to customer */
   }

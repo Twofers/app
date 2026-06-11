@@ -15,6 +15,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
+import { fetchOwnerBusiness } from "@/lib/owner-business";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
@@ -167,18 +168,11 @@ export default function BusinessSetupScreen() {
     if (!uid) return;
     let cancelled = false;
     void (async () => {
-      const { data, error } = await supabase
-        .from("businesses")
-        .select("name,address,phone,short_description")
-        .eq("owner_id", uid)
-        .maybeSingle();
-      if (cancelled || error || !data) return;
-      const row = data as {
-        name: string | null;
-        address: string | null;
-        phone: string | null;
-        short_description: string | null;
-      };
+      // Owner reads of `businesses` go through get_my_business() — an
+      // `owner_id` filter stops working once the PII column-grant migration
+      // lands (the helper still falls back to a direct select pre-migration).
+      const { row, error } = await fetchOwnerBusiness(supabase, uid);
+      if (cancelled || error || !row) return;
       setBusinessName((prev) => prev || (row.name ?? ""));
       setAddress((prev) => prev || (row.address ?? ""));
       setPhone((prev) => prev || (row.phone ?? ""));
@@ -383,23 +377,34 @@ export default function BusinessSetupScreen() {
       const addr = trimmed.address;
       const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
 
-      const { data: bizData, error } = await supabase
-        .from("businesses")
-        .upsert(
-          {
-            owner_id: uid,
-            name: trimmed.businessName,
-            phone: trimmed.phone || null,
-            address: addr,
-            location: addr,
-            short_description: trimmed.shortDescription || null,
-            category: resolvedCategory || null,
-            hours_text: resolvedHours || null,
-          },
-          { onConflict: "owner_id" },
-        )
-        .select("id")
-        .single();
+      // Not an upsert on owner_id anymore: `ON CONFLICT (owner_id) DO UPDATE`
+      // reads excluded.owner_id, which needs SELECT privilege on that column —
+      // revoked by the PII column-grant migration. Look up the existing row via
+      // get_my_business() (helper falls back pre-migration) and branch instead.
+      const { row: existingBiz, error: existingErr } = await fetchOwnerBusiness(supabase, uid);
+      if (existingErr) throw new Error(existingErr.message);
+
+      const bizPayload = {
+        name: trimmed.businessName,
+        phone: trimmed.phone || null,
+        address: addr,
+        location: addr,
+        short_description: trimmed.shortDescription || null,
+        category: resolvedCategory || null,
+        hours_text: resolvedHours || null,
+      };
+      const { data: bizData, error } = existingBiz
+        ? await supabase
+            .from("businesses")
+            .update(bizPayload)
+            .eq("id", existingBiz.id)
+            .select("id")
+            .single()
+        : await supabase
+            .from("businesses")
+            .insert({ owner_id: uid, ...bizPayload })
+            .select("id")
+            .single();
       if (error) throw error;
 
       // Upload logo if picked
