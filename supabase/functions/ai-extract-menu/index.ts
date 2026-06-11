@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
@@ -90,6 +91,9 @@ serve(async (req) => {
         JSON.stringify({ error: "Unauthorized. Please log in.", error_code: "UNAUTHORIZED" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: Record<string, unknown>;

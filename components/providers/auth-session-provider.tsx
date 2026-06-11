@@ -26,7 +26,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (error) {
           // Stale/invalid refresh token — clear it so the user lands on login
-          void supabase.auth.signOut().finally(() => {
+          void supabase.auth.signOut({ scope: "local" }).finally(() => {
             if (!cancelled) {
               setSession(null);
               setIsInitialLoading(false);
@@ -42,7 +42,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        void supabase.auth.signOut().catch(() => {});
+        void supabase.auth.signOut({ scope: "local" }).catch(() => {});
         setSession(null);
         setIsInitialLoading(false);
       });

@@ -10,6 +10,7 @@ const SKIP_ROOTS = new Set([
   "auth-landing",
   "auth-callback",
   "onboarding",
+  "redemption-mode",
   "consumer-profile-setup",
   "business-setup",
   "forgot-password",

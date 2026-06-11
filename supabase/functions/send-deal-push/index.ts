@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -34,6 +35,9 @@ serve(async (req) => {
     } = await authClient.auth.getUser();
     if (authErr || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: { deal_id?: string };

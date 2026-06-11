@@ -342,7 +342,7 @@ export default function SettingsScreen() {
     setDeleteBusy(true);
     try {
       await deleteUserAccount();
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       await clearCachedRole();
       router.replace("/auth-landing" as Href);
     } catch (err: unknown) {

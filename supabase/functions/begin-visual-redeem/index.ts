@@ -5,6 +5,7 @@ import {
   isPastRedeemDeadline,
 } from "../_shared/claim-redeem.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -38,6 +39,9 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: { claim_id?: string };

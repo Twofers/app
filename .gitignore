@@ -51,6 +51,7 @@ screenshots/
 qa-screens/
 *.apk
 *.aab
+*.bundle
 
 claude-history-export/
 

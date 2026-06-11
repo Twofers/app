@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { loadSubscriptionPricingFromAppConfig } from "../_shared/subscription-pricing.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -44,6 +45,9 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     const pricing = await loadSubscriptionPricingFromAppConfig(supabaseAdmin);

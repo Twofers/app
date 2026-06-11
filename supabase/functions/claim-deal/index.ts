@@ -9,6 +9,7 @@ import {
   decideOwnerClaimPush,
   resolveOwnerPushLocale,
 } from "../_shared/owner-claim-push.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -142,6 +143,9 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     // 📦 Parse request body

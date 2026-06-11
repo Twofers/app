@@ -4,6 +4,7 @@ import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-
 import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 type AiResult = {
   title: string;
@@ -61,6 +62,9 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: any;

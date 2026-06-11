@@ -6,6 +6,7 @@ import type { PostgrestError } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadSubscriptionPricingFromAppConfig } from "../_shared/subscription-pricing.ts";
 import { selectMonthlyTierPriceId } from "../_shared/stripe-price-selection.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
 type Tier = "pro" | "premium";
 
@@ -54,6 +55,9 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (isRedeemerUser(user)) {
+      return forbiddenForRedeemerResponse(corsHeaders);
     }
 
     let body: any;

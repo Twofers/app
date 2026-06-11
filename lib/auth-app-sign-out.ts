@@ -28,7 +28,7 @@ export async function signOutAndRedirectToAuthLanding(params: {
     await clearCachedRole();
 
     // This is the critical step — always attempt sign-out
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     replace("/auth-landing" as Href);
     return { ok: true };
   } catch (e: unknown) {
