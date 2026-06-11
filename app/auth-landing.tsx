@@ -512,7 +512,7 @@ export default function AuthLandingScreen() {
                   style={{
                     fontSize: 16,
                     fontWeight: "700",
-                    color: theme.accentText,
+                    color: theme.primary,
                     opacity: resendBusy || resendCooldown > 0 ? 0.45 : 1,
                   }}
                 >
@@ -532,7 +532,7 @@ export default function AuthLandingScreen() {
                 }}
                 style={{ marginTop: Spacing.lg, alignSelf: "center", paddingVertical: Spacing.sm }}
               >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.accentText }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.primary }}>
                   {t("authLanding.backToSignIn")}
                 </Text>
               </Pressable>
@@ -799,7 +799,7 @@ export default function AuthLandingScreen() {
                   }}
                 >
                   <Text
-                    style={{ fontSize: 14, fontWeight: "700", color: theme.accentText, opacity: busy ? 0.45 : 1, textAlign: "center" }}
+                    style={{ fontSize: 14, fontWeight: "700", color: theme.primary, opacity: busy ? 0.45 : 1, textAlign: "center" }}
                     numberOfLines={2}
                     adjustsFontSizeToFit
                     minimumFontScale={0.8}
