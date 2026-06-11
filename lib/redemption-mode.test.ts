@@ -24,10 +24,14 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
     removeItem: async (k: string) => void h.asyncStore.delete(k),
   },
 }));
-vi.mock("expo-secure-store", () => ({
-  getItemAsync: async (k: string) => h.secureStore.get(k) ?? null,
-  setItemAsync: async (k: string, v: string) => void h.secureStore.set(k, v),
-  deleteItemAsync: async (k: string) => void h.secureStore.delete(k),
+// Mock the local wrapper module, NOT the "expo-secure-store" package: the
+// source loads the package via a dynamic import, and on the Linux CI runner
+// vi.mock did not intercept that resolution — the real Expo module entered
+// the graph and the (error-swallowing) secure deletes silently did nothing.
+vi.mock("./redemption-secure-store", () => ({
+  secureGetItem: async (k: string) => h.secureStore.get(k) ?? null,
+  secureSetItem: async (k: string, v: string) => void h.secureStore.set(k, v),
+  secureDeleteItem: async (k: string) => void h.secureStore.delete(k),
 }));
 vi.mock("./supabase", () => ({
   supabase: {

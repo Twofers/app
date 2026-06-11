@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session } from "@supabase/supabase-js";
-import { Platform } from "react-native";
 import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "./functions";
 import { isRedeemerSessionLike, normalizeRedemptionCode } from "./redemption-mode-logic";
+import { secureDeleteItem, secureGetItem, secureSetItem } from "./redemption-secure-store";
 import { supabase } from "./supabase";
 
 export const REDEMPTION_MODE_STATE_KEY = "twofer_redemption_mode_state_v1";
@@ -14,8 +14,6 @@ const INSTALL_ID_KEY = "twofer_redemption_install_id_v1";
 const LEGACY_OWNER_SESSION_BACKUP_KEY = "twofer_redemption_owner_session_v1";
 const STAFF_SESSION_BACKUP_KEY = "twofer_redemption_staff_session_v1";
 const EXIT_TOKEN_KEY = "twofer_redemption_exit_token_v1";
-
-const memorySecureStore = new Map<string, string>();
 
 export type RedemptionModeState = {
   active: true;
@@ -51,56 +49,6 @@ export type StaffRedemptionResult = {
   redeemed_at?: string | null;
   device_label?: string | null;
 };
-
-function hasWindow(): boolean {
-  return typeof window !== "undefined";
-}
-
-async function secureGetItem(key: string): Promise<string | null> {
-  if (Platform.OS === "web") {
-    if (!hasWindow()) return memorySecureStore.get(key) ?? null;
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return memorySecureStore.get(key) ?? null;
-    }
-  }
-  const SecureStore = await import("expo-secure-store");
-  return SecureStore.getItemAsync(key);
-}
-
-async function secureSetItem(key: string, value: string): Promise<void> {
-  if (Platform.OS === "web") {
-    if (!hasWindow()) {
-      memorySecureStore.set(key, value);
-      return;
-    }
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      memorySecureStore.set(key, value);
-    }
-    return;
-  }
-  const SecureStore = await import("expo-secure-store");
-  await SecureStore.setItemAsync(key, value);
-}
-
-async function secureDeleteItem(key: string): Promise<void> {
-  if (Platform.OS === "web") {
-    memorySecureStore.delete(key);
-    if (hasWindow()) {
-      try {
-        window.localStorage.removeItem(key);
-      } catch {
-        /* noop */
-      }
-    }
-    return;
-  }
-  const SecureStore = await import("expo-secure-store");
-  await SecureStore.deleteItemAsync(key);
-}
 
 function safeParseSession(value: string | null): Session | null {
   if (!value) return null;
