@@ -23,6 +23,7 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 
 - No duplicate timestamp prefixes on disk for *different* features (if two files share a prefix in Git history, confirm only the intended one ran on prod).
 - `supabase db push` / CI against staging before prod, if available.
+- **Every NEW table** created after `20260712120000` (Redemption Mode) ships with its own `redeemer_<table>_block_all` restrictive RLS policy in the same migration — the Redemption Mode block-all loop only covers tables that existed when it ran (see `docs/redemption-mode-rls-checklist.md`).
 
 ---
 
