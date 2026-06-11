@@ -328,6 +328,22 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Staff redemption brute-force lockout (Batch 6 parity for the staff path).
+-- Counter devices sit behind one shop IP, so the existing (business_id, ip)
+-- scoping cannot tell devices apart; scope per device instead. The column is
+-- added here because failed_redeem_attempts is already applied in prod and
+-- redemption_devices first exists in this migration.
+ALTER TABLE public.failed_redeem_attempts
+  ADD COLUMN IF NOT EXISTS redemption_device_id uuid
+    REFERENCES public.redemption_devices(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_failed_redeem_attempts_device_lookup
+  ON public.failed_redeem_attempts (redemption_device_id, attempted_at DESC)
+  WHERE redemption_device_id IS NOT NULL;
+
+COMMENT ON COLUMN public.failed_redeem_attempts.redemption_device_id
+  IS 'Set by staff-redemption: failed guesses are counted per counter device, not per IP.';
+
 DO $$
 BEGIN
   IF to_regclass('public.app_analytics_events_backup_20260708') IS NOT NULL THEN
