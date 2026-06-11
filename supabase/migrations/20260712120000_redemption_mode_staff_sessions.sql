@@ -90,6 +90,11 @@ REVOKE ALL ON public.redemption_devices FROM anon, authenticated;
 REVOKE ALL ON public.redemptions FROM anon, authenticated;
 REVOKE ALL ON public.owner_redemption_security FROM anon, authenticated;
 
+-- Owners read their own redemption history directly (no secret columns live on
+-- redemptions). Without this grant the redemptions_owner_read policy below is
+-- dead: RLS policies filter rows but cannot substitute for a missing GRANT.
+GRANT SELECT ON public.redemptions TO authenticated;
+
 COMMENT ON TABLE public.redemption_devices
   IS 'Restricted staff/counter devices for Redemption Mode. Contains secret hashes; read/write through owner Edge Functions only.';
 
@@ -186,11 +191,17 @@ AS $$
     );
 $$;
 
-REVOKE ALL ON FUNCTION public.redemption_claim_input_kind(text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.is_redeemer_session() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.redeemer_business_id() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.redeemer_device_id() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.is_active_redeemer_for_business(uuid) FROM PUBLIC;
+-- Supabase default privileges grant EXECUTE to anon/authenticated on every new
+-- function, and REVOKE FROM PUBLIC alone does NOT remove those explicit grants
+-- (prod-verified 2026-06-10 for purge_user_data / deal_claim_counts, fd1e98e).
+-- authenticated keeps EXECUTE: is_redeemer_session / is_active_redeemer_for_business
+-- run inside RLS policy expressions evaluated as the calling role, and the
+-- claim helpers only echo the caller's own JWT.
+REVOKE ALL ON FUNCTION public.redemption_claim_input_kind(text, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_redeemer_session() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.redeemer_business_id() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.redeemer_device_id() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_active_redeemer_for_business(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.redemption_claim_input_kind(text, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.is_redeemer_session() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.redeemer_business_id() TO authenticated, service_role;
@@ -300,6 +311,7 @@ BEGIN
     'deal_shares',
     'failed_redeem_attempts',
     'owner_redemption_security',
+    'redemptions',
     'app_config',
     'rate_limits'
   ]
@@ -606,8 +618,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.preview_staff_redemption(text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.confirm_staff_redemption(text, text) FROM PUBLIC;
+-- anon must not be able to invoke the staff RPCs at all (see grant note above).
+REVOKE ALL ON FUNCTION public.preview_staff_redemption(text, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.confirm_staff_redemption(text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.preview_staff_redemption(text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.confirm_staff_redemption(text, text) TO authenticated;
 
@@ -736,11 +749,13 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.validate_business_invite(text) FROM public;
+-- CREATE OR REPLACE preserves whatever ACL prod already has on these three, so
+-- strip anon explicitly here too (their original migrations only revoked PUBLIC).
+REVOKE ALL ON FUNCTION public.validate_business_invite(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.validate_business_invite(text) TO authenticated;
-REVOKE ALL ON FUNCTION public.report_business(uuid, text, text, uuid) FROM public;
+REVOKE ALL ON FUNCTION public.report_business(uuid, text, text, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.report_business(uuid, text, text, uuid) TO authenticated;
-REVOKE ALL ON FUNCTION public.report_user(uuid, text, text) FROM public;
+REVOKE ALL ON FUNCTION public.report_user(uuid, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.report_user(uuid, text, text) TO authenticated;
 
 COMMIT;
