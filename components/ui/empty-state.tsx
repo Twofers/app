@@ -44,7 +44,7 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
           }}
         >
           <Image
-            source={require("../../assets/images/splash-icon.png")}
+            source={require("../../assets/images/penguin-auth-512.png")}
             style={{ width: 34, height: 34, opacity: 0.95 }}
             resizeMode="contain"
             accessibilityIgnoresInvertColors
