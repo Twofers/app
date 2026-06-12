@@ -227,6 +227,7 @@ export default function AuthLandingScreen() {
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [pwError, setPwError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [signUpAwaitingVerification, setSignUpAwaitingVerification] = useState(false);
@@ -248,11 +249,11 @@ export default function AuthLandingScreen() {
   }, [resendCooldown]);
 
   const busy = busyAction !== null;
-  const canSubmit = !busy && email.trim().length > 0 && pw.length > 0;
 
   function clearFeedback() {
     setAuthError(null);
     setEmailError(null);
+    setPwError(null);
     setInviteError(null);
   }
 
@@ -262,15 +263,25 @@ export default function AuthLandingScreen() {
     clearFeedback();
   }
 
-  function validateEmail(): boolean {
+  // The submit button stays enabled (full brand orange) at all times; tapping it
+  // with bad input surfaces inline errors under the offending fields instead.
+  function validateFields(): boolean {
+    let ok = true;
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setEmailError(
         t("authLanding.invalidEmail", { defaultValue: "Please enter a valid email address" }),
       );
-      return false;
+      ok = false;
+    } else {
+      setEmailError(null);
     }
-    setEmailError(null);
-    return true;
+    if (pw.length === 0) {
+      setPwError(t("authLanding.passwordRequired", { defaultValue: "Please enter your password" }));
+      ok = false;
+    } else {
+      setPwError(null);
+    }
+    return ok;
   }
 
   function onEmailChange(v: string) {
@@ -285,8 +296,8 @@ export default function AuthLandingScreen() {
   }
 
   async function handleLogIn() {
-    if (!canSubmit) return;
-    if (!validateEmail()) return;
+    if (busy) return;
+    if (!validateFields()) return;
     setBusyAction("login");
     clearFeedback();
     logAuthPath("normal_login", email.trim());
@@ -325,8 +336,8 @@ export default function AuthLandingScreen() {
   }
 
   async function handleSignUp() {
-    if (!canSubmit) return;
-    if (!validateEmail()) return;
+    if (busy) return;
+    if (!validateFields()) return;
     if (signupRole === "business" && !isValidBusinessInviteCode(inviteCode)) {
       setInviteError(
         t("authLanding.errInviteCode", {
@@ -678,7 +689,7 @@ export default function AuthLandingScreen() {
               {emailError ? (
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     color: theme.danger,
                     marginBottom: Spacing.md,
                   }}
@@ -702,7 +713,7 @@ export default function AuthLandingScreen() {
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
-                  borderColor: inputBorder,
+                  borderColor: pwError ? theme.danger : inputBorder,
                   borderRadius: Radii.md,
                   padding: Spacing.lg,
                   fontSize: 16,
@@ -710,6 +721,11 @@ export default function AuthLandingScreen() {
                   color: theme.text,
                 }}
               />
+              {pwError ? (
+                <Text style={{ fontSize: 12, color: theme.danger, marginTop: Spacing.xs }}>
+                  {pwError}
+                </Text>
+              ) : null}
 
               {isSignup && pw.length > 0 ? (
                 (() => {
@@ -816,7 +832,7 @@ export default function AuthLandingScreen() {
               )}
 
               <ScalePressable
-                disabled={!canSubmit}
+                disabled={busy}
                 onPress={() => void (isSignup ? handleSignUp() : handleLogIn())}
                 accessibilityLabel={
                   busy
@@ -825,7 +841,7 @@ export default function AuthLandingScreen() {
                       ? t("authLanding.createAccount")
                       : t("authLanding.logIn")
                 }
-                accessibilityState={{ disabled: !canSubmit, busy }}
+                accessibilityState={{ disabled: busy, busy }}
                 style={{
                   minHeight: 58,
                   borderRadius: Radii.lg,
@@ -836,7 +852,6 @@ export default function AuthLandingScreen() {
                   gap: Spacing.sm,
                   boxShadow: "0px 4px 10px rgba(0,0,0,0.15)",
                   elevation: 3,
-                  opacity: canSubmit ? 1 : 0.5,
                   marginBottom: Spacing.lg,
                 }}
               >

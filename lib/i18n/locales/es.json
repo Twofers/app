@@ -926,6 +926,8 @@
     "emailPlaceholder": "tu@ejemplo.com",
     "passwordLabel": "Contraseña",
     "passwordPlaceholder": "••••••••",
+    "invalidEmail": "Ingresa un correo electrónico válido",
+    "passwordRequired": "Ingresa tu contraseña",
     "forgotPassword": "Olvidé mi contraseña",
     "logIn": "Iniciar sesión",
     "pleaseWait": "Por favor espera…",

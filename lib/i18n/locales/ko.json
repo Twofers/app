@@ -926,6 +926,8 @@
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "비밀번호",
     "passwordPlaceholder": "••••••••",
+    "invalidEmail": "올바른 이메일 주소를 입력해 주세요",
+    "passwordRequired": "비밀번호를 입력해 주세요",
     "forgotPassword": "비밀번호 찾기",
     "logIn": "로그인",
     "pleaseWait": "잠시만 기다려 주세요…",
