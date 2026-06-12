@@ -158,14 +158,14 @@ function RoleCard({
             alignItems: "center",
             justifyContent: "space-between",
             gap: Spacing.sm,
-            marginBottom: 6,
+            marginBottom: Spacing.xs,
           }}
         >
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.85}
-            style={{ flex: 1, fontWeight: "900", fontSize: 16, lineHeight: 20, color: theme.text }}
+            style={{ flex: 1, fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }}
           >
             {title}
           </Text>
@@ -421,7 +421,6 @@ export default function AuthLandingScreen() {
 
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
-  const mutedLegal = colorScheme === "dark" ? "rgba(236,237,238,0.55)" : "rgba(17,24,28,0.55)";
   const consumerSubtitle = t("authLanding.subtitleConsumerPolished", {
     defaultValue: "Claim high-value local BOGO deals nearby.",
   });
@@ -447,10 +446,9 @@ export default function AuthLandingScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
-            // FIX: Reduced top padding from xxl to sm to push penguin up.
-            // Keeps content higher so Login button is visible without scrolling.
+            // Minimal top padding keeps the hero high so the form clears the fold.
             paddingTop: Math.max(insets.top, Spacing.xs),
-            paddingBottom: insets.bottom + Spacing.xxxl * 3,
+            paddingBottom: insets.bottom + Spacing.xxxl,
             paddingHorizontal: Spacing.lg,
           }}
         >
@@ -497,8 +495,8 @@ export default function AuthLandingScreen() {
               <Text
                 style={{
                   marginTop: Spacing.md,
-                  fontSize: 15,
-                  lineHeight: 22,
+                  fontSize: 14,
+                  lineHeight: 20,
                   color: theme.mutedText,
                   textAlign: "center",
                 }}
@@ -664,7 +662,7 @@ export default function AuthLandingScreen() {
                 </>
               ) : null}
 
-              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
                 {t("authLanding.emailLabel")}
               </Text>
               <TextInput
@@ -704,7 +702,7 @@ export default function AuthLandingScreen() {
                 </Text>
               ) : null}
 
-              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
+              <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
                 {t("authLanding.passwordLabel")}
               </Text>
               <View style={{ justifyContent: "center" }}>
@@ -772,7 +770,7 @@ export default function AuthLandingScreen() {
                         ? t("authLanding.strengthMedium", { defaultValue: "Medium" })
                         : t("authLanding.strengthWeak", { defaultValue: "Weak" });
                   return (
-                    <View style={{ marginTop: 6 }}>
+                    <View style={{ marginTop: Spacing.sm }}>
                       <View
                         style={{
                           height: 4,
@@ -783,7 +781,7 @@ export default function AuthLandingScreen() {
                       >
                         <View style={{ height: 4, borderRadius: 2, backgroundColor: color, width: widthPct }} />
                       </View>
-                      <Text style={{ fontSize: 12, color, marginTop: 2 }}>{label}</Text>
+                      <Text style={{ fontSize: 12, color, marginTop: Spacing.xs }}>{label}</Text>
                     </View>
                   );
                 })()
@@ -791,7 +789,7 @@ export default function AuthLandingScreen() {
 
               {isSignup && signupRole === "business" ? (
                 <View style={{ marginTop: Spacing.md }}>
-                  <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
+                  <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: Spacing.sm }}>
                     {t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
                   </Text>
                   <TextInput
@@ -819,9 +817,9 @@ export default function AuthLandingScreen() {
                     }}
                   />
                   {inviteError ? (
-                    <Text style={{ fontSize: 13, color: theme.danger, marginTop: 4 }}>{inviteError}</Text>
+                    <Text style={{ fontSize: 12, color: theme.danger, marginTop: Spacing.xs }}>{inviteError}</Text>
                   ) : (
-                    <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: 4 }}>
+                    <Text style={{ fontSize: 12, color: theme.mutedText, marginTop: Spacing.xs }}>
                       {t("authLanding.inviteCodeHint", {
                         defaultValue: "Required to create a business account.",
                       })}
@@ -887,7 +885,7 @@ export default function AuthLandingScreen() {
               >
                 {busy ? <ActivityIndicator color={theme.primaryText} /> : null}
                 <Text
-                  style={{ color: theme.primaryText, fontWeight: "900", fontSize: 18, textAlign: "center", flexShrink: 1 }}
+                  style={{ color: theme.primaryText, fontWeight: "800", fontSize: 18, textAlign: "center", flexShrink: 1 }}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -903,7 +901,7 @@ export default function AuthLandingScreen() {
             </>
           ) : null}
 
-          <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: theme.mutedText, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
             <Trans
               i18nKey="authLanding.legalFooter"
               components={{
@@ -950,8 +948,8 @@ export default function AuthLandingScreen() {
             gap: 2,
             minHeight: 36,
             paddingVertical: 4,
-            paddingLeft: 6,
-            paddingRight: 2,
+            paddingLeft: 8,
+            paddingRight: 4,
             borderRadius: Radii.md,
             borderWidth: 1,
             borderColor: theme.border,
@@ -972,7 +970,7 @@ export default function AuthLandingScreen() {
         {langPickerOpen ? (
           <View
             style={{
-              marginTop: 6,
+              marginTop: Spacing.sm,
               borderRadius: Radii.md,
               borderWidth: 1,
               borderColor: theme.border,
