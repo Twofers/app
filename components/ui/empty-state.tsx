@@ -90,24 +90,13 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
           </Pressable>
         ) : null}
 
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            marginTop: 2,
-            maxWidth: "100%",
-          }}
+        <Text
+          style={{ marginTop: 2, maxWidth: "100%", fontSize: 13, color: c.primary, opacity: 0.95, lineHeight: 18, textAlign: "center" }}
+          numberOfLines={2}
+          maxFontSizeMultiplier={1.15}
         >
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.primary }} />
-          <Text
-            style={{ flexShrink: 1, fontSize: 13, color: c.primary, opacity: 0.95, lineHeight: 18, textAlign: "center" }}
-            numberOfLines={2}
-            maxFontSizeMultiplier={1.15}
-          >
-            {t("emptyState.encouragement")}
-          </Text>
-        </View>
+          {t("emptyState.encouragement")}
+        </Text>
       </View>
     </View>
   );

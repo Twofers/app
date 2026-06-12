@@ -22,8 +22,11 @@ const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl * 2 + Spacing.md;
 
 export function useScreenInsets(variant: ScreenVariant = "tab") {
   const insets = useSafeAreaInsets();
+  // Floor the stack-screen bottom inset: on Android edge-to-edge dev clients
+  // insets.bottom can report 0, which let bottom CTAs (e.g. the AI ads
+  // publish button) sit against the home indicator / nav bar.
   const bottomInset =
-    variant === "tab" ? TAB_SCREEN_SCROLL_EXTRA : insets.bottom + Spacing.xl;
+    variant === "tab" ? TAB_SCREEN_SCROLL_EXTRA : Math.max(insets.bottom, Spacing.lg) + Spacing.xl;
 
   return {
     insets,
