@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors, PrimaryTint, Radii, Shadows } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -40,11 +40,6 @@ export function BusinessRowCard({
         borderColor: pressed ? theme.primary : theme.border,
         padding: Spacing.md,
         marginBottom: Spacing.md,
-        ...Shadows.soft,
-        shadowOpacity: 0.09,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 7 },
-        elevation: 4,
       })}
     >
       <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "stretch" }}>

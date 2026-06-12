@@ -4,7 +4,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { useMinuteTick } from "@/hooks/use-minute-tick";
@@ -79,12 +79,12 @@ export function DealCardPoster({
   return (
     <View
       style={{
-        borderRadius: 24,
+        borderRadius: Radii.lg,
         backgroundColor: theme.surface,
         overflow: "hidden",
         marginBottom: Spacing.xxl,
-        boxShadow: "0px 12px 26px rgba(0,0,0,0.18)",
-        elevation: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
       }}
     >
       <HapticScalePressable
@@ -266,8 +266,6 @@ export function DealCardPoster({
           disabled={claiming || dealStatus !== "live"}
           style={{
             backgroundColor: dealStatus === "live" ? Colors.light.primary : "rgba(255, 159, 28, 0.22)",
-            boxShadow: dealStatus === "live" ? "0px 10px 18px rgba(0,0,0,0.18)" : "0px 3px 10px rgba(0,0,0,0.06)",
-            elevation: dealStatus === "live" ? 10 : 2,
           }}
         />
 

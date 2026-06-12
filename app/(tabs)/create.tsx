@@ -211,8 +211,6 @@ export default function CreateDeal() {
               padding: Spacing.xl,
               backgroundColor: Colors.light.primary,
               alignItems: "center",
-              boxShadow: "0px 4px 14px rgba(255,159,28,0.35)",
-              elevation: 4,
             }}
           >
             <Text style={{ fontSize: 20, fontWeight: "900", color: "#fff", letterSpacing: 0.2 }}>
@@ -380,8 +378,6 @@ export default function CreateDeal() {
                   style={{
                     borderRadius: Radii.lg,
                     backgroundColor: theme.surface,
-                    boxShadow: "0px 4px 8px rgba(0,0,0,0.08)",
-                    elevation: 2,
                     borderWidth: 1,
                     borderColor: theme.border,
                     overflow: "hidden",

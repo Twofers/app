@@ -852,11 +852,6 @@ export default function HomeScreen() {
             overflow: "hidden",
             borderWidth: 1,
             borderColor: theme.border,
-            ...Shadows.soft,
-            shadowOpacity: 0.09,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 5,
           }}
         >
           <Pressable onPress={() => router.push(`/deal/${item.id}`)} accessibilityRole="button">

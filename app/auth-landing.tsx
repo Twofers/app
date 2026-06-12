@@ -147,8 +147,6 @@ function RoleCard({
           backgroundColor: pressed && !selected ? theme.surfaceMuted : fill,
           padding: Spacing.md,
           justifyContent: "center",
-          boxShadow: selected ? "0px 8px 18px rgba(255,159,28,0.18)" : "0px 2px 8px rgba(0,0,0,0.06)",
-          elevation: selected ? 4 : pressed ? 2 : 1,
           opacity: disabled ? 0.6 : 1,
         }}
       >
@@ -878,8 +876,6 @@ export default function AuthLandingScreen() {
                   alignItems: "center",
                   flexDirection: "row",
                   gap: Spacing.sm,
-                  boxShadow: "0px 4px 10px rgba(0,0,0,0.15)",
-                  elevation: 3,
                   marginBottom: Spacing.lg,
                 }}
               >
@@ -954,8 +950,6 @@ export default function AuthLandingScreen() {
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
-            boxShadow: "0px 1px 3px rgba(0,0,0,0.08)",
-            elevation: 1,
           }}
         >
           <View style={{ borderRadius: 3, overflow: "hidden" }}>
@@ -975,8 +969,6 @@ export default function AuthLandingScreen() {
               borderWidth: 1,
               borderColor: theme.border,
               backgroundColor: theme.surface,
-              boxShadow: "0px 6px 16px rgba(0,0,0,0.14)",
-              elevation: 6,
               overflow: "hidden",
             }}
           >

@@ -580,8 +580,6 @@ export default function MenuOfferScreen() {
               borderWidth: 1,
               borderColor: theme.border,
               gap: Spacing.md,
-              boxShadow: "0px 8px 24px rgba(0,0,0,0.08)",
-              elevation: 5,
             }}
           >
             <Text style={{ fontSize: 20, fontWeight: "800" }}>{t("menuOffer.generateStrongHeadline")}</Text>

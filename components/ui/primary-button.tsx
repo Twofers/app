@@ -23,9 +23,6 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
   const pressDepth = useSharedValue(0);
   const rStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }, { translateY: pressDepth.value }],
-    shadowOpacity: 0.2 - pressDepth.value * 0.06,
-    shadowRadius: 14 - pressDepth.value * 5,
-    elevation: 6 - pressDepth.value * 2,
   }));
 
   return (
@@ -57,8 +54,6 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
           opacity: disabled ? 0.65 : 1,
           justifyContent: "center",
           alignItems: "center",
-          boxShadow: "0px 6px 14px rgba(0,0,0,0.20)",
-          elevation: 6,
         },
         style,
         rStyle,

@@ -149,11 +149,8 @@ export function WelcomeWalkthrough({
             padding: Spacing.xl,
             width: "100%",
             maxWidth: 380,
-            shadowColor: "#000",
-            shadowOpacity: 0.18,
-            shadowRadius: 24,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 12,
+            borderWidth: 1,
+            borderColor: Colors.light.border,
           }}
         >
           {/* Step content */}

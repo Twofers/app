@@ -103,13 +103,18 @@ export const Controls = {
   buttonHeight: 52,
 };
 
+/**
+ * Flat design system: no drop shadows. Cards read as layers via a 1px
+ * `border` (gray-200) instead. `soft` is kept as a no-op so legacy spreads
+ * stay harmless; do not add new shadows.
+ */
 export const Shadows = {
   soft: {
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   none: {
     shadowColor: 'transparent',

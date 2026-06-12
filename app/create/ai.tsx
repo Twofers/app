@@ -2054,11 +2054,8 @@ export default function AiDealScreen() {
                     borderRadius: 24,
                     backgroundColor: "#fff",
                     overflow: "hidden",
-                    elevation: 4,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.1,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 4 },
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
                   }}
                 >
                   {/* Top — meta line */}
@@ -2232,8 +2229,8 @@ export default function AiDealScreen() {
                     backgroundColor: "#fff",
                     overflow: "hidden",
                     marginTop: 10,
-                    boxShadow: "0px 4px 10px rgba(0,0,0,0.08)",
-                    elevation: 2,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
                   }}
                 >
                   {(() => {

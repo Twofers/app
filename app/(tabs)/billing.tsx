@@ -9,7 +9,7 @@ import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
 
 import { useBusiness } from "@/hooks/use-business";
 import { supabase } from "@/lib/supabase";
-import { Colors, PrimaryTint, Spacing } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii, Spacing } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -338,11 +338,9 @@ export default function BusinessBillingScreen() {
 
   const cardShadow = {
     backgroundColor: Colors.light.surface,
-    borderRadius: 24,
+    borderRadius: Radii.lg,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    boxShadow: "0px 6px 18px rgba(0,0,0,0.10)",
-    elevation: 6,
   };
 
   if (!PAID_BILLING_ENABLED) {

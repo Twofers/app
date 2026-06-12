@@ -229,8 +229,6 @@ export function QrModal({
                 borderColor: "rgba(255,159,28,0.35)",
                 paddingVertical: 12,
                 paddingHorizontal: 14,
-                boxShadow: "0px 10px 18px rgba(0,0,0,0.18)",
-                elevation: 10,
               }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

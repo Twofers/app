@@ -316,11 +316,11 @@ export default function QuickDealExpress() {
           <View
             style={{
               marginTop: Spacing.xl,
-              borderRadius: 24,
+              borderRadius: Radii.lg,
               backgroundColor: theme.surface,
               padding: Spacing.xl,
-              boxShadow: "0px 12px 26px rgba(0,0,0,0.14)",
-              elevation: 10,
+              borderWidth: 1,
+              borderColor: theme.border,
             }}
           >
             <Text style={{ fontSize: 24, fontWeight: "900", color: theme.text, lineHeight: 30 }}>

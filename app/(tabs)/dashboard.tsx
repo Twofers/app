@@ -25,7 +25,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Fonts, Radii, Shadows } from "@/constants/theme";
+import { Colors, Fonts, Radii } from "@/constants/theme";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -310,12 +310,11 @@ function SnapshotMetric({
         minHeight: 86,
         borderRadius: Radii.lg,
         borderWidth: 1,
-        borderColor: accent ? Colors.light.primary : Colors.light.border,
+        borderColor: Colors.light.border,
         backgroundColor: Colors.light.surface,
         paddingHorizontal: 10,
         paddingVertical: Spacing.md,
         justifyContent: "center",
-        ...Shadows.soft,
       }}
     >
       <Text
@@ -1873,11 +1872,6 @@ export default function BusinessDashboard() {
                 padding: Spacing.lg,
                 paddingBottom: Spacing.xl,
                 gap: Spacing.sm,
-                ...Shadows.soft,
-                shadowOpacity: 0.16,
-                shadowRadius: 20,
-                shadowOffset: { width: 0, height: -6 },
-                elevation: 10,
               }}
             >
               <View

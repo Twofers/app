@@ -9,7 +9,7 @@ import { Image } from "expo-image";
 import { devWarn } from "@/lib/dev-log";
 
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { isDealActiveNow } from "@/lib/deal-time";
@@ -220,11 +220,8 @@ function renderMapCanvas({
           backgroundColor: "#fff",
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
-          elevation: 4,
+          borderWidth: 1,
+          borderColor: Colors.light.border,
         }}
       >
         <MaterialIcons name="refresh" size={22} color="#333" />
@@ -326,11 +323,11 @@ function renderMapCanvas({
             }
             accessibilityRole="button"
             style={{
-              borderRadius: 24,
+              borderRadius: Radii.lg,
               backgroundColor: "#fff",
               overflow: "hidden",
-              boxShadow: "0px 10px 20px rgba(0,0,0,0.16)",
-              elevation: 10,
+              borderWidth: 1,
+              borderColor: Colors.light.border,
             }}
           >
             {previewPosterUri ? (
