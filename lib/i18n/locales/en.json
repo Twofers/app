@@ -924,6 +924,8 @@
     "passwordPlaceholder": "••••••••",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Please enter your password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "forgotPassword": "Forgot password",
     "logIn": "Log in",
     "pleaseWait": "Please wait…",

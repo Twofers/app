@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -224,6 +225,8 @@ export default function AuthLandingScreen() {
 
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [pwVisible, setPwVisible] = useState(false);
+  const [focusedField, setFocusedField] = useState<null | "email" | "password" | "invite">(null);
   const [busyAction, setBusyAction] = useState<null | "login" | "signup">(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -672,12 +675,14 @@ export default function AuthLandingScreen() {
                 textContentType="emailAddress"
                 autoComplete="email"
                 editable={!busy}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField((f) => (f === "email" ? null : f))}
                 accessibilityLabel={t("authLanding.emailLabel")}
                 placeholder={t("authLanding.emailPlaceholder")}
                 placeholderTextColor={theme.mutedText}
                 style={{
                   borderWidth: 1,
-                  borderColor: emailError ? theme.danger : inputBorder,
+                  borderColor: emailError ? theme.danger : focusedField === "email" ? theme.primary : inputBorder,
                   borderRadius: Radii.md,
                   padding: Spacing.lg,
                   fontSize: 16,
@@ -701,26 +706,48 @@ export default function AuthLandingScreen() {
               <Text style={{ fontWeight: "500", fontSize: 14, color: theme.mutedText, marginBottom: 6 }}>
                 {t("authLanding.passwordLabel")}
               </Text>
-              <TextInput
-                value={pw}
-                onChangeText={onPwChange}
-                secureTextEntry
-                textContentType="password"
-                autoComplete="password"
-                editable={!busy}
-                accessibilityLabel={t("authLanding.passwordLabel")}
-                placeholder={t("authLanding.passwordPlaceholder")}
-                placeholderTextColor={theme.mutedText}
-                style={{
-                  borderWidth: 1,
-                  borderColor: pwError ? theme.danger : inputBorder,
-                  borderRadius: Radii.md,
-                  padding: Spacing.lg,
-                  fontSize: 16,
-                  backgroundColor: inputBg,
-                  color: theme.text,
-                }}
-              />
+              <View style={{ justifyContent: "center" }}>
+                <TextInput
+                  value={pw}
+                  onChangeText={onPwChange}
+                  secureTextEntry={!pwVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType={isSignup ? "newPassword" : "password"}
+                  autoComplete={isSignup ? "new-password" : "current-password"}
+                  editable={!busy}
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() => setFocusedField((f) => (f === "password" ? null : f))}
+                  accessibilityLabel={t("authLanding.passwordLabel")}
+                  placeholder={t("authLanding.passwordPlaceholder")}
+                  placeholderTextColor={theme.mutedText}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: pwError ? theme.danger : focusedField === "password" ? theme.primary : inputBorder,
+                    borderRadius: Radii.md,
+                    padding: Spacing.lg,
+                    paddingRight: Spacing.lg + 24 + Spacing.md,
+                    fontSize: 16,
+                    backgroundColor: inputBg,
+                    color: theme.text,
+                  }}
+                />
+                <Pressable
+                  onPress={() => setPwVisible((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    pwVisible ? t("authLanding.hidePassword") : t("authLanding.showPassword")
+                  }
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={{ position: "absolute", right: Spacing.lg }}
+                >
+                  <MaterialCommunityIcons
+                    name={pwVisible ? "eye-off-outline" : "eye-outline"}
+                    size={24}
+                    color={theme.mutedText}
+                  />
+                </Pressable>
+              </View>
               {pwError ? (
                 <Text style={{ fontSize: 12, color: theme.danger, marginTop: Spacing.xs }}>
                   {pwError}
@@ -775,12 +802,14 @@ export default function AuthLandingScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     editable={!busy}
+                    onFocus={() => setFocusedField("invite")}
+                    onBlur={() => setFocusedField((f) => (f === "invite" ? null : f))}
                     accessibilityLabel={t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
                     placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code TWOFER gave you" })}
                     placeholderTextColor={theme.mutedText}
                     style={{
                       borderWidth: 1,
-                      borderColor: inviteError ? theme.danger : inputBorder,
+                      borderColor: inviteError ? theme.danger : focusedField === "invite" ? theme.primary : inputBorder,
                       borderRadius: Radii.md,
                       padding: Spacing.lg,
                       fontSize: 16,

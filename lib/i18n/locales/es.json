@@ -928,6 +928,8 @@
     "passwordPlaceholder": "••••••••",
     "invalidEmail": "Ingresa un correo electrónico válido",
     "passwordRequired": "Ingresa tu contraseña",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña",
     "forgotPassword": "Olvidé mi contraseña",
     "logIn": "Iniciar sesión",
     "pleaseWait": "Por favor espera…",
