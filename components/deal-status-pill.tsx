@@ -1,19 +1,22 @@
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 
 export type ConsumerDealStatusKey = "live" | "claimed" | "redeeming" | "redeemed" | "expired" | "canceled";
 
+// Live/claimed/redeeming = brand orange; redeemed = the one success green
+// (redemption confirmation); terminal states = neutral gray.
 const styles: Record<
   ConsumerDealStatusKey,
   { background: string; text: string }
 > = {
-  live: { background: "#dcfce7", text: "#166534" },
-  claimed: { background: "#dbeafe", text: "#1e40af" },
-  redeeming: { background: "#fef3c7", text: "#92400e" },
-  redeemed: { background: "#e8f5e9", text: "#1b5e20" },
-  expired: { background: "#f4f4f5", text: "#52525b" },
-  canceled: { background: "#f4f4f5", text: "#71717a" },
+  live: { background: PrimaryTint.surfaceStrong, text: "#B45309" },
+  claimed: { background: PrimaryTint.surface, text: "#B45309" },
+  redeeming: { background: PrimaryTint.surface, text: "#B45309" },
+  redeemed: { background: "rgba(22,163,74,0.14)", text: "#16A34A" },
+  expired: { background: Gray[100], text: Gray[600] },
+  canceled: { background: Gray[100], text: Gray[500] },
 };
 
 type DealStatusPillProps = {
@@ -42,7 +45,7 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
         alignSelf: "flex-start",
         paddingHorizontal: Spacing.sm,
         paddingVertical: 5,
-        borderRadius: 10,
+        borderRadius: Radii.sm,
         backgroundColor: c.background,
         maxWidth: "100%",
       }}

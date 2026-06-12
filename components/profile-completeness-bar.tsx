@@ -39,7 +39,7 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
             {
               height: 8,
               borderRadius: 4,
-              backgroundColor: isComplete ? "#22C55E" : Colors.light.primary,
+              backgroundColor: Colors.light.primary,
             },
             barStyle,
           ]}

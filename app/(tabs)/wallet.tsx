@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { formatDealExpiryLocal } from "@/lib/format-deal-expiry";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii, Shadows } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
@@ -452,7 +452,7 @@ export default function WalletScreen() {
             bucket === "active" && !redeemed && !tokenDead
               ? urgent
                 ? "#fb923c"
-                : "#86efac"
+                : PrimaryTint.border
               : theme.border,
           ...Shadows.soft,
         }}
@@ -461,12 +461,12 @@ export default function WalletScreen() {
           <View
             style={{
               borderRadius: Radii.md,
-              backgroundColor: urgent ? "#7c2d12" : "#14532d",
+              backgroundColor: urgent ? "#7c2d12" : Gray[900],
               paddingVertical: Spacing.sm,
               paddingHorizontal: Spacing.md,
               marginBottom: Spacing.md,
               borderWidth: 1,
-              borderColor: urgent ? "#ea580c" : "#22c55e",
+              borderColor: urgent ? "#ea580c" : Colors.light.primary,
             }}
           >
             <Text
@@ -475,7 +475,7 @@ export default function WalletScreen() {
                 fontWeight: "800",
                 letterSpacing: 0.6,
                 textTransform: "uppercase",
-                color: urgent ? "#ffedd5" : "#dcfce7",
+                color: urgent ? "#ffedd5" : "#FFD9A8",
               }}
             >
               {urgent ? t("consumerWallet.redeemSoon") : t("consumerWallet.timeLeftHeading")}
@@ -491,7 +491,7 @@ export default function WalletScreen() {
             >
               {countdown}
             </Text>
-            <Text style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#bbf7d0", marginTop: 2 }}>
+            <Text style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#FFD9A8", marginTop: 2 }}>
               {t("consumerWallet.redeemByCaption", { datetime: expiryShown })}
             </Text>
           </View>
@@ -509,7 +509,7 @@ export default function WalletScreen() {
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
-                  style={{ width: 88, height: 110, borderRadius: Radii.lg, backgroundColor: "#eee" }}
+                  style={{ width: 88, height: 110, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
                   contentFit="cover"
                 />
               ) : (
@@ -518,7 +518,7 @@ export default function WalletScreen() {
                     width: 88,
                     height: 110,
                     borderRadius: Radii.lg,
-                    backgroundColor: "#ececec",
+                    backgroundColor: Gray[100],
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -598,13 +598,13 @@ export default function WalletScreen() {
                     style={{
                       width: 64,
                       height: 64,
-                      borderRadius: 12,
+                      borderRadius: Radii.md,
                       borderWidth: 2,
-                      borderColor: "#111827",
+                      borderColor: Gray[900],
                       borderStyle: "dashed",
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: "#f9fafb",
+                      backgroundColor: Gray[50],
                     }}
                   >
                     <Text style={{ fontSize: 10, fontWeight: "800", opacity: 0.7, color: "#9a3412" }}>QR</Text>
@@ -613,7 +613,7 @@ export default function WalletScreen() {
                     <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
                       {t("consumerWallet.verifyCodeLabel")}
                     </Text>
-                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: "#111827" }}>
+                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: Gray[900] }}>
                       {shortLabel}
                     </Text>
                   </View>

@@ -3,6 +3,7 @@ import { Animated, Easing, Modal, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -101,14 +102,14 @@ export function WalletRedeemModal({
       >
         <View
           style={{
-            backgroundColor: expired ? "#1a1a1a" : "#fff",
-            borderRadius: 20,
+            backgroundColor: expired ? Gray[900] : "#fff",
+            borderRadius: Radii.lg,
             padding: 18,
             paddingBottom: Math.max(18, insets.bottom + 10),
             width: "100%",
             maxWidth: 400,
             borderWidth: 3,
-            borderColor: expired ? "#7f1d1d" : "#FF9F1C",
+            borderColor: expired ? "#7f1d1d" : Colors.light.primary,
           }}
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -120,7 +121,7 @@ export function WalletRedeemModal({
                 borderColor: expired ? "#7f1d1d" : "#fed7aa",
                 paddingHorizontal: 10,
                 paddingVertical: 4,
-                borderRadius: 8,
+                borderRadius: Radii.sm,
               }}
             >
               <Text
@@ -138,12 +139,12 @@ export function WalletRedeemModal({
                 {expired ? t("consumerWallet.verifyExpired") : t("consumerWallet.verifyActive")}
               </Text>
             </View>
-            <Text style={{ fontSize: 12, opacity: 0.65, color: expired ? "#fca5a5" : "#444", flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
+            <Text style={{ fontSize: 12, opacity: 0.65, color: expired ? "#fca5a5" : Gray[600], flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
               {formatClock(nowMs, i18n.language)}
             </Text>
           </View>
 
-          <Text style={{ fontSize: 13, opacity: 0.75, color: expired ? "#fca5a5" : "#444" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          <Text style={{ fontSize: 13, opacity: 0.75, color: expired ? "#fca5a5" : Gray[600] }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {businessName}
           </Text>
           <Text
@@ -152,7 +153,7 @@ export function WalletRedeemModal({
               fontWeight: "800",
               marginTop: 4,
               marginBottom: 12,
-              color: expired ? "#fff" : "#111",
+              color: expired ? "#fff" : Gray[900],
             }}
             numberOfLines={2}
             adjustsFontSizeToFit
@@ -163,7 +164,7 @@ export function WalletRedeemModal({
           </Text>
 
           {claimedAt ? (
-            <Text style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, color: expired ? "#cbd5e1" : "#64748b" }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+            <Text style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, color: expired ? Gray[300] : Gray[500] }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
               {t("consumerWallet.claimedRecord", { datetime: formatAppDateTime(claimedAt, i18n.language) })}
             </Text>
           ) : null}
@@ -191,9 +192,9 @@ export function WalletRedeemModal({
               <View
                 style={{
                   padding: 10,
-                  borderRadius: 18,
+                  borderRadius: Radii.lg,
                   borderWidth: 2,
-                  borderColor: "#FF9F1C",
+                  borderColor: Colors.light.primary,
                   backgroundColor: "#fff",
                 }}
               >
@@ -201,8 +202,8 @@ export function WalletRedeemModal({
               </View>
             ) : null}
             {token && expired ? (
-              <View style={{ width: 200, height: 200, backgroundColor: "#333", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "#94a3b8", fontWeight: "700", textAlign: "center", padding: 16 }} maxFontSizeMultiplier={1.15}>
+              <View style={{ width: 200, height: 200, backgroundColor: Gray[700], borderRadius: Radii.md, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: Gray[400], fontWeight: "700", textAlign: "center", padding: 16 }} maxFontSizeMultiplier={1.15}>
                   {t("consumerWallet.verifyQrDisabled")}
                 </Text>
               </View>
@@ -211,12 +212,12 @@ export function WalletRedeemModal({
 
           <View
             style={{
-              backgroundColor: expired ? "#292524" : "#f8fafc",
-              borderRadius: 14,
+              backgroundColor: expired ? Gray[800] : Gray[50],
+              borderRadius: Radii.md,
               padding: 14,
               marginBottom: 12,
               borderWidth: 1,
-              borderColor: expired ? "#44403c" : "#e2e8f0",
+              borderColor: expired ? Gray[700] : Gray[200],
             }}
           >
             <Text
@@ -225,7 +226,7 @@ export function WalletRedeemModal({
                 fontWeight: "800",
                 opacity: 0.55,
                 letterSpacing: 0.5,
-                color: expired ? "#a8a29e" : "#64748b",
+                color: expired ? Gray[400] : Gray[500],
               }}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -235,7 +236,7 @@ export function WalletRedeemModal({
               {t("consumerWallet.verifyCountdown")}
             </Text>
             <Text
-              style={{ fontSize: 28, fontWeight: "900", marginTop: 4, color: expired ? "#f87171" : "#0f172a" }}
+              style={{ fontSize: 28, fontWeight: "900", marginTop: 4, color: expired ? "#F87171" : Gray[900] }}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.72}
@@ -244,7 +245,7 @@ export function WalletRedeemModal({
               {expired ? t("consumerWallet.verifyTimeUp") : countdownLabel}
             </Text>
             {expiresAt ? (
-              <Text style={{ fontSize: 12, opacity: 0.65, marginTop: 6, color: expired ? "#a8a29e" : "#64748b" }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+              <Text style={{ fontSize: 12, opacity: 0.65, marginTop: 6, color: expired ? Gray[400] : Gray[500] }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
                 {t("consumerWallet.verifyRedeemBy", {
                   datetime: formatAppDateTime(expiresAt, i18n.language),
                 })}
@@ -259,7 +260,7 @@ export function WalletRedeemModal({
                 fontWeight: "800",
                 opacity: 0.5,
                 letterSpacing: 0.5,
-                color: expired ? "#a8a29e" : "#64748b",
+                color: expired ? Gray[400] : Gray[500],
               }}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -274,7 +275,7 @@ export function WalletRedeemModal({
                 fontWeight: "900",
                 letterSpacing: 4,
                 marginTop: 6,
-                color: expired ? "#78716c" : "#111",
+                color: expired ? Gray[500] : Gray[900],
               }}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -283,7 +284,7 @@ export function WalletRedeemModal({
             >
               {codeDisplay}
             </Text>
-            <Text style={{ fontSize: 12, opacity: 0.55, marginTop: 8, textAlign: "center", color: expired ? "#a8a29e" : "#64748b" }} maxFontSizeMultiplier={1.15}>
+            <Text style={{ fontSize: 12, opacity: 0.55, marginTop: 8, textAlign: "center", color: expired ? Gray[400] : Gray[500] }} maxFontSizeMultiplier={1.15}>
               {t("consumerWallet.verifyStaffHint")}
             </Text>
           </View>
@@ -292,8 +293,8 @@ export function WalletRedeemModal({
             onPress={onHide}
             style={{
               paddingVertical: 14,
-              borderRadius: 12,
-              backgroundColor: expired ? "#44403c" : "#111",
+              borderRadius: Radii.md,
+              backgroundColor: expired ? Gray[700] : Colors.light.primary,
               marginBottom: 8,
             }}
           >
@@ -313,13 +314,13 @@ export function WalletRedeemModal({
               disabled={refreshing}
               style={{
                 paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: "#e5e5e5",
+                borderRadius: Radii.md,
+                backgroundColor: Gray[100],
                 opacity: refreshing ? 0.6 : 1,
               }}
             >
               <Text
-                style={{ color: "#111", fontWeight: "700", textAlign: "center" }}
+                style={{ color: Gray[700], fontWeight: "700", textAlign: "center" }}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}

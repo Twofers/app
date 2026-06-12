@@ -224,7 +224,7 @@ function renderMapCanvas({
           borderColor: Colors.light.border,
         }}
       >
-        <MaterialIcons name="refresh" size={22} color="#333" />
+        <MaterialIcons name="refresh" size={22} color={Gray[700]} />
       </Pressable>
       <MapView
         ref={mapRef}
@@ -338,7 +338,7 @@ function renderMapCanvas({
                 transition={250}
               />
             ) : (
-              <View style={{ width: "100%", height: 120, backgroundColor: "#f4f4f5" }} />
+              <View style={{ width: "100%", height: 120, backgroundColor: Gray[100] }} />
             )}
             <View style={{ padding: Spacing.lg }}>
               <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.62, textTransform: "uppercase" }}>
@@ -379,7 +379,7 @@ function renderBusinessMarker({
   router: ReturnType<typeof useRouter>;
 }) {
   const isSelected = selectedBusinessId === marker.id;
-  const markerBg = isSelected || marker.live ? Colors.light.primary : "#404040";
+  const markerBg = isSelected || marker.live ? Colors.light.primary : Gray[700];
   const markerBorderColor = getMarkerBorderColor(isSelected, marker.live);
   return (
     <Marker
@@ -420,7 +420,7 @@ function renderBusinessMarker({
 function getMarkerBorderColor(isSelected: boolean, isLive: boolean) {
   if (isSelected) return "#ffd9a8";
   if (isLive) return "rgba(255,255,255,0.95)";
-  return "#a3a3a3";
+  return Gray[400];
 }
 
 function handleBusinessMarkerPress({

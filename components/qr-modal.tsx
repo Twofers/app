@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
 import { formatAppDateTime } from "../lib/i18n/format-datetime";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
-import { Colors } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 
@@ -293,7 +293,7 @@ export function QrModal({
         <View
           style={{
             backgroundColor: "#fff",
-            borderRadius: 18,
+            borderRadius: Radii.lg,
             padding: 16,
             paddingBottom: Math.max(16, insets.bottom + 8),
             width: "100%",
@@ -309,13 +309,13 @@ export function QrModal({
                 borderRadius: 999,
                 paddingHorizontal: 10,
                 paddingVertical: 5,
-                backgroundColor: qrExpired ? "#fee2e2" : "#dcfce7",
+                backgroundColor: qrExpired ? "#FEF2F2" : PrimaryTint.surfaceStrong,
                 borderWidth: 1,
-                borderColor: qrExpired ? "#fecaca" : "#bbf7d0",
+                borderColor: qrExpired ? "#FECACA" : PrimaryTint.border,
               }}
             >
               <Text
-                style={{ fontSize: 11, fontWeight: "900", color: qrExpired ? "#991b1b" : "#166534" }}
+                style={{ fontSize: 11, fontWeight: "900", color: qrExpired ? "#B91C1C" : Colors.light.accentText }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.76}
@@ -330,7 +330,7 @@ export function QrModal({
               <View
                 style={{
                   padding: 12,
-                  borderRadius: 18,
+                  borderRadius: Radii.lg,
                   borderWidth: 2,
                   borderColor: Colors.light.primary,
                   backgroundColor: "#fff",
@@ -343,13 +343,13 @@ export function QrModal({
                 style={{
                   width: 220,
                   height: 220,
-                  backgroundColor: "#f4f4f5",
-                  borderRadius: 12,
+                  backgroundColor: Gray[100],
+                  borderRadius: Radii.md,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: "#71717a", fontWeight: "700", textAlign: "center", padding: 16 }}>
+                <Text style={{ color: Gray[500], fontWeight: "700", textAlign: "center", padding: 16 }}>
                   {t("consumerWallet.verifyQrDisabled")}
                 </Text>
               </View>
@@ -367,7 +367,7 @@ export function QrModal({
               })}
             </Text>
           ) : null}
-          <Text style={{ opacity: 0.62, textAlign: "center", marginTop: 8, lineHeight: 18, fontSize: 12, color: "#334155" }}>
+          <Text style={{ opacity: 0.62, textAlign: "center", marginTop: 8, lineHeight: 18, fontSize: 12, color: Gray[600] }}>
             {t("consumerWallet.verifyStaffHint")}
           </Text>
 
@@ -375,13 +375,13 @@ export function QrModal({
             style={{
               marginTop: 14,
               padding: 14,
-              borderRadius: 14,
-              backgroundColor: "#f8fafc",
+              borderRadius: Radii.md,
+              backgroundColor: Gray[50],
               borderWidth: 1,
-              borderColor: "#e2e8f0",
+              borderColor: Gray[200],
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "800", opacity: 0.55, letterSpacing: 0.5, color: "#64748b" }}>
+            <Text style={{ fontSize: 11, fontWeight: "800", opacity: 0.55, letterSpacing: 0.5, color: Gray[500] }}>
               {t("consumerWallet.verifyCodeLabel")}
             </Text>
             <Text
@@ -390,7 +390,7 @@ export function QrModal({
                 fontWeight: "900",
                 marginTop: 6,
                 letterSpacing: 3,
-                color: "#0f172a",
+                color: Gray[900],
                 textAlign: "center",
               }}
             >
@@ -403,8 +403,8 @@ export function QrModal({
               onPress={onHide}
               style={{
                 paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: "#111",
+                borderRadius: Radii.md,
+                backgroundColor: Colors.light.primary,
                 marginBottom: 8,
               }}
             >
@@ -418,19 +418,19 @@ export function QrModal({
                 disabled={refreshing}
                 style={{
                   paddingVertical: 12,
-                  borderRadius: 12,
-                  backgroundColor: "#eee",
+                  borderRadius: Radii.md,
+                  backgroundColor: Gray[100],
                   opacity: refreshing ? 0.6 : 1,
                 }}
               >
-                <Text style={{ color: "#111", fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
+                <Text style={{ color: Gray[700], fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                   {refreshing ? t("consumerWallet.refreshingQrModal") : t("consumerWallet.refreshQr")}
                 </Text>
               </HapticScalePressable>
             ) : null}
             {onShare ? (
               <>
-                <Text style={{ marginTop: 10, color: "#475569", fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+                <Text style={{ marginTop: 10, color: Gray[600], fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
                   {t("shareDeal.friendOwnCode", { defaultValue: "They'll get their own claim code." })}
                 </Text>
                 <HapticScalePressable
@@ -439,7 +439,7 @@ export function QrModal({
                   style={{
                     marginTop: 8,
                     paddingVertical: 12,
-                    borderRadius: 12,
+                    borderRadius: Radii.md,
                     borderWidth: 2,
                     borderColor: Colors.light.primary,
                     backgroundColor: "#fff",
@@ -453,7 +453,7 @@ export function QrModal({
                   </Text>
                 </HapticScalePressable>
                 {shareError ? (
-                  <Text style={{ marginTop: 8, color: "#b91c1c", fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+                  <Text style={{ marginTop: 8, color: Colors.light.danger, fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
                     {shareError}
                   </Text>
                 ) : null}

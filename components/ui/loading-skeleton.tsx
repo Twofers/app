@@ -1,6 +1,6 @@
 import { useWindowDimensions, View, type DimensionValue } from "react-native";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type LoadingSkeletonProps = {
@@ -24,7 +24,7 @@ export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
         <View
           key={`skeleton-${idx}`}
           style={{
-            borderRadius: 24,
+            borderRadius: Radii.lg,
             backgroundColor: theme.surface,
             overflow: "hidden",
             height: cardHeight,

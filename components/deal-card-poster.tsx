@@ -4,7 +4,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { useMinuteTick } from "@/hooks/use-minute-tick";
@@ -71,9 +71,9 @@ export function DealCardPoster({
       : null;
 
   const statusColors = {
-    success: { background: "#e8f5e9", text: "#1b5e20" },
-    error: { background: "#fde8e8", text: "#7a1f1f" },
-    info: { background: "#fff3e0", text: "#e65100" }, // orange tint
+    success: { background: PrimaryTint.surfaceStrong, text: "#B45309" },
+    error: { background: "#FEF2F2", text: "#B91C1C" },
+    info: { background: "#fff3e0", text: "#B45309" }, // orange tint
   }[statusTone];
 
   return (
@@ -105,13 +105,13 @@ export function DealCardPoster({
           <View
             style={{
               height: imageHeight,
-              backgroundColor: "#f7f7f8",
+              backgroundColor: Gray[50],
               alignItems: "center",
               justifyContent: "center",
             }}
           >
             <Text
-              style={{ color: "#9ca3af", fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: Spacing.md }}
+              style={{ color: Gray[400], fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: Spacing.md }}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.8}
@@ -207,7 +207,7 @@ export function DealCardPoster({
           paddingVertical: Spacing.xxl,
           gap: Spacing.lg,
           borderTopWidth: 1,
-          borderTopColor: "#f0f0f0",
+          borderTopColor: Gray[200],
         }}
       >
         {/* Favorite row */}
@@ -226,14 +226,14 @@ export function DealCardPoster({
               alignItems: "center",
               gap: Spacing.sm,
               padding: Spacing.md,
-              borderRadius: 24,
-              backgroundColor: pressed ? "#f8f8f8" : "transparent",
+              borderRadius: Radii.lg,
+              backgroundColor: pressed ? Gray[50] : "transparent",
             })}
           >
             <MaterialIcons
               name={isFavorite ? "favorite" : "favorite-border"}
               size={24}
-              color={isFavorite ? Colors.light.primary : "#6b7280"}
+              color={isFavorite ? Colors.light.primary : Gray[500]}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text

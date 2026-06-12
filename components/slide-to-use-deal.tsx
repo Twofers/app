@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, LayoutChangeEvent, PanResponder, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Colors, Gray } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 
 type SlideToUseDealProps = {
@@ -66,7 +67,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
         style={{
           height: KNOB + 12,
           borderRadius: 999,
-          backgroundColor: "#e5e5e5",
+          backgroundColor: Gray[200],
           justifyContent: "center",
           paddingHorizontal: 6,
           opacity: disabled ? 0.5 : 1,
@@ -81,7 +82,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
             pointerEvents: "none",
             fontWeight: "800",
             fontSize: 14,
-            color: "#888",
+            color: Gray[500],
             letterSpacing: 0.3,
           }}
           numberOfLines={1}
@@ -97,7 +98,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
             width: KNOB,
             height: KNOB,
             borderRadius: KNOB / 2,
-            backgroundColor: "#111",
+            backgroundColor: Colors.light.primary,
             transform: [{ translateX: pan }],
             justifyContent: "center",
             alignItems: "center",

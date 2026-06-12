@@ -1,4 +1,5 @@
 import { useHeaderHeight } from "@react-navigation/elements";
+import { Colors, Gray } from "@/constants/theme";
 import {
   InputAccessoryView,
   Keyboard,
@@ -64,8 +65,8 @@ export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: str
           alignItems: "flex-end",
           justifyContent: "center",
           borderTopWidth: 1,
-          borderTopColor: "#D1D5DB",
-          backgroundColor: "#F9FAFB",
+          borderTopColor: Gray[300],
+          backgroundColor: Gray[50],
           paddingHorizontal: 12,
         }}
       >
@@ -75,7 +76,7 @@ export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: str
           onPress={handlePress}
           style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 12 }}
         >
-          <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          <Text style={{ color: Colors.light.accentText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {label}
           </Text>
         </Pressable>

@@ -2,6 +2,7 @@ import { Modal, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { SlideToUseDeal } from "@/components/slide-to-use-deal";
+import { Gray, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -38,8 +39,8 @@ export function WalletUseDealSlideModal({
         <View
           style={{
             backgroundColor: "#fff",
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
+            borderTopLeftRadius: Radii.lg,
+            borderTopRightRadius: Radii.lg,
             paddingHorizontal: 20,
             paddingTop: 20,
             paddingBottom: Math.max(insets.bottom + 16, 24),
@@ -65,7 +66,7 @@ export function WalletUseDealSlideModal({
             disabled={busy}
             style={{ marginTop: Spacing.lg, paddingVertical: Spacing.md, opacity: busy ? 0.5 : 1 }}
           >
-            <Text style={{ textAlign: "center", fontWeight: "700", color: "#555" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+            <Text style={{ textAlign: "center", fontWeight: "700", color: Gray[600] }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
               {t("commonUi.cancel")}
             </Text>
           </HapticScalePressable>
