@@ -455,7 +455,7 @@ export default function AuthLandingScreen() {
                 keep its launcher safe-zone padding). */}
             <Image
               source={require("../assets/images/penguin-auth-512.png")}
-              style={{ width: 88, height: 88, marginBottom: Spacing.xs }}
+              style={{ width: 72, height: 72 }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
               accessibilityLabel={t("authLanding.heroA11y")}
@@ -475,8 +475,8 @@ export default function AuthLandingScreen() {
             <Text
               style={{
                 marginTop: Spacing.xs,
-                fontSize: 13,
-                lineHeight: 18,
+                fontSize: 14,
+                lineHeight: 20,
                 color: theme.mutedText,
                 textAlign: "center",
               }}
