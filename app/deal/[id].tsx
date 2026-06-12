@@ -483,14 +483,14 @@ export default function DealDetail() {
           return posterUri ? (
             <Image
               source={{ uri: posterUri }}
-              style={{ height: heroHeight, width: "100%", borderRadius: Radii.card }}
+              style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg }}
               contentFit="cover"
             />
           ) : (
             <View
               style={{
                 height: heroHeight,
-                borderRadius: Radii.card,
+                borderRadius: Radii.lg,
                 backgroundColor: theme.surfaceMuted,
                 alignItems: "center",
                 justifyContent: "center",

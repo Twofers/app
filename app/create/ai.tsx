@@ -36,7 +36,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
-import { Colors } from "@/constants/theme";
+import { Colors, PrimaryTint } from "@/constants/theme";
 import {
   aiGenerateAd,
   aiReviseAd,
@@ -505,9 +505,9 @@ export default function AiDealScreen() {
           icon: "check-circle" as const,
           title: editingDealId ? t("createAi.publishUpdateSuccessTitle") : t("createAi.publishSuccessTitle"),
           body: publishStatusMessage ?? t("createAi.publishSuccessBody"),
-          backgroundColor: Colors.light.successSurface,
-          borderColor: Colors.light.successBorder,
-          titleColor: Colors.light.success,
+          backgroundColor: PrimaryTint.surface,
+          borderColor: PrimaryTint.border,
+          titleColor: Colors.light.accentText,
         };
       case "error":
         return {
@@ -1996,7 +1996,6 @@ export default function AiDealScreen() {
                 title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
                 onPress={() => void generateAd()}
                 disabled={generating || revising}
-                style={{ height: 62, borderRadius: 18 }}
               />
               {generating ? (
                 <View style={{ marginTop: 4 }}>
@@ -2132,11 +2131,10 @@ export default function AiDealScreen() {
                   <PrimaryButton
                     title={t("createAi.useThisAd")}
                     onPress={acceptAd}
-                    style={{ height: 56, borderRadius: 16 }}
                   />
                 ) : (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: Colors.light.successSurface, borderWidth: 1, borderColor: Colors.light.successBorder }}>
-                    <Text style={{ fontWeight: "700", color: Colors.light.success }}>{t("createAi.adAccepted")}</Text>
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: PrimaryTint.surface, borderWidth: 1, borderColor: PrimaryTint.border }}>
+                    <Text style={{ fontWeight: "700", color: Colors.light.accentText }}>{t("createAi.adAccepted")}</Text>
                   </View>
                 )}
 
@@ -2302,7 +2300,6 @@ export default function AiDealScreen() {
                     }
                     onPress={() => void publishDeal()}
                     disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
-                    style={{ height: 66, borderRadius: 20 }}
                   />
                   <SecondaryButton
                     title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}

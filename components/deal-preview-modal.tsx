@@ -59,8 +59,8 @@ export function DealPreviewModal({
           style={{
             flex: 1,
             backgroundColor: Colors.light.background,
-            borderTopLeftRadius: Radii.xl,
-            borderTopRightRadius: Radii.xl,
+            borderTopLeftRadius: Radii.lg,
+            borderTopRightRadius: Radii.lg,
             marginTop: Spacing.lg,
             overflow: "hidden",
           }}
@@ -151,7 +151,6 @@ export function DealPreviewModal({
               }
               onPress={onPublish}
               disabled={publishing}
-              style={{ height: 56, borderRadius: 18 }}
             />
             <SecondaryButton title={t("createQuick.previewGoBack", { defaultValue: "Back" })} onPress={onDismiss} />
           </View>

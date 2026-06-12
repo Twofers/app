@@ -207,7 +207,7 @@ export default function CreateDeal() {
           <Pressable
             onPress={() => router.push("/create/quick")}
             style={{
-              borderRadius: Radii.card,
+              borderRadius: Radii.lg,
               padding: Spacing.xl,
               backgroundColor: Colors.light.primary,
               alignItems: "center",

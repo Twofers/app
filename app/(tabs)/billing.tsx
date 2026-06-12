@@ -9,7 +9,7 @@ import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
 
 import { useBusiness } from "@/hooks/use-business";
 import { supabase } from "@/lib/supabase";
-import { Colors, Spacing } from "@/constants/theme";
+import { Colors, PrimaryTint, Spacing } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -370,7 +370,6 @@ export default function BusinessBillingScreen() {
               <PrimaryButton
                 title={t("billing.retryLoadPricing")}
                 onPress={() => { setBanner(null); setRetryKey((k) => k + 1); }}
-                style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
               />
             </View>
           </View>
@@ -428,8 +427,8 @@ export default function BusinessBillingScreen() {
                       </Text>
                     </View>
                   ) : subscriptionStatus === "active" && subscriptionTier === "pro" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: Colors.light.successSurface, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.success }}>
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: PrimaryTint.surface, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.accentText }}>
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
@@ -452,7 +451,6 @@ export default function BusinessBillingScreen() {
                       onPress={() => void subscribe("pro")}
                       accessibilityLabel={t("billing.a11ySubscribeProLabel")}
                       accessibilityHint={t("billing.a11ySubscribeProHint")}
-                      style={{ backgroundColor: Colors.light.primary, borderRadius: 22, height: 62, minHeight: 62 }}
                     />
                   )}
                 </View>
@@ -479,8 +477,8 @@ export default function BusinessBillingScreen() {
                 </View>
                 <View style={{ marginTop: 14 }}>
                   {subscriptionStatus === "active" && subscriptionTier === "premium" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: Colors.light.successSurface, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.success }}>
+                    <View style={{ height: 62, borderRadius: 22, backgroundColor: PrimaryTint.surface, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.accentText }}>
                         {t("billing.currentPlan")}
                       </Text>
                     </View>
@@ -505,7 +503,6 @@ export default function BusinessBillingScreen() {
                       onPress={() => void subscribe("premium")}
                       accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
                       accessibilityHint={t("billing.a11ySubscribePremiumHint")}
-                      style={{ backgroundColor: Colors.light.primary, borderRadius: 22, height: 62, minHeight: 62 }}
                     />
                   )}
                 </View>

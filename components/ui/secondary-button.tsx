@@ -1,7 +1,7 @@
 import { Pressable, Text, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
-import { Colors, Fonts, Radii } from "@/constants/theme";
+import { Colors, Controls, Fonts, Radii } from "@/constants/theme";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -48,10 +48,10 @@ export function SecondaryButton({
         {
           width: "100%",
           alignSelf: "stretch",
-          minHeight: 58,
-          paddingVertical: 14,
-          paddingHorizontal: 22,
-          borderRadius: Radii.lg,
+          minHeight: Controls.buttonHeight,
+          paddingVertical: 12,
+          paddingHorizontal: 20,
+          borderRadius: Radii.md,
           backgroundColor: theme.surface,
           borderWidth: 1.5,
           borderColor: "rgba(17,24,28,0.18)",

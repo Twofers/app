@@ -131,7 +131,6 @@ export default function ManageSubscriptionScreen() {
               title={t("billingManage.openStripePortal", { defaultValue: "Open Stripe Portal" })}
               onPress={() => void openCustomerPortal("manage")}
               disabled={busy}
-              style={{ backgroundColor: "#FF9F1C", borderRadius: 22, height: 62, minHeight: 62 }}
             />
 
             <SecondaryButton

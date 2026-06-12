@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors, Radii, Shadows } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -34,7 +34,7 @@ export function BusinessRowCard({
     <HapticScalePressable
       onPress={onPress}
       style={({ pressed }) => ({
-        borderRadius: Radii.card,
+        borderRadius: Radii.lg,
         backgroundColor: theme.surface,
         borderWidth: 1,
         borderColor: pressed ? theme.primary : theme.border,
@@ -52,7 +52,7 @@ export function BusinessRowCard({
           style={{
             width: 58,
             minHeight: 76,
-            borderRadius: Radii.xl,
+            borderRadius: Radii.lg,
             backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.12)",
             borderWidth: 1,
             borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.32)" : "rgba(255,159,28,0.24)",
@@ -88,14 +88,14 @@ export function BusinessRowCard({
                   paddingHorizontal: Spacing.md,
                   paddingVertical: 4,
                   borderRadius: Radii.pill,
-                  backgroundColor: theme.successSurface,
+                  backgroundColor: PrimaryTint.surfaceStrong,
                   borderWidth: 1,
-                  borderColor: theme.successBorder,
+                  borderColor: PrimaryTint.border,
                   maxWidth: "100%",
                 }}
               >
                 <Text
-                  style={{ fontSize: 12, fontWeight: "800", color: theme.success }}
+                  style={{ fontSize: 12, fontWeight: "800", color: theme.accentText }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.76}

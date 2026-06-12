@@ -18,7 +18,7 @@ export function CardShell({ children, variant = "elevated", style }: CardShellPr
   const theme = Colors[colorScheme];
 
   const base: ViewStyle = {
-    borderRadius: Radii.card,
+    borderRadius: Radii.lg,
     padding: Spacing.lg,
     overflow: "hidden",
   };

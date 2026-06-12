@@ -438,7 +438,7 @@ export default function WalletScreen() {
     return (
       <View
         style={{
-          borderRadius: Radii.card,
+          borderRadius: Radii.lg,
           backgroundColor:
             bucket === "active" && !redeemed && !tokenDead
               ? urgent
@@ -627,7 +627,6 @@ export default function WalletScreen() {
               title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
-              style={{ borderRadius: Radii.lg }}
             />
             <NativePressable
               onPress={() => openVerifyForClaim(row)}
@@ -672,7 +671,6 @@ export default function WalletScreen() {
               title={claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
               disabled={claimingRefreshId !== null}
-              style={{ borderRadius: Radii.lg }}
             />
           </View>
         ) : null}
@@ -712,7 +710,7 @@ export default function WalletScreen() {
             gap: Spacing.md,
             marginTop: Spacing.md,
             marginBottom: Spacing.lg,
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             borderWidth: 1,
             borderColor: theme.border,
             padding: Spacing.md,
@@ -788,7 +786,7 @@ export default function WalletScreen() {
               <View
                 style={{
                   marginBottom: Spacing.lg,
-                  borderRadius: Radii.card,
+                  borderRadius: Radii.lg,
                   borderWidth: 1,
                   borderColor: theme.border,
                   backgroundColor: theme.surfaceMuted,

@@ -308,7 +308,7 @@ function SnapshotMetric({
         flexGrow: 1,
         minWidth: 0,
         minHeight: 86,
-        borderRadius: Radii.card,
+        borderRadius: Radii.lg,
         borderWidth: 1,
         borderColor: accent ? Colors.light.primary : Colors.light.border,
         backgroundColor: Colors.light.surface,
@@ -1865,8 +1865,8 @@ export default function BusinessDashboard() {
             <View
               style={{
                 backgroundColor: Colors.light.background,
-                borderTopLeftRadius: Radii.card,
-                borderTopRightRadius: Radii.card,
+                borderTopLeftRadius: Radii.lg,
+                borderTopRightRadius: Radii.lg,
                 borderWidth: 1,
                 borderBottomWidth: 0,
                 borderColor: Colors.light.border,

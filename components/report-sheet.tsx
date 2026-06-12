@@ -108,8 +108,8 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
           style={{
             flex: 1,
             backgroundColor: Colors.light.background,
-            borderTopLeftRadius: Radii.xl,
-            borderTopRightRadius: Radii.xl,
+            borderTopLeftRadius: Radii.lg,
+            borderTopRightRadius: Radii.lg,
             overflow: "hidden",
           }}
         >

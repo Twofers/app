@@ -17,7 +17,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii, Shadows } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal } from "@/lib/functions";
 import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled, scheduleClaimExpiryReminder } from "@/lib/notifications";
@@ -830,7 +830,7 @@ export default function HomeScreen() {
                 : t("dealDetail.claimButton");
       const statusColor =
         st === "live"
-          ? { background: theme.successSurface, border: theme.successBorder, text: theme.success }
+          ? { background: PrimaryTint.surfaceStrong, border: PrimaryTint.border, text: theme.accentText }
           : st === "claimed"
             ? {
                 background: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.14)",
@@ -847,7 +847,7 @@ export default function HomeScreen() {
         <View
           style={{
             marginBottom: Spacing.xl,
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             backgroundColor: theme.surface,
             overflow: "hidden",
             borderWidth: 1,
@@ -1252,7 +1252,7 @@ export default function HomeScreen() {
             {emptyNearbyLive ? (
               <View
                 style={{
-                  borderRadius: Radii.card,
+                  borderRadius: Radii.lg,
                   backgroundColor: theme.surface,
                   padding: Spacing.xxxl,
                   marginBottom: Spacing.xxxl,
@@ -1318,7 +1318,7 @@ export default function HomeScreen() {
               ...(favoritesOnly
                 ? {
                     backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
-                    borderRadius: Radii.card,
+                    borderRadius: Radii.lg,
                     padding: Spacing.md,
                     borderWidth: 1,
                     borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",

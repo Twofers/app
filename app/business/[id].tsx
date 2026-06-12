@@ -272,7 +272,7 @@ export default function BusinessProfileScreen() {
         {banner ? <Banner message={banner} tone="error" /> : null}
         <View
           style={{
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
@@ -309,7 +309,7 @@ export default function BusinessProfileScreen() {
         <View
           style={{
             height: 158,
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             marginBottom: Spacing.lg,
             backgroundColor: "rgba(255,159,28,0.10)",
             alignItems: "center",
@@ -369,7 +369,7 @@ export default function BusinessProfileScreen() {
         <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
           <View
             style={{
-              borderRadius: Radii.card,
+              borderRadius: Radii.lg,
               borderWidth: 1,
               borderColor: theme.border,
               backgroundColor: theme.surface,
@@ -397,7 +397,7 @@ export default function BusinessProfileScreen() {
 
           <View
             style={{
-              borderRadius: Radii.card,
+              borderRadius: Radii.lg,
               borderWidth: 1,
               borderColor: theme.border,
               backgroundColor: theme.surface,
@@ -445,7 +445,7 @@ export default function BusinessProfileScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={dealTitle}
                     style={{
-                      borderRadius: Radii.card,
+                      borderRadius: Radii.lg,
                       overflow: "hidden",
                       backgroundColor: theme.surface,
                       ...Shadows.soft,
@@ -496,7 +496,7 @@ export default function BusinessProfileScreen() {
           ) : (
             <View
               style={{
-                borderRadius: Radii.card,
+                borderRadius: Radii.lg,
                 borderWidth: 1,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
@@ -520,7 +520,7 @@ export default function BusinessProfileScreen() {
           <View
             style={{
               marginTop: Spacing.xl,
-              borderRadius: Radii.card,
+              borderRadius: Radii.lg,
               borderWidth: 1,
               borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.30)" : "rgba(255,159,28,0.22)",
               backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.10)" : "rgba(255,159,28,0.08)",

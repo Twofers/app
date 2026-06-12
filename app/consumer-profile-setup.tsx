@@ -307,8 +307,8 @@ export default function ConsumerProfileSetupScreen() {
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
           <View
             style={{
-              borderTopLeftRadius: Radii.xl,
-              borderTopRightRadius: Radii.xl,
+              borderTopLeftRadius: Radii.lg,
+              borderTopRightRadius: Radii.lg,
               backgroundColor: C.surface,
               paddingTop: Spacing.sm,
               paddingHorizontal: horizontal,

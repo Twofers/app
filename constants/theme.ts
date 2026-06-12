@@ -11,14 +11,40 @@ export { Spacing } from '@/lib/screen-layout';
 /**
  * Twofer visual tokens — 2026 delivery-app polish.
  */
+
+/**
+ * Single neutral ramp. Every gray in the app must come from here (no one-off
+ * #333 / #888 / slate / zinc / stone hexes in screens).
+ */
+export const Gray: Record<50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900, string> = {
+  50: '#F9FAFB',
+  100: '#F3F4F6',
+  200: '#E5E7EB',
+  300: '#D1D5DB',
+  400: '#9CA3AF',
+  500: '#6B7280',
+  600: '#4B5563',
+  700: '#374151',
+  800: '#1F2937',
+  900: '#111827',
+};
+
+/** Orange tints for selected/highlight surfaces — always pair with `accentText`. */
+export const PrimaryTint = {
+  surface: 'rgba(255,159,28,0.12)',
+  surfaceStrong: 'rgba(255,159,28,0.16)',
+  border: 'rgba(255,159,28,0.4)',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#11181C',
+    text: Gray[900],
     background: '#FFFFFF',
     surface: '#FFFFFF',
-    surfaceMuted: '#F8F9FA',
-    border: '#E7E9EE',
-    mutedText: '#5F6773',
+    /** Section fills + unselected chip/pill background (gray-100). */
+    surfaceMuted: Gray[100],
+    border: Gray[200],
+    mutedText: Gray[500],
     tint: '#FF9F1C', // Penguin orange (primary)
     primary: '#FF9F1C', // Use for all big CTAs
     primaryText: '#FFFFFF',
@@ -27,16 +53,18 @@ export const Colors = {
     // `primary`/`tint` for fills, buttons, and tab accents. #B45309 = 5.0:1 on
     // white, 4.8:1 on surfaceMuted.
     accentText: '#B45309',
-    secondary: '#11181C',
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    secondary: Gray[900],
+    icon: Gray[500],
+    tabIconDefault: Gray[500],
     tabIconSelected: '#FF9F1C',
-    cardShadow: '#000000',
-    // Status / feedback colors — named versions of hex values already used across screens.
-    danger: '#D32F2F',
-    success: '#2E7D32',
-    successSurface: '#E8F6E8',
-    successBorder: '#9ED79E',
+    /** The one destructive red. */
+    danger: '#DC2626',
+    /**
+     * The one success green. Reserved for redemption confirmation surfaces
+     * (redeemed wallet pass, QR / staff redemption success) — everything else
+     * uses orange or neutrals.
+     */
+    success: '#16A34A',
     favorite: '#E0245E',
   },
   dark: {
@@ -55,24 +83,24 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: '#FF9F1C',
-    cardShadow: '#000000',
     // Status / feedback colors — lighter variants for legibility on dark backgrounds.
-    danger: '#EF5350',
-    success: '#66BB6A',
-    successSurface: '#1E2B1E',
-    successBorder: '#2E7D32',
+    danger: '#F87171',
+    success: '#4ADE80',
     favorite: '#F0467A',
   },
 };
 
+/** Radius scale: chip/badge 8, input + button 12, card 16, pill 999. */
 export const Radii = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 20,
-  /** Hero / marketing cards (brand: 24px corners). */
-  card: 24,
   pill: 999,
+};
+
+/** Standard control sizing. */
+export const Controls = {
+  buttonHeight: 52,
 };
 
 export const Shadows = {

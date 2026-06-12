@@ -686,7 +686,7 @@ export default function BusinessSetupScreen() {
                   style={{
                     paddingVertical: 6,
                     paddingHorizontal: 14,
-                    borderRadius: Radii.xl,
+                    borderRadius: Radii.lg,
                     borderWidth: 1.5,
                     borderColor: active ? primary : theme.border,
                     backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,
@@ -733,7 +733,7 @@ export default function BusinessSetupScreen() {
                   style={{
                     paddingVertical: 6,
                     paddingHorizontal: 14,
-                    borderRadius: Radii.xl,
+                    borderRadius: Radii.lg,
                     borderWidth: 1.5,
                     borderColor: active ? primary : theme.border,
                     backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,

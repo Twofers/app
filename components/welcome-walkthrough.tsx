@@ -145,7 +145,7 @@ export function WelcomeWalkthrough({
           entering={FadeIn.duration(300)}
           style={{
             backgroundColor: Colors.light.background,
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             padding: Spacing.xl,
             width: "100%",
             maxWidth: 380,

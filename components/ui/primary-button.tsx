@@ -1,7 +1,7 @@
 import { Pressable, Text, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
-import { Colors, Fonts, Radii } from "@/constants/theme";
+import { Colors, Controls, Fonts, Radii } from "@/constants/theme";
 import { springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -49,10 +49,10 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
         {
           width: "100%",
           alignSelf: "stretch",
-          minHeight: 58,
-          paddingVertical: 14,
-          paddingHorizontal: 22,
-          borderRadius: Radii.lg,
+          minHeight: Controls.buttonHeight,
+          paddingVertical: 12,
+          paddingHorizontal: 20,
+          borderRadius: Radii.md,
           backgroundColor: theme.primary,
           opacity: disabled ? 0.65 : 1,
           justifyContent: "center",

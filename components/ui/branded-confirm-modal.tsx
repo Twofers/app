@@ -65,7 +65,7 @@ export function BrandedConfirmModal({
           onStartShouldSetResponder={() => true}
           style={{
             backgroundColor: theme.surface,
-            borderRadius: Radii.card,
+            borderRadius: Radii.lg,
             padding: Spacing.xl,
             gap: Spacing.sm,
             ...Shadows.soft,
