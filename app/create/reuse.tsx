@@ -12,7 +12,7 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
+import { Colors, Gray } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 
 type TemplateRow = {
@@ -189,7 +189,7 @@ export default function ReuseDealScreen() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: "#e5e5e5" }} />
+                      <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: Gray[200] }} />
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
@@ -256,7 +256,7 @@ export default function ReuseDealScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: "#e5e5e5" }} />
+                    <View style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: Gray[200] }} />
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>

@@ -25,7 +25,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Fonts, Gray, Radii } from "@/constants/theme";
+import { Colors, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -101,7 +101,7 @@ function EndEarlyButton({
     >
       <Text
         style={{
-          color: "#b71c1c",
+          color: Colors.light.danger,
           fontWeight: "800",
           fontSize: 15,
           ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
@@ -1598,7 +1598,7 @@ export default function BusinessDashboard() {
                                 height: 88,
                                 width: 88,
                                 borderRadius: 16,
-                                backgroundColor: "#f3f4f6",
+                                backgroundColor: Gray[100],
                               }}
                             />
                           )}
@@ -1616,7 +1616,7 @@ export default function BusinessDashboard() {
                                     backgroundColor: "rgba(17,17,17,0.08)",
                                   }}
                                 >
-                                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#333" }}>
+                                  <Text style={{ fontSize: 10, fontWeight: "800", color: Gray[700] }}>
                                     {t("offersDashboard.badgeRecurring")}
                                   </Text>
                                 </View>
@@ -1626,14 +1626,14 @@ export default function BusinessDashboard() {
                                   paddingHorizontal: Spacing.sm,
                                   paddingVertical: 4,
                                   borderRadius: 999,
-                                  backgroundColor: active ? "rgba(255,159,28,0.16)" : "#f0f0f0",
+                                  backgroundColor: active ? PrimaryTint.surfaceStrong : Gray[100],
                                 }}
                               >
                                 <Text
                                   style={{
                                     fontSize: 11,
                                     fontWeight: "800",
-                                    color: active ? "#c26100" : "#555",
+                                    color: active ? Colors.light.accentText : Gray[600],
                                   }}
                                 >
                                   {statusBadgeLabel(sched, item)}
@@ -1833,7 +1833,7 @@ export default function BusinessDashboard() {
                 }}
               >
                 <Text
-                  style={{ color: "#b71c1c", fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  style={{ color: Colors.light.danger, fontWeight: "800", fontSize: 14, textAlign: "center" }}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.72}

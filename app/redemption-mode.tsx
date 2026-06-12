@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import {
@@ -207,11 +207,11 @@ export default function RedemptionModeScreen() {
             style={{
               paddingVertical: 8,
               paddingHorizontal: 10,
-              borderRadius: Radii.md,
-              backgroundColor: staffReady ? "#e8f5e9" : "#fff3e0",
+              borderRadius: Radii.pill,
+              backgroundColor: staffReady ? theme.primary : theme.surfaceMuted,
             }}
           >
-            <Text style={{ color: staffReady ? "#1b5e20" : "#c26100", fontWeight: "800", fontSize: 12 }}>
+            <Text style={{ color: staffReady ? theme.primaryText : Gray[700], fontWeight: "800", fontSize: 12 }}>
               {staffReady ? t("redemptionMode.ready", { defaultValue: "READY" }) : t("redemptionMode.locked", { defaultValue: "LOCKED" })}
             </Text>
           </View>
@@ -249,7 +249,7 @@ export default function RedemptionModeScreen() {
             <View
               style={{
                 borderWidth: 1,
-                borderColor: "#FF9F1C",
+                borderColor: theme.primary,
                 borderRadius: Radii.lg,
                 padding: Spacing.lg,
                 backgroundColor: colorScheme === "dark" ? "#2b1c08" : "#fff7ed",

@@ -36,7 +36,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
-import { Colors, PrimaryTint } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint } from "@/constants/theme";
 import {
   aiGenerateAd,
   aiReviseAd,
@@ -1576,7 +1576,7 @@ export default function AiDealScreen() {
         {showCamera ? (
           <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
             <CameraView ref={cameraRef} style={{ height: 360, width: "100%" }} facing="back" />
-            <View style={{ padding: 12, backgroundColor: "#111" }}>
+            <View style={{ padding: 12, backgroundColor: Gray[900] }}>
               <PrimaryButton title={t("createAi.capturePhoto")} onPress={capturePhoto} />
               <View style={{ marginTop: 8 }}>
                 <SecondaryButton title={t("createAi.cancel")} onPress={() => setShowCamera(false)} />
@@ -1638,10 +1638,10 @@ export default function AiDealScreen() {
                           borderColor: Colors.light.border,
                         }}
                       >
-                        <Text style={{ fontWeight: "700", fontSize: 13, color: selected ? "#fff" : "#111", textAlign: "center" }}>
+                        <Text style={{ fontWeight: "700", fontSize: 13, color: selected ? "#fff" : Gray[700], textAlign: "center" }}>
                           {t(opt.labelKey)}
                         </Text>
-                        <Text style={{ marginTop: 2, fontSize: 11, color: selected ? "#fff" : "#666", textAlign: "center" }}>
+                        <Text style={{ marginTop: 2, fontSize: 11, color: selected ? "#fff" : Gray[500], textAlign: "center" }}>
                           {t(opt.helperKey)}
                         </Text>
                       </Pressable>
@@ -1710,7 +1710,7 @@ export default function AiDealScreen() {
                 style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? Colors.light.primary : Colors.light.surfaceMuted }}
               >
                 <Text
-                  style={{ color: validityMode === "one-time" ? "#fff" : "#111", fontWeight: "700" }}
+                  style={{ color: validityMode === "one-time" ? "#fff" : Gray[700], fontWeight: "700" }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -1724,7 +1724,7 @@ export default function AiDealScreen() {
                 style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? Colors.light.primary : Colors.light.surfaceMuted }}
               >
                 <Text
-                  style={{ color: validityMode === "recurring" ? "#fff" : "#111", fontWeight: "700" }}
+                  style={{ color: validityMode === "recurring" ? "#fff" : Gray[700], fontWeight: "700" }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -1855,7 +1855,7 @@ export default function AiDealScreen() {
                         style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted }}
                       >
                         <Text
-                          style={{ color: active ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }}
+                          style={{ color: active ? "#fff" : Gray[700], fontWeight: "700", fontSize: 13 }}
                           numberOfLines={1}
                           adjustsFontSizeToFit
                           minimumFontScale={0.78}
@@ -1892,7 +1892,7 @@ export default function AiDealScreen() {
                         style={{ maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? Colors.light.primary : Colors.light.surfaceMuted }}
                       >
                         <Text
-                          style={{ color: selected ? "#fff" : "#111", fontWeight: "600" }}
+                          style={{ color: selected ? "#fff" : Gray[700], fontWeight: "600" }}
                           numberOfLines={1}
                           adjustsFontSizeToFit
                           minimumFontScale={0.78}
@@ -2061,7 +2061,7 @@ export default function AiDealScreen() {
                   {/* Top — meta line */}
                   <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4 }}>
                     {businessName ? (
-                      <Text style={{ fontSize: 12, color: "#888", fontWeight: "600", letterSpacing: 0.3 }}>
+                      <Text style={{ fontSize: 12, color: Gray[500], fontWeight: "600", letterSpacing: 0.3 }}>
                         {businessName.toUpperCase()}
                       </Text>
                     ) : null}
@@ -2072,7 +2072,7 @@ export default function AiDealScreen() {
                     <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: Colors.light.primary, lineHeight: 28 }}>
                       {generatedAd.headline}
                     </Text>
-                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: "#222", lineHeight: 22 }}>
+                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: Gray[800], lineHeight: 22 }}>
                       {generatedAd.subheadline}
                     </Text>
                   </View>
@@ -2085,7 +2085,7 @@ export default function AiDealScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ height: 200, backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" }}>
+                    <View style={{ height: 200, backgroundColor: Gray[100], alignItems: "center", justifyContent: "center" }}>
                       <Text style={{ opacity: 0.5 }}>{t("createAi.noImage")}</Text>
                     </View>
                   )}
@@ -2094,7 +2094,7 @@ export default function AiDealScreen() {
                   <View style={{ paddingHorizontal: 18, paddingVertical: 16, gap: 10 }}>
                     <View
                       style={{
-                        backgroundColor: "#FF9F1C",
+                        backgroundColor: Colors.light.primary,
                         paddingVertical: 12,
                         paddingHorizontal: 20,
                         borderRadius: 14,
@@ -2106,18 +2106,18 @@ export default function AiDealScreen() {
                       </Text>
                     </View>
                     {businessProfile?.address || businessProfile?.location ? (
-                      <Text style={{ fontSize: 13, color: "#666" }}>
+                      <Text style={{ fontSize: 13, color: Gray[500] }}>
                         {businessProfile.address ?? businessProfile.location}
                       </Text>
                     ) : null}
-                    <Text style={{ fontSize: 12, color: "#888" }}>{displayScheduleSummary}</Text>
+                    <Text style={{ fontSize: 12, color: Gray[500] }}>{displayScheduleSummary}</Text>
                   </View>
                 </View>
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: "#f8f6f0", borderLeftWidth: 3, borderLeftColor: "#FF9F1C" }}>
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#a06400", letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, color: "#444", lineHeight: 19 }}>
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: Colors.light.primary }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.light.accentText, letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 13, color: Gray[600], lineHeight: 19 }}>
                       {generatedAd.item_research.description}
                     </Text>
                   </View>
@@ -2140,7 +2140,7 @@ export default function AiDealScreen() {
                   <View style={{ padding: 16, borderRadius: 18, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, gap: 12 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                       <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createAi.tweakTitle")}</Text>
-                      <Text style={{ fontSize: 12, color: "#888" }}>{revisionsLeftLabel}</Text>
+                      <Text style={{ fontSize: 12, color: Gray[500] }}>{revisionsLeftLabel}</Text>
                     </View>
 
                     {/* Target toggle */}
@@ -2160,7 +2160,7 @@ export default function AiDealScreen() {
                               borderColor: selected ? Colors.light.primary : Colors.light.border,
                             }}
                           >
-                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? "#fff" : "#111", fontSize: 13 }}>
+                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? "#fff" : Gray[700], fontSize: 13 }}>
                               {targetLabel[target]}
                             </Text>
                           </Pressable>
@@ -2186,7 +2186,7 @@ export default function AiDealScreen() {
                               borderColor: selected ? Colors.light.primary : Colors.light.border,
                             }}
                           >
-                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#fff" : "#222" }}>{presetText}</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#fff" : Gray[700] }}>{presetText}</Text>
                           </Pressable>
                         );
                       })}

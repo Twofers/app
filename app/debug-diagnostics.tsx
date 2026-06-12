@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Gray } from "@/constants/theme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { useTabMode } from "@/lib/tab-mode";
@@ -49,11 +50,11 @@ export default function DebugDiagnosticsScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      <Text style={{ marginBottom: Spacing.sm, fontSize: 13, color: "#555" }}>
+      <Text style={{ marginBottom: Spacing.sm, fontSize: 13, color: Gray[600] }}>
         Long-press the block below to copy (system selection).
       </Text>
       <ScrollView contentContainerStyle={{ paddingBottom: scrollBottom }} keyboardShouldPersistTaps="handled">
-        <Text style={{ fontFamily: "monospace", fontSize: 11, color: "#111" }} selectable>
+        <Text style={{ fontFamily: "monospace", fontSize: 11, color: Gray[900] }} selectable>
           {text}
         </Text>
       </ScrollView>

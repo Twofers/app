@@ -327,7 +327,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
               {loadingOwnerSecurity ? (
                 <ActivityIndicator color={theme.primary} />
               ) : (
-                <Text style={{ color: ownerSecurity?.enabled ? "#1b5e20" : theme.mutedText, fontWeight: "900", fontSize: 12 }}>
+                <Text style={{ color: ownerSecurity?.enabled ? theme.accentText : theme.mutedText, fontWeight: "900", fontSize: 12 }}>
                   {ownerSecurity?.enabled ? t("commonUi.on", { defaultValue: "On" }) : t("commonUi.off", { defaultValue: "Off" })}
                 </Text>
               )}
@@ -553,7 +553,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                   <Text style={{ color: theme.text, fontWeight: "800", flex: 1 }} numberOfLines={1}>
                     {device.device_label}
                   </Text>
-                  <Text style={{ color: device.active ? "#1b5e20" : theme.mutedText, fontWeight: "800", fontSize: 12 }}>
+                  <Text style={{ color: device.active ? theme.accentText : theme.mutedText, fontWeight: "800", fontSize: 12 }}>
                     {formatDeviceStatus(device, t)}
                   </Text>
                 </View>

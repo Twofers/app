@@ -255,7 +255,7 @@ export default function RedeemScanner() {
               padding: Spacing.lg,
               backgroundColor: colorScheme === "dark" ? "#2b1c08" : "#fff7ed",
               borderWidth: 1,
-              borderColor: "#FF9F1C",
+              borderColor: Colors.light.primary,
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
@@ -266,7 +266,7 @@ export default function RedeemScanner() {
                   borderRadius: 17,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#FF9F1C",
+                  backgroundColor: Colors.light.primary,
                 }}
               >
                 <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>OK</Text>
