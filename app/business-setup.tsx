@@ -491,27 +491,33 @@ export default function BusinessSetupScreen() {
   return (
     <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
-      <Pressable
-        onPress={() => void exitSetup()}
-        accessibilityRole="button"
-        accessibilityLabel={t("commonUi.goBack", { defaultValue: "Back" })}
-        style={{
-          alignSelf: "flex-start",
-          minHeight: 44,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.xs,
-          borderRadius: Radii.pill,
-          backgroundColor: theme.surfaceMuted,
-          paddingHorizontal: Spacing.sm,
-          marginBottom: Spacing.sm,
-        }}
-      >
-        <MaterialIcons name="arrow-back" size={20} color={theme.text} />
-        <Text style={{ color: theme.text, fontWeight: "800" }}>
-          {t("commonUi.goBack", { defaultValue: "Back" })}
-        </Text>
-      </Pressable>
+      {/* The stack header back arrow covers navigation when there is a back
+          stack. Fresh signups land here with NO back stack (no header arrow),
+          and exitSetup()'s only clean exit is sign-out — keep the pill for
+          that case only. */}
+      {!router.canGoBack() ? (
+        <Pressable
+          onPress={() => void exitSetup()}
+          accessibilityRole="button"
+          accessibilityLabel={t("commonUi.goBack", { defaultValue: "Back" })}
+          style={{
+            alignSelf: "flex-start",
+            minHeight: 44,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: Spacing.xs,
+            borderRadius: Radii.pill,
+            backgroundColor: theme.surfaceMuted,
+            paddingHorizontal: Spacing.sm,
+            marginBottom: Spacing.sm,
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={20} color={theme.text} />
+          <Text style={{ color: theme.text, fontWeight: "800" }}>
+            {t("commonUi.goBack", { defaultValue: "Back" })}
+          </Text>
+        </Pressable>
+      ) : null}
       <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("businessSetup.title")}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
         {t("businessSetup.subtitle")}
