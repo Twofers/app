@@ -29,7 +29,7 @@ import { persistRoleForUser, resolveRoleForUser, SIGNUP_ROLE_META_KEY } from "@/
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage, isEmailNotConfirmedError } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Controls, Radii } from "@/constants/theme";
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "@/lib/legal-urls";
 import { Banner } from "@/components/ui/banner";
 import { LocaleFlag } from "@/components/ui/locale-flag";
@@ -857,6 +857,10 @@ export default function AuthLandingScreen() {
                 <View style={{ height: Spacing.lg }} />
               )}
 
+              {/* Custom Pressable (not PrimaryButton) only because it renders an
+                  inline busy spinner + accessibilityState.busy. Sizing must match
+                  the button standard: Controls.buttonHeight + Radii.md, no shadow
+                  (see components/ui/primary-button.tsx). */}
               <ScalePressable
                 disabled={busy}
                 onPress={() => void (isSignup ? handleSignUp() : handleLogIn())}
@@ -869,7 +873,7 @@ export default function AuthLandingScreen() {
                 }
                 accessibilityState={{ disabled: busy, busy }}
                 style={{
-                  minHeight: 58,
+                  minHeight: Controls.buttonHeight,
                   borderRadius: Radii.md,
                   backgroundColor: theme.primary,
                   justifyContent: "center",
@@ -881,7 +885,7 @@ export default function AuthLandingScreen() {
               >
                 {busy ? <ActivityIndicator color={theme.primaryText} /> : null}
                 <Text
-                  style={{ color: theme.primaryText, fontWeight: "800", fontSize: 18, textAlign: "center", flexShrink: 1 }}
+                  style={{ color: theme.primaryText, fontWeight: "800", fontSize: 17, textAlign: "center", flexShrink: 1 }}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
