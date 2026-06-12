@@ -182,7 +182,8 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#F6A21E",
-        "foregroundImage": "./assets/images/adaptive-icon-foreground-1024.png"
+        "foregroundImage": "./assets/images/adaptive-icon-foreground-1024.png",
+        "monochromeImage": "./assets/images/adaptive-icon-monochrome-1024.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
