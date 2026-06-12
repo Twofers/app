@@ -4,7 +4,7 @@
     "slug": "twoforone",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon-1024-orange.png",
     "scheme": [
       "twoforone",
       "twofer"
@@ -13,7 +13,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.unvmex2.twoforone",
-      "icon": "./assets/images/ios-icon.png",
+      "icon": "./assets/images/icon-1024-orange.png",
       "associatedDomains": [
         "applinks:www.twoferapp.com"
       ],
@@ -181,10 +181,8 @@
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F6A21E",
+        "foregroundImage": "./assets/images/adaptive-icon-foreground-1024.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -260,10 +258,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/penguin-splash-1024.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#FFFFFF",
           "dark": {
             "backgroundColor": "#151718"
           }

@@ -1,0 +1,74 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- waving flipper (penguin's left, viewer right) behind body -->
+  <g transform="rotate(33 392 218)">
+    <ellipse cx="392" cy="218" rx="30" ry="86" fill="#2B3240"/>
+  </g>
+
+  <!-- body + head as one ink silhouette -->
+  <path d="M 256 62
+           C 188 62 150 112 150 172
+           C 150 196 156 214 164 228
+           C 138 258 124 296 124 336
+           C 124 426 184 466 256 466
+           C 328 466 388 426 388 336
+           C 388 296 374 258 348 228
+           C 356 214 362 196 362 172
+           C 362 112 324 62 256 62 Z"
+        fill="#2B3240"/>
+
+  <!-- resting flipper (viewer left) -->
+  <g transform="rotate(24 146 316)">
+    <ellipse cx="146" cy="316" rx="29" ry="82" fill="#2B3240"/>
+  </g>
+
+  <!-- feet -->
+  <g stroke="#2B3240" stroke-width="9" stroke-linejoin="round">
+    <path d="M 176 446 q -24 6 -24 22 q 0 14 28 14 q 28 0 28 -14 q 0 -13 -9 -20 Z" fill="#F6A21E"/>
+    <path d="M 336 446 q 24 6 24 22 q 0 14 -28 14 q -28 0 -28 -14 q 0 -13 9 -20 Z" fill="#F6A21E"/>
+  </g>
+
+  <!-- white face patch (two lobes) -->
+  <path d="M 256 116
+           C 232 96 196 100 180 124
+           C 164 148 168 184 190 206
+           C 212 228 240 234 256 234
+           C 272 234 300 228 322 206
+           C 344 184 348 148 332 124
+           C 316 100 280 96 256 116 Z"
+        fill="#FFFFFF"/>
+
+  <!-- white belly -->
+  <ellipse cx="256" cy="346" rx="96" ry="104" fill="#FFFFFF"/>
+
+  <!-- happy closed eyes -->
+  <g stroke="#2B3240" stroke-width="11" stroke-linecap="round" fill="none">
+    <path d="M 196 164 q 16 -18 32 0"/>
+    <path d="M 284 164 q 16 -18 32 0"/>
+  </g>
+
+  <!-- beak -->
+  <path d="M 242 188 L 270 188 Q 276 188 272 195 L 261 209 Q 256 215 251 209 L 240 195 Q 236 188 242 188 Z"
+        fill="#F6A21E" stroke="#2B3240" stroke-width="6.5" stroke-linejoin="round"/>
+
+  <!-- scarf band -->
+  <path d="M 168 232
+           C 196 262 316 262 344 232
+           C 352 244 354 256 350 268
+           C 312 296 200 296 162 268
+           C 158 256 160 244 168 232 Z"
+        fill="#5BA9E8" stroke="#2B3240" stroke-width="9" stroke-linejoin="round"/>
+
+  <!-- scarf hanging tail (viewer left) -->
+  <path d="M 176 270
+           C 168 296 164 322 168 348
+           C 169 356 174 360 182 359
+           L 216 352
+           C 224 350 227 344 224 336
+           C 216 312 212 292 212 280 Z"
+        fill="#5BA9E8" stroke="#2B3240" stroke-width="9" stroke-linejoin="round"/>
+  <!-- fringe notches -->
+  <g stroke="#2B3240" stroke-width="7" stroke-linecap="round">
+    <line x1="184" y1="357" x2="184" y2="344"/>
+    <line x1="200" y1="355" x2="200" y2="342"/>
+  </g>
+</svg>

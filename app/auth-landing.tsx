@@ -437,11 +437,9 @@ export default function AuthLandingScreen() {
         >
           <View style={{ alignItems: "center", marginBottom: Spacing.md }}>
             {/* Dedicated auth-logo asset (NOT the adaptive-icon foreground, which must
-                keep its launcher safe-zone padding). Re-export penguin-logo.png as a
-                tightly cropped penguin with true alpha transparency — the current file
-                still carries a baked-in checkerboard from the original art export. */}
+                keep its launcher safe-zone padding). */}
             <Image
-              source={require("../assets/images/penguin-logo.png")}
+              source={require("../assets/images/penguin-auth-512.png")}
               style={{ width: 88, height: 88, marginBottom: Spacing.xs }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
