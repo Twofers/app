@@ -708,7 +708,7 @@ export default function AccountScreen() {
                   {t("account.billingRowSubtitle")}
                 </Text>
                 <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
-                  {t("billing.goToBilling", { defaultValue: "Go to Billing" })} →
+                  {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
                 </Text>
               </CardShell>
             </Pressable>

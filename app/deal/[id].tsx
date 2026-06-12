@@ -622,7 +622,7 @@ export default function DealDetail() {
               title={
                 isSharing
                   ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
-                  : t("shareDeal.shareDeal", { defaultValue: "Share Deal" })
+                  : t("shareDeal.shareDeal", { defaultValue: "Share deal" })
               }
               onPress={handleShare}
               disabled={isSharing}

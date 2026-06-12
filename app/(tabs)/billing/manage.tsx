@@ -105,7 +105,7 @@ export default function ManageSubscriptionScreen() {
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 40 }}>
         <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text }}>
-          {t("billingManage.title", { defaultValue: "Manage Subscription" })}
+          {t("billingManage.title", { defaultValue: "Manage subscription" })}
         </Text>
 
         <Text style={{ marginTop: 10, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
@@ -128,7 +128,7 @@ export default function ManageSubscriptionScreen() {
               {t("billingManage.actionsTitle", { defaultValue: "Subscription actions" })}
             </Text>
             <PrimaryButton
-              title={t("billingManage.openStripePortal", { defaultValue: "Open Stripe Portal" })}
+              title={t("billingManage.openStripePortal", { defaultValue: "Open Stripe portal" })}
               onPress={() => void openCustomerPortal("manage")}
               disabled={busy}
             />
@@ -140,19 +140,19 @@ export default function ManageSubscriptionScreen() {
             />
 
             <SecondaryButton
-              title={t("billingManage.cancelSubscription", { defaultValue: "Cancel Subscription" })}
+              title={t("billingManage.cancelSubscription", { defaultValue: "Cancel subscription" })}
               onPress={() => void openCustomerPortal("cancel")}
               disabled={busy}
             />
 
             <SecondaryButton
-              title={t("billingManage.viewInvoices", { defaultValue: "View Invoices" })}
+              title={t("billingManage.viewInvoices", { defaultValue: "View invoices" })}
               onPress={() => void openCustomerPortal("invoices")}
               disabled={busy}
             />
 
             <SecondaryButton
-              title={t("billingManage.backToBilling", { defaultValue: "Back to Billing" })}
+              title={t("billingManage.backToBilling", { defaultValue: "Back to billing" })}
               onPress={() => router.back()}
               disabled={busy}
             />

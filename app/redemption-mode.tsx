@@ -85,7 +85,7 @@ export default function RedemptionModeScreen() {
 
   const statusText = useMemo(() => {
     // redemptionMode.locked is the badge text ("LOCKED"); the subtitle wants the mode name.
-    if (!state) return t("redemptionMode.title", { defaultValue: "Redemption Mode" });
+    if (!state) return t("redemptionMode.title", { defaultValue: "Redemption mode" });
     return state.deviceLabel;
   }, [state, t]);
 
@@ -197,7 +197,7 @@ export default function RedemptionModeScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 24, fontWeight: "900", color: theme.text }} numberOfLines={1} adjustsFontSizeToFit>
-              {t("redemptionMode.title", { defaultValue: "Redemption Mode" })}
+              {t("redemptionMode.title", { defaultValue: "Redemption mode" })}
             </Text>
             <Text style={{ marginTop: 3, color: theme.mutedText, fontSize: 13 }} numberOfLines={1}>
               {statusText}
@@ -400,7 +400,7 @@ export default function RedemptionModeScreen() {
             }}
           >
             <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>
-              {t("redemptionMode.exitTitle", { defaultValue: "Exit Redemption Mode" })}
+              {t("redemptionMode.exitTitle", { defaultValue: "Exit redemption mode" })}
             </Text>
             <TextInput
               value={exitPin}

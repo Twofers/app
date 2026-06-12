@@ -1168,7 +1168,7 @@ export default function BusinessDashboard() {
                 {t("offersDashboard.billingHintShort")}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 14, opacity: 0.65, fontWeight: "600" }}>
-                {t("billing.goToBilling", { defaultValue: "Go to Billing" })} →
+                {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
               </Text>
             </CardShell>
           </Pressable>

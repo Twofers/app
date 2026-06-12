@@ -57,7 +57,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   const [ownerDisablePin, setOwnerDisablePin] = useState("");
   const [ownerNewPin, setOwnerNewPin] = useState("");
   const [ownerNewPinConfirm, setOwnerNewPinConfirm] = useState("");
-  const defaultDeviceLabel = t("redemptionMode.defaultDeviceLabel", { defaultValue: "Front Counter iPhone" });
+  const defaultDeviceLabel = t("redemptionMode.defaultDeviceLabel", { defaultValue: "Front counter iPhone" });
   const [deviceLabel, setDeviceLabel] = useState(defaultDeviceLabel);
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
@@ -301,7 +301,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       >
         <View style={{ flex: 1 }}>
           <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>
-            {t("redemptionMode.settingsTitle", { defaultValue: "Redemption Mode" })}
+            {t("redemptionMode.settingsTitle", { defaultValue: "Redemption mode" })}
           </Text>
           <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 4, lineHeight: 18 }}>
             {t("redemptionMode.settingsSubtitle", { defaultValue: "Lock this device to staff redemptions only." })}
@@ -459,7 +459,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
             <TextInput
               value={deviceLabel}
               onChangeText={setDeviceLabel}
-              placeholder={t("redemptionMode.deviceLabelPlaceholder", { defaultValue: "Front Counter iPad" })}
+              placeholder={t("redemptionMode.deviceLabelPlaceholder", { defaultValue: "Front counter iPad" })}
               placeholderTextColor={theme.mutedText}
               autoCapitalize="words"
               maxLength={80}
