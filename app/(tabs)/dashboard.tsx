@@ -25,7 +25,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Fonts, Radii } from "@/constants/theme";
+import { Colors, Fonts, Gray, Radii } from "@/constants/theme";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -423,13 +423,11 @@ function ScrollFilterRow({
               paddingHorizontal: Spacing.md,
               paddingVertical: 6,
               borderRadius: Radii.pill,
-              borderWidth: active ? 2 : 1,
-              borderColor: active ? Colors.light.primary : Colors.light.border,
-              backgroundColor: active ? "rgba(255,159,28,0.12)" : Colors.light.surface,
+              backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted,
             }}
           >
             <Text
-              style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.accentText : Colors.light.text }}
+              style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.primaryText : Gray[700] }}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.78}

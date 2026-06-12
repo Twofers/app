@@ -16,7 +16,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { supabase } from "@/lib/supabase";
 import { fetchOwnerBusiness } from "@/lib/owner-business";
-import { Colors, Radii, Shadows } from "@/constants/theme";
+import { Colors, Gray, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
@@ -686,13 +686,11 @@ export default function BusinessSetupScreen() {
                   style={{
                     paddingVertical: 6,
                     paddingHorizontal: 14,
-                    borderRadius: Radii.lg,
-                    borderWidth: 1.5,
-                    borderColor: active ? primary : theme.border,
-                    backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,
+                    borderRadius: Radii.pill,
+                    backgroundColor: active ? primary : theme.surfaceMuted,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? primary : theme.text }}>
+                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? theme.primaryText : Gray[700] }}>
                     {t(`businessSetup.cat.${key}`)}
                   </Text>
                 </Pressable>
@@ -733,13 +731,11 @@ export default function BusinessSetupScreen() {
                   style={{
                     paddingVertical: 6,
                     paddingHorizontal: 14,
-                    borderRadius: Radii.lg,
-                    borderWidth: 1.5,
-                    borderColor: active ? primary : theme.border,
-                    backgroundColor: active ? "rgba(255,159,28,0.12)" : theme.surface,
+                    borderRadius: Radii.pill,
+                    backgroundColor: active ? primary : theme.surfaceMuted,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? primary : theme.text }}>
+                  <Text style={{ fontSize: 14, fontWeight: active ? "800" : "600", color: active ? theme.primaryText : Gray[700] }}>
                     {t(`businessSetup.hoursPreset.${key}`)}
                   </Text>
                 </Pressable>

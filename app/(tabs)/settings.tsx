@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { BrandedSwitch } from "@/components/ui/branded-switch";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
@@ -382,15 +382,15 @@ export default function SettingsScreen() {
         style={{
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
-          borderRadius: Radii.md,
-          backgroundColor: active ? theme.text : theme.surfaceMuted,
+          borderRadius: Radii.pill,
+          backgroundColor: active ? theme.primary : theme.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
           maxWidth: "100%",
         }}
       >
         <Text
-          style={{ fontWeight: "700", color: active ? theme.background : theme.text }}
+          style={{ fontWeight: "700", color: active ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.78}
@@ -592,14 +592,12 @@ export default function SettingsScreen() {
                     paddingVertical: Spacing.sm,
                     paddingHorizontal: Spacing.md,
                     borderRadius: Radii.pill,
-                    backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
-                    borderWidth: 1,
-                    borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
+                    backgroundColor: active ? theme.primary : theme.surfaceMuted,
                     marginRight: Spacing.sm,
                     marginBottom: Spacing.sm,
                   }}
                 >
-                  <Text style={{ color: active ? theme.primary : "#333", fontWeight: "700", fontSize: 13 }}>
+                  <Text style={{ color: active ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700", fontSize: 13 }}>
                     {loc === "en" ? t("language.english") : loc === "es" ? t("language.spanish") : t("language.korean")}
                   </Text>
                 </Pressable>

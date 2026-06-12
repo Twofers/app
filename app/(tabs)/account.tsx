@@ -26,7 +26,7 @@ import { deleteUserAccount } from "../../lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
@@ -541,16 +541,14 @@ export default function AccountScreen() {
           paddingVertical: Spacing.sm,
           paddingHorizontal: Spacing.md,
           borderRadius: Radii.pill,
-          backgroundColor: active ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
-          borderWidth: 1,
-          borderColor: active ? "rgba(255,159,28,0.4)" : theme.border,
+          backgroundColor: active ? theme.primary : theme.surfaceMuted,
           marginRight: Spacing.sm,
           marginBottom: Spacing.sm,
           maxWidth: "100%",
         }}
       >
         <Text
-          style={{ color: active ? theme.primary : theme.text, fontWeight: "700", fontSize: 13 }}
+          style={{ color: active ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700", fontSize: 13 }}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.78}

@@ -9,7 +9,7 @@ import { Image } from "expo-image";
 import { devWarn } from "@/lib/dev-log";
 
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { isDealActiveNow } from "@/lib/deal-time";
@@ -685,13 +685,13 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
             style={{
               alignSelf: "flex-start",
               minHeight: 36,
-              borderRadius: 10,
+              borderRadius: Radii.pill,
               paddingHorizontal: Spacing.md,
               justifyContent: "center",
-              backgroundColor: "#111",
+              backgroundColor: Colors.light.primary,
             }}
           >
-            <Text style={{ color: "#fff", fontWeight: "800" }}>
+            <Text style={{ color: Colors.light.primaryText, fontWeight: "800" }}>
               {t("commonUi.settings", { defaultValue: "Settings" })}
             </Text>
           </Pressable>
@@ -710,15 +710,13 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
               minHeight: 48,
               paddingVertical: Spacing.md,
               paddingHorizontal: Spacing.sm,
-              borderRadius: 14,
-              backgroundColor: mode === "all" ? "#111" : "#fff",
+              borderRadius: Radii.pill,
+              backgroundColor: mode === "all" ? Colors.light.primary : Gray[100],
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: mode === "all" ? 0 : 1,
-              borderColor: "#e4e4e7",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? "#fff" : "#27272a", textAlign: "center" }}>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? Colors.light.primaryText : Gray[700], textAlign: "center" }}>
               {t("consumerMap.toggleAll")}
             </Text>
           </Pressable>
@@ -733,15 +731,13 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
               minHeight: 48,
               paddingVertical: Spacing.md,
               paddingHorizontal: Spacing.sm,
-              borderRadius: 14,
-              backgroundColor: mode === "live" ? "#111" : "#fff",
+              borderRadius: Radii.pill,
+              backgroundColor: mode === "live" ? Colors.light.primary : Gray[100],
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: mode === "live" ? 0 : 1,
-              borderColor: "#e4e4e7",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? "#fff" : "#27272a", textAlign: "center" }}>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? Colors.light.primaryText : Gray[700], textAlign: "center" }}>
               {t("consumerMap.toggleLive")}
             </Text>
           </Pressable>

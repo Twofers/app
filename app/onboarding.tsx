@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import {
@@ -44,7 +44,7 @@ export default function OnboardingScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const C = Colors[colorScheme];
   const selectedSurface = colorScheme === "dark" ? "#3B301F" : "#FFF3E0";
-  const selectedBorder = colorScheme === "dark" ? "#6B4A1E" : "#FFD59A";
+  const unselectedText = colorScheme === "dark" ? C.text : Gray[700];
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
 
   const [locationMode, setLocationMode] = useState<"gps" | "zip">("gps");
@@ -248,13 +248,12 @@ export default function OnboardingScreen() {
             <Pressable
               onPress={() => { setLocationMode("gps"); setHint(null); }}
               style={{
-                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.lg, alignItems: "center",
-                borderWidth: 2, borderColor: locationMode === "gps" ? C.primary : C.border,
-                backgroundColor: locationMode === "gps" ? selectedSurface : C.surface,
+                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.pill, alignItems: "center",
+                backgroundColor: locationMode === "gps" ? C.primary : C.surfaceMuted,
               }}
             >
               <Text
-                style={{ fontWeight: "700", color: locationMode === "gps" ? C.accentText : C.text, textAlign: "center" }}
+                style={{ fontWeight: "700", color: locationMode === "gps" ? C.primaryText : unselectedText, textAlign: "center" }}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
@@ -266,13 +265,12 @@ export default function OnboardingScreen() {
             <Pressable
               onPress={() => { setLocationMode("zip"); setHint(null); }}
               style={{
-                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.lg, alignItems: "center",
-                borderWidth: 2, borderColor: locationMode === "zip" ? C.primary : C.border,
-                backgroundColor: locationMode === "zip" ? selectedSurface : C.surface,
+                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.pill, alignItems: "center",
+                backgroundColor: locationMode === "zip" ? C.primary : C.surfaceMuted,
               }}
             >
               <Text
-                style={{ fontWeight: "700", color: locationMode === "zip" ? C.accentText : C.text, textAlign: "center" }}
+                style={{ fontWeight: "700", color: locationMode === "zip" ? C.primaryText : unselectedText, textAlign: "center" }}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
@@ -329,12 +327,11 @@ export default function OnboardingScreen() {
                   onPress={() => setRadius(m)}
                   style={{
                     paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill, maxWidth: "100%",
-                    backgroundColor: active ? selectedSurface : C.surfaceMuted,
-                    borderWidth: 1, borderColor: active ? selectedBorder : C.border,
+                    backgroundColor: active ? C.primary : C.surfaceMuted,
                   }}
                 >
                   <Text
-                    style={{ fontWeight: "700", color: active ? C.accentText : C.text }}
+                    style={{ fontWeight: "700", color: active ? C.primaryText : unselectedText }}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.78}
@@ -361,12 +358,11 @@ export default function OnboardingScreen() {
                   onPress={() => setCategories((prev) => (active ? prev.filter((c) => c !== key) : [...prev, key]))}
                   style={{
                     paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: Radii.pill, maxWidth: "100%",
-                    backgroundColor: active ? selectedSurface : C.surfaceMuted,
-                    borderWidth: 1, borderColor: active ? selectedBorder : C.border,
+                    backgroundColor: active ? C.primary : C.surfaceMuted,
                   }}
                 >
                   <Text
-                    style={{ fontWeight: "700", color: active ? C.accentText : C.text }}
+                    style={{ fontWeight: "700", color: active ? C.primaryText : unselectedText }}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.78}
