@@ -616,7 +616,10 @@ export default function SettingsScreen() {
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("account.sessionSectionTitle")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
+            {session?.user?.email ? (
+              <Text style={{ fontWeight: "700", color: theme.text }}>{session.user.email}</Text>
+            ) : null}
             <SecondaryButton
               title={t("account.logOut")}
               onPress={confirmLogout}
@@ -629,33 +632,24 @@ export default function SettingsScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#f3d4d4",
+              borderColor: "#FECACA",
               borderRadius: Radii.lg,
               padding: Spacing.lg,
               gap: Spacing.sm,
-              backgroundColor: "#fffafa",
+              backgroundColor: "#FEF2F2",
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17, color: "#7f1d1d" }}>
+            <Text style={{ fontWeight: "800", fontSize: 17, color: "#B91C1C" }}>
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: "#444" }}>
+            <Text style={{ opacity: 0.78, fontSize: 14, lineHeight: 20, color: Gray[600] }}>
               {t("deleteAccount.sectionBodyConsumer")}
             </Text>
-            <Pressable
-              onPress={() => void openWebsiteUrl(DELETE_ACCOUNT_URL)}
-              accessibilityRole="link"
-              style={{ alignSelf: "flex-start", paddingVertical: Spacing.xs }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563eb" }}>
-                {t("legal.deleteAccount")}
-              </Text>
-            </Pressable>
             <PrimaryButton
               title={t("deleteAccount.cta")}
               onPress={confirmDeleteAccount}
               disabled={loading || logoutBusy || deleteBusy}
-              style={{ backgroundColor: "#b91c1c" }}
+              style={{ backgroundColor: Colors.light.danger }}
             />
           </View>
         ) : null}

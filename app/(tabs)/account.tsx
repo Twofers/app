@@ -604,22 +604,11 @@ export default function AccountScreen() {
               borderColor: theme.border,
               borderRadius: Radii.lg,
               padding: Spacing.md,
-            }}
-          >
-            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
-            <Text style={{ fontWeight: "700", marginTop: 4, color: theme.text }}>{sessionEmail}</Text>
-          </View>
-
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 17, color: theme.text }}>{t("account.sessionSectionTitle")}</Text>
+            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
+            <Text style={{ fontWeight: "700", color: theme.text }}>{sessionEmail}</Text>
             <SecondaryButton title={t("account.logOut")} onPress={confirmLogout} disabled={busy || loading} />
           </View>
 
@@ -1185,40 +1174,29 @@ export default function AccountScreen() {
           <View
             style={{
               borderWidth: 1,
-              borderColor: "#f3d4d4",
+              borderColor: "#FECACA",
               borderRadius: Radii.lg,
               padding: Spacing.md,
               gap: Spacing.sm,
-              backgroundColor: "#fffafa",
+              backgroundColor: "#FEF2F2",
             }}
           >
             <Text
               style={{
                 fontWeight: "700",
-                color: "#7f1d1d",
+                color: "#B91C1C",
               }}
             >
               {t("deleteAccount.sectionTitle")}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.85, color: "#444" }}>
+            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.85, color: Gray[600] }}>
               {deleteMayIncludeBusinessData ? t("deleteAccount.body") : t("deleteAccount.sectionBodyConsumer")}
             </Text>
-            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75, color: "#444" }}>
-              {t("deleteAccount.fallbackWebHint")}
-            </Text>
-            <Pressable
-              onPress={() => void openWebsiteUrl(DELETE_ACCOUNT_URL)}
-              style={{ alignSelf: "flex-start", paddingVertical: 4 }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#2563eb" }}>
-                {t("legal.deleteAccount")}
-              </Text>
-            </Pressable>
             <PrimaryButton
               title={t("deleteAccount.cta")}
               onPress={confirmDeleteAccount}
               disabled={busy || loading}
-              style={{ backgroundColor: "#b91c1c" }}
+              style={{ backgroundColor: Colors.light.danger }}
             />
           </View>
         </ScrollView>
