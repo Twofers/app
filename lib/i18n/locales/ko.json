@@ -933,7 +933,7 @@
     "forgotPassword": "비밀번호 찾기",
     "logIn": "로그인",
     "pleaseWait": "잠시만 기다려 주세요…",
-    "legalFooter": "계속하면 약관 및 개인정보 처리방침에 동의하게 됩니다.",
+    "legalFooter": "계속하면 <terms>약관</terms> 및 <privacy>개인정보 처리방침</privacy>에 동의하게 됩니다.",
     "errIncorrectCredentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
     "errNoAccount": "해당 이메일로 등록된 계정이 없습니다.",
     "errAlreadyExists": "해당 이메일로 등록된 계정이 이미 있습니다. 로그인해 보세요.",

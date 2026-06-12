@@ -933,7 +933,7 @@
     "forgotPassword": "Olvidé mi contraseña",
     "logIn": "Iniciar sesión",
     "pleaseWait": "Por favor espera…",
-    "legalFooter": "Al continuar aceptas nuestros Términos y Política de privacidad.",
+    "legalFooter": "Al continuar aceptas nuestros <terms>Términos</terms> y <privacy>Política de privacidad</privacy>.",
     "errIncorrectCredentials": "Correo o contraseña incorrectos.",
     "errNoAccount": "No encontramos una cuenta con ese correo.",
     "errAlreadyExists": "Ya existe una cuenta con ese correo. Intenta iniciar sesión.",

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -19,7 +20,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
 import { resolvePostAuthReplaceHref } from "@/lib/post-auth-route";
@@ -29,7 +30,7 @@ import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage, isEmailNotConfirmedError } from "@/lib/auth-error-messages";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
-import { LegalExternalLinks } from "@/components/legal-external-links";
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "@/lib/legal-urls";
 import { Banner } from "@/components/ui/banner";
 import { LocaleFlag } from "@/components/ui/locale-flag";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
@@ -902,12 +903,27 @@ export default function AuthLandingScreen() {
             </>
           ) : null}
 
-          <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
-              {t("authLanding.legalFooter")}
-            </Text>
-            <LegalExternalLinks align="center" showSupport={false} />
-          </View>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: mutedLegal, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+            <Trans
+              i18nKey="authLanding.legalFooter"
+              components={{
+                terms: (
+                  <Text
+                    accessibilityRole="link"
+                    style={{ textDecorationLine: "underline" }}
+                    onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
+                  />
+                ),
+                privacy: (
+                  <Text
+                    accessibilityRole="link"
+                    style={{ textDecorationLine: "underline" }}
+                    onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+                  />
+                ),
+              }}
+            />
+          </Text>
         </ScrollView>
       </KeyboardScreen>
 

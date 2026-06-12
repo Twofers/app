@@ -929,7 +929,7 @@
     "forgotPassword": "Forgot password",
     "logIn": "Log in",
     "pleaseWait": "Please wait…",
-    "legalFooter": "By continuing you agree to our Terms and Privacy Policy.",
+    "legalFooter": "By continuing you agree to our <terms>Terms</terms> and <privacy>Privacy Policy</privacy>.",
     "errIncorrectCredentials": "Incorrect email or password.",
     "errNoAccount": "No account found with that email.",
     "errAlreadyExists": "An account with that email already exists. Try logging in.",
