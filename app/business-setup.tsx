@@ -355,7 +355,7 @@ export default function BusinessSetupScreen() {
         if (!isValidBusinessInviteCode(inviteCodeInput)) {
           setInviteError(
             t("businessSetup.errInviteCode", {
-              defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+              defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
             }),
           );
           setBusy(false);
@@ -365,7 +365,7 @@ export default function BusinessSetupScreen() {
         if (!result.ok) {
           setInviteError(
             t("businessSetup.errInviteCode", {
-              defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+              defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
             }),
           );
           setBusy(false);
@@ -541,7 +541,7 @@ export default function BusinessSetupScreen() {
             <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75 }}>
               {t("businessSetup.inviteCodeHint", {
                 defaultValue:
-                  "TWOFER is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
+                  "Twofer is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
               })}
             </Text>
             <TextInput
@@ -553,7 +553,7 @@ export default function BusinessSetupScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               placeholder={t("businessSetup.inviteCodePlaceholder", {
-                defaultValue: "Enter the code TWOFER gave you",
+                defaultValue: "Enter the code Twofer gave you",
               })}
               placeholderTextColor={Colors.light.mutedText}
               style={{

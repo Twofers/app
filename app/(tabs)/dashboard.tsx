@@ -1393,7 +1393,7 @@ export default function BusinessDashboard() {
             </View>
             <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600" }}>
               {t("offersDashboard.dataCoverageBody", {
-                defaultValue: "TWOFER shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
+                defaultValue: "Twofer shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
               })}
             </Text>
           </CardShell>
@@ -1705,7 +1705,7 @@ export default function BusinessDashboard() {
                   <CardShell>
                     <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text, letterSpacing: -0.2 }}>
                       {t("offersDashboard.emptyFirstDealTitle", {
-                        defaultValue: "Launch your first TWOFER deal",
+                        defaultValue: "Launch your first Twofer deal",
                       })}
                     </Text>
                     <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, fontWeight: "600", color: Colors.light.mutedText }}>

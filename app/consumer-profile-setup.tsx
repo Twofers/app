@@ -230,11 +230,11 @@ export default function ConsumerProfileSetupScreen() {
               {isEdit
                 ? t("consumerProfile.zipWhyEdit", {
                     defaultValue:
-                      "TWOFER uses your ZIP as a general area so nearby deals and alerts stay relevant. You can change your radius in Settings.",
+                      "Twofer uses your ZIP as a general area so nearby deals and alerts stay relevant. You can change your radius in Settings.",
                   })
                 : t("consumerProfile.zipWhy", {
                     defaultValue:
-                      "TWOFER uses your ZIP as a general area so nearby deals and alerts start relevant. You can choose your browsing radius next.",
+                      "Twofer uses your ZIP as a general area so nearby deals and alerts start relevant. You can choose your browsing radius next.",
                   })}
             </Text>
           </View>

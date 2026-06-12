@@ -132,7 +132,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
               <View style={{ gap: Spacing.md }}>
                 <Banner
                   message={t("report.submittedBody", {
-                    defaultValue: "Thanks. Your report was submitted to TWOFER.",
+                    defaultValue: "Thanks. Your report was submitted to Twofer.",
                   })}
                   tone="success"
                 />

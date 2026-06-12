@@ -21,7 +21,7 @@ type BrandedConfirmModalProps = {
 };
 
 /**
- * TWOFER-branded replacement for `Alert.alert`. Keeps the primary action in brand
+ * Twofer-branded replacement for `Alert.alert`. Keeps the primary action in brand
  * orange (`PrimaryButton`) and the secondary action neutral (`SecondaryButton`) so
  * confirm dialogs never fall back to the platform's teal OS buttons.
  *

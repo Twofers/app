@@ -343,7 +343,7 @@ export default function AuthLandingScreen() {
     if (signupRole === "business" && !isValidBusinessInviteCode(inviteCode)) {
       setInviteError(
         t("authLanding.errInviteCode", {
-          defaultValue: "That invite code isn't valid. Reach out to TWOFER to get one.",
+          defaultValue: "That invite code isn't valid. Reach out to Twofer to get one.",
         }),
       );
       return;
@@ -802,7 +802,7 @@ export default function AuthLandingScreen() {
                     onFocus={() => setFocusedField("invite")}
                     onBlur={() => setFocusedField((f) => (f === "invite" ? null : f))}
                     accessibilityLabel={t("authLanding.inviteCodeLabel", { defaultValue: "Business invite code" })}
-                    placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code TWOFER gave you" })}
+                    placeholder={t("authLanding.inviteCodePlaceholder", { defaultValue: "Enter the code Twofer gave you" })}
                     placeholderTextColor={theme.mutedText}
                     style={{
                       borderWidth: 1,

@@ -459,7 +459,7 @@ export default function QuickDealExpress() {
               }}
             >
               <Text style={{ fontSize: 14, fontWeight: "900", color: theme.text }}>
-                {t("createQuick.strongGuidanceTitle", { defaultValue: "Strong TWOFER requirement" })}
+                {t("createQuick.strongGuidanceTitle", { defaultValue: "Strong Twofer requirement" })}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 13, lineHeight: 19, color: theme.text }}>
                 {t("createQuick.strongGuidanceBody", {

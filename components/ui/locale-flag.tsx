@@ -4,7 +4,7 @@ import MX from "country-flag-icons/string/3x2/MX";
 import KR from "country-flag-icons/string/3x2/KR";
 import type { AppLocale } from "@/lib/i18n/config";
 
-// Spanish maps to Mexico's flag: TWOFER's DFW/Texas Spanish-speaking base is
+// Spanish maps to Mexico's flag: Twofer's DFW/Texas Spanish-speaking base is
 // largely Mexican-American. All flags use country-flag-icons' uniform 3x2
 // viewBox, so a single 3:2 size renders every flag without distortion.
 const FLAG_SVG_BY_LOCALE: Record<AppLocale, string> = {
