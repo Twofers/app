@@ -139,7 +139,7 @@ function RoleCard({
         style={{
           flex: 1,
           minHeight: 96,
-          borderRadius: Radii.card,
+          borderRadius: Radii.md,
           borderWidth: selected ? 2 : 1,
           borderColor: selected || focused || pressed ? theme.primary : theme.border,
           backgroundColor: pressed && !selected ? theme.surfaceMuted : fill,
@@ -844,7 +844,7 @@ export default function AuthLandingScreen() {
                 accessibilityState={{ disabled: busy, busy }}
                 style={{
                   minHeight: 58,
-                  borderRadius: Radii.lg,
+                  borderRadius: Radii.md,
                   backgroundColor: theme.primary,
                   justifyContent: "center",
                   alignItems: "center",
@@ -907,7 +907,7 @@ export default function AuthLandingScreen() {
             paddingVertical: 4,
             paddingLeft: 6,
             paddingRight: 2,
-            borderRadius: Radii.sm,
+            borderRadius: Radii.md,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
