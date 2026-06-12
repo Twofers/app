@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Outfit_700Bold, useFonts } from "@expo-google-fonts/outfit";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -211,6 +212,9 @@ export default function AuthLandingScreen() {
   const stackRoleCards = windowWidth < 340;
   const roleCardGap = windowWidth < 360 ? Spacing.sm : Spacing.md;
   const { adoptRole } = useTabMode();
+  // Brand wordmark font. Until it resolves (first frames only — expo-font caches
+  // after that) we fall back to the system font at the same size to avoid layout shift.
+  const [wordmarkFontLoaded] = useFonts({ Outfit_700Bold });
 
   // Hard role split: the role is picked once, at signup only. Login has no
   // picker — it routes by the role stored on the profile.
@@ -447,14 +451,15 @@ export default function AuthLandingScreen() {
             />
             <Text
               style={{
-                fontSize: 34,
-                lineHeight: 38,
-                fontWeight: "900",
+                fontSize: 28,
+                lineHeight: 34,
                 color: theme.primary,
-                letterSpacing: 1.5,
+                ...(wordmarkFontLoaded
+                  ? { fontFamily: "Outfit_700Bold" }
+                  : { fontWeight: "700" as const }),
               }}
             >
-              TWOFER
+              Twofer
             </Text>
             <Text
               style={{
