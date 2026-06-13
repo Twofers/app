@@ -54,6 +54,7 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 - Changing the bundle id, package id, or signing.
 - Applying any Supabase migration.
 - Exposing or printing any secret: Supabase keys, the APNs .p8 key, the App Store Connect API key, push tokens, auth tokens, distribution certificates, provisioning profiles, full google-services.json contents, QR tokens, claim codes, or redemption codes.
+  - Local QA screenshot exception: when Dan explicitly asks for app screenshots, screenshots saved only under local `artifacts/` folders may include in-app QR codes, QR tokens, claim codes, or redemption codes so the screen can be visually reviewed. Do not transcribe those values into chat, terminal output, docs, commits, PRs, or public artifacts; do not push them; redact or delete them before any external sharing.
 
 ## Standing rules
 

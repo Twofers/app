@@ -100,7 +100,7 @@ The repo carries `CLAUDE.md` and `AGENTS.md` at root. Those rules govern all age
 - Changing version or build numbers.
 - Changing the bundle id, package id, or signing.
 - Applying any Supabase migration.
-- Exposing or printing any secret.
+- Exposing or printing any secret. Local QA screenshot exception: when Dan explicitly asks for app screenshots, screenshots saved only under local `artifacts/` folders may include in-app QR codes, QR tokens, claim codes, or redemption codes so the screen can be visually reviewed. Do not transcribe those values into chat, terminal output, docs, commits, PRs, or public artifacts; do not push them; redact or delete them before any external sharing.
 
 **Build and change discipline.**
 - Work on a dedicated branch off a named safety checkpoint commit.
