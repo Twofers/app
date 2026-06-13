@@ -773,7 +773,7 @@
     "preparing": "Preparing link...",
     "errCreateLink": "Couldn't create share link. Try again.",
     "shareSheetTitle": "Share this Twofer deal",
-    "message": "I found this Twofer deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}",
+    "message": "I found this Twofer deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}\n\nIf they don't have Twofer yet, they should install the app first, then tap this same link again.",
     "linkUnavailableTitle": "Deal unavailable",
     "linkUnavailableBody": "This shared deal is no longer available.",
     "linkErrorTitle": "Couldn't open link",

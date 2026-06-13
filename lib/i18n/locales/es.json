@@ -773,7 +773,7 @@
     "preparing": "Preparando enlace...",
     "errCreateLink": "No se pudo crear el enlace. Inténtalo de nuevo.",
     "shareSheetTitle": "Comparte esta oferta Twofer",
-    "message": "Encontré esta oferta Twofer:\n\n{{dealTitle}} en {{businessName}}.\n\nPuede reclamar su propia oferta aquí:\n{{shareUrl}}",
+    "message": "Encontré esta oferta Twofer:\n\n{{dealTitle}} en {{businessName}}.\n\nPuede reclamar su propia oferta aquí:\n{{shareUrl}}\n\nSi aún no tiene Twofer, instale la app primero y luego toque este mismo enlace otra vez.",
     "linkUnavailableTitle": "Oferta no disponible",
     "linkUnavailableBody": "Esta oferta compartida ya no está disponible.",
     "linkErrorTitle": "No se pudo abrir el enlace",

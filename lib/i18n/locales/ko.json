@@ -773,7 +773,7 @@
     "preparing": "링크 준비 중...",
     "errCreateLink": "공유 링크를 만들지 못했습니다. 다시 시도해 주세요.",
     "shareSheetTitle": "이 Twofer 딜 공유하기",
-    "message": "Twofer 딜을 찾았어요:\n\n{{businessName}}의 {{dealTitle}}.\n\n친구도 여기에서 자기만의 혜택을 받을 수 있어요:\n{{shareUrl}}",
+    "message": "Twofer 딜을 찾았어요:\n\n{{businessName}}의 {{dealTitle}}.\n\n친구도 여기에서 자기만의 혜택을 받을 수 있어요:\n{{shareUrl}}\n\nTwofer가 아직 설치되어 있지 않다면 먼저 앱을 설치한 뒤 이 링크를 다시 눌러 주세요.",
     "linkUnavailableTitle": "딜을 사용할 수 없음",
     "linkUnavailableBody": "공유된 딜을 더 이상 사용할 수 없습니다.",
     "linkErrorTitle": "링크를 열 수 없음",
