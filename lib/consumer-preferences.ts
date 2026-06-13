@@ -7,12 +7,11 @@ export type ConsumerLocationMode = "gps" | "zip";
 /** How we decide which deals trigger local notifications (extensible for future filters). */
 export type ConsumerNotificationMode = "all_nearby" | "favorites_only";
 
-export const CONSUMER_RADIUS_MILES_OPTIONS = [1, 3, 5, 10, 15, 25] as const;
+export const CONSUMER_RADIUS_MILES_OPTIONS = [1, 3, 5, 10] as const;
 export type ConsumerRadiusMiles = (typeof CONSUMER_RADIUS_MILES_OPTIONS)[number];
 
-// Pilot is centered on ZIP 75063 (Irving, TX) with a 15-mile target reach
-// covering Coppell, Grapevine, Carrollton, Las Colinas, and parts of Dallas.
-export const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 15;
+// Matches the hosted consumer push preference schema and v1 onboarding spec.
+export const DEFAULT_RADIUS_MILES: ConsumerRadiusMiles = 3;
 
 export type ConsumerNotificationPrefsV1 = {
   v: 1;

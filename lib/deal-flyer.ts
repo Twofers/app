@@ -147,7 +147,7 @@ function buildFlyerHtml(input: DealFlyerInput, qrSvg: string): string {
 </head>
 <body>
 <div class="card">
-  <div class="brand-bar"><span>TWOFER</span></div>
+  <div class="brand-bar"><span>Twofer</span></div>
   ${posterBlock}
   <div class="body">
     <p class="biz-name">${esc(input.businessName)}</p>

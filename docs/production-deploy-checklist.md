@@ -1,4 +1,4 @@
-# Production deploy checklist (TWOFER)
+# Production deploy checklist (Twofer)
 
 Use this after merging to `main` and before pointing pilot traffic at a **hosted** Supabase project and a **production** EAS build. Do not paste real secrets into tickets or this file.
 

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TWOFER",
+    "name": "Twofer",
     "slug": "twoforone",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,10 +19,10 @@
       ],
       "supportsTablet": false,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TWOFER uses your location to sort nearby deals and match your area to business profile locations.",
-        "NSCameraUsageDescription": "TWOFER uses your camera to scan QR codes for redeeming deals and to capture deal, AI offer, and menu photos.",
-        "NSMicrophoneUsageDescription": "TWOFER uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
-        "NSPhotoLibraryUsageDescription": "TWOFER uses your photo library to attach deal photos, AI offer photos, and menu photos for AI extraction.",
+        "NSLocationWhenInUseUsageDescription": "Twofer uses your location to sort nearby deals and match your area to business profile locations.",
+        "NSCameraUsageDescription": "Twofer uses your camera to scan QR codes for redeeming deals and to capture deal, AI offer, and menu photos.",
+        "NSMicrophoneUsageDescription": "Twofer uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
+        "NSPhotoLibraryUsageDescription": "Twofer uses your photo library to attach deal photos, AI offer photos, and menu photos for AI extraction.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
@@ -285,7 +285,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "TWOFER uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
+          "microphonePermission": "Twofer uses your microphone for AI Compose voice input so your spoken offer can be recorded and transcribed into deal copy.",
           "recordAudioAndroid": true,
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false

@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import { addDays, format, isValid } from "date-fns";
 import type { Locale } from "date-fns";
 import { dateFnsLocaleFor } from "./i18n/date-locale";
-import { devWarn } from "@/lib/dev-log";
+import { devWarn } from "./dev-log";
 
 type RecurringInfo = {
   is_recurring?: boolean | null;

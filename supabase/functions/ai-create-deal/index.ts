@@ -284,7 +284,7 @@ serve(async (req) => {
         .eq("id", business_id)
         .single();
 
-      const bizName = bizRow?.name ?? "TWOFER";
+      const bizName = bizRow?.name ?? "Twofer";
       const bizLat = typeof bizRow?.latitude === "number" ? bizRow.latitude : null;
       const bizLng = typeof bizRow?.longitude === "number" ? bizRow.longitude : null;
 

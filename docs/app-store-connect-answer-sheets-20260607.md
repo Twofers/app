@@ -3,7 +3,7 @@
 Date: 2026-06-07
 
 Scope: iOS App Store submission answer drafts for the free v1 pilot. These are
-ready for Dan to paste into App Store Connect after the demo login is verified. They match the trimmed privacy
+ready for Dan to paste into App Store Connect after the reviewer logins are verified. They match the trimmed privacy
 manifest in `app.json` and `docs/privacy-manifest-reconciliation-20260607.md`.
 
 ## App Privacy
@@ -109,39 +109,42 @@ Recommended App Store Connect posture:
 
 ## Reviewer App Access Notes
 
-Use the dedicated demo review account. Do not use personal accounts.
+Use dedicated reviewer accounts. Do not use personal accounts.
 
 Paste-ready draft:
 
 ```
-TWOFER uses email and password login. There is no social login.
+Twofer uses email and password login. There is no social login.
 There is no email link login or one-time code login for reviewer access.
 
 This first iOS release is a free pilot. No in-app purchase, paid upgrade, external payment, or subscription flow is exposed.
 
-Please use this demo login:
+Please use these reviewer logins:
 
-Email: demo@demo.com
-Password: [DAN_TO_PASTE_REVIEWER_PASSWORD]
+Consumer email: [DAN_TO_PASTE_CONSUMER_REVIEWER_EMAIL]
+Consumer password: [DAN_TO_PASTE_CONSUMER_REVIEWER_PASSWORD]
 
-This demo login reaches both the consumer side and the business side. Demo deals are already posted for review.
+Business email: [DAN_TO_PASTE_BUSINESS_REVIEWER_EMAIL]
+Business password: [DAN_TO_PASTE_BUSINESS_REVIEWER_PASSWORD]
+
+The consumer login reaches the shopper side. The business login reaches the owner side and has a pilot business with posted deals for review.
 
 Suggested review path:
-1. Log in with demo@demo.com through the normal email and password form.
+1. Log in with the consumer reviewer account through the normal email and password form.
 2. On the consumer side, browse nearby deals, open a deal, claim it, view it in Wallet, and use Share Deal if desired.
-3. Switch to the business side.
+3. Sign out, then log in with the business reviewer account.
 4. Open Dashboard to view posted deals and performance basics.
 5. Open Create to draft a deal. The AI draft flow can use typed text, a photo, or a short voice note.
 6. If you use voice input, the audio is sent to an AI transcription service and the transcript is shown for review before publishing.
-7. Account deletion is available in the app. Please do not delete the main review account unless requested. We can provide a separate deletion-test account if needed.
+7. Account deletion is available in the app. Please do not delete the reviewer accounts unless requested. We can provide a separate deletion-test account if needed.
 
-Business accounts are invite-only during the pilot, so please use the supplied demo login rather than creating a new account.
+Business accounts are invite-only during the pilot, so please use the supplied business reviewer login rather than creating a new account.
 ```
 
 Before pasting:
-- Verify demo@demo.com works on the review environment with the reviewer password.
-- Verify the account can reach both sides and has posted demo deals.
-- Paste the reviewer password into App Store Connect.
+- Verify both reviewer accounts work on the review environment with their reviewer passwords.
+- Verify the consumer account can browse/claim and the business account has posted deals.
+- Paste the reviewer passwords into App Store Connect.
 - Provide the support contact email and phone used in App Store Connect.
 
 ## Other Declarations

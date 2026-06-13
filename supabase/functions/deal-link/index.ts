@@ -40,7 +40,7 @@ function buildLandingPage(
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>TWOFER — ${esc(dealTitle)}</title>
+<title>Twofer — ${esc(dealTitle)}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -76,18 +76,18 @@ function buildLandingPage(
 </head>
 <body>
 <div class="card">
-  <div class="brand"><span>TWOFER</span></div>
+  <div class="brand"><span>Twofer</span></div>
   <div class="body">
     <p class="biz">${esc(businessName)}</p>
     <h1 class="title">${esc(dealTitle)}</h1>
-    <p class="subtitle">Claim this BOGO deal in seconds — open TWOFER and show it at the counter.</p>
+    <p class="subtitle">Claim this BOGO deal in seconds — open Twofer and show it at the counter.</p>
 
     <a id="openApp" class="btn btn-primary" href="${esc(schemeUrl)}">
-      Open in TWOFER
+      Open in Twofer
     </a>
 
     <a class="btn btn-secondary" href="${esc(fallbackUrl)}">
-      Get TWOFER at twoferapp.com
+      Get Twofer at twoferapp.com
     </a>
 
     <p class="hint">
@@ -96,7 +96,7 @@ function buildLandingPage(
     </p>
   </div>
   <div class="footer">
-    <span>Powered by TWOFER — local deals, zero waste</span>
+    <span>Powered by Twofer — local deals, zero waste</span>
   </div>
 </div>
 
@@ -125,7 +125,7 @@ serve(async (req) => {
 
   if (!dealId) {
     return htmlResponse(
-      buildLandingPage("", "TWOFER Deals", "TWOFER", "https://www.twoferapp.com"),
+      buildLandingPage("", "Twofer Deals", "Twofer", "https://www.twoferapp.com"),
       corsHeaders,
       200,
     );

@@ -155,7 +155,7 @@
     "zipInvalid": "Use a valid 5-digit US ZIP.",
     "zipLookupFail": "We couldn’t verify that ZIP. Check the code and your connection, then try again.",
     "radiusSection": "Nearby radius",
-    "radiusHelp": "Used for sorting, map ring, and “all nearby” deal alerts (default 15 mi).",
+    "radiusHelp": "Used for sorting, map ring, and “all nearby” deal alerts (default 3 mi).",
     "notificationsSection": "Notifications",
     "notificationsHelp": "Choose whether your feed and alerts use all nearby deals or only favorites.",
     "notificationModeTitle": "Feed and alert scope",

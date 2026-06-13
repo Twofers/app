@@ -1,4 +1,4 @@
-# TWOFER deployment command plan
+# Twofer deployment command plan
 
 Command-by-command verification for moving from code readiness to **deployment readiness**. This doc does not deploy anything by itself.
 

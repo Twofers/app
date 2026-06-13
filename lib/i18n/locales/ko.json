@@ -155,7 +155,7 @@
     "zipInvalid": "미국 5자리 우편번호를 입력해 주세요.",
     "zipLookupFail": "우편번호를 확인하지 못했습니다. 번호와 연결을 확인한 뒤 다시 시도해 주세요.",
     "radiusSection": "주변 반경",
-    "radiusHelp": "정렬, 지도 원, ‘주변 전체’ 알림에 사용됩니다(기본 15마일).",
+    "radiusHelp": "정렬, 지도 원, ‘주변 전체’ 알림에 사용됩니다(기본 3마일).",
     "notificationsSection": "알림",
     "notificationsHelp": "피드와 알림에 주변 모든 딜을 사용할지, 즐겨찾기만 사용할지 선택하세요.",
     "notificationModeTitle": "피드 및 알림 범위",

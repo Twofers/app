@@ -1,5 +1,5 @@
 /**
- * ai-generate-ad-variants — TWOFER ad generator (single-ad pipeline).
+ * ai-generate-ad-variants — Twofer ad generator (single-ad pipeline).
  *
  * Quality-first rewrite (2026-05-01):
  * - Stage 1: optional web research for unfamiliar menu items (gpt-4o-search-preview).

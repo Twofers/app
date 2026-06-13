@@ -1,4 +1,4 @@
-# TWOFER Play Console Submission Pack
+# Twofer Play Console Submission Pack
 
 Date: 2026-06-07
 Account path: personal Google Play account, Twofer already attached. Closed testing applies.
@@ -135,11 +135,13 @@ Answer to land at the same rating as iOS, which is 13+ driven by infrequent alco
 
 ## 5. App access, for Play review
 
-Provide reviewers a working login so they can see both sides of the app.
+Provide reviewers working logins so they can see both sides of the app. Twofer has a hard role split, so reviewer access needs one consumer account and one business account.
 
-- Username: demo@demo.com
-- Password: [demo password, you provide, do not commit it anywhere in the repo]
-- Notes for the reviewer: This account reaches both the consumer side and the business side. Deals are already posted, so the deals list, an open deal, and the claim or redeem flow are all reachable. The business dashboard is reachable from the same login. Sign in uses email and password only. There is no email magic link and no one-time code.
+- Consumer reviewer account: [Dan-provided consumer email]
+- Consumer reviewer password: [paste only in Play Console, do not commit]
+- Business reviewer account: [Dan-provided business email]
+- Business reviewer password: [paste only in Play Console, do not commit]
+- Notes for the reviewer: Sign in uses email and password only. There is no email magic link and no one-time code. Use the consumer account to browse deals, open a deal, claim it, view Wallet, and test Share Deal. Use the business account to view the dashboard, posted deals, create flow, analytics, and redeem flow.
 
 ---
 
@@ -233,5 +235,5 @@ Use real people on real Android phones. Emulators usually do not count toward th
 
 - Phone for the listing, optional, ship without it if you like.
 - The 12 tester names and emails, and the opt-in URL once the closed track exists.
-- The demo account password, which you drop into the App access section at submission time and never commit.
-- Confirm the demo password and the AASA path scope are the only things I had to leave as placeholders that you alone can fill.
+- The consumer and business reviewer account credentials, which you drop into the App access section at submission time and never commit.
+- Confirm the reviewer credentials and the AASA path scope are the only things I had to leave as placeholders that you alone can fill.

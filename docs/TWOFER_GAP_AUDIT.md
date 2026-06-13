@@ -1,5 +1,9 @@
 # Twofer Codebase Gap Audit
 
+> Historical audit only. This document was written before the role-split and AI-limit batches
+> landed, so several findings below are no longer current. Use the repo-root
+> `twofer-developer-handoff-spec.md` plus a fresh audit of the current HEAD for release work.
+
 Date: 2026-06-10 · Branch: `docs/section4-confirmations` (HEAD `ac29c1b`) · Read-only audit, no code changed.
 
 Spec audited against: `twofer-developer-handoff-spec.md` at the **repo root** (the task prompt said `docs/`, but the spec lives at the root per CLAUDE.md). Four parallel sub-audits: A = Consumer (spec 10.1–10.10), B = Business (11.1–11.8), C = Architecture & AI (8, 12, 15), D = Data/Security/Integrations (13, 14, 17, 18, 19).

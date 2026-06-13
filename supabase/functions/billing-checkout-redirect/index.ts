@@ -15,21 +15,21 @@ serve((req) => {
 
   const fallbackMessage =
     checkout === "success"
-      ? "Payment completed. If the app does not open automatically, open TWOFER and refresh Billing."
-      : "Checkout canceled. If the app does not open automatically, open TWOFER and check Billing.";
+      ? "Payment completed. If the app does not open automatically, open Twofer and refresh Billing."
+      : "Checkout canceled. If the app does not open automatically, open Twofer and check Billing.";
 
   const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>TWOFER Billing Redirect</title>
+    <title>Twofer Billing Redirect</title>
   </head>
   <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; color: #11181c;">
-    <h2 style="margin:0 0 12px;">Returning to TWOFER…</h2>
+    <h2 style="margin:0 0 12px;">Returning to Twofer…</h2>
     <p style="margin:0 0 12px;">${fallbackMessage}</p>
     <p style="margin:0 0 12px;">
-      <a href="${target}" style="color:#FF9F1C;font-weight:700;">Open TWOFER</a>
+      <a href="${target}" style="color:#FF9F1C;font-weight:700;">Open Twofer</a>
     </p>
     <script>
       window.location.replace(${JSON.stringify(target)});

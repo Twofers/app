@@ -1,17 +1,17 @@
-# TWOFER — App Store & Google Play Listing Copy
+# Twofer — App Store & Google Play Listing Copy
 
 ---
 
 ## iOS App Store
 
 ### App Name
-**TWOFER**
+**Twofer**
 
 ### Subtitle *(30 chars max)*
 Live BOGO deals from local cafes
 
 ### Description *(4000 chars max)*
-TWOFER puts the best local deals in your pocket — live, time-limited buy-one-get-one offers from the independent coffee shops and bakeries you love.
+Twofer puts the best local deals in your pocket — live, time-limited buy-one-get-one offers from the independent coffee shops and bakeries you love.
 
 **For customers:**
 Discover live BOGO deals near you the moment they go live. Claim a deal in one tap, then redeem it at the counter by showing your QR code. No printing, no clipping — just open the app and go.
@@ -32,26 +32,26 @@ Post a BOGO deal in under 60 seconds. Set your discount, how many claims you all
 • Instant on/off — pause or end a deal anytime
 • Deals expire automatically, so you're never over-committed
 
-TWOFER is built for the neighborhood spots that make your city worth living in. Support local — and get a great deal while you're at it.
+Twofer is built for the neighborhood spots that make your city worth living in. Support local — and get a great deal while you're at it.
 
 ### Keywords *(100 chars max)*
 bogo,deals,local,cafe,coffee,bakery,discount,coupon,food,nearby,wallet,qr
 
 ### What's New (v1.0)
-TWOFER launches with full support for browsing, claiming, and redeeming live BOGO deals. Business owners can post deals manually or use AI Compose to generate polished offers from a photo or a few words.
+Twofer launches with full support for browsing, claiming, and redeeming live BOGO deals. Business owners can post deals manually or use AI Compose to generate polished offers from a photo or a few words.
 
 ---
 
 ## Google Play
 
 ### App Name
-**TWOFER — Live BOGO Deals**
+**Twofer — Live BOGO Deals**
 
 ### Short Description *(80 chars max)*
 Claim live BOGO deals from local cafes and bakeries in one tap.
 
 ### Full Description *(4000 chars max)*
-TWOFER puts the best local deals in your pocket — live, time-limited buy-one-get-one offers from the independent coffee shops and bakeries you love.
+Twofer puts the best local deals in your pocket — live, time-limited buy-one-get-one offers from the independent coffee shops and bakeries you love.
 
 **For customers:**
 Discover live BOGO deals near you the moment they go live. Claim a deal in one tap, then redeem it at the counter by showing your QR code. No printing, no clipping — just open the app and go.
@@ -72,10 +72,10 @@ Post a BOGO deal in under 60 seconds. Set your discount, how many claims you all
 ★ Instant on/off — pause or end a deal at any time
 ★ Deals expire automatically, so you're never over-committed
 
-**Why TWOFER?**
-TWOFER is built for the neighborhood spots that make your city worth living in. It's fast for customers, simple for owners, and designed to drive foot traffic — not just clicks.
+**Why Twofer?**
+Twofer is built for the neighborhood spots that make your city worth living in. It's fast for customers, simple for owners, and designed to drive foot traffic — not just clicks.
 
-Support local. Get a great deal. Open TWOFER.
+Support local. Get a great deal. Open Twofer.
 
 ### Category
 Food & Drink

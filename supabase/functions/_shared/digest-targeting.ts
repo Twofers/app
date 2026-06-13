@@ -33,7 +33,7 @@ export type DigestConsumer = {
   favorite_business_ids: string[];
 };
 
-const DEFAULT_RADIUS_MILES = 15;
+const DEFAULT_RADIUS_MILES = 3;
 
 function isFiniteNum(n: number | null): n is number {
   return typeof n === "number" && Number.isFinite(n);

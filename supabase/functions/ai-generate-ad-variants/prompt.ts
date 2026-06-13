@@ -57,7 +57,7 @@ export const AD_COPY_JSON_SCHEMA = {
 
 export const COPY_VOICE_RULES = [
   "Write for a local coffee shop, cafe, bakery, or small food business, not a chain restaurant and not a generic image caption.",
-  "The job is to write a live, time-limited TWOFER/BOGO deal ad for a mobile app.",
+  "The job is to write a live, time-limited Twofer/BOGO deal ad for a mobile app.",
   "Use owner-provided deal facts as ground truth. Product/deal terms beat photo context, research context, and generic cafe assumptions.",
   "Clearly mention the actual product or deal item when one is provided.",
   'Clearly explain the BOGO value using direct language such as "BOGO", "2-for-1", "buy one get one", or "<item> free".',
@@ -162,7 +162,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   }
 
   const system = [
-    `Write one mobile TWOFER deal draft. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
+    `Write one mobile Twofer deal draft. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
     "",
     ...COPY_VOICE_RULES,
   ].join("\n");

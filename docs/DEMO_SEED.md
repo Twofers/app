@@ -1,5 +1,10 @@
 # Preview / development: demo account (turnkey)
 
+> Obsolete for release review. The v1 app now uses a hard Shopper/Business role split and the
+> old combined demo account must not be used for App Store or Play review. Use two dedicated
+> reviewer accounts instead: one consumer account and one business account. This file remains
+> only as historical preview-seed context.
+
 EAS **preview** and **development** profiles set `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER=true` (see `eas.json`), which enables the in-app **Demo login** button. **Local `expo start`** also counts as a preview-like client (`__DEV__`), so **Demo login** appears even when that env var is unset. **Release bundles** (e.g. EAS production) require both a preview/dev profile (or `EXPO_PUBLIC_PREVIEW_MATCHES_DEV`) **and** `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER=true`. The app does **not** auto–sign-up the demo user after a failed password login (avoids email rate limits); provision the user once (below).
 
 ## Exact credentials

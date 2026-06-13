@@ -107,7 +107,7 @@ export function buildPosterImagePrompt(params: {
   const { businessName, displayOffer, headline, sub, visualDirection } = params;
   const esc = (s: string) => s.replace(/"/g, "'");
   return [
-    "Square promotional graphic for a local café deal mobile app (TWOFER).",
+    "Square promotional graphic for a local café deal mobile app (Twofer).",
     "Photorealistic food or drink hero; crisp, legible typography as part of the design. No photorealistic human faces.",
     `Venue: ${esc(businessName)}.`,
     `Offer: ${esc(displayOffer)}.`,

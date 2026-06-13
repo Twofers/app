@@ -29,7 +29,7 @@ message. The Supabase email rate limit must allow at least ~1 email/min/user.
 ### A. Custom SMTP (Authentication → Emails → SMTP Settings)
 - [ ] Enable Custom SMTP; enter host, port, username, password from the new provider.
 - [ ] Sender email: `support@twoferapp.com` (locked public address) or a controlled
-      `noreply@twoferapp.com`; sender name "TWOFER".
+      `noreply@twoferapp.com`; sender name "Twofer".
 - [ ] Confirm SPF/DKIM/DMARC for `twoferapp.com` are set up at the provider (otherwise
       mail goes to spam and the tests below fail).
 

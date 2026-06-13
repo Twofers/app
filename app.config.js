@@ -18,12 +18,12 @@ module.exports = ({ config }) => ({
   ...config,
   /** Prebuild: keep New Architecture enabled across native regeneration. */
   newArchEnabled: true,
-  name: "TWOFER",
+  name: "Twofer",
   ios: {
     ...config.ios,
     infoPlist: {
       ...config.ios?.infoPlist,
-      CFBundleDisplayName: "TWOFER",
+      CFBundleDisplayName: "Twofer",
     },
   },
   android: {

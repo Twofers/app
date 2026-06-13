@@ -73,7 +73,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Not your deal" }, 403);
     }
 
-    const businessName = biz.name ?? "TWOFER";
+    const businessName = biz.name ?? "Twofer";
     const dealTitle = deal.title ?? "New deal available!";
 
     // --- 1. Favorites audience ---

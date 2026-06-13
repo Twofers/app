@@ -7,7 +7,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 **Time:** 20–25 minutes per cafe.
 
 **What to bring:**
-- Your phone (Android, with the TWOFER internal-testing build installed)
+- Your phone (Android, with the Twofer internal-testing build installed)
 - Their phone (Android preferred for the pilot)
 - A clear photo of their menu board, ready to take if they don't already have one
 - This script (printed or on screen)
@@ -18,7 +18,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 
 1. **Confirm Stripe is configured.** Open `docs/stripe-setup.md` Step 7 — sign in as a test user, tap Subscribe with `4242 4242 4242 4242`, confirm `subscription_status` flips to `active`. If this doesn't work, **postpone the cafe meeting** — billing must be solid before you onboard real owners.
 2. **Send the cafe a 1-line text:**
-   > "Excited to set you up on TWOFER today. Bring your phone (Android works best) and your menu — we'll have you running in 20 minutes."
+   > "Excited to set you up on Twofer today. Bring your phone (Android works best) and your menu — we'll have you running in 20 minutes."
 3. **Bump their `trial_ends_at` to 60 days** in advance:
    ```sql
    update business_profiles
@@ -39,7 +39,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 
 ### 2. Business profile (5 min)
 
-> "Type your business name. Tap **Look up** — TWOFER will fill in your address, phone, hours, and category automatically. Just check it and edit anything that's wrong."
+> "Type your business name. Tap **Look up** — Twofer will fill in your address, phone, hours, and category automatically. Just check it and edit anything that's wrong."
 
 - The AI lookup uses Google + an LLM. ~80% of independent cafes hit on the first try.
 - If lookup misses or fields are wrong: have them type address, phone, and hours manually. Pick the closest **Category** (Coffee shop, Bakery, Cafe).
@@ -51,7 +51,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 > "Tap **Create** in the bottom bar, then **Scan Your Menu** — the orange-bordered card. Take a photo of your menu board, or pick one from your library."
 
 - Wait 8–15 seconds while AI extracts items.
-- **Show them the result:** "These are the items TWOFER pulled from your menu. Review the names and prices — fix anything that's wrong, then tap **Save**."
+- **Show them the result:** "These are the items Twofer pulled from your menu. Review the names and prices — fix anything that's wrong, then tap **Save**."
 - If extraction is poor (handwritten, glare, partial menu): take a second photo, or have them edit/add manually. **Worst case, type 5 staple items by hand** — this still saves time on every future deal.
 - **Why this matters:** "Now every deal you create reuses these items. You won't type them again."
 
@@ -82,7 +82,7 @@ A one-page walkthrough for the first 10 founding cafes. Run this in person or ov
 
 Hand them a printed mini-card (or text it to them):
 
-> **TWOFER for [Cafe Name]**
+> **Twofer for [Cafe Name]**
 > - **Trial ends:** [date 60 days from today]
 > - **Your support contact:** support@twoferapp.com
 > - **First-week goal:** post 1 deal per slow window. Watch what works.
@@ -94,7 +94,7 @@ Hand them a printed mini-card (or text it to them):
 
 | Stumble | Fix |
 |---|---|
-| **"I don't see my deal in the customer app"** | Check radius default (10 mi). On your test consumer account, set radius to 25 mi if cafe is in a far suburb. |
+| **"I don't see my deal in the customer app"** | Check nearby radius (default 3 mi, max 10 mi). On your test consumer account, set radius to 10 mi or use ZIP/GPS near the cafe. |
 | **"AI lookup got my address wrong"** | Manual entry is fine. Save and continue. Don't waste 5 min on lookup tuning. |
 | **"Menu scan returned weird items"** | Probably handwritten or glare. Take a second photo of the printed/typed menu inside, or fall back to manual entry of 5 staples. |
 | **"How do I cancel a deal?"** | Dashboard → tap the deal → **End deal**. Active claims stay valid until they expire. |

@@ -55,8 +55,8 @@ describe("computeDigestCounts — radius / location", () => {
     expect(res.has("u")).toBe(false);
   });
 
-  it("falls back to a 15mi default when radius is missing/invalid", () => {
-    // far deal (~69mi) excluded; near deal included under the 15mi default
+  it("falls back to a 3mi default when radius is missing/invalid", () => {
+    // far deal (~69mi) excluded; near deal included under the 3mi default
     const res = computeDigestCounts([nearDeal, farDeal], [consumer({ user_id: "u", radius_miles: null })]);
     expect(res.get("u")).toBe(1);
   });

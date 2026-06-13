@@ -1,4 +1,4 @@
-# TWOFER — EAS Build & Production Setup Guide
+# Twofer — EAS Build & Production Setup Guide
 
 Expo SDK 54 · React Native 0.81.5 · EAS CLI ≥ 16.0.0
 
