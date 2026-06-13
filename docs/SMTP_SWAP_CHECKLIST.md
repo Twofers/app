@@ -1,9 +1,9 @@
-# SMTP swap checklist (Supabase dashboard — Dan executes)
+# SMTP swap checklist (Supabase dashboard — verified 2026-06-13)
 
-Prepared 2026-06-10. Covers spec section 4, item 6: turn on email confirmation with a real
-SMTP provider. Everything here is dashboard work in the live Supabase project; no app-code
-changes are needed. The app-side pieces (resend button, "confirm your email" login message)
-landed in Batch 3 and must be in the build you test with.
+Prepared 2026-06-10 and updated after live dashboard verification on 2026-06-13.
+Covers spec section 4, item 6: keep email confirmation on with a real SMTP provider.
+The Supabase dashboard setup is complete; the remaining work is inbox delivery QA with a
+fresh throwaway address and on-device link testing.
 
 ## What the app code expects (do not break these)
 
@@ -24,35 +24,45 @@ Rate-limit assumptions in code: the resend button has a 60-second client cooldow
 `lib/auth-error-messages.ts` maps `over_email_send_rate_limit` (and variants) to a friendly
 message. The Supabase email rate limit must allow at least ~1 email/min/user.
 
-## Dashboard steps
+## Dashboard state verified 2026-06-13
 
 ### A. Custom SMTP (Authentication → Emails → SMTP Settings)
-- [ ] Enable Custom SMTP; enter host, port, username, password from the new provider.
-- [ ] Sender email: `support@twoferapp.com` (locked public address) or a controlled
-      `noreply@twoferapp.com`; sender name "Twofer".
-- [ ] Confirm SPF/DKIM/DMARC for `twoferapp.com` are set up at the provider (otherwise
-      mail goes to spam and the tests below fail).
+- [x] Custom SMTP is enabled.
+- [x] Sender email is `support@twoferapp.com`; sender name is "Twofer".
+- [x] SMTP host is `smtp.resend.com`; username is `resend`; password is saved and hidden.
+- [x] Minimum interval per user is 30 seconds.
+- [x] DNS check: `resend._domainkey.twoferapp.com` DKIM TXT exists; `_dmarc.twoferapp.com`
+      exists with `p=none`; `send.twoferapp.com` has SPF `include:amazonses.com` and an
+      MX record to `feedback-smtp.us-east-1.amazonses.com`.
 
 ### B. Confirm email toggle (Authentication → Sign In / Providers → Email)
-- [ ] Confirm email = ON (decided, item 6). Leave "Secure email change" and other
+- [x] Confirm email = ON (decided, item 6). Leave "Secure email change" and other
       toggles as they are.
 
 ### C. URL Configuration (Authentication → URL Configuration)
-- [ ] Additional Redirect URLs contain exactly:
+- [x] Site URL is `https://www.twoferapp.com`.
+- [x] Additional Redirect URLs contain exactly:
   - `twoforone://auth-callback`
   - `twoforone://reset-password`
   - `twofer://auth-callback` (secondary scheme, cheap insurance)
   - `twofer://reset-password`
-  - (optional, dev only) any `exp://...` Metro URL still used for dev-client testing
-- [ ] Note the current Site URL before touching anything; leave it as-is unless wrong.
 
 ### D. Rate limits (Authentication → Rate Limits)
-- [ ] With custom SMTP on, raise the email rate limit from the built-in 2/hour default
-      (the cause of the TestFlight breakage). ~30/hour is plenty for the pilot.
+- [x] Email send rate limit is 30/hour.
 
 ### E. Templates (Authentication → Emails → Templates)
-- [ ] Check "Confirm signup" and "Reset password" still use `{{ .ConfirmationURL }}`
-      and don't hardcode a URL. No customization required.
+- [x] "Confirm sign up" subject is "Confirm your Twofer account".
+- [x] "Confirm sign up" body uses `{{ .ConfirmationURL }}` and does not hardcode a URL.
+
+## 2026-06-13 troubleshooting note
+
+- Supabase showed `unvmex2@hotmail.com` as an existing confirmed user created on
+  2026-03-26, so a fresh signup attempt with that address should not be expected to
+  receive a new confirmation email.
+- Supabase auth logs showed `/signup` and `/resend` requests completed during the test.
+- A direct `supabase.auth.resend({ type: "signup" })` probe for that address returned
+  success. If no email appears, check junk/spam and the Resend event log for delivered,
+  bounced, suppressed, or complained events.
 
 ## Post-swap test sequence (on a phone with a Batch 3+ build)
 
@@ -69,13 +79,9 @@ message. The Supabase email rate limit must allow at least ~1 email/min/user.
 6. **Password reset**: Forgot password → email → link opens the in-app reset-password
    screen → new password works at login.
 
-## Docs to update after the swap
+## Docs updated after verification
 
-- `twofer-developer-handoff-spec.md` section 4 item 6 — "Dan configures Supabase later"
-  becomes done.
-- `twofer-developer-handoff-spec.md` "Known broken item" paragraph (email confirmation
-  broken for TestFlight users because default SMTP is test-only) — becomes false; rewrite
-  or remove.
-- `CLAUDE.md` / `AGENTS.md` section-4 item 6 — same "at a later date" wording.
-- `docs/DEMO_SEED.md` mentions manual email confirmation for the demo account — moot once
-  demo deletion (item 2) lands; leave unless touching that file anyway.
+- `twofer-developer-handoff-spec.md` section 4 item 6 and section 17 now record the
+  verified SMTP/dashboard state.
+- `CLAUDE.md` / `AGENTS.md` section-4 item 6 now record the verified SMTP/dashboard state.
+- `docs/TWOFER_GAP_AUDIT.md` now records the verified SMTP/dashboard state.

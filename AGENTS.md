@@ -33,7 +33,7 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 3. The Share Deal feature flag is `EXPO_PUBLIC_ENABLE_SHARE_DEAL`, set in `eas.json` and read only in `lib/runtime-env.ts`.
 4. AI usage limits: 30 generations per month per AI feature, and 2 regenerations per deal creation. Pending implementation — deal-copy is still 60/month and the regeneration caps are still 5 (client) / 10 (server).
 5. AI Compose voice audio is processed ephemerally and never stored; only the text transcript is retained in `ai_generation_logs`.
-6. Email confirmation stays on; Dan will configure the Supabase side (custom SMTP, the Confirm email toggle, the redirect-URL allow-list) himself at a later date. No app-code auth changes are needed.
+6. Email confirmation stays on. Supabase auth email was verified on 2026-06-13: custom SMTP is enabled through Resend (`smtp.resend.com`) from `support@twoferapp.com`, Confirm email is on, the app redirect allow-list is set, and the auth email send rate limit is 30/hour. Do not expose SMTP credentials. App code handles confirmed, unconfirmed, and existing-account signup paths.
 
 ## How to work
 
