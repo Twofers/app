@@ -25,7 +25,7 @@ import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { supabase } from "@/lib/supabase";
-import { aiGenerateAd, notifyDealPublished, translateDeal } from "@/lib/functions";
+import { aiGenerateAd, notifyDealPublished, translateDealCopy } from "@/lib/functions";
 import { adToDealDraft, composeListingDescription, type GeneratedAd } from "@/lib/ad-variants";
 import { assessDealQuality } from "@/lib/deal-quality";
 import { resolveDealFlowLanguage, translateDealQualityBlock } from "@/lib/translate-deal-quality";
@@ -219,11 +219,24 @@ export default function QuickDealExpress() {
       const posterPublic = posterPath ? buildPublicDealPhotoUrl(posterPath) : null;
       const now = new Date();
       const end = new Date(now.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+      const translations = await translateDealCopy({
+        business_id: businessId,
+        title: cleanTitle,
+        description: listingDescription,
+        source_locale: dealOutputLang,
+      });
 
       const row = {
         business_id: businessId,
         title: cleanTitle,
         description: listingDescription,
+        source_locale: translations.source_locale,
+        title_en: translations.title_en,
+        title_es: translations.title_es,
+        title_ko: translations.title_ko,
+        description_en: translations.description_en,
+        description_es: translations.description_es,
+        description_ko: translations.description_ko,
         price: null,
         start_time: now.toISOString(),
         end_time: end.toISOString(),
@@ -251,7 +264,6 @@ export default function QuickDealExpress() {
       const id = data?.[0]?.id as string | undefined;
       if (!id) throw new Error("Missing published deal id.");
       void notifyDealPublished(id);
-      void translateDeal(id);
       await markRecentPublish(cleanTitle);
       setPublishedDealId(id);
       setPublishedDealTitle(cleanTitle);

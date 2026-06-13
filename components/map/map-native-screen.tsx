@@ -35,6 +35,8 @@ import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-dea
 type DealLite = {
   id: string;
   title: string | null;
+  source_locale: string | null;
+  title_en: string | null;
   title_es: string | null;
   title_ko: string | null;
   description: string | null;
@@ -105,7 +107,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     const { data: dz, error: ed } = await supabase
       .from("deals")
       .select(
-        "id,title,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())

@@ -51,6 +51,8 @@ type ClaimRow = {
     id: string;
     business_id: string;
     title: string | null;
+    source_locale: string | null;
+    title_en: string | null;
     title_es: string | null;
     title_ko: string | null;
     poster_url: string | null;
@@ -143,7 +145,7 @@ export default function WalletScreen() {
       const { data, error } = await supabase
         .from("deal_claims")
         .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude))",
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude))",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })

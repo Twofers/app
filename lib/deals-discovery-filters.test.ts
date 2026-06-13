@@ -27,6 +27,21 @@ describe("dealMatchesSearch", () => {
     expect(dealMatchesSearch(deal, "austin")).toBe(true);
   });
 
+  it("matches generated English translations for non-English source deals", () => {
+    expect(
+      dealMatchesSearch(
+        {
+          title: "Cafe helado 2x1",
+          description: "Compra uno y lleva otro gratis.",
+          title_en: "BOGO iced coffee",
+          description_en: "Buy one iced coffee, get one free.",
+          businesses: { name: "Demo Cafe", category: "Coffee shop", location: "Austin TX" },
+        },
+        "iced coffee",
+      ),
+    ).toBe(true);
+  });
+
   it("empty query passes all", () => {
     expect(dealMatchesSearch(deal, "")).toBe(true);
     expect(dealMatchesSearch(deal, "   ")).toBe(true);

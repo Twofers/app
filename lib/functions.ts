@@ -404,10 +404,72 @@ export async function aiBusinessLookupDetails(body: {
  * Fire-and-forget: translate deal title/description into es + ko.
  * Never throws — translations arrive asynchronously.
  */
-export async function translateDeal(dealId: string): Promise<void> {
+export type DealTranslationResult = {
+  source_locale: "en" | "es" | "ko";
+  title_en: string;
+  title_es: string;
+  title_ko: string;
+  description_en: string;
+  description_es: string;
+  description_ko: string;
+};
+
+function parseDealTranslationResult(data: unknown): DealTranslationResult {
+  if (!data || typeof data !== "object") {
+    throw new Error("Unexpected response from ai-translate-deal.");
+  }
+  const d = data as Partial<DealTranslationResult>;
+  const source = d.source_locale;
+  if (source !== "en" && source !== "es" && source !== "ko") {
+    throw new Error("Unexpected response from ai-translate-deal.");
+  }
+  for (const key of ["title_en", "title_es", "title_ko", "description_en", "description_es", "description_ko"] as const) {
+    if (typeof d[key] !== "string") {
+      throw new Error("Unexpected response from ai-translate-deal.");
+    }
+  }
+  const title_en = d.title_en!;
+  const title_es = d.title_es!;
+  const title_ko = d.title_ko!;
+  const description_en = d.description_en!;
+  const description_es = d.description_es!;
+  const description_ko = d.description_ko!;
+  return {
+    source_locale: source,
+    title_en,
+    title_es,
+    title_ko,
+    description_en,
+    description_es,
+    description_ko,
+  };
+}
+
+/** Translate source deal copy before publish so all customer locales are saved together. */
+export async function translateDealCopy(body: {
+  business_id: string;
+  title: string;
+  description: string;
+  source_locale: "en" | "es" | "ko";
+}): Promise<DealTranslationResult> {
+  const { data, error } = await supabase.functions.invoke("ai-translate-deal", {
+    body,
+    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
+  });
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throw new Error(fromBody.message ?? parseFunctionError(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error(String((data as { error?: string }).error ?? "Translation failed."));
+  }
+  return parseDealTranslationResult(data);
+}
+
+export async function translateDeal(dealId: string, sourceLocale?: "en" | "es" | "ko"): Promise<void> {
   try {
     const { error } = await supabase.functions.invoke("ai-translate-deal", {
-      body: { deal_id: dealId },
+      body: { deal_id: dealId, ...(sourceLocale ? { source_locale: sourceLocale } : {}) },
       timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
     });
     if (error) {

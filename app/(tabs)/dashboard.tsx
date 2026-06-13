@@ -126,6 +126,7 @@ type DealRow = {
   id: string;
   title: string | null;
   description: string | null;
+  source_locale: string | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   created_at: string;
@@ -154,7 +155,7 @@ type PerDealMetrics = {
 
 const DASHBOARD_DEALS_PAGE_SIZE = 100;
 const DASHBOARD_DEALS_SELECT =
-  "id,title,description,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
 
 function buildPerDealMap(monthOnly: ClaimRow[], nowMs: number): Record<string, PerDealMetrics> {
   const perDealMap: Record<string, PerDealMetrics> = {};
@@ -806,6 +807,7 @@ export default function BusinessDashboard() {
         prefillTitle: deal.title ?? "",
         prefillHint: deal.description ?? "",
         prefillPrice: deal.price != null ? String(deal.price) : "",
+        prefillSourceLocale: deal.source_locale ?? "",
         prefillPosterPath: deal.poster_storage_path ?? "",
         prefillIsRecurring: deal.is_recurring ? "1" : "0",
         prefillDaysOfWeek: deal.days_of_week ? deal.days_of_week.join(",") : "",

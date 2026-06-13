@@ -4,8 +4,18 @@ import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
-// ── Phrase-based translation engine ─────────────────────────
+type AppLocale = "en" | "es" | "ko";
 type TransPhrase = { rx: RegExp; es: string; ko: string };
+
+type TranslationResult = {
+  source_locale: AppLocale;
+  title_en: string;
+  title_es: string;
+  title_ko: string;
+  description_en: string;
+  description_es: string;
+  description_ko: string;
+};
 
 const TITLE_TRANS: TransPhrase[] = [
   { rx: /2-for-1 oat milk latte/i, es: "2x1 en lattes de leche de avena", ko: "\uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC 1+1" },
@@ -19,42 +29,116 @@ const TITLE_TRANS: TransPhrase[] = [
   { rx: /croissant/i, es: "Croissant reci\u00E9n horneado, dos por uno", ko: "\uAC13 \uAD6C\uC6B4 \uD06C\uB85C\uC640\uC0C1 1+1" },
   { rx: /muffin/i, es: "Muffin de ar\u00E1ndanos, dos por uno", ko: "\uBE14\uB8E8\uBCA0\uB9AC \uBA38\uD540 1+1" },
   { rx: /handcrafted|crafted with care/i, es: "Hecho a mano con cuidado, por partida doble", ko: "\uC815\uC131 \uB2F4\uC544 \uB9CC\uB4E0, \uB450 \uBC30\uC758 \uAE30\uC068" },
-  { rx: /2-for-1|two for one|bogo|buy one.+get one/i, es: "2x1 \u2014 calidad artesanal", ko: "1+1 \u2014 \uC7A5\uC778\uC758 \uD488\uC9C8" },
+  { rx: /2-for-1|two for one|bogo|buy one.+get one/i, es: "2x1 - calidad artesanal", ko: "1+1 - \uC7A5\uC778\uC758 \uD488\uC9C8" },
 ];
 
 const DESC_TRANS: TransPhrase[] = [
-  { rx: /buy one.+get one free/i, es: "Compra uno y lleva otro gratis \u2014 hecho con ingredientes de primera", ko: "\uD558\uB098 \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC \u2014 \uCD5C\uC0C1\uC758 \uC7AC\uB8CC\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4" },
-  { rx: /two for the price of one/i, es: "Dos por el precio de uno \u2014 elaborado con esmero", ko: "\uD558\uB098 \uAC00\uACA9\uC5D0 \uB458 \u2014 \uC815\uC131\uC744 \uB2F4\uC544" },
-  { rx: /walk.?ins? welcome/i, es: "Sin reserva necesaria \u2014 bienvenidos siempre", ko: "\uC608\uC57D \uC5C6\uC774 \uBC29\uBB38 \uAC00\uB2A5" },
-  { rx: /made fresh|single-origin|hand/i, es: "Preparado fresco con ingredientes reales. Ven y pru\u00E9balo.", ko: "\uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uC815\uC131\uC2A4\uB7FD\uAC8C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4. \uC9C1\uC811 \uB9DB\uBCF4\uC138\uC694." },
-  { rx: /no catch|no shortcuts/i, es: "Sin trampas, sin atajos \u2014 solo calidad real", ko: "\uC870\uAC74 \uC5C6\uC774, \uD0C0\uD611 \uC5C6\uC774 \u2014 \uC9C4\uC9DC \uD488\uC9C8\uB9CC" },
+  { rx: /buy one.+get one free/i, es: "Compra uno y lleva otro gratis - hecho con ingredientes de primera", ko: "\uD558\uB098 \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC - \uCD5C\uC0C1\uC758 \uC7AC\uB8CC\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4" },
+  { rx: /two for the price of one/i, es: "Dos por el precio de uno - elaborado con esmero", ko: "\uD558\uB098 \uAC00\uACA9\uC5D0 \uB458 - \uC815\uC131\uC744 \uB2F4\uC544" },
+  { rx: /walk.?ins? welcome/i, es: "Sin reserva necesaria - bienvenidos siempre", ko: "\uC608\uC57D \uC5C6\uC774 \uBC29\uBB38 \uAC00\uB2A5" },
+  { rx: /made fresh|single-origin|hand/i, es: "Preparado fresco con ingredientes reales. Ven y pruebalo.", ko: "\uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uC815\uC131\uC2A4\uB7FD\uAC8C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4. \uC9C1\uC811 \uB9DB\uBCF4\uC138\uC694." },
+  { rx: /no catch|no shortcuts/i, es: "Sin trampas, sin atajos - solo calidad real", ko: "\uC870\uAC74 \uC5C6\uC774, \uD0C0\uD611 \uC5C6\uC774 - \uC9C4\uC9DC \uD488\uC9C8\uB9CC" },
 ];
 
-function translateField(text: string, phrases: TransPhrase[], lang: "es" | "ko"): string {
+function jsonResponse(body: Record<string, unknown>, status: number, corsHeaders: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function normalizeLocale(value: unknown): AppLocale | null {
+  if (typeof value !== "string") return null;
+  const lang = value.trim().toLowerCase().split("-")[0];
+  return lang === "en" || lang === "es" || lang === "ko" ? lang : null;
+}
+
+function textField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function translateEnglishField(text: string, phrases: TransPhrase[], lang: "es" | "ko"): string {
   if (!text.trim()) return "";
   for (const p of phrases) {
     if (p.rx.test(text)) return p[lang];
   }
   return lang === "es"
-    ? `${text} \u2014 calidad artesanal, hecho con cuidado`
-    : `${text} \u2014 \uC7A5\uC778\uC758 \uC815\uC131\uC73C\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4`;
+    ? `${text} - calidad artesanal, hecho con cuidado`
+    : `${text} - \uC7A5\uC778\uC758 \uC815\uC131\uC73C\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4`;
 }
 
-function buildTranslationResult(title: string, description: string): TranslationResult {
-  return {
-    title_es: translateField(title, TITLE_TRANS, "es"),
-    title_ko: translateField(title, TITLE_TRANS, "ko"),
-    description_es: translateField(description, DESC_TRANS, "es"),
-    description_ko: translateField(description, DESC_TRANS, "ko"),
+function fallbackResult(title: string, description: string, sourceLocale: AppLocale): TranslationResult {
+  const result: TranslationResult = {
+    source_locale: sourceLocale,
+    title_en: sourceLocale === "en" ? title : title,
+    title_es: sourceLocale === "en" ? translateEnglishField(title, TITLE_TRANS, "es") : title,
+    title_ko: sourceLocale === "en" ? translateEnglishField(title, TITLE_TRANS, "ko") : title,
+    description_en: sourceLocale === "en" ? description : description,
+    description_es: sourceLocale === "en" ? translateEnglishField(description, DESC_TRANS, "es") : description,
+    description_ko: sourceLocale === "en" ? translateEnglishField(description, DESC_TRANS, "ko") : description,
   };
+  if (sourceLocale === "es") {
+    result.title_es = title;
+    result.description_es = description;
+  }
+  if (sourceLocale === "ko") {
+    result.title_ko = title;
+    result.description_ko = description;
+  }
+  return result;
 }
 
-type TranslationResult = {
-  title_es: string;
-  title_ko: string;
-  description_es: string;
-  description_ko: string;
-};
+function normalizeAiResult(raw: Record<string, unknown>, title: string, description: string, sourceLocale: AppLocale): TranslationResult {
+  const fallback = fallbackResult(title, description, sourceLocale);
+  const result: TranslationResult = {
+    source_locale: sourceLocale,
+    title_en: textField(raw.title_en) || fallback.title_en,
+    title_es: textField(raw.title_es) || fallback.title_es,
+    title_ko: textField(raw.title_ko) || fallback.title_ko,
+    description_en: textField(raw.description_en) || fallback.description_en,
+    description_es: textField(raw.description_es) || fallback.description_es,
+    description_ko: textField(raw.description_ko) || fallback.description_ko,
+  };
+  if (sourceLocale === "en") {
+    result.title_en = title;
+    result.description_en = description;
+  } else if (sourceLocale === "es") {
+    result.title_es = title;
+    result.description_es = description;
+  } else {
+    result.title_ko = title;
+    result.description_ko = description;
+  }
+  return result;
+}
+
+async function logTranslation(
+  admin: any,
+  input: {
+    businessId: string;
+    userId: string;
+    requestHash: string;
+    model: string | null;
+    success: boolean;
+    openaiCalled: boolean;
+    failureReason?: string;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+  },
+) {
+  await admin.from("ai_generation_logs").insert({
+    business_id: input.businessId,
+    user_id: input.userId,
+    request_type: "deal_translate",
+    request_hash: input.requestHash,
+    model: input.model,
+    success: input.success,
+    failure_reason: input.failureReason ?? null,
+    openai_called: input.openaiCalled,
+    input_token_count: input.promptTokens ?? null,
+    output_token_count: input.completionTokens ?? null,
+  });
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -62,12 +146,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
-
   if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
   try {
@@ -86,10 +166,7 @@ serve(async (req) => {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized. Please log in." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ error: "Unauthorized. Please log in." }, 401, corsHeaders);
     }
     if (isRedeemerUser(user)) {
       return forbiddenForRedeemerResponse(corsHeaders);
@@ -99,81 +176,87 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ error: "Invalid JSON in request body" }, 400, corsHeaders);
     }
 
-    const deal_id = typeof body.deal_id === "string" ? body.deal_id.trim() : "";
-    if (!deal_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing deal_id." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const dealId = typeof body.deal_id === "string" ? body.deal_id.trim() : "";
+    const businessIdFromBody = typeof body.business_id === "string" ? body.business_id.trim() : "";
+    const directMode = Boolean(businessIdFromBody && ("title" in body || "description" in body));
+    const requestHash = dealId ? `translate:${dealId}` : `translate:direct:${crypto.randomUUID()}`;
 
-    // Fetch deal and verify ownership
-    const { data: deal, error: dealErr } = await admin
-      .from("deals")
-      .select("id, title, description, business_id")
-      .eq("id", deal_id)
-      .single();
+    let title = "";
+    let description = "";
+    let businessId = "";
+    let sourceLocale = normalizeLocale(body.source_locale) ?? "en";
 
-    if (dealErr || !deal) {
-      return new Response(
-        JSON.stringify({ error: "Deal not found." }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (directMode) {
+      businessId = businessIdFromBody;
+      title = textField(body.title);
+      description = textField(body.description);
+    } else {
+      if (!dealId) {
+        return jsonResponse({ error: "Missing deal_id or business_id/title/description." }, 400, corsHeaders);
+      }
+      const { data: deal, error: dealErr } = await admin
+        .from("deals")
+        .select("id, title, description, business_id, source_locale")
+        .eq("id", dealId)
+        .single();
+
+      if (dealErr || !deal) {
+        return jsonResponse({ error: "Deal not found." }, 404, corsHeaders);
+      }
+      title = deal.title ?? "";
+      description = deal.description ?? "";
+      businessId = deal.business_id;
+      sourceLocale = normalizeLocale(body.source_locale) ?? normalizeLocale(deal.source_locale) ?? "en";
     }
 
     const { data: biz } = await admin
       .from("businesses")
       .select("owner_id")
-      .eq("id", deal.business_id)
+      .eq("id", businessId)
       .single();
 
     if (!biz || biz.owner_id !== user.id) {
-      return new Response(
-        JSON.stringify({ error: "You do not own this deal." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ error: "You do not own this business." }, 403, corsHeaders);
     }
 
-    const title = deal.title ?? "";
-    const description = deal.description ?? "";
-
     if (!title && !description) {
-      return new Response(
-        JSON.stringify({ ok: true, skipped: true }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const emptyResult = fallbackResult("", "", sourceLocale);
+      return jsonResponse({ ok: true, skipped: true, ...emptyResult }, 200, corsHeaders);
     }
 
     if (!openAiKey) {
-      const ms = 400 + Math.floor(Math.random() * 300);
-      await new Promise((r) => setTimeout(r, ms));
-      const fallbackResult = buildTranslationResult(title, description);
-      await admin.from("deals").update(fallbackResult).eq("id", deal_id);
-      return new Response(
-        JSON.stringify({ ok: true, ...fallbackResult }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const result = fallbackResult(title, description, sourceLocale);
+      if (!directMode) {
+        await admin.from("deals").update(result).eq("id", dealId);
+      }
+      await logTranslation(admin, {
+        businessId,
+        userId: user.id,
+        requestHash,
+        model: null,
+        success: true,
+        openaiCalled: false,
+      });
+      return jsonResponse({ ok: true, ...result }, 200, corsHeaders);
     }
 
-    const CHAT_MODEL = resolveOpenAiChatModel();
-
+    const chatModel = resolveOpenAiChatModel();
     const systemPrompt = [
       "You translate short promotional deal copy for a local business mobile app.",
-      "Translate into Spanish (es) and Korean (ko).",
-      "Keep translations punchy, mobile-friendly, and preserve the promotional tone.",
-      "Do not add or remove information. Keep character counts similar to the original.",
-      "Return JSON only with: title_es, title_ko, description_es, description_ko.",
-      "If a field is empty, return an empty string for its translations.",
+      "Supported output locales are English (en), Spanish (es), and Korean (ko).",
+      "The owner source locale is provided. For that locale, copy the original text exactly.",
+      "For the other locales, translate naturally and preserve the promotional meaning.",
+      "Keep translations punchy, mobile-friendly, and similar in length.",
+      "Do not add or remove deal terms.",
+      "Return JSON only with: title_en, title_es, title_ko, description_en, description_es, description_ko.",
+      "If a field is empty, return an empty string for each language version of that field.",
     ].join(" ");
 
     const aiBody = {
-      model: CHAT_MODEL,
+      model: chatModel,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -182,12 +265,14 @@ serve(async (req) => {
           schema: {
             type: "object",
             properties: {
+              title_en: { type: "string" },
               title_es: { type: "string" },
               title_ko: { type: "string" },
+              description_en: { type: "string" },
               description_es: { type: "string" },
               description_ko: { type: "string" },
             },
-            required: ["title_es", "title_ko", "description_es", "description_ko"],
+            required: ["title_en", "title_es", "title_ko", "description_en", "description_es", "description_ko"],
             additionalProperties: false,
           },
         },
@@ -196,10 +281,10 @@ serve(async (req) => {
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Title: ${title}\nDescription: ${description}`,
+          content: `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`,
         },
       ],
-      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1024 }),
+      ...chatCompletionTuning(chatModel, { maxTokens: 1400 }),
     };
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -212,22 +297,17 @@ serve(async (req) => {
     });
 
     if (!aiRes.ok) {
-      const errText = await aiRes.text();
       console.log(JSON.stringify({ tag: "ai_translate_deal", event: "openai_error", status: aiRes.status }));
-      await admin.from("ai_generation_logs").insert({
-        business_id: deal.business_id,
-        user_id: user.id,
-        request_type: "deal_translate",
-        request_hash: `translate:${deal_id}`,
-        model: CHAT_MODEL,
+      await logTranslation(admin, {
+        businessId,
+        userId: user.id,
+        requestHash,
+        model: chatModel,
         success: false,
-        failure_reason: `OPENAI_HTTP_${aiRes.status}`,
-        openai_called: true,
+        openaiCalled: true,
+        failureReason: `OPENAI_HTTP_${aiRes.status}`,
       });
-      return new Response(
-        JSON.stringify({ error: "Translation failed." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ error: "Translation failed." }, 502, corsHeaders);
     }
 
     const aiJson = await aiRes.json();
@@ -236,56 +316,44 @@ serve(async (req) => {
 
     let result: TranslationResult;
     try {
-      result = JSON.parse(content);
+      const parsed = JSON.parse(content);
+      result = normalizeAiResult(parsed, title, description, sourceLocale);
     } catch {
-      await admin.from("ai_generation_logs").insert({
-        business_id: deal.business_id,
-        user_id: user.id,
-        request_type: "deal_translate",
-        request_hash: `translate:parse_error:${deal_id}`,
-        model: CHAT_MODEL,
+      await logTranslation(admin, {
+        businessId,
+        userId: user.id,
+        requestHash: `translate:parse_error:${dealId || crypto.randomUUID()}`,
+        model: chatModel,
         success: false,
-        failure_reason: "PARSE_ERROR",
-        openai_called: true,
-        input_token_count: usage?.prompt_tokens ?? null,
-        output_token_count: usage?.completion_tokens ?? null,
+        openaiCalled: true,
+        failureReason: "PARSE_ERROR",
+        promptTokens: usage?.prompt_tokens ?? null,
+        completionTokens: usage?.completion_tokens ?? null,
       });
-      return new Response(
-        JSON.stringify({ error: "Translation response was invalid." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ error: "Translation response was invalid." }, 500, corsHeaders);
     }
 
-    // Write translations to the deal
-    await admin.from("deals").update({
-      title_es: result.title_es || null,
-      title_ko: result.title_ko || null,
-      description_es: result.description_es || null,
-      description_ko: result.description_ko || null,
-    }).eq("id", deal_id);
+    if (!directMode) {
+      const { error: updateErr } = await admin.from("deals").update(result).eq("id", dealId);
+      if (updateErr) {
+        return jsonResponse({ error: "Translation save failed." }, 500, corsHeaders);
+      }
+    }
 
-    // Log success
-    await admin.from("ai_generation_logs").insert({
-      business_id: deal.business_id,
-      user_id: user.id,
-      request_type: "deal_translate",
-      request_hash: `translate:${deal_id}`,
-      model: CHAT_MODEL,
+    await logTranslation(admin, {
+      businessId,
+      userId: user.id,
+      requestHash,
+      model: chatModel,
       success: true,
-      openai_called: true,
-      input_token_count: usage?.prompt_tokens ?? null,
-      output_token_count: usage?.completion_tokens ?? null,
+      openaiCalled: true,
+      promptTokens: usage?.prompt_tokens ?? null,
+      completionTokens: usage?.completion_tokens ?? null,
     });
 
-    return new Response(
-      JSON.stringify({ ok: true, ...result }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ ok: true, ...result }, 200, corsHeaders);
   } catch (err) {
     console.log(JSON.stringify({ tag: "ai_translate_deal", event: "error", err: String(err) }));
-    return new Response(
-      JSON.stringify({ error: "Server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: "Server error" }, 500, getCorsHeaders(req));
   }
 });

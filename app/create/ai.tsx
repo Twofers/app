@@ -41,7 +41,7 @@ import {
   aiGenerateAd,
   aiReviseAd,
   notifyDealPublished,
-  translateDeal,
+  translateDealCopy,
   getErrorCode,
 } from "../../lib/functions";
 import {
@@ -59,6 +59,7 @@ import {
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
+import { isAppLocale, type AppLocale } from "../../lib/i18n/config";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import {
   buildPublicDealPhotoUrl,
@@ -310,6 +311,7 @@ export default function AiDealScreen() {
     prefillTimezone?: string;
     prefillMaxClaims?: string;
     prefillCutoffMins?: string;
+    prefillSourceLocale?: string;
   }>();
   const { templateId, dealId: dealIdParam } = params;
   const { t, i18n } = useTranslation();
@@ -437,6 +439,8 @@ export default function AiDealScreen() {
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
   const menuOfferScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
+  const [prefillSourceLocale, setPrefillSourceLocale] = useState<AppLocale | null>(null);
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
@@ -634,7 +638,7 @@ export default function AiDealScreen() {
         const { data, error } = await supabase
           .from("deals")
           .select(
-            "id,title,description,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
+            "id,title,description,source_locale,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
           )
           .eq("id", dealIdFromRoute)
           .eq("business_id", businessId)
@@ -643,10 +647,14 @@ export default function AiDealScreen() {
         if (error || !data) {
           setDealLoadError(t("createAi.errLoadDeal"));
           setEditingDealId(null);
+          setEditingSourceLocale(null);
           return;
         }
         const row = data as Record<string, unknown>;
+        const loadedSourceLocale = String(row.source_locale ?? "");
         setEditingDealId(String(row.id));
+        setEditingSourceLocale(isAppLocale(loadedSourceLocale) ? loadedSourceLocale : "en");
+        setPrefillSourceLocale(null);
         setTitle(String(row.title ?? ""));
         setDescription(String(row.description ?? ""));
         setPromoLine("");
@@ -715,6 +723,8 @@ export default function AiDealScreen() {
       if (cancelled) return;
       if (!error && data) {
         const row = data as TemplateRow;
+        setEditingSourceLocale(null);
+        setPrefillSourceLocale(null);
         setTitle(row.title ?? "");
         setDescription(row.description ?? "");
         setPromoLine("");
@@ -763,6 +773,9 @@ export default function AiDealScreen() {
     const fromMenu = g(params.fromMenuOffer);
     const fromReuse = g(params.fromReuse);
     const fromHub = g(params.fromCreateHub);
+    const sourceFromRoute = g(params.prefillSourceLocale);
+    setEditingSourceLocale(null);
+    setPrefillSourceLocale(isAppLocale(sourceFromRoute) ? sourceFromRoute : null);
     const pl = g(params.prefillLocationId).trim();
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
@@ -811,7 +824,7 @@ export default function AiDealScreen() {
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
-    params.prefillLocationId, params.prefillExtraLocationIds, dealIdFromRoute, t,
+    params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
     params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
     params.prefillWindowEndMin, params.prefillTimezone, params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
@@ -1290,11 +1303,25 @@ export default function AiDealScreen() {
         posterUrl,
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
+      const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
+      const translations = await translateDealCopy({
+        business_id: businessId,
+        title: title.trim(),
+        description: listingDescription.trim(),
+        source_locale: sourceLocaleForPublish,
+      });
 
       const baseRow = {
         business_id: businessId,
         title: title.trim(),
         description: listingDescription.trim(),
+        source_locale: translations.source_locale,
+        title_en: translations.title_en,
+        title_es: translations.title_es,
+        title_ko: translations.title_ko,
+        description_en: translations.description_en,
+        description_es: translations.description_es,
+        description_ko: translations.description_ko,
         price: priceNum,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
@@ -1325,7 +1352,6 @@ export default function AiDealScreen() {
             .eq("business_id", businessId);
         }
         if (updateResult.error) throw updateResult.error;
-        void translateDeal(editingDealId);
       } else {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
@@ -1339,7 +1365,6 @@ export default function AiDealScreen() {
         for (const row of dealsOut ?? []) {
           if (row?.id) {
             void notifyDealPublished(row.id);
-            void translateDeal(row.id);
           }
         }
       }

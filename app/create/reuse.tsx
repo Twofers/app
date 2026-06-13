@@ -27,6 +27,7 @@ type DealRow = {
   id: string;
   title: string | null;
   description: string | null;
+  source_locale: string | null;
   price: number | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
@@ -58,7 +59,7 @@ export default function ReuseDealScreen() {
         .limit(25),
       supabase
         .from("deals")
-        .select("id,title,description,price,poster_url,poster_storage_path,end_time")
+        .select("id,title,description,source_locale,price,poster_url,poster_storage_path,end_time")
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(25),
@@ -130,6 +131,7 @@ export default function ReuseDealScreen() {
         prefillTitle: title,
         prefillHint: hint || title,
         prefillPrice: price,
+        prefillSourceLocale: row.source_locale ?? "",
         fromReuse: "1",
       },
     } as Href);

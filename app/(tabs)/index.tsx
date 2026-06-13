@@ -72,7 +72,7 @@ const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
  */
 const NEARBY_FETCH_MILES = 60;
 const FEED_DEAL_SELECT =
-  "id,title,description,title_es,title_ko,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 
 function businessDetailHref(businessId: string, distanceLabel?: string | null): Href {
   const encodedId = encodeURIComponent(businessId);
@@ -85,8 +85,11 @@ type Deal = {
   id: string;
   title: string | null;
   description: string | null;
+  source_locale: string | null;
+  title_en: string | null;
   title_es: string | null;
   title_ko: string | null;
+  description_en: string | null;
   description_es: string | null;
   description_ko: string | null;
   end_time: string;
@@ -804,7 +807,6 @@ export default function HomeScreen() {
             : t("consumerHome.onlyNLeft", { count: remainingForDeal })
           : null;
       const offerText = localizedDealTitle(item, i18n.language) || t("dealDetail.dealFallback");
-      const bogoText = /bogo|buy one get one/i.test(offerText) ? offerText : `BOGO: ${offerText}`;
       const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
       const businessLocation = item.businesses?.location?.trim() || null;
@@ -972,7 +974,7 @@ export default function HomeScreen() {
               ) : null}
             </View>
             <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
-              {bogoText}
+              {offerText}
             </Text>
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }} maxFontSizeMultiplier={1.15}>
               {localizedDealDescription(item, i18n.language) || t("consumerHome.tagline")}
