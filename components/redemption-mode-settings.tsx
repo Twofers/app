@@ -44,7 +44,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   const { t } = useTranslation();
   const router = useRouter();
   const { refresh } = useRedemptionMode();
-  const { clearUnlock, markUnlocked } = useOwnerRedemptionSecurity();
+  const { clearUnlock, markUnlocked, setPinEnabled } = useOwnerRedemptionSecurity();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -75,7 +75,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     if (!businessId) return;
     setLoadingOwnerSecurity(true);
     try {
-      setOwnerSecurity(await getOwnerRedemptionSecurityStatus(businessId));
+      const status = await getOwnerRedemptionSecurityStatus(businessId);
+      setOwnerSecurity(status);
+      setPinEnabled(businessId, status.enabled);
     } catch (err) {
       setBanner({
         message: err instanceof Error ? err.message : t("redemptionMode.ownerPinLoadFailed", { defaultValue: "Could not load owner redemption PIN settings." }),
@@ -84,7 +86,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     } finally {
       setLoadingOwnerSecurity(false);
     }
-  }, [businessId, t]);
+  }, [businessId, setPinEnabled, t]);
 
   const reloadDevices = useCallback(async () => {
     if (!businessId) return;
@@ -123,6 +125,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     try {
       await enableOwnerRedemptionPin(businessId, pinValue);
       markUnlocked(businessId);
+      setPinEnabled(businessId, true);
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
       setOwnerPin("");
       setOwnerPinConfirm("");
@@ -152,6 +155,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     try {
       await disableOwnerRedemptionPin(businessId, pinValue || undefined);
       clearUnlock(businessId);
+      setPinEnabled(businessId, false);
       // Server clears pin_hash on disable; re-enabling is a fresh setup.
       setOwnerSecurity({ enabled: false, hasPin: false, lockedUntil: null });
       setOwnerDisablePin("");
@@ -190,6 +194,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     try {
       await changeOwnerRedemptionPin(businessId, currentPin, newPin);
       markUnlocked(businessId);
+      setPinEnabled(businessId, true);
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
       setOwnerDisablePin("");
       setOwnerNewPin("");
@@ -321,7 +326,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                   {t("redemptionMode.ownerPinTitle", { defaultValue: "Owner redeem PIN" })}
                 </Text>
                 <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 3, lineHeight: 18 }}>
-                  {t("redemptionMode.ownerPinSubtitle", { defaultValue: "Unlock the Redeem tab once per app session." })}
+                  {t("redemptionMode.ownerPinSubtitle", {
+                    defaultValue: "When enabled, only Redeem is available until the owner unlocks the app.",
+                  })}
                 </Text>
               </View>
               {loadingOwnerSecurity ? (
@@ -441,7 +448,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                   }}
                 />
                 <SecondaryButton
-                  title={savingOwnerSecurity ? t("commonUi.saving", { defaultValue: "Saving..." }) : t("redemptionMode.enableOwnerPin", { defaultValue: "Require PIN for owner redemptions" })}
+                  title={savingOwnerSecurity ? t("commonUi.saving", { defaultValue: "Saving..." }) : t("redemptionMode.enableOwnerPin", { defaultValue: "Require PIN to unlock business app" })}
                   onPress={() => void enableOwnerPin()}
                   disabled={savingOwnerSecurity || loadingOwnerSecurity}
                   style={{ minHeight: 48, paddingVertical: 10 }}

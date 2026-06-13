@@ -41,7 +41,7 @@ export default function RedeemScanner() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const { isLoggedIn, businessId, loading } = useBusiness();
-  const { isUnlocked, markUnlocked } = useOwnerRedemptionSecurity();
+  const { isUnlocked, markUnlocked, setPinEnabled } = useOwnerRedemptionSecurity();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
@@ -68,7 +68,9 @@ export default function RedeemScanner() {
     setOwnerSecurityLoading(true);
     setOwnerSecurityError(null);
     try {
-      setOwnerSecurity(await getOwnerRedemptionSecurityStatus(businessId));
+      const status = await getOwnerRedemptionSecurityStatus(businessId);
+      setOwnerSecurity(status);
+      setPinEnabled(businessId, status.enabled);
     } catch (err) {
       setOwnerSecurity(null);
       setOwnerSecurityError(
@@ -79,7 +81,7 @@ export default function RedeemScanner() {
     } finally {
       setOwnerSecurityLoading(false);
     }
-  }, [businessId, t]);
+  }, [businessId, setPinEnabled, t]);
 
   // Clear stale success/error state when tab regains focus
   useFocusEffect(
@@ -118,6 +120,7 @@ export default function RedeemScanner() {
         return;
       }
       markUnlocked(businessId);
+      setPinEnabled(businessId, true);
       setOwnerPinInput("");
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
     } catch (err) {
@@ -216,6 +219,11 @@ export default function RedeemScanner() {
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md, paddingBottom: scrollBottom }}>
           <Text style={{ fontWeight: "900", fontSize: 18, color: theme.text }}>
             {t("redemptionMode.ownerPinRequiredTitle", { defaultValue: "Owner PIN required" })}
+          </Text>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+            {t("redemptionMode.ownerPinUnlockBody", {
+              defaultValue: "Enter the owner PIN to unlock the rest of the business app.",
+            })}
           </Text>
           <TextInput
             value={ownerPinInput}

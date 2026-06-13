@@ -18,12 +18,14 @@ import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { isRedeemerSession } from "@/lib/redemption-mode";
 import {
   deriveTabFromSegments,
   resolveTabModeRedirectTarget,
   shouldCheckBusinessProfileForTab,
 } from "@/lib/tab-mode-redirect";
+import type { TabMode } from "@/lib/tab-mode";
 
 type TabIconName = ComponentProps<typeof IconSymbol>["name"];
 
@@ -43,6 +45,14 @@ const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
 const renderBillingTabIcon = createTabIconRenderer("heart.fill");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
 const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <HapticTab {...props} />;
+
+type BusinessTabState = ReturnType<typeof useBusiness>;
+
+function useOwnerPinLockedForBusiness(mode: TabMode, businessId: string | null): boolean {
+  const { isPinEnabled, isUnlocked } = useOwnerRedemptionSecurity();
+  const ownerPinEnabled = businessId ? isPinEnabled(businessId) : null;
+  return mode === "business" && Boolean(businessId && ownerPinEnabled === true && !isUnlocked(businessId));
+}
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
@@ -110,6 +120,8 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { mode } = useTabMode();
+  const business = useBusiness();
+  const ownerPinLocked = useOwnerPinLockedForBusiness(mode, business.businessId);
   const androidTabBottomPadding = Math.max(insets.bottom, 8);
 
   /**
@@ -127,7 +139,7 @@ export default function TabLayout() {
 
   return (
     <TabAuthGate>
-      <TabModeRedirect />
+      <TabModeRedirect business={business} ownerPinLocked={ownerPinLocked} />
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: theme.primary,
@@ -192,7 +204,7 @@ export default function TabLayout() {
           options={{
             title: t('tabs.create'),
             tabBarIcon: renderCreateTabIcon,
-            ...hideWhen(mode === 'customer'),
+            ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
         <Tabs.Screen
@@ -208,7 +220,7 @@ export default function TabLayout() {
           options={{
             title: t('tabs.dashboard'),
             tabBarIcon: renderDashboardTabIcon,
-            ...hideWhen(mode === 'customer'),
+            ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
         <Tabs.Screen
@@ -216,7 +228,7 @@ export default function TabLayout() {
           options={{
             title: t("tabs.billing"),
             tabBarIcon: renderBillingTabIcon,
-            ...hideWhen(mode === "customer" || !PAID_BILLING_ENABLED),
+            ...hideWhen(mode === "customer" || !PAID_BILLING_ENABLED || ownerPinLocked),
           }}
         />
         <Tabs.Screen
@@ -224,7 +236,7 @@ export default function TabLayout() {
           options={{
             title: t('tabs.account'),
             tabBarIcon: renderAccountTabIcon,
-            ...hideWhen(mode === 'customer'),
+            ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
         {/* FIX: billing/manage is a sub-route pushed from billing.tsx.
@@ -237,10 +249,16 @@ export default function TabLayout() {
   );
 }
 
-function TabModeRedirect() {
+function TabModeRedirect({
+  business,
+  ownerPinLocked,
+}: {
+  business: BusinessTabState;
+  ownerPinLocked: boolean;
+}) {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
-  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading: billingLoading } = useBusiness();
+  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading: billingLoading } = business;
   const segments = useSegments() as string[];
   const router = useRouter();
   const params = useGlobalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -278,7 +296,7 @@ function TabModeRedirect() {
   }, [tab, segments]);
 
   useEffect(() => {
-    if (!ready || mode !== "business" || forceBypass) {
+    if (!ready || mode !== "business" || forceBypass || ownerPinLocked) {
       setCheckingProfile(false);
       setBusinessProfileComplete(null);
       profileCheckedUserRef.current = null;
@@ -302,7 +320,7 @@ function TabModeRedirect() {
     return () => {
       cancelled = true;
     };
-  }, [ready, mode, forceBypass, session?.user?.id, tab, businessProfileComplete]);
+  }, [ready, mode, forceBypass, ownerPinLocked, session?.user?.id, tab, businessProfileComplete]);
 
   useEffect(() => {
     if (!ready || billingLoading) return;
@@ -323,11 +341,12 @@ function TabModeRedirect() {
       checkingProfile,
       businessProfileComplete,
       businessBillingBlocked,
+      ownerPinLocked,
     });
     if (target) {
       redirectTo(target);
     }
-  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked, billingLoading]);
+  }, [ready, mode, tab, currentPath, router, forceBypass, checkingProfile, businessProfileComplete, businessBillingBlocked, billingLoading, ownerPinLocked]);
 
   if (checkingProfile) {
     return (

@@ -22,6 +22,7 @@ export function resolveTabModeRedirectTarget({
   checkingProfile,
   businessProfileComplete,
   businessBillingBlocked = false,
+  ownerPinLocked = false,
 }: {
   mode: TabMode;
   tab: string | null;
@@ -30,12 +31,16 @@ export function resolveTabModeRedirectTarget({
   checkingProfile: boolean;
   businessProfileComplete: boolean | null;
   businessBillingBlocked?: boolean;
+  ownerPinLocked?: boolean;
 }): string | null {
   if (tab === null) return null;
 
   const safeReturn = (target: string) => (target === currentPath ? null : target);
 
   if (mode === "business") {
+    if (ownerPinLocked) {
+      return tab === "redeem" ? null : safeReturn("/(tabs)/redeem");
+    }
     if (CONSUMER_TABS.has(tab)) return safeReturn("/(tabs)/create");
     if (BUSINESS_TABS.has(tab)) {
       if (forceBypass || checkingProfile || businessProfileComplete === null) return null;

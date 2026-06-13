@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,12 +19,17 @@ import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-han
 import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
-import { OwnerRedemptionSecurityProvider } from '@/components/providers/owner-redemption-security-provider';
+import {
+  OwnerRedemptionSecurityProvider,
+  useOwnerRedemptionSecurity,
+} from '@/components/providers/owner-redemption-security-provider';
 import { RedemptionModeGate, RedemptionModeProvider } from '@/components/providers/redemption-mode-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useBusiness } from '@/hooks/use-business';
 import { Colors } from '@/constants/theme';
-import { TabModeProvider } from '@/lib/tab-mode';
+import { TabModeProvider, useTabMode } from '@/lib/tab-mode';
 import { CreateMenuOfferWizardProvider } from '@/lib/create-menu-offer-wizard-context';
+import { getOwnerRedemptionSecurityStatus } from '@/lib/owner-redemption-security';
 
 // N-2 FIX: Register foreground notification handler at module level so
 // notifications received while the app is open are displayed to the user.
@@ -71,6 +76,44 @@ export const unstable_settings = {
   anchor: 'index',
 };
 
+function isOwnerPinAllowedRoute(segments: string[]): boolean {
+  const root = String(segments[0] ?? '');
+  if (root === 'redemption-mode') return true;
+  return root === '(tabs)' && String(segments[1] ?? '') === 'redeem';
+}
+
+function OwnerRedemptionPinGate() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { mode, ready } = useTabMode();
+  const { businessId, loading } = useBusiness();
+  const { isPinEnabled, isUnlocked, setPinEnabled } = useOwnerRedemptionSecurity();
+  const ownerPinEnabled = businessId ? isPinEnabled(businessId) : null;
+
+  useEffect(() => {
+    if (!ready || mode !== 'business' || loading || !businessId || ownerPinEnabled !== null) return;
+    let cancelled = false;
+    void getOwnerRedemptionSecurityStatus(businessId)
+      .then((status) => {
+        if (!cancelled) setPinEnabled(businessId, status.enabled);
+      })
+      .catch((err) => {
+        if (__DEV__) console.warn('[owner-pin-gate] status lookup failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, loading, mode, ownerPinEnabled, ready, setPinEnabled]);
+
+  useEffect(() => {
+    if (!ready || mode !== 'business' || !businessId || ownerPinEnabled !== true || isUnlocked(businessId)) return;
+    if (isOwnerPinAllowedRoute(segments.map(String))) return;
+    router.replace('/(tabs)/redeem' as Href);
+  }, [businessId, isUnlocked, mode, ownerPinEnabled, ready, router, segments]);
+
+  return null;
+}
+
 function RootNavigationStack() {
   const colorScheme = useColorScheme();
   const uiTheme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
@@ -91,6 +134,7 @@ function RootNavigationStack() {
       <BillingDeepLinkHandler />
       <AuthStackGate />
       <RedemptionModeGate />
+      <OwnerRedemptionPinGate />
       <CreateMenuOfferWizardProvider>
       <Stack
         screenOptions={{

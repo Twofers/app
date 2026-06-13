@@ -51,6 +51,35 @@ describe("resolveTabModeRedirectTarget", () => {
     ).toBe("/(tabs)/create");
   });
 
+  it("redirects locked business navigation to redeem", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: "dashboard",
+        currentPath: "/(tabs)/dashboard",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: true,
+        ownerPinLocked: true,
+      }),
+    ).toBe("/(tabs)/redeem");
+  });
+
+  it("keeps redeem available while the owner PIN lock is active", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: "redeem",
+        currentPath: "/(tabs)/redeem",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: false,
+        businessBillingBlocked: true,
+        ownerPinLocked: true,
+      }),
+    ).toBeNull();
+  });
+
   it("redirects incomplete business profile to setup", () => {
     expect(
       resolveTabModeRedirectTarget({
