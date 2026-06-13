@@ -19,7 +19,7 @@ import {
   KeyboardScreen,
 } from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
+import { Colors, Gray, Radii } from "@/constants/theme";
 import { ReportSheet } from "@/components/report-sheet";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { submitUserReport, type UserReportReason } from "@/lib/reports";
@@ -313,13 +313,13 @@ export default function RedeemScanner() {
               style={{
                 flex: 1,
                 paddingVertical: Spacing.sm,
-                borderRadius: 12,
-                backgroundColor: mode === "scan" ? theme.text : theme.surfaceMuted,
+                borderRadius: Radii.pill,
+                backgroundColor: mode === "scan" ? theme.primary : theme.surfaceMuted,
                 alignItems: "center",
                 opacity: processing && mode !== "scan" ? 0.5 : 1,
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.background : theme.text }}>{t("redeem.modeScan")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.primaryText : Gray[700] }}>{t("redeem.modeScan")}</Text>
             </Pressable>
             <Pressable
               onPress={() => setMode("manual")}
@@ -327,13 +327,13 @@ export default function RedeemScanner() {
               style={{
                 flex: 1,
                 paddingVertical: Spacing.sm,
-                borderRadius: 12,
-                backgroundColor: mode === "manual" ? theme.text : theme.surfaceMuted,
+                borderRadius: Radii.pill,
+                backgroundColor: mode === "manual" ? theme.primary : theme.surfaceMuted,
                 alignItems: "center",
                 opacity: processing && mode !== "manual" ? 0.5 : 1,
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.background : theme.text }}>{t("redeem.modeManual")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.primaryText : Gray[700] }}>{t("redeem.modeManual")}</Text>
             </Pressable>
           </View>
 

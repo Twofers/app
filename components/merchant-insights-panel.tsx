@@ -3,23 +3,26 @@ import { useTranslation } from "react-i18next";
 import type { MerchantInsightsRow } from "@/lib/merchant-insights";
 import { Spacing } from "@/lib/screen-layout";
 
+// Raw ids the server may emit that have no translation (demo_seed, future
+// sources, …) must never leak into the UI — they collapse into the localized
+// "Other" / "Unknown" buckets so labels stay friendly and consistently cased.
 function formatAcquisitionLabel(key: string, t: (k: string) => string) {
   const k = `merchantInsights.acquisition.${key}`;
   const s = t(k);
-  return s === k ? key : s;
+  return s === k ? t("merchantInsights.acquisition.other") : s;
 }
 
 function formatMethodLabel(key: string, t: (k: string) => string) {
   if (key === "visual") return t("merchantInsights.methodVisual");
   if (key === "qr") return t("merchantInsights.methodQr");
   if (key === "pending") return t("merchantInsights.methodPending");
-  return key;
+  return t("merchantInsights.claimBlockedReasons.unknown");
 }
 
 function formatClaimBlockedReasonLabel(key: string, t: (k: string) => string) {
   const k = `merchantInsights.claimBlockedReasons.${key}`;
   const s = t(k);
-  return s === k ? key : s;
+  return s === k ? t("merchantInsights.claimBlockedReasons.unknown") : s;
 }
 
 type Props = {

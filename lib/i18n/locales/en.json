@@ -126,6 +126,7 @@
     "title": "Map",
     "toggleAll": "All businesses",
     "toggleLive": "Live deals",
+    "loadingMap": "Loading map…",
     "subtitleAll": "Businesses with a map pin.",
     "subtitleLive": "Only spots with a live offer right now.",
     "dismissPreview": "Dismiss",
@@ -705,7 +706,7 @@
   },
   "reuseHub": {
     "title": "Reuse & repeat",
-    "subtitle": "Templates open in full AI Deal. Past deals load into Quick Deal to tweak and publish.",
+    "subtitle": "Relaunch a past deal or template in a couple of taps.",
     "loading": "Loading…",
     "needBusiness": "Create a business first.",
     "templatesSection": "Saved templates",
@@ -1019,7 +1020,8 @@
       "search": "Search",
       "direct": "Direct",
       "campaign": "Campaign",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "other": "Other"
     }
   },
   "passwordRecovery": {

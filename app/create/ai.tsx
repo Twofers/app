@@ -1587,9 +1587,14 @@ export default function AiDealScreen() {
           <>
             <StepBadge n={1} total={3} t={t} />
             <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
+            {/* Both buttons default to width:100%; flex wrappers keep the row inside the viewport. */}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
-              <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
+              <View style={{ flex: 1 }}>
+                <PrimaryButton title={t("createAi.takePhoto")} onPress={takePhoto} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
+              </View>
             </View>
 
             {photoUri || posterUrl ? (

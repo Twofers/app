@@ -126,6 +126,7 @@
     "title": "Mapa",
     "toggleAll": "Todos los negocios",
     "toggleLive": "Ofertas en vivo",
+    "loadingMap": "Cargando mapa…",
     "subtitleAll": "Todos los negocios en Twofer con pin en el mapa.",
     "subtitleLive": "Solo sitios con una oferta activa ahora.",
     "dismissPreview": "Cerrar",
@@ -705,7 +706,7 @@
   },
   "reuseHub": {
     "title": "Reusar y repetir",
-    "subtitle": "Las plantillas abren la oferta IA completa. Las ofertas pasadas cargan la Oferta rápida para ajustar y publicar.",
+    "subtitle": "Relanza una oferta o plantilla anterior en un par de toques.",
     "loading": "Cargando…",
     "needBusiness": "Primero crea un negocio.",
     "templatesSection": "Plantillas guardadas",
@@ -1023,7 +1024,8 @@
       "search": "Búsqueda",
       "direct": "Directo",
       "campaign": "Campaña",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "other": "Otro"
     }
   },
   "passwordRecovery": {

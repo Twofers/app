@@ -141,7 +141,7 @@ function renderMapLoading(t: (key: string) => string) {
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
       <ActivityIndicator size="large" color={Colors.light.primary} />
-      <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.subtitleAll")}</Text>
+      <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.loadingMap")}</Text>
     </View>
   );
 }

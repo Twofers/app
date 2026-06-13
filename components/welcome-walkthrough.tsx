@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Image, Modal, Pressable, Text, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import Animated, {
@@ -17,11 +18,40 @@ import { EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
 const STEPS = ["dashboard", "create", "track"] as const;
 type Step = (typeof STEPS)[number];
 
-const STEP_ICONS: Record<Step, string> = {
-  dashboard: "\u{1F4CA}", // bar chart
-  create: "\u{1F381}", // gift
-  track: "\u{1F680}", // rocket
+// Brand imagery instead of emoji: the dashboard step shows the penguin (same
+// cream-circle treatment as EmptyState); the other steps use brand-orange icons.
+const STEP_MATERIAL_ICONS: Record<Exclude<Step, "dashboard">, keyof typeof MaterialIcons.glyphMap> = {
+  create: "card-giftcard",
+  track: "trending-up",
 };
+
+function StepBadge({ step }: { step: Step }) {
+  return (
+    <View
+      style={{
+        alignSelf: "center",
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: "rgba(255,159,28,0.14)",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: Spacing.md,
+      }}
+    >
+      {step === "dashboard" ? (
+        <Image
+          source={require("../assets/images/penguin-auth-512.png")}
+          style={{ width: 34, height: 34 }}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <MaterialIcons name={STEP_MATERIAL_ICONS[step]} size={32} color={Colors.light.primary} />
+      )}
+    </View>
+  );
+}
 
 type AiSuggestion = { title: string; hint: string } | null;
 
@@ -158,15 +188,7 @@ export function WelcomeWalkthrough({
             key={stepIdx}
             entering={Entering.duration(280).springify()}
           >
-            <Text
-              style={{
-                fontSize: 48,
-                textAlign: "center",
-                marginBottom: Spacing.md,
-              }}
-            >
-              {STEP_ICONS[step]}
-            </Text>
+            <StepBadge step={step} />
             <Text
               style={{
                 fontSize: 22,

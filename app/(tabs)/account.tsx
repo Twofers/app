@@ -789,15 +789,15 @@ export default function AccountScreen() {
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
-                    borderRadius: 10,
-                    backgroundColor: profilePreferredLocale == null ? theme.text : theme.surfaceMuted,
+                    borderRadius: Radii.pill,
+                    backgroundColor: profilePreferredLocale == null ? theme.primary : theme.surfaceMuted,
                     marginRight: 8,
                     marginBottom: 8,
                   }}
                 >
                   <Text
                     style={{
-                      color: profilePreferredLocale == null ? theme.background : theme.text,
+                      color: profilePreferredLocale == null ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
                       fontWeight: "600",
                       fontSize: 13,
                     }}
@@ -815,15 +815,15 @@ export default function AccountScreen() {
                     style={{
                       paddingVertical: 8,
                       paddingHorizontal: 12,
-                      borderRadius: 10,
-                      backgroundColor: profilePreferredLocale === loc ? theme.text : theme.surfaceMuted,
+                      borderRadius: Radii.pill,
+                      backgroundColor: profilePreferredLocale === loc ? theme.primary : theme.surfaceMuted,
                       marginRight: 8,
                       marginBottom: 8,
                     }}
                   >
                     <Text
                       style={{
-                        color: profilePreferredLocale === loc ? theme.background : theme.text,
+                        color: profilePreferredLocale === loc ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700],
                         fontWeight: "600",
                         fontSize: 13,
                       }}

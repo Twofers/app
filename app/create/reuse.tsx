@@ -137,8 +137,8 @@ export default function ReuseDealScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("reuseHub.title")}</Text>
-      <Text style={{ marginTop: 6, opacity: 0.65, fontSize: 15, lineHeight: 22 }}>{t("reuseHub.subtitle")}</Text>
+      {/* The stack header already shows the screen title; only the subtitle renders in-page. */}
+      <Text style={{ opacity: 0.65, fontSize: 15, lineHeight: 22 }}>{t("reuseHub.subtitle")}</Text>
       {err ? <Banner message={err} tone="error" /> : null}
 
       {!isLoggedIn || loading ? (
