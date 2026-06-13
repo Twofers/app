@@ -319,15 +319,15 @@ export default function MenuOfferScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        style={{ flex: 1, paddingTop: top }}
+        style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: horizontal,
+          paddingTop: Spacing.xxxl,
           paddingBottom: scrollBottom,
           gap: Spacing.md,
         }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("menuOffer.title")}</Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
       {loadErr ? <Banner message={loadErr} tone="error" /> : null}
       {locErr ? <Banner message={locErr} tone="error" /> : null}

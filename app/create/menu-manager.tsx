@@ -152,15 +152,15 @@ export default function MenuManagerScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        style={{ flex: 1, paddingTop: top }}
+        style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: horizontal,
+          paddingTop: Spacing.xxxl,
           paddingBottom: scrollBottom,
           gap: Spacing.md,
         }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>{t("menuManager.title")}</Text>
         <Text style={{ opacity: 0.7 }}>{t("menuManager.subtitle")}</Text>
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {loadErr ? <Banner message={loadErr} tone="error" /> : null}

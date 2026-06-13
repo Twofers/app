@@ -17,7 +17,7 @@ import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
 import { Colors, Radii } from "../../constants/theme";
-import { formatValiditySummary } from "../../lib/deal-time";
+import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
@@ -58,11 +58,30 @@ type Deal = {
 };
 
 type ActiveClaim = {
-  id: string;
+  id?: string;
   token: string;
   expires_at: string;
   short_code: string | null;
 };
+
+function labelForClaimScheduleBlock(reason: DealClaimScheduleBlockReason, t: (key: string) => string) {
+  switch (reason) {
+    case "not_started":
+      return t("dealDetail.notStartedYet");
+    case "expired":
+      return t("dealDetail.expired");
+    case "claim_closed":
+      return t("dealDetail.claimClosed");
+    case "not_active_today":
+      return t("dealDetail.notActiveToday");
+    case "not_active_now":
+      return t("dealDetail.notActiveRightNow");
+    case "claim_window_closed":
+      return t("dealDetail.claimWindowClosedToday");
+    case "misconfigured":
+      return t("dealDetail.unavailable");
+  }
+}
 
 function messageFromThrown(value: unknown): string | null {
   if (value instanceof Error) return value.message;
@@ -92,6 +111,7 @@ export default function DealDetail() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrExpires, setQrExpires] = useState<string | null>(null);
   const [qrShortCode, setQrShortCode] = useState<string | null>(null);
+  const [activeClaim, setActiveClaim] = useState<ActiveClaim | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [claimSuccessToastNonce, setClaimSuccessToastNonce] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -178,7 +198,7 @@ export default function DealDetail() {
     }
   }, []);
 
-  async function loadActiveClaimForDeal(dealId: string, ownerUserId: string, attempts = 1): Promise<ActiveClaim | null> {
+  const loadActiveClaimForDeal = useCallback(async (dealId: string, ownerUserId: string, attempts = 1): Promise<ActiveClaim | null> => {
     for (let i = 0; i < attempts; i++) {
       const { data } = await supabase
         .from("deal_claims")
@@ -193,12 +213,18 @@ export default function DealDetail() {
       if (i < attempts - 1) await sleep(800);
     }
     return null;
-  }
+  }, []);
 
-  function openClaimQr(claim: { token: string; expires_at: string; short_code?: string | null }, showSuccessToast: boolean) {
+  function openClaimQr(claim: { id?: string; token: string; expires_at: string; short_code?: string | null }, showSuccessToast: boolean) {
     setQrToken(claim.token);
     setQrExpires(claim.expires_at);
     setQrShortCode(claim.short_code ?? null);
+    setActiveClaim({
+      id: claim.id,
+      token: claim.token,
+      expires_at: claim.expires_at,
+      short_code: claim.short_code ?? null,
+    });
     if (showSuccessToast) setClaimSuccessToastNonce((n) => n + 1);
     setQrVisible(true);
   }
@@ -252,6 +278,20 @@ export default function DealDetail() {
     })();
     return () => { cancelled = true; };
   }, [userId, deal?.business_id]);
+
+  useEffect(() => {
+    if (!userId || !deal?.id) {
+      setActiveClaim(null);
+      return;
+    }
+    let cancelled = false;
+    setActiveClaim(null);
+    (async () => {
+      const existing = await loadActiveClaimForDeal(deal.id, userId);
+      if (!cancelled) setActiveClaim(existing);
+    })();
+    return () => { cancelled = true; };
+  }, [deal?.id, loadActiveClaimForDeal, userId]);
 
   // MVP open tracking: count once per loaded deal detail view.
   useEffect(() => {
@@ -309,7 +349,11 @@ export default function DealDetail() {
     }
   }
 
-  async function refreshQr() {
+  async function viewQr() {
+    if (activeClaim) {
+      openClaimQr(activeClaim, false);
+      return;
+    }
     if (!deal || !userId) return;
     if (refreshingQr) return;
     setRefreshingQr(true);
@@ -317,6 +361,7 @@ export default function DealDetail() {
       // Look up existing active claim instead of creating a new one.
       const existing = await loadActiveClaimForDeal(deal.id, userId);
       if (existing) {
+        setActiveClaim(existing);
         openClaimQr(existing, false);
       } else {
         setBanner(t("dealDetail.noActiveClaim"));
@@ -428,21 +473,15 @@ export default function DealDetail() {
   const remaining = Math.max(0, deal.max_claims - claimsCount);
   // Pre-rendered claim states so the user sees sold out / closed / not-started
   // before tapping. Client-side mirror only — the server checks in claim-deal
-  // stay authoritative. Recurring daily windows are left to the server; only the
-  // absolute start/end/cutoff times are evaluated here. Sold out requires the
-  // reliable RPC total: the fallback count only sees the caller's own claims.
-  const renderNowMs = Date.now();
-  const startMs = deal.start_time ? Date.parse(deal.start_time) : NaN;
-  const endMs = Date.parse(deal.end_time);
-  const cutoffMs = Number.isFinite(endMs) ? endMs - (deal.claim_cutoff_buffer_minutes || 15) * 60_000 : NaN;
+  // stay authoritative. Sold out requires the reliable RPC total: the fallback
+  // count only sees the caller's own claims.
+  const scheduleBlockReason = getDealClaimScheduleBlock(deal);
   const claimBlockedLabel =
     claimsCountReliable && deal.max_claims > 0 && remaining <= 0
       ? t("dealDetail.soldOut")
-      : Number.isFinite(cutoffMs) && renderNowMs >= cutoffMs
-        ? t("dealDetail.claimClosed")
-        : Number.isFinite(startMs) && renderNowMs < startMs
-          ? t("dealDetail.notStartedYet")
-          : null;
+      : scheduleBlockReason
+        ? labelForClaimScheduleBlock(scheduleBlockReason, t)
+        : null;
   const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
   const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
   const displayDescription = localizedDealDescription(deal, i18n.language);
@@ -591,13 +630,16 @@ export default function DealDetail() {
               lang: i18n.language,
               endsVerb: t("commonUi.dealEndsVerb"),
               t,
+              showTimeZone: false,
             })}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {t("dealDetail.cutoffPrefix")} {deal.claim_cutoff_buffer_minutes} {t("dealDetail.cutoffSuffix")}
+            {deal.claim_cutoff_buffer_minutes > 0
+              ? t("dealDetail.claimingClosesBeforeEnd", { count: deal.claim_cutoff_buffer_minutes })
+              : t("dealDetail.claimingOpenUntilEnd")}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {t("dealDetail.claimsRemaining")} {remaining} / {deal.max_claims}
+            {t("dealDetail.claimsAvailable", { count: remaining })}
           </Text>
         </View>
 
@@ -607,16 +649,18 @@ export default function DealDetail() {
             onPress={doClaim}
             disabled={isClaiming || claimBlockedLabel !== null}
           />
-          <Pressable
-            onPress={refreshQr}
-            disabled={refreshingQr}
-            accessibilityRole="button"
-            style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: refreshingQr ? 0.6 : 1 }}
-          >
-            <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
-              {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.refreshQr")}
-            </Text>
-          </Pressable>
+          {activeClaim ? (
+            <Pressable
+              onPress={viewQr}
+              disabled={refreshingQr}
+              accessibilityRole="button"
+              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: refreshingQr ? 0.6 : 1 }}
+            >
+              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
+                {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.viewQr")}
+              </Text>
+            </Pressable>
+          ) : null}
           {shareDealEnabled ? (
             <SecondaryButton
               title={
@@ -668,7 +712,7 @@ export default function DealDetail() {
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
         onHide={() => setQrVisible(false)}
-        onRefresh={refreshQr}
+        onRefresh={viewQr}
         refreshing={refreshingQr}
         onShare={shareDealEnabled ? handleShare : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}

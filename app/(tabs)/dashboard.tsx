@@ -402,19 +402,23 @@ function ScrollFilterRow({
   items,
   selected,
   onSelect,
+  activeTone = "primary",
 }: {
   items: { key: string; label: string }[];
   selected: string;
   onSelect: (key: string) => void;
+  activeTone?: "primary" | "subtle";
 }) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: Spacing.xs }}
+      contentContainerStyle={{ gap: Spacing.xs, alignItems: "center" }}
     >
       {items.map((item) => {
         const active = item.key === selected;
+        const primaryActive = active && activeTone === "primary";
+        const subtleActive = active && activeTone === "subtle";
         return (
           <Pressable
             key={item.key}
@@ -423,11 +427,17 @@ function ScrollFilterRow({
               paddingHorizontal: Spacing.md,
               paddingVertical: 6,
               borderRadius: Radii.pill,
-              backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted,
+              borderWidth: subtleActive ? 1 : 0,
+              borderColor: subtleActive ? Colors.light.primary : "transparent",
+              backgroundColor: primaryActive ? Colors.light.primary : Colors.light.surfaceMuted,
             }}
           >
             <Text
-              style={{ fontSize: 13, fontWeight: active ? "800" : "600", color: active ? Colors.light.primaryText : Gray[700] }}
+              style={{
+                fontSize: 13,
+                fontWeight: active ? "800" : "600",
+                color: primaryActive ? Colors.light.primaryText : subtleActive ? Colors.light.accentText : Gray[700],
+              }}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.78}
@@ -1240,15 +1250,23 @@ export default function BusinessDashboard() {
               selected={dealFilter}
               onSelect={(k) => setDealFilter(k as typeof dealFilter)}
             />
-            <ScrollFilterRow
-              items={[
-                { key: "newest", label: t("offersDashboard.sortNewest") },
-                { key: "claims", label: t("offersDashboard.sortClaims") },
-                { key: "conversion", label: t("offersDashboard.sortConversion") },
-              ]}
-              selected={dealSort}
-              onSelect={(k) => setDealSort(k as typeof dealSort)}
-            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+                {t("offersDashboard.sortPrefix")}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <ScrollFilterRow
+                  items={[
+                    { key: "newest", label: t("offersDashboard.sortNewest") },
+                    { key: "claims", label: t("offersDashboard.sortClaims") },
+                    { key: "conversion", label: t("offersDashboard.sortConversion") },
+                  ]}
+                  selected={dealSort}
+                  onSelect={(k) => setDealSort(k as typeof dealSort)}
+                  activeTone="subtle"
+                />
+              </View>
+            </View>
             {dealFilter !== "all" ? (
               <Text style={{ fontSize: 13, color: Colors.light.mutedText }}>
                 {t("offersDashboard.showingFiltered", { shown: filteredDeals.length, total: deals.length })}

@@ -61,10 +61,9 @@ function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
     .join(", ");
 }
 
-export function isDealActiveNow(deal: RecurringInfo) {
+export function isDealActiveNow(deal: RecurringInfo, now = new Date()) {
   if (!deal) return false;
   try {
-    const now = new Date();
     const start = deal.start_time ? new Date(deal.start_time) : null;
     const end = deal.end_time ? new Date(deal.end_time) : null;
 
@@ -96,12 +95,67 @@ export function isDealActiveNow(deal: RecurringInfo) {
   }
 }
 
+export type DealClaimScheduleBlockReason =
+  | "not_started"
+  | "expired"
+  | "claim_closed"
+  | "not_active_today"
+  | "not_active_now"
+  | "claim_window_closed"
+  | "misconfigured";
+
+export function getDealClaimScheduleBlock(
+  deal: RecurringInfo & { claim_cutoff_buffer_minutes?: number | null },
+  now = new Date(),
+): DealClaimScheduleBlockReason | null {
+  if (!deal) return "misconfigured";
+  try {
+    const nowMs = now.getTime();
+    if (!Number.isFinite(nowMs)) return "misconfigured";
+
+    const start = deal.start_time ? new Date(deal.start_time) : null;
+    const end = deal.end_time ? new Date(deal.end_time) : null;
+    const endMs = end?.getTime() ?? NaN;
+    const rawCutoff = deal.claim_cutoff_buffer_minutes;
+    const cutoffBufferMinutes = typeof rawCutoff === "number" && Number.isFinite(rawCutoff) ? rawCutoff : 15;
+
+    if (start && nowMs < start.getTime()) return "not_started";
+    if (!end || !Number.isFinite(endMs)) return "misconfigured";
+    if (nowMs >= endMs) return "expired";
+
+    const absoluteCutoffMs = endMs - cutoffBufferMinutes * 60_000;
+    if (Number.isFinite(absoluteCutoffMs) && nowMs >= absoluteCutoffMs) return "claim_closed";
+
+    if (!deal.is_recurring) return null;
+
+    const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
+    const windowStart = deal.window_start_minutes;
+    const windowEnd = deal.window_end_minutes;
+    const tz = deal.timezone || "America/Chicago";
+
+    if (!days.length || windowStart == null || windowEnd == null) return "misconfigured";
+
+    const { day, minutes } = getLocalParts(now, tz);
+    if (!days.includes(day)) return "not_active_today";
+    if (windowStart >= windowEnd) return "misconfigured";
+    if (minutes < windowStart || minutes >= windowEnd) return "not_active_now";
+    if (minutes >= windowEnd - cutoffBufferMinutes) return "claim_window_closed";
+
+    return null;
+  } catch (e) {
+    devWarn("[deal-time] getDealClaimScheduleBlock failed (bad dates/timezone?)", e);
+    return "misconfigured";
+  }
+}
+
 export type FormatValiditySummaryOptions = {
   lang?: string;
   /** Prefix before end date when only `end_time` is set (e.g. t('commonUi.dealEndsVerb')). */
   endsVerb?: string;
   /** When set, preset day patterns (every day, weekdays, weekend) use translated copy. */
   t?: TFunction;
+  /** Customer-facing screens should avoid exposing raw IANA timezone ids. */
+  showTimeZone?: boolean;
 };
 
 /** Merchant dashboard: how this deal should be labeled (not identical to consumer "live"). */
@@ -146,7 +200,8 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
     if (!days.length || windowStart == null || windowEnd == null) {
       return t?.("dealValidity.recurringWindow") ?? "Recurring window";
     }
-    return `${formatDaysLocalized(days, loc, t)} · ${formatMinutesLocalized(windowStart, loc)}–${formatMinutesLocalized(windowEnd, loc)} (${tz})`;
+    const timeZoneSuffix = options?.showTimeZone === false ? "" : ` (${tz})`;
+    return `${formatDaysLocalized(days, loc, t)} · ${formatMinutesLocalized(windowStart, loc)}–${formatMinutesLocalized(windowEnd, loc)}${timeZoneSuffix}`;
   }
   const start = deal.start_time ? new Date(deal.start_time) : null;
   const end = deal.end_time ? new Date(deal.end_time) : null;
