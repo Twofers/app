@@ -46,6 +46,25 @@ function mergeAuthUrlParams(url: string): URLSearchParams {
   return merged;
 }
 
+function authUrlTargetsResetPassword(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    const pathSegments = parsed.pathname
+      .split("/")
+      .map((segment) => segment.trim().toLowerCase())
+      .filter(Boolean);
+
+    return hostname === "reset-password" || pathSegments.includes("reset-password");
+  } catch {
+    return /(?:^|[/:])reset-password(?:$|[/?#])/.test(url.toLowerCase());
+  }
+}
+
+function normalizeRedirectType(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 export type AuthDeepLinkResult =
   | { ok: false }
   | { ok: true; flow: "recovery" | "signup" };
@@ -62,13 +81,18 @@ export async function consumeSupabaseAuthDeepLink(url: string): Promise<AuthDeep
   if (params.get("error") || params.get("error_description")) return { ok: false };
 
   const type = (params.get("type") ?? "").toLowerCase();
-  const flowFromType: "recovery" | "signup" = type === "recovery" ? "recovery" : "signup";
+  const flowFromUrl: "recovery" | "signup" =
+    type === "recovery" || authUrlTargetsResetPassword(url) ? "recovery" : "signup";
 
   const code = params.get("code");
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) return { ok: false };
-    return { ok: true, flow: flowFromType };
+    const redirectType = normalizeRedirectType((data as { redirectType?: unknown } | null)?.redirectType);
+    return {
+      ok: true,
+      flow: redirectType === "password_recovery" || redirectType === "recovery" ? "recovery" : flowFromUrl,
+    };
   }
 
   const access_token = params.get("access_token");
@@ -76,7 +100,7 @@ export async function consumeSupabaseAuthDeepLink(url: string): Promise<AuthDeep
   if (access_token && refresh_token) {
     const { error } = await supabase.auth.setSession({ access_token, refresh_token });
     if (error) return { ok: false };
-    return { ok: true, flow: flowFromType };
+    return { ok: true, flow: flowFromUrl };
   }
 
   return { ok: false };
