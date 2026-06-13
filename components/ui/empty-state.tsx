@@ -1,6 +1,6 @@
 import { Image, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Colors } from "@/constants/theme";
+import { Colors, Controls, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type EmptyStateProps = {
@@ -72,8 +72,9 @@ export function EmptyState({ title, message, actionLabel, onAction }: EmptyState
               marginTop: 10,
               maxWidth: "100%",
               backgroundColor: c.primary,
-              borderRadius: 999,
-              paddingVertical: 12,
+              borderRadius: Radii.md,
+              minHeight: Controls.buttonHeight,
+              justifyContent: "center",
               paddingHorizontal: 28,
               alignItems: "center",
             }}

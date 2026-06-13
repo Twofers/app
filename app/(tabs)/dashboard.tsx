@@ -25,7 +25,7 @@ import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { Colors, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
+import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -87,11 +87,11 @@ function EndEarlyButton({
       }}
       style={[
         {
-          minHeight: 48,
-          borderRadius: 20,
+          minHeight: Controls.buttonHeight,
+          borderRadius: Radii.md,
           borderWidth: 2,
-          borderColor: "rgba(198,40,40,0.85)",
-          backgroundColor: "#fff",
+          borderColor: Colors.light.danger,
+          backgroundColor: Colors.light.surface,
           alignItems: "center",
           justifyContent: "center",
           opacity: disabled ? 0.65 : 1,
@@ -1782,10 +1782,11 @@ export default function BusinessDashboard() {
                 onPress={() => void bulkPause()}
                 style={{
                   flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: Radii.lg,
+                  minHeight: Controls.buttonHeight,
+                  borderRadius: Radii.md,
                   backgroundColor: primary,
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
@@ -1802,12 +1803,13 @@ export default function BusinessDashboard() {
                 onPress={() => void bulkResume()}
                 style={{
                   flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: Radii.lg,
+                  minHeight: Controls.buttonHeight,
+                  borderRadius: Radii.md,
                   backgroundColor: Colors.light.surface,
                   borderWidth: 1.5,
                   borderColor: primary,
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
@@ -1824,12 +1826,13 @@ export default function BusinessDashboard() {
                 onPress={bulkDelete}
                 style={{
                   flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: Radii.lg,
-                  backgroundColor: "#fff",
+                  minHeight: Controls.buttonHeight,
+                  borderRadius: Radii.md,
+                  backgroundColor: Colors.light.surface,
                   borderWidth: 1.5,
-                  borderColor: "rgba(198,40,40,0.85)",
+                  borderColor: Colors.light.danger,
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text

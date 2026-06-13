@@ -3,7 +3,7 @@ import { Animated, Easing, Modal, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
-import { Colors, Gray, Radii } from "@/constants/theme";
+import { Colors, Controls, Gray, Radii } from "@/constants/theme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -292,7 +292,8 @@ export function WalletRedeemModal({
           <HapticScalePressable
             onPress={onHide}
             style={{
-              paddingVertical: 14,
+              minHeight: Controls.buttonHeight,
+              justifyContent: "center",
               borderRadius: Radii.md,
               backgroundColor: expired ? Gray[700] : Colors.light.primary,
               marginBottom: 8,
@@ -313,7 +314,8 @@ export function WalletRedeemModal({
               onPress={onRefresh}
               disabled={refreshing}
               style={{
-                paddingVertical: 12,
+                minHeight: Controls.buttonHeight,
+                justifyContent: "center",
                 borderRadius: Radii.md,
                 backgroundColor: Gray[100],
                 opacity: refreshing ? 0.6 : 1,

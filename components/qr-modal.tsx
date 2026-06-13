@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
 import { formatAppDateTime } from "../lib/i18n/format-datetime";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
-import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
+import { Colors, Controls, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
 
@@ -402,7 +402,8 @@ export function QrModal({
             <HapticScalePressable
               onPress={onHide}
               style={{
-                paddingVertical: 12,
+                minHeight: Controls.buttonHeight,
+                justifyContent: "center",
                 borderRadius: Radii.md,
                 backgroundColor: Colors.light.primary,
                 marginBottom: 8,
@@ -417,7 +418,8 @@ export function QrModal({
                 onPress={onRefresh}
                 disabled={refreshing}
                 style={{
-                  paddingVertical: 12,
+                  minHeight: Controls.buttonHeight,
+                  justifyContent: "center",
                   borderRadius: Radii.md,
                   backgroundColor: Gray[100],
                   opacity: refreshing ? 0.6 : 1,
@@ -438,7 +440,8 @@ export function QrModal({
                   disabled={sharing}
                   style={{
                     marginTop: 8,
-                    paddingVertical: 12,
+                    minHeight: Controls.buttonHeight,
+                    justifyContent: "center",
                     borderRadius: Radii.md,
                     borderWidth: 2,
                     borderColor: Colors.light.primary,
