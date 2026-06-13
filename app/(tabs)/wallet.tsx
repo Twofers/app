@@ -35,6 +35,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
+import { isShareDealEnabled } from "@/lib/runtime-env";
 
 type ClaimRow = {
   id: string;
@@ -131,6 +132,9 @@ export default function WalletScreen() {
   const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const shareDealEnabled = isShareDealEnabled();
 
   const loadClaims = useCallback(async () => {
     if (!userId) {
@@ -189,6 +193,7 @@ export default function WalletScreen() {
     const dead = claimNotRedeemable(row, nowMs);
     if (dead || row.redeemed_at) return;
     if (row.claim_status === "redeeming") return;
+    setShareError(null);
     setQrToken(row.token);
     setQrShortCode(row.short_code);
     setQrExpires(row.expires_at);
@@ -277,6 +282,30 @@ export default function WalletScreen() {
           defaultValue: "We couldn't open maps. Try the address from this page.",
         }),
       );
+    }
+  }
+
+  async function shareWalletDeal(row: ClaimRow) {
+    if (!shareDealEnabled || isSharing) return;
+    setIsSharing(true);
+    setBanner(null);
+    setShareError(null);
+    try {
+      const { buildShareCopy, getOrCreateShareCode, openShareSheet } = await import("@/lib/share-deal");
+      const code = await getOrCreateShareCode(row.deal_id);
+      const copy = buildShareCopy({
+        shareCode: code,
+        dealTitle: dealTitle(row),
+        businessName: businessName(row),
+        t,
+      });
+      await openShareSheet(copy);
+    } catch {
+      const message = t("shareDeal.errCreateLink", { defaultValue: "Couldn't create share link. Try again." });
+      setShareError(message);
+      setBanner(message);
+    } finally {
+      setIsSharing(false);
     }
   }
 
@@ -630,6 +659,31 @@ export default function WalletScreen() {
               onPress={() => void startUseDealFlow(row)}
               disabled={useDealBusy}
             />
+            {shareDealEnabled ? (
+              <NativePressable
+                onPress={() => void shareWalletDeal(row)}
+                disabled={isSharing}
+                accessibilityRole="button"
+                accessibilityLabel={t("shareDeal.shareDeal", { defaultValue: "Share deal" })}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => ({
+                  minHeight: 50,
+                  borderRadius: Radii.lg,
+                  borderWidth: 1.5,
+                  borderColor: theme.primary,
+                  backgroundColor: pressed ? "#ffedd5" : theme.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: isSharing ? 0.45 : 1,
+                })}
+              >
+                <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
+                  {isSharing
+                    ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
+                    : t("shareDeal.sendToFriend", { defaultValue: "Send to a friend" })}
+                </Text>
+              </NativePressable>
+            ) : null}
             <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
@@ -696,6 +750,7 @@ export default function WalletScreen() {
   const showPassModal = useDealState !== null && useDealState.begin !== null;
   const passRow = showPassModal ? useDealState.row : null;
   const passBegin = showPassModal ? useDealState.begin : null;
+  const activeQrClaim = activeDealId ? claims.find((c) => c.deal_id === activeDealId) ?? null : null;
 
   if (!isLoggedIn) {
     return <Redirect href="/auth-landing" />;
@@ -865,6 +920,9 @@ export default function WalletScreen() {
         onHide={() => setQrVisible(false)}
         onRefresh={refreshQr}
         refreshing={refreshingQr}
+        onShare={shareDealEnabled && activeQrClaim ? () => void shareWalletDeal(activeQrClaim) : undefined}
+        sharing={shareDealEnabled ? isSharing : undefined}
+        shareError={shareDealEnabled ? shareError : undefined}
       />
     </View>
   );
