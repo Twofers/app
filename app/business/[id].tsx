@@ -326,7 +326,7 @@ export default function BusinessProfileScreen() {
             <Image source={{ uri: logoUri }} style={{ width: "100%", height: "100%" }} contentFit="contain" />
           ) : (
             <Image
-              source={require("../../assets/images/penguin-auth-512.png")}
+              source={require("../../assets/images/twofer-mark-512.png")}
               style={{ width: 76, height: 76, opacity: 0.34 }}
               contentFit="contain"
             />
@@ -466,7 +466,7 @@ export default function BusinessProfileScreen() {
                         }}
                       >
                         <Image
-                          source={require("../../assets/images/penguin-auth-512.png")}
+                          source={require("../../assets/images/twofer-mark-512.png")}
                           style={{ width: 58, height: 58, opacity: 0.3 }}
                           contentFit="contain"
                         />

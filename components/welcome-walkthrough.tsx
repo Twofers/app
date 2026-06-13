@@ -18,8 +18,8 @@ import { EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
 const STEPS = ["dashboard", "create", "track"] as const;
 type Step = (typeof STEPS)[number];
 
-// Brand imagery instead of emoji: the dashboard step shows the penguin (same
-// cream-circle treatment as EmptyState); the other steps use brand-orange icons.
+// Brand imagery instead of emoji: the dashboard step shows the Twofer mark; the
+// other steps use brand-orange icons.
 const STEP_MATERIAL_ICONS: Record<Exclude<Step, "dashboard">, keyof typeof MaterialIcons.glyphMap> = {
   create: "card-giftcard",
   track: "trending-up",
@@ -41,7 +41,7 @@ function StepBadge({ step }: { step: Step }) {
     >
       {step === "dashboard" ? (
         <Image
-          source={require("../assets/images/penguin-auth-512.png")}
+          source={require("../assets/images/twofer-mark-512.png")}
           style={{ width: 34, height: 34 }}
           resizeMode="contain"
           accessibilityIgnoresInvertColors

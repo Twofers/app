@@ -1272,7 +1272,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <Image
-                    source={require("../../assets/images/penguin-auth-512.png")}
+                    source={require("../../assets/images/twofer-mark-512.png")}
                     style={{ width: 30, height: 30, opacity: 0.95 }}
                     contentFit="contain"
                   />

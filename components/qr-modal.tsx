@@ -246,7 +246,7 @@ export function QrModal({
                   }}
                 >
                   <Image
-                    source={require("../assets/images/penguin-auth-512.png")}
+                    source={require("../assets/images/twofer-mark-512.png")}
                     style={{ width: 26, height: 26 }}
                     resizeMode="contain"
                     accessibilityIgnoresInvertColors
