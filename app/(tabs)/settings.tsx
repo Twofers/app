@@ -26,7 +26,7 @@ import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { isValidUsZipFormat, normalizeUsZipInput, sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
-import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import { syncConsumerLocationToServer, syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
   registerPushTokenWithResult,
@@ -69,6 +69,7 @@ export default function SettingsScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
   const [zip, setZip] = useState("");
+  const [zipSaving, setZipSaving] = useState(false);
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
   const [notifMode, setNotifModeState] = useState<ConsumerNotificationMode>("all_nearby");
   const [consumerSession, setConsumerSession] = useState(false);
@@ -214,6 +215,7 @@ export default function SettingsScreen() {
   }
 
   async function saveZip() {
+    if (zipSaving) return;
     const normalized = normalizeUsZipInput(zip);
     if (!normalized) {
       confirm({
@@ -234,6 +236,7 @@ export default function SettingsScreen() {
       return;
     }
     try {
+      setZipSaving(true);
       const geo = await geocodeUsZip(normalized);
       if (!geo.ok) {
         confirm({
@@ -245,19 +248,35 @@ export default function SettingsScreen() {
         return;
       }
       setZip(normalized);
+      await setConsumerLocationMode("zip");
+      setLocationModeState("zip");
       await setConsumerZipCode(normalized);
       if (session?.user?.id) {
         await updateConsumerProfileZip(session.user.id, normalized);
       }
       await setLastKnownConsumerCoords(geo.lat, geo.lng);
+      await syncConsumerLocationToServer(session?.user?.id ?? null, geo.lat, geo.lng);
+      confirm({
+        iconName: "check-circle",
+        title: t("consumerSettings.zipSaveSuccessTitle", { defaultValue: "ZIP saved" }),
+        message: t("consumerSettings.zipSaveSuccessBody", {
+          zip: normalized,
+          defaultValue: "Twofer will use {{zip}} for nearby deals and alerts.",
+        }),
+        confirmLabel: t("commonUi.ok"),
+      });
     } catch (err: unknown) {
       devWarn("[settings] ZIP save failed", err);
       confirm({
         iconName: "error-outline",
         title: t("consumerSettings.zipSaveFailTitle"),
-        message: t("consumerSettings.zipLookupFail"),
+        message: t("consumerSettings.zipSaveFailBody", {
+          defaultValue: "We couldn't save that ZIP. Check your connection and try again.",
+        }),
         confirmLabel: t("commonUi.ok"),
       });
+    } finally {
+      setZipSaving(false);
     }
   }
 
@@ -505,7 +524,11 @@ export default function SettingsScreen() {
               />
               <IosDoneInputAccessory />
               <View style={{ marginTop: Spacing.sm }}>
-                <PrimaryButton title={t("consumerSettings.saveZip")} onPress={() => void saveZip()} />
+                <PrimaryButton
+                  title={zipSaving ? t("consumerSettings.savingZip", { defaultValue: "Saving..." }) : t("consumerSettings.saveZip")}
+                  onPress={() => void saveZip()}
+                  disabled={zipSaving}
+                />
               </View>
             </View>
           ) : null}

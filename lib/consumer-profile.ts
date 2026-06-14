@@ -47,10 +47,11 @@ export async function fetchConsumerProfile(userId: string): Promise<ConsumerProf
 export async function updateConsumerProfileZip(userId: string, zipCode: string): Promise<void> {
   const zip = zipCode.trim();
   if (!zip) return;
-  await supabase
+  const { error } = await supabase
     .from("consumer_profiles")
     .update({ zip_code: zip, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
+  if (error) throw new Error(error.message);
 }
 
 export async function upsertConsumerProfile(input: {
