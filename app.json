@@ -4,7 +4,7 @@
     "slug": "twoforone",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon-1024-orange.png",
+    "icon": "./assets/images/twofer-icon-1024.png",
     "scheme": [
       "twoforone",
       "twofer"
@@ -13,7 +13,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.unvmex2.twoforone",
-      "icon": "./assets/images/icon-1024-orange.png",
+      "icon": "./assets/images/twofer-icon-1024.png",
       "associatedDomains": [
         "applinks:www.twoferapp.com"
       ],
@@ -182,8 +182,8 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/adaptive-icon-foreground-1024.png",
-        "monochromeImage": "./assets/images/adaptive-icon-monochrome-1024.png"
+        "foregroundImage": "./assets/images/twofer-adaptive-icon-foreground-1024.png",
+        "monochromeImage": "./assets/images/twofer-adaptive-icon-monochrome-1024.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
