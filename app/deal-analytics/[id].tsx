@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "@/lib/supabase";
 import { devWarn } from "@/lib/dev-log";
 import { Banner } from "@/components/ui/banner";
@@ -12,9 +13,10 @@ import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-
 import { formatValiditySummary } from "@/lib/deal-time";
 import { formatAppDateFromDayKey } from "@/lib/i18n/format-datetime";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
+import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -63,6 +65,37 @@ export default function DealAnalyticsDetail() {
   const [bestTime, setBestTime] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/dashboard" as Href);
+    }
+  }, [router]);
+
+  function renderBackAction() {
+    return (
+      <Pressable
+        onPress={goBack}
+        accessibilityRole="button"
+        accessibilityLabel={t("commonUi.goBack")}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{
+          minHeight: 44,
+          minWidth: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: Radii.lg,
+          backgroundColor: theme.surfaceMuted,
+          borderWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
+        <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+      </Pressable>
+    );
+  }
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -167,7 +200,7 @@ export default function DealAnalyticsDetail() {
   if (loading) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-        <ScreenHeader title={t("dealAnalytics.title")} />
+        <ScreenHeader title={t("dealAnalytics.title")} leftSlot={renderBackAction()} />
         <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("dealAnalytics.loading")}</Text>
       </View>
     );
@@ -209,7 +242,7 @@ export default function DealAnalyticsDetail() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      <ScreenHeader title={t("dealAnalytics.title")} subtitle={headerSubtitle} />
+      <ScreenHeader title={t("dealAnalytics.title")} subtitle={headerSubtitle} leftSlot={renderBackAction()} />
       {deal ? (
         <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs, gap: Spacing.xs }}>
           <SecondaryButton

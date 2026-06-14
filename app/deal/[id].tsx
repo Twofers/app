@@ -472,7 +472,7 @@ export default function DealDetail() {
   if (loadStatus === "loading") {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
+        <ScreenHeader title={t("dealDetail.title")} leftSlot={renderBackAction()} />
         <Text style={{ marginTop: Spacing.md, opacity: 0.8, color: theme.text }}>{t("dealDetail.loading")}</Text>
       </View>
     );
@@ -481,7 +481,7 @@ export default function DealDetail() {
   if (loadStatus === "failed" || !deal) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg }}>
-        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
+        <ScreenHeader title={t("dealDetail.title")} leftSlot={renderBackAction()} />
         {banner ? <Banner message={banner} tone="error" /> : null}
         <Text style={{ opacity: 0.78, fontSize: 16, lineHeight: 24, color: theme.text }}>{t("dealDetail.couldNotLoad")}</Text>
         <SecondaryButton title={t("commonUi.goBack")} onPress={goBack} />
@@ -510,13 +510,13 @@ export default function DealDetail() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+      <ScreenHeader title={t("dealDetail.title")} leftSlot={renderBackAction()} style={{ marginBottom: Spacing.md }} />
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <ScreenHeader title={t("dealDetail.title")} rightSlot={renderBackAction()} />
         <Pressable
           onPress={toggleFavorite}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -699,6 +699,7 @@ export default function DealDetail() {
               disabled={isSharing || dealIsDemo}
             />
           ) : null}
+          <SecondaryButton title={t("commonUi.goBack")} onPress={goBack} />
         </View>
 
         <Pressable

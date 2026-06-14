@@ -7,6 +7,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 export type ScreenHeaderProps = {
   title: string;
   subtitle?: string | null;
+  /** Leading content (usually a back button). */
+  leftSlot?: ReactNode;
   /** Trailing content (icon button, single affordance). */
   rightSlot?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -20,6 +22,7 @@ export type ScreenHeaderProps = {
 export function ScreenHeader({
   title,
   subtitle,
+  leftSlot,
   rightSlot,
   style,
   titleStyle,
@@ -30,6 +33,7 @@ export function ScreenHeader({
 
   return (
     <View style={[{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }, style]}>
+      {leftSlot ? <View style={{ paddingTop: 2, flexShrink: 0 }}>{leftSlot}</View> : null}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={[
