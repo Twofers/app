@@ -43,6 +43,7 @@ import {
   notifyDealPublished,
   translateDealCopy,
   getErrorCode,
+  fetchAdGenerationQuota,
 } from "../../lib/functions";
 import {
   adToDealDraft,
@@ -337,7 +338,7 @@ export default function AiDealScreen() {
   const lastQuotaFetchRef = useRef(0);
   const reloadQuota = useCallback(async () => {
     if (!businessId) return;
-    const q = await fetchAiComposeQuota(businessId);
+    const q = await fetchAdGenerationQuota(businessId) ?? await fetchAiComposeQuota(businessId);
     setQuota(q);
   }, [businessId]);
   useFocusEffect(
@@ -1103,7 +1104,7 @@ export default function AiDealScreen() {
       const maxClaimsNum = Number(maxClaims);
       const cutoffNum = Number(cutoffMins);
 
-      const { ad } = await aiGenerateAd({
+      const { ad, quota: nextQuota } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
@@ -1117,6 +1118,7 @@ export default function AiDealScreen() {
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
       setGeneratedAd(ad);
+      if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
@@ -1166,7 +1168,7 @@ export default function AiDealScreen() {
     const maxClaimsNum = Number(maxClaims);
     const cutoffNum = Number(cutoffMins);
     try {
-      const { ad } = await aiReviseAd({
+      const { ad, quota: nextQuota } = await aiReviseAd({
         business_id: businessId,
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
@@ -1184,6 +1186,7 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
       setGeneratedAd(ad);
+      if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");
       setActivePreset(null);

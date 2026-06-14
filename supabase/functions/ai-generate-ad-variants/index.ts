@@ -310,6 +310,25 @@ function defaultCta(lang: OutputLanguage): string {
 // ─── Stage 3: image ────────────────────────────────────────────────────────
 
 type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
+type AdQuota = { used: number; limit: number; remaining: number };
+
+async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<AdQuota> {
+  const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
+  const { count } = await admin
+    .from("ai_generation_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId)
+    .in("request_type", ["ad_variants", "ad_refine"])
+    .eq("openai_called", true)
+    .eq("success", true)
+    .gte("created_at", utcMonthStartIso());
+  const used = count ?? 0;
+  return {
+    used,
+    limit: monthlyLimit,
+    remaining: Math.max(0, monthlyLimit - used),
+  };
+}
 
 async function produceImage(params: {
   openAiKey: string;
@@ -525,6 +544,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const quotaStatusOnly = body.quota_status_only === true || body.action === "quota_status";
 
     const photoPath = typeof body.photo_path === "string" ? body.photo_path.trim() : "";
     const hintText = typeof body.hint_text === "string" ? body.hint_text.trim() : "";
@@ -585,7 +605,7 @@ serve(async (req) => {
       !!previousAdRaw && typeof previousAdRaw === "object" && !Array.isArray(previousAdRaw);
     const isRevision: boolean = revisionTarget !== null && previousAdIsObject;
 
-    if (!isRevision && !photoPath && !hintText) {
+    if (!quotaStatusOnly && !isRevision && !photoPath && !hintText) {
       return new Response(
         JSON.stringify({ error: "Provide at least a photo or a description of the offer." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -606,6 +626,14 @@ serve(async (req) => {
     }
     const businessName = typeof business.name === "string" ? business.name : "";
 
+    if (quotaStatusOnly) {
+      const quota = await fetchAdQuota(admin, businessId);
+      return new Response(JSON.stringify({ ok: true, quota }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /**
      * Path-traversal guard: clients must only operate on photos under their own business folder.
      * Without this, a malicious client could pass `other-business-id/some.png` and either generate
@@ -619,23 +647,13 @@ serve(async (req) => {
     }
 
     // Quota: monthly limit
-    const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
-    const monthStart = utcMonthStartIso();
-    const { count: monthCount } = await admin
-      .from("ai_generation_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", businessId)
-      .in("request_type", ["ad_variants", "ad_refine"])
-      .eq("openai_called", true)
-      .eq("success", true)
-      .gte("created_at", monthStart);
-
-    if ((monthCount ?? 0) >= monthlyLimit) {
+    const startingQuota = await fetchAdQuota(admin, businessId);
+    if (startingQuota.used >= startingQuota.limit) {
       return new Response(
         JSON.stringify({
-          error: `Monthly AI limit reached (${monthlyLimit}). Resets on the 1st.`,
+          error: `Monthly AI limit reached (${startingQuota.limit}). Resets on the 1st.`,
           error_code: "MONTHLY_LIMIT",
-          quota: { used: monthCount ?? 0, limit: monthlyLimit, remaining: 0 },
+          quota: { ...startingQuota, remaining: 0 },
         }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -847,11 +865,11 @@ serve(async (req) => {
     });
 
     /** Quota only ticks on a real successful production (matches the log row above). */
-    const updatedUsed = (monthCount ?? 0) + (productionSuccess ? 1 : 0);
+    const updatedUsed = startingQuota.used + (productionSuccess ? 1 : 0);
     const quota = {
       used: updatedUsed,
-      limit: monthlyLimit,
-      remaining: Math.max(0, monthlyLimit - updatedUsed),
+      limit: startingQuota.limit,
+      remaining: Math.max(0, startingQuota.limit - updatedUsed),
     };
 
     return new Response(JSON.stringify({ ad, ads: [ad], quota }), {

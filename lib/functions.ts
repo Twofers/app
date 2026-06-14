@@ -655,6 +655,32 @@ export type AiReviseAdRequest = AiGenerateAdRequest & {
 
 export type AiGenerateAdResponse = { ad: GeneratedAd; quota?: AdVariantsQuota };
 
+function normalizeAdQuota(value: unknown): AdVariantsQuota | null {
+  if (!value || typeof value !== "object") return null;
+  const q = value as Record<string, unknown>;
+  const used = Number(q.used);
+  const limit = Number(q.limit);
+  const remaining = Number(q.remaining);
+  if (!Number.isFinite(used) || !Number.isFinite(limit) || !Number.isFinite(remaining)) return null;
+  return { used, limit, remaining: Math.max(0, remaining) };
+}
+
+export async function fetchAdGenerationQuota(businessId: string): Promise<AdVariantsQuota | null> {
+  const { data, error } = await supabase.functions.invoke("ai-generate-ad-variants", {
+    body: { business_id: businessId, quota_status_only: true },
+    timeout: EDGE_FUNCTION_TIMEOUT_QUICK_MS,
+  });
+  if (error) {
+    devWarn("[fetchAdGenerationQuota] Edge function quota status unavailable:", parseFunctionError(error));
+    return null;
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    devWarn("[fetchAdGenerationQuota] Edge function quota status failed:", (data as { error?: unknown }).error);
+    return null;
+  }
+  return normalizeAdQuota((data as { quota?: unknown } | null)?.quota);
+}
+
 /** Generate a single ad (research → copy → image). Edge: `ai-generate-ad-variants`. */
 export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerateAdResponse> {
   return invokeAdEdge({
