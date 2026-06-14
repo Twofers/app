@@ -62,8 +62,9 @@ export function BillingDeepLinkHandler() {
     void (async () => {
       if (initialDone.current) return;
       initialDone.current = true;
-      if (!claimInitialUrl()) return;
       const initial = await Linking.getInitialURL();
+      if (!parseBillingDeepLink(initial)) return;
+      if (!claimInitialUrl()) return;
       runWhenBridgeSettled(() => navigate(initial));
     })();
 

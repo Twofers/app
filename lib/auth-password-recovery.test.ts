@@ -27,7 +27,7 @@ vi.mock("./supabase", () => ({
   },
 }));
 
-import { consumeSupabaseAuthDeepLink } from "./auth-password-recovery";
+import { consumeSupabaseAuthDeepLink, isSupabaseAuthDeepLink } from "./auth-password-recovery";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -81,5 +81,20 @@ describe("consumeSupabaseAuthDeepLink", () => {
 
     expect(result).toEqual({ ok: true, flow: "signup" });
     expect(h.exchangeCodeForSession).toHaveBeenCalledWith("signup-code");
+  });
+});
+
+describe("isSupabaseAuthDeepLink", () => {
+  it("recognizes auth callback and reset-password links with auth payloads", () => {
+    expect(isSupabaseAuthDeepLink("twoforone://auth-callback?code=signup-code")).toBe(true);
+    expect(
+      isSupabaseAuthDeepLink("twoforone://reset-password#access_token=access-token&refresh_token=refresh-token"),
+    ).toBe(true);
+    expect(isSupabaseAuthDeepLink("https://www.twoferapp.com/auth-callback?code=signup-code")).toBe(true);
+  });
+
+  it("does not treat public Share Deal URLs as auth links", () => {
+    expect(isSupabaseAuthDeepLink("https://www.twoferapp.com/s/ABCDEFG")).toBe(false);
+    expect(isSupabaseAuthDeepLink("https://www.twoferapp.com/s/ABCDEFG?code=not-auth")).toBe(false);
   });
 });

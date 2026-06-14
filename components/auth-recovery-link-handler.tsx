@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
-import { consumeSupabaseAuthDeepLink } from "@/lib/auth-password-recovery";
+import { consumeSupabaseAuthDeepLink, isSupabaseAuthDeepLink } from "@/lib/auth-password-recovery";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
 import { claimInitialUrl } from "@/lib/initial-url-guard";
 
@@ -40,8 +40,9 @@ export function AuthRecoveryLinkHandler() {
     void (async () => {
       if (initialDone.current) return;
       initialDone.current = true;
-      if (!claimInitialUrl()) return;
       const initial = await Linking.getInitialURL();
+      if (!isSupabaseAuthDeepLink(initial)) return;
+      if (!claimInitialUrl()) return;
       runWhenBridgeSettled(() => {
         void handleUrl(initial);
       });

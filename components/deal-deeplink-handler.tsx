@@ -35,6 +35,11 @@ function extractDealId(url: string | null): string | null {
   return null;
 }
 
+function shouldHandleDealDeepLink(url: string | null): boolean {
+  if (extractDealId(url)) return true;
+  return parseShareLink(url).type !== "none";
+}
+
 /**
  * Listens for deep links (custom scheme, HTTPS edge function URLs, and public
  * share links like https://www.twoferapp.com/s/<code>) and navigates to
@@ -114,8 +119,9 @@ export function DealDeepLinkHandler() {
     void (async () => {
       if (initialDone.current) return;
       initialDone.current = true;
-      if (!claimInitialUrl()) return;
       const initial = await Linking.getInitialURL();
+      if (!shouldHandleDealDeepLink(initial)) return;
+      if (!claimInitialUrl()) return;
       runWhenBridgeSettled(() => navigate(initial));
     })();
 

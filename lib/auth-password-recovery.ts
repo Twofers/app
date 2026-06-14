@@ -61,6 +61,25 @@ function authUrlTargetsResetPassword(url: string): boolean {
   }
 }
 
+function authUrlTargetsCallback(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    const pathSegments = parsed.pathname
+      .split("/")
+      .map((segment) => segment.trim().toLowerCase())
+      .filter(Boolean);
+
+    return (
+      hostname === "auth-callback" ||
+      pathSegments.includes("auth-callback") ||
+      authUrlTargetsResetPassword(url)
+    );
+  } catch {
+    return /(?:^|[/:])auth-callback(?:$|[/?#])/.test(url.toLowerCase()) || authUrlTargetsResetPassword(url);
+  }
+}
+
 function normalizeRedirectType(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -69,13 +88,25 @@ export type AuthDeepLinkResult =
   | { ok: false }
   | { ok: true; flow: "recovery" | "signup" };
 
+export function isSupabaseAuthDeepLink(url: string | null): boolean {
+  if (!url || typeof url !== "string") return false;
+
+  const params = mergeAuthUrlParams(url);
+  const hasAuthPayload =
+    Boolean(params.get("code")) ||
+    Boolean(params.get("access_token") && params.get("refresh_token")) ||
+    Boolean(params.get("error") || params.get("error_description"));
+
+  return hasAuthPayload && authUrlTargetsCallback(url);
+}
+
 /**
  * Parses Supabase auth callback URLs (email confirmation, magic link, password recovery).
  * PKCE (`code=`), implicit tokens in hash, or query + hash combined.
  * `flow` is `recovery` only when `type=recovery` — use this to route to the reset-password screen.
  */
 export async function consumeSupabaseAuthDeepLink(url: string): Promise<AuthDeepLinkResult> {
-  if (!url || typeof url !== "string") return { ok: false };
+  if (!isSupabaseAuthDeepLink(url)) return { ok: false };
 
   const params = mergeAuthUrlParams(url);
   if (params.get("error") || params.get("error_description")) return { ok: false };

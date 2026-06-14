@@ -27,21 +27,24 @@ export function LegacyTabsDeepLinkHandler() {
       }
     }
 
-    const handle = (url: string) => {
-      const href = normalizeLegacyTabsDeepLink(url);
+    const handleHref = (href: ReturnType<typeof normalizeLegacyTabsDeepLink>, url: string) => {
       if (href) {
         if (__DEV__) devLog("[deeplink] legacy /tabs/* normalized to", href, "from", url);
         router.replace(href);
       }
     };
 
-    if (claimInitialUrl()) {
-      void Linking.getInitialURL().then((url) => {
-        if (!url || initialDone.current) return;
-        initialDone.current = true;
-        runWhenBridgeSettled(() => handle(url));
-      });
-    }
+    const handle = (url: string) => {
+      handleHref(normalizeLegacyTabsDeepLink(url), url);
+    };
+
+    void Linking.getInitialURL().then((url) => {
+      if (!url || initialDone.current) return;
+      const href = normalizeLegacyTabsDeepLink(url);
+      if (!href || !claimInitialUrl()) return;
+      initialDone.current = true;
+      runWhenBridgeSettled(() => handleHref(href, url));
+    });
 
     const sub = Linking.addEventListener("url", ({ url }) => handle(url));
     return () => sub.remove();
