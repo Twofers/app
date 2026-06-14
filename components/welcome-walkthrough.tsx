@@ -14,6 +14,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const STEPS = ["dashboard", "create", "track"] as const;
 type Step = (typeof STEPS)[number];
@@ -26,6 +27,8 @@ const STEP_MATERIAL_ICONS: Record<Exclude<Step, "dashboard">, keyof typeof Mater
 };
 
 function StepBadge({ step }: { step: Step }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
     <View
       style={{
@@ -47,7 +50,7 @@ function StepBadge({ step }: { step: Step }) {
           accessibilityIgnoresInvertColors
         />
       ) : (
-        <MaterialIcons name={STEP_MATERIAL_ICONS[step]} size={32} color={Colors.light.primary} />
+        <MaterialIcons name={STEP_MATERIAL_ICONS[step]} size={32} color={theme.primary} />
       )}
     </View>
   );
@@ -74,6 +77,8 @@ export function WelcomeWalkthrough({
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const step = STEPS[stepIdx];
 
@@ -174,13 +179,13 @@ export function WelcomeWalkthrough({
         <Animated.View
           entering={FadeIn.duration(300)}
           style={{
-            backgroundColor: Colors.light.background,
+            backgroundColor: theme.background,
             borderRadius: Radii.lg,
             padding: Spacing.xl,
             width: "100%",
             maxWidth: 380,
             borderWidth: 1,
-            borderColor: Colors.light.border,
+            borderColor: theme.border,
           }}
         >
           {/* Step content */}
@@ -194,7 +199,7 @@ export function WelcomeWalkthrough({
                 fontSize: 22,
                 fontWeight: "800",
                 textAlign: "center",
-                color: Colors.light.text,
+                color: theme.text,
                 letterSpacing: -0.3,
                 marginBottom: Spacing.sm,
               }}
@@ -206,7 +211,7 @@ export function WelcomeWalkthrough({
                 fontSize: 15,
                 lineHeight: 22,
                 textAlign: "center",
-                color: Colors.light.text,
+                color: theme.text,
                 opacity: 0.7,
                 fontWeight: "500",
               }}
@@ -219,18 +224,18 @@ export function WelcomeWalkthrough({
               <View
                 style={{
                   marginTop: Spacing.lg,
-                  backgroundColor: Colors.light.surfaceMuted,
+                  backgroundColor: theme.surfaceMuted,
                   borderRadius: Radii.lg,
                   padding: Spacing.md,
                   borderWidth: 1.5,
-                  borderColor: Colors.light.primary,
+                  borderColor: theme.primary,
                 }}
               >
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: "800",
-                    color: Colors.light.accentText,
+                    color: theme.accentText,
                     textTransform: "uppercase",
                     letterSpacing: 0.5,
                     marginBottom: 4,
@@ -242,7 +247,7 @@ export function WelcomeWalkthrough({
                   style={{
                     fontSize: 16,
                     fontWeight: "700",
-                    color: Colors.light.text,
+                    color: theme.text,
                   }}
                 >
                   {aiSuggestion.title}
@@ -258,6 +263,7 @@ export function WelcomeWalkthrough({
                   fontSize: 13,
                   opacity: 0.5,
                   fontWeight: "600",
+                  color: theme.text,
                 }}
               >
                 {t("walkthrough.aiLoading")}
@@ -284,8 +290,8 @@ export function WelcomeWalkthrough({
                   borderRadius: 4,
                   backgroundColor:
                     i === stepIdx
-                      ? Colors.light.primary
-                      : Colors.light.border,
+                      ? theme.primary
+                      : theme.border,
                 }}
               />
             ))}
@@ -312,7 +318,7 @@ export function WelcomeWalkthrough({
                     style={{
                       fontSize: 14,
                       fontWeight: "700",
-                      color: Colors.light.mutedText,
+                      color: theme.mutedText,
                     }}
                   >
                     {t("walkthrough.skip")}

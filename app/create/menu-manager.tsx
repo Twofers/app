@@ -18,6 +18,7 @@ import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type Row = {
   id: string;
@@ -33,6 +34,8 @@ export default function MenuManagerScreen() {
   const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -135,24 +138,24 @@ export default function MenuManagerScreen() {
 
   if (bizLoading) {
     return (
-      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
 
   if (!businessId) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal }}>
-        <Text>{t("menuScan.needBusiness")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+        <Text style={{ color: theme.text }}>{t("menuScan.needBusiness")}</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardScreen>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={{
           paddingHorizontal: horizontal,
           paddingTop: Spacing.xxxl,
@@ -161,7 +164,7 @@ export default function MenuManagerScreen() {
         }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
-        <Text style={{ opacity: 0.7 }}>{t("menuManager.subtitle")}</Text>
+        <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuManager.subtitle")}</Text>
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {loadErr ? <Banner message={loadErr} tone="error" /> : null}
 
@@ -180,9 +183,11 @@ export default function MenuManagerScreen() {
               placeholder={t("menuManager.namePlaceholder")}
               style={{
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 borderRadius: Radii.md,
                 padding: Spacing.md,
+                color: theme.text,
+                backgroundColor: theme.surface,
               }}
             />
             <TextInput
@@ -191,9 +196,11 @@ export default function MenuManagerScreen() {
               placeholder={t("menuManager.categoryPlaceholder")}
               style={{
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 borderRadius: Radii.md,
                 padding: Spacing.md,
+                color: theme.text,
+                backgroundColor: theme.surface,
               }}
             />
             <TextInput
@@ -202,9 +209,11 @@ export default function MenuManagerScreen() {
               placeholder={t("menuManager.pricePlaceholder")}
               style={{
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 borderRadius: Radii.md,
                 padding: Spacing.md,
+                color: theme.text,
+                backgroundColor: theme.surface,
               }}
             />
             <TextInput
@@ -214,10 +223,12 @@ export default function MenuManagerScreen() {
               multiline
               style={{
                 borderWidth: 1,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 borderRadius: Radii.md,
                 padding: Spacing.md,
                 minHeight: 72,
+                color: theme.text,
+                backgroundColor: theme.surface,
               }}
             />
             <PrimaryButton title={t("menuManager.save")} onPress={() => void addManual()} />
@@ -232,7 +243,7 @@ export default function MenuManagerScreen() {
         )}
 
         {visible.length === 0 && !loadErr ? (
-          <Text style={{ opacity: 0.7 }}>{t("menuManager.empty")}</Text>
+          <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuManager.empty")}</Text>
         ) : null}
 
         {visible.map((r) => (
@@ -243,8 +254,8 @@ export default function MenuManagerScreen() {
                 padding: Spacing.md,
                 borderRadius: Radii.md,
                 borderWidth: 1,
-                borderColor: Colors.light.border,
-                backgroundColor: Colors.light.surface,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
                 gap: Spacing.sm,
                 opacity: r.archived_at ? 0.55 : 1,
               }}
@@ -257,9 +268,11 @@ export default function MenuManagerScreen() {
                     placeholder={t("menuManager.namePlaceholder")}
                     style={{
                       borderWidth: 1,
-                      borderColor: Colors.light.border,
+                      borderColor: theme.border,
                       borderRadius: Radii.md,
                       padding: Spacing.md,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
                     }}
                   />
                   <TextInput
@@ -268,9 +281,11 @@ export default function MenuManagerScreen() {
                     placeholder={t("menuManager.categoryPlaceholder")}
                     style={{
                       borderWidth: 1,
-                      borderColor: Colors.light.border,
+                      borderColor: theme.border,
                       borderRadius: Radii.md,
                       padding: Spacing.md,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
                     }}
                   />
                   <TextInput
@@ -279,9 +294,11 @@ export default function MenuManagerScreen() {
                     placeholder={t("menuManager.pricePlaceholder")}
                     style={{
                       borderWidth: 1,
-                      borderColor: Colors.light.border,
+                      borderColor: theme.border,
                       borderRadius: Radii.md,
                       padding: Spacing.md,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
                     }}
                   />
                   <TextInput
@@ -291,10 +308,12 @@ export default function MenuManagerScreen() {
                     multiline
                     style={{
                       borderWidth: 1,
-                      borderColor: Colors.light.border,
+                      borderColor: theme.border,
                       borderRadius: Radii.md,
                       padding: Spacing.md,
                       minHeight: 64,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
                     }}
                   />
                   <PrimaryButton title={t("menuManager.save")} onPress={() => void saveEdit()} />
@@ -302,16 +321,16 @@ export default function MenuManagerScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={{ fontWeight: "700", fontSize: 16 }}>{r.name}</Text>
-                  {r.category ? <Text style={{ opacity: 0.75 }}>{r.category}</Text> : null}
-                  {r.price_text ? <Text style={{ opacity: 0.75 }}>{r.price_text}</Text> : null}
-                  {r.description ? <Text style={{ opacity: 0.8 }}>{r.description}</Text> : null}
+                  <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{r.name}</Text>
+                  {r.category ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.category}</Text> : null}
+                  {r.price_text ? <Text style={{ opacity: 0.75, color: theme.text }}>{r.price_text}</Text> : null}
+                  {r.description ? <Text style={{ opacity: 0.8, color: theme.text }}>{r.description}</Text> : null}
                   <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
                     <Pressable onPress={() => startEdit(r)}>
-                      <Text style={{ color: Colors.light.accentText, fontWeight: "700" }}>{t("menuManager.edit")}</Text>
+                      <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("menuManager.edit")}</Text>
                     </Pressable>
                     <Pressable onPress={() => void toggleArchive(r)}>
-                      <Text style={{ fontWeight: "600" }}>
+                      <Text style={{ fontWeight: "600", color: theme.text }}>
                         {r.archived_at ? t("menuManager.unarchive") : t("menuManager.archive")}
                       </Text>
                     </Pressable>

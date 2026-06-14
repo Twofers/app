@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type ProfileCompletenessBarProps = {
   percentage: number;
@@ -9,6 +10,8 @@ type ProfileCompletenessBarProps = {
 };
 
 export function ProfileCompletenessBar({ percentage, hint }: ProfileCompletenessBarProps) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -23,14 +26,14 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
 
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "700", fontSize: 14, color: Colors.light.text }}>
+      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
         {isComplete ? "100% \u2014 looking great!" : `${percentage}% complete`}
       </Text>
       <View
         style={{
           height: 8,
           borderRadius: 4,
-          backgroundColor: Colors.light.border,
+          backgroundColor: theme.border,
           overflow: "hidden",
         }}
       >
@@ -39,14 +42,14 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
             {
               height: 8,
               borderRadius: 4,
-              backgroundColor: Colors.light.primary,
+              backgroundColor: theme.primary,
             },
             barStyle,
           ]}
         />
       </View>
       {hint && !isComplete ? (
-        <Text style={{ fontSize: 13, color: Colors.light.mutedText, lineHeight: 18 }}>
+        <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
           {hint}
         </Text>
       ) : null}

@@ -65,7 +65,7 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
         minimumFontScale={0.8}
         maxFontSizeMultiplier={1.15}
         style={{
-          color: "white",
+          color: theme.primaryText,
           fontSize: 17,
           fontWeight: "800",
           textAlign: "center",

@@ -74,7 +74,7 @@ export default function BusinessSetupScreen() {
   const { session, isInitialLoading: authLoading } = useAuthSession();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
-  const primary = Colors.light.primary;
+  const primary = theme.primary;
 
   const [businessName, setBusinessName] = useState("");
   const [address, setAddress] = useState("");
@@ -549,15 +549,15 @@ export default function BusinessSetupScreen() {
               backgroundColor: "rgba(255,159,28,0.08)",
               borderRadius: Radii.lg,
               borderWidth: 1,
-              borderColor: Colors.light.primary,
+              borderColor: theme.primary,
               padding: Spacing.md,
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 15 }}>
+            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
               {t("businessSetup.inviteCodeLabel", { defaultValue: "Business invite code" })}
             </Text>
-            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75 }}>
+            <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.75, color: theme.text }}>
               {t("businessSetup.inviteCodeHint", {
                 defaultValue:
                   "Twofer is invite-only for business accounts during the pilot. Enter the code we shared with you to continue.",
@@ -574,12 +574,13 @@ export default function BusinessSetupScreen() {
               placeholder={t("businessSetup.inviteCodePlaceholder", {
                 defaultValue: "Enter the code Twofer gave you",
               })}
-              placeholderTextColor={Colors.light.mutedText}
+              placeholderTextColor={theme.mutedText}
               style={{
                 borderWidth: 1,
-                borderColor: inviteError ? theme.danger : Colors.light.border,
+                borderColor: inviteError ? theme.danger : theme.border,
                 borderRadius: Radii.md,
-                backgroundColor: Colors.light.surface,
+                backgroundColor: theme.surface,
+                color: theme.text,
                 paddingVertical: Spacing.sm,
                 paddingHorizontal: Spacing.md,
                 fontSize: 16,
@@ -644,7 +645,7 @@ export default function BusinessSetupScreen() {
 
         {searching && (
           <View style={{ alignItems: "center", paddingVertical: Spacing.sm }}>
-            <ActivityIndicator color={Colors.light.primary} />
+            <ActivityIndicator color={theme.primary} />
           </View>
         )}
 
@@ -657,23 +658,23 @@ export default function BusinessSetupScreen() {
               <Pressable key={r.place_id || i} onPress={() => void applyLookupResult(r)}>
                 <View
                   style={{
-                    backgroundColor: Colors.light.surface,
+                    backgroundColor: theme.surface,
                     borderRadius: Radii.lg,
                     padding: Spacing.md,
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     ...Shadows.soft,
                   }}
                 >
-                  <Text style={{ fontWeight: "700", fontSize: 15 }}>{r.name}</Text>
-                  <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>{r.formatted_address}</Text>
-                  {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{r.phone}</Text> : null}
-                  {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2 }}>{r.category}</Text> : null}
-                  <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
+                  <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
+                  {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
+                  {r.category ? <Text style={{ fontSize: 12, opacity: 0.5, marginTop: 2, color: theme.text }}>{r.category}</Text> : null}
+                  <Text style={{ fontSize: 11, color: theme.accentText, marginTop: 4 }}>
                     {t("businessSetup.verifiedSource")}
                   </Text>
                   {detailsLoadingPlaceId === r.place_id ? (
-                    <ActivityIndicator color={Colors.light.primary} style={{ marginTop: Spacing.xs }} />
+                    <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.xs }} />
                   ) : null}
                 </View>
               </Pressable>

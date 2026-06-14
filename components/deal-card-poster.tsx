@@ -4,7 +4,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { Spacing } from "@/lib/screen-layout";
-import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { useMinuteTick } from "@/hooks/use-minute-tick";
@@ -71,9 +71,18 @@ export function DealCardPoster({
       : null;
 
   const statusColors = {
-    success: { background: PrimaryTint.surfaceStrong, text: "#B45309" },
-    error: { background: "#FEF2F2", text: "#B91C1C" },
-    info: { background: "#fff3e0", text: "#B45309" }, // orange tint
+    success:
+      colorScheme === "dark"
+        ? { background: "rgba(255,159,28,0.18)", text: theme.accentText }
+        : { background: PrimaryTint.surfaceStrong, text: "#B45309" },
+    error:
+      colorScheme === "dark"
+        ? { background: "rgba(248,113,113,0.16)", text: theme.danger }
+        : { background: "#FEF2F2", text: "#B91C1C" },
+    info:
+      colorScheme === "dark"
+        ? { background: "rgba(255,159,28,0.14)", text: theme.accentText }
+        : { background: "#fff3e0", text: "#B45309" },
   }[statusTone];
 
   return (
@@ -105,13 +114,13 @@ export function DealCardPoster({
           <View
             style={{
               height: imageHeight,
-              backgroundColor: Gray[50],
+              backgroundColor: theme.surfaceMuted,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
             <Text
-              style={{ color: Gray[400], fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: Spacing.md }}
+              style={{ color: theme.mutedText, fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: Spacing.md }}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.8}
@@ -129,7 +138,7 @@ export function DealCardPoster({
             {countdown && (
               <View
                 style={{
-                  backgroundColor: Colors.light.primary,
+                  backgroundColor: theme.primary,
                   borderRadius: 999,
                   paddingHorizontal: 12,
                   paddingVertical: 4,
@@ -137,7 +146,7 @@ export function DealCardPoster({
                 }}
               >
                 <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}
+                  style={{ fontSize: 13, fontWeight: "700", color: theme.primaryText }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -152,27 +161,27 @@ export function DealCardPoster({
           {businessName && (
             <View style={{ marginBottom: Spacing.xs }}>
               <Text
-                style={{ fontSize: 13, fontWeight: "700", opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 }}
+                style={{ fontSize: 13, fontWeight: "700", color: theme.mutedText, textTransform: "uppercase", letterSpacing: 0.5 }}
                 numberOfLines={2}
                 maxFontSizeMultiplier={1.15}
               >
                 {businessName}
               </Text>
               {distanceLabel && (
-                <Text style={{ fontSize: 12, marginTop: 2, color: Colors.light.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                <Text style={{ fontSize: 12, marginTop: 2, color: theme.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {distanceLabel}
                 </Text>
               )}
             </View>
           )}
 
-          <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28 }} numberOfLines={3} maxFontSizeMultiplier={1.15}>
+          <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28, color: theme.text }} numberOfLines={3} maxFontSizeMultiplier={1.15}>
             {title}
           </Text>
 
           {price != null && (
             <Text
-              style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: Colors.light.accentText }}
+              style={{ marginTop: Spacing.sm, fontSize: 20, fontWeight: "700", color: theme.accentText }}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.8}
@@ -183,17 +192,17 @@ export function DealCardPoster({
           )}
 
           {description && (
-            <Text style={{ marginTop: Spacing.sm, opacity: 0.75, fontSize: 15.5, lineHeight: 23 }} maxFontSizeMultiplier={1.15}>
+            <Text style={{ marginTop: Spacing.sm, color: theme.text, opacity: 0.75, fontSize: 15.5, lineHeight: 23 }} maxFontSizeMultiplier={1.15}>
               {description.length > 160 ? `${description.slice(0, 160)}…` : description}
             </Text>
           )}
 
-          <Text style={{ marginTop: Spacing.md, opacity: 0.6, fontSize: 14 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+          <Text style={{ marginTop: Spacing.md, color: theme.text, opacity: 0.6, fontSize: 14 }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
             {t("dealsBrowse.dealEnds", { time: formatAppDateTime(endTime, i18n.language) })}
           </Text>
 
           {remainingClaims != null && (
-            <Text style={{ marginTop: Spacing.xs, opacity: 0.6, fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+            <Text style={{ marginTop: Spacing.xs, color: theme.text, opacity: 0.6, fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
               {t("dealsBrowse.cardClaimsLeft", { count: remainingClaims })}
             </Text>
           )}
@@ -207,7 +216,7 @@ export function DealCardPoster({
           paddingVertical: Spacing.xxl,
           gap: Spacing.lg,
           borderTopWidth: 1,
-          borderTopColor: Gray[200],
+          borderTopColor: theme.border,
         }}
       >
         {/* Favorite row */}
@@ -227,17 +236,17 @@ export function DealCardPoster({
               gap: Spacing.sm,
               padding: Spacing.md,
               borderRadius: Radii.lg,
-              backgroundColor: pressed ? Gray[50] : "transparent",
+              backgroundColor: pressed ? theme.surfaceMuted : "transparent",
             })}
           >
             <MaterialIcons
               name={isFavorite ? "favorite" : "favorite-border"}
               size={24}
-              color={isFavorite ? Colors.light.primary : Gray[500]}
+              color={isFavorite ? theme.favorite : theme.icon}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
-                style={{ fontSize: 16, fontWeight: "600" }}
+                style={{ fontSize: 16, fontWeight: "600", color: theme.text }}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
@@ -265,7 +274,12 @@ export function DealCardPoster({
           onPress={onClaim}
           disabled={claiming || dealStatus !== "live"}
           style={{
-            backgroundColor: dealStatus === "live" ? Colors.light.primary : "rgba(255, 159, 28, 0.22)",
+            backgroundColor:
+              dealStatus === "live"
+                ? theme.primary
+                : colorScheme === "dark"
+                  ? theme.surfaceMuted
+                  : "rgba(255, 159, 28, 0.22)",
           }}
         />
 

@@ -25,6 +25,7 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useBusiness } from "../../hooks/use-business";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Banner } from "../../components/ui/banner";
 import {
   FORM_SCROLL_KEYBOARD_PROPS,
@@ -289,6 +290,8 @@ export default function AiDealScreen() {
   const navigation = useNavigation();
   const { confirm, confirmModal } = useBrandedConfirm();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const params = useLocalSearchParams<{
     templateId?: string;
     dealId?: string;
@@ -501,9 +504,9 @@ export default function AiDealScreen() {
           icon: "hourglass-empty" as const,
           title: t("createAi.publishBusyTitle"),
           body: t("createAi.publishBusyBody"),
-          backgroundColor: Colors.light.surfaceMuted,
-          borderColor: Colors.light.border,
-          titleColor: Colors.light.text,
+          backgroundColor: theme.surfaceMuted,
+          borderColor: theme.border,
+          titleColor: theme.text,
         };
       case "success":
         return {
@@ -512,25 +515,25 @@ export default function AiDealScreen() {
           body: publishStatusMessage ?? t("createAi.publishSuccessBody"),
           backgroundColor: PrimaryTint.surface,
           borderColor: PrimaryTint.border,
-          titleColor: Colors.light.accentText,
+          titleColor: theme.accentText,
         };
       case "error":
         return {
           icon: "error-outline" as const,
           title: t("createAi.publishFailedTitle"),
           body: publishStatusMessage ?? t("createAi.errPublishFailed"),
-          backgroundColor: Colors.light.surfaceMuted,
-          borderColor: Colors.light.danger,
-          titleColor: Colors.light.danger,
+          backgroundColor: theme.surfaceMuted,
+          borderColor: theme.danger,
+          titleColor: theme.danger,
         };
       case "missing":
         return {
           icon: "edit" as const,
           title: t("createAi.publishMissingTitle"),
           body: t("createAi.publishMissingBody"),
-          backgroundColor: Colors.light.surfaceMuted,
-          borderColor: Colors.light.border,
-          titleColor: Colors.light.mutedText,
+          backgroundColor: theme.surfaceMuted,
+          borderColor: theme.border,
+          titleColor: theme.mutedText,
         };
       case "ready":
       default:
@@ -538,12 +541,12 @@ export default function AiDealScreen() {
           icon: "assignment-turned-in" as const,
           title: editingDealId ? t("createAi.publishUpdateReadyTitle") : t("createAi.publishReadyTitle"),
           body: editingDealId ? t("createAi.publishUpdateReadyBody") : t("createAi.publishReadyBody"),
-          backgroundColor: "#FFF7ED",
-          borderColor: Colors.light.primary,
-          titleColor: Colors.light.accentText,
+          backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : "#FFF7ED",
+          borderColor: theme.primary,
+          titleColor: theme.accentText,
         };
     }
-  }, [displayedPublishStatus, editingDealId, publishStatusMessage, t]);
+  }, [colorScheme, displayedPublishStatus, editingDealId, publishStatusMessage, t, theme]);
 
   const showDraftEditor =
     templateLoaded ||
@@ -1493,27 +1496,27 @@ export default function AiDealScreen() {
 
   if (!isLoggedIn) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleScreen")}</Text>
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.loginPrompt")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("createAi.loginPrompt")}</Text>
       </View>
     );
   }
 
   if (!businessId) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("createAi.titleScreen")}</Text>
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.needBusiness")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("createAi.titleScreen")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("createAi.needBusiness")}</Text>
       </View>
     );
   }
 
   if (dealIdFromRoute && dealEditLoading) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("createAi.loadingDeal")}</Text>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("createAi.loadingDeal")}</Text>
       </View>
     );
   }
@@ -1581,10 +1584,10 @@ export default function AiDealScreen() {
   }
 
   return (
-    <KeyboardScreen>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
       <ScrollView
         ref={scrollRef}
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: theme.background }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
@@ -1593,10 +1596,10 @@ export default function AiDealScreen() {
           paddingBottom: scrollBottom,
         }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3 }}>
+        <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
           {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
         </Text>
-        <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18 }}>{t("createAi.intro")}</Text>
+        <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18, color: theme.text }}>{t("createAi.intro")}</Text>
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
@@ -1614,7 +1617,7 @@ export default function AiDealScreen() {
         ) : (
           <>
             <StepBadge n={1} total={3} t={t} />
-            <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16 }}>{t("createAi.photo")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.photo")}</Text>
             {/* Both buttons default to width:100%; flex wrappers keep the row inside the viewport. */}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
               <View style={{ flex: 1 }}>
@@ -1633,19 +1636,19 @@ export default function AiDealScreen() {
               />
             ) : (
               <View style={{ marginTop: 12 }}>
-                <View style={{ height: 260, borderRadius: 18, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1.5, borderColor: Colors.light.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "700", color: Colors.light.text }}>
+                <View style={{ height: 260, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1.5, borderColor: theme.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
+                  <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
                     {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
                   </Text>
-                  <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center" }}>{t("createAi.photoHint")}</Text>
+                  <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center", color: theme.text }}>{t("createAi.photoHint")}</Text>
                 </View>
               </View>
             )}
 
             {photoUri || posterUrl ? (
               <View style={{ marginTop: 14 }}>
-                <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6 }}>{t("createAi.photoPolishTitle")}</Text>
-                <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8 }}>
+                <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6, color: theme.text }}>{t("createAi.photoPolishTitle")}</Text>
+                <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>
                   {t("createAi.photoPolishHelp")}
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
@@ -1666,15 +1669,15 @@ export default function AiDealScreen() {
                           paddingVertical: 10,
                           paddingHorizontal: 8,
                           borderRadius: 12,
-                          backgroundColor: selected ? Colors.light.primary : Colors.light.surfaceMuted,
+                          backgroundColor: selected ? theme.primary : theme.surfaceMuted,
                           borderWidth: selected ? 0 : 1,
-                          borderColor: Colors.light.border,
+                          borderColor: theme.border,
                         }}
                       >
-                        <Text style={{ fontWeight: "700", fontSize: 13, color: selected ? "#fff" : Gray[700], textAlign: "center" }}>
+                        <Text style={{ fontWeight: "700", fontSize: 13, color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], textAlign: "center" }}>
                           {t(opt.labelKey)}
                         </Text>
-                        <Text style={{ marginTop: 2, fontSize: 11, color: selected ? "#fff" : Gray[500], textAlign: "center" }}>
+                        <Text style={{ marginTop: 2, fontSize: 11, color: selected ? theme.primaryText : theme.mutedText, textAlign: "center" }}>
                           {t(opt.helperKey)}
                         </Text>
                       </Pressable>
@@ -1687,39 +1690,41 @@ export default function AiDealScreen() {
             <View style={{ marginTop: 16 }}>
               <StepBadge n={2} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.fewWords")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.fewWords")}</Text>
             <View style={{ marginTop: 6 }}>
               <TextInput
                 value={hintText}
                 onChangeText={setHintText}
                 placeholder={t("createAi.hintPlaceholder")}
+                placeholderTextColor={theme.mutedText}
                 multiline
                 style={{
                   borderWidth: 1,
-                  borderColor: isRecording ? Colors.light.danger : Colors.light.border,
+                  borderColor: isRecording ? theme.danger : theme.border,
                   borderRadius: 14,
                   padding: 14,
                   paddingRight: Platform.OS !== "web" ? 56 : 14,
                   minHeight: 56,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
+                  color: theme.text,
                 }}
               />
               {Platform.OS !== "web" ? (
                 <Pressable
                   onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
                   disabled={transcribing}
-                  style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? Colors.light.danger : Colors.light.primary, alignItems: "center", justifyContent: "center" }}
+                  style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
                 >
                   {transcribing ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color={theme.primaryText} size="small" />
                   ) : (
-                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
+                    <MaterialIcons name={isRecording ? "stop" : "mic"} size={20} color={theme.primaryText} />
                   )}
                 </Pressable>
               ) : null}
             </View>
 
-            <Text style={{ marginTop: 12 }}>{t("createAi.priceOptional")}</Text>
+            <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.priceOptional")}</Text>
             <TextInput
               value={price}
               onChangeText={(value) => setPrice(sanitizeDecimalInput(value))}
@@ -1727,7 +1732,8 @@ export default function AiDealScreen() {
               inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
               returnKeyType="done"
               placeholder={t("createAi.placeholderPrice")}
-              style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+              placeholderTextColor={theme.mutedText}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
             />
 
             <View
@@ -1736,14 +1742,14 @@ export default function AiDealScreen() {
             >
               <StepBadge n={3} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700" }}>{t("createAi.validity")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.validity")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
-                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? Colors.light.primary : Colors.light.surfaceMuted }}
+                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "one-time" ? theme.primary : theme.surfaceMuted }}
               >
                 <Text
-                  style={{ color: validityMode === "one-time" ? "#fff" : Gray[700], fontWeight: "700" }}
+                  style={{ color: validityMode === "one-time" ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700" }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -1754,10 +1760,10 @@ export default function AiDealScreen() {
               </Pressable>
               <Pressable
                 onPress={() => setValidityMode("recurring")}
-                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? Colors.light.primary : Colors.light.surfaceMuted }}
+                style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: validityMode === "recurring" ? theme.primary : theme.surfaceMuted }}
               >
                 <Text
-                  style={{ color: validityMode === "recurring" ? "#fff" : Gray[700], fontWeight: "700" }}
+                  style={{ color: validityMode === "recurring" ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700" }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
@@ -1770,7 +1776,7 @@ export default function AiDealScreen() {
 
             {validityMode === "one-time" ? (
               <>
-                <Text style={{ marginTop: 12 }}>{t("createAi.startTime")}</Text>
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.startTime")}</Text>
                 <Pressable
                   onPress={() => {
                     if (Platform.OS === "ios") {
@@ -1779,9 +1785,9 @@ export default function AiDealScreen() {
                       setShowStartPicker(true);
                     }
                   }}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, backgroundColor: theme.surface }}
                 >
-                  <Text>{formatAppDateTime(startTime, i18n.language)}</Text>
+                  <Text style={{ color: theme.text }}>{formatAppDateTime(startTime, i18n.language)}</Text>
                 </Pressable>
                 {showStartPicker ? (
                   Platform.OS === "android" ? (
@@ -1818,7 +1824,7 @@ export default function AiDealScreen() {
                   )
                 ) : null}
 
-                <Text style={{ marginTop: 12 }}>{t("createAi.endTime")}</Text>
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.endTime")}</Text>
                 <Pressable
                   onPress={() => {
                     if (Platform.OS === "ios") {
@@ -1827,9 +1833,9 @@ export default function AiDealScreen() {
                       setShowEndPicker(true);
                     }
                   }}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, backgroundColor: theme.surface }}
                 >
-                  <Text>{formatAppDateTime(endTime, i18n.language)}</Text>
+                  <Text style={{ color: theme.text }}>{formatAppDateTime(endTime, i18n.language)}</Text>
                 </Pressable>
                 {showEndPicker ? (
                   Platform.OS === "android" ? (
@@ -1868,7 +1874,7 @@ export default function AiDealScreen() {
               </>
             ) : (
               <>
-                <Text style={{ marginTop: 12, fontWeight: "600", fontSize: 13, opacity: 0.5 }}>{t("createAi.schedulePresetsLabel")}</Text>
+                <Text style={{ marginTop: 12, fontWeight: "600", fontSize: 13, opacity: 0.5, color: theme.text }}>{t("createAi.schedulePresetsLabel")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                   {SCHEDULE_PRESETS.map((preset) => {
                     const active = schedulePreset === preset.key;
@@ -1885,10 +1891,10 @@ export default function AiDealScreen() {
                             setWindowEnd(dateFromMinutes(preset.endMin));
                           }
                         }}
-                        style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? Colors.light.primary : Colors.light.surfaceMuted }}
+                        style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: active ? theme.primary : theme.surfaceMuted }}
                       >
                         <Text
-                          style={{ color: active ? "#fff" : Gray[700], fontWeight: "700", fontSize: 13 }}
+                          style={{ color: active ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700", fontSize: 13 }}
                           numberOfLines={1}
                           adjustsFontSizeToFit
                           minimumFontScale={0.78}
@@ -1901,7 +1907,7 @@ export default function AiDealScreen() {
                   })}
                 </View>
 
-                <Text style={{ marginTop: 12 }}>{t("createAi.days")}</Text>
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.days")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                   {[
                     { label: t("createAi.dayMon"), value: 1 },
@@ -1922,10 +1928,10 @@ export default function AiDealScreen() {
                             selected ? prev.filter((d) => d !== day.value) : [...prev, day.value],
                           );
                         }}
-                        style={{ maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? Colors.light.primary : Colors.light.surfaceMuted }}
+                        style={{ maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: selected ? theme.primary : theme.surfaceMuted }}
                       >
                         <Text
-                          style={{ color: selected ? "#fff" : Gray[700], fontWeight: "600" }}
+                          style={{ color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "600" }}
                           numberOfLines={1}
                           adjustsFontSizeToFit
                           minimumFontScale={0.78}
@@ -1938,7 +1944,7 @@ export default function AiDealScreen() {
                   })}
                 </View>
 
-                <Text style={{ marginTop: 12 }}>{t("createAi.timeWindow")}</Text>
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.timeWindow")}</Text>
                 <Pressable
                   onPress={() => {
                     if (Platform.OS === "ios") {
@@ -1947,9 +1953,9 @@ export default function AiDealScreen() {
                       setShowWindowStartPicker(true);
                     }
                   }}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, backgroundColor: theme.surface }}
                 >
-                  <Text>{t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}</Text>
+                  <Text style={{ color: theme.text }}>{t("createAi.windowStart")} {formatMinutes(minutesFromDate(windowStart))}</Text>
                 </Pressable>
                 {showWindowStartPicker && Platform.OS !== "ios" ? (
                   <DateTimePicker
@@ -1967,9 +1973,9 @@ export default function AiDealScreen() {
                       setShowWindowEndPicker(true);
                     }
                   }}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, backgroundColor: theme.surface }}
                 >
-                  <Text>{t("createAi.windowEnd")} {formatPickerTime(windowEnd)}</Text>
+                  <Text style={{ color: theme.text }}>{t("createAi.windowEnd")} {formatPickerTime(windowEnd)}</Text>
                 </Pressable>
                 {showWindowEndPicker && Platform.OS !== "ios" ? (
                   <DateTimePicker
@@ -1985,14 +1991,14 @@ export default function AiDealScreen() {
               onPress={() => setClaimSettingsOpen((v) => !v)}
               style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
             >
-              <Text style={{ fontWeight: "700" }}>{t("createAi.claimSettingsHeader")}</Text>
-              <Text style={{ fontSize: 12, opacity: 0.5 }}>
+              <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.claimSettingsHeader")}</Text>
+              <Text style={{ fontSize: 12, opacity: 0.5, color: theme.text }}>
                 {claimSettingsOpen ? "▲" : `${maxClaims} claims, ${cutoffMins} min ▼`}
               </Text>
             </Pressable>
             {claimSettingsOpen ? (
               <>
-                <Text style={{ marginTop: 8 }}>{t("createAi.maxClaims")}</Text>
+                <Text style={{ marginTop: 8, color: theme.text }}>{t("createAi.maxClaims")}</Text>
                 <TextInput
                   value={maxClaims}
                   onChangeText={(value) => setMaxClaims(sanitizeIntegerInput(value))}
@@ -2000,9 +2006,10 @@ export default function AiDealScreen() {
                   inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                   returnKeyType="done"
                   placeholder={t("createAi.placeholderMaxClaims")}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  placeholderTextColor={theme.mutedText}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
                 />
-                <Text style={{ marginTop: 8 }}>{t("createAi.cutoffBuffer")}</Text>
+                <Text style={{ marginTop: 8, color: theme.text }}>{t("createAi.cutoffBuffer")}</Text>
                 <TextInput
                   value={cutoffMins}
                   onChangeText={(value) => setCutoffMins(sanitizeIntegerInput(value))}
@@ -2010,7 +2017,8 @@ export default function AiDealScreen() {
                   inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                   returnKeyType="done"
                   placeholder={t("createAi.placeholderCutoff")}
-                  style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }}
+                  placeholderTextColor={theme.mutedText}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
                 />
               </>
             ) : null}
@@ -2021,7 +2029,7 @@ export default function AiDealScreen() {
 
             <View style={{ marginTop: 16, gap: 10 }}>
               {quota ? (
-                <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center" }}>
+                <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center", color: theme.text }}>
                   {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
                 </Text>
               ) : null}
@@ -2033,14 +2041,14 @@ export default function AiDealScreen() {
               {generating ? (
                 <View style={{ marginTop: 4 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <ActivityIndicator />
-                    <Text style={{ opacity: 0.75, flex: 1 }}>
+                    <ActivityIndicator color={theme.primary} />
+                    <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
                       {photoUri || posterUrl
                         ? t("createAi.generatingWithPhoto")
                         : t("createAi.generatingNoPhoto")}
                     </Text>
                   </View>
-                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17 }}>
+                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17, color: theme.text }}>
                     {t("createAi.generatingHint")}
                   </Text>
                   <View style={{ marginTop: 10 }}>
@@ -2060,12 +2068,12 @@ export default function AiDealScreen() {
             </View>
 
             {lastGenerationError && !generating ? (
-              <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, gap: 10 }}>
+              <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                 {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
                     failure / timeout / ownership), not a generic "couldn't generate"
                     line — so the cause is visible instead of hidden. */}
-                <Text style={{ fontWeight: "700" }}>{lastGenerationError}</Text>
-                <Text style={{ opacity: 0.8, lineHeight: 20 }}>{t("createAi.fallbackBody")}</Text>
+                <Text style={{ fontWeight: "700", color: theme.text }}>{lastGenerationError}</Text>
+                <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>{t("createAi.fallbackBody")}</Text>
                 <SecondaryButton
                   title={t("createAi.showDraftFields")}
                   onPress={() => {
@@ -2079,22 +2087,22 @@ export default function AiDealScreen() {
             {/* Single ad preview — text rendered ABOVE image, not baked in */}
             {generatedAd ? (
               <View style={{ marginTop: 22, gap: 14 }}>
-                <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createAi.yourAd")}</Text>
+                <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
                 {/* Ad card: text above, image below */}
                 <View
                   style={{
                     borderRadius: 24,
-                    backgroundColor: "#fff",
+                    backgroundColor: theme.surface,
                     overflow: "hidden",
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                   }}
                 >
                   {/* Top — meta line */}
                   <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4 }}>
                     {businessName ? (
-                      <Text style={{ fontSize: 12, color: Gray[500], fontWeight: "600", letterSpacing: 0.3 }}>
+                      <Text style={{ fontSize: 12, color: theme.mutedText, fontWeight: "600", letterSpacing: 0.3 }}>
                         {businessName.toUpperCase()}
                       </Text>
                     ) : null}
@@ -2102,10 +2110,10 @@ export default function AiDealScreen() {
 
                   {/* Headline + subline */}
                   <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
-                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: Colors.light.primary, lineHeight: 28 }}>
+                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: theme.primary, lineHeight: 28 }}>
                       {generatedAd.headline}
                     </Text>
-                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: Gray[800], lineHeight: 22 }}>
+                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: theme.text, lineHeight: 22 }}>
                       {generatedAd.subheadline}
                     </Text>
                   </View>
@@ -2118,8 +2126,8 @@ export default function AiDealScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ height: 200, backgroundColor: Gray[100], alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ opacity: 0.5 }}>{t("createAi.noImage")}</Text>
+                    <View style={{ height: 200, backgroundColor: theme.surfaceMuted, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ opacity: 0.5, color: theme.text }}>{t("createAi.noImage")}</Text>
                     </View>
                   )}
 
@@ -2127,30 +2135,30 @@ export default function AiDealScreen() {
                   <View style={{ paddingHorizontal: 18, paddingVertical: 16, gap: 10 }}>
                     <View
                       style={{
-                        backgroundColor: Colors.light.primary,
+                        backgroundColor: theme.primary,
                         paddingVertical: 12,
                         paddingHorizontal: 20,
                         borderRadius: 14,
                         alignSelf: "flex-start",
                       }}
                     >
-                      <Text style={{ fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: 0.2 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "800", color: theme.primaryText, letterSpacing: 0.2 }}>
                         {generatedAd.cta}
                       </Text>
                     </View>
                     {businessProfile?.address || businessProfile?.location ? (
-                      <Text style={{ fontSize: 13, color: Gray[500] }}>
+                      <Text style={{ fontSize: 13, color: theme.mutedText }}>
                         {businessProfile.address ?? businessProfile.location}
                       </Text>
                     ) : null}
-                    <Text style={{ fontSize: 12, color: Gray[500] }}>{displayScheduleSummary}</Text>
+                    <Text style={{ fontSize: 12, color: theme.mutedText }}>{displayScheduleSummary}</Text>
                   </View>
                 </View>
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: Colors.light.primary }}>
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.light.accentText, letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, color: Gray[600], lineHeight: 19 }}>
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: theme.accentText, letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 13, color: theme.mutedText, lineHeight: 19 }}>
                       {generatedAd.item_research.description}
                     </Text>
                   </View>
@@ -2163,17 +2171,17 @@ export default function AiDealScreen() {
                     onPress={acceptAd}
                   />
                 ) : (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: PrimaryTint.surface, borderWidth: 1, borderColor: PrimaryTint.border }}>
-                    <Text style={{ fontWeight: "700", color: Colors.light.accentText }}>{t("createAi.adAccepted")}</Text>
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderWidth: 1, borderColor: PrimaryTint.border }}>
+                    <Text style={{ fontWeight: "700", color: theme.accentText }}>{t("createAi.adAccepted")}</Text>
                   </View>
                 )}
 
                 {/* Revise panel */}
                 {!adAccepted ? (
-                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, gap: 12 }}>
+                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 12 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("createAi.tweakTitle")}</Text>
-                      <Text style={{ fontSize: 12, color: Gray[500] }}>{revisionsLeftLabel}</Text>
+                      <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
+                      <Text style={{ fontSize: 12, color: theme.mutedText }}>{revisionsLeftLabel}</Text>
                     </View>
 
                     {/* Target toggle */}
@@ -2188,12 +2196,12 @@ export default function AiDealScreen() {
                               flex: 1,
                               paddingVertical: 8,
                               borderRadius: 999,
-                              backgroundColor: selected ? Colors.light.primary : Colors.light.surface,
+                              backgroundColor: selected ? theme.primary : theme.surface,
                               borderWidth: 1,
-                              borderColor: selected ? Colors.light.primary : Colors.light.border,
+                              borderColor: selected ? theme.primary : theme.border,
                             }}
                           >
-                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? "#fff" : Gray[700], fontSize: 13 }}>
+                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
                               {targetLabel[target]}
                             </Text>
                           </Pressable>
@@ -2214,12 +2222,12 @@ export default function AiDealScreen() {
                               paddingVertical: 6,
                               paddingHorizontal: 12,
                               borderRadius: 999,
-                              backgroundColor: selected ? Colors.light.primary : Colors.light.surface,
+                              backgroundColor: selected ? theme.primary : theme.surface,
                               borderWidth: 1,
-                              borderColor: selected ? Colors.light.primary : Colors.light.border,
+                              borderColor: selected ? theme.primary : theme.border,
                             }}
                           >
-                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#fff" : Gray[700] }}>{presetText}</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
                           </Pressable>
                         );
                       })}
@@ -2230,14 +2238,16 @@ export default function AiDealScreen() {
                       value={revisionFeedback}
                       onChangeText={setRevisionFeedback}
                       placeholder={t("createAi.reviseFeedbackPlaceholder")}
+                      placeholderTextColor={theme.mutedText}
                       multiline
                       style={{
                         borderWidth: 1,
-                        borderColor: Colors.light.border,
+                        borderColor: theme.border,
                         borderRadius: 12,
                         padding: 12,
                         minHeight: 50,
-                        backgroundColor: Colors.light.surface,
+                        backgroundColor: theme.surface,
+                        color: theme.text,
                         fontSize: 14,
                       }}
                     />
@@ -2259,11 +2269,11 @@ export default function AiDealScreen() {
                 <View
                   style={{
                     borderRadius: 18,
-                    backgroundColor: "#fff",
+                    backgroundColor: theme.surface,
                     overflow: "hidden",
                     marginTop: 10,
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                   }}
                 >
                   {(() => {
@@ -2273,27 +2283,27 @@ export default function AiDealScreen() {
                     return previewUri ? (
                       <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
                     ) : (
-                      <View style={{ height: 200, backgroundColor: Colors.light.surfaceMuted }} />
+                      <View style={{ height: 200, backgroundColor: theme.surfaceMuted }} />
                     );
                   })()}
                   <View style={{ padding: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "700" }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600" }}>{promoLine}</Text> : null}
-                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700" }}>{ctaText}</Text> : null}
-                    <Text style={{ marginTop: 6, opacity: 0.8 }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                    <Text style={{ marginTop: 8, opacity: 0.7 }}>{t("createAi.scheduleLabel")} {displayScheduleSummary}</Text>
-                    <Text style={{ marginTop: 4, opacity: 0.7 }}>{t("createAi.maxClaimsLabel")} {maxClaims}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
+                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
+                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
+                    <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                    <Text style={{ marginTop: 8, opacity: 0.7, color: theme.text }}>{t("createAi.scheduleLabel")} {displayScheduleSummary}</Text>
+                    <Text style={{ marginTop: 4, opacity: 0.7, color: theme.text }}>{t("createAi.maxClaimsLabel")} {maxClaims}</Text>
                   </View>
                 </View>
 
-                <Text style={{ marginTop: 16 }}>{t("createAi.editHeadline")}</Text>
-                <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }} />
-                <Text style={{ marginTop: 12 }}>{t("createAi.editSubheadline")}</Text>
-                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }} />
-                <Text style={{ marginTop: 12 }}>{t("createAi.editCta")}</Text>
-                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6 }} />
-                <Text style={{ marginTop: 12 }}>{t("createAi.editDetails")}</Text>
-                <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} multiline style={{ borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90 }} />
+                <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
+                <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editSubheadline")}</Text>
+                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editCta")}</Text>
+                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editDetails")}</Text>
+                <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
 
                 <View style={{ marginTop: 16, gap: 8 }}>
                   <View
@@ -2313,7 +2323,7 @@ export default function AiDealScreen() {
                       <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
                         {publishStatusCard.title}
                       </Text>
-                      <Text style={{ marginTop: 4, color: Colors.light.mutedText, lineHeight: 19 }}>
+                      <Text style={{ marginTop: 4, color: theme.mutedText, lineHeight: 19 }}>
                         {publishStatusCard.body}
                       </Text>
                     </View>
@@ -2356,7 +2366,7 @@ export default function AiDealScreen() {
             style={{
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              backgroundColor: Colors.light.surface,
+              backgroundColor: theme.surface,
               paddingTop: 8,
               paddingHorizontal: horizontal,
               paddingBottom: scrollBottom,
@@ -2375,13 +2385,13 @@ export default function AiDealScreen() {
                 onPress={cancelIosSchedulePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingRight: 16 }}
               >
-                <Text style={{ color: Colors.light.mutedText, fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: theme.mutedText, fontSize: 16, fontWeight: "700" }}>
                   {t("commonUi.cancel")}
                 </Text>
               </Pressable>
               <Text
                 numberOfLines={1}
-                style={{ flex: 1, color: Colors.light.text, fontSize: 16, fontWeight: "800", textAlign: "center" }}
+                style={{ flex: 1, color: theme.text, fontSize: 16, fontWeight: "800", textAlign: "center" }}
               >
                 {iosSchedulePickerTitle}
               </Text>
@@ -2390,7 +2400,7 @@ export default function AiDealScreen() {
                 onPress={confirmIosSchedulePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingLeft: 16 }}
               >
-                <Text style={{ color: Colors.light.primary, fontSize: 16, fontWeight: "800" }}>
+                <Text style={{ color: theme.primary, fontSize: 16, fontWeight: "800" }}>
                   {t("commonUi.done", { defaultValue: "Done" })}
                 </Text>
               </Pressable>
@@ -2399,8 +2409,8 @@ export default function AiDealScreen() {
               value={iosScheduleDraft}
               mode={iosSchedulePickerMode}
               display="spinner"
-              textColor={Colors.light.text}
-              themeVariant="light"
+              textColor={theme.text}
+              themeVariant={colorScheme}
               style={{ height: 216, alignSelf: "stretch" }}
               onChange={(_event, date) => {
                 if (date) setIosScheduleDraft(date);
@@ -2415,9 +2425,11 @@ export default function AiDealScreen() {
 }
 
 function StepBadge({ n, total, t }: { n: number; total: number; t: (key: string, opts?: Record<string, unknown>) => string }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
-    <View style={{ borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" }}>
-      <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72 }}>
+    <View style={{ borderRadius: 14, backgroundColor: theme.surfaceMuted, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" }}>
+      <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72, color: theme.text }}>
         {t("createAi.stepOfTotal", { current: n, total })}
       </Text>
     </View>

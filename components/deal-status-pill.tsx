@@ -1,7 +1,8 @@
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Gray, PrimaryTint, Radii } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export type ConsumerDealStatusKey = "live" | "claimed" | "redeeming" | "redeemed" | "expired" | "canceled";
 
@@ -25,7 +26,19 @@ type DealStatusPillProps = {
 
 export function DealStatusPill({ status }: DealStatusPillProps) {
   const { t } = useTranslation();
-  const c = styles[status];
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
+  const c =
+    colorScheme === "dark"
+      ? {
+          live: { background: "rgba(255,159,28,0.18)", text: theme.accentText },
+          claimed: { background: "rgba(255,159,28,0.14)", text: theme.accentText },
+          redeeming: { background: "rgba(255,159,28,0.14)", text: theme.accentText },
+          redeemed: { background: "rgba(74,222,128,0.14)", text: theme.success },
+          expired: { background: theme.surfaceMuted, text: theme.mutedText },
+          canceled: { background: theme.surfaceMuted, text: theme.mutedText },
+        }[status]
+      : styles[status];
   const label =
     status === "live"
       ? t("dealStatus.live")

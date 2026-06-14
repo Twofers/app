@@ -401,6 +401,16 @@
     "spanish": "Spanish",
     "korean": "Korean"
   },
+  "appearance": {
+    "sectionTitle": "Appearance",
+    "sectionHelp": "Choose how Twofer looks on this device.",
+    "system": "System",
+    "systemHint": "Matches phone",
+    "light": "Light",
+    "lightHint": "Bright mode",
+    "dark": "Dark",
+    "darkHint": "Low-light mode"
+  },
   "account": {
     "title": "Account",
     "expandBizProfile": "Show all business fields",

@@ -23,6 +23,7 @@ import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type EditableRow = {
   key: string;
@@ -62,6 +63,8 @@ export default function MenuScanScreen() {
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -333,16 +336,16 @@ export default function MenuScanScreen() {
 
   if (bizLoading) {
     return (
-      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, paddingTop: top, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+        <ActivityIndicator color={theme.primary} />
       </View>
     );
   }
 
   return (
-    <KeyboardScreen>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
     <ScrollView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
         paddingHorizontal: horizontal,
         paddingTop: Spacing.xxxl,
@@ -363,7 +366,7 @@ export default function MenuScanScreen() {
         onPress={() => void pickAndScan("library", false)}
         disabled={scanning || !businessId}
       />
-      <Text style={{ opacity: 0.65, fontSize: 13 }}>{t("menuScan.multiHint")}</Text>
+      <Text style={{ opacity: 0.65, fontSize: 13, color: theme.text }}>{t("menuScan.multiHint")}</Text>
       <SecondaryButton
         title={scanning ? t("menuScan.scanning") : t("menuScan.takeMore")}
         onPress={() => void pickAndScan("camera", true)}
@@ -377,8 +380,8 @@ export default function MenuScanScreen() {
       {scanning ? (
         <View style={{ marginTop: 4, gap: Spacing.sm }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <ActivityIndicator />
-            <Text style={{ opacity: 0.75, flex: 1 }}>
+            <ActivityIndicator color={theme.primary} />
+            <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
               {t("menuScan.scanning")}
               {scanProgress ? ` (${scanProgress.current}/${scanProgress.total})` : ""}
             </Text>
@@ -397,7 +400,7 @@ export default function MenuScanScreen() {
               paddingVertical: Spacing.xs,
             }}
           >
-            <Text style={{ flex: 1, fontWeight: "600", fontSize: 14 }}>{t("menuScan.skipDupLabel")}</Text>
+            <Text style={{ flex: 1, fontWeight: "600", fontSize: 14, color: theme.text }}>{t("menuScan.skipDupLabel")}</Text>
             <BrandedSwitch value={skipDuplicatesOnSave} onValueChange={setSkipDuplicatesOnSave} />
           </View>
           <SecondaryButton title={t("menuScan.addRow")} onPress={addRow} />
@@ -409,8 +412,8 @@ export default function MenuScanScreen() {
                   padding: Spacing.md,
                   borderRadius: Radii.md,
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
-                  backgroundColor: Colors.light.surface,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
                   gap: Spacing.sm,
                 }}
               >
@@ -424,9 +427,11 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.namePlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
+                    color: theme.text,
+                    backgroundColor: theme.surface,
                   }}
                 />
                 <TextInput
@@ -439,9 +444,11 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.categoryPlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
+                    color: theme.text,
+                    backgroundColor: theme.surface,
                   }}
                 />
                 <TextInput
@@ -454,9 +461,11 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.pricePlaceholder")}
                   style={{
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
+                    color: theme.text,
+                    backgroundColor: theme.surface,
                   }}
                 />
                 <TextInput
@@ -469,13 +478,15 @@ export default function MenuScanScreen() {
                   placeholder={t("menuScan.sizePlaceholder", { defaultValue: "Sizes as shown (optional)" })}
                   style={{
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     borderRadius: 10,
                     padding: 10,
+                    color: theme.text,
+                    backgroundColor: theme.surface,
                   }}
                 />
                 <Pressable onPress={() => removeRow(item.key)}>
-                  <Text style={{ color: Colors.light.danger, fontWeight: "600" }}>{t("menuScan.removeLine")}</Text>
+                  <Text style={{ color: theme.danger, fontWeight: "600" }}>{t("menuScan.removeLine")}</Text>
                 </Pressable>
               </View>
             ))}
@@ -492,10 +503,10 @@ export default function MenuScanScreen() {
             title={t("menuScan.buildOffer")}
             onPress={() => router.push("/create/menu-offer" as Href)}
           />
-          <Text style={{ opacity: 0.68, fontSize: 13, marginTop: 4 }}>{t("menuScan.strongDealHint")}</Text>
+          <Text style={{ opacity: 0.68, fontSize: 13, marginTop: 4, color: theme.text }}>{t("menuScan.strongDealHint")}</Text>
         </>
       ) : (
-        <Text style={{ opacity: 0.7 }}>{t("menuScan.emptyExtract")}</Text>
+        <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuScan.emptyExtract")}</Text>
       )}
     </ScrollView>
     </KeyboardScreen>

@@ -7,6 +7,7 @@ import { CardShell } from "@/components/ui/card-shell";
 import { Colors, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { parseFunctionError, EDGE_FUNCTION_TIMEOUT_AI_MS } from "@/lib/functions";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type Suggestion = {
   icon: string;
@@ -40,6 +41,8 @@ export function AiInsightsCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
@@ -97,7 +100,7 @@ export function AiInsightsCard({
     }
   }, [fetched, fetchSuggestions]);
 
-  const primary = Colors.light.primary;
+  const primary = theme.primary;
 
   return (
     <Animated.View entering={FadeInDown.duration(440).delay(80).springify()}>
@@ -123,7 +126,7 @@ export function AiInsightsCard({
             style={{
               fontWeight: "800",
               fontSize: 15,
-              color: Colors.light.text,
+              color: theme.text,
               flex: 1,
             }}
           >
@@ -159,6 +162,7 @@ export function AiInsightsCard({
                 fontSize: 13,
                 fontWeight: "600",
                 opacity: 0.5,
+                color: theme.text,
               }}
             >
               {t("aiInsights.loading")}
@@ -172,6 +176,7 @@ export function AiInsightsCard({
               lineHeight: 20,
               opacity: 0.6,
               fontWeight: "500",
+              color: theme.text,
             }}
           >
             {error}
@@ -194,7 +199,7 @@ export function AiInsightsCard({
                     style={{
                       fontSize: 14,
                       fontWeight: "700",
-                      color: Colors.light.text,
+                      color: theme.text,
                       marginBottom: 2,
                     }}
                   >
@@ -204,7 +209,7 @@ export function AiInsightsCard({
                     style={{
                       fontSize: 13,
                       lineHeight: 19,
-                      color: Colors.light.text,
+                      color: theme.text,
                       opacity: 0.65,
                       fontWeight: "500",
                     }}

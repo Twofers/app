@@ -55,6 +55,7 @@ import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
+import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -629,6 +630,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <ThemePreferenceSelector />
+
         {consumerSession ? (
           <View
             style={{
@@ -672,7 +675,7 @@ export default function SettingsScreen() {
               title={t("deleteAccount.cta")}
               onPress={confirmDeleteAccount}
               disabled={loading || logoutBusy || deleteBusy}
-              style={{ backgroundColor: Colors.light.danger }}
+              style={{ backgroundColor: theme.danger }}
             />
           </View>
         ) : null}

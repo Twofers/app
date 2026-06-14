@@ -54,7 +54,7 @@ export function SecondaryButton({
           borderRadius: Radii.md,
           backgroundColor: theme.surface,
           borderWidth: 1.5,
-          borderColor: "rgba(17,24,28,0.18)",
+          borderColor: theme.border,
           opacity: disabled ? 0.65 : 1,
           justifyContent: "center",
           alignItems: "center",

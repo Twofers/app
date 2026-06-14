@@ -11,11 +11,14 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function ForgotPasswordScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -74,16 +77,16 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <KeyboardScreen>
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
       <ScrollView
         style={{ flex: 1 }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("passwordRecovery.forgotTitle")}</Text>
-        <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("passwordRecovery.forgotTitle")}</Text>
+        <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
           {t("passwordRecovery.forgotSubtitle")}
         </Text>
 
@@ -95,7 +98,7 @@ export default function ForgotPasswordScreen() {
               onPress={() => router.replace("/auth-landing")}
             />
             <View style={{ gap: Spacing.sm }}>
-              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.sectionTitle")}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.sectionTitle")}</Text>
               <LegalExternalLinks />
             </View>
           </View>
@@ -103,7 +106,7 @@ export default function ForgotPasswordScreen() {
           <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
             {error ? <Banner message={error} tone="error" /> : null}
             <View>
-              <Text style={{ fontWeight: "600" }}>{t("auth.email")}</Text>
+              <Text style={{ fontWeight: "600", color: theme.text }}>{t("auth.email")}</Text>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -113,11 +116,13 @@ export default function ForgotPasswordScreen() {
                 editable={!busy}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: 12,
                   padding: 12,
                   marginTop: 6,
                   fontSize: 16,
+                  color: theme.text,
+                  backgroundColor: theme.surface,
                 }}
               />
             </View>
@@ -133,10 +138,10 @@ export default function ForgotPasswordScreen() {
               disabled={busy || cooldownRemaining > 0}
             />
             <Pressable onPress={() => router.back()} disabled={busy} style={{ paddingVertical: Spacing.sm }}>
-              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center" }}>{t("commonUi.goBack")}</Text>
+              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center", color: theme.text }}>{t("commonUi.goBack")}</Text>
             </Pressable>
             <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
-              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.sectionTitle")}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.sectionTitle")}</Text>
               <LegalExternalLinks />
             </View>
           </View>

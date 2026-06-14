@@ -40,6 +40,7 @@ import { RedemptionModeSettings } from "@/components/redemption-mode-settings";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { getSupportEmail } from "@/lib/support-contact";
+import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -573,14 +574,14 @@ export default function AccountScreen() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.md,
-              backgroundColor: Colors.light.surface,
+              backgroundColor: theme.surface,
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 18 }}>{t("account.bizCardTitle")}</Text>
-            <Text style={{ opacity: 0.8, lineHeight: 20 }}>
+            <Text style={{ fontWeight: "700", fontSize: 18, color: theme.text }}>{t("account.bizCardTitle")}</Text>
+            <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
               {t("account.bizSignInToContinue")}
             </Text>
             <SecondaryButton
@@ -590,6 +591,7 @@ export default function AccountScreen() {
               }}
             />
           </View>
+          <ThemePreferenceSelector />
         </View>
       ) : (
         <ScrollView
@@ -720,6 +722,8 @@ export default function AccountScreen() {
               {localeChip(t("language.korean"), "ko", i18n.language === "ko", () => chooseAppLocale("ko"))}
             </View>
           </View>
+
+          <ThemePreferenceSelector />
 
           <View
             style={{
@@ -894,11 +898,11 @@ export default function AccountScreen() {
                         <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{r.name}</Text>
                         <Text style={{ fontSize: 13, opacity: 0.7, marginTop: 2, color: theme.text }}>{r.formatted_address}</Text>
                         {r.phone ? <Text style={{ fontSize: 13, opacity: 0.6, marginTop: 2, color: theme.text }}>{r.phone}</Text> : null}
-                        <Text style={{ fontSize: 11, color: Colors.light.accentText, marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, color: theme.accentText, marginTop: 4 }}>
                           {t("businessSetup.verifiedSource")}
                         </Text>
                         {lookupDetailsPlaceId === r.place_id ? (
-                          <ActivityIndicator color={Colors.light.primary} style={{ marginTop: Spacing.xs }} />
+                          <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.xs }} />
                         ) : null}
                       </View>
                     </Pressable>
@@ -1196,7 +1200,7 @@ export default function AccountScreen() {
               title={t("deleteAccount.cta")}
               onPress={confirmDeleteAccount}
               disabled={busy || loading}
-              style={{ backgroundColor: Colors.light.danger }}
+              style={{ backgroundColor: theme.danger }}
             />
           </View>
         </ScrollView>

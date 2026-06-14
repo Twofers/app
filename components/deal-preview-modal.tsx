@@ -6,6 +6,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type DealPreviewModalProps = {
   visible: boolean;
@@ -38,6 +39,8 @@ export function DealPreviewModal({
 }: DealPreviewModalProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   return (
     <Modal
@@ -58,7 +61,7 @@ export function DealPreviewModal({
         <View
           style={{
             flex: 1,
-            backgroundColor: Colors.light.background,
+            backgroundColor: theme.background,
             borderTopLeftRadius: Radii.lg,
             borderTopRightRadius: Radii.lg,
             marginTop: Spacing.lg,
@@ -74,11 +77,11 @@ export function DealPreviewModal({
               paddingHorizontal: Spacing.md,
               paddingVertical: Spacing.md,
               borderBottomWidth: 1,
-              borderBottomColor: Colors.light.border,
+              borderBottomColor: theme.border,
             }}
           >
             <Text
-              style={{ flex: 1, minWidth: 0, fontWeight: "800", fontSize: 17, color: Colors.light.text }}
+              style={{ flex: 1, minWidth: 0, fontWeight: "800", fontSize: 17, color: theme.text }}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.82}
@@ -88,7 +91,7 @@ export function DealPreviewModal({
             </Text>
             <Text
               onPress={onDismiss}
-              style={{ flexShrink: 0, fontSize: 15, fontWeight: "700", color: Colors.light.mutedText }}
+              style={{ flexShrink: 0, fontSize: 15, fontWeight: "700", color: theme.mutedText }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.15}
             >
@@ -105,7 +108,7 @@ export function DealPreviewModal({
             <Text
               style={{
                 fontSize: 13,
-                color: Colors.light.mutedText,
+                color: theme.mutedText,
                 marginBottom: Spacing.sm,
                 textAlign: "center",
               }}
@@ -140,7 +143,7 @@ export function DealPreviewModal({
               paddingBottom: Math.max(insets.bottom, Spacing.md),
               gap: Spacing.sm,
               borderTopWidth: 1,
-              borderTopColor: Colors.light.border,
+              borderTopColor: theme.border,
             }}
           >
             <PrimaryButton

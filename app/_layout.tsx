@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments, type Href } from 'expo-router';
@@ -18,6 +18,7 @@ import { BillingDeepLinkHandler } from '@/components/billing-deeplink-handler';
 import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
 import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
+import { AppThemeProvider } from '@/components/providers/app-theme-provider';
 import { AuthSessionProvider } from '@/components/providers/auth-session-provider';
 import {
   OwnerRedemptionSecurityProvider,
@@ -116,11 +117,27 @@ function OwnerRedemptionPinGate() {
 
 function RootNavigationStack() {
   const colorScheme = useColorScheme();
-  const uiTheme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  const isDark = colorScheme === 'dark';
+  const uiTheme = Colors[isDark ? 'dark' : 'light'];
   const { t } = useTranslation();
+  const navigationTheme = useMemo(
+    () => ({
+      ...(isDark ? DarkTheme : DefaultTheme),
+      colors: {
+        ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+        primary: uiTheme.primary,
+        background: uiTheme.background,
+        card: uiTheme.background,
+        text: uiTheme.text,
+        border: uiTheme.border,
+        notification: uiTheme.primary,
+      },
+    }),
+    [isDark, uiTheme],
+  );
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme}>
       {/* Deep link handlers — priority order:
          1. Auth recovery (password reset links)
          2. Billing deep links (subscription/checkout)
@@ -172,7 +189,7 @@ function RootNavigationStack() {
         <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
       </Stack>
       </CreateMenuOfferWizardProvider>
-      <StatusBar style="auto" />
+      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={uiTheme.background} />
     </ThemeProvider>
   );
 }
@@ -190,23 +207,25 @@ export default function RootLayout() {
 
   return (
     <AppErrorBoundary>
-      <AppI18nGate>
-        <SafeAreaProvider>
-          <AuthSessionProvider>
-            <RedemptionModeProvider>
-              <OwnerRedemptionSecurityProvider>
-                <TabModeProvider>
-                  <DiagnosticBootLog />
-                  <AppErrorBoundary>
-                    <RootNavigationStack />
-                  </AppErrorBoundary>
-                  <ConsumerOnboardingGate />
-                </TabModeProvider>
-              </OwnerRedemptionSecurityProvider>
-            </RedemptionModeProvider>
-          </AuthSessionProvider>
-        </SafeAreaProvider>
-      </AppI18nGate>
+      <AppThemeProvider>
+        <AppI18nGate>
+          <SafeAreaProvider>
+            <AuthSessionProvider>
+              <RedemptionModeProvider>
+                <OwnerRedemptionSecurityProvider>
+                  <TabModeProvider>
+                    <DiagnosticBootLog />
+                    <AppErrorBoundary>
+                      <RootNavigationStack />
+                    </AppErrorBoundary>
+                    <ConsumerOnboardingGate />
+                  </TabModeProvider>
+                </OwnerRedemptionSecurityProvider>
+              </RedemptionModeProvider>
+            </AuthSessionProvider>
+          </SafeAreaProvider>
+        </AppI18nGate>
+      </AppThemeProvider>
     </AppErrorBoundary>
   );
 }

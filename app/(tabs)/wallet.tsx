@@ -497,7 +497,7 @@ export default function WalletScreen() {
               paddingHorizontal: Spacing.md,
               marginBottom: Spacing.md,
               borderWidth: 1,
-              borderColor: urgent ? "#ea580c" : Colors.light.primary,
+              borderColor: urgent ? "#ea580c" : theme.primary,
             }}
           >
             <Text

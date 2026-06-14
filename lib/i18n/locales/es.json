@@ -401,6 +401,16 @@
     "spanish": "Español",
     "korean": "Coreano"
   },
+  "appearance": {
+    "sectionTitle": "Apariencia",
+    "sectionHelp": "Elige como se ve Twofer en este dispositivo.",
+    "system": "Sistema",
+    "systemHint": "Como el telefono",
+    "light": "Claro",
+    "lightHint": "Modo claro",
+    "dark": "Oscuro",
+    "darkHint": "Modo oscuro"
+  },
   "account": {
     "title": "Cuenta",
     "alertsEnableHint": "Activa las notificaciones para alertas de ofertas.",

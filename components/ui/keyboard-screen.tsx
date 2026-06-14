@@ -1,5 +1,6 @@
 import { useHeaderHeight } from "@react-navigation/elements";
-import { Colors, Gray } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   InputAccessoryView,
   Keyboard,
@@ -55,6 +56,8 @@ export const FORM_SCROLL_KEYBOARD_PROPS: Pick<
 export const IOS_DONE_INPUT_ACCESSORY_ID = "twofer-ios-done-input-accessory";
 
 export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: string; onPress?: () => void }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   if (Platform.OS !== "ios") return null;
   const handlePress = onPress ?? Keyboard.dismiss;
   return (
@@ -65,8 +68,8 @@ export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: str
           alignItems: "flex-end",
           justifyContent: "center",
           borderTopWidth: 1,
-          borderTopColor: Gray[300],
-          backgroundColor: Gray[50],
+          borderTopColor: theme.border,
+          backgroundColor: theme.surface,
           paddingHorizontal: 12,
         }}
       >
@@ -76,7 +79,7 @@ export function IosDoneInputAccessory({ label = "Done", onPress }: { label?: str
           onPress={handlePress}
           style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 12 }}
         >
-          <Text style={{ color: Colors.light.accentText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          <Text style={{ color: theme.accentText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {label}
           </Text>
         </Pressable>

@@ -6,6 +6,7 @@ import QRCode from "react-native-qrcode-svg";
 import { Colors, Controls, Gray, Radii } from "@/constants/theme";
 import { formatAppDateTime } from "@/lib/i18n/format-datetime";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type WalletRedeemModalProps = {
   visible: boolean;
@@ -45,6 +46,8 @@ export function WalletRedeemModal({
 }: WalletRedeemModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -102,23 +105,23 @@ export function WalletRedeemModal({
       >
         <View
           style={{
-            backgroundColor: expired ? Gray[900] : "#fff",
+            backgroundColor: expired ? Gray[900] : theme.surface,
             borderRadius: Radii.lg,
             padding: 18,
             paddingBottom: Math.max(18, insets.bottom + 10),
             width: "100%",
             maxWidth: 400,
             borderWidth: 3,
-            borderColor: expired ? "#7f1d1d" : Colors.light.primary,
+            borderColor: expired ? "#7f1d1d" : theme.primary,
           }}
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <View
               style={{
                 flexShrink: 1,
-                backgroundColor: expired ? "#450a0a" : "#fff7ed",
+                backgroundColor: expired ? "#450a0a" : colorScheme === "dark" ? "rgba(255,159,28,0.14)" : "#fff7ed",
                 borderWidth: 1,
-                borderColor: expired ? "#7f1d1d" : "#fed7aa",
+                borderColor: expired ? "#7f1d1d" : colorScheme === "dark" ? "rgba(255,159,28,0.36)" : "#fed7aa",
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: Radii.sm,
@@ -129,7 +132,7 @@ export function WalletRedeemModal({
                   fontWeight: "900",
                   fontSize: 12,
                   letterSpacing: 0.6,
-                  color: expired ? "#fecaca" : "#9a3412",
+                  color: expired ? "#fecaca" : theme.accentText,
                 }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -139,12 +142,12 @@ export function WalletRedeemModal({
                 {expired ? t("consumerWallet.verifyExpired") : t("consumerWallet.verifyActive")}
               </Text>
             </View>
-            <Text style={{ fontSize: 12, opacity: 0.65, color: expired ? "#fca5a5" : Gray[600], flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
+            <Text style={{ fontSize: 12, opacity: 0.65, color: expired ? "#fca5a5" : theme.mutedText, flexShrink: 0 }} maxFontSizeMultiplier={1.15}>
               {formatClock(nowMs, i18n.language)}
             </Text>
           </View>
 
-          <Text style={{ fontSize: 13, opacity: 0.75, color: expired ? "#fca5a5" : Gray[600] }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          <Text style={{ fontSize: 13, opacity: 0.75, color: expired ? "#fca5a5" : theme.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
             {businessName}
           </Text>
           <Text
@@ -153,7 +156,7 @@ export function WalletRedeemModal({
               fontWeight: "800",
               marginTop: 4,
               marginBottom: 12,
-              color: expired ? "#fff" : Gray[900],
+              color: expired ? "#fff" : theme.text,
             }}
             numberOfLines={2}
             adjustsFontSizeToFit
@@ -194,7 +197,7 @@ export function WalletRedeemModal({
                   padding: 10,
                   borderRadius: Radii.lg,
                   borderWidth: 2,
-                  borderColor: Colors.light.primary,
+              borderColor: theme.primary,
                   backgroundColor: "#fff",
                 }}
               >
@@ -295,12 +298,12 @@ export function WalletRedeemModal({
               minHeight: Controls.buttonHeight,
               justifyContent: "center",
               borderRadius: Radii.md,
-              backgroundColor: expired ? Gray[700] : Colors.light.primary,
+              backgroundColor: expired ? Gray[700] : theme.primary,
               marginBottom: 8,
             }}
           >
             <Text
-              style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}
+              style={{ color: expired ? "#fff" : theme.primaryText, fontWeight: "800", textAlign: "center" }}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.8}

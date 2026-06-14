@@ -28,6 +28,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useTabMode } from "@/lib/tab-mode";
@@ -72,6 +73,8 @@ function EndEarlyButton({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const scale = useSharedValue(1);
   const rStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
@@ -90,8 +93,8 @@ function EndEarlyButton({
           minHeight: Controls.buttonHeight,
           borderRadius: Radii.md,
           borderWidth: 2,
-          borderColor: Colors.light.danger,
-          backgroundColor: Colors.light.surface,
+          borderColor: theme.danger,
+          backgroundColor: theme.surface,
           alignItems: "center",
           justifyContent: "center",
           opacity: disabled ? 0.65 : 1,
@@ -101,7 +104,7 @@ function EndEarlyButton({
     >
       <Text
         style={{
-          color: Colors.light.danger,
+          color: theme.danger,
           fontWeight: "800",
           fontSize: 15,
           ...(Fonts.sans ? { fontFamily: Fonts.sans } : {}),
@@ -207,6 +210,8 @@ function WeeklyClaimsChart({
   values: number[];
   primary: string;
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const max = Math.max(1, ...values);
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-end", height: 120, gap: 5 }}>
@@ -228,7 +233,7 @@ function WeeklyClaimsChart({
                 marginTop: Spacing.sm,
                 fontSize: 11,
                 fontWeight: "700",
-                color: Colors.light.text,
+                color: theme.text,
                 opacity: 0.45,
               }}
             >
@@ -254,6 +259,8 @@ function MetricTile({
   delay: number;
   fullWidth?: boolean;
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
     <Animated.View
       entering={FadeInDown.duration(420).delay(delay).springify()}
@@ -264,7 +271,7 @@ function MetricTile({
         style={{
           fontSize: 12,
           fontWeight: "700",
-          color: Colors.light.text,
+          color: theme.text,
           opacity: 0.48,
           letterSpacing: 0.2,
         }}
@@ -277,14 +284,14 @@ function MetricTile({
           fontSize: 26,
           fontWeight: "800",
           marginTop: Spacing.sm,
-          color: Colors.light.text,
+          color: theme.text,
           letterSpacing: -0.6,
         }}
       >
         {value}
       </Text>
       {sublabel ? (
-        <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.5, fontWeight: "600" }}>{sublabel}</Text>
+        <Text style={{ marginTop: 6, fontSize: 12, opacity: 0.5, fontWeight: "600", color: theme.text }}>{sublabel}</Text>
       ) : null}
       </CardShell>
     </Animated.View>
@@ -302,6 +309,8 @@ function SnapshotMetric({
   sublabel?: string;
   accent?: boolean;
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
     <View
       style={{
@@ -311,15 +320,15 @@ function SnapshotMetric({
         minHeight: 86,
         borderRadius: Radii.lg,
         borderWidth: 1,
-        borderColor: Colors.light.border,
-        backgroundColor: Colors.light.surface,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
         paddingHorizontal: 10,
         paddingVertical: Spacing.md,
         justifyContent: "center",
       }}
     >
       <Text
-        style={{ fontSize: 12, lineHeight: 15, fontWeight: "800", color: Colors.light.mutedText }}
+        style={{ fontSize: 12, lineHeight: 15, fontWeight: "800", color: theme.mutedText }}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.68}
@@ -332,7 +341,7 @@ function SnapshotMetric({
           marginTop: 4,
           fontSize: 24,
           fontWeight: "900",
-          color: accent ? Colors.light.accentText : Colors.light.text,
+          color: accent ? theme.accentText : theme.text,
         }}
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -343,7 +352,7 @@ function SnapshotMetric({
       </Text>
       {sublabel ? (
         <Text
-          style={{ marginTop: 4, fontSize: 12, lineHeight: 15, fontWeight: "600", color: Colors.light.mutedText }}
+          style={{ marginTop: 4, fontSize: 12, lineHeight: 15, fontWeight: "600", color: theme.mutedText }}
           numberOfLines={2}
           adjustsFontSizeToFit
           minimumFontScale={0.74}
@@ -365,6 +374,8 @@ function DealStatPill({
   value: string;
   accent?: boolean;
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
     <View
       style={{
@@ -372,14 +383,18 @@ function DealStatPill({
         flexBasis: "30%",
         minWidth: 86,
         borderRadius: Radii.pill,
-        backgroundColor: accent ? "rgba(255,159,28,0.14)" : Colors.light.surfaceMuted,
+        backgroundColor: accent
+          ? colorScheme === "dark"
+            ? "rgba(255,159,28,0.18)"
+            : "rgba(255,159,28,0.14)"
+          : theme.surfaceMuted,
         borderWidth: 1,
-        borderColor: accent ? "rgba(255,159,28,0.34)" : Colors.light.border,
+        borderColor: accent ? "rgba(255,159,28,0.34)" : theme.border,
         paddingHorizontal: Spacing.md,
         paddingVertical: 8,
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.light.mutedText }} numberOfLines={1}>
+      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText }} numberOfLines={1}>
         {label}
       </Text>
       <Text
@@ -387,7 +402,7 @@ function DealStatPill({
           marginTop: 2,
           fontSize: 15,
           fontWeight: "900",
-          color: accent ? Colors.light.accentText : Colors.light.text,
+          color: accent ? theme.accentText : theme.text,
         }}
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -410,6 +425,8 @@ function ScrollFilterRow({
   onSelect: (key: string) => void;
   activeTone?: "primary" | "subtle";
 }) {
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   return (
     <ScrollView
       horizontal
@@ -429,15 +446,15 @@ function ScrollFilterRow({
               paddingVertical: 6,
               borderRadius: Radii.pill,
               borderWidth: subtleActive ? 1 : 0,
-              borderColor: subtleActive ? Colors.light.primary : "transparent",
-              backgroundColor: primaryActive ? Colors.light.primary : Colors.light.surfaceMuted,
+              borderColor: subtleActive ? theme.primary : "transparent",
+              backgroundColor: primaryActive ? theme.primary : theme.surfaceMuted,
             }}
           >
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: active ? "800" : "600",
-                color: primaryActive ? Colors.light.primaryText : subtleActive ? Colors.light.accentText : Gray[700],
+                color: primaryActive ? theme.primaryText : subtleActive ? theme.accentText : colorScheme === "dark" ? theme.text : Gray[700],
               }}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -495,7 +512,9 @@ export default function BusinessDashboard() {
   const [exportingAnalytics, setExportingAnalytics] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  const primary = Colors.light.primary;
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
+  const primary = theme.primary;
 
   const billingBlocked = Boolean(
     PAID_BILLING_ENABLED &&
@@ -1081,10 +1100,10 @@ export default function BusinessDashboard() {
         <CardShell>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: "800", color: Colors.light.accentText }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: theme.accentText }}>
                 {t("offersDashboard.snapshotEyebrow", { defaultValue: "Merchant snapshot" })}
               </Text>
-              <Text style={{ marginTop: 4, fontSize: 21, fontWeight: "900", color: Colors.light.text, letterSpacing: -0.2 }}>
+              <Text style={{ marginTop: 4, fontSize: 21, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}>
                 {liveDeals.length > 0
                   ? liveDeals.length === 1
                     ? t("offersDashboard.snapshotLiveTitleOne", {
@@ -1098,16 +1117,16 @@ export default function BusinessDashboard() {
                       defaultValue: "No live deal right now",
                     })}
               </Text>
-              <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+              <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: theme.mutedText }}>
                 {lastUpdatedLabel}
               </Text>
             </View>
             <View
               style={{
                 borderRadius: Radii.pill,
-                backgroundColor: liveDeals.length > 0 ? "rgba(255,159,28,0.16)" : Colors.light.surfaceMuted,
+                backgroundColor: liveDeals.length > 0 ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
                 borderWidth: 1,
-                borderColor: liveDeals.length > 0 ? "rgba(255,159,28,0.36)" : Colors.light.border,
+                borderColor: liveDeals.length > 0 ? "rgba(255,159,28,0.36)" : theme.border,
                 paddingHorizontal: Spacing.md,
                 paddingVertical: 7,
               }}
@@ -1116,7 +1135,7 @@ export default function BusinessDashboard() {
                 style={{
                   fontSize: 12,
                   fontWeight: "900",
-                  color: liveDeals.length > 0 ? Colors.light.accentText : Colors.light.mutedText,
+                  color: liveDeals.length > 0 ? theme.accentText : theme.mutedText,
                 }}
               >
                 {t("offersDashboard.liveDealCount", {
@@ -1161,7 +1180,7 @@ export default function BusinessDashboard() {
             />
           </View>
 
-          <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: Colors.light.mutedText }}>
+          <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
             {t("offersDashboard.dashboardDataNote", {
               defaultValue: "Claims and redemptions use customer activity. Engagement shows opens when available, otherwise redemption rate after claims.",
             })}
@@ -1176,10 +1195,10 @@ export default function BusinessDashboard() {
         {billingBlocked ? (
           <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
             <CardShell variant="muted">
-              <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
+              <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
                 {t("offersDashboard.billingHintShort")}
               </Text>
-              <Text style={{ marginTop: 6, fontSize: 14, opacity: 0.65, fontWeight: "600" }}>
+              <Text style={{ marginTop: 6, fontSize: 14, opacity: 0.65, fontWeight: "600", color: theme.text }}>
                 {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
               </Text>
             </CardShell>
@@ -1191,7 +1210,7 @@ export default function BusinessDashboard() {
               fontWeight: "800",
               fontSize: 17,
               letterSpacing: -0.2,
-              color: Colors.light.text,
+              color: theme.text,
               flex: 1,
             }}
           >
@@ -1233,7 +1252,7 @@ export default function BusinessDashboard() {
             </Pressable>
             {selectedDealIds.size > 0 ? (
               <Pressable onPress={() => setSelectedDealIds(new Set())}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.mutedText }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
                   {t("offersDashboard.deselectAll", "Deselect all")}
                 </Text>
               </Pressable>
@@ -1253,7 +1272,7 @@ export default function BusinessDashboard() {
               onSelect={(k) => setDealFilter(k as typeof dealFilter)}
             />
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.light.mutedText }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.mutedText }}>
                 {t("offersDashboard.sortPrefix")}
               </Text>
               <View style={{ flex: 1 }}>
@@ -1270,7 +1289,7 @@ export default function BusinessDashboard() {
               </View>
             </View>
             {dealFilter !== "all" ? (
-              <Text style={{ fontSize: 13, color: Colors.light.mutedText }}>
+              <Text style={{ fontSize: 13, color: theme.mutedText }}>
                 {t("offersDashboard.showingFiltered", { shown: filteredDeals.length, total: deals.length })}
               </Text>
             ) : null}
@@ -1289,6 +1308,7 @@ export default function BusinessDashboard() {
       selectedDealIds.size,
       filteredDeals,
       primary,
+      theme,
       liveDeals.length,
       lastUpdatedLabel,
       monthClaims,
@@ -1304,7 +1324,7 @@ export default function BusinessDashboard() {
     () => (
       <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: Colors.light.text }}>
+          <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: theme.text }}>
             {t("offersDashboard.overview")}
           </Text>
           {filteredDeals.length > 0 ? (
@@ -1315,10 +1335,10 @@ export default function BusinessDashboard() {
             />
           ) : null}
         </View>
-        <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18 }}>{t("offersDashboard.periodHint")}</Text>
+        <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18, color: theme.text }}>{t("offersDashboard.periodHint")}</Text>
 
         <CardShell variant="muted">
-          <Text style={{ fontSize: 15, fontWeight: "600", color: Colors.light.text, opacity: 0.88 }}>
+          <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text, opacity: 0.88 }}>
             {t("offersDashboard.monthlyStatsSummary", {
               claims: monthClaims,
               redeems: monthRedeems,
@@ -1407,11 +1427,11 @@ export default function BusinessDashboard() {
                   backgroundColor: primary,
                 }}
               />
-              <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text, flex: 1 }}>
+              <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text, flex: 1 }}>
                 {t("offersDashboard.dataCoverageTitle", { defaultValue: "What this dashboard can prove" })}
               </Text>
             </View>
-            <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600" }}>
+            <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600", color: theme.text }}>
               {t("offersDashboard.dataCoverageBody", {
                 defaultValue: "Twofer shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
               })}
@@ -1421,11 +1441,11 @@ export default function BusinessDashboard() {
 
         <Animated.View entering={FadeInDown.duration(440).delay(160).springify()}>
           <CardShell>
-            <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: Colors.light.text }}>
+            <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: theme.text }}>
               {t("offersDashboard.chartTitle")}
             </Text>
             <WeeklyClaimsChart labels={weekLabels} values={weekCounts} primary={primary} />
-            <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600" }}>
+            <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600", color: theme.text }}>
               {t("offersDashboard.chartFooter")}
             </Text>
           </CardShell>
@@ -1433,7 +1453,7 @@ export default function BusinessDashboard() {
 
         <CardShell variant="muted">
           <Pressable onPress={() => setInsightsOpen((v) => !v)} accessibilityRole="button">
-            <Text style={{ fontWeight: "800", fontSize: 15, color: Colors.light.text }}>
+            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
               {insightsOpen ? t("offersDashboard.insightsCollapse") : t("offersDashboard.insightsExpand")}
             </Text>
           </Pressable>
@@ -1450,6 +1470,7 @@ export default function BusinessDashboard() {
     [
       t,
       primary,
+      theme,
       router,
       monthImpressions,
       monthOpens,
@@ -1475,7 +1496,7 @@ export default function BusinessDashboard() {
 
   if (!modeReady) {
     return (
-      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
+      <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
         <LoadingSkeleton rows={2} />
       </View>
     );
@@ -1490,7 +1511,7 @@ export default function BusinessDashboard() {
 
   return (
     <AppErrorBoundary>
-    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: Colors.light.background }}>
+    <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <WelcomeWalkthrough
         visible={showWalkthrough}
         onDismiss={dismissWalkthrough}
@@ -1503,13 +1524,13 @@ export default function BusinessDashboard() {
       </Animated.View>
 
       {!isLoggedIn ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7, fontWeight: "500" }}>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, fontWeight: "500", color: theme.text }}>
           {t("offersDashboard.loginPrompt")}
         </Text>
       ) : loading ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.loading")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("offersDashboard.loading")}</Text>
       ) : !businessId ? (
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("offersDashboard.needBusiness")}</Text>
+        <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
           {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
@@ -1524,7 +1545,7 @@ export default function BusinessDashboard() {
               keyExtractor={(item) => item.id}
               ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
               contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
               onEndReachedThreshold={0.35}
               onEndReached={() => void loadMoreDeals()}
@@ -1545,7 +1566,7 @@ export default function BusinessDashboard() {
                       style={{
                         textAlign: "center",
                         fontSize: 13,
-                        color: Colors.light.mutedText,
+                        color: theme.mutedText,
                         marginTop: Spacing.md,
                         marginBottom: Spacing.sm,
                       }}
@@ -1594,14 +1615,14 @@ export default function BusinessDashboard() {
                                   height: 24,
                                   borderRadius: 12,
                                   borderWidth: 2,
-                                  borderColor: selectedDealIds.has(item.id) ? primary : Colors.light.border,
+                                  borderColor: selectedDealIds.has(item.id) ? primary : theme.border,
                                   backgroundColor: selectedDealIds.has(item.id) ? primary : "transparent",
                                   alignItems: "center",
                                   justifyContent: "center",
                                 }}
                               >
                                 {selectedDealIds.has(item.id) ? (
-                                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>✓</Text>
+                                  <Text style={{ color: theme.primaryText, fontSize: 14, fontWeight: "800" }}>✓</Text>
                                 ) : null}
                               </View>
                             </View>
@@ -1618,13 +1639,13 @@ export default function BusinessDashboard() {
                                 height: 88,
                                 width: 88,
                                 borderRadius: 16,
-                                backgroundColor: Gray[100],
+                                backgroundColor: theme.surfaceMuted,
                               }}
                             />
                           )}
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
-                              <Text style={{ fontWeight: "800", fontSize: 17, flex: 1 }} numberOfLines={2}>
+                                <Text style={{ fontWeight: "800", fontSize: 17, flex: 1, color: theme.text }} numberOfLines={2}>
                                 {item.title ?? t("offersDashboard.dealFallback")}
                               </Text>
                               {item.is_recurring ? (
@@ -1633,10 +1654,10 @@ export default function BusinessDashboard() {
                                     paddingHorizontal: Spacing.sm,
                                     paddingVertical: 4,
                                     borderRadius: 999,
-                                    backgroundColor: "rgba(17,17,17,0.08)",
+                                    backgroundColor: colorScheme === "dark" ? theme.surfaceMuted : "rgba(17,17,17,0.08)",
                                   }}
                                 >
-                                  <Text style={{ fontSize: 10, fontWeight: "800", color: Gray[700] }}>
+                                  <Text style={{ fontSize: 10, fontWeight: "800", color: colorScheme === "dark" ? theme.mutedText : Gray[700] }}>
                                     {t("offersDashboard.badgeRecurring")}
                                   </Text>
                                 </View>
@@ -1646,14 +1667,18 @@ export default function BusinessDashboard() {
                                   paddingHorizontal: Spacing.sm,
                                   paddingVertical: 4,
                                   borderRadius: 999,
-                                  backgroundColor: active ? PrimaryTint.surfaceStrong : Gray[100],
+                                  backgroundColor: active
+                                    ? colorScheme === "dark"
+                                      ? "rgba(255,159,28,0.18)"
+                                      : PrimaryTint.surfaceStrong
+                                    : theme.surfaceMuted,
                                 }}
                               >
                                 <Text
                                   style={{
                                     fontSize: 11,
                                     fontWeight: "800",
-                                    color: active ? Colors.light.accentText : Gray[600],
+                                    color: active ? theme.accentText : colorScheme === "dark" ? theme.mutedText : Gray[600],
                                   }}
                                 >
                                   {statusBadgeLabel(sched, item)}
@@ -1661,7 +1686,7 @@ export default function BusinessDashboard() {
                               </View>
                             </View>
                             <Text
-                              style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 13, fontWeight: "600" }}
+                              style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 13, fontWeight: "600", color: theme.text }}
                               numberOfLines={2}
                             >
                               {formatValiditySummary(item, {
@@ -1723,21 +1748,21 @@ export default function BusinessDashboard() {
               ListEmptyComponent={
                 deals.length === 0 ? (
                   <CardShell>
-                    <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text, letterSpacing: -0.2 }}>
+                    <Text style={{ fontSize: 20, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}>
                       {t("offersDashboard.emptyFirstDealTitle", {
                         defaultValue: "Launch your first Twofer deal",
                       })}
                     </Text>
-                    <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, fontWeight: "600", color: Colors.light.mutedText }}>
+                    <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, fontWeight: "600", color: theme.mutedText }}>
                       {t("offersDashboard.emptyFirstDealBody", {
                         defaultValue: "Create one strong 2-for-1 offer. After customers claim or redeem it, this dashboard will show the real activity.",
                       })}
                     </Text>
                     <View style={{ marginTop: Spacing.md, gap: Spacing.xs }}>
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: Colors.light.text }}>
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>
                         {t("offersDashboard.emptyNextStep", { defaultValue: "Next step: publish a deal customers can claim today." })}
                       </Text>
-                      <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: "600", color: Colors.light.mutedText }}>
+                      <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
                         {t("offersDashboard.emptyMetricsNote", {
                           defaultValue: "Claims, redemptions, and engagement will stay blank until there is customer activity.",
                         })}
@@ -1751,10 +1776,10 @@ export default function BusinessDashboard() {
                   </CardShell>
                 ) : (
                   <CardShell variant="muted">
-                    <Text style={{ fontSize: 17, fontWeight: "900", color: Colors.light.text }}>
+                    <Text style={{ fontSize: 17, fontWeight: "900", color: theme.text }}>
                       {t("offersDashboard.noFilteredDealsTitle", { defaultValue: "No deals match this view" })}
                     </Text>
-                    <Text style={{ marginTop: Spacing.sm, fontSize: 14, lineHeight: 20, fontWeight: "600", color: Colors.light.mutedText }}>
+                    <Text style={{ marginTop: Spacing.sm, fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
                       {t("offersDashboard.noFilteredDealsBody", {
                         defaultValue: "Clear filters to see all existing deals and their activity.",
                       })}
@@ -1782,9 +1807,9 @@ export default function BusinessDashboard() {
             bottom: 0,
             left: 0,
             right: 0,
-            backgroundColor: Colors.light.background,
+            backgroundColor: theme.background,
             borderTopWidth: 1,
-            borderTopColor: Colors.light.border,
+            borderTopColor: theme.border,
             paddingHorizontal: horizontal,
             paddingVertical: Spacing.md,
             paddingBottom: Spacing.xl,
@@ -1810,7 +1835,7 @@ export default function BusinessDashboard() {
                 }}
               >
                 <Text
-                  style={{ color: "#fff", fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  style={{ color: theme.primaryText, fontWeight: "800", fontSize: 14, textAlign: "center" }}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.72}
@@ -1825,7 +1850,7 @@ export default function BusinessDashboard() {
                   flex: 1,
                   minHeight: Controls.buttonHeight,
                   borderRadius: Radii.md,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                   borderWidth: 1.5,
                   borderColor: primary,
                   alignItems: "center",
@@ -1848,15 +1873,15 @@ export default function BusinessDashboard() {
                   flex: 1,
                   minHeight: Controls.buttonHeight,
                   borderRadius: Radii.md,
-                  backgroundColor: Colors.light.surface,
+                  backgroundColor: theme.surface,
                   borderWidth: 1.5,
-                  borderColor: Colors.light.danger,
+                  borderColor: theme.danger,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 <Text
-                  style={{ color: Colors.light.danger, fontWeight: "800", fontSize: 14, textAlign: "center" }}
+                  style={{ color: theme.danger, fontWeight: "800", fontSize: 14, textAlign: "center" }}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.72}
@@ -1884,12 +1909,12 @@ export default function BusinessDashboard() {
           {dealManageFor ? (
             <View
               style={{
-                backgroundColor: Colors.light.background,
+                backgroundColor: theme.background,
                 borderTopLeftRadius: Radii.lg,
                 borderTopRightRadius: Radii.lg,
                 borderWidth: 1,
                 borderBottomWidth: 0,
-                borderColor: Colors.light.border,
+                borderColor: theme.border,
                 padding: Spacing.lg,
                 paddingBottom: Spacing.xl,
                 gap: Spacing.sm,
@@ -1901,7 +1926,7 @@ export default function BusinessDashboard() {
                   width: 42,
                   height: 5,
                   borderRadius: Radii.pill,
-                  backgroundColor: "rgba(17,24,28,0.16)",
+                  backgroundColor: colorScheme === "dark" ? theme.border : "rgba(17,24,28,0.16)",
                   marginBottom: Spacing.xs,
                 }}
               />
@@ -1909,11 +1934,11 @@ export default function BusinessDashboard() {
                 style={{
                   paddingBottom: Spacing.sm,
                   borderBottomWidth: 1,
-                  borderBottomColor: Colors.light.border,
+                  borderBottomColor: theme.border,
                   marginBottom: Spacing.xs,
                 }}
               >
-                <Text style={{ fontWeight: "900", fontSize: 18, lineHeight: 23, color: Colors.light.text }} numberOfLines={2}>
+                <Text style={{ fontWeight: "900", fontSize: 18, lineHeight: 23, color: theme.text }} numberOfLines={2}>
                   {dealManageFor.title ?? t("offersDashboard.dealFallback")}
                 </Text>
               </View>
@@ -1973,7 +1998,7 @@ export default function BusinessDashboard() {
               {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (
                 endingDealId === dealManageFor.id ? (
                   <View style={{ padding: Spacing.md, alignItems: "center" }}>
-                    <ActivityIndicator color={Colors.light.danger} />
+                    <ActivityIndicator color={theme.danger} />
                   </View>
                 ) : (
                   <EndEarlyButton

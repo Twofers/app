@@ -13,6 +13,7 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type SessionCheck = "unknown" | "ok" | "missing";
 
@@ -21,6 +22,8 @@ export default function ResetPasswordScreen() {
   const { session, isInitialLoading: authLoading } = useAuthSession();
   const router = useRouter();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,15 +65,15 @@ export default function ResetPasswordScreen() {
 
   if (sessionCheck === "unknown") {
     return (
-      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, justifyContent: "center" }}>
-        <Text style={{ opacity: 0.7 }}>{t("passwordRecovery.checkingSession")}</Text>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, justifyContent: "center", backgroundColor: theme.background }}>
+        <Text style={{ opacity: 0.7, color: theme.text }}>{t("passwordRecovery.checkingSession")}</Text>
       </View>
     );
   }
 
   if (sessionCheck === "missing" && !success) {
     return (
-      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
         <Banner message={t("passwordRecovery.invalidSession")} tone="error" />
         <PrimaryButton
           title={t("passwordRecovery.backToSignIn")}
@@ -78,7 +81,7 @@ export default function ResetPasswordScreen() {
           style={{ marginTop: Spacing.lg }}
         />
         <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.sectionTitle")}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.sectionTitle")}</Text>
           <LegalExternalLinks />
         </View>
       </View>
@@ -86,16 +89,16 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <KeyboardScreen>
-    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
+    <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
       <ScrollView
         style={{ flex: 1 }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}>{t("passwordRecovery.resetTitle")}</Text>
-        <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("passwordRecovery.resetTitle")}</Text>
+        <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
           {t("passwordRecovery.resetSubtitle")}
         </Text>
 
@@ -112,7 +115,7 @@ export default function ResetPasswordScreen() {
           <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
             {error ? <Banner message={error} tone="error" /> : null}
             <View>
-              <Text style={{ fontWeight: "600" }}>{t("passwordRecovery.newPassword")}</Text>
+              <Text style={{ fontWeight: "600", color: theme.text }}>{t("passwordRecovery.newPassword")}</Text>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -121,16 +124,18 @@ export default function ResetPasswordScreen() {
                 editable={!busy}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: 12,
                   padding: 12,
                   marginTop: 6,
                   fontSize: 16,
+                  color: theme.text,
+                  backgroundColor: theme.surface,
                 }}
               />
             </View>
             <View>
-              <Text style={{ fontWeight: "600" }}>{t("passwordRecovery.confirmPassword")}</Text>
+              <Text style={{ fontWeight: "600", color: theme.text }}>{t("passwordRecovery.confirmPassword")}</Text>
               <TextInput
                 value={confirm}
                 onChangeText={setConfirm}
@@ -139,25 +144,27 @@ export default function ResetPasswordScreen() {
                 editable={!busy}
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.light.border,
+                  borderColor: theme.border,
                   borderRadius: 12,
                   padding: 12,
                   marginTop: 6,
                   fontSize: 16,
+                  color: theme.text,
+                  backgroundColor: theme.surface,
                 }}
               />
             </View>
-            <Text style={{ fontSize: 13, opacity: 0.55 }}>{t("passwordRecovery.passwordRulesHint", { min: PASSWORD_MIN_LENGTH })}</Text>
+            <Text style={{ fontSize: 13, opacity: 0.55, color: theme.text }}>{t("passwordRecovery.passwordRulesHint", { min: PASSWORD_MIN_LENGTH })}</Text>
             <PrimaryButton
               title={busy ? t("passwordRecovery.saving") : t("passwordRecovery.saveNewPassword")}
               onPress={() => void onSubmit()}
               disabled={busy}
             />
             <Pressable onPress={() => router.back()} disabled={busy} style={{ paddingVertical: Spacing.sm }}>
-              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center" }}>{t("commonUi.goBack")}</Text>
+              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center", color: theme.text }}>{t("commonUi.goBack")}</Text>
             </Pressable>
             <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
-              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68 }}>{t("legal.sectionTitle")}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.sectionTitle")}</Text>
               <LegalExternalLinks />
             </View>
           </View>

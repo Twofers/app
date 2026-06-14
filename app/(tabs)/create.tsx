@@ -209,14 +209,14 @@ export default function CreateDeal() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.xl,
-              backgroundColor: Colors.light.primary,
+              backgroundColor: theme.primary,
               alignItems: "center",
             }}
           >
-            <Text style={{ fontSize: 20, fontWeight: "900", color: "#fff", letterSpacing: 0.2 }}>
+            <Text style={{ fontSize: 20, fontWeight: "900", color: theme.primaryText, letterSpacing: 0.2 }}>
               {t("createHub.newDeal")}
             </Text>
-            <Text style={{ fontSize: 14, color: "#fff", opacity: 0.88, marginTop: 6 }}>
+            <Text style={{ fontSize: 14, color: theme.primaryText, opacity: 0.88, marginTop: 6 }}>
               {t("createHub.newDealSub")}
             </Text>
           </Pressable>
@@ -227,9 +227,9 @@ export default function CreateDeal() {
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.lg,
-              backgroundColor: Colors.light.surface,
+              backgroundColor: theme.surface,
               borderWidth: 1.5,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
               alignItems: "center",
             }}
           >

@@ -263,7 +263,7 @@ export default function RedeemScanner() {
               padding: Spacing.lg,
               backgroundColor: colorScheme === "dark" ? "#2b1c08" : "#fff7ed",
               borderWidth: 1,
-              borderColor: Colors.light.primary,
+              borderColor: theme.primary,
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
@@ -274,10 +274,10 @@ export default function RedeemScanner() {
                   borderRadius: 17,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: Colors.light.primary,
+                  backgroundColor: theme.primary,
                 }}
               >
-                <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }}>OK</Text>
+                <Text style={{ color: theme.primaryText, fontWeight: "900", fontSize: 12 }}>OK</Text>
               </View>
               <Text style={{ fontWeight: "900", fontSize: 18, color: theme.text }}>{t("redeem.redeemed")}</Text>
             </View>

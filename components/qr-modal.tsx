@@ -8,6 +8,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type Sh
 import { Colors, Controls, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { DEFAULT_CLAIM_GRACE_MINUTES, getClaimRedeemDeadlineIso } from "@/lib/claim-redeem-deadline";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type QrModalProps = {
   visible: boolean;
@@ -79,6 +80,8 @@ export function QrModal({
 }: QrModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const [remaining, setRemaining] = useState<string | null>(null);
   const tick = false;
   const [toastVisible, setToastVisible] = useState(false);
@@ -265,7 +268,7 @@ export function QrModal({
                     paddingHorizontal: 10,
                     paddingVertical: 6,
                     borderRadius: 999,
-                    backgroundColor: Colors.light.primary,
+                    backgroundColor: theme.primary,
                   }}
                 >
                   <Text style={{ color: "#11181C", fontWeight: "900", fontSize: 12 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
@@ -332,7 +335,7 @@ export function QrModal({
                   padding: 12,
                   borderRadius: Radii.lg,
                   borderWidth: 2,
-                  borderColor: Colors.light.primary,
+                  borderColor: theme.primary,
                   backgroundColor: "#fff",
                 }}
               >
@@ -405,11 +408,11 @@ export function QrModal({
                 minHeight: Controls.buttonHeight,
                 justifyContent: "center",
                 borderRadius: Radii.md,
-                backgroundColor: Colors.light.primary,
+                backgroundColor: theme.primary,
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
+              <Text style={{ color: theme.primaryText, fontWeight: "700", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                 {t("consumerWallet.hideQr")}
               </Text>
             </HapticScalePressable>
@@ -444,19 +447,19 @@ export function QrModal({
                     justifyContent: "center",
                     borderRadius: Radii.md,
                     borderWidth: 2,
-                    borderColor: Colors.light.primary,
+                    borderColor: theme.primary,
                     backgroundColor: "#fff",
                     opacity: sharing ? 0.6 : 1,
                   }}
                 >
-                  <Text style={{ color: Colors.light.primary, fontWeight: "800", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
+                  <Text style={{ color: theme.primary, fontWeight: "800", textAlign: "center" }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.15}>
                     {sharing
                       ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
                       : t("shareDeal.sendToFriend", { defaultValue: "Send to a friend" })}
                   </Text>
                 </HapticScalePressable>
                 {shareError ? (
-                  <Text style={{ marginTop: 8, color: Colors.light.danger, fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+                  <Text style={{ marginTop: 8, color: theme.danger, fontSize: 13, fontWeight: "700", textAlign: "center" }} maxFontSizeMultiplier={1.15}>
                     {shareError}
                   </Text>
                 ) : null}

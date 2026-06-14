@@ -31,6 +31,9 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+
+type AppTheme = typeof Colors.light;
 
 type DealLite = {
   id: string;
@@ -139,11 +142,11 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   };
 }
 
-function renderMapLoading(t: (key: string) => string) {
+function renderMapLoading(t: (key: string) => string, theme: AppTheme) {
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator size="large" color={Colors.light.primary} />
-      <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13 }}>{t("consumerMap.loadingMap")}</Text>
+      <ActivityIndicator size="large" color={theme.primary} />
+      <Text style={{ marginTop: Spacing.md, opacity: 0.65, fontSize: 13, color: theme.text }}>{t("consumerMap.loadingMap")}</Text>
     </View>
   );
 }
@@ -181,6 +184,8 @@ function renderMapCanvas({
   selectedBusiness,
   previewDeal,
   previewPosterUri,
+  theme,
+  colorScheme,
 }: {
   horizontal: number;
   loadMapData: () => Promise<void>;
@@ -203,6 +208,8 @@ function renderMapCanvas({
   selectedBusiness: MarkerWithLive | null;
   previewDeal: DealLite | null;
   previewPosterUri: string | null;
+  theme: AppTheme;
+  colorScheme: "light" | "dark";
 }) {
   return (
     <View style={{ flex: 1 }}>
@@ -219,14 +226,14 @@ function renderMapCanvas({
           width: 44,
           height: 44,
           borderRadius: 22,
-          backgroundColor: "#fff",
+          backgroundColor: theme.surface,
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 1,
-          borderColor: Colors.light.border,
+          borderColor: theme.border,
         }}
       >
-        <MaterialIcons name="refresh" size={22} color={Gray[700]} />
+        <MaterialIcons name="refresh" size={22} color={colorScheme === "dark" ? theme.text : Gray[700]} />
       </Pressable>
       <MapView
         ref={mapRef}
@@ -277,6 +284,7 @@ function renderMapCanvas({
             deals,
             setSelectedBusinessId,
             router,
+            theme,
           }),
         )}
       </MapView>
@@ -290,10 +298,10 @@ function renderMapCanvas({
             bottom: 0,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(255,255,255,0.72)",
+            backgroundColor: colorScheme === "dark" ? "rgba(21,23,24,0.72)" : "rgba(255,255,255,0.72)",
           }}
         >
-          <ActivityIndicator size="large" color={Colors.light.primary} />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       )}
 
@@ -326,10 +334,10 @@ function renderMapCanvas({
             accessibilityRole="button"
             style={{
               borderRadius: Radii.lg,
-              backgroundColor: "#fff",
+              backgroundColor: theme.surface,
               overflow: "hidden",
               borderWidth: 1,
-              borderColor: Colors.light.border,
+              borderColor: theme.border,
             }}
           >
             {previewPosterUri ? (
@@ -340,22 +348,22 @@ function renderMapCanvas({
                 transition={250}
               />
             ) : (
-              <View style={{ width: "100%", height: 120, backgroundColor: Gray[100] }} />
+              <View style={{ width: "100%", height: 120, backgroundColor: theme.surfaceMuted }} />
             )}
             <View style={{ padding: Spacing.lg }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", opacity: 0.62, textTransform: "uppercase" }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText, textTransform: "uppercase" }}>
                 {selectedBusiness.name}
               </Text>
-              <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24 }}>
+              <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24, color: theme.text }}>
                 {previewDeal ? localizedDealTitle(previewDeal, language) || selectedBusiness.name : selectedBusiness.name}
               </Text>
               {typeof previewDeal?.price === "number" ? (
-                <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: Colors.light.accentText }}>
+                <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: theme.accentText }}>
                   ${previewDeal.price.toFixed(2)}
                 </Text>
               ) : null}
               {selectedBusiness.location ? (
-                <Text style={{ marginTop: 6, fontSize: 13, opacity: 0.6 }} numberOfLines={1}>
+                <Text style={{ marginTop: 6, fontSize: 13, color: theme.mutedText }} numberOfLines={1}>
                   {selectedBusiness.location}
                 </Text>
               ) : null}
@@ -373,15 +381,17 @@ function renderBusinessMarker({
   deals,
   setSelectedBusinessId,
   router,
+  theme,
 }: {
   marker: MarkerWithLive;
   selectedBusinessId: string | null;
   deals: DealLite[];
   setSelectedBusinessId: (id: string | null) => void;
   router: ReturnType<typeof useRouter>;
+  theme: AppTheme;
 }) {
   const isSelected = selectedBusinessId === marker.id;
-  const markerBg = isSelected || marker.live ? Colors.light.primary : Gray[700];
+  const markerBg = isSelected || marker.live ? theme.primary : Gray[700];
   const markerBorderColor = getMarkerBorderColor(isSelected, marker.live);
   return (
     <Marker
@@ -456,14 +466,16 @@ function renderMapBody({
   t,
   horizontal,
   mapCanvas,
+  theme,
 }: {
   loading: boolean;
   androidMapsOk: boolean;
   t: (key: string) => string;
   horizontal: number;
   mapCanvas: ReactNode;
+  theme: AppTheme;
 }) {
-  if (loading) return renderMapLoading(t);
+  if (loading) return renderMapLoading(t, theme);
   if (!androidMapsOk) return renderAndroidMapsUnavailable(t, horizontal);
   return mapCanvas;
 }
@@ -472,6 +484,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { top, horizontal } = useScreenInsets("tab");
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const androidMapsOk =
     Platform.OS !== "android" || Boolean(Constants.expoConfig?.extra?.androidMapsKeyConfigured);
   const [mode, setMode] = useState<"all" | "live">("all");
@@ -590,6 +604,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     selectedBusiness,
     previewDeal,
     previewPosterUri,
+    theme,
+    colorScheme,
   });
 
   // MVP impressions tracking for map:
@@ -642,7 +658,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   }, [mapReady, androidMapsOk, userPos, markers]);
 
   return (
-    <View style={{ flex: 1, paddingTop: top }}>
+    <View style={{ flex: 1, paddingTop: top, backgroundColor: theme.background }}>
       {banner ? (
         <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
           <Banner message={banner} tone="error" />
@@ -654,8 +670,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
         </View>
       ) : null}
       <View style={{ paddingHorizontal: horizontal, marginBottom: Spacing.sm }}>
-        <Text style={{ fontSize: 22, fontWeight: "800", letterSpacing: -0.2 }}>{t("consumerMap.title")}</Text>
-        <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.58, lineHeight: 18 }}>{subtitleText}</Text>
+        <Text style={{ fontSize: 22, fontWeight: "800", letterSpacing: -0.2, color: theme.text }}>{t("consumerMap.title")}</Text>
+        <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.58, lineHeight: 18, color: theme.text }}>{subtitleText}</Text>
       </View>
       {showDefaultAreaNotice ? (
         <View
@@ -664,19 +680,19 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
             marginBottom: Spacing.sm,
             borderRadius: 14,
             borderWidth: 1,
-            borderColor: "#FDBA74",
-            backgroundColor: "#FFF7ED",
+            borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.36)" : "#FDBA74",
+            backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : "#FFF7ED",
             padding: Spacing.md,
             gap: Spacing.sm,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-            <MaterialIcons name="location-off" size={18} color="#9A3412" />
-            <Text style={{ flex: 1, fontWeight: "800", color: "#7C2D12" }}>
+            <MaterialIcons name="location-off" size={18} color={theme.accentText} />
+            <Text style={{ flex: 1, fontWeight: "800", color: theme.accentText }}>
               {t("consumerMap.defaultAreaTitle", { defaultValue: "Using default area" })}
             </Text>
           </View>
-          <Text style={{ color: "#7C2D12", fontSize: 13, lineHeight: 18 }}>
+          <Text style={{ color: colorScheme === "dark" ? theme.text : "#7C2D12", fontSize: 13, lineHeight: 18 }}>
             {t("consumerMap.defaultAreaBody", {
               defaultValue: "Turn on location or add a ZIP in Settings to center nearby deals around you.",
             })}
@@ -690,10 +706,10 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
               borderRadius: Radii.pill,
               paddingHorizontal: Spacing.md,
               justifyContent: "center",
-              backgroundColor: Colors.light.primary,
+              backgroundColor: theme.primary,
             }}
           >
-            <Text style={{ color: Colors.light.primaryText, fontWeight: "800" }}>
+            <Text style={{ color: theme.primaryText, fontWeight: "800" }}>
               {t("commonUi.settings", { defaultValue: "Settings" })}
             </Text>
           </Pressable>
@@ -713,12 +729,12 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
               paddingVertical: Spacing.md,
               paddingHorizontal: Spacing.sm,
               borderRadius: Radii.pill,
-              backgroundColor: mode === "all" ? Colors.light.primary : Gray[100],
+              backgroundColor: mode === "all" ? theme.primary : theme.surfaceMuted,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? Colors.light.primaryText : Gray[700], textAlign: "center" }}>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "all" ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], textAlign: "center" }}>
               {t("consumerMap.toggleAll")}
             </Text>
           </Pressable>
@@ -734,19 +750,19 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
               paddingVertical: Spacing.md,
               paddingHorizontal: Spacing.sm,
               borderRadius: Radii.pill,
-              backgroundColor: mode === "live" ? Colors.light.primary : Gray[100],
+              backgroundColor: mode === "live" ? theme.primary : theme.surfaceMuted,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? Colors.light.primaryText : Gray[700], textAlign: "center" }}>
+            <Text style={{ fontWeight: "700", fontSize: 14, color: mode === "live" ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], textAlign: "center" }}>
               {t("consumerMap.toggleLive")}
             </Text>
           </Pressable>
         </View>
       ) : null}
 
-      {renderMapBody({ loading, androidMapsOk, t, horizontal, mapCanvas })}
+      {renderMapBody({ loading, androidMapsOk, t, horizontal, mapCanvas, theme })}
     </View>
   );
 }

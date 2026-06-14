@@ -17,6 +17,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
 import { Colors, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   BUSINESS_REPORT_REASONS,
   USER_REPORT_REASONS,
@@ -37,6 +38,8 @@ type Props = {
 export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const reasons: readonly (BusinessReportReason | UserReportReason)[] =
     mode === "business" ? BUSINESS_REPORT_REASONS : USER_REPORT_REASONS;
   const [reason, setReason] = useState<string | null>(null);
@@ -107,7 +110,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
         <View
           style={{
             flex: 1,
-            backgroundColor: Colors.light.background,
+            backgroundColor: theme.background,
             borderTopLeftRadius: Radii.lg,
             borderTopRightRadius: Radii.lg,
             overflow: "hidden",
@@ -120,11 +123,11 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
             automaticallyAdjustKeyboardInsets
             keyboardDismissMode="interactive"
           >
-            <Text style={{ fontSize: 22, fontWeight: "800", color: Colors.light.text }}>{sheetTitle}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", opacity: 0.65, color: Colors.light.text }}>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text }}>{sheetTitle}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", opacity: 0.65, color: theme.text }}>
               {subjectLabel}
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.78, color: Colors.light.text }}>
+            <Text style={{ fontSize: 14, lineHeight: 20, opacity: 0.78, color: theme.text }}>
               {sheetSubtitle}
             </Text>
 
@@ -145,7 +148,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
               <>
                 {error ? <Banner message={error} tone="error" /> : null}
 
-                <Text style={{ fontWeight: "700", marginTop: Spacing.sm, color: Colors.light.text }}>
+                <Text style={{ fontWeight: "700", marginTop: Spacing.sm, color: theme.text }}>
                   {t("report.reasonLabel", { defaultValue: "Reason" })}
                 </Text>
                 <View style={{ gap: Spacing.sm }}>
@@ -162,14 +165,18 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
                           paddingHorizontal: Spacing.lg,
                           borderRadius: Radii.md,
                           borderWidth: selected ? 2 : 1,
-                          borderColor: selected ? Colors.light.primary : Colors.light.border,
-                          backgroundColor: selected ? "rgba(255,159,28,0.1)" : Colors.light.surface,
+                          borderColor: selected ? theme.primary : theme.border,
+                          backgroundColor: selected
+                            ? colorScheme === "dark"
+                              ? "rgba(255,159,28,0.18)"
+                              : "rgba(255,159,28,0.1)"
+                            : theme.surface,
                         }}
                       >
                         <Text
                           style={{
                             fontWeight: selected ? "800" : "600",
-                            color: Colors.light.text,
+                            color: theme.text,
                             fontSize: 15,
                           }}
                         >
@@ -180,7 +187,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
                   })}
                 </View>
 
-                <Text style={{ fontWeight: "700", marginTop: Spacing.md, color: Colors.light.text }}>
+                <Text style={{ fontWeight: "700", marginTop: Spacing.md, color: theme.text }}>
                   {t("report.commentLabel", { defaultValue: "Add details (optional)" })}
                 </Text>
                 <TextInput
@@ -190,18 +197,18 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
                   placeholder={t("report.commentPlaceholder", {
                     defaultValue: "Anything else we should know?",
                   })}
-                  placeholderTextColor={Colors.light.mutedText}
+                  placeholderTextColor={theme.mutedText}
                   maxLength={500}
                   style={{
                     borderWidth: 1,
-                    borderColor: Colors.light.border,
+                    borderColor: theme.border,
                     borderRadius: Radii.md,
-                    backgroundColor: Colors.light.surface,
+                    backgroundColor: theme.surface,
                     padding: Spacing.md,
                     minHeight: 96,
                     fontSize: 15,
                     textAlignVertical: "top",
-                    color: Colors.light.text,
+                    color: theme.text,
                   }}
                 />
 
@@ -222,7 +229,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
                   />
                   {submitting ? (
                     <View style={{ alignItems: "center", marginTop: Spacing.xs }}>
-                      <ActivityIndicator color={Colors.light.primary} />
+                      <ActivityIndicator color={theme.primary} />
                     </View>
                   ) : null}
                 </View>

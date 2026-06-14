@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBusiness } from "@/hooks/use-business";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -59,7 +60,8 @@ export default function QuickDealExpress() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, businessName, businessContextForAi, businessPreferredLocale } = useBusiness();
   const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
-  const theme = Colors.light;
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
 
   const [hint, setHint] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);

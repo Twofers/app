@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Animated, LayoutChangeEvent, PanResponder, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Colors, Gray } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type SlideToUseDealProps = {
   onConfirmed: () => void;
@@ -16,6 +17,8 @@ const THRESHOLD_RATIO = 0.72;
 
 export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDealProps) {
   const { t } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   const trackW = useRef(0);
   const pan = useRef(new Animated.Value(0)).current;
   const fired = useRef(false);
@@ -57,7 +60,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
 
   return (
     <View style={{ gap: Spacing.sm }}>
-      <Text style={{ fontSize: 13, opacity: 0.65, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
+      <Text style={{ fontSize: 13, opacity: 0.65, textAlign: "center", color: theme.text }} maxFontSizeMultiplier={1.15}>
         {t("consumerWallet.slideHint")}
       </Text>
       <View
@@ -67,7 +70,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
         style={{
           height: KNOB + 12,
           borderRadius: 999,
-          backgroundColor: Gray[200],
+          backgroundColor: theme.surfaceMuted,
           justifyContent: "center",
           paddingHorizontal: 6,
           opacity: disabled ? 0.5 : 1,
@@ -82,7 +85,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
             pointerEvents: "none",
             fontWeight: "800",
             fontSize: 14,
-            color: Gray[500],
+            color: theme.mutedText,
             letterSpacing: 0.3,
           }}
           numberOfLines={1}
@@ -98,7 +101,7 @@ export function SlideToUseDeal({ onConfirmed, disabled, resetKey }: SlideToUseDe
             width: KNOB,
             height: KNOB,
             borderRadius: KNOB / 2,
-            backgroundColor: Colors.light.primary,
+            backgroundColor: theme.primary,
             transform: [{ translateX: pan }],
             justifyContent: "center",
             alignItems: "center",
