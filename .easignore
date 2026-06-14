@@ -10,8 +10,13 @@
 *.p8
 *.pem
 *.key
+*.p12
+*.cer
+*.mobileprovision
 GoogleService-Info.plist
 google-services.json
+eas-credentials.json
+expo-credentials.json
 service-account*.json
 firebase-service-account*.json
 apple-api-key*.json
@@ -26,8 +31,11 @@ node_modules/
 .git/
 .expo/
 .expo-shared/
+.metro-cache/
 dist/
 web-build/
+build/
+coverage/
 android/.gradle/
 android/build/
 android/app/build/
@@ -39,6 +47,8 @@ android/app/.cxx/
 *.apk
 *.aab
 *.apks
+*.ipa
+*.xcarchive
 *.zip
 
 # Local QA, release-prep, and agent artifacts
