@@ -453,7 +453,7 @@ export default function AuthLandingScreen() {
           <View style={{ alignItems: "center", marginBottom: Spacing.md }}>
             {/* Dedicated auth-logo asset sized for this compact hero. */}
             <Image
-              source={require("../assets/images/twofer-mark-512.png")}
+              source={require("../assets/images/penguin-auth-512.png")}
               style={{ width: 72, height: 72 }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
