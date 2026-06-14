@@ -181,7 +181,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#FF9221",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/adaptive-icon-foreground-1024.png",
         "monochromeImage": "./assets/images/adaptive-icon-monochrome-1024.png"
       },
