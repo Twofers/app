@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Swap these when the app is published to stores.
 const FALLBACK_BASE = "https://www.twoferapp.com/deal";
+const WEBSITE_HOME = "https://www.twoferapp.com";
 // const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.unvmex2.twoforone";
 // const APP_STORE  = "https://apps.apple.com/app/twofer/idXXXXXXXXXX";
 
@@ -10,6 +11,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SCHEME_PREFIX = "twoforone://deal/";
 const BRAND_COLOR = "#FF9F1C";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function esc(s: string): string {
   return s
@@ -23,25 +25,67 @@ function esc(s: string): string {
 function htmlResponse(html: string, corsHeaders: Record<string, string>, status = 200) {
   return new Response(html, {
     status,
-    headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
 
-function buildLandingPage(
-  dealId: string,
-  dealTitle: string,
-  businessName: string,
-  fallbackUrl: string,
-  isDemo = false,
-): string {
-  const schemeUrl = `${SCHEME_PREFIX}${dealId}`;
+type LandingPageArgs = {
+  dealId: string | null;
+  dealTitle: string;
+  businessName: string;
+  fallbackUrl: string;
+  canOpenApp: boolean;
+};
+
+function buildLandingPage({
+  dealId,
+  dealTitle,
+  businessName,
+  fallbackUrl,
+  canOpenApp,
+}: LandingPageArgs): string {
+  const schemeUrl = canOpenApp && dealId ? `${SCHEME_PREFIX}${dealId}` : "";
+  const subtitle = canOpenApp
+    ? "Claim this BOGO deal in seconds - open Twofer and show it at the counter."
+    : "This Twofer deal is unavailable or has ended. Open Twofer to find live local deals.";
+  const hint = canOpenApp
+    ? "Don't have the app yet? Tap above to visit twoferapp.com.<br/>After installing, scan this code again to claim your deal!"
+    : "Visit twoferapp.com or open the app to browse live local deals.";
+  const primaryAction = canOpenApp
+    ? `<a id="openApp" class="btn btn-primary" href="${esc(schemeUrl)}">
+      Open in Twofer
+    </a>`
+    : `<a class="btn btn-primary" href="${esc(fallbackUrl)}">
+      Visit twoferapp.com
+    </a>`;
+  const secondaryAction = canOpenApp
+    ? `<a class="btn btn-secondary" href="${esc(fallbackUrl)}">
+      Get Twofer at twoferapp.com
+    </a>`
+    : "";
+  const autoOpenScript = canOpenApp
+    ? `<script>
+(function(){
+  var scheme = ${JSON.stringify(schemeUrl)};
+  var fallback = ${JSON.stringify(fallbackUrl)};
+  var t = setTimeout(function(){ window.location.href = fallback; }, 1500);
+  window.addEventListener("blur", function(){ clearTimeout(t); });
+  try { window.location.href = scheme; } catch(e){}
+})();
+</script>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Twofer â€” ${esc(dealTitle)}</title>
+<title>Twofer - ${esc(dealTitle)}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -60,11 +104,6 @@ function buildLandingPage(
   .biz{font-size:13px;font-weight:700;color:#888;margin-bottom:8px}
   .title{font-size:24px;font-weight:800;line-height:1.25;margin-bottom:16px}
   .subtitle{font-size:15px;color:#555;line-height:1.5;margin-bottom:28px}
-  .demo{
-    border:1px solid #FDBA74;background:#FFF7ED;color:#7C2D12;
-    border-radius:14px;padding:12px;text-align:left;margin-bottom:20px;
-  }
-  .demo strong{display:block;color:#B45309;margin-bottom:4px}
   .btn{
     display:inline-block;width:100%;padding:16px;border-radius:16px;
     font-size:17px;font-weight:800;text-decoration:none;
@@ -86,38 +125,45 @@ function buildLandingPage(
   <div class="body">
     <p class="biz">${esc(businessName)}</p>
     <h1 class="title">${esc(dealTitle)}</h1>
-    ${isDemo ? '<div class="demo"><strong>Demo offer</strong>This is sample content for testing only. Not a real offer.</div>' : ""}
-    <p class="subtitle">${isDemo ? "Open Twofer to view this sample offer." : "Claim this BOGO deal in seconds - open Twofer and show it at the counter."}</p>
+    <p class="subtitle">${esc(subtitle)}</p>
 
-    <a id="openApp" class="btn btn-primary" href="${esc(schemeUrl)}">
-      Open in Twofer
-    </a>
-
-    <a class="btn btn-secondary" href="${esc(fallbackUrl)}">
-      Get Twofer at twoferapp.com
-    </a>
+    ${primaryAction}
+    ${secondaryAction}
 
     <p class="hint">
-      Don't have the app yet? Tap above to visit twoferapp.com.<br/>
-      After installing, scan this code again to claim your deal!
+      ${hint}
     </p>
   </div>
   <div class="footer">
-    <span>Powered by Twofer â€” local deals, zero waste</span>
+    <span>Powered by Twofer - local deals, zero waste</span>
   </div>
 </div>
 
-<script>
-(function(){
-  var scheme = ${JSON.stringify(schemeUrl)};
-  var fallback = ${JSON.stringify(fallbackUrl)};
-  var t = setTimeout(function(){ window.location.href = fallback; }, 1500);
-  window.addEventListener("blur", function(){ clearTimeout(t); });
-  try { window.location.href = scheme; } catch(e){}
-})();
-</script>
+${autoOpenScript}
 </body>
 </html>`;
+}
+
+function nestedBusinessName(data: { businesses?: unknown } | null): string {
+  const business = Array.isArray(data?.businesses) ? data.businesses[0] : data?.businesses;
+  if (business && typeof business === "object" && "name" in business) {
+    const name = (business as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) return name;
+  }
+  return "Twofer";
+}
+
+function genericLanding(corsHeaders: Record<string, string>) {
+  return htmlResponse(
+    buildLandingPage({
+      dealId: null,
+      dealTitle: "Twofer Deals",
+      businessName: "Twofer",
+      fallbackUrl: WEBSITE_HOME,
+      canOpenApp: false,
+    }),
+    corsHeaders,
+  );
 }
 
 serve(async (req) => {
@@ -130,36 +176,48 @@ serve(async (req) => {
   const url = new URL(req.url);
   const dealId = url.searchParams.get("id")?.trim();
 
-  if (!dealId) {
-    return htmlResponse(
-      buildLandingPage("", "Twofer Deals", "Twofer", "https://www.twoferapp.com"),
-      corsHeaders,
-      200,
-    );
+  if (!dealId || !UUID_RE.test(dealId)) {
+    return genericLanding(corsHeaders);
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const admin = createClient(supabaseUrl, serviceKey);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !anonKey) {
+    return genericLanding(corsHeaders);
+  }
+  const publicClient = createClient(supabaseUrl, anonKey);
 
-  let dealTitle = "A great deal is waiting for you";
-  let businessName = "";
-  let isDemo = false;
+  let data: { id?: string; title?: string | null; businesses?: unknown } | null = null;
   try {
-    const { data } = await admin
+    const nowIso = new Date().toISOString();
+    const { data: liveDeal, error } = await publicClient
       .from("deals")
-      .select("title, is_demo, businesses(name,is_demo)")
+      .select("id,title,businesses(name)")
       .eq("id", dealId)
-      .single();
-
-    if (data?.title) dealTitle = data.title;
-    if ((data as any)?.businesses?.name) businessName = (data as any).businesses.name;
-    isDemo = data?.is_demo === true || (data as any)?.businesses?.is_demo === true;
+      .eq("is_active", true)
+      .lte("start_time", nowIso)
+      .gt("end_time", nowIso)
+      .maybeSingle();
+    if (error) throw error;
+    data = liveDeal;
   } catch {
-    // Graceful fallback â€” show generic page even if DB lookup fails.
+    return genericLanding(corsHeaders);
+  }
+
+  if (!data?.id) {
+    return genericLanding(corsHeaders);
   }
 
   const fallbackUrl = `${FALLBACK_BASE}/${encodeURIComponent(dealId)}`;
 
-  return htmlResponse(buildLandingPage(dealId, dealTitle, businessName, fallbackUrl, isDemo), corsHeaders);
+  return htmlResponse(
+    buildLandingPage({
+      dealId,
+      dealTitle: data.title || "A great deal is waiting for you",
+      businessName: nestedBusinessName(data),
+      fallbackUrl,
+      canOpenApp: true,
+    }),
+    corsHeaders,
+  );
 });
