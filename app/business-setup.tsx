@@ -91,6 +91,7 @@ export default function BusinessSetupScreen() {
   const [searching, setSearching] = useState(false);
   const [detailsLoadingPlaceId, setDetailsLoadingPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
+  const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -177,6 +178,11 @@ export default function BusinessSetupScreen() {
       setAddress((prev) => prev || (row.address ?? ""));
       setPhone((prev) => prev || (row.phone ?? ""));
       setShortDescription((prev) => prev || (row.short_description ?? ""));
+      const lat = row.latitude != null ? Number(row.latitude) : NaN;
+      const lng = row.longitude != null ? Number(row.longitude) : NaN;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setVerifiedLookupCoords((prev) => prev ?? { lat, lng });
+      }
     })();
     return () => {
       cancelled = true;
@@ -307,6 +313,11 @@ export default function BusinessSetupScreen() {
       setBusinessName(details.name);
       setAddress(details.formatted_address);
       setPhone(details.phone);
+      setVerifiedLookupCoords(
+        details.lat != null && details.lng != null
+          ? { lat: details.lat, lng: details.lng }
+          : null,
+      );
       applyCategoryFromLookup(details.category);
       if (details.hours_text) {
         setHoursPreset("custom_prompt");
@@ -392,6 +403,8 @@ export default function BusinessSetupScreen() {
         short_description: trimmed.shortDescription || null,
         category: resolvedCategory || null,
         hours_text: resolvedHours || null,
+        latitude: verifiedLookupCoords?.lat ?? null,
+        longitude: verifiedLookupCoords?.lng ?? null,
       };
       const { data: bizData, error } = existingBiz
         ? await supabase
@@ -668,7 +681,15 @@ export default function BusinessSetupScreen() {
           </View>
         )}
 
-        <Field label={t("businessSetup.address")} value={address} onChangeText={setAddress} theme={theme} />
+        <Field
+          label={t("businessSetup.address")}
+          value={address}
+          onChangeText={(s) => {
+            setAddress(s);
+            setVerifiedLookupCoords(null);
+          }}
+          theme={theme}
+        />
         <Field label={t("businessSetup.phone")} value={phone} onChangeText={setPhone} keyboardType="phone-pad" theme={theme} />
         <Field
           label={t("businessSetup.shortDescription")}
