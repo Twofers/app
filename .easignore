@@ -1,3 +1,26 @@
+# Sensitive local config and credentials
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.jks
+*.keystore
+*.p8
+*.pem
+*.key
+GoogleService-Info.plist
+google-services.json
+service-account*.json
+firebase-service-account*.json
+apple-api-key*.json
+claude-history-secret-scan.txt
+
+# Generated native project folders
+/ios
+/android
+
 # Local dependencies, generated build output, and native caches
 node_modules/
 .git/
@@ -33,7 +56,6 @@ screenshots/
 .codex-remote-attachments/
 claude-history-export/
 project-knowledge/
-claude-history-secret-scan.txt
 convert-claude-history.ps1
 /screen*.png
 /test_*.png
