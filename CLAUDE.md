@@ -67,7 +67,7 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 - This is a Windows machine. You cannot build or sign an iOS app locally here. All iOS builds run on EAS cloud, and all iOS device testing runs through TestFlight on a real iPhone.
 - The stack is Expo SDK 54, React Native, TypeScript, and Expo Router, with Supabase (Postgres and row level security, Deno edge functions, Storage).
 - There is no local Supabase. Do not start one or assume one exists.
-- Never run `expo run:android` or start an Android emulator on the dev machine. Do not use `subst` or junction workarounds. Prefer local Android builds and preserve the single remaining EAS cloud credit.
+- When Dan explicitly requests local Android emulator QA, agents may start an Android emulator and use local debug/dev-client Android commands such as `expo run:android` for testing and screenshots. Do not use `subst` or junction workarounds. Preserve the single remaining EAS cloud credit.
 
 ## Out of scope for you
 

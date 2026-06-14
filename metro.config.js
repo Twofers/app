@@ -38,6 +38,8 @@ config.resolver.blockList = [
   localPathPattern("twoforone_full_backup"),
   localPathPattern("meeting minutes"),
   localPathPattern("share_deal_smoke_20260606"),
+  localPathPattern("artifacts"),
+  localPathPattern("outdated"),
   localPathPattern("dist"),
   /[/\\]application-[^/\\]+\.apk$/,
   /[/\\]claude-history-secret-scan\.txt$/,

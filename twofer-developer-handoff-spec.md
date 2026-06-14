@@ -108,7 +108,7 @@ The repo carries `CLAUDE.md` and `AGENTS.md` at root. Those rules govern all age
 - Commit locally. Do not push.
 - When fixing an iOS-only bug, preserve existing Android behavior, and the reverse.
 - After each change, validate with `npx tsc --noEmit` and a Metro bundle probe. Run the test suite (175 tests across 23 files at last count) and lint.
-- Never run `expo run:android` or start an Android emulator on the dev machine. Do not use `subst` or junction workarounds.
+- When Dan explicitly requests local Android emulator QA, agents may start an Android emulator and use local debug/dev-client Android commands such as `expo run:android` for testing and screenshots. Do not use `subst` or junction workarounds. Preserve the single remaining EAS cloud credit.
 - There is no local Supabase. Do not assume a local Supabase instance exists.
 - iOS cannot be built or signed on the Windows dev machine. All iOS builds run on EAS cloud. All iOS device testing runs through TestFlight on a real iPhone.
 - Preserve the single remaining EAS cloud credit. Prefer local Android builds where possible.
