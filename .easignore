@@ -23,6 +23,7 @@ artifacts/
 notification_emulator_*/
 twofer_rc_qa_*/
 share_deal_*
+website-screenshots-*/
 meeting minutes/
 docs/store-release-prep.md
 qa-screens/

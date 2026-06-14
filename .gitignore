@@ -47,10 +47,14 @@ app-example
 .claude/
 
 # Dev/debug screenshots
+artifacts/
 screenshots/
 qa-screens/
+website-screenshots-*/
+*.zip
 *.apk
 *.aab
+*.apks
 *.bundle
 
 claude-history-export/
