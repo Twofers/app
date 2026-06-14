@@ -1,13 +1,13 @@
-/**
- * Pilot smoke test: merchant publishes deal → consumer claims → merchant redeems.
+﻿/**
+ * Pilot smoke test: merchant publishes deal â†’ consumer claims â†’ merchant redeems.
  *
  * Usage:
  *   npx tsx scripts/pilot-smoke-test.ts
  *
  * Requires:
- *   - Local Supabase running (`npx supabase start`)
- *   - Demo account seeded (`npm run seed:demo`)
+ *   - A safe local/test Supabase target
  *   - EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env
+ *   - TWOFER_SMOKE_EMAIL and TWOFER_SMOKE_PASSWORD set locally
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -23,10 +23,21 @@ if (!SUPABASE_URL || !ANON_KEY) {
   process.exit(1);
 }
 
-const MERCHANT_EMAIL = "demo@demo.com";
-const MERCHANT_PASSWORD = "demo12345";
-const CONSUMER_EMAIL = "test-consumer@twofer.test";
-const CONSUMER_PASSWORD = "testpass123";
+function requiredSmokeEnv(name: "TWOFER_SMOKE_EMAIL" | "TWOFER_SMOKE_PASSWORD"): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(
+      "Missing TWOFER_SMOKE_EMAIL or TWOFER_SMOKE_PASSWORD. Set them locally for a safe smoke account; never commit real credentials.",
+    );
+    process.exit(1);
+  }
+  return value;
+}
+
+const MERCHANT_EMAIL = requiredSmokeEnv("TWOFER_SMOKE_EMAIL");
+const MERCHANT_PASSWORD = requiredSmokeEnv("TWOFER_SMOKE_PASSWORD");
+const CONSUMER_EMAIL = `twofer-smoke-${Date.now()}@example.test`;
+const CONSUMER_PASSWORD = `Smoke-${crypto.randomUUID()}-Aa1`;
 
 async function run() {
   console.log("=== Twofer Pilot Smoke Test ===\n");
@@ -40,7 +51,7 @@ async function run() {
   });
   if (mAuthErr) {
     console.error("   FAIL: Merchant sign-in failed:", mAuthErr.message);
-    console.log("   Hint: Run `npm run seed:demo` first.");
+    console.log("   Hint: verify TWOFER_SMOKE_EMAIL/TWOFER_SMOKE_PASSWORD point to a valid local/test account.");
     process.exit(1);
   }
   console.log("   OK: Signed in as", mAuth.user?.email);
@@ -64,7 +75,7 @@ async function run() {
   const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
   const { data: deal, error: dealErr } = await merchantClient.from("deals").insert({
     business_id: biz.id,
-    title: "BOGO drip coffee — smoke test",
+    title: "BOGO drip coffee â€” smoke test",
     description: "Buy one get one free drip coffee",
     price: 3.50,
     start_time: new Date().toISOString(),

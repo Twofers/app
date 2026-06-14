@@ -52,6 +52,7 @@ import { WelcomeWalkthrough } from "@/components/welcome-walkthrough";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { consumeRecentPublish } from "@/lib/recent-publish";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 function friendlyDashboardError(err: unknown, fallback: string): string {
   devWarn("[dashboard]", err);
@@ -136,6 +137,7 @@ type DealRow = {
   start_time: string;
   end_time: string;
   is_active: boolean;
+  is_demo?: boolean | null;
   is_recurring: boolean;
   days_of_week: number[] | null;
   window_start_minutes: number | null;
@@ -158,7 +160,7 @@ type PerDealMetrics = {
 
 const DASHBOARD_DEALS_PAGE_SIZE = 100;
 const DASHBOARD_DEALS_SELECT =
-  "id,title,description,source_locale,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_demo,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
 
 function buildPerDealMap(monthOnly: ClaimRow[], nowMs: number): Record<string, PerDealMetrics> {
   const perDealMap: Record<string, PerDealMetrics> = {};
@@ -1685,6 +1687,11 @@ export default function BusinessDashboard() {
                                 </Text>
                               </View>
                             </View>
+                            {item.is_demo ? (
+                              <View style={{ marginTop: Spacing.sm }}>
+                                <DemoOfferNotice compact />
+                              </View>
+                            ) : null}
                             <Text
                               style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 13, fontWeight: "600", color: theme.text }}
                               numberOfLines={2}

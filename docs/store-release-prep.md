@@ -117,9 +117,9 @@ eas submit -p android --latest    # requires Google Play service-account JSON
 eas submit -p ios --latest        # requires App Store Connect API key
 ```
 
-The `production` EAS profile carries **no** demo/debug flags (`EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER`,
-`EXPO_PUBLIC_SHOW_DEBUG_PANEL`, `EXPO_PUBLIC_DEBUG_BOOT_LOG`, `EXPO_PUBLIC_PREVIEW_MATCHES_DEV` are
-dev/preview-only). Full build/submit/credentials guide: `store-assets/EAS-BUILD.md`.
+The `production` EAS profile carries no debug flags (`EXPO_PUBLIC_SHOW_DEBUG_PANEL`,
+`EXPO_PUBLIC_DEBUG_BOOT_LOG`, `EXPO_PUBLIC_PREVIEW_MATCHES_DEV` are dev/preview-only).
+Full build/submit/credentials guide: `store-assets/EAS-BUILD.md`.
 
 ---
 

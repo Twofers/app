@@ -203,7 +203,7 @@ serve(async (req) => {
     // 🔍 Fetch and validate deal (before rate limit, so invalid IDs don't exhaust quotas)
     const { data: deal, error: dealError } = await supabase
       .from("deals")
-      .select("id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone")
+      .select("id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone")
       .eq("id", dealId)
       .single();
 
@@ -212,6 +212,16 @@ serve(async (req) => {
         JSON.stringify({ error: "Deal not found" }),
         {
           status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (deal.is_demo === true) {
+      return new Response(
+        JSON.stringify({ error: "This is sample content for testing only. Not a real offer." }),
+        {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );

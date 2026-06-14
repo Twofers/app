@@ -36,6 +36,8 @@ import { localizedDealTitle } from "@/lib/deal-localization";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { isShareDealEnabled } from "@/lib/runtime-env";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import { DEMO_OFFER_DETAIL_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 
 type ClaimRow = {
   id: string;
@@ -52,6 +54,7 @@ type ClaimRow = {
     id: string;
     business_id: string;
     title: string | null;
+    is_demo?: boolean | null;
     source_locale: string | null;
     title_en: string | null;
     title_es: string | null;
@@ -67,6 +70,7 @@ type ClaimRow = {
       location: string | null;
       latitude: number | string | null;
       longitude: number | string | null;
+      is_demo?: boolean | null;
     } | null;
   } | null;
 };
@@ -149,7 +153,7 @@ export default function WalletScreen() {
       const { data, error } = await supabase
         .from("deal_claims")
         .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude))",
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -190,6 +194,10 @@ export default function WalletScreen() {
   }
 
   function openVerifyForClaim(row: ClaimRow) {
+    if (isDemoOffer(row.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     const dead = claimNotRedeemable(row, nowMs);
     if (dead || row.redeemed_at) return;
     if (row.claim_status === "redeeming") return;
@@ -205,6 +213,11 @@ export default function WalletScreen() {
   async function refreshQr() {
     if (!activeDealId) {
       setBanner(t("consumerWallet.errNoDealForQr"));
+      return;
+    }
+    const activeClaim = claims.find((c) => c.deal_id === activeDealId);
+    if (isDemoOffer(activeClaim?.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
       return;
     }
     if (refreshingQr) return;
@@ -241,6 +254,10 @@ export default function WalletScreen() {
   }
 
   async function refreshClaimFromRow(row: ClaimRow) {
+    if (isDemoOffer(row.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     if (claimingRefreshId) return;
     setClaimingRefreshId(row.id);
     setBanner(null);
@@ -287,6 +304,10 @@ export default function WalletScreen() {
 
   async function shareWalletDeal(row: ClaimRow) {
     if (!shareDealEnabled || isSharing) return;
+    if (isDemoOffer(row.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     setIsSharing(true);
     setBanner(null);
     setShareError(null);
@@ -366,6 +387,10 @@ export default function WalletScreen() {
 
   async function startUseDealFlow(row: ClaimRow) {
     setBanner(null);
+    if (isDemoOffer(row.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     if (row.claim_status === "redeeming") {
       setUseDealBusy(true);
       try {
@@ -399,6 +424,11 @@ export default function WalletScreen() {
   async function onSlideConfirmed() {
     const row = useDealState?.row;
     if (!row || useDealState.begin !== null) return;
+    if (isDemoOffer(row.deals)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      setUseDealState(null);
+      return;
+    }
     setUseDealBusy(true);
     setBanner(null);
     try {
@@ -449,6 +479,7 @@ export default function WalletScreen() {
       !redeemed &&
       !tokenDead &&
       remainingMs <= 15 * 60 * 1000;
+    const rowIsDemo = isDemoOffer(row.deals);
 
     const shortLabel = row.short_code
       ? `${row.short_code.slice(0, 3)} ${row.short_code.slice(3)}`
@@ -464,7 +495,7 @@ export default function WalletScreen() {
           : bucket === "canceled"
             ? ("canceled" as const)
             : ("expired" as const);
-    const verifyDisabled = isRedeeming || useDealBusy;
+    const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
 
     return (
       <View
@@ -562,6 +593,11 @@ export default function WalletScreen() {
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.xs }}>
                 <DealStatusPill status={pillStatus} />
               </View>
+              {rowIsDemo ? (
+                <View style={{ marginBottom: Spacing.sm }}>
+                  <DemoOfferNotice compact />
+                </View>
+              ) : null}
               <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }} numberOfLines={2}>
                 {dealTitle(row)}
               </Text>
@@ -655,14 +691,22 @@ export default function WalletScreen() {
               </View>
             </NativePressable>
             <PrimaryButton
-              title={useDealBusy ? t("redeem.redeeming") : isRedeeming ? t("consumerWallet.continueUseDeal") : t("consumerWallet.useDealCta")}
+              title={
+                rowIsDemo
+                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
+                  : useDealBusy
+                    ? t("redeem.redeeming")
+                    : isRedeeming
+                      ? t("consumerWallet.continueUseDeal")
+                      : t("consumerWallet.useDealCta")
+              }
               onPress={() => void startUseDealFlow(row)}
-              disabled={useDealBusy}
+              disabled={rowIsDemo || useDealBusy}
             />
             {shareDealEnabled ? (
               <NativePressable
                 onPress={() => void shareWalletDeal(row)}
-                disabled={isSharing}
+                disabled={rowIsDemo || isSharing}
                 accessibilityRole="button"
                 accessibilityLabel={t("shareDeal.shareDeal", { defaultValue: "Share deal" })}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -674,7 +718,7 @@ export default function WalletScreen() {
                   backgroundColor: pressed ? "#ffedd5" : theme.surface,
                   alignItems: "center",
                   justifyContent: "center",
-                  opacity: isSharing ? 0.45 : 1,
+                  opacity: rowIsDemo || isSharing ? 0.45 : 1,
                 })}
               >
                 <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
@@ -724,9 +768,9 @@ export default function WalletScreen() {
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
             <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text }}>{t("consumerWallet.qrExpired")}</Text>
             <PrimaryButton
-              title={claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
+              title={rowIsDemo ? t("demoOffer.label", { defaultValue: "Demo offer" }) : claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
-              disabled={claimingRefreshId !== null}
+              disabled={rowIsDemo || claimingRefreshId !== null}
             />
           </View>
         ) : null}

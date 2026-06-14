@@ -59,7 +59,7 @@ supabase functions deploy <function-name>
 - `ai-create-deal` (legacy; still keep behavior sane if enabled)
 - Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
 
-After deploy, hit each critical path once from a **non-demo** account (claim, redeem, AI create) and once from **demo** if you use preview builds.
+After deploy, hit each critical path once from a dedicated smoke/test account (claim, redeem, AI create). Demo content may remain visible for testers, but do not rely on a shared demo login.
 
 ---
 
@@ -78,7 +78,6 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 - `OPENAI_MODEL` / `OPENAI_AD_MODEL` / team-specific chat model vars (see `supabase/functions/_shared/openai-chat-model.ts` and docs)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
-- `AI_ADS_DEMO_USE_LIVE` — when `true`, demo account uses live OpenAI instead of template/demo responses
 
 **Menu extraction (preview / explicit opt-in only):**
 
@@ -88,15 +87,13 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 ## 5. Required EAS / app environment variables
 
-Configured in `eas.json` profiles and/or Expo project env. **Production** should **not** enable demo-auth helpers or debug panels.
+Configured in `eas.json` profiles and/or Expo project env. **Production** should not enable debug panels.
 
 | Variable | Production expectation |
 |----------|-------------------------|
 | `EXPO_PUBLIC_SUPABASE_URL` | Hosted Supabase project URL. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Anon key for that project. |
 | `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` | Valid key with Maps SDK for Android (map tab). |
-| `EXPO_PUBLIC_DEMO_EMAIL` / `EXPO_PUBLIC_DEMO_PASSWORD` | Optional; only if you ship a known demo account (pilot decision). |
-| `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER` | Should be **absent or false** on production store builds. |
 | `EXPO_PUBLIC_SHOW_DEBUG_PANEL` / `EXPO_PUBLIC_DEBUG_BOOT_LOG` / `EXPO_PUBLIC_PREVIEW_MATCHES_DEV` | **Off** for production. |
 
 Legal / support URLs: see `app.config.js` / `.env.example` (`EXPO_PUBLIC_PRIVACY_POLICY_URL`, etc.).

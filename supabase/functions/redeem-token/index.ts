@@ -182,6 +182,7 @@ serve(async (req) => {
           id,
           business_id,
           title,
+          is_demo,
           business:businesses!inner(id, owner_id)
         )
       `;
@@ -235,6 +236,7 @@ serve(async (req) => {
       id?: string | null;
       business_id?: string | null;
       title?: string | null;
+      is_demo?: boolean | null;
       business?: { owner_id?: string };
       max_claims?: number | null;
     } | null;
@@ -244,6 +246,15 @@ serve(async (req) => {
         JSON.stringify({ error: "This token does not belong to your business" }),
         {
           status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    if (deal.is_demo === true) {
+      return new Response(
+        JSON.stringify({ error: "This is sample content for testing only. Not a real offer." }),
+        {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );

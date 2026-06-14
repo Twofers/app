@@ -20,7 +20,7 @@ This document amends the original TWOFER QA exploration report using a static re
 | **P2 #14** | Native `Alert` for errors | Auth flows use `Alert.alert` on [`auth-landing.tsx`](../app/auth-landing.tsx). |
 | **P3 #15** | Hardware back on onboarding internal steps | No `BackHandler`; steps are local `setStep` only. |
 | **P3 #17** | Dark mode incoherent | [`_layout.tsx`](../app/_layout.tsx) uses React Navigation themes; many screens hardcode `#ffffff`. |
-| **P3 #18** | Demo password mismatch | [`demo-account.ts`](../lib/demo-account.ts) `demo12345` vs demo prefilled `123456` in [`auth-landing.tsx`](../app/auth-landing.tsx) when demo env is on. |
+| **P3 #18** | Demo password mismatch | [`demo-account.ts`](../lib/demo-account.ts) `[redacted demo password]` vs demo prefilled `[redacted demo password]` in [`auth-landing.tsx`](../app/auth-landing.tsx) when demo env is on. |
 | **A11y (auth)** | Email/password inputs | [`auth-landing.tsx`](../app/auth-landing.tsx) `TextInput`s lack `accessibilityLabel`. |
 | **Arch** | Multiple `getSession()` | Calls across [`app/index.tsx`](../app/index.tsx), [`app/(tabs)/_layout.tsx`](../app/(tabs)/_layout.tsx), [`components/consumer-onboarding-gate.tsx`](../components/consumer-onboarding-gate.tsx), [`app/onboarding.tsx`](../app/onboarding.tsx), etc. |
 | **Arch** | `index.tsx` stale `destination` in listener | [`app/index.tsx`](../app/index.tsx): `onAuthStateChange` reads `destination`; `useEffect` deps are `[forceE2E]` only. |

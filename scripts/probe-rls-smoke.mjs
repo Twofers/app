@@ -43,10 +43,8 @@ function loadEnv() {
 const env = loadEnv();
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-// Prefer a dedicated throwaway smoke account; fall back to the demo account
-// (also a prod test account) so the probe is always runnable.
-const EMAIL = env.TWOFER_SMOKE_EMAIL || env.EXPO_PUBLIC_DEMO_EMAIL;
-const PASSWORD = env.TWOFER_SMOKE_PASSWORD || env.EXPO_PUBLIC_DEMO_PASSWORD;
+const EMAIL = env.TWOFER_SMOKE_EMAIL;
+const PASSWORD = env.TWOFER_SMOKE_PASSWORD;
 
 if (!URL_BASE || !ANON) {
   console.error("Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in .env");

@@ -18,6 +18,7 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type BizRow = {
   id: string;
@@ -30,6 +31,7 @@ type BizRow = {
   hours_text: string | null;
   short_description: string | null;
   logo_url: string | null;
+  is_demo?: boolean | null;
 };
 
 type DealRow = {
@@ -53,6 +55,7 @@ type DealRow = {
   window_start_minutes: number | null;
   window_end_minutes: number | null;
   timezone: string | null;
+  is_demo?: boolean | null;
 };
 
 export default function BusinessProfileScreen() {
@@ -84,7 +87,7 @@ export default function BusinessProfileScreen() {
     setBanner(null);
     const { data: b, error: eb } = await supabase
       .from("businesses")
-      .select("id,name,address,location,latitude,longitude,phone,hours_text,short_description,logo_url")
+      .select("id,name,address,location,latitude,longitude,phone,hours_text,short_description,logo_url,is_demo")
       .eq("id", id)
       .maybeSingle();
     if (eb || !b) {
@@ -101,7 +104,7 @@ export default function BusinessProfileScreen() {
     const { data: deals } = await supabase
       .from("deals")
       .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("business_id", id)
       .eq("is_active", true)
@@ -333,6 +336,11 @@ export default function BusinessProfileScreen() {
           )}
         </View>
         <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: "800", color: theme.text }}>{biz.name}</Text>
+        {biz.is_demo ? (
+          <View style={{ marginTop: Spacing.md }}>
+            <DemoOfferNotice detail />
+          </View>
+        ) : null}
         {biz.short_description?.trim() ? (
           <Text style={{ marginTop: Spacing.sm, color: theme.mutedText, fontSize: 16, lineHeight: 24 }}>
             {biz.short_description}
@@ -441,6 +449,7 @@ export default function BusinessProfileScreen() {
                 const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
                 const dealTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
                 const dealDescription = localizedDealDescription(deal, i18n.language);
+                const isDemoDeal = deal.is_demo === true || biz.is_demo === true;
                 return (
                   <Pressable
                     key={deal.id}
@@ -473,6 +482,7 @@ export default function BusinessProfileScreen() {
                       </View>
                     )}
                     <View style={{ padding: Spacing.lg, gap: Spacing.sm }}>
+                      {isDemoDeal ? <DemoOfferNotice compact /> : null}
                       <Text style={{ fontSize: 19, lineHeight: 25, fontWeight: "800", color: theme.text }}>
                         {dealTitle}
                       </Text>

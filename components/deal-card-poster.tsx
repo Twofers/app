@@ -13,6 +13,7 @@ import { DealStatusPill, type ConsumerDealStatusKey } from "@/components/deal-st
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type DealCardPosterProps = {
   // ... your existing props (unchanged)
@@ -33,6 +34,7 @@ type DealCardPosterProps = {
   statusTone?: "success" | "error" | "info";
   dealStatus?: ConsumerDealStatusKey;
   showLiveCountdown?: boolean;
+  isDemoOffer?: boolean;
 };
 
 export function DealCardPoster({
@@ -53,6 +55,7 @@ export function DealCardPoster({
   statusTone = "info",
   dealStatus = "live",
   showLiveCountdown = true,
+  isDemoOffer = false,
 }: DealCardPosterProps) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -175,6 +178,12 @@ export function DealCardPoster({
             </View>
           )}
 
+          {isDemoOffer ? (
+            <View style={{ marginBottom: Spacing.md }}>
+              <DemoOfferNotice compact />
+            </View>
+          ) : null}
+
           <Text style={{ fontSize: 22, fontWeight: "700", lineHeight: 28, color: theme.text }} numberOfLines={3} maxFontSizeMultiplier={1.15}>
             {title}
           </Text>
@@ -261,7 +270,9 @@ export function DealCardPoster({
         {/* Big orange Claim button — DoorDash style */}
         <PrimaryButton
           title={
-            claiming
+            isDemoOffer
+              ? t("demoOffer.label", { defaultValue: "Demo offer" })
+              : claiming
               ? t("dealDetail.claiming")
               : dealStatus === "claimed"
               ? t("dealStatus.claimed")
@@ -272,7 +283,7 @@ export function DealCardPoster({
               : t("dealDetail.claim")
           }
           onPress={onClaim}
-          disabled={claiming || dealStatus !== "live"}
+          disabled={isDemoOffer || claiming || dealStatus !== "live"}
           style={{
             backgroundColor:
               dealStatus === "live"

@@ -25,10 +25,12 @@ export async function finalizeStaleVisualRedeemForClaim(
 ): Promise<boolean> {
   const { data: row } = await supabase
     .from("deal_claims")
-    .select("id, claim_status, redeem_started_at, redeemed_at, expires_at, grace_period_minutes")
+    .select("id, claim_status, redeem_started_at, redeemed_at, expires_at, grace_period_minutes, deal:deals!inner(id,is_demo)")
     .eq("id", claimId)
     .maybeSingle();
   if (!row || row.redeemed_at) return false;
+  const deal = row.deal as { is_demo?: boolean | null } | null;
+  if (deal?.is_demo === true) return false;
   if (row.claim_status !== "redeeming" || !row.redeem_started_at) return false;
   const started = new Date(String(row.redeem_started_at)).getTime();
   const now = new Date(nowIso).getTime();

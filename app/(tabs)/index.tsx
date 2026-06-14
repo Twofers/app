@@ -59,6 +59,8 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
@@ -72,7 +74,7 @@ const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
  */
 const NEARBY_FETCH_MILES = 60;
 const FEED_DEAL_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 
 function businessDetailHref(businessId: string, distanceLabel?: string | null): Href {
   const encodedId = encodeURIComponent(businessId);
@@ -94,6 +96,7 @@ type Deal = {
   description_ko: string | null;
   end_time: string;
   is_active: boolean;
+  is_demo?: boolean | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   business_id: string;
@@ -105,6 +108,7 @@ type Deal = {
     location: string | null;
     latitude: number | string | null;
     longitude: number | string | null;
+    is_demo?: boolean | null;
   } | null;
   start_time: string;
   is_recurring: boolean;
@@ -555,6 +559,15 @@ export default function HomeScreen() {
           setBanner(t("dealDetail.errLoginClaim"));
           return;
         }
+        const requestedDeal = dealsRef.current.find((d) => d.id === dealId);
+        if (isDemoOffer(requestedDeal)) {
+          setBanner(DEMO_OFFER_SHORT_EXPLANATION);
+          setClaimStatus((prev) => ({
+            ...prev,
+            [dealId]: { message: DEMO_OFFER_SHORT_EXPLANATION, tone: "info" },
+          }));
+          return;
+        }
         if (claimingDealId) return;
         setClaimingDealId(dealId);
         setClaimStatus((prev) => ({ ...prev, [dealId]: { message: t("dealsBrowse.statusClaiming"), tone: "info" } }));
@@ -811,6 +824,7 @@ export default function HomeScreen() {
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
       const businessLocation = item.businesses?.location?.trim() || null;
       const isFavorite = favoriteBusinessIds.includes(item.business_id);
+      const itemIsDemo = isDemoOffer(item);
       const isLive = st === "live";
       const statusLabel =
         st === "live"
@@ -821,7 +835,9 @@ export default function HomeScreen() {
               ? t("dealStatus.redeemed")
               : t("dealStatus.expired");
       const claimButtonTitle =
-        claimingDealId === item.id
+        itemIsDemo
+          ? t("demoOffer.label", { defaultValue: "Demo offer" })
+          : claimingDealId === item.id
           ? t("dealsBrowse.statusClaiming")
           : st === "claimed"
             ? t("dealStatus.claimed")
@@ -973,6 +989,7 @@ export default function HomeScreen() {
                 </View>
               ) : null}
             </View>
+            {itemIsDemo ? <DemoOfferNotice compact /> : null}
             <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
               {offerText}
             </Text>
@@ -999,7 +1016,7 @@ export default function HomeScreen() {
               <PrimaryButton
                 title={claimButtonTitle}
                 onPress={() => void doClaim(item.id)}
-                disabled={claimingDealId === item.id || st !== "live"}
+                disabled={itemIsDemo || claimingDealId === item.id || st !== "live"}
               />
             </View>
             <Pressable

@@ -87,6 +87,12 @@ serve(async (req) => {
       return json({ error: "Missing action." }, 400, corsHeaders);
     }
 
+    const shortCodeNorm =
+      typeof body.short_code === "string"
+        ? body.short_code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+        : "";
+    const tokenNorm = typeof body.token === "string" ? body.token.trim() : "";
+
     // 🔒 Brute-force lockout (Batch 6 parity, scoped per counter device — the
     // device id is a server-set app_metadata claim). >= 10 recorded failures
     // in the last 5 minutes → 429 before any code lookup happens.
@@ -105,6 +111,27 @@ serve(async (req) => {
       } else if (isStaffRedemptionLockedOut(recentFailures)) {
         return json({ error: "Too many failed attempts. Try again in a few minutes." }, 429, corsHeaders);
       }
+    }
+
+    let demoCheck = supabaseAdmin
+      .from("deal_claims")
+      .select("id, deal:deals!inner(is_demo)")
+      .limit(1);
+    if (shortCodeNorm.length >= 4) {
+      demoCheck = demoCheck.eq("short_code", shortCodeNorm);
+    } else if (tokenNorm.length > 0) {
+      demoCheck = demoCheck.eq("token", tokenNorm);
+    } else {
+      demoCheck = demoCheck.eq("id", "00000000-0000-0000-0000-000000000000");
+    }
+    const { data: demoRows, error: demoCheckError } = await demoCheck;
+    if (demoCheckError) {
+      console.error("[staff-redemption] demo check failed", demoCheckError);
+      return json({ error: "Could not process redemption." }, 500, corsHeaders);
+    }
+    const demoRow = demoRows?.[0] as { deal?: { is_demo?: boolean | null } | null } | undefined;
+    if (demoRow?.deal?.is_demo === true) {
+      return json({ error: "This is sample content for testing only. Not a real offer." }, 400, corsHeaders);
     }
 
     const rpcName = action === "confirm" ? "confirm_staff_redemption" : "preview_staff_redemption";

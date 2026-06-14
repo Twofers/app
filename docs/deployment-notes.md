@@ -145,7 +145,6 @@ See `docs/stripe-setup.md` for end-to-end Stripe test-mode bring-up (products, p
 | `EXPO_PUBLIC_SUPPORT_URL` | No | Default: `https://www.twoferapp.com/support` |
 | `EXPO_PUBLIC_DELETE_ACCOUNT_URL` | No | Default: `https://www.twoferapp.com/delete-account` |
 | `EXPO_PUBLIC_GIT_COMMIT` | No | Optional short SHA shown in **Diagnostics** / `app.config.js` `extra.gitCommit` (else `git rev-parse` at config time if available) |
-| `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER` | No | With a preview/dev client profile, when `true`, shows **Demo login** (password sign-in only; no auto–sign-up). **Preview** in `eas.json` sets this; **production** does not. Local Metro (`expo start`) also enables Demo login via `__DEV__` even if unset. |
 | `EXPO_PUBLIC_SHOW_DEBUG_PANEL` | No | Settings → **Diagnostics (build / env)** screen |
 | `EXPO_PUBLIC_ENABLE_SHARE_DEAL` | No | Share Deal kill switch. Only exact value `true` shows Share Deal UI or allows `deal_shares` reads/inserts; unset or any other value keeps the feature off. |
 | `EXPO_PUBLIC_DEBUG_BOOT_LOG` | No | One-shot `[twoforone:boot]` JSON in Metro / Logcat |
@@ -164,12 +163,11 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
 | `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default chat / Whisper models | Optional |
 | `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-1`) | Optional |
-| `AI_ADS_DEMO_USE_LIVE` | Use live OpenAI (not stubbed) for `demo@demo.com` account | Optional |
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
 
-`ai-generate-deal-copy` also now returns a plain-language error with `error_code: OPENAI_NOT_CONFIGURED` for non-demo users when `OPENAI_API_KEY` is missing. Template copy fallback is kept for the explicit demo account path only.
+`ai-generate-deal-copy` also returns a plain-language error with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing.
 
 **Setting Edge secrets:**
 

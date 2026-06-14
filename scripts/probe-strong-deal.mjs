@@ -26,13 +26,23 @@ function loadEnv() {
 const env = loadEnv();
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SMOKE_EMAIL = env.TWOFER_SMOKE_EMAIL;
+const SMOKE_PASSWORD = env.TWOFER_SMOKE_PASSWORD;
 const j = (o) => JSON.stringify(o);
 
 async function signIn() {
+  if (!URL_BASE || !ANON) {
+    console.error("Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in .env");
+    process.exit(2);
+  }
+  if (!SMOKE_EMAIL || !SMOKE_PASSWORD) {
+    console.error("Missing TWOFER_SMOKE_EMAIL / TWOFER_SMOKE_PASSWORD in .env (local test account)");
+    process.exit(2);
+  }
   const res = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: ANON, "Content-Type": "application/json" },
-    body: j({ email: env.EXPO_PUBLIC_DEMO_EMAIL, password: env.EXPO_PUBLIC_DEMO_PASSWORD }),
+    body: j({ email: SMOKE_EMAIL, password: SMOKE_PASSWORD }),
   });
   const b = await res.json().catch(() => ({}));
   return b.access_token;

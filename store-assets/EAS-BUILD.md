@@ -58,7 +58,6 @@ Set these under **Project → Settings → Edge Functions → Secrets**:
 ### Debug flags (dev/preview only — NOT production)
 
 The `development` and `preview` profiles in `eas.json` set these automatically:
-- `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER=true`
 - `EXPO_PUBLIC_SHOW_DEBUG_PANEL=true`
 - `EXPO_PUBLIC_DEBUG_BOOT_LOG=true`
 - `EXPO_PUBLIC_PREVIEW_MATCHES_DEV=true`

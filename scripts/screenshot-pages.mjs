@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { chromium } from "playwright";
@@ -42,35 +42,25 @@ async function clickIfVisible(page, locator) {
   }
 }
 
-async function tryDemoLogin(page) {
-  // Demo login appears in dev/preview builds (or when EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER=true).
-  // We keep selectors text-based because RN Web doesn’t expose stable testIDs by default.
-  // Primary path: dedicated "Demo Login" CTA.
-  const clickedDemo = await clickIfVisible(page, page.getByText(/demo login/i));
-  if (clickedDemo) {
-    try {
-      await page.waitForURL((u) => !u.toString().includes("/auth-landing"), { timeout: 20_000 });
-    } catch {
-      // continue: maybe the app stays on auth-landing but session is still set; we’ll verify below.
-    }
-    await page.waitForTimeout(1200);
-    // Verify we're past auth by checking for the tab bar labels.
-    if (await page.getByText(/settings|wallet|map|create|dashboard/i).first().isVisible().catch(() => false)) {
-      return true;
-    }
+async function trySmokeLogin(page) {
+  // Optional local smoke login. Credentials must come from local-only env vars.
+  // We keep selectors text-based because RN Web doesn't expose stable testIDs by default.
+  const smokeEmail = process.env.TWOFER_SMOKE_EMAIL;
+  const smokePassword = process.env.TWOFER_SMOKE_PASSWORD;
+  if (!smokeEmail || !smokePassword) {
+    console.warn(
+      "Skipping login fallback: set TWOFER_SMOKE_EMAIL and TWOFER_SMOKE_PASSWORD locally if this screenshot run needs auth.",
+    );
+    return false;
   }
-
-  // Fallback: fill demo email/password and press "Log In".
-  const demoEmail = "demo@demo.com";
-  const demoPassword = "demo12345";
   try {
-    await page.getByLabel(/email/i).fill(demoEmail);
-    await page.getByLabel(/password/i).fill(demoPassword);
+    await page.getByLabel(/email/i).fill(smokeEmail);
+    await page.getByLabel(/password/i).fill(smokePassword);
   } catch {
     // RN Web often doesn't wire labels; fall back to placeholders and first/second input.
     const inputs = page.locator("input");
-    await inputs.nth(0).fill(demoEmail);
-    await inputs.nth(1).fill(demoPassword);
+    await inputs.nth(0).fill(smokeEmail);
+    await inputs.nth(1).fill(smokePassword);
   }
   await clickIfVisible(page, page.getByText(/^log in$/i));
   try {
@@ -118,7 +108,7 @@ async function main() {
     shots: [],
     notes: [
       "If you want desktop/tablet screenshots, rerun with SCREENSHOT_VIEWPORT=desktop (not implemented yet).",
-      "If Demo login is not visible, make sure you are running in dev/preview and/or set EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER=true.",
+      "If auth screenshots need a real session, set TWOFER_SMOKE_EMAIL and TWOFER_SMOKE_PASSWORD locally.",
     ],
   };
 
@@ -133,7 +123,7 @@ async function main() {
   await gotoAndWait(page, "/reset-password");
   report.shots.push({ route: "/reset-password", ok: true, file: await shot(page, "03-reset-password") });
 
-  // Attempt demo login so we can capture gated tabs/routes.
+  // Use an opt-in web-only bypass so screenshots do not need committed credentials.
   // Use an opt-in web-only bypass for screenshot capture (no real auth session needed).
   await gotoAndWait(page, "/?e2e=1&mode=customer");
   const demoOk = true;

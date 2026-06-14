@@ -1,4 +1,4 @@
-// READ-ONLY: check whether the demo business would pass the deals-insert
+// READ-ONLY: check whether a local smoke business would pass the deals-insert
 // subscription gate added in billing v4 (20260601153000). That policy requires
 // a business_profiles row for the owner with subscription_status IN
 // ('trial','active'); otherwise every deal INSERT is blocked by RLS.
@@ -22,13 +22,23 @@ function loadEnv() {
 const env = loadEnv();
 const URL_BASE = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SMOKE_EMAIL = env.TWOFER_SMOKE_EMAIL;
+const SMOKE_PASSWORD = env.TWOFER_SMOKE_PASSWORD;
 const j = (o) => JSON.stringify(o);
 
 async function signIn() {
+  if (!URL_BASE || !ANON) {
+    console.error("Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in .env");
+    process.exit(2);
+  }
+  if (!SMOKE_EMAIL || !SMOKE_PASSWORD) {
+    console.error("Missing TWOFER_SMOKE_EMAIL / TWOFER_SMOKE_PASSWORD in .env (local business test account)");
+    process.exit(2);
+  }
   const res = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: ANON, "Content-Type": "application/json" },
-    body: j({ email: env.EXPO_PUBLIC_DEMO_EMAIL, password: env.EXPO_PUBLIC_DEMO_PASSWORD }),
+    body: j({ email: SMOKE_EMAIL, password: SMOKE_PASSWORD }),
   });
   const b = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`sign-in ${res.status}`);
@@ -44,7 +54,7 @@ async function get(token, pathq) {
 }
 
 const { token, userId } = await signIn();
-console.log("Signed in as demo user:", userId?.slice(0, 8) + "…");
+console.log("Signed in as smoke user:", userId?.slice(0, 8) + "…");
 
 const biz = await get(token, `businesses?owner_id=eq.${userId}&select=id,name,owner_id`);
 console.log("\nbusinesses (owned):", biz.status, j(biz.body));
@@ -70,8 +80,8 @@ if (Array.isArray(bp.body)) {
   }
   const ok = bp.body.some((r) => ["trial", "active"].includes(r.subscription_status));
   console.log("\nVERDICT:", ok
-    ? "PASS — demo would clear the subscription gate (publish allowed for demo)."
-    : "BLOCKED — demo's status is not trial/active → deal INSERT denied by RLS.");
+    ? "PASS — smoke business would clear the subscription gate."
+    : "BLOCKED — smoke business status is not trial/active → deal INSERT denied by RLS.");
 } else {
   console.log("  unexpected:", j(bp.body)?.slice(0, 200));
 }

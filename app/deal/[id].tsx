@@ -26,6 +26,8 @@ import { ReportSheet } from "@/components/report-sheet";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { isShareDealEnabled } from "@/lib/runtime-env";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
 
 type Deal = {
   id: string;
@@ -40,6 +42,7 @@ type Deal = {
   description_ko: string | null;
   end_time: string;
   start_time: string;
+  is_demo?: boolean | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   business_id: string;
@@ -52,6 +55,7 @@ type Deal = {
     location: string | null;
     latitude: number | string | null;
     longitude: number | string | null;
+    is_demo?: boolean | null;
   } | null;
   is_recurring?: boolean;
   days_of_week?: number[] | null;
@@ -242,7 +246,7 @@ export default function DealDetail() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude)",
+        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)",
       )
       .eq("id", id)
       .single();
@@ -315,6 +319,10 @@ export default function DealDetail() {
         return;
       }
       if (!deal) return;
+      if (isDemoOffer(deal)) {
+        setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+        return;
+      }
       if (isClaiming) return;
       setIsClaiming(true);
       const claimPromise = (async () => {
@@ -353,6 +361,10 @@ export default function DealDetail() {
   }
 
   async function viewQr() {
+    if (deal && isDemoOffer(deal)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     if (activeClaim) {
       openClaimQr(activeClaim, false);
       return;
@@ -380,6 +392,10 @@ export default function DealDetail() {
   async function handleShare() {
     if (!shareDealEnabled) return;
     if (!deal || isSharing) return;
+    if (isDemoOffer(deal)) {
+      setBanner(DEMO_OFFER_DETAIL_EXPLANATION);
+      return;
+    }
     setIsSharing(true);
     setBanner(null);
     setShareError(null);
@@ -474,13 +490,16 @@ export default function DealDetail() {
   }
 
   const remaining = Math.max(0, deal.max_claims - claimsCount);
+  const dealIsDemo = isDemoOffer(deal);
   // Pre-rendered claim states so the user sees sold out / closed / not-started
   // before tapping. Client-side mirror only — the server checks in claim-deal
   // stay authoritative. Sold out requires the reliable RPC total: the fallback
   // count only sees the caller's own claims.
   const scheduleBlockReason = getDealClaimScheduleBlock(deal);
   const claimBlockedLabel =
-    claimsCountReliable && deal.max_claims > 0 && remaining <= 0
+    dealIsDemo
+      ? DEMO_OFFER_LABEL
+      : claimsCountReliable && deal.max_claims > 0 && remaining <= 0
       ? t("dealDetail.soldOut")
       : scheduleBlockReason
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
@@ -606,6 +625,11 @@ export default function DealDetail() {
         <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
           {displayTitle}
         </Text>
+        {dealIsDemo ? (
+          <View style={{ marginTop: Spacing.md }}>
+            <DemoOfferNotice detail />
+          </View>
+        ) : null}
         {deal.price != null ? (
           <Text style={{ marginTop: Spacing.sm, fontWeight: "700", fontSize: 20, color: theme.text }}>
             ${deal.price.toFixed(2)}
@@ -672,7 +696,7 @@ export default function DealDetail() {
                   : t("shareDeal.shareDeal", { defaultValue: "Share deal" })
               }
               onPress={handleShare}
-              disabled={isSharing}
+              disabled={isSharing || dealIsDemo}
             />
           ) : null}
         </View>

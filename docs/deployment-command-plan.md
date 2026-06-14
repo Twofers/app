@@ -228,7 +228,7 @@ Never paste real secret values into tickets or commits.
 |--------|--------|
 | `SUPABASE_URL` | Often auto-provided on hosted Supabase; confirm present for Deno functions. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-side admin client. |
-| `OPENAI_API_KEY` | Required for real AI paths for non-demo users. |
+| `OPENAI_API_KEY` | Required for AI paths. |
 
 ### 5.2 Strongly recommended for product quality
 
@@ -245,7 +245,6 @@ Never paste real secret values into tickets or commits.
 | `OPENAI_IMAGE_MODEL_DEFAULT` | Default for both generate and edit when role-specific vars unset (`_shared/dalle-image.ts`); allowlisted ids only; invalid → `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_GENERATE` | Text-to-image / poster generation (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_EDIT` | Uploaded-photo edits (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
-| `AI_ADS_DEMO_USE_LIVE` | When `true`, demo account can use live OpenAI for ads paths. |
 | `AI_COMPOSE_PROMPT_VERSION` | `ai-compose-offer` |
 | `AI_DEDUP_WINDOW_SECONDS` | `ai-compose-offer` |
 | `AI_COPY_MONTHLY_LIMIT` | `ai-generate-deal-copy` |
@@ -292,7 +291,7 @@ npx supabase secrets set KEY=value
 
 ### 6.1 Profiles (from `eas.json`)
 
-- **`production`:** `environment: production`, `autoIncrement: true`. Does **not** inject demo/debug `EXPO_PUBLIC_*` flags (unlike `development` / `preview`).
+- **`production`:** `environment: production`, `autoIncrement: true`. Does **not** inject debug `EXPO_PUBLIC_*` flags (unlike `development` / `preview`).
 - **`apk`:** extends `production` with `android.buildType: apk` for APK artifacts.
 
 ### 6.2 Required `EXPO_PUBLIC_*` for production Android
@@ -317,7 +316,6 @@ npx supabase secrets set KEY=value
 
 Do **not** set these to dev-like `true` on production:
 
-- `EXPO_PUBLIC_ENABLE_DEMO_AUTH_HELPER`
 - `EXPO_PUBLIC_SHOW_DEBUG_PANEL`
 - `EXPO_PUBLIC_DEBUG_BOOT_LOG`
 - `EXPO_PUBLIC_PREVIEW_MATCHES_DEV`

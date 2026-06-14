@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Swap these when the app is published to stores.
@@ -32,6 +32,7 @@ function buildLandingPage(
   dealTitle: string,
   businessName: string,
   fallbackUrl: string,
+  isDemo = false,
 ): string {
   const schemeUrl = `${SCHEME_PREFIX}${dealId}`;
 
@@ -40,7 +41,7 @@ function buildLandingPage(
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Twofer — ${esc(dealTitle)}</title>
+<title>Twofer â€” ${esc(dealTitle)}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -59,6 +60,11 @@ function buildLandingPage(
   .biz{font-size:13px;font-weight:700;color:#888;margin-bottom:8px}
   .title{font-size:24px;font-weight:800;line-height:1.25;margin-bottom:16px}
   .subtitle{font-size:15px;color:#555;line-height:1.5;margin-bottom:28px}
+  .demo{
+    border:1px solid #FDBA74;background:#FFF7ED;color:#7C2D12;
+    border-radius:14px;padding:12px;text-align:left;margin-bottom:20px;
+  }
+  .demo strong{display:block;color:#B45309;margin-bottom:4px}
   .btn{
     display:inline-block;width:100%;padding:16px;border-radius:16px;
     font-size:17px;font-weight:800;text-decoration:none;
@@ -80,7 +86,8 @@ function buildLandingPage(
   <div class="body">
     <p class="biz">${esc(businessName)}</p>
     <h1 class="title">${esc(dealTitle)}</h1>
-    <p class="subtitle">Claim this BOGO deal in seconds — open Twofer and show it at the counter.</p>
+    ${isDemo ? '<div class="demo"><strong>Demo offer</strong>This is sample content for testing only. Not a real offer.</div>' : ""}
+    <p class="subtitle">${isDemo ? "Open Twofer to view this sample offer." : "Claim this BOGO deal in seconds - open Twofer and show it at the counter."}</p>
 
     <a id="openApp" class="btn btn-primary" href="${esc(schemeUrl)}">
       Open in Twofer
@@ -96,7 +103,7 @@ function buildLandingPage(
     </p>
   </div>
   <div class="footer">
-    <span>Powered by Twofer — local deals, zero waste</span>
+    <span>Powered by Twofer â€” local deals, zero waste</span>
   </div>
 </div>
 
@@ -137,21 +144,22 @@ serve(async (req) => {
 
   let dealTitle = "A great deal is waiting for you";
   let businessName = "";
-
+  let isDemo = false;
   try {
     const { data } = await admin
       .from("deals")
-      .select("title, businesses(name)")
+      .select("title, is_demo, businesses(name,is_demo)")
       .eq("id", dealId)
       .single();
 
     if (data?.title) dealTitle = data.title;
     if ((data as any)?.businesses?.name) businessName = (data as any).businesses.name;
+    isDemo = data?.is_demo === true || (data as any)?.businesses?.is_demo === true;
   } catch {
-    // Graceful fallback — show generic page even if DB lookup fails.
+    // Graceful fallback â€” show generic page even if DB lookup fails.
   }
 
   const fallbackUrl = `${FALLBACK_BASE}/${encodeURIComponent(dealId)}`;
 
-  return htmlResponse(buildLandingPage(dealId, dealTitle, businessName, fallbackUrl), corsHeaders);
+  return htmlResponse(buildLandingPage(dealId, dealTitle, businessName, fallbackUrl, isDemo), corsHeaders);
 });

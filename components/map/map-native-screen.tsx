@@ -32,12 +32,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type AppTheme = typeof Colors.light;
 
 type DealLite = {
   id: string;
   title: string | null;
+  is_demo?: boolean | null;
   source_locale: string | null;
   title_en: string | null;
   title_es: string | null;
@@ -110,7 +112,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     const { data: dz, error: ed } = await supabase
       .from("deals")
       .select(
-        "id,title,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,is_demo,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
@@ -351,6 +353,11 @@ function renderMapCanvas({
               <View style={{ width: "100%", height: 120, backgroundColor: theme.surfaceMuted }} />
             )}
             <View style={{ padding: Spacing.lg }}>
+              {previewDeal?.is_demo ? (
+                <View style={{ marginBottom: Spacing.sm }}>
+                  <DemoOfferNotice compact />
+                </View>
+              ) : null}
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText, textTransform: "uppercase" }}>
                 {selectedBusiness.name}
               </Text>

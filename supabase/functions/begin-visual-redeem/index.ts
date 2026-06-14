@@ -69,7 +69,7 @@ serve(async (req) => {
 
     const { data: claim, error: fetchErr } = await supabase
       .from("deal_claims")
-      .select("id, user_id, expires_at, redeemed_at, claim_status, redeem_started_at, grace_period_minutes")
+      .select("id, user_id, expires_at, redeemed_at, claim_status, redeem_started_at, grace_period_minutes, deal:deals!inner(id,is_demo)")
       .eq("id", claimId)
       .maybeSingle();
 
@@ -83,6 +83,14 @@ serve(async (req) => {
     if (claim.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "This claim does not belong to you" }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const deal = claim.deal as { is_demo?: boolean | null } | null;
+    if (deal?.is_demo === true) {
+      return new Response(JSON.stringify({ error: "This is sample content for testing only. Not a real offer." }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

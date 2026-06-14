@@ -606,7 +606,7 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
    - **Sign In:** `supabase.auth.signInWithPassword()`
    - **Sign Up:** `supabase.auth.signUp()` with email confirmation disabled (immediate sign-in)
    - On success: redirects to `next` param or `/onboarding`
-   - Demo account: hardcoded `demo@demo.com` / `123456` (lines 73-74)
+   - Demo account: hardcoded `demo@demo.com` / `[redacted demo password]` (lines 73-74)
    - Error handling: `friendlyError()` maps Supabase auth errors to readable messages via `friendlyAuthErrorMessage()` in `lib/auth-error-messages.ts`
 3. Password recovery: `/forgot-password` → sends email → deep link → `/reset-password`
 
@@ -834,7 +834,7 @@ Tracks AI compose usage. Full columns defined in migration `20260325120000`. FK 
 
 ### Security Concerns
 
-- **Hardcoded demo credentials** in `app/auth-landing.tsx` lines 73-74: `demo@demo.com` / `123456`. This is likely dev-only but is in production code.
+- **Hardcoded demo credentials** in `app/auth-landing.tsx` lines 73-74: `demo@demo.com` / `[redacted demo password]`. This is likely dev-only but is in production code.
 - **No RLS policies on `ai_generation_logs`**: Intentional (service role only), but a developer could accidentally query this table from the client.
 - **`deals` insert is direct from client**: The strong-deal guardrail trigger on the server catches weak deals, but the insert itself goes through the Supabase client (not an edge function). An attacker could potentially insert deals with manipulated fields (e.g., `quality_tier`, `poster_url`) if they have a valid session.
 - **`deal_claims` direct INSERT bypass risk**: `supabase/migrations/20250127000000_initial_schema.sql` includes a `deal_claims` client INSERT policy (`"Users can insert their own claims"`). If this legacy policy remains active, a malicious client could insert `deal_claims` rows without going through `supabase/functions/claim-deal`, bypassing claim rule enforcement and redeem-by deadline semantics.
