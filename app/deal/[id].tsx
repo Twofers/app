@@ -517,7 +517,7 @@ export default function DealDetail() {
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      <ScreenHeader title={t("dealDetail.title")} leftSlot={renderBackAction()} style={{ marginBottom: Spacing.md }} />
+      <ScreenHeader title={displayTitle} leftSlot={renderBackAction()} style={{ marginBottom: Spacing.md }} />
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}

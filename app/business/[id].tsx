@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { ActivityIndicator, BackHandler, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -304,8 +304,11 @@ export default function BusinessProfileScreen() {
     );
   }
 
+  const businessInitial = biz.name.trim().charAt(0).toUpperCase() || "T";
+
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
+      <Stack.Screen options={{ title: biz.name || t("businessProfile.title") }} />
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -328,11 +331,35 @@ export default function BusinessProfileScreen() {
           {logoUri ? (
             <Image source={{ uri: logoUri }} style={{ width: "100%", height: "100%" }} contentFit="contain" />
           ) : (
-            <Image
-              source={require("../../assets/images/twofer-mark-512.png")}
-              style={{ width: 76, height: 76, opacity: 0.34 }}
-              contentFit="contain"
-            />
+            <View style={{ alignItems: "center", gap: Spacing.sm }}>
+              <View
+                style={{
+                  width: 82,
+                  height: 82,
+                  borderRadius: 41,
+                  backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "#FFF7ED",
+                  borderWidth: 1,
+                  borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.32)" : "#FED7AA",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                }}
+              >
+                <MaterialIcons name="storefront" size={28} color={theme.accentText} />
+                <Text style={{ fontSize: 22, fontWeight: "900", color: theme.accentText }} numberOfLines={1}>
+                  {businessInitial}
+                </Text>
+              </View>
+              <Text
+                style={{ color: theme.accentText, fontSize: 13, fontWeight: "900", textTransform: "uppercase" }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.15}
+              >
+                {biz.name}
+              </Text>
+            </View>
           )}
         </View>
         <Text style={{ fontSize: 28, lineHeight: 34, fontWeight: "800", color: theme.text }}>{biz.name}</Text>
