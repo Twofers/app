@@ -6,16 +6,18 @@ import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser"
 
 import { useBusiness } from "@/hooks/use-business";
 import { supabase } from "@/lib/supabase";
-import { Colors, Spacing } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { useScreenInsets } from "@/lib/screen-layout";
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const { subscriptionStatus, subscriptionTier, loading, refresh } = useBusiness();
 
   const [busy, setBusy] = useState(false);
@@ -103,7 +105,10 @@ export default function ManageSubscriptionScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
-      <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 40 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: top, paddingHorizontal: horizontal, paddingBottom: scrollBottom }}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text }}>
           {t("billingManage.title", { defaultValue: "Manage subscription" })}
         </Text>

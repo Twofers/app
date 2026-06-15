@@ -12,6 +12,10 @@ export const Spacing = {
 } as const;
 
 type ScreenVariant = "tab" | "stack";
+type ScreenInsets = {
+  top: number;
+  bottom: number;
+};
 
 /**
  * Tab screens are laid out **above** the bottom tab bar; the bar already clears the home indicator.
@@ -20,8 +24,7 @@ type ScreenVariant = "tab" | "stack";
  */
 const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl * 2 + Spacing.md;
 
-export function useScreenInsets(variant: ScreenVariant = "tab") {
-  const insets = useSafeAreaInsets();
+export function getScreenLayoutMetrics(insets: ScreenInsets, variant: ScreenVariant = "tab") {
   // Floor the stack-screen bottom inset: on Android edge-to-edge dev clients
   // insets.bottom can report 0, which let bottom CTAs (e.g. the AI ads
   // publish button) sit against the home indicator / nav bar.
@@ -38,4 +41,8 @@ export function useScreenInsets(variant: ScreenVariant = "tab") {
     /** FlatList contentContainerStyle.paddingBottom. */
     listBottom: bottomInset + Spacing.lg,
   };
+}
+
+export function useScreenInsets(variant: ScreenVariant = "tab") {
+  return getScreenLayoutMetrics(useSafeAreaInsets(), variant);
 }

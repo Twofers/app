@@ -9,7 +9,7 @@ import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
 
 import { useBusiness } from "@/hooks/use-business";
 import { supabase } from "@/lib/supabase";
-import { Colors, PrimaryTint, Radii, Spacing } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
@@ -17,6 +17,7 @@ import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
 import type { SubscriptionPricing } from "@/lib/billing/subscription-pricing";
 import { devError, devLog } from "@/lib/dev-log";
 import { PAID_BILLING_ENABLED, PILOT_DISABLE_BILLING_GATE, isTrialExpired } from "@/lib/billing/access";
+import { useScreenInsets } from "@/lib/screen-layout";
 
 function daysBetween(nowMs: number, targetIso: string | null): number | null {
   if (!targetIso) return null;
@@ -30,6 +31,7 @@ export default function BusinessBillingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { checkout, reason } = useLocalSearchParams<{ checkout?: string; reason?: string }>();
+  const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const {
     userId,
     subscriptionStatus,
@@ -349,8 +351,11 @@ export default function BusinessBillingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
-      <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 40 }}>
-        <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text, marginTop: 6 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: top, paddingHorizontal: horizontal, paddingBottom: scrollBottom }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text }}>
           {t("tabs.billing")}
         </Text>
 
