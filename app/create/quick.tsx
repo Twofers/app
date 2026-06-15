@@ -2,7 +2,7 @@
  * Express deal flow: photo / menu item -> AI offer draft -> review -> publish.
  *
  * Deliberately lean. The full editor (app/create/ai.tsx) stays one tap away via
- * "More options" for scheduling, pricing, recurring windows, multi-location, etc.
+ * the AI Ads builder for scheduling, pricing, recurring windows, multi-location, etc.
  *
  * The strong-deal guard is NOT weakened here: this screen runs the same client
  * mirror (validateStrongDealOnly) as the full editor, and every insert still hits
@@ -14,6 +14,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
@@ -34,8 +35,9 @@ import { validateStrongDealOnly } from "@/lib/strong-deal-guard";
 import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
 import { markRecentPublish } from "@/lib/recent-publish";
+import { buildQuickDealFullBuilderParams } from "@/lib/quick-deal-full-builder";
 
-// Express defaults; owners who need to tune these use "More options" (the full editor).
+// Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
 const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
@@ -75,6 +77,7 @@ export default function QuickDealExpress() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [publishedDealId, setPublishedDealId] = useState<string | null>(null);
   const [publishedDealTitle, setPublishedDealTitle] = useState("");
+  const [openingFullEditor, setOpeningFullEditor] = useState(false);
 
   const posterUri = draft?.poster_storage_path
     ? buildPublicDealPhotoUrl(draft.poster_storage_path)
@@ -278,8 +281,30 @@ export default function QuickDealExpress() {
     }
   }
 
-  function goToFullEditor() {
-    router.push({ pathname: "/create/ai", params: hint.trim() ? { hint: hint.trim() } : {} } as Href);
+  async function goToFullEditor() {
+    if (openingFullEditor) return;
+    setOpeningFullEditor(true);
+    let nextPhotoPath = photoPath ?? draft?.poster_storage_path ?? null;
+    try {
+      if (!nextPhotoPath && photoUri && businessId) {
+        nextPhotoPath = await uploadDealPhoto(businessId, photoUri);
+        setPhotoPath(nextPhotoPath);
+      }
+    } catch {
+      nextPhotoPath = null;
+    } finally {
+      setOpeningFullEditor(false);
+    }
+    router.push({
+      pathname: "/create/ai",
+      params: buildQuickDealFullBuilderParams({
+        hint,
+        title,
+        offerLine,
+        cta: draft?.cta ?? null,
+        posterPath: nextPhotoPath,
+      }),
+    } as Href);
   }
 
   const strongHint =
@@ -446,10 +471,19 @@ export default function QuickDealExpress() {
               />
             </View>
 
-            <Pressable onPress={goToFullEditor} style={{ marginTop: Spacing.lg, alignItems: "center" }}>
-              <Text style={{ color: theme.mutedText, fontSize: 14, fontWeight: "600" }}>
-                {t("createQuick.advanced")}
+            <Pressable
+              onPress={() => void goToFullEditor()}
+              disabled={openingFullEditor}
+              accessibilityRole="button"
+              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open AI Ads builder" })}
+              style={{ marginTop: Spacing.lg, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 4, opacity: openingFullEditor ? 0.6 : 1 }}
+            >
+              <Text style={{ color: theme.accentText, fontSize: 14, fontWeight: "800" }}>
+                {openingFullEditor
+                  ? t("createQuick.openingFullBuilder", { defaultValue: "Opening builder..." })
+                  : t("createQuick.fullBuilder", { defaultValue: "Use AI Ads builder" })}
               </Text>
+              <MaterialIcons name="chevron-right" size={20} color={theme.accentText} />
             </Pressable>
           </>
         ) : (
@@ -561,10 +595,19 @@ export default function QuickDealExpress() {
             <View style={{ marginTop: Spacing.sm }}>
               <SecondaryButton title={t("createQuick.startOver")} onPress={resetDraft} />
             </View>
-            <Pressable onPress={goToFullEditor} style={{ marginTop: Spacing.md, alignItems: "center" }}>
-              <Text style={{ color: theme.mutedText, fontSize: 14, fontWeight: "600" }}>
-                {t("createQuick.advanced")}
+            <Pressable
+              onPress={() => void goToFullEditor()}
+              disabled={openingFullEditor}
+              accessibilityRole="button"
+              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open AI Ads builder" })}
+              style={{ marginTop: Spacing.md, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 4, opacity: openingFullEditor ? 0.6 : 1 }}
+            >
+              <Text style={{ color: theme.accentText, fontSize: 14, fontWeight: "800" }}>
+                {openingFullEditor
+                  ? t("createQuick.openingFullBuilder", { defaultValue: "Opening builder..." })
+                  : t("createQuick.fullBuilder", { defaultValue: "Use AI Ads builder" })}
               </Text>
+              <MaterialIcons name="chevron-right" size={20} color={theme.accentText} />
             </Pressable>
           </>
         )}
