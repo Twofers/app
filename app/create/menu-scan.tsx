@@ -25,6 +25,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 
 type EditableRow = {
   key: string;
@@ -413,7 +414,14 @@ export default function MenuScanScreen() {
             }}
           >
             <Text style={{ flex: 1, fontWeight: "600", fontSize: 14, color: theme.text }}>{t("menuScan.skipDupLabel")}</Text>
-            <BrandedSwitch value={skipDuplicatesOnSave} onValueChange={setSkipDuplicatesOnSave} />
+            <BrandedSwitch
+              value={skipDuplicatesOnSave}
+              onValueChange={setSkipDuplicatesOnSave}
+              accessibilityRole="switch"
+              accessibilityLabel={t("menuScan.skipDupLabel")}
+              accessibilityHint={t("menuScan.skipDupA11yHint")}
+              accessibilityState={getSwitchAccessibilityState(skipDuplicatesOnSave)}
+            />
           </View>
           <SecondaryButton title={t("menuScan.addRow")} onPress={addRow} />
           {rows.map((item) => (

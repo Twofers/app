@@ -40,6 +40,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
 import { Colors, Radii } from "@/constants/theme";
+import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 
 type DbMenuItem = {
   id: string;
@@ -411,7 +412,14 @@ export default function MenuOfferScreen() {
                 }}
               >
                 <Text style={{ flex: 1, fontWeight: "600" }}>{t("menuOffer.multiLocationToggle")}</Text>
-                <BrandedSwitch value={applyMultiLocation} onValueChange={setApplyMultiLocation} />
+                <BrandedSwitch
+                  value={applyMultiLocation}
+                  onValueChange={setApplyMultiLocation}
+                  accessibilityRole="switch"
+                  accessibilityLabel={t("menuOffer.multiLocationToggle")}
+                  accessibilityHint={t("menuOffer.multiLocationToggleHint")}
+                  accessibilityState={getSwitchAccessibilityState(applyMultiLocation)}
+                />
               </View>
               {applyMultiLocation
                 ? visibleLocations

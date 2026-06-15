@@ -41,6 +41,7 @@ import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type Bus
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
+import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -746,7 +747,15 @@ export default function AccountScreen() {
               <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
               <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
-            <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={alertsLoading} />
+            <BrandedSwitch
+              value={alertsEnabled}
+              onValueChange={toggleAlerts}
+              disabled={alertsLoading}
+              accessibilityRole="switch"
+              accessibilityLabel={t("account.dealAlertsTitle")}
+              accessibilityHint={t("account.dealAlertsA11yHint")}
+              accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
+            />
           </View>
 
           {bizClaimNotif !== null ? (
@@ -769,6 +778,10 @@ export default function AccountScreen() {
                 value={bizClaimNotif}
                 onValueChange={(v) => void toggleBizClaimNotif(v)}
                 disabled={bizClaimNotifSaving}
+                accessibilityRole="switch"
+                accessibilityLabel={t("account.bizClaimNotifTitle")}
+                accessibilityHint={t("account.bizClaimNotifA11yHint")}
+                accessibilityState={getSwitchAccessibilityState(bizClaimNotif, bizClaimNotifSaving)}
               />
             </View>
           ) : null}

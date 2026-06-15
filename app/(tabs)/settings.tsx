@@ -56,6 +56,7 @@ import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
+import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -576,7 +577,15 @@ export default function SettingsScreen() {
               <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
               <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
-            <BrandedSwitch value={alertsEnabled} onValueChange={toggleAlerts} disabled={loading} />
+            <BrandedSwitch
+              value={alertsEnabled}
+              onValueChange={toggleAlerts}
+              disabled={loading}
+              accessibilityRole="switch"
+              accessibilityLabel={t("account.dealAlertsTitle")}
+              accessibilityHint={t("account.dealAlertsA11yHint")}
+              accessibilityState={getSwitchAccessibilityState(alertsEnabled, loading)}
+            />
           </View>
           <Text style={{ fontWeight: "700", marginTop: Spacing.md }}>{t("consumerSettings.notificationModeTitle")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
