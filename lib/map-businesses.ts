@@ -129,3 +129,14 @@ export function shouldClearMapSelectionOnPress(action: string | undefined): bool
   // Marker taps can bubble to map on some platforms; keep selection in that case.
   return normalized !== "marker-press" && normalized !== "marker-click";
 }
+
+export function shouldIgnoreMapPressAfterMarkerPress(
+  lastMarkerPressAtMs: number,
+  nowMs: number,
+  windowMs = 350,
+): boolean {
+  if (!Number.isFinite(lastMarkerPressAtMs) || lastMarkerPressAtMs <= 0) return false;
+  if (!Number.isFinite(nowMs)) return false;
+  const elapsed = nowMs - lastMarkerPressAtMs;
+  return elapsed >= 0 && elapsed <= windowMs;
+}

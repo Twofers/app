@@ -8,6 +8,7 @@ import {
   pickPreviewDeal,
   resolveMapTapHref,
   shouldClearMapSelectionOnPress,
+  shouldIgnoreMapPressAfterMarkerPress,
 } from "./map-businesses";
 
 describe("isValidCoordinate", () => {
@@ -126,5 +127,18 @@ describe("shouldClearMapSelectionOnPress", () => {
   it("clears selection for normal map taps or missing actions", () => {
     expect(shouldClearMapSelectionOnPress(undefined)).toBe(true);
     expect(shouldClearMapSelectionOnPress("press")).toBe(true);
+  });
+});
+
+describe("shouldIgnoreMapPressAfterMarkerPress", () => {
+  it("ignores immediate map presses after marker presses", () => {
+    expect(shouldIgnoreMapPressAfterMarkerPress(1_000, 1_120)).toBe(true);
+    expect(shouldIgnoreMapPressAfterMarkerPress(1_000, 1_350)).toBe(true);
+  });
+
+  it("allows later or invalid map presses", () => {
+    expect(shouldIgnoreMapPressAfterMarkerPress(1_000, 1_351)).toBe(false);
+    expect(shouldIgnoreMapPressAfterMarkerPress(0, 1_120)).toBe(false);
+    expect(shouldIgnoreMapPressAfterMarkerPress(1_000, Number.NaN)).toBe(false);
   });
 });

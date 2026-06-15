@@ -25,6 +25,7 @@ import {
   pickPreviewDeal,
   resolveMarkerTapOutcome,
   shouldClearMapSelectionOnPress,
+  shouldIgnoreMapPressAfterMarkerPress,
   type MappableBusiness,
 } from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
@@ -171,7 +172,8 @@ function renderMapCanvas({
   initialRegion,
   showUserLocationDot,
   setMapReady,
-  setSelectedBusinessId,
+  onMapBackgroundPress,
+  onMarkerSelected,
   userPos,
   radiusKm,
   markers,
@@ -195,7 +197,8 @@ function renderMapCanvas({
   initialRegion: Region;
   showUserLocationDot: boolean;
   setMapReady: (ready: boolean) => void;
-  setSelectedBusinessId: (id: string | null) => void;
+  onMapBackgroundPress: (action: string | undefined) => void;
+  onMarkerSelected: (id: string) => void;
   userPos: { lat: number; lng: number } | null;
   radiusKm: number;
   markers: MarkerWithLive[];
@@ -243,9 +246,19 @@ function renderMapCanvas({
         initialRegion={initialRegion}
         showsUserLocation={showUserLocationDot}
         onMapReady={() => setMapReady(true)}
+        onMarkerPress={(event) => {
+          const markerId = event.nativeEvent.id;
+          if (!markerId) return;
+          handleBusinessMarkerPress({
+            markerId,
+            selectedBusinessId,
+            deals,
+            onMarkerSelected,
+            router,
+          });
+        }}
         onPress={(e) => {
-          if (!shouldClearMapSelectionOnPress(e.nativeEvent.action)) return;
-          setSelectedBusinessId(null);
+          onMapBackgroundPress(e.nativeEvent.action);
         }}
       >
         {userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng) && radiusKm > 0 ? (
@@ -284,7 +297,7 @@ function renderMapCanvas({
             marker: m,
             selectedBusinessId,
             deals,
-            setSelectedBusinessId,
+            onMarkerSelected,
             router,
             theme,
           }),
@@ -422,14 +435,14 @@ function renderBusinessMarker({
   marker,
   selectedBusinessId,
   deals,
-  setSelectedBusinessId,
+  onMarkerSelected,
   router,
   theme,
 }: {
   marker: MarkerWithLive;
   selectedBusinessId: string | null;
   deals: DealLite[];
-  setSelectedBusinessId: (id: string | null) => void;
+  onMarkerSelected: (id: string) => void;
   router: ReturnType<typeof useRouter>;
   theme: AppTheme;
 }) {
@@ -439,6 +452,7 @@ function renderBusinessMarker({
   return (
     <Marker
       key={marker.id}
+      identifier={marker.id}
       coordinate={{ latitude: marker.lat, longitude: marker.lng }}
       tracksViewChanges={false}
       zIndex={marker.live ? 10 : 5}
@@ -449,7 +463,7 @@ function renderBusinessMarker({
           markerId: marker.id,
           selectedBusinessId,
           deals,
-          setSelectedBusinessId,
+          onMarkerSelected,
           router,
         });
       }}
@@ -483,13 +497,13 @@ function handleBusinessMarkerPress({
   markerId,
   selectedBusinessId,
   deals,
-  setSelectedBusinessId,
+  onMarkerSelected,
   router,
 }: {
   markerId: string;
   selectedBusinessId: string | null;
   deals: DealLite[];
-  setSelectedBusinessId: (id: string | null) => void;
+  onMarkerSelected: (id: string) => void;
   router: ReturnType<typeof useRouter>;
 }) {
   const liveDeal = pickPreviewDeal(deals, markerId, isDealActiveNow);
@@ -498,7 +512,7 @@ function handleBusinessMarkerPress({
     selectedBusinessId,
     liveDealId: liveDeal?.id ?? null,
   });
-  setSelectedBusinessId(outcome.nextSelectedBusinessId);
+  onMarkerSelected(outcome.nextSelectedBusinessId);
   if (outcome.href) {
     router.push(outcome.href as Href);
   }
@@ -548,7 +562,19 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const lastCameraFitSignatureRef = useRef<string | null>(null);
+  const lastMarkerPressAtRef = useRef(0);
   const livePulse = useLiveDealPulse();
+
+  const onMapBackgroundPress = useCallback((action: string | undefined) => {
+    if (shouldIgnoreMapPressAfterMarkerPress(lastMarkerPressAtRef.current, Date.now())) return;
+    if (!shouldClearMapSelectionOnPress(action)) return;
+    setSelectedBusinessId(null);
+  }, []);
+
+  const onMarkerSelected = useCallback((id: string) => {
+    lastMarkerPressAtRef.current = Date.now();
+    setSelectedBusinessId(id);
+  }, []);
 
   const loadMapData = useCallback(async () => {
     setLoading(true);
@@ -633,7 +659,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     initialRegion,
     showUserLocationDot,
     setMapReady,
-    setSelectedBusinessId,
+    onMapBackgroundPress,
+    onMarkerSelected,
     userPos,
     radiusKm,
     markers,
