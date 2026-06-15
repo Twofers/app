@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildOfferHintText, buildStructuredOffer, resolveMenuOfferLocationFlow } from "./menu-offer";
+import {
+  buildOfferHintText,
+  buildStructuredOffer,
+  resolveMenuOfferLocationFlow,
+  structuredOfferToEligibilityFormState,
+} from "./menu-offer";
 import { validateMenuOfferCanonicalSummary } from "./strong-deal-guard";
 
 describe("buildStructuredOffer", () => {
@@ -46,7 +51,7 @@ describe("buildStructuredOffer", () => {
     expect(solo.paired_item).toBeNull();
   });
 
-  it("second_half_off with and without paired", () => {
+  it("second_half_off remains historical data but is not a valid strong menu offer", () => {
     const withPaired = buildStructuredOffer({
       main: { name: "Bagel" },
       paired: { name: "Schmear" },
@@ -57,7 +62,7 @@ describe("buildStructuredOffer", () => {
     expect(withPaired.human_summary).toContain("Schmear");
     expect(
       validateMenuOfferCanonicalSummary({ human_summary: withPaired.human_summary }).ok,
-    ).toBe(true);
+    ).toBe(false);
 
     const solo = buildStructuredOffer({
       main: { name: "Bagel" },
@@ -108,6 +113,35 @@ describe("buildOfferHintText", () => {
       human_summary: "   ",
     });
     expect(hint).toBe("Espresso");
+  });
+
+  it("builds eligibility prefill for percent and free-item menu offers", () => {
+    const percent = structuredOfferToEligibilityFormState(
+      buildStructuredOffer({
+        main: { name: "Latte" },
+        paired: null,
+        pairing_type: "percent_off",
+        discount_percent: 50,
+      }),
+    );
+    expect(percent).toMatchObject({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      discountPercent: "50",
+      itemDescription: "Latte",
+    });
+
+    const free = structuredOfferToEligibilityFormState(
+      buildStructuredOffer({
+        main: { name: "Coffee" },
+        paired: { name: "Croissant" },
+        pairing_type: "free_with_purchase",
+      }),
+    );
+    expect(free).toMatchObject({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "Coffee",
+      freeItemDescription: "Croissant",
+    });
   });
 });
 

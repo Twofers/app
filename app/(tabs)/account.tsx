@@ -26,7 +26,7 @@ import { deleteUserAccount } from "../../lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { Colors, Gray, Radii } from "@/constants/theme";
+import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
@@ -49,6 +49,22 @@ import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
+
+type RepeatClaimPolicyType = "NONE" | "COOLDOWN_DAYS" | "FOREVER";
+
+const DEFAULT_REPEAT_CLAIM_COOLDOWN_DAYS = "7";
+const REPEAT_CLAIM_POLICY_TYPES: RepeatClaimPolicyType[] = ["NONE", "COOLDOWN_DAYS", "FOREVER"];
+
+function normalizeRepeatClaimPolicyType(value: unknown): RepeatClaimPolicyType {
+  return typeof value === "string" && REPEAT_CLAIM_POLICY_TYPES.includes(value as RepeatClaimPolicyType)
+    ? (value as RepeatClaimPolicyType)
+    : "NONE";
+}
+
+function isMissingRepeatPolicySchemaError(error: { code?: string | null; message?: string | null } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? "";
+  return error?.code === "42703" || error?.code === "PGRST204" || message.includes("repeat_claim_policy");
+}
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -74,6 +90,10 @@ export default function AccountScreen() {
   /** null = unknown (no business, or column not deployed yet) — toggle hidden. */
   const [bizClaimNotif, setBizClaimNotif] = useState<boolean | null>(null);
   const [bizClaimNotifSaving, setBizClaimNotifSaving] = useState(false);
+  const [repeatPolicyAvailable, setRepeatPolicyAvailable] = useState(false);
+  const [repeatPolicyType, setRepeatPolicyType] = useState<RepeatClaimPolicyType>("NONE");
+  const [repeatCooldownDays, setRepeatCooldownDays] = useState(DEFAULT_REPEAT_CLAIM_COOLDOWN_DAYS);
+  const [repeatPolicySaving, setRepeatPolicySaving] = useState(false);
   const [profileBusinessName, setProfileBusinessName] = useState("");
   const [profileContactName, setProfileContactName] = useState("");
   const [profileBusinessEmail, setProfileBusinessEmail] = useState("");
@@ -299,6 +319,46 @@ export default function AccountScreen() {
     };
   }, [businessId]);
 
+  useEffect(() => {
+    if (!businessId) {
+      setRepeatPolicyAvailable(false);
+      setRepeatPolicyType("NONE");
+      setRepeatCooldownDays(DEFAULT_REPEAT_CLAIM_COOLDOWN_DAYS);
+      return;
+    }
+    let cancelled = false;
+    setRepeatPolicyAvailable(false);
+    void supabase
+      .from("businesses")
+      .select("repeat_claim_policy_type,repeat_claim_cooldown_days")
+      .eq("id", businessId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setRepeatPolicyAvailable(false);
+          return;
+        }
+        const row = data as {
+          repeat_claim_policy_type?: string | null;
+          repeat_claim_cooldown_days?: number | null;
+        };
+        const policyType = normalizeRepeatClaimPolicyType(row.repeat_claim_policy_type);
+        const cooldownDays =
+          typeof row.repeat_claim_cooldown_days === "number" &&
+          Number.isFinite(row.repeat_claim_cooldown_days) &&
+          row.repeat_claim_cooldown_days > 0
+            ? String(Math.trunc(row.repeat_claim_cooldown_days))
+            : DEFAULT_REPEAT_CLAIM_COOLDOWN_DAYS;
+        setRepeatPolicyType(policyType);
+        setRepeatCooldownDays(cooldownDays);
+        setRepeatPolicyAvailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
   async function toggleBizClaimNotif(next: boolean) {
     if (!businessId || bizClaimNotif === null) return;
     const previous = bizClaimNotif;
@@ -313,6 +373,46 @@ export default function AccountScreen() {
       setBizClaimNotif(previous);
       setBanner({ message: t("account.errSaveProfileFailed"), tone: "error" });
     }
+  }
+
+  async function saveRepeatPolicy() {
+    if (!businessId || !repeatPolicyAvailable || repeatPolicySaving) return;
+    const parsedCooldownDays = Number.parseInt(repeatCooldownDays.trim(), 10);
+    if (
+      repeatPolicyType === "COOLDOWN_DAYS" &&
+      (!Number.isFinite(parsedCooldownDays) || parsedCooldownDays < 1)
+    ) {
+      setBanner({
+        message: t("account.repeatPolicyInvalidDays", { defaultValue: "Enter at least 1 day." }),
+        tone: "error",
+      });
+      return;
+    }
+    const normalizedCooldownDays = Math.max(1, parsedCooldownDays);
+    setRepeatPolicySaving(true);
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        repeat_claim_policy_type: repeatPolicyType,
+        repeat_claim_cooldown_days: repeatPolicyType === "COOLDOWN_DAYS" ? normalizedCooldownDays : null,
+      })
+      .eq("id", businessId);
+    setRepeatPolicySaving(false);
+    if (error) {
+      if (isMissingRepeatPolicySchemaError(error)) {
+        setRepeatPolicyAvailable(false);
+        return;
+      }
+      setBanner({ message: t("account.errSaveProfileFailed"), tone: "error" });
+      return;
+    }
+    if (repeatPolicyType === "COOLDOWN_DAYS") {
+      setRepeatCooldownDays(String(normalizedCooldownDays));
+    }
+    setBanner({
+      message: t("account.repeatPolicySaved", { defaultValue: "Repeat customer settings saved." }),
+      tone: "success",
+    });
   }
 
   async function toggleAlerts(next: boolean) {
@@ -660,6 +760,60 @@ export default function AccountScreen() {
     );
   }
 
+  function repeatPolicyOption(policyType: RepeatClaimPolicyType, label: string, helper?: string) {
+    const selected = repeatPolicyType === policyType;
+    return (
+      <Pressable
+        key={policyType}
+        onPress={() => setRepeatPolicyType(policyType)}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        style={{
+          borderWidth: 1,
+          borderColor: selected ? theme.primary : theme.border,
+          borderRadius: Radii.lg,
+          padding: Spacing.sm,
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: Spacing.sm,
+          backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+        }}
+      >
+        <View
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 9,
+            borderWidth: 2,
+            borderColor: selected ? theme.primary : theme.border,
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 1,
+          }}
+        >
+          {selected ? (
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: theme.primary,
+              }}
+            />
+          ) : null}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.text, fontWeight: "700" }}>{label}</Text>
+          {helper ? (
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 3 }}>
+              {helper}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
+
   return (
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -873,6 +1027,89 @@ export default function AccountScreen() {
                 accessibilityLabel={t("account.bizClaimNotifTitle")}
                 accessibilityHint={t("account.bizClaimNotifA11yHint")}
                 accessibilityState={getSwitchAccessibilityState(bizClaimNotif, bizClaimNotifSaving)}
+              />
+            </View>
+          ) : null}
+
+          {repeatPolicyAvailable ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                gap: Spacing.sm,
+                backgroundColor: theme.surface,
+              }}
+            >
+              <Text style={{ fontWeight: "700" }}>
+                {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
+              </Text>
+              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+                {t("account.repeatPolicyHelp", {
+                  defaultValue:
+                    "Use this if your goal is to bring in new customers instead of giving the same customer a deal every day.",
+                })}
+              </Text>
+              {repeatPolicyOption(
+                "NONE",
+                t("account.repeatPolicyNone", { defaultValue: "No limit" }),
+              )}
+              {repeatPolicyOption(
+                "COOLDOWN_DAYS",
+                t("account.repeatPolicyCooldown", { defaultValue: "Customers can claim again after X days" }),
+                t("account.repeatPolicyCooldownHelp", {
+                  defaultValue:
+                    "A customer who redeems a deal from your business must wait this many days before claiming another deal from your business.",
+                }),
+              )}
+              {repeatPolicyType === "COOLDOWN_DAYS" ? (
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+                    <TextInput
+                      value={repeatCooldownDays}
+                      onChangeText={(value) => setRepeatCooldownDays(value.replace(/\D/g, "").slice(0, 3))}
+                      keyboardType="number-pad"
+                      accessibilityLabel={t("account.repeatPolicyCooldownInputA11y", {
+                        defaultValue: "Repeat customer cooldown days",
+                      })}
+                      style={{
+                        width: 76,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        borderRadius: Radii.sm,
+                        paddingHorizontal: Spacing.sm,
+                        paddingVertical: 8,
+                        color: theme.text,
+                        backgroundColor: theme.surface,
+                        fontWeight: "700",
+                        textAlign: "center",
+                      }}
+                    />
+                    <Text style={{ color: theme.text, fontWeight: "700" }}>
+                      {t("account.repeatPolicyDays", { defaultValue: "days" })}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+              {repeatPolicyOption(
+                "FOREVER",
+                t("account.repeatPolicyForever", {
+                  defaultValue: "Customers can claim only once ever from my business",
+                }),
+                t("account.repeatPolicyForeverHelp", {
+                  defaultValue:
+                    "New-customer-only mode: once a customer redeems a deal from your business, they cannot claim another deal from your business again.",
+                }),
+              )}
+              <SecondaryButton
+                title={
+                  repeatPolicySaving
+                    ? t("account.repeatPolicySaving", { defaultValue: "Saving..." })
+                    : t("account.repeatPolicySave", { defaultValue: "Save repeat limit" })
+                }
+                onPress={() => void saveRepeatPolicy()}
+                disabled={repeatPolicySaving}
               />
             </View>
           ) : null}

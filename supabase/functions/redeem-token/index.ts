@@ -7,6 +7,53 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
+const NEW_REDEEM_SELECT_COLUMN_NAMES = [
+  "location_id",
+  "qr_token_hash",
+] as const;
+const NEW_REDEEM_UPDATE_COLUMN_NAMES = [
+  "redeemed_by_business_user_id",
+  "redeemed_at_business_id",
+  "redeemed_at_location_id",
+] as const;
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return base64Url(new Uint8Array(digest));
+}
+
+function normalizeQrToken(value: string): string {
+  const clean = value.trim();
+  if (!clean) return "";
+  if (clean.toLowerCase().startsWith("twofer://redeem/")) return clean;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+    return `twofer://redeem/${clean}`;
+  }
+  return clean;
+}
+
+function isMissingNewRedeemColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST200" || error?.code === "PGRST204" || error?.code === "42703") &&
+    [...NEW_REDEEM_SELECT_COLUMN_NAMES, ...NEW_REDEEM_UPDATE_COLUMN_NAMES].some((name) =>
+      message.includes(name),
+    )
+  );
+}
+
+function omitNewRedeemUpdateColumns<T extends Record<string, unknown>>(row: T) {
+  const next = { ...row };
+  for (const name of NEW_REDEEM_UPDATE_COLUMN_NAMES) delete next[name];
+  return next;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -87,6 +134,23 @@ serve(async (req) => {
     }
 
     const businessIds = (businesses ?? []).map((b) => b.id);
+    let scannerLocationId: string | null = null;
+    try {
+      const { data: scannerLocation, error: scannerLocationError } = await supabase
+        .from("business_locations")
+        .select("id")
+        .eq("business_id", business.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (scannerLocationError) {
+        console.warn("[redeem-token] scanner location lookup skipped:", scannerLocationError.message);
+      } else {
+        scannerLocationId = scannerLocation?.id ?? null;
+      }
+    } catch (err) {
+      console.warn("[redeem-token] scanner location lookup unavailable:", String(err).slice(0, 160));
+    }
 
     // 🔒 Brute-force lockout (20260705120007_failed_redeem_attempts.sql):
     // >= 10 failed attempts in the last 5 minutes for this business (and IP,
@@ -174,9 +238,21 @@ serve(async (req) => {
       typeof shortCodeRaw === "string"
         ? shortCodeRaw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
         : "";
-    const tokenNorm = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const tokenInput = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const tokenNorm = tokenInput ? normalizeQrToken(tokenInput) : "";
 
-    const selectClaim = `
+    const selectClaimNew = `
+        *,
+        deal:deals!inner(
+          id,
+          business_id,
+          location_id,
+          title,
+          is_demo,
+          business:businesses!inner(id, owner_id)
+        )
+      `;
+    const selectClaimLegacy = `
         *,
         deal:deals!inner(
           id,
@@ -188,22 +264,51 @@ serve(async (req) => {
       `;
 
     let claim: Record<string, unknown> | null = null;
-    let claimError: { message?: string } | null = null;
+    let claimError: { code?: string; message?: string } | null = null;
 
     if (shortCodeNorm.length >= 4) {
-      const r = await supabase
+      let r = await supabase
         .from("deal_claims")
-        .select(selectClaim)
+        .select(selectClaimNew)
         .eq("short_code", shortCodeNorm)
         .maybeSingle();
+      if (isMissingNewRedeemColumn(r.error)) {
+        r = await supabase
+          .from("deal_claims")
+          .select(selectClaimLegacy)
+          .eq("short_code", shortCodeNorm)
+          .maybeSingle();
+      }
       claim = r.data as Record<string, unknown> | null;
       claimError = r.error;
     } else if (tokenNorm.length > 0) {
-      const r = await supabase
+      const tokenHash = await sha256Base64Url(tokenNorm);
+      let r = await supabase
         .from("deal_claims")
-        .select(selectClaim)
-        .eq("token", tokenNorm)
+        .select(selectClaimNew)
+        .eq("qr_token_hash", tokenHash)
         .maybeSingle();
+      if (isMissingNewRedeemColumn(r.error) || !r.data) {
+        r = await supabase
+          .from("deal_claims")
+          .select(isMissingNewRedeemColumn(r.error) ? selectClaimLegacy : selectClaimNew)
+          .eq("token", tokenNorm)
+          .maybeSingle();
+      }
+      if (!r.data && tokenInput && tokenInput !== tokenNorm) {
+        r = await supabase
+          .from("deal_claims")
+          .select(selectClaimLegacy)
+          .eq("token", tokenInput)
+          .maybeSingle();
+      }
+      if (isMissingNewRedeemColumn(r.error)) {
+        r = await supabase
+          .from("deal_claims")
+          .select(selectClaimLegacy)
+          .eq("token", tokenInput || tokenNorm)
+          .maybeSingle();
+      }
       claim = r.data as Record<string, unknown> | null;
       claimError = r.error;
     } else {
@@ -235,6 +340,7 @@ serve(async (req) => {
     const deal = claim.deal as {
       id?: string | null;
       business_id?: string | null;
+      location_id?: string | null;
       title?: string | null;
       is_demo?: boolean | null;
       business?: { owner_id?: string };
@@ -248,6 +354,33 @@ serve(async (req) => {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+    if (!businessIds.includes(deal.business_id ?? "")) {
+      await recordFailedAttempt("wrong_business");
+      return new Response(
+        JSON.stringify({
+          error: "This deal belongs to another business and cannot be redeemed here.",
+          error_code: "WRONG_BUSINESS_REDEMPTION",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    const dealLocationId = deal.location_id ?? (claim.location_id as string | null | undefined) ?? null;
+    if (dealLocationId && scannerLocationId && dealLocationId !== scannerLocationId) {
+      await recordFailedAttempt("wrong_location");
+      return new Response(
+        JSON.stringify({
+          error: "This deal can only be redeemed at the location shown in the customer's wallet.",
+          error_code: "WRONG_LOCATION_REDEMPTION",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     if (deal.is_demo === true) {
@@ -321,18 +454,32 @@ serve(async (req) => {
     // 💾 Mark as redeemed (idempotent: same claim id, only if still null)
     // Manual short-code entry is the backup path for staff QR redemption.
     const redeemMethod = "qr";
-    const { data: updated, error: updateError } = await supabase
+    const redeemUpdateRow = {
+      redeemed_at: nowIso,
+      claim_status: "redeemed",
+      redeem_method: redeemMethod,
+      redeem_started_at: null,
+      redeemed_by_business_user_id: user.id,
+      redeemed_at_business_id: deal.business_id ?? business.id,
+      redeemed_at_location_id: dealLocationId ?? scannerLocationId,
+    };
+    let updateResult = await supabase
       .from("deal_claims")
-      .update({
-        redeemed_at: nowIso,
-        claim_status: "redeemed",
-        redeem_method: redeemMethod,
-        redeem_started_at: null,
-      })
+      .update(redeemUpdateRow)
       .eq("id", claimId)
       .is("redeemed_at", null)
       .select("redeemed_at")
       .single();
+    if (isMissingNewRedeemColumn(updateResult.error)) {
+      updateResult = await supabase
+        .from("deal_claims")
+        .update(omitNewRedeemUpdateColumns(redeemUpdateRow))
+        .eq("id", claimId)
+        .is("redeemed_at", null)
+        .select("redeemed_at")
+        .single();
+    }
+    const { data: updated, error: updateError } = updateResult;
 
     if (updateError || !updated) {
       console.error("Update error:", updateError);

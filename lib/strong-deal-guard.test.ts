@@ -6,10 +6,12 @@ import {
 } from "./strong-deal-guard";
 
 describe("validateStrongDealOnly", () => {
-  // ── Existing passing cases ────────────────────────────────────────────────
   it("accepts explicit BOGO language", () => {
     expect(
-      validateStrongDealOnly({ title: "BOGO croissants all afternoon", description: "Buy one get one on any pastry." }),
+      validateStrongDealOnly({
+        title: "BOGO croissants all afternoon",
+        description: "Buy one get one on any pastry.",
+      }),
     ).toEqual({ ok: true });
   });
 
@@ -25,41 +27,28 @@ describe("validateStrongDealOnly", () => {
     ).toEqual({ ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
-  // ── Free-item cases (Rule 1 — always PASS) ────────────────────────────────
-  it("accepts 'buy a coffee get a free muffin'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Buy a coffee, get a free muffin" }),
-    ).toEqual({ ok: true });
+  it("accepts buy a coffee get a free muffin", () => {
+    expect(validateStrongDealOnly({ title: "Buy a coffee, get a free muffin" })).toEqual({ ok: true });
   });
 
-  it("accepts 'get one free'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Latte + cookie — get one free" }),
-    ).toEqual({ ok: true });
+  it("accepts get one free", () => {
+    expect(validateStrongDealOnly({ title: "Latte + cookie - get one free" })).toEqual({ ok: true });
   });
 
-  it("accepts 'free muffin with coffee'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Free muffin with any coffee purchase" }),
-    ).toEqual({ ok: true });
+  it("accepts free muffin with coffee", () => {
+    expect(validateStrongDealOnly({ title: "Free muffin with any coffee purchase" })).toEqual({ ok: true });
   });
 
-  it("accepts 'on the house'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Second latte on the house today" }),
-    ).toEqual({ ok: true });
+  it("accepts on the house", () => {
+    expect(validateStrongDealOnly({ title: "Second latte on the house today" })).toEqual({ ok: true });
   });
 
-  it("accepts 'complimentary'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Complimentary pastry with your espresso" }),
-    ).toEqual({ ok: true });
+  it("accepts complimentary", () => {
+    expect(validateStrongDealOnly({ title: "Complimentary pastry with your espresso" })).toEqual({ ok: true });
   });
 
-  it("accepts 'buy one get one free' (spelled out)", () => {
-    expect(
-      validateStrongDealOnly({ title: "Buy one get one free on all pastries" }),
-    ).toEqual({ ok: true });
+  it("accepts buy one get one free spelled out", () => {
+    expect(validateStrongDealOnly({ title: "Buy one get one free on all pastries" })).toEqual({ ok: true });
   });
 
   it("accepts free item in description even if title is plain", () => {
@@ -71,58 +60,74 @@ describe("validateStrongDealOnly", () => {
     ).toEqual({ ok: true });
   });
 
-  // ── "sugar-free" should NOT trigger the free-item pass ───────────────────
-  it("does NOT accept 'sugar-free latte' alone as a deal", () => {
-    expect(
-      validateStrongDealOnly({ title: "Sugar-free latte special" }),
-    ).toEqual({ ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE });
+  it("does not accept sugar-free latte alone as a deal", () => {
+    expect(validateStrongDealOnly({ title: "Sugar-free latte special" })).toEqual({
+      ok: false,
+      reason: "no_strong_language",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  it("does NOT accept 'dairy-free option available' alone", () => {
-    expect(
-      validateStrongDealOnly({ title: "Dairy-free option available today" }),
-    ).toEqual({ ok: false, reason: "no_strong_language", message: STRONG_DEAL_ONLY_MESSAGE });
+  it("does not accept dairy-free option alone", () => {
+    expect(validateStrongDealOnly({ title: "Dairy-free option available today" })).toEqual({
+      ok: false,
+      reason: "no_strong_language",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  // ── Conditional discount (Rule 2 — always REJECT) ────────────────────────
-  it("rejects 'buy a coffee + 40% off muffin'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Buy a coffee + 40% off muffin" }),
-    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
+  it("rejects buy a coffee plus 40% off muffin", () => {
+    expect(validateStrongDealOnly({ title: "Buy a coffee + 40% off muffin" })).toEqual({
+      ok: false,
+      reason: "conditional",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  it("rejects 'buy a latte + 50% off pastry'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Buy a latte + 50% off any pastry" }),
-    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
+  it("rejects buy a latte plus 50% off pastry", () => {
+    expect(validateStrongDealOnly({ title: "Buy a latte + 50% off any pastry" })).toEqual({
+      ok: false,
+      reason: "conditional",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  it("rejects 'buy espresso + 60% off second drink'", () => {
-    expect(
-      validateStrongDealOnly({ title: "Buy an espresso + 60% off second drink" }),
-    ).toEqual({ ok: false, reason: "conditional", message: STRONG_DEAL_ONLY_MESSAGE });
+  it("rejects buy espresso plus 60% off second drink", () => {
+    expect(validateStrongDealOnly({ title: "Buy an espresso + 60% off second drink" })).toEqual({
+      ok: false,
+      reason: "second_item_discount",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  // ── Strong-language cases (Rule 4 — PASS) ────────────────────────────────
   it("accepts 2-for-1", () => {
-    expect(
-      validateStrongDealOnly({ title: "2-for-1 oat milk lattes" }),
-    ).toEqual({ ok: true });
+    expect(validateStrongDealOnly({ title: "2-for-1 oat milk lattes" })).toEqual({ ok: true });
   });
 
-  it("accepts 40% off", () => {
-    expect(
-      validateStrongDealOnly({ title: "40% off all drinks today" }),
-    ).toEqual({ ok: true });
+  it("rejects broad 40% off entire-category copy", () => {
+    expect(validateStrongDealOnly({ title: "40% off all drinks today" })).toEqual({
+      ok: false,
+      reason: "entire_order",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  it("accepts 50% off", () => {
-    expect(
-      validateStrongDealOnly({ title: "50% off second item" }),
-    ).toEqual({ ok: true });
+  it("rejects 40% off an entire order", () => {
+    expect(validateStrongDealOnly({ title: "40% off your entire order" })).toEqual({
+      ok: false,
+      reason: "entire_order",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
   });
 
-  // ── Misspelling tolerance (AI handles this, but guard should still work) ──
+  it("rejects 50% off a second item", () => {
+    expect(validateStrongDealOnly({ title: "50% off second item" })).toEqual({
+      ok: false,
+      reason: "second_item_discount",
+      message: STRONG_DEAL_ONLY_MESSAGE,
+    });
+  });
+
   it("validateMenuOfferCanonicalSummary matches structured wizard lines", () => {
     expect(
       validateMenuOfferCanonicalSummary({
@@ -131,9 +136,9 @@ describe("validateStrongDealOnly", () => {
     ).toEqual({ ok: true });
     expect(
       validateMenuOfferCanonicalSummary({
-        human_summary: "50% off the second item — Bagel.",
+        human_summary: "50% off the second item - Bagel.",
       }),
-    ).toEqual({ ok: true });
+    ).toEqual({ ok: false, reason: "second_item_discount", message: STRONG_DEAL_ONLY_MESSAGE });
     expect(
       validateMenuOfferCanonicalSummary({
         human_summary: "5% off Latte",
@@ -142,8 +147,7 @@ describe("validateStrongDealOnly", () => {
     ).toEqual({ ok: false, reason: "low_percent", message: STRONG_DEAL_ONLY_MESSAGE });
   });
 
-  it("accepts BOGO with typo in description (AI-generated output)", () => {
-    // After AI rewrites "cofee + muffin" it outputs proper BOGO copy
+  it("accepts BOGO with typo in description from generated output", () => {
     expect(
       validateStrongDealOnly({
         title: "Buy a coffee, get a free muffin",

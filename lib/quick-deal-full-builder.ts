@@ -4,6 +4,7 @@ export type QuickDealFullBuilderDraft = {
   offerLine?: string | null;
   cta?: string | null;
   posterPath?: string | null;
+  dealEligibility?: string | null;
 };
 
 function clean(value: string | null | undefined): string {
@@ -17,6 +18,7 @@ export function buildQuickDealFullBuilderParams(draft: QuickDealFullBuilderDraft
   const offerLine = clean(draft.offerLine);
   const cta = clean(draft.cta);
   const posterPath = clean(draft.posterPath);
+  const dealEligibility = clean(draft.dealEligibility);
 
   if (hint) params.prefillHint = hint;
   if (title) params.prefillTitle = title;
@@ -26,6 +28,7 @@ export function buildQuickDealFullBuilderParams(draft: QuickDealFullBuilderDraft
   }
   if (cta) params.prefillCta = cta;
   if (posterPath) params.prefillPosterPath = posterPath;
+  if (dealEligibility) params.prefillDealEligibility = dealEligibility;
 
   return params;
 }

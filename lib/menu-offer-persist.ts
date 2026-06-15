@@ -7,9 +7,7 @@ const KEY = "@twof/lastMenuOfferPairingType";
 const VALID: MenuOfferPairingType[] = [
   "free_with_purchase",
   "bogo_pair",
-  "second_half_off",
   "percent_off",
-  "fixed_price_special",
 ];
 
 export function isMenuOfferPairingType(s: string): s is MenuOfferPairingType {

@@ -9,6 +9,7 @@ import {
 } from "../_shared/staff-redemption-lockout.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NEW_STAFF_PREFLIGHT_COLUMN_NAMES = ["location_id", "qr_token_hash"] as const;
 
 function json(body: Record<string, unknown>, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(body), {
@@ -39,6 +40,26 @@ function statusCode(status: unknown): number {
     default:
       return 400;
   }
+}
+
+function isMissingStaffPreflightColumn(error: { code?: string | null; message?: string | null } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST200" || error?.code === "PGRST204" || error?.code === "42703") &&
+    NEW_STAFF_PREFLIGHT_COLUMN_NAMES.some((name) => message.includes(name))
+  );
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return base64Url(new Uint8Array(digest));
 }
 
 serve(async (req) => {
@@ -98,6 +119,15 @@ serve(async (req) => {
     // in the last 5 minutes → 429 before any code lookup happens.
     const businessId = metadataUuid(user.app_metadata, "business_id");
     const deviceId = metadataUuid(user.app_metadata, "redemption_device_id");
+    let scannerLocationId = metadataUuid(user.app_metadata, "location_id");
+    if (!scannerLocationId && deviceId) {
+      const { data: deviceRow } = await supabaseAdmin
+        .from("redemption_devices")
+        .select("location_id")
+        .eq("id", deviceId)
+        .maybeSingle();
+      scannerLocationId = (deviceRow?.location_id as string | null | undefined) ?? null;
+    }
     if (businessId && deviceId) {
       const windowStart = new Date(Date.now() - STAFF_LOCKOUT_WINDOW_MS).toISOString();
       const { count: recentFailures, error: lockoutErr } = await supabaseAdmin
@@ -113,31 +143,88 @@ serve(async (req) => {
       }
     }
 
-    let demoCheck = supabaseAdmin
-      .from("deal_claims")
-      .select("id, deal:deals!inner(is_demo)")
-      .limit(1);
-    if (shortCodeNorm.length >= 4) {
-      demoCheck = demoCheck.eq("short_code", shortCodeNorm);
-    } else if (tokenNorm.length > 0) {
-      demoCheck = demoCheck.eq("token", tokenNorm);
-    } else {
-      demoCheck = demoCheck.eq("id", "00000000-0000-0000-0000-000000000000");
+    const emptyClaimId = "00000000-0000-0000-0000-000000000000";
+    const claimSelectNew = "id, short_code, location_id, deal:deals!inner(is_demo,business_id,location_id)";
+    const claimSelectLegacy = "id, short_code, deal:deals!inner(is_demo,business_id)";
+    const tokenHash = tokenNorm.length > 0 ? await sha256Base64Url(tokenNorm) : "";
+    const runPreflight = (selectColumns: string, match: "short_code" | "qr_token_hash" | "token" | "none") => {
+      let query = supabaseAdmin.from("deal_claims").select(selectColumns).limit(1);
+      if (match === "short_code") return query.eq("short_code", shortCodeNorm);
+      if (match === "qr_token_hash") return query.eq("qr_token_hash", tokenHash);
+      if (match === "token") return query.eq("token", tokenNorm);
+      return query.eq("id", emptyClaimId);
+    };
+    const preflightMatch =
+      shortCodeNorm.length >= 4 ? "short_code" : tokenNorm.length > 0 ? "qr_token_hash" : "none";
+    let preflightResult = (await runPreflight(claimSelectNew, preflightMatch)) as {
+      data: unknown[] | null;
+      error: { code?: string | null; message?: string | null } | null;
+    };
+    if (
+      !preflightResult.error &&
+      tokenNorm.length > 0 &&
+      preflightMatch === "qr_token_hash" &&
+      (preflightResult.data?.length ?? 0) === 0
+    ) {
+      preflightResult = (await runPreflight(claimSelectNew, "token")) as {
+        data: unknown[] | null;
+        error: { code?: string | null; message?: string | null } | null;
+      };
     }
-    const { data: demoRows, error: demoCheckError } = await demoCheck;
-    if (demoCheckError) {
-      console.error("[staff-redemption] demo check failed", demoCheckError);
+    if (isMissingStaffPreflightColumn(preflightResult.error)) {
+      const legacyMatch =
+        shortCodeNorm.length >= 4 ? "short_code" : tokenNorm.length > 0 ? "token" : "none";
+      preflightResult = (await runPreflight(claimSelectLegacy, legacyMatch)) as {
+        data: unknown[] | null;
+        error: { code?: string | null; message?: string | null } | null;
+      };
+    }
+    const { data: preflightRows, error: preflightError } = preflightResult;
+    if (preflightError) {
+      console.error("[staff-redemption] preflight failed", preflightError);
       return json({ error: "Could not process redemption." }, 500, corsHeaders);
     }
-    const demoRow = demoRows?.[0] as { deal?: { is_demo?: boolean | null } | null } | undefined;
-    if (demoRow?.deal?.is_demo === true) {
+    const preflightRow = preflightRows?.[0] as {
+      id?: string | null;
+      short_code?: string | null;
+      location_id?: string | null;
+      deal?: { is_demo?: boolean | null; business_id?: string | null; location_id?: string | null } | null;
+    } | undefined;
+    if (preflightRow?.deal?.is_demo === true) {
       return json({ error: "This is sample content for testing only. Not a real offer." }, 400, corsHeaders);
+    }
+    if (preflightRow?.deal?.business_id && businessId && preflightRow.deal.business_id !== businessId) {
+      return json(
+        {
+          error: "This deal belongs to another business and cannot be redeemed here.",
+          error_code: "WRONG_BUSINESS_REDEMPTION",
+        },
+        403,
+        corsHeaders,
+      );
+    }
+    const dealLocationId = preflightRow?.deal?.location_id ?? preflightRow?.location_id ?? null;
+    if (dealLocationId && scannerLocationId && dealLocationId !== scannerLocationId) {
+      return json(
+        {
+          error: "This deal can only be redeemed at the location shown in the customer's wallet.",
+          error_code: "WRONG_LOCATION_REDEMPTION",
+        },
+        403,
+        corsHeaders,
+      );
     }
 
     const rpcName = action === "confirm" ? "confirm_staff_redemption" : "preview_staff_redemption";
+    const rpcShortCode =
+      typeof body.short_code === "string"
+        ? body.short_code
+        : tokenNorm.length > 0 && preflightRow?.short_code
+          ? preflightRow.short_code
+          : null;
     const { data, error } = await supabase.rpc(rpcName, {
-      p_token: typeof body.token === "string" ? body.token : null,
-      p_short_code: typeof body.short_code === "string" ? body.short_code : null,
+      p_token: rpcShortCode ? null : typeof body.token === "string" ? body.token : null,
+      p_short_code: rpcShortCode,
     });
 
     if (error) {
@@ -170,6 +257,13 @@ serve(async (req) => {
         }
       }
       return json({ ...result, error: String(result.message ?? "Redemption failed.") }, statusCode(result.status), corsHeaders);
+    }
+
+    if (action === "confirm" && tokenNorm.length > 0 && preflightRow?.id) {
+      await supabaseAdmin
+        .from("redemptions")
+        .update({ redeem_method: "staff_qr", code_type: "token" })
+        .eq("claim_id", preflightRow.id);
     }
 
     return json(result, 200, corsHeaders);

@@ -5,6 +5,12 @@ import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import {
+  dealEligibilityErrorPayload,
+  validateDealEligibility,
+  type DealEligibilityInput,
+  type DealEligibilityResult,
+} from "../../../lib/deal-eligibility.ts";
 
 type AiResult = {
   title: string;
@@ -12,6 +18,99 @@ type AiResult = {
   promo_line: string;
   hashtags?: string[];
 };
+
+const DEAL_ELIGIBILITY_COLUMN_KEYS = [
+  "deal_status",
+  "eligibility_status",
+  "eligibility_reason_code",
+  "eligibility_message",
+  "customer_value_percent",
+  "deal_type",
+  "applies_to",
+  "discount_percent",
+  "required_purchase_quantity",
+  "free_item_quantity",
+  "required_item_description",
+  "required_item_retail_value_cents",
+  "free_item_description",
+  "free_item_retail_value_cents",
+  "free_item_discount_percent",
+  "item_description",
+  "item_retail_value_cents",
+] as const;
+
+function parseDealEligibilityInput(value: unknown): DealEligibilityInput | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as DealEligibilityInput)
+    : null;
+}
+
+function dealNotEligibleForAiResponse(
+  input: DealEligibilityInput | null,
+  corsHeaders: Record<string, string>,
+) {
+  const eligibility = input
+    ? validateDealEligibility(input)
+    : {
+        eligible: false,
+        eligibilityStatus: "INVALID" as const,
+        reasonCode: "INVALID_DEAL_TYPE" as const,
+        message:
+          "This deal is not eligible for AI ad generation yet. Twofer deals must be free-item offers or at least 40% off a single item.",
+      };
+  if (eligibility.eligible) return { response: null, eligibility, input };
+  return {
+    response: new Response(
+      JSON.stringify({
+        ...dealEligibilityErrorPayload(eligibility),
+        error: "DEAL_NOT_ELIGIBLE_FOR_AI",
+        error_code: "DEAL_NOT_ELIGIBLE_FOR_AI",
+      }),
+      { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    ),
+    eligibility,
+    input,
+  };
+}
+
+function dealEligibilityColumnsFromInput(
+  input: DealEligibilityInput,
+  result: DealEligibilityResult,
+): Record<string, unknown> {
+  return {
+    deal_status: "LIVE",
+    eligibility_status: result.eligibilityStatus,
+    eligibility_reason_code: result.reasonCode ?? null,
+    eligibility_message: result.message ?? null,
+    customer_value_percent: result.customerValuePercent ?? null,
+    deal_type: input.dealType ?? null,
+    applies_to: input.appliesTo ?? "SINGLE_ITEM",
+    discount_percent: input.discountPercent ?? null,
+    required_purchase_quantity: input.requiredPurchaseQuantity ?? null,
+    free_item_quantity: input.freeItemQuantity ?? null,
+    required_item_description: input.requiredItemDescription ?? null,
+    required_item_retail_value_cents: input.requiredItemRetailValueCents ?? null,
+    free_item_description: input.freeItemDescription ?? null,
+    free_item_retail_value_cents: input.freeItemRetailValueCents ?? null,
+    free_item_discount_percent: input.freeItemDiscountPercent ?? null,
+    item_description: input.itemDescription ?? null,
+    item_retail_value_cents: input.itemRetailValueCents ?? null,
+  };
+}
+
+function isMissingDealEligibilityColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    DEAL_ELIGIBILITY_COLUMN_KEYS.some((key) => message.includes(key))
+  );
+}
+
+function omitDealEligibilityColumns<T extends Record<string, unknown>>(row: T) {
+  const next = { ...row };
+  for (const key of DEAL_ELIGIBILITY_COLUMN_KEYS) delete next[key];
+  return next;
+}
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 
@@ -88,6 +187,7 @@ serve(async (req) => {
       end_time,
       max_claims,
       claim_cutoff_buffer_minutes,
+      deal_eligibility,
     } = body ?? {};
 
     if (!business_id || !photo_path || !hint_text || !end_time || !max_claims) {
@@ -99,6 +199,12 @@ serve(async (req) => {
         }
       );
     }
+
+    const parsedEligibilityInput = parseDealEligibilityInput(deal_eligibility);
+    const eligibilityPreflight = dealNotEligibleForAiResponse(parsedEligibilityInput, corsHeaders);
+    if (eligibilityPreflight.response) return eligibilityPreflight.response;
+    const eligibilityInput = eligibilityPreflight.input!;
+    const eligibilityResult = eligibilityPreflight.eligibility as DealEligibilityResult;
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
@@ -246,9 +352,7 @@ serve(async (req) => {
       );
     }
 
-    const { data: deal, error: insertError } = await supabase
-      .from("deals")
-      .insert({
+    const dealInsertRow = {
         business_id,
         title: result.title,
         description: result.description,
@@ -260,9 +364,22 @@ serve(async (req) => {
         is_active: true,
         poster_url: posterPublicUrl,
         poster_storage_path: photo_path,
-      })
+        ...dealEligibilityColumnsFromInput(eligibilityInput, eligibilityResult),
+      };
+
+    let insertResult = await supabase
+      .from("deals")
+      .insert(dealInsertRow)
       .select("id")
       .single();
+    if (isMissingDealEligibilityColumn(insertResult.error)) {
+      insertResult = await supabase
+        .from("deals")
+        .insert(omitDealEligibilityColumns(dealInsertRow))
+        .select("id")
+        .single();
+    }
+    const { data: deal, error: insertError } = insertResult;
 
     if (insertError) {
       return new Response(

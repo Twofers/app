@@ -11,6 +11,7 @@ export type DealFormDirtySource = {
   promoLine?: string | null;
   ctaText?: string | null;
   description?: string | null;
+  dealEligibility?: string | null;
   maxClaims?: string | number | null;
   cutoffMins?: string | number | null;
   validityMode: DealValidityMode;
@@ -38,6 +39,7 @@ export type DealFormDirtySnapshot = {
   promoLine: string;
   ctaText: string;
   description: string;
+  dealEligibility: string;
   maxClaims: string;
   cutoffMins: string;
   validityMode: DealValidityMode;
@@ -113,6 +115,7 @@ export function buildDealFormDirtySnapshot(source: DealFormDirtySource): DealFor
     promoLine: normalizeText(source.promoLine),
     ctaText: normalizeText(source.ctaText),
     description: normalizeText(source.description),
+    dealEligibility: normalizeText(source.dealEligibility),
     maxClaims: normalizeNumber(source.maxClaims),
     cutoffMins: normalizeNumber(source.cutoffMins),
     validityMode: source.validityMode,

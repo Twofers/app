@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isPastRedeemDeadline } from "../_shared/claim-redeem.ts";
-import { hasClaimOnLocalBusinessDay } from "../_shared/claim-limits.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import {
@@ -10,6 +8,10 @@ import {
   resolveOwnerPushLocale,
 } from "../_shared/owner-claim-push.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import {
+  evaluateRepeatClaimPolicy,
+  normalizeRepeatClaimPolicyType,
+} from "../_shared/repeat-claim-policy.ts";
 
 const DEFAULT_BUSINESS_TZ = "America/Chicago";
 
@@ -17,6 +19,18 @@ const DEFAULT_BUSINESS_TZ = "America/Chicago";
 const REDEEM_GRACE_MINUTES = 10;
 
 const SHORT_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const NEW_CLAIM_COLUMN_NAMES = [
+  "business_id",
+  "location_id",
+  "qr_token_hash",
+] as const;
+const NEW_DEAL_SELECT_COLUMN_NAMES = [
+  "location_id",
+  "deal_status",
+  "eligibility_status",
+  "repeat_claim_policy_type",
+  "repeat_claim_cooldown_days",
+] as const;
 
 const ACQUISITION_SOURCES = new Set([
   "organic",
@@ -53,6 +67,39 @@ function randomShortCode(): string {
   let s = "";
   for (let i = 0; i < 6; i++) s += SHORT_CODE_CHARS[buf[i]! % SHORT_CODE_CHARS.length];
   return s;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return base64Url(new Uint8Array(digest));
+}
+
+function isMissingNewClaimColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    NEW_CLAIM_COLUMN_NAMES.some((name) => message.includes(name))
+  );
+}
+
+function isMissingNewDealSelectColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST200" || error?.code === "PGRST204" || error?.code === "42703") &&
+    NEW_DEAL_SELECT_COLUMN_NAMES.some((name) => message.includes(name))
+  );
+}
+
+function omitNewClaimColumns<T extends Record<string, unknown>>(row: T) {
+  const next = { ...row };
+  for (const name of NEW_CLAIM_COLUMN_NAMES) delete next[name];
+  return next;
 }
 
 function readZonedYmd(now: Date, tz: string) {
@@ -201,11 +248,23 @@ serve(async (req) => {
     }
 
     // 🔍 Fetch and validate deal (before rate limit, so invalid IDs don't exhaust quotas)
-    const { data: deal, error: dealError } = await supabase
+    const dealSelectNew =
+      "id, business_id, location_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone, deal_status, eligibility_status, businesses(repeat_claim_policy_type, repeat_claim_cooldown_days)";
+    const dealSelectLegacy =
+      "id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone";
+    let dealResult = await supabase
       .from("deals")
-      .select("id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone")
+      .select(dealSelectNew)
       .eq("id", dealId)
       .single();
+    if (isMissingNewDealSelectColumn(dealResult.error)) {
+      dealResult = await supabase
+        .from("deals")
+        .select(dealSelectLegacy)
+        .eq("id", dealId)
+        .single();
+    }
+    const { data: deal, error: dealError } = dealResult;
 
     if (dealError || !deal) {
       return new Response(
@@ -234,6 +293,30 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    const dealStatus = typeof deal.deal_status === "string" ? deal.deal_status : "LIVE";
+    const eligibilityStatus = typeof deal.eligibility_status === "string" ? deal.eligibility_status : "UNKNOWN";
+    if (dealStatus === "DRAFT_INVALID" || eligibilityStatus === "INVALID") {
+      return new Response(
+        JSON.stringify({
+          error: "This deal is not eligible to claim.",
+          error_code: "DEAL_NOT_ELIGIBLE",
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (dealStatus !== "LIVE" && dealStatus !== "UNKNOWN") {
+      return new Response(
+        JSON.stringify({ error: "This deal is not active" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -424,6 +507,13 @@ serve(async (req) => {
 
     const nowMs = now.getTime();
 
+    await supabaseAdmin
+      .from("deal_claims")
+      .update({ claim_status: "expired" })
+      .eq("user_id", user.id)
+      .in("claim_status", ["active", "redeeming"])
+      .lte("expires_at", now.toISOString());
+
     // 🚫 At most one active claim app-wide (unredeemed, before redeem-by deadline). Same deal → idempotent 200.
     const { data: unredeemedRows, error: unredeemedErr } = await supabaseAdmin
       .from("deal_claims")
@@ -434,29 +524,29 @@ serve(async (req) => {
     if (unredeemedErr) {
       console.error("unredeemed claims lookup:", unredeemedErr);
     } else {
-      const notCanceled = (unredeemedRows ?? []).filter(
-        (row: { claim_status?: string | null }) => row.claim_status !== "canceled",
+      const statusActive = (unredeemedRows ?? []).filter(
+        (row: { claim_status?: string | null }) =>
+          row.claim_status === "active" || row.claim_status === "redeeming",
       );
-      const activeRows = notCanceled.filter((row: {
+      const activeRows = statusActive.filter((row: {
         expires_at: string;
-        grace_period_minutes: number | null;
       }) => {
-        const grace = row.grace_period_minutes ?? REDEEM_GRACE_MINUTES;
-        return !isPastRedeemDeadline(nowMs, row.expires_at, grace);
+        const expires = Date.parse(row.expires_at);
+        return Number.isFinite(expires) && expires > nowMs;
       });
 
       const forThisDeal = activeRows.find((r: { deal_id: string }) => r.deal_id === dealId);
       if (forThisDeal) {
         const fc = forThisDeal as {
           id: string;
-          token: string;
+          token: string | null;
           expires_at: string;
           short_code: string | null;
         };
         return new Response(
           JSON.stringify({
             claim_id: fc.id,
-            token: fc.token,
+            token: fc.token ?? null,
             expires_at: fc.expires_at,
             short_code: fc.short_code ?? null,
             message: "You already have an active claim for this deal",
@@ -472,7 +562,9 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             error:
-              "You already have an active claim. Redeem it or wait until it expires before claiming another deal.",
+              "You already have an active deal in your wallet. Redeem it, let it expire, or release it before claiming another.",
+            error_code: "CUSTOMER_ALREADY_HAS_ACTIVE_DEAL",
+            activeClaimId: (activeRows[0] as { id?: string } | undefined)?.id ?? null,
           }),
           {
             status: 409,
@@ -482,38 +574,63 @@ serve(async (req) => {
       }
     }
 
-    // 🚫 One non-canceled claim per business per local calendar day (deal timezone)
-    const businessTz =
-      typeof deal.timezone === "string" && deal.timezone.trim().length > 0
-        ? deal.timezone.trim()
-        : DEFAULT_BUSINESS_TZ;
-    const lookbackIso = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: recentClaims, error: todayErr } = await supabaseAdmin
-      .from("deal_claims")
-      .select("id, deal_id, created_at, claim_status")
-      .eq("user_id", user.id)
-      .in("deal_id", businessDealIds)
-      .gte("created_at", lookbackIso);
+    // Repeat limits are business-level and count only successful redemptions.
+    const businessPolicyRow = Array.isArray(deal.businesses)
+      ? deal.businesses[0]
+      : (deal.businesses as { repeat_claim_policy_type?: string | null; repeat_claim_cooldown_days?: number | null } | null);
+    const repeatPolicyType = normalizeRepeatClaimPolicyType(businessPolicyRow?.repeat_claim_policy_type);
+    const repeatCooldownDays =
+      typeof businessPolicyRow?.repeat_claim_cooldown_days === "number"
+        ? businessPolicyRow.repeat_claim_cooldown_days
+        : null;
 
-    if (todayErr) {
-      console.error("recent claims for daily limit:", todayErr);
-    } else if (recentClaims && recentClaims.length > 0) {
-      const hasClaimThisLocalDay = hasClaimOnLocalBusinessDay({
-        now,
-        businessTz,
-        claims: recentClaims as Array<{ created_at: string; claim_status: string | null }>,
-      });
+    if (repeatPolicyType !== "NONE") {
+      let priorRedeemResult = await supabaseAdmin
+        .from("deal_claims")
+        .select("id, redeemed_at")
+        .eq("user_id", user.id)
+        .eq("business_id", businessId)
+        .eq("claim_status", "redeemed")
+        .not("redeemed_at", "is", null)
+        .order("redeemed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (hasClaimThisLocalDay) {
-        return new Response(
-          JSON.stringify({
-            error: "You can only claim once per business per local day.",
-          }),
-          {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+      if (isMissingNewClaimColumn(priorRedeemResult.error)) {
+        priorRedeemResult = await supabaseAdmin
+          .from("deal_claims")
+          .select("id, redeemed_at")
+          .eq("user_id", user.id)
+          .in("deal_id", businessDealIds)
+          .eq("claim_status", "redeemed")
+          .not("redeemed_at", "is", null)
+          .order("redeemed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+      }
+
+      if (priorRedeemResult.error) {
+        console.error("repeat policy redemption lookup:", priorRedeemResult.error);
+      } else if (priorRedeemResult.data?.redeemed_at) {
+        const repeatBlock = evaluateRepeatClaimPolicy({
+          policyType: repeatPolicyType,
+          cooldownDays: repeatCooldownDays,
+          lastRedeemedAt: priorRedeemResult.data.redeemed_at as string,
+          nowMs,
+        });
+        if (repeatBlock) {
+          return new Response(
+            JSON.stringify({
+              error: repeatBlock.message,
+              error_code: repeatBlock.errorCode,
+              ...("nextEligibleAt" in repeatBlock ? { nextEligibleAt: repeatBlock.nextEligibleAt } : {}),
+            }),
+            {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
       }
     }
 
@@ -551,7 +668,8 @@ serve(async (req) => {
     );
 
     // ⏱ Concrete claim `expires_at` (instance end). Redeem allowed until expires_at + grace (see shared helper).
-    const token = crypto.randomUUID();
+    const token = `twofer://redeem/${crypto.randomUUID()}`;
+    const qrTokenHash = await sha256Base64Url(token);
     const tzForDeal =
       typeof deal.timezone === "string" && deal.timezone.trim().length > 0
         ? deal.timezone.trim()
@@ -575,12 +693,13 @@ serve(async (req) => {
     let newClaimId: string | null = null;
     for (let attempt = 0; attempt < 14; attempt++) {
       const code = randomShortCode();
-      const { data: inserted, error: err } = await supabaseAdmin
-        .from("deal_claims")
-        .insert({
+      const claimInsertRow = {
           deal_id: dealId,
           user_id: user.id,
-          token,
+          business_id: businessId,
+          location_id: (deal as { location_id?: string | null }).location_id ?? null,
+          token: null,
+          qr_token_hash: qrTokenHash,
           expires_at: expiresAt,
           short_code: code,
           claim_status: "active",
@@ -592,9 +711,20 @@ serve(async (req) => {
           app_version_at_claim,
           device_platform_at_claim,
           session_id_at_claim,
-        })
+        };
+      let insertResult = await supabaseAdmin
+        .from("deal_claims")
+        .insert(claimInsertRow)
         .select("id")
         .single();
+      if (isMissingNewClaimColumn(insertResult.error)) {
+        insertResult = await supabaseAdmin
+          .from("deal_claims")
+          .insert({ ...omitNewClaimColumns(claimInsertRow), token })
+          .select("id")
+          .single();
+      }
+      const { data: inserted, error: err } = insertResult;
       if (!err && inserted?.id) {
         short_code = code;
         newClaimId = inserted.id as string;

@@ -8,7 +8,7 @@
  * mirror (validateStrongDealOnly) as the full editor, and every insert still hits
  * the server-side SQL trigger that hard-rejects weak deals.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -23,6 +23,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
+import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -36,6 +37,15 @@ import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
 import { markRecentPublish } from "@/lib/recent-publish";
 import { buildQuickDealFullBuilderParams } from "@/lib/quick-deal-full-builder";
+import { validateDealEligibility } from "@/lib/deal-eligibility";
+import {
+  DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
+  createDefaultDealEligibilityFormState,
+  dealEligibilityFormToDealColumns,
+  dealEligibilityFormToInput,
+  omitDealEligibilityColumns,
+  type DealEligibilityFormState,
+} from "@/lib/deal-eligibility-form";
 
 // Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
@@ -48,6 +58,14 @@ function isMissingDealLocationColumn(error: { code?: string; message?: string } 
   return (
     (error?.code === "PGRST204" || error?.code === "42703") &&
     error.message?.includes("location_id")
+  );
+}
+
+function isMissingDealEligibilityColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => message.includes(key))
   );
 }
 
@@ -66,6 +84,9 @@ export default function QuickDealExpress() {
   const theme = Colors[colorScheme];
 
   const [hint, setHint] = useState("");
+  const [eligibilityForm, setEligibilityForm] = useState<DealEligibilityFormState>(
+    () => createDefaultDealEligibilityFormState(),
+  );
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -83,6 +104,14 @@ export default function QuickDealExpress() {
     ? buildPublicDealPhotoUrl(draft.poster_storage_path)
     : photoUri;
   const previewEndTime = new Date(Date.now() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const eligibilityInput = useMemo(
+    () => dealEligibilityFormToInput(eligibilityForm),
+    [eligibilityForm],
+  );
+  const eligibilityResult = useMemo(
+    () => validateDealEligibility(eligibilityInput),
+    [eligibilityInput],
+  );
 
   function resetDraft() {
     setDraft(null);
@@ -98,7 +127,43 @@ export default function QuickDealExpress() {
     setBanner(null);
     setPublishedDealId(null);
     setPublishedDealTitle("");
+    setEligibilityForm(createDefaultDealEligibilityFormState());
     resetDraft();
+  }
+
+  function blockIneligibleOffer(attemptedAction: string): boolean {
+    void attemptedAction;
+    if (eligibilityResult.eligible) return false;
+    setBanner({
+      message:
+        eligibilityResult.message ??
+        t("dealEligibility.invalidBody", {
+          defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
+        }),
+      tone: "error",
+    });
+    return true;
+  }
+
+  async function insertDealWithCompatibility(row: Record<string, unknown>) {
+    let payload: Record<string, unknown> = row;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const result = await supabase.from("deals").insert(payload).select("id");
+      if (!result.error) return result;
+      if (isMissingDealLocationColumn(result.error) && "location_id" in payload) {
+        payload = omitDealLocationId(payload);
+        continue;
+      }
+      if (
+        isMissingDealEligibilityColumn(result.error) &&
+        DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => key in payload)
+      ) {
+        payload = omitDealEligibilityColumns(payload);
+        continue;
+      }
+      return result;
+    }
+    return supabase.from("deals").insert(payload).select("id");
   }
 
   async function onPickPhoto(fromCamera: boolean) {
@@ -134,6 +199,7 @@ export default function QuickDealExpress() {
       setBanner({ message: t("createQuick.needInput"), tone: "info" });
       return;
     }
+    if (blockIneligibleOffer("generate_ad")) return;
     setGenerating(true);
     setBanner(null);
     try {
@@ -149,6 +215,7 @@ export default function QuickDealExpress() {
         hint_text: hint.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        deal_eligibility: eligibilityInput,
         offer_schedule_summary: `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`,
         quantity_limit: EXPRESS_MAX_CLAIMS,
         redemption_limit: `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`,
@@ -197,6 +264,7 @@ export default function QuickDealExpress() {
       setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
       return null;
     }
+    if (blockIneligibleOffer("publish")) return null;
 
     return { cleanTitle, listingDescription, quality };
   }
@@ -230,6 +298,7 @@ export default function QuickDealExpress() {
         description: listingDescription,
         source_locale: dealOutputLang,
       });
+      const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
 
       const row = {
         business_id: businessId,
@@ -257,12 +326,10 @@ export default function QuickDealExpress() {
         timezone: null,
         quality_tier: quality.tier,
         location_id: null,
+        ...eligibilityColumns,
       };
 
-      let insertResult = await supabase.from("deals").insert(row).select("id");
-      if (isMissingDealLocationColumn(insertResult.error)) {
-        insertResult = await supabase.from("deals").insert(omitDealLocationId(row)).select("id");
-      }
+      const insertResult = await insertDealWithCompatibility(row);
       const { data, error } = insertResult;
       if (error) throw error;
 
@@ -303,6 +370,7 @@ export default function QuickDealExpress() {
         offerLine,
         cta: draft?.cta ?? null,
         posterPath: nextPhotoPath,
+        dealEligibility: JSON.stringify(eligibilityForm),
       }),
     } as Href);
   }
@@ -438,6 +506,15 @@ export default function QuickDealExpress() {
                 color: theme.text,
                 backgroundColor: theme.surface,
               }}
+            />
+
+            <DealEligibilityForm
+              value={eligibilityForm}
+              onChange={setEligibilityForm}
+              t={t}
+              theme={theme}
+              colorScheme={colorScheme}
+              result={eligibilityResult}
             />
 
             {posterUri ? (

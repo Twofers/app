@@ -2,6 +2,9 @@
  * Structured offer from menu-driven wizard - canonical facts for AI ad generation and refine.
  */
 
+import { createDefaultDealEligibilityFormState } from "./deal-eligibility-form";
+import type { DealEligibilityFormState } from "./deal-eligibility-form";
+
 export type MenuOfferPairingType =
   | "free_with_purchase"
   | "bogo_pair"
@@ -120,5 +123,40 @@ export function buildStructuredOffer(params: {
     human_summary,
     discount_percent: params.pairing_type === "percent_off" ? pct : null,
     fixed_price_amount: params.pairing_type === "fixed_price_special" ? fixedAmt : null,
+  };
+}
+
+export function structuredOfferToEligibilityFormState(offer: StructuredOffer): DealEligibilityFormState {
+  const mainName = displayItemName(offer.main_item);
+  const pairedName = offer.paired_item ? displayItemName(offer.paired_item) : "";
+  const base = createDefaultDealEligibilityFormState({
+    itemDescription: mainName,
+    requiredItemDescription: mainName,
+    freeItemDescription: pairedName,
+  });
+
+  if (offer.pairing_type === "percent_off") {
+    return {
+      ...base,
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      discountPercent: String(offer.discount_percent ?? 40),
+      itemDescription: mainName,
+    };
+  }
+
+  if (offer.pairing_type === "bogo_pair" && !offer.paired_item) {
+    return {
+      ...base,
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: mainName,
+      freeItemDescription: mainName,
+    };
+  }
+
+  return {
+    ...base,
+    dealType: "BUY_ONE_GET_SOMETHING_FREE",
+    requiredItemDescription: mainName,
+    freeItemDescription: pairedName,
   };
 }

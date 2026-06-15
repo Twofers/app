@@ -6,6 +6,7 @@ import type {
   GeneratedAd,
   PhotoTreatment,
 } from "./ad-variants";
+import type { DealEligibilityInput } from "./deal-eligibility";
 import {
   normalizeBusinessLookupResults,
   type BusinessLookupResult,
@@ -17,6 +18,11 @@ import {
   EDGE_FN_TIMEOUT_AI_MS as _EDGE_FN_TIMEOUT_AI_MS,
   EDGE_FN_TIMEOUT_FAST_MS,
 } from "../constants/timing";
+import {
+  clearWalletClaimToken,
+  getWalletClaimToken,
+  saveWalletClaimToken,
+} from "./wallet-claim-token-cache";
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = EDGE_FN_TIMEOUT_DEFAULT_MS;
@@ -195,11 +201,29 @@ export async function claimDeal(dealId: string, extra?: ClaimDealExtraBody) {
     throwInvokeError(body.error || "Server returned an error", body.error_code);
   }
 
-  if (!data || !data.token) {
+  if (!data || typeof data !== "object") {
     throw new Error("No token returned from server");
   }
 
-  return data as {
+  const body = data as {
+    claim_id?: string;
+    token?: string | null;
+    expires_at?: string;
+    short_code?: string | null;
+  };
+  if (body.claim_id && body.token) {
+    await saveWalletClaimToken(body.claim_id, body.token);
+  }
+  const token = body.token || (body.claim_id ? await getWalletClaimToken(body.claim_id) : null);
+  if (!token || !body.expires_at) {
+    throw new Error("No token returned from server");
+  }
+
+  return {
+    ...body,
+    token,
+    expires_at: body.expires_at,
+  } as {
     claim_id?: string;
     token: string;
     expires_at: string;
@@ -237,6 +261,33 @@ export async function redeemToken(body: { token?: string; short_code?: string })
     redeemed_at: string;
     claim_id?: string;
   };
+}
+
+export async function releaseClaim(claimId: string) {
+  const { data, error } = await supabase.functions.invoke("release-claim", {
+    body: { claim_id: claimId },
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
+
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    const parsed = fromBody.message ?? parseFunctionError(error);
+    throwInvokeError(parsed || "Could not release this deal. Try again.", fromBody.code ?? getErrorCode(error));
+  }
+
+  if (data && typeof data === "object" && "error" in data) {
+    const body = data as { error?: string; error_code?: string };
+    throwInvokeError(body.error || "Could not release this deal. Try again.", body.error_code);
+  }
+
+  const out = data as {
+    status: "RELEASED";
+    claim_id: string;
+    released_at?: string | null;
+    message?: string;
+  };
+  await clearWalletClaimToken(out.claim_id || claimId);
+  return out;
 }
 
 export async function beginVisualRedeem(claimId: string) {
@@ -638,6 +689,7 @@ export type AiGenerateAdRequest = {
   hint_text: string;
   business_context: BusinessContextPayload;
   output_language: string;
+  deal_eligibility?: DealEligibilityInput;
   photo_path?: string;
   photo_treatment?: PhotoTreatment | null;
   offer_schedule_summary?: string;
@@ -688,6 +740,7 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     hint_text: body.hint_text,
     business_context: body.business_context,
     output_language: body.output_language,
+    ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
@@ -706,6 +759,7 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     previous_ad: body.previous_ad,
     revision_target: body.revision_target,
     revision_count: body.revision_count,
+    ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.revision_preset ? { revision_preset: body.revision_preset } : {}),
     ...(body.revision_feedback ? { revision_feedback: body.revision_feedback } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),

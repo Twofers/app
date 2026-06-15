@@ -10,7 +10,7 @@ import { Colors, Gray, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { supabase } from "@/lib/supabase";
-import { claimDeal, beginVisualRedeem, finalizeStaleRedeems } from "@/lib/functions";
+import { claimDeal, beginVisualRedeem, finalizeStaleRedeems, releaseClaim } from "@/lib/functions";
 import {
   DEFAULT_CLAIM_GRACE_MINUTES,
   getClaimRedeemDeadlineIso,
@@ -38,10 +38,11 @@ import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { isShareDealEnabled } from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
+import { clearWalletClaimToken, getWalletClaimToken } from "@/lib/wallet-claim-token-cache";
 
 type ClaimRow = {
   id: string;
-  token: string;
+  token: string | null;
   short_code: string | null;
   expires_at: string;
   redeemed_at: string | null;
@@ -88,7 +89,7 @@ function claimNotRedeemable(row: ClaimRow, now: number) {
 
 function classifyClaimBlockReason(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes("already have an active claim")) return "active_app_wide_claim";
+  if (m.includes("already have an active claim") || m.includes("already have an active deal")) return "active_app_wide_claim";
   if (m.includes("once per business per local day") && m.includes("redeemable")) return "business_daily_limit";
   if (m.includes("once per business per day")) return "business_daily_limit"; // legacy fallback
   if (m.includes("active claim from this business")) return "active_business_claim";
@@ -98,7 +99,7 @@ function classifyClaimBlockReason(message: string): string {
   return "unknown";
 }
 
-type EndedKind = "redeemed" | "expired" | "canceled";
+type EndedKind = "redeemed" | "expired" | "canceled" | "released";
 
 type EndedListItem = { row: ClaimRow; kind: EndedKind };
 
@@ -134,6 +135,7 @@ export default function WalletScreen() {
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [claimingRefreshId, setClaimingRefreshId] = useState<string | null>(null);
+  const [releasingClaimId, setReleasingClaimId] = useState<string | null>(null);
   const [useDealState, setUseDealState] = useState<UseDealState>(null);
   const [useDealBusy, setUseDealBusy] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -165,7 +167,29 @@ export default function WalletScreen() {
         setClaims([]);
         return;
       }
-      setClaims((data ?? []) as unknown as ClaimRow[]);
+      const rows = (data ?? []) as unknown as ClaimRow[];
+      const rowsWithCachedTokens = await Promise.all(
+        rows.map(async (row) => {
+          const ended =
+            !!row.redeemed_at ||
+            row.claim_status === "redeemed" ||
+            row.claim_status === "released" ||
+            row.claim_status === "canceled" ||
+            row.claim_status === "expired";
+          try {
+            if (ended) {
+              await clearWalletClaimToken(row.id);
+              return row;
+            }
+            if (row.token) return row;
+            const cachedToken = await getWalletClaimToken(row.id);
+            return cachedToken ? { ...row, token: cachedToken } : row;
+          } catch {
+            return row;
+          }
+        }),
+      );
+      setClaims(rowsWithCachedTokens);
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown wallet load error" };
       logPostgrestError("wallet deal_claims", err);
@@ -201,6 +225,10 @@ export default function WalletScreen() {
     const dead = claimNotRedeemable(row, nowMs);
     if (dead || row.redeemed_at) return;
     if (row.claim_status === "redeeming") return;
+    if (!row.token) {
+      setBanner(t("consumerWallet.errRefreshQr", { defaultValue: "Could not load this QR code. Try refreshing your wallet." }));
+      return;
+    }
     setShareError(null);
     setQrToken(row.token);
     setQrShortCode(row.short_code);
@@ -340,6 +368,32 @@ export default function WalletScreen() {
     return row.deals?.businesses?.name?.trim() || t("consumerWallet.localBusiness");
   }
 
+  function redeemLocationLabel(row: ClaimRow) {
+    const business = row.deals?.businesses;
+    const name = businessName(row);
+    const place = business?.address?.trim() || business?.location?.trim() || "";
+    return place ? `${name} - ${place}` : name;
+  }
+
+  async function releaseWalletClaim(row: ClaimRow) {
+    if (row.claim_status !== "active" && row.claim_status !== "redeeming") return;
+    if (releasingClaimId) return;
+    setReleasingClaimId(row.id);
+    setBanner(null);
+    try {
+      await releaseClaim(row.id);
+      await clearWalletClaimToken(row.id);
+      await loadClaims();
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : t("consumerWallet.releaseError", {
+        defaultValue: "Could not release this deal. Try again.",
+      });
+      setBanner(translateKnownApiMessage(String(raw), t));
+    } finally {
+      setReleasingClaimId(null);
+    }
+  }
+
   const { active, ended } = useMemo(() => {
     const now = nowMs;
     const a: ClaimRow[] = [];
@@ -351,6 +405,10 @@ export default function WalletScreen() {
       }
       if (c.claim_status === "canceled") {
         e.push({ row: c, kind: "canceled" });
+        continue;
+      }
+      if (c.claim_status === "released") {
+        e.push({ row: c, kind: "released" });
         continue;
       }
       const expired = claimNotRedeemable(c, now) || c.claim_status === "expired";
@@ -494,7 +552,9 @@ export default function WalletScreen() {
           ? ("redeemed" as const)
           : bucket === "canceled"
             ? ("canceled" as const)
-            : ("expired" as const);
+            : bucket === "released"
+              ? ("released" as const)
+              : ("expired" as const);
     const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
 
     return (
@@ -604,6 +664,21 @@ export default function WalletScreen() {
               <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, color: theme.text }} numberOfLines={1}>
                 {businessName(row)}
               </Text>
+              {bucket === "active" ? (
+                <View style={{ marginTop: Spacing.sm }}>
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
+                    {t("consumerWallet.redeemAtLabel", { defaultValue: "Redeem at:" })}
+                  </Text>
+                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
+                    {redeemLocationLabel(row)}
+                  </Text>
+                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
+                    {t("consumerWallet.locationLockedQr", {
+                      defaultValue: "This QR code only works at this location.",
+                    })}
+                  </Text>
+                </View>
+              ) : null}
               <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
                 {t("consumerWallet.claimedRecord", {
                   datetime: formatAppDateTime(row.created_at, i18n.language),
@@ -728,6 +803,29 @@ export default function WalletScreen() {
                 </Text>
               </NativePressable>
             ) : null}
+            <NativePressable
+              onPress={() => void releaseWalletClaim(row)}
+              disabled={rowIsDemo || releasingClaimId !== null || isRedeeming}
+              accessibilityRole="button"
+              accessibilityLabel={t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                minHeight: 50,
+                borderRadius: Radii.lg,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+                backgroundColor: pressed ? theme.surfaceMuted : theme.surface,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: rowIsDemo || releasingClaimId !== null || isRedeeming ? 0.45 : 1,
+              })}
+            >
+              <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>
+                {releasingClaimId === row.id
+                  ? t("consumerWallet.releasingDeal", { defaultValue: "Releasing..." })
+                  : t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
+              </Text>
+            </NativePressable>
             <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
@@ -938,6 +1036,7 @@ export default function WalletScreen() {
               context: { method: "visual" },
             });
             closeUseDealFlow();
+            void clearWalletClaimToken(passRow.id);
             void loadClaims();
           }}
           onError={(msg) => {

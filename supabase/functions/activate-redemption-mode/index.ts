@@ -94,6 +94,20 @@ serve(async (req) => {
       return json({ error: "You do not own this business." }, 403, corsHeaders);
     }
 
+    let scannerLocationId: string | null = null;
+    try {
+      const { data: locationRow } = await supabaseAdmin
+        .from("business_locations")
+        .select("id")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      scannerLocationId = locationRow?.id ?? null;
+    } catch {
+      scannerLocationId = null;
+    }
+
     const [pinHash, exitToken] = await Promise.all([hashPin(pin), Promise.resolve(randomBase64Url(32))]);
     const exitTokenHash = await hashExitToken(exitToken);
     const nowIso = new Date().toISOString();
@@ -114,11 +128,10 @@ serve(async (req) => {
     let staffUserId = existing?.staff_user_id as string | null | undefined;
 
     if (deviceId) {
-      const { error: updateDeviceError } = await supabaseAdmin
-        .from("redemption_devices")
-        .update({
+      const deviceUpdate = {
           owner_id: user.id,
           device_label: deviceLabel,
+          location_id: scannerLocationId,
           pin_hash: pinHash,
           exit_token_hash: exitTokenHash,
           active: false,
@@ -127,28 +140,56 @@ serve(async (req) => {
           deactivated_at: null,
           removed_at: null,
           updated_at: nowIso,
-        })
+        };
+      let updateDeviceResult = await supabaseAdmin
+        .from("redemption_devices")
+        .update(deviceUpdate)
         .eq("id", deviceId);
+      if (
+        updateDeviceResult.error &&
+        (updateDeviceResult.error.code === "PGRST204" || updateDeviceResult.error.code === "42703")
+      ) {
+        const { location_id: _locationId, ...legacyUpdate } = deviceUpdate;
+        updateDeviceResult = await supabaseAdmin
+          .from("redemption_devices")
+          .update(legacyUpdate)
+          .eq("id", deviceId);
+      }
+      const updateDeviceError = updateDeviceResult.error;
       if (updateDeviceError) {
         console.error("[activate-redemption-mode] device update failed", updateDeviceError);
         return json({ error: "Could not activate Redemption Mode." }, 500, corsHeaders);
       }
     } else {
-      const { data: inserted, error: insertError } = await supabaseAdmin
-        .from("redemption_devices")
-        .insert({
+      const deviceInsert = {
           business_id: businessId,
           owner_id: user.id,
           install_id: installId,
           device_label: deviceLabel,
+          location_id: scannerLocationId,
           pin_hash: pinHash,
           exit_token_hash: exitTokenHash,
           active: false,
           created_at: nowIso,
           updated_at: nowIso,
-        })
+        };
+      let insertResult = await supabaseAdmin
+        .from("redemption_devices")
+        .insert(deviceInsert)
         .select("id")
         .single();
+      if (
+        insertResult.error &&
+        (insertResult.error.code === "PGRST204" || insertResult.error.code === "42703")
+      ) {
+        const { location_id: _locationId, ...legacyInsert } = deviceInsert;
+        insertResult = await supabaseAdmin
+          .from("redemption_devices")
+          .insert(legacyInsert)
+          .select("id")
+          .single();
+      }
+      const { data: inserted, error: insertError } = insertResult;
 
       if (insertError || !inserted?.id) {
         console.error("[activate-redemption-mode] device insert failed", insertError);
@@ -162,6 +203,7 @@ serve(async (req) => {
     const appMetadata = {
       app_role: "redeemer",
       business_id: businessId,
+      location_id: scannerLocationId,
       redemption_device_id: deviceId,
       owner_id: user.id,
     };

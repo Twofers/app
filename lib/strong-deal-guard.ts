@@ -48,6 +48,19 @@ const CONDITIONAL_DISCOUNT_PATTERNS: RegExp[] = [
   /buy\s+\S.{0,60}\s*\+\s*\d{1,3}\s*%\s*off/i,
 ];
 
+const SECOND_ITEM_DISCOUNT_PATTERNS: RegExp[] = [
+  /\bbuy\s+one\s+get\s+one\s+\d{1,3}\s*%\s*off\b/i,
+  /\bbuy\s+1\s+get\s+1\s+\d{1,3}\s*%\s*off\b/i,
+  /\bsecond\s+(?:item|one|\w+)\s+half\s+off\b/i,
+  /\b\d{1,3}\s*%\s*off\s+(?:the\s+)?second\b/i,
+  /\bsecond\s+(?:item|one|\w+)\s+\d{1,3}\s*%\s*off\b/i,
+];
+
+const ENTIRE_ORDER_DISCOUNT_PATTERNS: RegExp[] = [
+  /\b\d{1,3}\s*%\s*off\s+(?:your\s+)?(?:entire|whole)\s+order\b/i,
+  /\b\d{1,3}\s*%\s*off\s+(?:everything|all\s+(?:drinks|items|pastries|orders|food))\b/i,
+];
+
 // ── 4. STRONG LANGUAGE ────────────────────────────────────────────────────────
 const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\bbogo\b/i,
@@ -61,9 +74,6 @@ const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\bsecond\s+item\s+free\b/i,
   /\bsecond\s+one\s+free\b/i,
   /\b2nd\s+item\s+free\b/i,
-  /\bsecond\s+half\s+off\b/i,
-  /\bsecond\s+\w+\s+half\s+off\b/i,
-  /\b50\s*%\s*off\s+the\s+second\b/i,
   /\b40\s*%\s*off\b/i,
   /\b[4-9]\d\s*%\s*off\b/i,
   /\b100\s*%\s*off\b/i,
@@ -93,7 +103,12 @@ function extractPercents(text: string): number[] {
   return values;
 }
 
-export type StrongDealRejectReason = "conditional" | "low_percent" | "no_strong_language";
+export type StrongDealRejectReason =
+  | "conditional"
+  | "low_percent"
+  | "second_item_discount"
+  | "entire_order"
+  | "no_strong_language";
 
 export function validateStrongDealOnly(input: {
   title: string;
@@ -106,6 +121,16 @@ export function validateStrongDealOnly(input: {
   const text = `${title}\n${description}`.toLowerCase();
 
   // ── 1. FREE ITEM — always pass ──────────────────────────────────────────────
+  const hasSecondItemDiscount = SECOND_ITEM_DISCOUNT_PATTERNS.some((p) => p.test(text));
+  if (hasSecondItemDiscount) {
+    return { ok: false, reason: "second_item_discount", message: STRONG_DEAL_ONLY_MESSAGE };
+  }
+
+  const hasEntireOrderDiscount = ENTIRE_ORDER_DISCOUNT_PATTERNS.some((p) => p.test(text));
+  if (hasEntireOrderDiscount) {
+    return { ok: false, reason: "entire_order", message: STRONG_DEAL_ONLY_MESSAGE };
+  }
+
   const hasFreeItem = FREE_ITEM_PATTERNS.some((p) => p.test(text));
   if (hasFreeItem) return { ok: true };
 

@@ -4,7 +4,7 @@ import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { Spacing } from "@/lib/screen-layout";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-export type ConsumerDealStatusKey = "live" | "claimed" | "redeeming" | "redeemed" | "expired" | "canceled";
+export type ConsumerDealStatusKey = "live" | "claimed" | "redeeming" | "redeemed" | "expired" | "canceled" | "released";
 
 // Live/claimed/redeeming = brand orange; redeemed = the one success green
 // (redemption confirmation); terminal states = neutral gray.
@@ -18,6 +18,7 @@ const styles: Record<
   redeemed: { background: "rgba(22,163,74,0.14)", text: "#16A34A" },
   expired: { background: Gray[100], text: Gray[600] },
   canceled: { background: Gray[100], text: Gray[500] },
+  released: { background: Gray[100], text: Gray[500] },
 };
 
 type DealStatusPillProps = {
@@ -37,6 +38,7 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
           redeemed: { background: "rgba(74,222,128,0.14)", text: theme.success },
           expired: { background: theme.surfaceMuted, text: theme.mutedText },
           canceled: { background: theme.surfaceMuted, text: theme.mutedText },
+          released: { background: theme.surfaceMuted, text: theme.mutedText },
         }[status]
       : styles[status];
   const label =
@@ -48,8 +50,10 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
           ? t("dealStatus.redeeming")
           : status === "redeemed"
             ? t("dealStatus.redeemed")
-            : status === "canceled"
-              ? t("dealStatus.canceled")
+          : status === "canceled"
+            ? t("dealStatus.canceled")
+            : status === "released"
+              ? t("dealStatus.released", { defaultValue: "Released" })
               : t("dealStatus.expired");
 
   return (

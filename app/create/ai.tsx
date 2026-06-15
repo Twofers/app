@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
+import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -75,6 +76,16 @@ import {
 } from "../../lib/deal-poster-url";
 import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
+import { validateDealEligibility } from "../../lib/deal-eligibility";
+import {
+  DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
+  createDefaultDealEligibilityFormState,
+  dealEligibilityFormFromDealRow,
+  dealEligibilityFormToDealColumns,
+  dealEligibilityFormToInput,
+  omitDealEligibilityColumns,
+  type DealEligibilityFormState,
+} from "../../lib/deal-eligibility-form";
 import {
   aiComposeOfferTranscribe,
   fetchAiComposeQuota,
@@ -132,6 +143,14 @@ function isMissingDealLocationColumn(error: { code?: string; message?: string } 
   return (
     (error?.code === "PGRST204" || error?.code === "42703") &&
     error.message?.includes("location_id")
+  );
+}
+
+function isMissingDealEligibilityColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703") &&
+    DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => message.includes(key))
   );
 }
 
@@ -321,6 +340,7 @@ export default function AiDealScreen() {
     prefillMaxClaims?: string;
     prefillCutoffMins?: string;
     prefillSourceLocale?: string;
+    prefillDealEligibility?: string;
   }>();
   const { templateId, dealId: dealIdParam } = params;
   const { t, i18n } = useTranslation();
@@ -372,6 +392,9 @@ export default function AiDealScreen() {
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
+  const [eligibilityForm, setEligibilityForm] = useState<DealEligibilityFormState>(
+    () => createDefaultDealEligibilityFormState(),
+  );
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
   const [ctaText, setCtaText] = useState("");
@@ -497,6 +520,14 @@ export default function AiDealScreen() {
     () => composeListingDescription(promoLine, ctaText, description),
     [promoLine, ctaText, description],
   );
+  const eligibilityInput = useMemo(
+    () => dealEligibilityFormToInput(eligibilityForm),
+    [eligibilityForm],
+  );
+  const eligibilityResult = useMemo(
+    () => validateDealEligibility(eligibilityInput),
+    [eligibilityInput],
+  );
 
   const canPublish = useMemo(() => {
     return title.trim().length > 0 && listingBody.trim().length > 0;
@@ -583,6 +614,7 @@ export default function AiDealScreen() {
         promoLine,
         ctaText,
         description,
+        dealEligibility: JSON.stringify(eligibilityForm),
         maxClaims,
         cutoffMins,
         validityMode,
@@ -607,6 +639,7 @@ export default function AiDealScreen() {
       promoLine,
       ctaText,
       description,
+      eligibilityForm,
       maxClaims,
       cutoffMins,
       validityMode,
@@ -642,12 +675,14 @@ export default function AiDealScreen() {
     windowStart,
     windowEnd,
     publishLocationIds,
+    eligibilityForm,
   ]);
 
   const composeDirty = useMemo(() => {
     if (photoUri || hintText.trim() || price.trim()) return true;
     if (generatedAd != null || adAccepted) return true;
     if (title.trim() || promoLine.trim() || ctaText.trim() || description.trim()) return true;
+    if (JSON.stringify(eligibilityForm) !== JSON.stringify(createDefaultDealEligibilityFormState())) return true;
     if (maxClaims !== "50" || cutoffMins !== "15") return true;
     if (validityMode !== "one-time") return true;
     if ([...daysOfWeek].sort((a, b) => a - b).join(",") !== DEFAULT_WEEKDAYS_SORTED_KEY) return true;
@@ -664,6 +699,7 @@ export default function AiDealScreen() {
     promoLine,
     ctaText,
     description,
+    eligibilityForm,
     maxClaims,
     cutoffMins,
     validityMode,
@@ -705,9 +741,7 @@ export default function AiDealScreen() {
       try {
         const { data, error } = await supabase
           .from("deals")
-          .select(
-            "id,title,description,source_locale,price,poster_url,poster_storage_path,start_time,end_time,max_claims,claim_cutoff_buffer_minutes,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,location_id",
-          )
+          .select("*")
           .eq("id", dealIdFromRoute)
           .eq("business_id", businessId)
           .maybeSingle();
@@ -750,6 +784,7 @@ export default function AiDealScreen() {
             : Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
         const lid = row.location_id;
         const loadedLocationIds = lid ? [String(lid)] : [];
+        const loadedEligibilityForm = dealEligibilityFormFromDealRow(row);
         setEditingDealId(String(row.id));
         setEditingSourceLocale(isAppLocale(loadedSourceLocale) ? loadedSourceLocale : "en");
         setPrefillSourceLocale(null);
@@ -773,6 +808,7 @@ export default function AiDealScreen() {
         setWindowEnd(loadedWindowEnd);
         setTimezone(loadedTimezone);
         setPublishLocationIds(loadedLocationIds);
+        setEligibilityForm(loadedEligibilityForm);
         setManualDraftUnlocked(true);
         setGeneratedAd(null);
         setAdAccepted(false);
@@ -791,6 +827,7 @@ export default function AiDealScreen() {
             promoLine: "",
             ctaText: "",
             description: loadedDescription,
+            dealEligibility: JSON.stringify(loadedEligibilityForm),
             maxClaims: loadedMaxClaims,
             cutoffMins: loadedCutoffMins,
             validityMode: loadedValidityMode,
@@ -836,6 +873,7 @@ export default function AiDealScreen() {
         setPromoLine("");
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
+        setEligibilityForm(createDefaultDealEligibilityFormState());
         setPosterUrl(row.poster_url ?? null);
         setMaxClaims(String(row.max_claims ?? 50));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
@@ -875,6 +913,7 @@ export default function AiDealScreen() {
     const ph = g(params.prefillHint).trim();
     const price0 = g(params.prefillPrice).trim();
     const posterPath = g(params.prefillPosterPath).trim();
+    const prefillDealEligibility = g(params.prefillDealEligibility).trim();
     const fromAi = g(params.fromAiCompose);
     const fromMenu = g(params.fromMenuOffer);
     const fromReuse = g(params.fromReuse);
@@ -887,7 +926,7 @@ export default function AiDealScreen() {
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
     const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && locIds.length === 0 && !hasSchedulePrefill) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -898,6 +937,38 @@ export default function AiDealScreen() {
     if (posterPath) {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
+    }
+    if (prefillDealEligibility) {
+      try {
+        const parsed = JSON.parse(prefillDealEligibility) as Partial<DealEligibilityFormState>;
+        const parsedDealType = parsed?.dealType;
+        if (
+          parsedDealType === "BUY_ONE_GET_ONE_FREE" ||
+          parsedDealType === "BUY_ONE_GET_SOMETHING_FREE" ||
+          parsedDealType === "PERCENT_OFF_SINGLE_ITEM"
+        ) {
+          setEligibilityForm((prev) => ({
+            dealType: parsedDealType,
+            discountPercent: typeof parsed.discountPercent === "string" ? parsed.discountPercent : prev.discountPercent,
+            itemDescription: typeof parsed.itemDescription === "string" ? parsed.itemDescription : prev.itemDescription,
+            itemRetailValue: typeof parsed.itemRetailValue === "string" ? parsed.itemRetailValue : prev.itemRetailValue,
+            requiredItemDescription:
+              typeof parsed.requiredItemDescription === "string"
+                ? parsed.requiredItemDescription
+                : prev.requiredItemDescription,
+            requiredItemRetailValue:
+              typeof parsed.requiredItemRetailValue === "string"
+                ? parsed.requiredItemRetailValue
+                : prev.requiredItemRetailValue,
+            freeItemDescription:
+              typeof parsed.freeItemDescription === "string" ? parsed.freeItemDescription : prev.freeItemDescription,
+            freeItemRetailValue:
+              typeof parsed.freeItemRetailValue === "string" ? parsed.freeItemRetailValue : prev.freeItemRetailValue,
+          }));
+        }
+      } catch {
+        /* ignore malformed route state */
+      }
     }
 
     // Schedule prefill (from "Run again" / duplicate)
@@ -929,6 +1000,7 @@ export default function AiDealScreen() {
   }, [
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
+    params.prefillDealEligibility,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
     params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
     params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
@@ -1169,6 +1241,26 @@ export default function AiDealScreen() {
     setBanner(null);
   }
 
+  function blockIneligibleOffer(attemptedAction: string): boolean {
+    if (eligibilityResult.eligible) return false;
+    const message =
+      eligibilityResult.message ??
+      t("dealEligibility.invalidBody", {
+        defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
+      });
+    setBanner({ message, tone: "error" });
+    trackEvent("deal_validation_failed", {
+      businessId,
+      attemptedDealType: eligibilityForm.dealType,
+      discountPercent: Number(eligibilityForm.discountPercent) || null,
+      customerValuePercent: eligibilityResult.customerValuePercent ?? null,
+      reasonCode: eligibilityResult.reasonCode ?? null,
+      attemptedAction,
+      source: "create_ai",
+    });
+    return true;
+  }
+
   async function generateAd() {
     if (!validateInputs()) return;
     if (!businessId) {
@@ -1180,6 +1272,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
       return;
     }
+    if (blockIneligibleOffer("generate_ad")) return;
 
     trackEvent(AiAdsEvents.GENERATE_TAPPED, { screen: "create_ai" });
     setGenerating(true);
@@ -1214,6 +1307,7 @@ export default function AiDealScreen() {
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        deal_eligibility: eligibilityInput,
         ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
@@ -1252,6 +1346,7 @@ export default function AiDealScreen() {
 
   async function reviseAd() {
     if (!generatedAd || !businessId) return;
+    if (blockIneligibleOffer("revise_ad")) return;
     if (revisionsUsed >= SOFT_REVISION_CAP) {
       setBanner({ message: t("createAi.errRegenClientLimit"), tone: "info" });
       return;
@@ -1278,6 +1373,7 @@ export default function AiDealScreen() {
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        deal_eligibility: eligibilityInput,
         previous_ad: generatedAd,
         revision_target: revisionTarget,
         revision_count: revisionsUsed + 1,
@@ -1333,6 +1429,52 @@ export default function AiDealScreen() {
     setBanner({ message, tone });
   }
 
+  async function updateDealWithCompatibility(row: Record<string, unknown>) {
+    let payload: Record<string, unknown> = row;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const result = await supabase
+        .from("deals")
+        .update(payload)
+        .eq("id", editingDealId)
+        .eq("business_id", businessId);
+      if (!result.error) return result;
+      if (isMissingDealLocationColumn(result.error) && "location_id" in payload) {
+        payload = omitDealLocationId(payload);
+        continue;
+      }
+      if (
+        isMissingDealEligibilityColumn(result.error) &&
+        DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => key in payload)
+      ) {
+        payload = omitDealEligibilityColumns(payload);
+        continue;
+      }
+      return result;
+    }
+    return supabase.from("deals").update(payload).eq("id", editingDealId).eq("business_id", businessId);
+  }
+
+  async function insertDealsWithCompatibility(rows: Record<string, unknown>[]) {
+    let payload = rows;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const result = await supabase.from("deals").insert(payload).select("id");
+      if (!result.error) return result;
+      if (isMissingDealLocationColumn(result.error) && payload.some((row) => "location_id" in row)) {
+        payload = payload.map(omitDealLocationId);
+        continue;
+      }
+      if (
+        isMissingDealEligibilityColumn(result.error) &&
+        payload.some((row) => DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => key in row))
+      ) {
+        payload = payload.map(omitDealEligibilityColumns);
+        continue;
+      }
+      return result;
+    }
+    return supabase.from("deals").insert(payload).select("id");
+  }
+
   async function publishDeal() {
     if (publishInFlightRef.current) return;
     setPublishStatusMessage(null);
@@ -1354,6 +1496,11 @@ export default function AiDealScreen() {
     const priceNum = parseOptionalPriceInput(price);
     if (priceNum !== null && Number.isNaN(priceNum)) {
       showPublishError(t("createAi.errPriceNumber"));
+      return;
+    }
+    if (blockIneligibleOffer("publish")) {
+      setPublishStatus("error");
+      setPublishStatusMessage(eligibilityResult.message ?? t("dealEligibility.invalidTitle", { defaultValue: "Not eligible yet" }));
       return;
     }
 
@@ -1412,6 +1559,7 @@ export default function AiDealScreen() {
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
+      const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const translations = await translateDealCopy({
         business_id: businessId,
         title: title.trim(),
@@ -1444,30 +1592,17 @@ export default function AiDealScreen() {
         window_end_minutes: isRecurring ? minutesFromDate(windowEnd) : null,
         timezone: isRecurring ? timezone : null,
         quality_tier: quality.tier,
+        ...eligibilityColumns,
       };
       if (editingDealId) {
         const updateRow = { ...baseRow, location_id: publishLocationIds[0] ?? null };
-        let updateResult = await supabase
-          .from("deals")
-          .update(updateRow)
-          .eq("id", editingDealId)
-          .eq("business_id", businessId);
-        if (isMissingDealLocationColumn(updateResult.error)) {
-          updateResult = await supabase
-            .from("deals")
-            .update(omitDealLocationId(updateRow))
-            .eq("id", editingDealId)
-            .eq("business_id", businessId);
-        }
+        const updateResult = await updateDealWithCompatibility(updateRow);
         if (updateResult.error) throw updateResult.error;
       } else {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        let insertResult = await supabase.from("deals").insert(rows).select("id");
-        if (isMissingDealLocationColumn(insertResult.error)) {
-          insertResult = await supabase.from("deals").insert(rows.map(omitDealLocationId)).select("id");
-        }
+        const insertResult = await insertDealsWithCompatibility(rows);
         const { data: dealsOut, error } = insertResult;
         if (error) throw error;
         for (const row of dealsOut ?? []) {
@@ -1524,6 +1659,7 @@ export default function AiDealScreen() {
             promoLine,
             ctaText,
             description,
+            dealEligibility: JSON.stringify(eligibilityForm),
             maxClaims,
             cutoffMins,
             validityMode,
@@ -1591,6 +1727,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
       return;
     }
+    if (blockIneligibleOffer("save_template")) return;
     setSavingTemplate(true);
     setBanner(null);
     try {
@@ -1872,6 +2009,16 @@ export default function AiDealScreen() {
               placeholder={t("createAi.placeholderPrice")}
               placeholderTextColor={theme.mutedText}
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
+            />
+
+            <DealEligibilityForm
+              value={eligibilityForm}
+              onChange={setEligibilityForm}
+              t={t}
+              theme={theme}
+              colorScheme={colorScheme}
+              inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+              result={eligibilityResult}
             />
 
             <View

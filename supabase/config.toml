@@ -405,6 +405,11 @@ entrypoint = "./functions/redeem-token/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/redeem-token/*.html" ]
 
+[functions.release-claim]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/release-claim/index.ts"
+
 [functions.activate-redemption-mode]
 enabled = true
 verify_jwt = false

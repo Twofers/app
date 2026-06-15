@@ -13,12 +13,22 @@ const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\bsecond\s+item\s+free\b/i,
   /\bsecond\s+one\s+free\b/i,
   /\b2nd\s+item\s+free\b/i,
-  /\bsecond\s+half\s+off\b/i,
-  /\bsecond\s+\w+\s+half\s+off\b/i,
-  /\b50\s*%\s*off\s+the\s+second\b/i,
   /\b40\s*%\s*off\b/i,
   /\b[4-9]\d\s*%\s*off\b/i,
   /\b100\s*%\s*off\b/i,
+];
+
+const SECOND_ITEM_DISCOUNT_PATTERNS: RegExp[] = [
+  /\bbuy\s+one\s+get\s+one\s+\d{1,3}\s*%\s*off\b/i,
+  /\bbuy\s+1\s+get\s+1\s+\d{1,3}\s*%\s*off\b/i,
+  /\bsecond\s+(?:item|one|\w+)\s+half\s+off\b/i,
+  /\b\d{1,3}\s*%\s*off\s+(?:the\s+)?second\b/i,
+  /\bsecond\s+(?:item|one|\w+)\s+\d{1,3}\s*%\s*off\b/i,
+];
+
+const ENTIRE_ORDER_DISCOUNT_PATTERNS: RegExp[] = [
+  /\b\d{1,3}\s*%\s*off\s+(?:your\s+)?(?:entire|whole)\s+order\b/i,
+  /\b\d{1,3}\s*%\s*off\s+(?:everything|all\s+(?:drinks|items|pastries|orders|food))\b/i,
 ];
 
 function extractPercents(text: string): number[] {
@@ -40,6 +50,14 @@ export function validateStrongDealOnly(input: {
   const title = (input.title ?? "").trim();
   const description = (input.description ?? "").trim();
   const text = `${title}\n${description}`.toLowerCase();
+
+  if (SECOND_ITEM_DISCOUNT_PATTERNS.some((p) => p.test(text))) {
+    return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+  }
+
+  if (ENTIRE_ORDER_DISCOUNT_PATTERNS.some((p) => p.test(text))) {
+    return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };
+  }
 
   if (typeof input.discountPercent === "number" && input.discountPercent < 40) {
     return { ok: false, message: STRONG_DEAL_ONLY_MESSAGE };

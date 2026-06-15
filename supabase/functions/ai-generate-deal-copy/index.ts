@@ -3,12 +3,47 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import {
+  dealEligibilityErrorPayload,
+  validateDealEligibility,
+  type DealEligibilityInput,
+} from "../../../lib/deal-eligibility.ts";
 
 type AiResult = {
   title: string;
   promo_line: string;
   description: string;
 };
+
+function parseDealEligibilityInput(value: unknown): DealEligibilityInput | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as DealEligibilityInput)
+    : null;
+}
+
+function dealNotEligibleForAiResponse(
+  input: DealEligibilityInput | null,
+  corsHeaders: Record<string, string>,
+) {
+  const eligibility = input
+    ? validateDealEligibility(input)
+    : {
+        eligible: false,
+        eligibilityStatus: "INVALID" as const,
+        reasonCode: "INVALID_DEAL_TYPE" as const,
+        message:
+          "This deal is not eligible for AI ad generation yet. Twofer deals must be free-item offers or at least 40% off a single item.",
+      };
+  if (eligibility.eligible) return null;
+  return new Response(
+    JSON.stringify({
+      ...dealEligibilityErrorPayload(eligibility),
+      error: "DEAL_NOT_ELIGIBLE_FOR_AI",
+      error_code: "DEAL_NOT_ELIGIBLE_FOR_AI",
+    }),
+    { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -86,6 +121,12 @@ serve(async (req) => {
         }
       );
     }
+
+    const eligibilityResponse = dealNotEligibleForAiResponse(
+      parseDealEligibilityInput(body?.deal_eligibility),
+      corsHeaders,
+    );
+    if (eligibilityResponse) return eligibilityResponse;
 
     if (!openAiKey) {
       console.log(JSON.stringify({ tag: "ai_generate_deal_copy", event: "openai_not_configured" }));

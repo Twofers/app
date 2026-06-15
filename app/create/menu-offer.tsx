@@ -33,6 +33,7 @@ import {
   buildOfferHintText,
   buildStructuredOffer,
   resolveMenuOfferLocationFlow,
+  structuredOfferToEligibilityFormState,
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
@@ -70,15 +71,13 @@ function sanitizeDecimalInput(raw: string): string {
 function getPairingValidationError(params: {
   pairingType: MenuOfferPairingType;
   discountPercent: number;
-  fixedPriceText: string;
   pairedItem: DbMenuItem | null;
-}): "menuOffer.errPercentWeak" | "menuOffer.errFixedPrice" | "menuOffer.errNeedPairedFree" | null {
-  const { pairingType, discountPercent, fixedPriceText, pairedItem } = params;
-  if (pairingType === "percent_off" && discountPercent < 40) return "menuOffer.errPercentWeak";
-  if (pairingType === "fixed_price_special") {
-    const n = Number(fixedPriceText.trim());
-    if (!Number.isFinite(n) || n <= 0) return "menuOffer.errFixedPrice";
+}): string | null {
+  const { pairingType, discountPercent, pairedItem } = params;
+  if (pairingType === "second_half_off" || pairingType === "fixed_price_special") {
+    return "Twofer only supports free-item offers or 40%+ off one single item.";
   }
+  if (pairingType === "percent_off" && discountPercent < 40) return "menuOffer.errPercentWeak";
   if (pairingType === "free_with_purchase" && !pairedItem) return "menuOffer.errNeedPairedFree";
   return null;
 }
@@ -212,6 +211,7 @@ export default function MenuOfferScreen() {
       return;
     }
     const hint = buildOfferHintText(structuredOffer);
+    const prefillDealEligibility = JSON.stringify(structuredOfferToEligibilityFormState(structuredOffer));
     const locPrimary = dealLocationIds[0] ?? "";
     const extras = dealLocationIds.slice(1).join(",");
     clearWizard();
@@ -221,6 +221,7 @@ export default function MenuOfferScreen() {
         prefillHint: hint,
         ...(locPrimary ? { prefillLocationId: locPrimary } : {}),
         ...(extras ? { prefillExtraLocationIds: extras } : {}),
+        prefillDealEligibility,
         fromMenuOffer: "1",
       },
     } as Href);
@@ -254,11 +255,13 @@ export default function MenuOfferScreen() {
     const validationError = getPairingValidationError({
       pairingType,
       discountPercent,
-      fixedPriceText,
       pairedItem,
     });
     if (validationError) {
-      setBanner({ message: t(validationError), tone: "error" });
+      setBanner({
+        message: validationError.startsWith("menuOffer.") ? t(validationError) : validationError,
+        tone: "error",
+      });
       return;
     }
     setBanner(null);
@@ -312,9 +315,7 @@ export default function MenuOfferScreen() {
   const pairingOptions: { id: MenuOfferPairingType; label: string }[] = [
     { id: "free_with_purchase", label: t("menuOffer.pairFree") },
     { id: "bogo_pair", label: t("menuOffer.pairBogo") },
-    { id: "second_half_off", label: t("menuOffer.pairHalf") },
     { id: "percent_off", label: t("menuOffer.pairPercent") },
-    { id: "fixed_price_special", label: t("menuOffer.pairFixed") },
   ];
 
   function sizesFor(item: DbMenuItem): string[] {

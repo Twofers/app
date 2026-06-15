@@ -32,6 +32,11 @@ import {
   type ItemResearch,
   type OutputLanguage,
 } from "./prompt.ts";
+import {
+  dealEligibilityErrorPayload,
+  validateDealEligibility,
+  type DealEligibilityInput,
+} from "../../../lib/deal-eligibility.ts";
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
@@ -78,6 +83,36 @@ function utcMonthStartIso(): string {
 function clip(s: string, max: number): string {
   const t = s.replace(/\s+/g, " ").trim();
   return t.length <= max ? t : t.slice(0, max - 1).trimEnd();
+}
+
+function parseDealEligibilityInput(value: unknown): DealEligibilityInput | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as DealEligibilityInput)
+    : null;
+}
+
+function dealNotEligibleForAiResponse(
+  input: DealEligibilityInput | null,
+  corsHeaders: Record<string, string>,
+) {
+  const eligibility = input
+    ? validateDealEligibility(input)
+    : {
+        eligible: false,
+        eligibilityStatus: "INVALID" as const,
+        reasonCode: "INVALID_DEAL_TYPE" as const,
+        message:
+          "This deal is not eligible for AI ad generation yet. Twofer deals must be free-item offers or at least 40% off a single item.",
+      };
+  if (eligibility.eligible) return null;
+  return new Response(
+    JSON.stringify({
+      ...dealEligibilityErrorPayload(eligibility),
+      error: "DEAL_NOT_ELIGIBLE_FOR_AI",
+      error_code: "DEAL_NOT_ELIGIBLE_FOR_AI",
+    }),
+    { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 }
 
 // ─── Stage 1: research ─────────────────────────────────────────────────────
@@ -633,6 +668,12 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const eligibilityResponse = dealNotEligibleForAiResponse(
+      parseDealEligibilityInput(body.deal_eligibility),
+      corsHeaders,
+    );
+    if (eligibilityResponse) return eligibilityResponse;
 
     /**
      * Path-traversal guard: clients must only operate on photos under their own business folder.
