@@ -178,6 +178,7 @@
       }
     },
     "android": {
+      "icon": "./assets/images/twofer-icon-1024.png",
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -264,7 +265,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF",
           "dark": {
-            "backgroundColor": "#151718"
+            "backgroundColor": "#FFFFFF"
           }
         }
       ],

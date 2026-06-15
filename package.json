@@ -11,6 +11,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "assert:brand-assets": "node scripts/assert-no-legacy-branding.js",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "node scripts/typecheck-functions.cjs",
     "test": "vitest run",
