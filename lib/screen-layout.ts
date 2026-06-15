@@ -43,6 +43,10 @@ export function getScreenLayoutMetrics(insets: ScreenInsets, variant: ScreenVari
   };
 }
 
+export function getBottomSheetBottomPadding(insets: ScreenInsets) {
+  return Math.max(insets.bottom, Spacing.lg);
+}
+
 export function useScreenInsets(variant: ScreenVariant = "tab") {
   return getScreenLayoutMetrics(useSafeAreaInsets(), variant);
 }

@@ -16,7 +16,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
 import { Colors, Radii } from "@/constants/theme";
-import { Spacing } from "@/lib/screen-layout";
+import { getBottomSheetBottomPadding, Spacing } from "@/lib/screen-layout";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   BUSINESS_REPORT_REASONS,
@@ -40,6 +40,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const sheetBottomPadding = getBottomSheetBottomPadding(insets);
   const reasons: readonly (BusinessReportReason | UserReportReason)[] =
     mode === "business" ? BUSINESS_REPORT_REASONS : USER_REPORT_REASONS;
   const [reason, setReason] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.5)",
           paddingTop: insets.top + Spacing.xl,
-          paddingBottom: insets.bottom,
+          paddingBottom: sheetBottomPadding,
         }}
       >
         <KeyboardAvoidingView

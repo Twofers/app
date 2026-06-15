@@ -4,7 +4,7 @@ vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-import { getScreenLayoutMetrics, Spacing } from "./screen-layout";
+import { getBottomSheetBottomPadding, getScreenLayoutMetrics, Spacing } from "./screen-layout";
 
 describe("getScreenLayoutMetrics", () => {
   it("keeps tab screens above the bottom tab bar with stable scroll/list padding", () => {
@@ -34,5 +34,10 @@ describe("getScreenLayoutMetrics", () => {
 
     expect(metrics.scrollBottom).toBe(34 + Spacing.xl + Spacing.md);
     expect(metrics.listBottom).toBe(34 + Spacing.xl + Spacing.lg);
+  });
+
+  it("floors bottom-sheet padding for Android gesture navigation", () => {
+    expect(getBottomSheetBottomPadding({ top: 0, bottom: 0 })).toBe(Spacing.lg);
+    expect(getBottomSheetBottomPadding({ top: 0, bottom: 34 })).toBe(34);
   });
 });
