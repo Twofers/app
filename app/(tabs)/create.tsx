@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, ScrollView, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CardShell } from "@/components/ui/card-shell";
@@ -19,6 +19,7 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
 
 type TemplateRow = {
   id: string;
@@ -42,6 +43,8 @@ export default function CreateDeal() {
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(true);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const templatesFolderYRef = useRef(0);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -148,8 +151,25 @@ export default function CreateDeal() {
   }
 
   function toggleTemplatesFolder() {
-    setTemplatesOpen((current) => !current);
+    setTemplatesOpen((current) => {
+      const next = !current;
+      if (next) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({
+            y: getExpandedSectionScrollY(templatesFolderYRef.current),
+            animated: true,
+          });
+        });
+      }
+      return next;
+    });
   }
+
+  function rememberTemplatesFolderLayout(event: LayoutChangeEvent) {
+    templatesFolderYRef.current = event.nativeEvent.layout.y;
+  }
+
+  const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -198,8 +218,9 @@ export default function CreateDeal() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1, marginTop: Spacing.lg }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: createScrollBottom }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -339,6 +360,7 @@ export default function CreateDeal() {
               </Pressable>
               <Pressable
                 onPress={toggleTemplatesFolder}
+                onLayout={rememberTemplatesFolderLayout}
                 accessibilityRole="button"
                 accessibilityState={{ expanded: templatesOpen }}
                 style={{
