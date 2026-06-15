@@ -35,6 +35,15 @@ export type ExtractedMenuItem = {
   readable?: boolean;
 };
 
+export type MenuOfferLocationFlow = "setup" | "skip" | "select";
+
+export function resolveMenuOfferLocationFlow(locationIds: readonly string[]): MenuOfferLocationFlow {
+  const uniqueIds = new Set(locationIds.map((id) => id.trim()).filter(Boolean));
+  if (uniqueIds.size === 0) return "setup";
+  if (uniqueIds.size === 1) return "skip";
+  return "select";
+}
+
 function displayItemName(item: MenuItemRef): string {
   const name = item.name.trim();
   const size = item.size_label?.trim();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOfferHintText, buildStructuredOffer } from "./menu-offer";
+import { buildOfferHintText, buildStructuredOffer, resolveMenuOfferLocationFlow } from "./menu-offer";
 import { validateMenuOfferCanonicalSummary } from "./strong-deal-guard";
 
 describe("buildStructuredOffer", () => {
@@ -108,5 +108,19 @@ describe("buildOfferHintText", () => {
       human_summary: "   ",
     });
     expect(hint).toBe("Espresso");
+  });
+});
+
+describe("resolveMenuOfferLocationFlow", () => {
+  it("prompts for setup when no locations are available", () => {
+    expect(resolveMenuOfferLocationFlow([])).toBe("setup");
+  });
+
+  it("skips the selector when exactly one location is available", () => {
+    expect(resolveMenuOfferLocationFlow(["loc_1"])).toBe("skip");
+  });
+
+  it("shows the selector only when multiple visible locations are available", () => {
+    expect(resolveMenuOfferLocationFlow(["loc_1", "loc_2"])).toBe("select");
   });
 });

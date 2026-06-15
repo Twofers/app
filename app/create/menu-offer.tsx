@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -32,6 +32,7 @@ import {
 import {
   buildOfferHintText,
   buildStructuredOffer,
+  resolveMenuOfferLocationFlow,
   type MenuOfferPairingType,
 } from "@/lib/menu-offer";
 import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
@@ -122,6 +123,10 @@ export default function MenuOfferScreen() {
     null,
   );
   const pairingPersistReady = useRef(false);
+  const locationFlow = useMemo(
+    () => resolveMenuOfferLocationFlow(visibleLocations.map((loc) => loc.id)),
+    [visibleLocations],
+  );
 
   useEffect(() => {
     void loadLastMenuOfferPairingType().then((saved) => {
@@ -165,10 +170,30 @@ export default function MenuOfferScreen() {
   }, [businessId, t]);
 
   useEffect(() => {
-    if (visibleLocations.length === 1) {
-      setPrimaryLocationId(visibleLocations[0].id);
+    if (locationFlow === "skip") {
+      const id = visibleLocations[0]?.id;
+      if (!id) return;
+      setPrimaryLocationId(id);
+      setApplyMultiLocation(false);
+      setExtraLocationIds(new Set());
+      setDealLocationIds([id]);
+      setStep((current) => (current === "location" ? "main" : current));
+      return;
     }
-  }, [visibleLocations]);
+
+    if (locationFlow === "setup") {
+      setPrimaryLocationId(null);
+      setApplyMultiLocation(false);
+      setExtraLocationIds(new Set());
+      setDealLocationIds([]);
+      setStep("location");
+      return;
+    }
+
+    setPrimaryLocationId((prev) =>
+      prev && visibleLocations.some((loc) => loc.id === prev) ? prev : visibleLocations[0]?.id ?? null,
+    );
+  }, [locationFlow, visibleLocations, setDealLocationIds]);
 
   /**
    * Skip in-wizard ad generation. Hand the structured offer to the main create flow,
@@ -210,6 +235,18 @@ export default function MenuOfferScreen() {
     setBanner(null);
     setStep("main");
   }, [primaryLocationId, applyMultiLocation, extraLocationIds, setDealLocationIds, t]);
+
+  const goBackFromMainStep = useCallback(() => {
+    if (locationFlow === "select") {
+      setStep("location");
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/create" as Href);
+  }, [locationFlow, router]);
 
   const onPairingNext = useCallback(() => {
     if (!mainItem) return;
@@ -332,7 +369,18 @@ export default function MenuOfferScreen() {
       {loadErr ? <Banner message={loadErr} tone="error" /> : null}
       {locErr ? <Banner message={locErr} tone="error" /> : null}
 
-      {step === "location" && visibleLocations.length > 0 ? (
+      {step === "location" && locationFlow === "setup" ? (
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.locationSetupTitle")}</Text>
+          <Text style={{ opacity: 0.7 }}>{t("menuOffer.locationSetupBody")}</Text>
+          <PrimaryButton
+            title={t("menuOffer.locationSetupCta")}
+            onPress={() => router.push("/business-setup" as Href)}
+          />
+        </View>
+      ) : null}
+
+      {step === "location" && locationFlow === "select" ? (
         <View style={{ gap: Spacing.sm }}>
           <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("menuOffer.stepLocation")}</Text>
           <Text style={{ opacity: 0.7 }}>{t("menuOffer.locationHelp")}</Text>
@@ -442,7 +490,7 @@ export default function MenuOfferScreen() {
                 })}
               </Pressable>
             ))}
-          <SecondaryButton title={t("menuOffer.back")} onPress={() => setStep("location")} />
+          <SecondaryButton title={t("menuOffer.back")} onPress={goBackFromMainStep} />
         </View>
       ) : null}
 
