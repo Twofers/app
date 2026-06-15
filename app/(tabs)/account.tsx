@@ -47,6 +47,7 @@ import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
+import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -371,20 +372,25 @@ export default function AccountScreen() {
   }
 
   function confirmDeleteAccount() {
-    // Owners see the explicit cascade warning ("…your business, its deals, and
-    // claim history will also be removed"). Consumers see the simpler copy.
-    // Apple/Google both require the dialog to make the cascade consequences
-    // clear before destruction; the deleteAccount.body string already does that.
-    const message = deleteMayIncludeBusinessData
-      ? t("deleteAccount.body")
-      : t("deleteAccount.bodyConsumer");
+    const copyKeys = getDeleteAccountConfirmationCopyKeys(deleteMayIncludeBusinessData);
     confirm({
       iconName: "delete-forever",
       title: t("deleteAccount.title"),
-      message,
-      confirmLabel: t("deleteAccount.confirmDestructive"),
-      onConfirm: () => void runDeleteAccount(),
+      message: t(copyKeys.impactBodyKey),
+      confirmLabel: t("deleteAccount.reviewImpactCta"),
+      onConfirm: () => confirmFinalDeleteAccount(copyKeys.finalBodyKey),
       cancelLabel: t("commonUi.cancel"),
+    });
+  }
+
+  function confirmFinalDeleteAccount(finalBodyKey: string) {
+    confirm({
+      iconName: "delete-forever",
+      title: t("deleteAccount.finalTitle"),
+      message: t(finalBodyKey),
+      confirmLabel: t("deleteAccount.finalConfirmDestructive"),
+      onConfirm: () => void runDeleteAccount(),
+      cancelLabel: t("deleteAccount.keepAccount"),
     });
   }
 

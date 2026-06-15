@@ -57,6 +57,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { devWarn } from "@/lib/dev-log";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
+import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -384,13 +385,25 @@ export default function SettingsScreen() {
   }
 
   function confirmDeleteAccount() {
+    const copyKeys = getDeleteAccountConfirmationCopyKeys(false);
     confirm({
       iconName: "delete-forever",
       title: t("deleteAccount.title"),
-      message: t("deleteAccount.bodyConsumer"),
-      confirmLabel: t("deleteAccount.confirmDestructive"),
-      onConfirm: () => void performDeleteAccount(),
+      message: t(copyKeys.impactBodyKey),
+      confirmLabel: t("deleteAccount.reviewImpactCta"),
+      onConfirm: () => confirmFinalDeleteAccount(copyKeys.finalBodyKey),
       cancelLabel: t("commonUi.cancel"),
+    });
+  }
+
+  function confirmFinalDeleteAccount(finalBodyKey: string) {
+    confirm({
+      iconName: "delete-forever",
+      title: t("deleteAccount.finalTitle"),
+      message: t(finalBodyKey),
+      confirmLabel: t("deleteAccount.finalConfirmDestructive"),
+      onConfirm: () => void performDeleteAccount(),
+      cancelLabel: t("deleteAccount.keepAccount"),
     });
   }
 
