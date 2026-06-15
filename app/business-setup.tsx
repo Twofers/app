@@ -11,6 +11,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { consumePendingDeepLink } from "@/lib/post-auth-route";
+import { getBusinessSetupCopyKeys, type BusinessSetupMode } from "@/lib/business-setup-copy";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
@@ -92,6 +93,7 @@ export default function BusinessSetupScreen() {
   const [detailsLoadingPlaceId, setDetailsLoadingPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -147,6 +149,7 @@ export default function BusinessSetupScreen() {
 
   const resolvedCategory = category === "other" ? customCategory.trim() : category;
   const resolvedHours = hoursPreset === "custom_prompt" ? customHours.trim() : hoursPreset ? t(`businessSetup.hoursPreset.${hoursPreset}`) : "";
+  const copyKeys = useMemo(() => getBusinessSetupCopyKeys(setupMode, busy), [setupMode, busy]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -168,16 +171,38 @@ export default function BusinessSetupScreen() {
     const uid = session?.user?.id;
     if (!uid) return;
     let cancelled = false;
+    setSetupMode("loading");
     void (async () => {
       // Owner reads of `businesses` go through get_my_business() — an
       // `owner_id` filter stops working once the PII column-grant migration
       // lands (the helper still falls back to a direct select pre-migration).
       const { row, error } = await fetchOwnerBusiness(supabase, uid);
-      if (cancelled || error || !row) return;
+      if (cancelled) return;
+      if (error || !row) {
+        setSetupMode("create");
+        return;
+      }
+      setSetupMode("edit");
       setBusinessName((prev) => prev || (row.name ?? ""));
       setAddress((prev) => prev || (row.address ?? ""));
       setPhone((prev) => prev || (row.phone ?? ""));
       setShortDescription((prev) => prev || (row.short_description ?? ""));
+      const storedCategory = row.category?.trim();
+      if (storedCategory) {
+        const categoryKey = CATEGORY_KEYS.includes(storedCategory as CategoryKey)
+          ? (storedCategory as CategoryKey)
+          : categoryKeyFromLookup(storedCategory);
+        setCategory((prev) => prev || categoryKey || "other");
+        if (!categoryKey) setCustomCategory((prev) => prev || storedCategory);
+      }
+      const storedHours = row.hours_text?.trim();
+      if (storedHours) {
+        const presetKey = HOURS_PRESET_KEYS.find(
+          (key) => key !== "custom_prompt" && t(`businessSetup.hoursPreset.${key}`) === storedHours,
+        );
+        setHoursPreset((prev) => prev || presetKey || "custom_prompt");
+        if (!presetKey) setCustomHours((prev) => prev || storedHours);
+      }
       const lat = row.latitude != null ? Number(row.latitude) : NaN;
       const lng = row.longitude != null ? Number(row.longitude) : NaN;
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
@@ -187,7 +212,7 @@ export default function BusinessSetupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, session?.user?.id]);
+  }, [authLoading, session?.user?.id, t]);
 
   // Invite-validation check. Lives separately from the business prefill so a
   // first-time user (no business row yet) still gets the right gate state.
@@ -406,6 +431,7 @@ export default function BusinessSetupScreen() {
         latitude: verifiedLookupCoords?.lat ?? null,
         longitude: verifiedLookupCoords?.lng ?? null,
       };
+      const submitCopyKeys = getBusinessSetupCopyKeys(existingBiz ? "edit" : "create", false);
       const { data: bizData, error } = existingBiz
         ? await supabase
             .from("businesses")
@@ -479,7 +505,7 @@ export default function BusinessSetupScreen() {
         if (upsertByOwner.error) throw upsertByOwner.error;
       }
 
-      setBanner({ message: t("businessSetup.setupComplete"), tone: "success" });
+      setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
       redirectTimerRef.current = setTimeout(async () => {
         const pending = await consumePendingDeepLink();
         router.replace((pending ?? "/(tabs)/dashboard") as Href);
@@ -493,7 +519,7 @@ export default function BusinessSetupScreen() {
       const raw = e instanceof Error ? e.message : "";
       const friendly = raw ? translateKnownApiMessage(raw, t) : "";
       setBanner({
-        message: friendly && friendly !== raw ? friendly : t("businessSetup.errSave"),
+        message: friendly && friendly !== raw ? friendly : t(copyKeys.errorKey),
         tone: "error",
       });
     } finally {
@@ -531,9 +557,9 @@ export default function BusinessSetupScreen() {
           </Text>
         </Pressable>
       ) : null}
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("businessSetup.title")}</Text>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t(copyKeys.titleKey)}</Text>
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
-        {t("businessSetup.subtitle")}
+        {t(copyKeys.subtitleKey)}
       </Text>
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
@@ -795,14 +821,14 @@ export default function BusinessSetupScreen() {
         </View>
 
         <View style={{ gap: Spacing.sm }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.businessSetupHint")}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t(copyKeys.legalHintKey)}</Text>
           <LegalExternalLinks />
         </View>
 
         <PrimaryButton
-          title={busy ? t("businessSetup.creating") : t("businessSetup.continue")}
+          title={t(copyKeys.submitKey)}
           onPress={() => void onSubmit()}
-          disabled={busy || logoUploading}
+          disabled={busy || logoUploading || setupMode === "loading"}
         />
       </ScrollView>
     </View>

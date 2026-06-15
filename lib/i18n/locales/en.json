@@ -1002,7 +1002,8 @@
     "support": "Support",
     "deleteAccount": "Delete account",
     "authFooterHint": "By signing up you agree to our Terms of Service and Privacy Policy.",
-    "businessSetupHint": "Creating a business account is subject to our Terms of Service and Privacy Policy."
+    "businessSetupHint": "Creating a business account is subject to our Terms of Service and Privacy Policy.",
+    "businessUpdateHint": "Business profile updates are subject to our Terms of Service and Privacy Policy."
   },
   "deleteAccount": {
     "title": "Delete account?",
@@ -1820,6 +1821,8 @@
     "navTitle": "Business setup",
     "title": "Set up your business",
     "subtitle": "Choose a category and add your hours. We'll keep it quick.",
+    "editTitle": "Edit business profile",
+    "editSubtitle": "Review your business details and save any changes.",
     "contactName": "Your name",
     "businessEmail": "Business email",
     "businessName": "Business name",
@@ -1834,12 +1837,16 @@
     "logoUploadHint": "Tap to upload your logo",
     "errLogoUpload": "Could not upload logo. Try again.",
     "errPhotoPermission": "Photo library permission is needed to upload a logo.",
+    "loadingProfile": "Loading profile...",
     "continue": "Create business",
     "creating": "Creating…",
+    "saveChanges": "Save changes",
+    "saving": "Saving...",
     "errRequired": "Fill in every required field.",
     "errNameAddress": "Business name and address are required.",
     "errEmail": "Enter a valid email.",
     "errSave": "Could not create business. Try again.",
+    "errSaveChanges": "Could not save changes. Try again.",
     "errEnterName": "Enter a business name first.",
     "errInviteCode": "That invite code isn't valid. Reach out to Twofer to get one.",
     "errCheckingInvite": "Hold on a moment — we're double-checking your invite.",
@@ -1858,6 +1865,7 @@
     "aiEstimate": "Suggested details",
     "verifiedSource": "Verified by Google Places",
     "setupComplete": "Setup complete — ready to launch BOGO deals!",
+    "changesSaved": "Changes saved.",
     "city": "City",
     "cat": {
       "restaurant": "Restaurant",

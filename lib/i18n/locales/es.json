@@ -1006,7 +1006,8 @@
     "support": "Soporte",
     "deleteAccount": "Eliminar cuenta",
     "authFooterHint": "Al registrarte, aceptas nuestros Términos del servicio y la Política de privacidad.",
-    "businessSetupHint": "Crear una cuenta de negocio está sujeto a nuestros Términos del servicio y la Política de privacidad."
+    "businessSetupHint": "Crear una cuenta de negocio está sujeto a nuestros Términos del servicio y la Política de privacidad.",
+    "businessUpdateHint": "Las actualizaciones del perfil del negocio están sujetas a nuestros Términos del servicio y la Política de privacidad."
   },
   "deleteAccount": {
     "title": "¿Eliminar cuenta?",
@@ -1585,6 +1586,8 @@
     "navTitle": "Configurar negocio",
     "title": "Configura tu negocio",
     "subtitle": "Elige categoría y horario con chips; solo unas pocas líneas a mano.",
+    "editTitle": "Editar perfil del negocio",
+    "editSubtitle": "Revisa los datos del negocio y guarda los cambios.",
     "contactName": "Tu nombre",
     "businessEmail": "Email del negocio",
     "businessName": "Nombre del negocio",
@@ -1599,13 +1602,18 @@
     "logoUploadHint": "Toca para subir tu logo",
     "errLogoUpload": "No se pudo subir el logo. Intenta de nuevo.",
     "errPhotoPermission": "Se necesita permiso para acceder a la biblioteca de fotos.",
+    "loadingProfile": "Cargando perfil...",
     "continue": "Crear negocio",
     "creating": "Creando…",
+    "saveChanges": "Guardar cambios",
+    "saving": "Guardando...",
     "errRequired": "Rellena todos los campos (usa chips cuando puedas).",
     "errNameAddress": "El nombre del negocio y la dirección son obligatorios.",
     "errEmail": "Introduce un email válido.",
     "errSave": "No se pudo crear el negocio. Inténtalo de nuevo.",
+    "errSaveChanges": "No se pudieron guardar los cambios. Intenta de nuevo.",
     "setupComplete": "¡Configuración completa! Listo para lanzar ofertas BOGO.",
+    "changesSaved": "Cambios guardados.",
     "city": "Ciudad",
     "cat": {
       "restaurant": "Restaurante",
