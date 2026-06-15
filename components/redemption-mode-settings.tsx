@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Text, TextInput, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { ActivityIndicator, Text, TextInput, View, type TextInputProps } from "react-native";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
@@ -34,6 +34,22 @@ type Props = {
   businessName?: string | null;
 };
 
+const SECURE_PIN_INPUT_PROPS = {
+  autoComplete: "off",
+  autoCorrect: false,
+  importantForAutofill: "no",
+  keyboardType: "number-pad",
+  secureTextEntry: true,
+  textContentType: "none",
+} satisfies Pick<
+  TextInputProps,
+  "autoComplete" | "autoCorrect" | "importantForAutofill" | "keyboardType" | "secureTextEntry" | "textContentType"
+>;
+
+function normalizePinInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 6);
+}
+
 function formatDeviceStatus(device: RedemptionDeviceSummary, t: TFunction): string {
   if (device.active) return t("redemptionMode.statusActive", { defaultValue: "Active" });
   if (device.deactivated_at) return t("redemptionMode.statusInactive", { defaultValue: "Inactive" });
@@ -65,6 +81,26 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   const [devices, setDevices] = useState<RedemptionDeviceSummary[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" | "warning" } | null>(null);
+
+  const clearPinFields = useCallback(() => {
+    setOwnerPin("");
+    setOwnerPinConfirm("");
+    setOwnerDisablePin("");
+    setOwnerNewPin("");
+    setOwnerNewPinConfirm("");
+    setPin("");
+    setPinConfirm("");
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return clearPinFields;
+    }, [clearPinFields]),
+  );
+
+  useEffect(() => {
+    clearPinFields();
+  }, [businessId, clearPinFields]);
 
   useEffect(() => {
     if (!businessName || deviceLabel !== defaultDeviceLabel) return;
@@ -112,23 +148,24 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   async function enableOwnerPin() {
     if (!businessId || savingOwnerSecurity) return;
     const pinValue = ownerPin.trim();
+    const pinConfirmValue = ownerPinConfirm.trim();
     if (!/^\d{4,6}$/.test(pinValue)) {
       setBanner({ message: t("redemptionMode.ownerPinRequired", { defaultValue: "Enter a 4-6 digit redemption PIN." }), tone: "error" });
       return;
     }
-    if (pinValue !== ownerPinConfirm.trim()) {
+    if (pinValue !== pinConfirmValue) {
       setBanner({ message: t("redemptionMode.pinMismatch", { defaultValue: "PINs do not match." }), tone: "error" });
       return;
     }
     setSavingOwnerSecurity(true);
     setBanner(null);
+    setOwnerPin("");
+    setOwnerPinConfirm("");
     try {
       await enableOwnerRedemptionPin(businessId, pinValue);
       markUnlocked(businessId);
       setPinEnabled(businessId, true);
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
-      setOwnerPin("");
-      setOwnerPinConfirm("");
       setBanner({
         message: t("redemptionMode.ownerPinEnabled", { defaultValue: "Owner redemption PIN enabled." }),
         tone: "success",
@@ -152,13 +189,13 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     }
     setSavingOwnerSecurity(true);
     setBanner(null);
+    setOwnerDisablePin("");
     try {
       await disableOwnerRedemptionPin(businessId, pinValue || undefined);
       clearUnlock(businessId);
       setPinEnabled(businessId, false);
       // Server clears pin_hash on disable; re-enabling is a fresh setup.
       setOwnerSecurity({ enabled: false, hasPin: false, lockedUntil: null });
-      setOwnerDisablePin("");
       setBanner({
         message: t("redemptionMode.ownerPinDisabled", { defaultValue: "Owner redemption PIN disabled." }),
         tone: "success",
@@ -191,14 +228,14 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     }
     setSavingOwnerSecurity(true);
     setBanner(null);
+    setOwnerDisablePin("");
+    setOwnerNewPin("");
+    setOwnerNewPinConfirm("");
     try {
       await changeOwnerRedemptionPin(businessId, currentPin, newPin);
       markUnlocked(businessId);
       setPinEnabled(businessId, true);
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
-      setOwnerDisablePin("");
-      setOwnerNewPin("");
-      setOwnerNewPinConfirm("");
       setBanner({
         message: t("redemptionMode.ownerPinChanged", { defaultValue: "Owner redemption PIN changed." }),
         tone: "success",
@@ -216,22 +253,26 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
   async function startRedemptionMode() {
     if (!businessId || activating) return;
     const label = deviceLabel.trim();
+    const pinValue = pin.trim();
+    const pinConfirmValue = pinConfirm.trim();
     if (!label) {
       setBanner({ message: t("redemptionMode.labelRequired", { defaultValue: "Enter a device label." }), tone: "error" });
       return;
     }
-    if (!/^\d{4,6}$/.test(pin.trim())) {
+    if (!/^\d{4,6}$/.test(pinValue)) {
       setBanner({ message: t("redemptionMode.exitPinSetupRequired", { defaultValue: "Enter a 4-6 digit exit PIN." }), tone: "error" });
       return;
     }
-    if (pin.trim() !== pinConfirm.trim()) {
+    if (pinValue !== pinConfirmValue) {
       setBanner({ message: t("redemptionMode.exitPinMismatch", { defaultValue: "Exit PINs do not match." }), tone: "error" });
       return;
     }
     setActivating(true);
     setBanner(null);
+    setPin("");
+    setPinConfirm("");
     try {
-      await activateRedemptionMode({ businessId, deviceLabel: label, pin: pin.trim() });
+      await activateRedemptionMode({ businessId, deviceLabel: label, pin: pinValue });
       await refresh();
       router.replace("/redemption-mode" as Href);
     } catch (err) {
@@ -272,6 +313,11 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     });
   }
 
+  function toggleOpen() {
+    if (open) clearPinFields();
+    setOpen((value) => !value);
+  }
+
   async function removeDevice(deviceId: string) {
     if (!businessId) return;
     try {
@@ -300,7 +346,7 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       }}
     >
       <Pressable
-        onPress={() => setOpen((value) => !value)}
+        onPress={toggleOpen}
         accessibilityRole="button"
         style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: Spacing.md }}
       >
@@ -335,7 +381,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                 <ActivityIndicator color={theme.primary} />
               ) : (
                 <Text style={{ color: ownerSecurity?.enabled ? theme.accentText : theme.mutedText, fontWeight: "900", fontSize: 12 }}>
-                  {ownerSecurity?.enabled ? t("commonUi.on", { defaultValue: "On" }) : t("commonUi.off", { defaultValue: "Off" })}
+                  {ownerSecurity?.enabled
+                    ? t("redemptionMode.ownerPinConfigured", { defaultValue: "PIN configured" })
+                    : t("redemptionMode.ownerPinNotSet", { defaultValue: "No PIN set" })}
                 </Text>
               )}
             </View>
@@ -344,11 +392,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
               <View style={{ gap: Spacing.sm }}>
                 <TextInput
                   value={ownerDisablePin}
-                  onChangeText={(value) => setOwnerDisablePin(value.replace(/\D/g, "").slice(0, 6))}
+                  onChangeText={(value) => setOwnerDisablePin(normalizePinInput(value))}
                   placeholder={t("redemptionMode.currentPin", { defaultValue: "Current PIN" })}
                   placeholderTextColor={theme.mutedText}
-                  keyboardType="number-pad"
-                  secureTextEntry
+                  {...SECURE_PIN_INPUT_PROPS}
                   maxLength={6}
                   editable={!savingOwnerSecurity}
                   style={{
@@ -362,11 +409,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                 />
                 <TextInput
                   value={ownerNewPin}
-                  onChangeText={(value) => setOwnerNewPin(value.replace(/\D/g, "").slice(0, 6))}
+                  onChangeText={(value) => setOwnerNewPin(normalizePinInput(value))}
                   placeholder={t("redemptionMode.newPin", { defaultValue: "New PIN" })}
                   placeholderTextColor={theme.mutedText}
-                  keyboardType="number-pad"
-                  secureTextEntry
+                  {...SECURE_PIN_INPUT_PROPS}
                   maxLength={6}
                   editable={!savingOwnerSecurity}
                   style={{
@@ -380,11 +426,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                 />
                 <TextInput
                   value={ownerNewPinConfirm}
-                  onChangeText={(value) => setOwnerNewPinConfirm(value.replace(/\D/g, "").slice(0, 6))}
+                  onChangeText={(value) => setOwnerNewPinConfirm(normalizePinInput(value))}
                   placeholder={t("redemptionMode.confirmNewPin", { defaultValue: "Confirm new PIN" })}
                   placeholderTextColor={theme.mutedText}
-                  keyboardType="number-pad"
-                  secureTextEntry
+                  {...SECURE_PIN_INPUT_PROPS}
                   maxLength={6}
                   editable={!savingOwnerSecurity}
                   style={{
@@ -413,11 +458,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
               <View style={{ gap: Spacing.sm }}>
                 <TextInput
                   value={ownerPin}
-                  onChangeText={(value) => setOwnerPin(value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder={t("redemptionMode.ownerPinPlaceholder", { defaultValue: "Redemption PIN" })}
+                  onChangeText={(value) => setOwnerPin(normalizePinInput(value))}
+                  placeholder={t("redemptionMode.ownerPinPlaceholder", { defaultValue: "Enter owner PIN" })}
                   placeholderTextColor={theme.mutedText}
-                  keyboardType="number-pad"
-                  secureTextEntry
+                  {...SECURE_PIN_INPUT_PROPS}
                   maxLength={6}
                   editable={!savingOwnerSecurity}
                   style={{
@@ -431,11 +475,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
                 />
                 <TextInput
                   value={ownerPinConfirm}
-                  onChangeText={(value) => setOwnerPinConfirm(value.replace(/\D/g, "").slice(0, 6))}
+                  onChangeText={(value) => setOwnerPinConfirm(normalizePinInput(value))}
                   placeholder={t("redemptionMode.confirmPin", { defaultValue: "Confirm PIN" })}
                   placeholderTextColor={theme.mutedText}
-                  keyboardType="number-pad"
-                  secureTextEntry
+                  {...SECURE_PIN_INPUT_PROPS}
                   maxLength={6}
                   editable={!savingOwnerSecurity}
                   style={{
@@ -488,11 +531,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
             </Text>
             <TextInput
               value={pin}
-              onChangeText={(value) => setPin(value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="1234"
+              onChangeText={(value) => setPin(normalizePinInput(value))}
+              placeholder={t("redemptionMode.exitPinSetupPlaceholder", { defaultValue: "Enter exit PIN" })}
               placeholderTextColor={theme.mutedText}
-              keyboardType="number-pad"
-              secureTextEntry
+              {...SECURE_PIN_INPUT_PROPS}
               maxLength={6}
               editable={!activating}
               style={{
@@ -506,11 +548,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
             />
             <TextInput
               value={pinConfirm}
-              onChangeText={(value) => setPinConfirm(value.replace(/\D/g, "").slice(0, 6))}
+              onChangeText={(value) => setPinConfirm(normalizePinInput(value))}
               placeholder={t("redemptionMode.confirmPin", { defaultValue: "Confirm PIN" })}
               placeholderTextColor={theme.mutedText}
-              keyboardType="number-pad"
-              secureTextEntry
+              {...SECURE_PIN_INPUT_PROPS}
               maxLength={6}
               editable={!activating}
               style={{

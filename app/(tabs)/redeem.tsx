@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Text, TextInput, type TextInputProps, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -30,6 +30,22 @@ import {
 } from "@/lib/owner-redemption-security";
 
 type RedeemMode = "scan" | "manual";
+
+const SECURE_PIN_INPUT_PROPS = {
+  autoComplete: "off",
+  autoCorrect: false,
+  importantForAutofill: "no",
+  keyboardType: "number-pad",
+  secureTextEntry: true,
+  textContentType: "none",
+} satisfies Pick<
+  TextInputProps,
+  "autoComplete" | "autoCorrect" | "importantForAutofill" | "keyboardType" | "secureTextEntry" | "textContentType"
+>;
+
+function normalizePinInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 6);
+}
 
 function normalizeClaimCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -92,6 +108,7 @@ export default function RedeemScanner() {
       setBanner(null);
       setScanned(false);
       processingRef.current = false;
+      return () => setOwnerPinInput("");
     }, []),
   );
 
@@ -115,6 +132,7 @@ export default function RedeemScanner() {
     }
     setOwnerPinSubmitting(true);
     setBanner(null);
+    setOwnerPinInput("");
     try {
       const unlocked = await verifyOwnerRedemptionPin(businessId, pin);
       if (!unlocked) {
@@ -123,7 +141,6 @@ export default function RedeemScanner() {
       }
       markUnlocked(businessId);
       setPinEnabled(businessId, true);
-      setOwnerPinInput("");
       setOwnerSecurity({ enabled: true, hasPin: true, lockedUntil: null });
     } catch (err) {
       setBanner({
@@ -260,11 +277,10 @@ export default function RedeemScanner() {
           </Text>
           <TextInput
             value={ownerPinInput}
-            onChangeText={(value) => setOwnerPinInput(value.replace(/\D/g, "").slice(0, 6))}
-            placeholder={t("redemptionMode.ownerPinPlaceholder", { defaultValue: "Redemption PIN" })}
+            onChangeText={(value) => setOwnerPinInput(normalizePinInput(value))}
+            placeholder={t("redemptionMode.ownerPinPlaceholder", { defaultValue: "Enter owner PIN" })}
             placeholderTextColor={theme.mutedText}
-            keyboardType="number-pad"
-            secureTextEntry
+            {...SECURE_PIN_INPUT_PROPS}
             maxLength={6}
             editable={!ownerPinSubmitting}
             inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}

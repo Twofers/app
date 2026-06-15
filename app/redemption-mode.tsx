@@ -6,11 +6,12 @@ import {
   ScrollView,
   Text,
   TextInput,
+  type TextInputProps,
   useWindowDimensions,
   View,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter, type Href } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { useAuthSession } from "@/components/providers/auth-session-provider";
@@ -38,6 +39,22 @@ import {
 
 type InputBody = { token?: string; short_code?: string };
 type EntryMode = "scan" | "manual";
+
+const SECURE_PIN_INPUT_PROPS = {
+  autoComplete: "off",
+  autoCorrect: false,
+  importantForAutofill: "no",
+  keyboardType: "number-pad",
+  secureTextEntry: true,
+  textContentType: "none",
+} satisfies Pick<
+  TextInputProps,
+  "autoComplete" | "autoCorrect" | "importantForAutofill" | "keyboardType" | "secureTextEntry" | "textContentType"
+>;
+
+function normalizePinInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 6);
+}
 
 function codeBodyFromManual(raw: string): InputBody | null {
   const code = normalizeRedemptionCode(raw);
@@ -75,6 +92,12 @@ export default function RedemptionModeScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => setExitPin("");
+    }, []),
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -162,14 +185,16 @@ export default function RedemptionModeScreen() {
 
   async function runExit() {
     if (exiting) return;
-    if (!/^\d{4,6}$/.test(exitPin.trim())) {
+    const pinValue = exitPin.trim();
+    if (!/^\d{4,6}$/.test(pinValue)) {
       setBanner({ message: t("redemptionMode.pinRequired", { defaultValue: "Enter the 4-6 digit exit PIN." }), tone: "error" });
       return;
     }
     setExiting(true);
     setBanner(null);
+    setExitPin("");
     try {
-      await exitRedemptionMode(exitPin.trim());
+      await exitRedemptionMode(pinValue);
       await refresh();
       // No owner session lives on this device; exit always ends at login.
       router.replace("/auth-landing" as Href);
@@ -404,11 +429,10 @@ export default function RedemptionModeScreen() {
             </Text>
             <TextInput
               value={exitPin}
-              onChangeText={(value) => setExitPin(value.replace(/\D/g, "").slice(0, 6))}
+              onChangeText={(value) => setExitPin(normalizePinInput(value))}
               placeholder={t("redemptionMode.exitPinPlaceholder", { defaultValue: "Exit PIN" })}
               placeholderTextColor={theme.mutedText}
-              keyboardType="number-pad"
-              secureTextEntry
+              {...SECURE_PIN_INPUT_PROPS}
               inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
               maxLength={6}
               style={{
