@@ -1,11 +1,11 @@
 import type { Href } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { removePushTokensForUser } from "@/lib/push-token";
-import { clearCachedRole } from "@/lib/tab-mode";
+import { clearLocalAuthSessionState } from "./auth-local-session-state";
 
 /**
- * Full app sign-out: push token cleanup (while session is valid), local role
- * cache cleanup, then Supabase sign-out and login screen.
+ * Full app sign-out: push token cleanup (while session is valid), local
+ * auth-scoped cache cleanup, then Supabase sign-out and login screen.
  *
  * The stored profile role is permanent (hard role split) and is NOT touched
  * here. Cleanup steps are best-effort: failures are logged but sign-out
@@ -24,8 +24,8 @@ export async function signOutAndRedirectToAuthLanding(params: {
       });
     }
 
-    // Best-effort: drop the locally cached role so the next account resolves fresh.
-    await clearCachedRole();
+    // Best-effort: drop local auth-scoped state so the next account resolves fresh.
+    await clearLocalAuthSessionState();
 
     // This is the critical step — always attempt sign-out
     await supabase.auth.signOut({ scope: "local" });

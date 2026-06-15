@@ -8,6 +8,10 @@ import {
   parseOwnerRedemptionUnlockGraceCache,
   pruneOwnerRedemptionUnlockGraceCache,
 } from "@/lib/owner-redemption-unlock-grace";
+import {
+  clearOwnerRedemptionUnlockGraceCache,
+  OWNER_REDEMPTION_UNLOCK_GRACE_KEY,
+} from "@/lib/owner-redemption-unlock-cache";
 
 type OwnerRedemptionSecurityContextValue = {
   isUnlocked: (businessId: string | null | undefined) => boolean;
@@ -18,7 +22,6 @@ type OwnerRedemptionSecurityContextValue = {
 };
 
 const OwnerRedemptionSecurityContext = createContext<OwnerRedemptionSecurityContextValue | null>(null);
-const OWNER_REDEMPTION_UNLOCK_GRACE_KEY = "twofer.ownerRedemptionUnlockGrace.v1";
 
 export function OwnerRedemptionSecurityProvider({ children }: { children: ReactNode }) {
   const { session, isInitialLoading } = useAuthSession();
@@ -30,7 +33,7 @@ export function OwnerRedemptionSecurityProvider({ children }: { children: ReactN
     if (isInitialLoading) return;
     if (!userId) {
       setUnlockedBusinessIds(new Set());
-      void AsyncStorage.removeItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY).catch(() => {});
+      void clearOwnerRedemptionUnlockGraceCache();
       return;
     }
 

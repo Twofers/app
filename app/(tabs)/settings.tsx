@@ -45,8 +45,8 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { isDebugPanelEnabled } from "@/lib/runtime-env";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { clearCachedRole } from "@/lib/tab-mode";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { clearLocalAuthSessionState } from "@/lib/auth-local-session-state";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { deleteUserAccount } from "@/lib/functions";
@@ -365,7 +365,7 @@ export default function SettingsScreen() {
     try {
       await deleteUserAccount();
       await supabase.auth.signOut({ scope: "local" });
-      await clearCachedRole();
+      await clearLocalAuthSessionState();
       router.replace("/auth-landing" as Href);
     } catch (err: unknown) {
       devWarn("[settings] delete account failed", err);

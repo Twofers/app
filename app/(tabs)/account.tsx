@@ -20,7 +20,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import type { AppLocale } from "../../lib/i18n/config";
 import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
-import { clearCachedRole, useTabMode } from "../../lib/tab-mode";
+import { useTabMode } from "../../lib/tab-mode";
 import { LegalExternalLinks } from "../../components/legal-external-links";
 import { deleteUserAccount } from "../../lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
@@ -31,6 +31,7 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { clearLocalAuthSessionState } from "@/lib/auth-local-session-state";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
@@ -400,7 +401,7 @@ export default function AccountScreen() {
     try {
       await deleteUserAccount();
       await supabase.auth.signOut({ scope: "local" });
-      await clearCachedRole();
+      await clearLocalAuthSessionState();
       router.replace("/auth-landing" as Href);
     } catch (e: unknown) {
       // Don't surface raw Postgres / RLS / network errors in a top-of-screen banner

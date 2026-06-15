@@ -1,6 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { consumerSafeHrefFromNext } from "./post-auth-route";
+const h = vi.hoisted(() => {
+  const asyncStore = new Map<string, string>();
+  return {
+    asyncStore,
+    getBusinessProfileAccessForCurrentUser: vi.fn(async () => ({ isComplete: true })),
+  };
+});
+
+vi.mock("@react-native-async-storage/async-storage", () => ({
+  default: {
+    getItem: async (key: string) => h.asyncStore.get(key) ?? null,
+    setItem: async (key: string, value: string) => void h.asyncStore.set(key, value),
+    removeItem: async (key: string) => void h.asyncStore.delete(key),
+  },
+}));
+
+vi.mock("./business-profile-access", () => ({
+  getBusinessProfileAccessForCurrentUser: h.getBusinessProfileAccessForCurrentUser,
+}));
+
+import { consumerSafeHrefFromNext, consumePendingDeepLink, resolvePostAuthReplaceHref } from "./post-auth-route";
+
+beforeEach(() => {
+  h.asyncStore.clear();
+  h.getBusinessProfileAccessForCurrentUser.mockReset();
+  h.getBusinessProfileAccessForCurrentUser.mockResolvedValue({ isComplete: true });
+});
 
 describe("consumerSafeHrefFromNext", () => {
   it("keeps safe consumer tab routes", () => {
@@ -21,5 +47,30 @@ describe("consumerSafeHrefFromNext", () => {
 
   it("falls back to feed for unknown external paths", () => {
     expect(consumerSafeHrefFromNext("/admin/secrets")).toBe("/(tabs)");
+  });
+});
+
+describe("resolvePostAuthReplaceHref", () => {
+  it("routes a complete business account to the business create surface", async () => {
+    await expect(
+      resolvePostAuthReplaceHref({ role: "business", nextParam: "/(tabs)/wallet" }),
+    ).resolves.toBe("/(tabs)/create");
+    expect(h.getBusinessProfileAccessForCurrentUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes incomplete business accounts to setup and preserves the requested destination", async () => {
+    h.getBusinessProfileAccessForCurrentUser.mockResolvedValueOnce({ isComplete: false });
+
+    await expect(
+      resolvePostAuthReplaceHref({ role: "business", nextParam: "/deal/deal_1" }),
+    ).resolves.toBe("/business-setup");
+    await expect(consumePendingDeepLink()).resolves.toBe("/deal/deal_1");
+  });
+
+  it("routes customer accounts away from business-only destinations without a profile check", async () => {
+    await expect(
+      resolvePostAuthReplaceHref({ role: "customer", nextParam: "/(tabs)/dashboard" }),
+    ).resolves.toBe("/(tabs)");
+    expect(h.getBusinessProfileAccessForCurrentUser).not.toHaveBeenCalled();
   });
 });
