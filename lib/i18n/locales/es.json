@@ -486,6 +486,7 @@
     "bizYourBusiness": "Tu negocio",
     "bizNoAddress": "Aún no hay dirección.",
     "bizCategory": "Categoría",
+    "bizCategoryMissing": "Falta categoría",
     "bizSetupComplete": "¡Configuración completa! Listo para lanzar ofertas BOGO.",
     "bizSetupFinish": "Completa tu configuración para desbloquear crear, canjear y panel.",
     "bizSetupStart": "Completa la configuración inicial para empezar a lanzar ofertas.",

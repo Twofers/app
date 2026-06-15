@@ -86,7 +86,6 @@ export default function AccountScreen() {
   const [businessProfileSnapshot, setBusinessProfileSnapshot] = useState<{
     name: string | null;
     address: string | null;
-    category: string | null;
   } | null>(null);
   const [bizProfileExpanded, setBizProfileExpanded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -105,6 +104,16 @@ export default function AccountScreen() {
     () => calculateProfileCompleteness(businessProfile),
     [businessProfile],
   );
+  const businessSummaryName =
+    businessProfile?.name?.trim() ||
+    businessProfileSnapshot?.name?.trim() ||
+    businessName ||
+    null;
+  const businessSummaryAddress =
+    businessProfile?.address?.trim() ||
+    businessProfileSnapshot?.address?.trim() ||
+    null;
+  const businessSummaryCategory = businessProfile?.category?.trim() || null;
 
   useEffect(() => {
     if (!isLoggedIn || tabMode !== "business") {
@@ -124,7 +133,6 @@ export default function AccountScreen() {
             ? {
                 name: access.profile.name ?? null,
                 address: access.profile.address ?? null,
-                category: access.profile.category ?? null,
               }
             : null,
         );
@@ -652,16 +660,14 @@ export default function AccountScreen() {
               ) : (
                 <>
                   <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
-                    {businessProfileSnapshot?.name ?? businessName ?? t("account.bizYourBusiness")}
+                    {businessSummaryName ?? t("account.bizYourBusiness")}
                   </Text>
                   <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
-                    {businessProfileSnapshot?.address ?? t("account.bizNoAddress")}
+                    {businessSummaryAddress ?? t("account.bizNoAddress")}
                   </Text>
-                  {businessProfileSnapshot?.category ? (
-                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
-                      {t("account.bizCategory")}: {businessProfileSnapshot.category}
-                    </Text>
-                  ) : null}
+                  <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                    {t("account.bizCategory")}: {businessSummaryCategory ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
+                  </Text>
                   {visibleBusinessContactName ? (
                     <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
                       {t("account.fieldContactName")}: {visibleBusinessContactName}

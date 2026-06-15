@@ -486,6 +486,7 @@
     "bizYourBusiness": "내 비즈니스",
     "bizNoAddress": "아직 주소가 없습니다.",
     "bizCategory": "카테고리",
+    "bizCategoryMissing": "카테고리 없음",
     "bizSetupComplete": "설정 완료 — BOGO 딜을 시작할 준비가 되었습니다!",
     "bizSetupFinish": "설정을 완료하여 만들기, 사용, 대시보드를 잠금 해제하세요.",
     "bizSetupStart": "초기 설정을 완료하여 딜을 시작하세요.",

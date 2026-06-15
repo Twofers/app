@@ -489,6 +489,7 @@
     "bizYourBusiness": "Your business",
     "bizNoAddress": "No address on file yet.",
     "bizCategory": "Category",
+    "bizCategoryMissing": "Category missing",
     "bizSetupComplete": "Setup complete — ready to launch BOGO deals!",
     "bizSetupFinish": "Finish setup to create deals, redeem tickets, and view performance.",
     "bizSetupStart": "Complete your one-time setup to start launching deals.",
