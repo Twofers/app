@@ -6,6 +6,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
@@ -14,6 +15,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBusiness } from "@/hooks/use-business";
+import { getMenuManagerViewState } from "@/lib/menu-manager-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -31,6 +33,7 @@ type Row = {
 
 export default function MenuManagerScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
@@ -65,7 +68,15 @@ export default function MenuManagerScreen() {
     void load();
   }, [load]);
 
-  const visible = showArchived ? rows : rows.filter((r) => !r.archived_at);
+  const menuState = getMenuManagerViewState(rows, showArchived);
+  const visible = menuState.visibleRows;
+
+  const startAdding = () => {
+    setEditingId(null);
+    setDraft({ name: "", category: "", price_text: "", description: "" });
+    setAdding(true);
+    setShowArchived(false);
+  };
 
   const startEdit = (r: Row) => {
     setAdding(false);
@@ -170,12 +181,18 @@ export default function MenuManagerScreen() {
 
         <SecondaryButton
           title={showArchived ? t("menuManager.hideArchived") : t("menuManager.showArchived")}
-          onPress={() => setShowArchived((s) => !s)}
+          onPress={() => {
+            setShowArchived((s) => !s);
+            setAdding(false);
+            setEditingId(null);
+          }}
         />
 
-        {!adding ? (
-          <PrimaryButton title={t("menuManager.addManual")} onPress={() => { setEditingId(null); setDraft({ name: "", category: "", price_text: "", description: "" }); setAdding(true); }} />
-        ) : (
+        {!showArchived && !adding && !menuState.isActiveEmpty ? (
+          <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
+        ) : null}
+
+        {adding ? (
           <View style={{ gap: Spacing.sm }}>
             <TextInput
               value={draft.name}
@@ -240,10 +257,33 @@ export default function MenuManagerScreen() {
               }}
             />
           </View>
-        )}
+        ) : null}
 
-        {visible.length === 0 && !loadErr ? (
-          <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuManager.empty")}</Text>
+        {menuState.isActiveEmpty && !adding && !loadErr ? (
+          <View style={{ gap: Spacing.md }}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("menuManager.emptyTitle")}</Text>
+            <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+              {t("menuManager.emptyBody")}
+            </Text>
+            <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
+            <SecondaryButton
+              title={t("menuManager.scanMenu")}
+              onPress={() => router.push("/create/menu-scan" as Href)}
+            />
+          </View>
+        ) : null}
+
+        {menuState.isArchivedEmpty && !loadErr ? (
+          <View style={{ gap: Spacing.sm }}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("menuManager.archivedEmptyTitle")}</Text>
+            <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+              {t("menuManager.archivedEmptyBody")}
+            </Text>
+          </View>
+        ) : null}
+
+        {showArchived && menuState.showRestoreActions ? (
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("menuManager.archivedHelp")}</Text>
         ) : null}
 
         {visible.map((r) => (
