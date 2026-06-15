@@ -23,14 +23,95 @@ import {
   upsertConsumerProfile,
 } from "@/lib/consumer-profile";
 import {
+  clampConsumerBirthdate,
   defaultConsumerBirthdate,
   latestValidBirthdate,
+  makeConsumerBirthdateFromParts,
   parseBirthdateIsoToLocalDate,
+  shiftConsumerBirthdateMonths,
+  shiftConsumerBirthdateYears,
   toBirthdateIso,
 } from "@/lib/consumer-birthdate";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { isValidUsZipFormat, sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
+
+type AppTheme = typeof Colors.light;
+
+function BirthdateStepper({
+  label,
+  value,
+  onDecrease,
+  onIncrease,
+  decreaseLabel,
+  increaseLabel,
+  theme,
+}: {
+  label: string;
+  value: string;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  decreaseLabel: string;
+  increaseLabel: string;
+  theme: AppTheme;
+}) {
+  const iconButtonStyle = {
+    width: 44,
+    height: 44,
+    borderRadius: Radii.pill,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: theme.surfaceMuted,
+    borderWidth: 1,
+    borderColor: theme.border,
+  };
+
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: Radii.lg,
+        padding: Spacing.md,
+        backgroundColor: theme.surface,
+        gap: Spacing.sm,
+      }}
+    >
+      <Text style={{ color: theme.mutedText, fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+        <Pressable
+          onPress={onDecrease}
+          accessibilityRole="button"
+          accessibilityLabel={decreaseLabel}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={iconButtonStyle}
+        >
+          <MaterialIcons name="remove" size={22} color={theme.text} />
+        </Pressable>
+        <Text
+          style={{ flex: 1, textAlign: "center", fontSize: 18, fontWeight: "800", color: theme.text }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          maxFontSizeMultiplier={1.15}
+        >
+          {value}
+        </Text>
+        <Pressable
+          onPress={onIncrease}
+          accessibilityRole="button"
+          accessibilityLabel={increaseLabel}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={iconButtonStyle}
+        >
+          <MaterialIcons name="add" size={22} color={theme.text} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 export default function ConsumerProfileSetupScreen() {
   const { t } = useTranslation();
@@ -156,27 +237,44 @@ export default function ConsumerProfileSetupScreen() {
   }
 
   function openBirthdatePicker() {
-    const current = birthDate.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : birthDate;
-    if (Platform.OS === "ios") {
-      setDraftBirthDate(current);
-      setShowPicker(true);
-      return;
-    }
-    setBirthDate(current);
-    setShowPicker((visible) => !visible);
+    const current = clampConsumerBirthdate(birthDate);
+    setDraftBirthDate(current);
+    setShowPicker(true);
   }
 
-  function cancelIosBirthdatePicker() {
+  function cancelBirthdatePicker() {
     setDraftBirthDate(birthDate);
     setShowPicker(false);
   }
 
-  function confirmIosBirthdatePicker() {
-    const next = draftBirthDate.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : draftBirthDate;
+  function confirmBirthdatePicker() {
+    const next = clampConsumerBirthdate(draftBirthDate);
     setBirthDate(next);
     setDraftBirthDate(next);
     setBirthdateTouched(true);
     setShowPicker(false);
+  }
+
+  function clearBirthdatePicker() {
+    const fallback = defaultConsumerBirthdate();
+    setBirthDate(fallback);
+    setDraftBirthDate(fallback);
+    setBirthdateTouched(false);
+    setShowPicker(false);
+  }
+
+  function shiftDraftMonth(delta: number) {
+    setDraftBirthDate((current) => shiftConsumerBirthdateMonths(current, delta));
+  }
+
+  function shiftDraftYear(delta: number) {
+    setDraftBirthDate((current) => shiftConsumerBirthdateYears(current, delta));
+  }
+
+  function shiftDraftDay(delta: number) {
+    setDraftBirthDate((current) =>
+      makeConsumerBirthdateFromParts(current.getFullYear(), current.getMonth(), current.getDate() + delta),
+    );
   }
 
   if (loading) {
@@ -318,31 +416,127 @@ export default function ConsumerProfileSetupScreen() {
             </Text>
           </Pressable>
           {showPicker && Platform.OS !== "ios" ? (
-            <DateTimePicker
-              value={birthDate}
-              mode="date"
-              display="default"
-              maximumDate={maximumBirthDate}
-              minimumDate={new Date(1900, 0, 1)}
-              positiveButton={{ label: t("commonUi.ok"), textColor: C.primary }}
-              negativeButton={{ label: t("commonUi.cancel"), textColor: C.mutedText }}
-              neutralButton={{
-                label: t("commonUi.clear", { defaultValue: "Clear" }),
-                textColor: C.mutedText,
-              }}
-              onChange={(event, d) => {
-                setShowPicker(false);
-                if (event.type === "neutralButtonPressed") {
-                  setBirthDate(defaultConsumerBirthdate);
-                  setDraftBirthDate(defaultConsumerBirthdate);
-                  setBirthdateTouched(false);
-                  return;
-                }
-                if (event.type === "dismissed" || !d) return;
-                setBirthDate(d.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : d);
-                setBirthdateTouched(true);
-              }}
-            />
+            <Modal
+              visible
+              transparent
+              animationType="slide"
+              presentationStyle="overFullScreen"
+              accessibilityViewIsModal
+              onRequestClose={cancelBirthdatePicker}
+            >
+              <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
+                <View
+                  style={{
+                    borderTopLeftRadius: Radii.lg,
+                    borderTopRightRadius: Radii.lg,
+                    backgroundColor: C.surface,
+                    paddingTop: Spacing.sm,
+                    paddingHorizontal: horizontal,
+                    paddingBottom: scrollBottom,
+                    gap: Spacing.md,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingVertical: Spacing.sm,
+                    }}
+                  >
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={cancelBirthdatePicker}
+                      style={{ minHeight: 44, justifyContent: "center", paddingRight: Spacing.md }}
+                    >
+                      <Text style={{ color: C.mutedText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                        {t("commonUi.cancel")}
+                      </Text>
+                    </Pressable>
+                    <Text
+                      style={{ color: C.text, fontSize: 16, fontWeight: "800", flex: 1, textAlign: "center" }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                      maxFontSizeMultiplier={1.15}
+                    >
+                      {t("consumerProfile.birthdateTitle")}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={confirmBirthdatePicker}
+                      style={{ minHeight: 44, justifyContent: "center", paddingLeft: Spacing.md }}
+                    >
+                      <Text style={{ color: C.primary, fontSize: 16, fontWeight: "800" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                        {t("commonUi.done", { defaultValue: "Done" })}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View
+                    style={{
+                      borderRadius: Radii.lg,
+                      backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : "#FFF7ED",
+                      borderWidth: 1,
+                      borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.32)" : "#FED7AA",
+                      padding: Spacing.md,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: C.accentText, fontSize: 20, fontWeight: "900" }} maxFontSizeMultiplier={1.15}>
+                      {draftBirthDate.toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </View>
+
+                  <BirthdateStepper
+                    label={t("consumerProfile.birthdateMonth", { defaultValue: "Month" })}
+                    value={draftBirthDate.toLocaleDateString(undefined, { month: "long" })}
+                    onDecrease={() => shiftDraftMonth(-1)}
+                    onIncrease={() => shiftDraftMonth(1)}
+                    decreaseLabel={t("consumerProfile.birthdatePreviousMonth", { defaultValue: "Previous month" })}
+                    increaseLabel={t("consumerProfile.birthdateNextMonth", { defaultValue: "Next month" })}
+                    theme={C}
+                  />
+                  <BirthdateStepper
+                    label={t("consumerProfile.birthdateDay", { defaultValue: "Day" })}
+                    value={String(draftBirthDate.getDate())}
+                    onDecrease={() => shiftDraftDay(-1)}
+                    onIncrease={() => shiftDraftDay(1)}
+                    decreaseLabel={t("consumerProfile.birthdatePreviousDay", { defaultValue: "Previous day" })}
+                    increaseLabel={t("consumerProfile.birthdateNextDay", { defaultValue: "Next day" })}
+                    theme={C}
+                  />
+                  <BirthdateStepper
+                    label={t("consumerProfile.birthdateYear", { defaultValue: "Year" })}
+                    value={String(draftBirthDate.getFullYear())}
+                    onDecrease={() => shiftDraftYear(-1)}
+                    onIncrease={() => shiftDraftYear(1)}
+                    decreaseLabel={t("consumerProfile.birthdatePreviousYear", { defaultValue: "Previous year" })}
+                    increaseLabel={t("consumerProfile.birthdateNextYear", { defaultValue: "Next year" })}
+                    theme={C}
+                  />
+
+                  <Pressable
+                    onPress={clearBirthdatePicker}
+                    accessibilityRole="button"
+                    style={{
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingVertical: Spacing.sm,
+                    }}
+                  >
+                    <Text style={{ color: C.mutedText, fontSize: 15, fontWeight: "800" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                      {t("commonUi.clear", { defaultValue: "Clear" })}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Modal>
           ) : null}
         </View>
 
@@ -358,7 +552,7 @@ export default function ConsumerProfileSetupScreen() {
         animationType="slide"
         presentationStyle="overFullScreen"
         accessibilityViewIsModal
-        onRequestClose={cancelIosBirthdatePicker}
+        onRequestClose={cancelBirthdatePicker}
       >
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.28)" }}>
           <View
@@ -381,7 +575,7 @@ export default function ConsumerProfileSetupScreen() {
             >
               <Pressable
                 accessibilityRole="button"
-                onPress={cancelIosBirthdatePicker}
+                onPress={cancelBirthdatePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingRight: Spacing.md }}
               >
                 <Text style={{ color: C.mutedText, fontSize: 16, fontWeight: "700" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
@@ -399,7 +593,7 @@ export default function ConsumerProfileSetupScreen() {
               </Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={confirmIosBirthdatePicker}
+                onPress={confirmBirthdatePicker}
                 style={{ minHeight: 44, justifyContent: "center", paddingLeft: Spacing.md }}
               >
                 <Text style={{ color: C.primary, fontSize: 16, fontWeight: "800" }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
