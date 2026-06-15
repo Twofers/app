@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
@@ -34,7 +34,12 @@ import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
-import { validateBusinessProfileSaveDraft } from "@/lib/business-profile-save";
+import {
+  isBusinessProfileEditorDirty,
+  isValidBusinessEmail,
+  validateBusinessProfileSaveDraft,
+  type BusinessProfileEditorDraft,
+} from "@/lib/business-profile-save";
 import { ProfileCompletenessBar } from "@/components/profile-completeness-bar";
 import { RedemptionModeSettings } from "@/components/redemption-mode-settings";
 import { aiGenerateDealCopy, aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
@@ -94,6 +99,10 @@ export default function AccountScreen() {
   const [lookupSearching, setLookupSearching] = useState(false);
   const [lookupDetailsPlaceId, setLookupDetailsPlaceId] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const profileBusinessNameRef = useRef<TextInput>(null);
+  const profileBusinessEmailRef = useRef<TextInput>(null);
+  const profileAddressRef = useRef<TextInput>(null);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -115,6 +124,72 @@ export default function AccountScreen() {
     businessProfileSnapshot?.address?.trim() ||
     null;
   const businessSummaryCategory = businessProfile?.category?.trim() || null;
+  const savedBusinessProfileDraft = useMemo<BusinessProfileEditorDraft>(
+    () => ({
+      name: businessProfile?.name ?? "",
+      contactName: businessProfile?.contact_name ?? "",
+      businessEmail: businessProfile?.business_email ?? "",
+      phone: businessProfile?.phone ?? "",
+      address: businessProfile?.address ?? "",
+      category: businessProfile?.category ?? "",
+      hours: businessProfile?.hours_text ?? "",
+      tone: businessProfile?.tone ?? "",
+      location: businessProfile?.location ?? "",
+      latitude:
+        businessProfile?.latitude != null && Number.isFinite(Number(businessProfile.latitude))
+          ? String(businessProfile.latitude)
+          : "",
+      longitude:
+        businessProfile?.longitude != null && Number.isFinite(Number(businessProfile.longitude))
+          ? String(businessProfile.longitude)
+          : "",
+      shortDescription: businessProfile?.short_description ?? "",
+      preferredLocale: businessProfile?.preferred_locale ?? null,
+    }),
+    [businessProfile],
+  );
+  const currentBusinessProfileDraft = useMemo<BusinessProfileEditorDraft>(
+    () => ({
+      name: profileBusinessName,
+      contactName: profileContactName,
+      businessEmail: profileBusinessEmail,
+      phone: profilePhone,
+      address: profileAddress,
+      category: profileCategory,
+      hours: profileHours,
+      tone: profileTone,
+      location: profileLocation,
+      latitude: profileLatitude,
+      longitude: profileLongitude,
+      shortDescription: profileShortDescription,
+      preferredLocale: profilePreferredLocale,
+    }),
+    [
+      profileAddress,
+      profileBusinessEmail,
+      profileBusinessName,
+      profileCategory,
+      profileContactName,
+      profileHours,
+      profileLatitude,
+      profileLocation,
+      profileLongitude,
+      profilePhone,
+      profilePreferredLocale,
+      profileShortDescription,
+      profileTone,
+    ],
+  );
+  const businessProfileDirty = Boolean(
+    businessId &&
+      businessProfile &&
+      isBusinessProfileEditorDirty(currentBusinessProfileDraft, savedBusinessProfileDraft),
+  );
+  const profileNameMissing = bizProfileExpanded && profileBusinessName.trim().length === 0;
+  const profileAddressMissing = bizProfileExpanded && profileAddress.trim().length === 0;
+  const profileBusinessEmailInvalid = bizProfileExpanded && !isValidBusinessEmail(profileBusinessEmail);
+  const requiredFieldLabel = t("account.fieldRequired", { defaultValue: "Required" });
+  const optionalFieldLabel = t("account.fieldOptional", { defaultValue: "Optional" });
 
   useEffect(() => {
     if (!isLoggedIn || tabMode !== "business") {
@@ -472,6 +547,14 @@ export default function AccountScreen() {
         hours: profileHours,
       });
       if (!profileValidation.ok) {
+        if (profileValidation.reason === "email") {
+          profileBusinessEmailRef.current?.focus();
+        } else if (!profileValidation.values.name) {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+          profileBusinessNameRef.current?.focus();
+        } else {
+          profileAddressRef.current?.focus();
+        }
         setBanner({
           message:
             profileValidation.reason === "email"
@@ -604,8 +687,9 @@ export default function AccountScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={{ marginTop: Spacing.lg, flex: 1 }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
+          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom + (businessProfileDirty ? 112 : 0) }}
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
@@ -871,8 +955,15 @@ export default function AccountScreen() {
               {bizProfileExpanded ? (
                 <>
                   <View>
-                    <Text style={{ fontSize: 13 }}>{t("account.fieldBusinessName")}</Text>
+                    <ProfileFieldLabel
+                      label={t("account.fieldBusinessName")}
+                      required
+                      requiredText={requiredFieldLabel}
+                      optionalText={optionalFieldLabel}
+                      theme={theme}
+                    />
                 <TextInput
+                  ref={profileBusinessNameRef}
                   value={profileBusinessName}
                   onChangeText={setProfileBusinessName}
                   placeholder={t("account.phBusinessName")}
@@ -880,13 +971,14 @@ export default function AccountScreen() {
                   editable={!savingProfile}
                   style={{
                     borderWidth: 1,
-                    borderColor: theme.border,
+                    borderColor: profileNameMissing ? theme.danger : theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
                     backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
+                {profileNameMissing ? <ProfileFieldError message={t("account.errBizNameRequired")} theme={theme} /> : null}
               </View>
 
               <SecondaryButton
@@ -930,7 +1022,12 @@ export default function AccountScreen() {
               )}
 
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldContactName")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldContactName")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileContactName}
                   onChangeText={setProfileContactName}
@@ -948,8 +1045,14 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldBusinessEmail")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldBusinessEmail")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
+                  ref={profileBusinessEmailRef}
                   value={profileBusinessEmail}
                   onChangeText={setProfileBusinessEmail}
                   placeholder={t("account.phBusinessEmail")}
@@ -961,17 +1064,25 @@ export default function AccountScreen() {
                   editable={!savingProfile}
                   style={{
                     borderWidth: 1,
-                    borderColor: theme.border,
+                    borderColor: profileBusinessEmailInvalid ? theme.danger : theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
                     backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
+                {profileBusinessEmailInvalid ? <ProfileFieldError message={t("account.errBizEmailInvalid")} theme={theme} /> : null}
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldAddress")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldAddress")}
+                  required
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
+                  ref={profileAddressRef}
                   value={profileAddress}
                   onChangeText={setProfileAddress}
                   placeholder={t("account.phAddress")}
@@ -979,16 +1090,22 @@ export default function AccountScreen() {
                   editable={!savingProfile}
                   style={{
                     borderWidth: 1,
-                    borderColor: theme.border,
+                    borderColor: profileAddressMissing ? theme.danger : theme.border,
                     borderRadius: 10,
                     padding: 10,
                     marginTop: 4,
                     backgroundColor: savingProfile ? theme.surfaceMuted : undefined,
                   }}
                 />
+                {profileAddressMissing ? <ProfileFieldError message={t("account.errBizAddressRequired")} theme={theme} /> : null}
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldPhone")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldPhone")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profilePhone}
                   onChangeText={setProfilePhone}
@@ -1006,7 +1123,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldCategory")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldCategory")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileCategory}
                   onChangeText={setProfileCategory}
@@ -1023,7 +1145,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldHours")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldHours")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileHours}
                   onChangeText={setProfileHours}
@@ -1043,7 +1170,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldTone")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldTone")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileTone}
                   onChangeText={setProfileTone}
@@ -1060,7 +1192,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldLocation")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldLocation")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileLocation}
                   onChangeText={setProfileLocation}
@@ -1077,7 +1214,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldLatLng")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldLatLng")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <Text style={{ opacity: 0.65, fontSize: 12, marginTop: 4, lineHeight: 16 }}>
                   {t("account.fieldLatLngHelp")}
                 </Text>
@@ -1117,7 +1259,12 @@ export default function AccountScreen() {
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 13 }}>{t("account.fieldShortDescription")}</Text>
+                <ProfileFieldLabel
+                  label={t("account.fieldShortDescription")}
+                  requiredText={requiredFieldLabel}
+                  optionalText={optionalFieldLabel}
+                  theme={theme}
+                />
                 <TextInput
                   value={profileShortDescription}
                   onChangeText={setProfileShortDescription}
@@ -1140,6 +1287,11 @@ export default function AccountScreen() {
                   onPress={() => void generateAiDescription()}
                   disabled={generatingDescription}
                 />
+                <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16 }}>
+                  {t("account.aiDescDraftHelp", {
+                    defaultValue: "AI fills this draft field only. Save your business profile to publish it.",
+                  })}
+                </Text>
               </View>
                   <PrimaryButton
                     title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
@@ -1224,8 +1376,66 @@ export default function AccountScreen() {
           </View>
         </ScrollView>
       )}
+      {businessProfileDirty ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            left: horizontal,
+            right: horizontal,
+            bottom: Math.max(Spacing.md, scrollBottom - Spacing.md),
+          }}
+        >
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: Radii.lg,
+              padding: Spacing.sm,
+              gap: Spacing.sm,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Text style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}>
+              {t("account.profileUnsavedTitle", { defaultValue: "Unsaved profile changes" })}
+            </Text>
+            <PrimaryButton
+              title={savingProfile ? t("account.savingProfile") : t("account.saveBizProfile")}
+              onPress={saveBusinessProfile}
+              disabled={savingProfile}
+            />
+          </View>
+        </View>
+      ) : null}
       {confirmModal}
     </View>
     </KeyboardScreen>
   );
+}
+
+function ProfileFieldLabel({
+  label,
+  required,
+  requiredText,
+  optionalText,
+  theme,
+}: {
+  label: string;
+  required?: boolean;
+  requiredText: string;
+  optionalText: string;
+  theme: typeof Colors.light;
+}) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+      <Text style={{ fontSize: 13, color: theme.text }}>{label}</Text>
+      <Text style={{ fontSize: 12, fontWeight: "800", color: required ? theme.text : theme.mutedText }}>
+        {required ? requiredText : optionalText}
+      </Text>
+    </View>
+  );
+}
+
+function ProfileFieldError({ message, theme }: { message: string; theme: typeof Colors.light }) {
+  return <Text style={{ color: theme.danger, fontSize: 12, lineHeight: 16, marginTop: 4 }}>{message}</Text>;
 }

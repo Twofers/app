@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeBusinessProfileSaveDraft, validateBusinessProfileSaveDraft } from "./business-profile-save";
+import {
+  isBusinessProfileEditorDirty,
+  isValidBusinessEmail,
+  normalizeBusinessProfileSaveDraft,
+  validateBusinessProfileSaveDraft,
+  type BusinessProfileEditorDraft,
+} from "./business-profile-save";
 
 const completeDraft = {
   name: "Demo Cafe",
@@ -10,6 +16,16 @@ const completeDraft = {
   address: "123 Main St",
   category: "Cafe",
   hours: "Mon-Fri 7a-4p",
+};
+
+const completeEditorDraft: BusinessProfileEditorDraft = {
+  ...completeDraft,
+  tone: "Friendly",
+  location: "Downtown",
+  latitude: "30.2672",
+  longitude: "-97.7431",
+  shortDescription: "A local cafe.",
+  preferredLocale: "en",
 };
 
 describe("business profile save validation", () => {
@@ -49,6 +65,10 @@ describe("business profile save validation", () => {
   });
 
   it("validates business email only when one is entered", () => {
+    expect(isValidBusinessEmail(" hello@example.com ")).toBe(true);
+    expect(isValidBusinessEmail("")).toBe(true);
+    expect(isValidBusinessEmail("not-email")).toBe(false);
+
     expect(validateBusinessProfileSaveDraft({ ...completeDraft, businessEmail: "" })).toMatchObject({
       ok: true,
     });
@@ -78,5 +98,40 @@ describe("business profile save validation", () => {
       category: "Cafe",
       hours: "Daily",
     });
+  });
+
+  it("does not treat whitespace-only editor changes as dirty", () => {
+    expect(
+      isBusinessProfileEditorDirty(
+        {
+          ...completeEditorDraft,
+          name: " Demo Cafe ",
+          shortDescription: " A local cafe. ",
+        },
+        completeEditorDraft,
+      ),
+    ).toBe(false);
+  });
+
+  it("detects dirty editor changes across profile fields", () => {
+    expect(
+      isBusinessProfileEditorDirty(
+        {
+          ...completeEditorDraft,
+          name: "New Cafe",
+        },
+        completeEditorDraft,
+      ),
+    ).toBe(true);
+
+    expect(
+      isBusinessProfileEditorDirty(
+        {
+          ...completeEditorDraft,
+          preferredLocale: "es",
+        },
+        completeEditorDraft,
+      ),
+    ).toBe(true);
   });
 });
