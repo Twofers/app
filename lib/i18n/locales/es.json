@@ -1650,6 +1650,8 @@
     "exportTitle": "Exportar analíticas",
     "exportChoose": "Elige formato de exportación",
     "exportCsv": "CSV",
+    "backToOffers": "Mis ofertas",
+    "backToOffersLabel": "Volver a Mis ofertas",
     "exportPdf": "PDF",
     "exporting": "Exportando...",
     "errExport": "No se pudo generar la exportación."

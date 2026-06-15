@@ -1882,6 +1882,8 @@
     "exportTitle": "Export analytics",
     "exportChoose": "Choose export format",
     "exportCsv": "CSV",
+    "backToOffers": "My offers",
+    "backToOffersLabel": "Back to My offers",
     "exportPdf": "PDF",
     "exporting": "Exporting...",
     "errExport": "Could not generate export."

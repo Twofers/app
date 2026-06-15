@@ -1650,6 +1650,8 @@
     "exportTitle": "분석 내보내기",
     "exportChoose": "내보내기 형식 선택",
     "exportCsv": "CSV",
+    "backToOffers": "내 오퍼",
+    "backToOffersLabel": "내 오퍼로 돌아가기",
     "exportPdf": "PDF",
     "exporting": "내보내는 중...",
     "errExport": "내보내기를 생성하지 못했습니다."

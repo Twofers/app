@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Alert, BackHandler, Platform, ScrollView, Text, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "@/lib/supabase";
@@ -74,16 +74,31 @@ export default function DealAnalyticsDetail() {
     }
   }, [router]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        goBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goBack]),
+  );
+
   function renderBackAction() {
+    const label = t("dealAnalytics.backToOffers", "My offers");
     return (
       <Pressable
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel={t("commonUi.goBack")}
+        accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
+        testID="deal-analytics-back-to-offers"
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
           minHeight: 44,
-          minWidth: 44,
+          paddingHorizontal: 10,
+          flexDirection: "row",
+          gap: 4,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: Radii.lg,
@@ -92,7 +107,15 @@ export default function DealAnalyticsDetail() {
           borderColor: theme.border,
         }}
       >
-        <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+        <MaterialIcons name="arrow-back" size={20} color={theme.text} />
+        <Text
+          style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   }
@@ -288,7 +311,14 @@ export default function DealAnalyticsDetail() {
           {t("dealAnalytics.claimsOverTime")}
         </Text>
         {claimsByDay.length === 0 ? (
-          <Text style={{ opacity: 0.7, marginBottom: Spacing.lg }}>{t("dealAnalytics.noClaims")}</Text>
+          <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+            <Text style={{ opacity: 0.7 }}>{t("dealAnalytics.noClaims")}</Text>
+            <SecondaryButton
+              title={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
+              accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
+              onPress={goBack}
+            />
+          </View>
         ) : (
           <View style={{ marginBottom: Spacing.xl }}>
             {claimsByDay.map((item) => (
