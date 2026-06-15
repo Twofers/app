@@ -64,6 +64,11 @@ import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
 import { isAppLocale, type AppLocale } from "../../lib/i18n/config";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import {
+  buildDealFormDirtySnapshot,
+  isDealFormDirty,
+  type DealFormDirtySnapshot,
+} from "../../lib/deal-form-dirty";
+import {
   buildPublicDealPhotoUrl,
   extractDealPhotoStoragePath,
   resolveCurrentDealPosterStoragePath,
@@ -448,6 +453,13 @@ export default function AiDealScreen() {
   const [dealLoadError, setDealLoadError] = useState<string | null>(null);
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
+  const [editDirtyBaseline, setEditDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+
+  const dealIdFromRoute = useMemo(() => {
+    const raw = dealIdParam;
+    const s = Array.isArray(raw) ? raw[0] : raw;
+    return typeof s === "string" ? s.trim() : "";
+  }, [dealIdParam]);
 
   /** Stable English — shipped to the AI. Do not localize. */
   const offerScheduleSummary = useMemo(
@@ -558,6 +570,57 @@ export default function AiDealScreen() {
     description.trim().length > 0 ||
     manualDraftUnlocked;
 
+  const currentDealFormSnapshot = useMemo(
+    () =>
+      buildDealFormDirtySnapshot({
+        photoUri,
+        photoPath,
+        posterUrl,
+        generatedPosterPath: generatedAd?.poster_storage_path ?? null,
+        hintText,
+        price,
+        title,
+        promoLine,
+        ctaText,
+        description,
+        maxClaims,
+        cutoffMins,
+        validityMode,
+        startTime,
+        endTime,
+        daysOfWeek,
+        windowStart,
+        windowEnd,
+        timezone,
+        publishLocationIds,
+        hasGeneratedAd: generatedAd != null,
+        adAccepted,
+      }),
+    [
+      photoUri,
+      photoPath,
+      posterUrl,
+      generatedAd,
+      hintText,
+      price,
+      title,
+      promoLine,
+      ctaText,
+      description,
+      maxClaims,
+      cutoffMins,
+      validityMode,
+      startTime,
+      endTime,
+      daysOfWeek,
+      windowStart,
+      windowEnd,
+      timezone,
+      publishLocationIds,
+      adAccepted,
+    ],
+  );
+
   useEffect(() => {
     setPublishStatus((current) => {
       if (current === "success" || current === "error") return "idle";
@@ -609,8 +672,14 @@ export default function AiDealScreen() {
     templateLoaded,
   ]);
 
+  const editFormDirty = useMemo(
+    () => isDealFormDirty(editDirtyBaseline, currentDealFormSnapshot),
+    [editDirtyBaseline, currentDealFormSnapshot],
+  );
+  const dealDraftDirty = dealIdFromRoute ? editFormDirty : composeDirty;
+
   usePreventRemove(
-    composeDirty && !allowPostPublishNavigation,
+    dealDraftDirty && !allowPostPublishNavigation,
     useCallback(
       ({ data }) => {
         confirm({
@@ -626,15 +695,10 @@ export default function AiDealScreen() {
     ),
   );
 
-  const dealIdFromRoute = useMemo(() => {
-    const raw = dealIdParam;
-    const s = Array.isArray(raw) ? raw[0] : raw;
-    return typeof s === "string" ? s.trim() : "";
-  }, [dealIdParam]);
-
   useEffect(() => {
     if (!dealIdFromRoute || !businessId) return;
     let cancelled = false;
+    setEditDirtyBaseline(null);
     setDealLoadError(null);
     setDealEditLoading(true);
     void (async () => {
@@ -656,63 +720,101 @@ export default function AiDealScreen() {
         }
         const row = data as Record<string, unknown>;
         const loadedSourceLocale = String(row.source_locale ?? "");
+        const loadedTitle = String(row.title ?? "");
+        const loadedDescription = String(row.description ?? "");
+        const loadedPrice = row.price != null ? String(row.price) : "";
+        const rawPosterUrl = (row.poster_url as string | null) ?? null;
+        const pPath = row.poster_storage_path as string | null | undefined;
+        const loadedPhotoPath = pPath ? pPath : null;
+        const loadedPosterUrl = loadedPhotoPath
+          ? rawPosterUrl ?? buildPublicDealPhotoUrl(loadedPhotoPath)
+          : rawPosterUrl;
+        const loadedMaxClaims = String(row.max_claims ?? 50);
+        const loadedCutoffMins = String(row.claim_cutoff_buffer_minutes ?? 15);
+        const loadedValidityMode = row.is_recurring ? "recurring" : "one-time";
+        const now = new Date();
+        const loadedStartTime = row.start_time ? new Date(String(row.start_time)) : now;
+        const loadedEndTime = row.end_time ? new Date(String(row.end_time)) : new Date(now.getTime() + 2 * 60 * 60 * 1000);
+        const loadedDaysOfWeek =
+          Array.isArray(row.days_of_week) && row.days_of_week.length
+            ? (row.days_of_week as number[])
+            : [1, 2, 3, 4, 5];
+        const loadedWindowStartMinutes = row.window_start_minutes != null ? Number(row.window_start_minutes) : 540;
+        const loadedWindowEndMinutes = row.window_end_minutes != null ? Number(row.window_end_minutes) : 1020;
+        const loadedWindowStart = dateFromMinutes(loadedWindowStartMinutes);
+        const loadedWindowEnd = dateFromMinutes(loadedWindowEndMinutes);
+        const tz = row.timezone;
+        const loadedTimezone =
+          typeof tz === "string" && tz.trim()
+            ? tz.trim()
+            : Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
+        const lid = row.location_id;
+        const loadedLocationIds = lid ? [String(lid)] : [];
         setEditingDealId(String(row.id));
         setEditingSourceLocale(isAppLocale(loadedSourceLocale) ? loadedSourceLocale : "en");
         setPrefillSourceLocale(null);
-        setTitle(String(row.title ?? ""));
-        setDescription(String(row.description ?? ""));
+        setTitle(loadedTitle);
+        setDescription(loadedDescription);
         setPromoLine("");
         setCtaText("");
-        setPrice(row.price != null ? String(row.price) : "");
-        const rawPosterUrl = (row.poster_url as string | null) ?? null;
-        const pPath = row.poster_storage_path as string | null | undefined;
+        setPrice(loadedPrice);
+        setPhotoUri(null);
         // Restore both the storage path AND a usable preview URL — without this the photo
         // selector renders empty when editing an existing deal that has a poster.
-        if (pPath) {
-          setPhotoPath(pPath);
-          setPosterUrl(rawPosterUrl ?? buildPublicDealPhotoUrl(pPath));
-        } else {
-          setPosterUrl(rawPosterUrl);
-        }
-        setMaxClaims(String(row.max_claims ?? 50));
-        setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
-        setValidityMode(row.is_recurring ? "recurring" : "one-time");
-        if (row.start_time) setStartTime(new Date(String(row.start_time)));
-        if (row.end_time) setEndTime(new Date(String(row.end_time)));
-        setDaysOfWeek(
-          Array.isArray(row.days_of_week) && row.days_of_week.length
-            ? (row.days_of_week as number[])
-            : [1, 2, 3, 4, 5],
-        );
-        if (row.window_start_minutes != null) {
-          const wm = Number(row.window_start_minutes);
-          const d = new Date();
-          d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
-          setWindowStart(d);
-        }
-        if (row.window_end_minutes != null) {
-          const wm = Number(row.window_end_minutes);
-          const d = new Date();
-          d.setHours(Math.floor(wm / 60), wm % 60, 0, 0);
-          setWindowEnd(d);
-        }
-        const tz = row.timezone;
-        if (typeof tz === "string" && tz.trim()) setTimezone(tz.trim());
-        else setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago");
-        const lid = row.location_id;
-        setPublishLocationIds(lid ? [String(lid)] : []);
+        setPhotoPath(loadedPhotoPath);
+        setPosterUrl(loadedPosterUrl);
+        setMaxClaims(loadedMaxClaims);
+        setCutoffMins(loadedCutoffMins);
+        setValidityMode(loadedValidityMode);
+        setStartTime(loadedStartTime);
+        setEndTime(loadedEndTime);
+        setDaysOfWeek(loadedDaysOfWeek);
+        setWindowStart(loadedWindowStart);
+        setWindowEnd(loadedWindowEnd);
+        setTimezone(loadedTimezone);
+        setPublishLocationIds(loadedLocationIds);
         setManualDraftUnlocked(true);
         setGeneratedAd(null);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
         setLastGenerationError(null);
         setTemplateLoaded(false);
+        setEditDirtyBaseline(
+          buildDealFormDirtySnapshot({
+            photoUri: null,
+            photoPath: loadedPhotoPath,
+            posterUrl: loadedPosterUrl,
+            generatedPosterPath: null,
+            hintText: "",
+            price: loadedPrice,
+            title: loadedTitle,
+            promoLine: "",
+            ctaText: "",
+            description: loadedDescription,
+            maxClaims: loadedMaxClaims,
+            cutoffMins: loadedCutoffMins,
+            validityMode: loadedValidityMode,
+            startTime: loadedStartTime,
+            endTime: loadedEndTime,
+            daysOfWeek: loadedDaysOfWeek,
+            windowStartMinutes: loadedWindowStartMinutes,
+            windowEndMinutes: loadedWindowEndMinutes,
+            timezone: loadedTimezone,
+            publishLocationIds: loadedLocationIds,
+            hasGeneratedAd: false,
+            adAccepted: false,
+          }),
+        );
       } finally {
         if (!cancelled) setDealEditLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [dealIdFromRoute, businessId, dealLoadNonce, t]);
+
+  useEffect(() => {
+    if (!dealIdFromRoute) setEditDirtyBaseline(null);
+  }, [dealIdFromRoute]);
 
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
@@ -1401,6 +1503,42 @@ export default function AiDealScreen() {
       setPublishStatus("success");
       setPublishStatusMessage(successMessage);
       setBanner({ message: successMessage, tone: "success" });
+      if (editingDealId) {
+        const savedPosterPath = baseRow.poster_storage_path;
+        const savedPosterUrl = baseRow.poster_url;
+        setPhotoUri(null);
+        setPhotoPath(savedPosterPath);
+        setPosterUrl(savedPosterUrl);
+        setGeneratedAd(null);
+        setAdAccepted(false);
+        aiDraftBaselineRef.current = null;
+        setEditDirtyBaseline(
+          buildDealFormDirtySnapshot({
+            photoUri: null,
+            photoPath: savedPosterPath,
+            posterUrl: savedPosterUrl,
+            generatedPosterPath: null,
+            hintText,
+            price,
+            title,
+            promoLine,
+            ctaText,
+            description,
+            maxClaims,
+            cutoffMins,
+            validityMode,
+            startTime: start,
+            endTime: end,
+            daysOfWeek,
+            windowStart,
+            windowEnd,
+            timezone,
+            publishLocationIds,
+            hasGeneratedAd: false,
+            adAccepted: false,
+          }),
+        );
+      }
       await markRecentPublish(title.trim());
       setAllowPostPublishNavigation(true);
       await new Promise((resolve) => setTimeout(resolve, 700));
