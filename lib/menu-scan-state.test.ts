@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getMenuScanEmptyStateKey, isMenuScanBusy } from "./menu-scan-state";
+import {
+  getMenuScanEmptyStateKey,
+  isMenuScanBusy,
+  shouldShowAppendMenuPhotoActions,
+} from "./menu-scan-state";
 
 describe("menu scan state", () => {
   it("shows first-use guidance while idle", () => {
@@ -20,5 +24,10 @@ describe("menu scan state", () => {
 
   it("shows recovery copy after a real scan error", () => {
     expect(getMenuScanEmptyStateKey("error")).toBe("menuScan.errorEmptyState");
+  });
+
+  it("shows append-photo actions only after menu rows exist", () => {
+    expect(shouldShowAppendMenuPhotoActions(0)).toBe(false);
+    expect(shouldShowAppendMenuPhotoActions(1)).toBe(true);
   });
 });

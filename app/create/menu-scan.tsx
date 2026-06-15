@@ -19,7 +19,12 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useBusiness } from "@/hooks/use-business";
 import { aiExtractMenu } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-import { getMenuScanEmptyStateKey, isMenuScanBusy, type MenuScanState } from "@/lib/menu-scan-state";
+import {
+  getMenuScanEmptyStateKey,
+  isMenuScanBusy,
+  shouldShowAppendMenuPhotoActions,
+  type MenuScanState,
+} from "@/lib/menu-scan-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -80,6 +85,7 @@ export default function MenuScanScreen() {
   const scanRequestIdRef = useRef(0);
   const scanning = isMenuScanBusy(scanState);
   const emptyStateKey = getMenuScanEmptyStateKey(scanState);
+  const showAppendPhotoActions = shouldShowAppendMenuPhotoActions(rows.length);
 
   function cancelScan() {
     // Bumping the id makes any in-flight result a no-op when it returns; clearing the
@@ -380,16 +386,20 @@ export default function MenuScanScreen() {
         disabled={scanning || !businessId}
       />
       <Text style={{ opacity: 0.65, fontSize: 13, color: theme.text }}>{t("menuScan.multiHint")}</Text>
-      <SecondaryButton
-        title={scanning ? t("menuScan.scanning") : t("menuScan.takeMore")}
-        onPress={() => void pickAndScan("camera", true)}
-        disabled={scanning || !businessId}
-      />
-      <SecondaryButton
-        title={scanning ? t("menuScan.scanning") : t("menuScan.pickMore")}
-        onPress={() => void pickAndScan("library", true)}
-        disabled={scanning || !businessId}
-      />
+      {showAppendPhotoActions ? (
+        <>
+          <SecondaryButton
+            title={scanning ? t("menuScan.scanning") : t("menuScan.takeMore")}
+            onPress={() => void pickAndScan("camera", true)}
+            disabled={scanning || !businessId}
+          />
+          <SecondaryButton
+            title={scanning ? t("menuScan.scanning") : t("menuScan.pickMore")}
+            onPress={() => void pickAndScan("library", true)}
+            disabled={scanning || !businessId}
+          />
+        </>
+      ) : null}
       {scanning ? (
         <View style={{ marginTop: 4, gap: Spacing.sm }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

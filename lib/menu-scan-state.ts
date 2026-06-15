@@ -16,3 +16,7 @@ export function getMenuScanEmptyStateKey(state: MenuScanState): string | null {
   if (state === "error") return "menuScan.errorEmptyState";
   return "menuScan.idleEmptyState";
 }
+
+export function shouldShowAppendMenuPhotoActions(rowCount: number): boolean {
+  return rowCount > 0;
+}
