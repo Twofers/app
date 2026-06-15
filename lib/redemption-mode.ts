@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session } from "@supabase/supabase-js";
 import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "./functions";
-import { isRedeemerSessionLike, normalizeRedemptionCode } from "./redemption-mode-logic";
+import { isRedeemerSessionLike } from "./redemption-mode-logic";
 import { secureDeleteItem, secureGetItem, secureSetItem } from "./redemption-secure-store";
 import { supabase } from "./supabase";
 
@@ -117,7 +117,7 @@ async function invokeErrorMessage(error: unknown): Promise<string> {
   return parseFunctionError(error);
 }
 
-export { normalizeRedemptionCode };
+export { isRedemptionCodeComplete, normalizeRedemptionCode, REDEMPTION_SHORT_CODE_LENGTH } from "./redemption-mode-logic";
 
 export function isRedeemerSession(session: Session | null | undefined): boolean {
   return isRedeemerSessionLike(session);

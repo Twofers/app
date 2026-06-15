@@ -31,6 +31,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import {
   confirmStaffRedemption,
   exitRedemptionMode,
+  isRedemptionCodeComplete,
   isRedeemerSession,
   normalizeRedemptionCode,
   previewStaffRedemption,
@@ -58,7 +59,7 @@ function normalizePinInput(value: string): string {
 
 function codeBodyFromManual(raw: string): InputBody | null {
   const code = normalizeRedemptionCode(raw);
-  return code.length >= 4 ? { short_code: code } : null;
+  return isRedemptionCodeComplete(code) ? { short_code: code } : null;
 }
 
 export default function RedemptionModeScreen() {
@@ -86,6 +87,8 @@ export default function RedemptionModeScreen() {
   const staffReady = isRedeemerSession(session) && sessionStatus === "ready";
   const lockedExpired = Boolean(state) && !staffReady;
   const cameraHeight = Math.round(Math.min(430, Math.max(260, height * 0.42)));
+  const manualCodeComplete = isRedemptionCodeComplete(manualCode);
+  const manualPreviewDisabled = busy || !manualCodeComplete;
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -339,17 +342,28 @@ export default function RedemptionModeScreen() {
 
               {mode === "manual" ? (
                 <View style={{ gap: Spacing.md }}>
+                  <Text style={{ color: theme.mutedText, lineHeight: 20 }}>
+                    {t("redeem.manualFormatHelp", {
+                      defaultValue: "Enter the 6-character code shown under the customer's QR. Spaces and dashes are okay.",
+                    })}
+                  </Text>
                   <TextInput
                     value={manualCode}
                     onChangeText={(value) => setManualCode(normalizeRedemptionCode(value))}
-                    placeholder={t("redeem.manualPlaceholder", { defaultValue: "ABC123" })}
+                    placeholder={t("redeem.manualPlaceholder", { defaultValue: "6-character code" })}
+                    accessibilityLabel={t("redeem.manualCodeInputLabel", { defaultValue: "Ticket code" })}
+                    accessibilityHint={t("redeem.manualFormatHelp", {
+                      defaultValue: "Enter the 6-character code shown under the customer's QR. Spaces and dashes are okay.",
+                    })}
                     placeholderTextColor={theme.mutedText}
                     autoCapitalize="characters"
                     autoCorrect={false}
                     inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                     returnKeyType="done"
-                    onSubmitEditing={() => void runManualPreview()}
-                    maxLength={8}
+                    onSubmitEditing={() => {
+                      if (manualCodeComplete) void runManualPreview();
+                    }}
+                    maxLength={12}
                     editable={!busy}
                     style={{
                       borderWidth: 1,
@@ -363,10 +377,15 @@ export default function RedemptionModeScreen() {
                       backgroundColor: theme.surface,
                     }}
                   />
+                  {!manualCodeComplete ? (
+                    <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+                      {t("redeem.manualIncompleteHint", { defaultValue: "Enter all 6 characters to redeem." })}
+                    </Text>
+                  ) : null}
                   <PrimaryButton
                     title={busy ? t("redeem.redeeming", { defaultValue: "Checking..." }) : t("redemptionMode.preview", { defaultValue: "Check code" })}
                     onPress={() => void runManualPreview()}
-                    disabled={busy}
+                    disabled={manualPreviewDisabled}
                   />
                 </View>
               ) : !permission ? (

@@ -28,6 +28,7 @@ import {
   verifyOwnerRedemptionPin,
   type OwnerRedemptionSecurityStatus,
 } from "@/lib/owner-redemption-security";
+import { isRedemptionCodeComplete, normalizeRedemptionCode } from "@/lib/redemption-mode-logic";
 
 type RedeemMode = "scan" | "manual";
 
@@ -45,10 +46,6 @@ const SECURE_PIN_INPUT_PROPS = {
 
 function normalizePinInput(value: string): string {
   return value.replace(/\D/g, "").slice(0, 6);
-}
-
-function normalizeClaimCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 export default function RedeemScanner() {
@@ -189,8 +186,8 @@ export default function RedeemScanner() {
 
   async function onManualRedeem() {
     if (processingRef.current) return;
-    const code = normalizeClaimCode(claimCodeInput);
-    if (code.length < 4) {
+    const code = normalizeRedemptionCode(claimCodeInput);
+    if (!isRedemptionCodeComplete(code)) {
       setBanner({ message: t("redeem.errCodeRequired"), tone: "error" });
       return;
     }
@@ -230,6 +227,8 @@ export default function RedeemScanner() {
   const cameraBlockHeight = Math.round(Math.min(420, Math.max(260, winH * 0.42)));
   const ownerPinGateActive = Boolean(businessId && ownerSecurity?.enabled && !isUnlocked(businessId));
   const cameraPermissionBlocked = Boolean(permission && !permission.granted && permission.canAskAgain === false);
+  const claimCodeComplete = isRedemptionCodeComplete(claimCodeInput);
+  const manualRedeemDisabled = processing || !claimCodeComplete;
 
   return (
     <KeyboardScreen>
@@ -403,17 +402,22 @@ export default function RedeemScanner() {
               <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20, color: theme.text }}>{t("redeem.manualHelp")}</Text>
               <TextInput
                 value={claimCodeInput}
-                onChangeText={setClaimCodeInput}
+                onChangeText={(value) => setClaimCodeInput(normalizeRedemptionCode(value))}
                 placeholder={t("redeem.manualPlaceholder")}
                 accessibilityLabel={t("redeem.manualCodeInputLabel", { defaultValue: "Ticket code" })}
+                accessibilityHint={t("redeem.manualFormatHelp", {
+                  defaultValue: "Enter the 6-character code shown under the customer's QR. Spaces and dashes are okay.",
+                })}
                 testID="redeem-manual-code-input"
                 placeholderTextColor={theme.mutedText}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                 returnKeyType="done"
-                onSubmitEditing={() => void onManualRedeem()}
-                maxLength={8}
+                onSubmitEditing={() => {
+                  if (claimCodeComplete) void onManualRedeem();
+                }}
+                maxLength={12}
                 editable={!processing}
                 style={{
                   borderWidth: 1,
@@ -427,10 +431,20 @@ export default function RedeemScanner() {
                   backgroundColor: theme.surface,
                 }}
               />
+              <Text style={{ opacity: 0.72, fontSize: 13, lineHeight: 18, color: theme.text }}>
+                {t("redeem.manualFormatHelp", {
+                  defaultValue: "Enter the 6-character code shown under the customer's QR. Spaces and dashes are okay.",
+                })}
+              </Text>
+              {!claimCodeComplete ? (
+                <Text style={{ opacity: 0.78, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+                  {t("redeem.manualIncompleteHint", { defaultValue: "Enter all 6 characters to redeem." })}
+                </Text>
+              ) : null}
               <PrimaryButton
                 title={processing ? t("redeem.redeeming") : t("redeem.redeemButton")}
                 onPress={() => void onManualRedeem()}
-                disabled={processing}
+                disabled={manualRedeemDisabled}
               />
             </ScrollView>
           ) : !permission ? (
