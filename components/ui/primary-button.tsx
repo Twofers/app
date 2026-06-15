@@ -14,9 +14,10 @@ type PrimaryButtonProps = {
   style?: ViewStyle;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
 };
 
-export function PrimaryButton({ title, onPress, disabled, style, accessibilityLabel, accessibilityHint }: PrimaryButtonProps) {
+export function PrimaryButton({ title, onPress, disabled, style, accessibilityLabel, accessibilityHint, testID }: PrimaryButtonProps) {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const scale = useSharedValue(1);
@@ -32,6 +33,7 @@ export function PrimaryButton({ title, onPress, disabled, style, accessibilityLa
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
+      testID={testID}
       onPressIn={() => {
         if (disabled) return;
         triggerLightHaptic();

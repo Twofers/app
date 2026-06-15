@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -51,6 +51,8 @@ export default function RedeemScanner() {
   const [ownerPinInput, setOwnerPinInput] = useState("");
   const [ownerPinSubmitting, setOwnerPinSubmitting] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const [cameraPermissionRequesting, setCameraPermissionRequesting] = useState(false);
+  const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
   const [mode, setMode] = useState<RedeemMode>("scan");
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -178,8 +180,39 @@ export default function RedeemScanner() {
     await runRedeem({ short_code: code });
   }
 
+  async function requestCameraAccess() {
+    if (cameraPermissionRequesting) return;
+    setCameraPermissionRequesting(true);
+    setCameraPermissionError(null);
+    try {
+      await requestPermission();
+    } catch {
+      setCameraPermissionError(
+        t("redeem.cameraPermissionFailed", {
+          defaultValue: "Camera permission did not open. Try again or enter the ticket code.",
+        }),
+      );
+    } finally {
+      setCameraPermissionRequesting(false);
+    }
+  }
+
+  async function openCameraSettings() {
+    setCameraPermissionError(null);
+    try {
+      await Linking.openSettings();
+    } catch {
+      setCameraPermissionError(
+        t("redeem.cameraPermissionFailed", {
+          defaultValue: "Camera permission did not open. Try again or enter the ticket code.",
+        }),
+      );
+    }
+  }
+
   const cameraBlockHeight = Math.round(Math.min(420, Math.max(260, winH * 0.42)));
   const ownerPinGateActive = Boolean(businessId && ownerSecurity?.enabled && !isUnlocked(businessId));
+  const cameraPermissionBlocked = Boolean(permission && !permission.granted && permission.canAskAgain === false);
 
   return (
     <KeyboardScreen>
@@ -356,6 +389,8 @@ export default function RedeemScanner() {
                 value={claimCodeInput}
                 onChangeText={setClaimCodeInput}
                 placeholder={t("redeem.manualPlaceholder")}
+                accessibilityLabel={t("redeem.manualCodeInputLabel", { defaultValue: "Ticket code" })}
+                testID="redeem-manual-code-input"
                 placeholderTextColor={theme.mutedText}
                 autoCapitalize="characters"
                 autoCorrect={false}
@@ -383,13 +418,53 @@ export default function RedeemScanner() {
               />
             </ScrollView>
           ) : !permission ? (
-            <View>
-              <Text style={{ opacity: 0.7, color: theme.text }}>{t("redeem.requestingCamera")}</Text>
+            <View style={{ gap: Spacing.sm }}>
+              <ActivityIndicator color={theme.primary} />
+              <Text style={{ opacity: 0.7, color: theme.text }}>
+                {t("redeem.cameraChecking", { defaultValue: "Checking camera permission..." })}
+              </Text>
             </View>
           ) : !permission.granted ? (
-            <View>
-              <Text style={{ opacity: 0.7, marginBottom: Spacing.md, color: theme.text }}>{t("redeem.cameraRequired")}</Text>
-              <PrimaryButton title={t("redeem.grantPermission")} onPress={requestPermission} />
+            <View style={{ gap: Spacing.md }}>
+              <Text style={{ opacity: 0.7, color: theme.text }}>
+                {cameraPermissionBlocked
+                  ? t("redeem.cameraBlocked", {
+                      defaultValue:
+                        "Camera access is blocked. Open Android settings to allow camera, or enter the ticket code instead.",
+                    })
+                  : t("redeem.cameraRequired")}
+              </Text>
+              {cameraPermissionError ? <Banner message={cameraPermissionError} tone="error" /> : null}
+              <PrimaryButton
+                title={
+                  cameraPermissionBlocked
+                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
+                    : cameraPermissionRequesting
+                      ? t("redeem.requestingCamera")
+                      : t("redeem.grantPermission")
+                }
+                accessibilityLabel={
+                  cameraPermissionBlocked
+                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
+                    : t("redeem.grantPermission")
+                }
+                testID={cameraPermissionBlocked ? "redeem-open-camera-settings" : "redeem-grant-camera-permission"}
+                onPress={() => {
+                  if (cameraPermissionBlocked) {
+                    void openCameraSettings();
+                    return;
+                  }
+                  void requestCameraAccess();
+                }}
+                disabled={cameraPermissionRequesting}
+              />
+              <SecondaryButton
+                title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
+                accessibilityLabel={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
+                testID="redeem-camera-manual-fallback"
+                onPress={() => setMode("manual")}
+                disabled={processing}
+              />
             </View>
           ) : (
             <>

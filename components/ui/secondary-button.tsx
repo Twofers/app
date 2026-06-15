@@ -14,6 +14,7 @@ type SecondaryButtonProps = {
   style?: ViewStyle;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
 };
 
 export function SecondaryButton({
@@ -23,6 +24,7 @@ export function SecondaryButton({
   style,
   accessibilityLabel,
   accessibilityHint,
+  testID,
 }: SecondaryButtonProps) {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -36,6 +38,7 @@ export function SecondaryButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
+      testID={testID}
       onPressIn={() => {
         if (disabled) return;
         triggerLightHaptic();

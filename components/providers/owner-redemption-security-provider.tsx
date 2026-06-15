@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { useAuthSession } from "@/components/providers/auth-session-provider";
+import {
+  createOwnerRedemptionUnlockGraceEntry,
+  isOwnerRedemptionUnlockGraceValid,
+  parseOwnerRedemptionUnlockGraceCache,
+  pruneOwnerRedemptionUnlockGraceCache,
+} from "@/lib/owner-redemption-unlock-grace";
 
 type OwnerRedemptionSecurityContextValue = {
   isUnlocked: (businessId: string | null | undefined) => boolean;
@@ -9,10 +18,51 @@ type OwnerRedemptionSecurityContextValue = {
 };
 
 const OwnerRedemptionSecurityContext = createContext<OwnerRedemptionSecurityContextValue | null>(null);
+const OWNER_REDEMPTION_UNLOCK_GRACE_KEY = "twofer.ownerRedemptionUnlockGrace.v1";
 
 export function OwnerRedemptionSecurityProvider({ children }: { children: ReactNode }) {
+  const { session, isInitialLoading } = useAuthSession();
+  const userId = session?.user?.id ?? null;
   const [unlockedBusinessIds, setUnlockedBusinessIds] = useState<Set<string>>(() => new Set());
   const [pinEnabledByBusinessId, setPinEnabledByBusinessId] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (isInitialLoading) return;
+    if (!userId) {
+      setUnlockedBusinessIds(new Set());
+      void AsyncStorage.removeItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY).catch(() => {});
+      return;
+    }
+
+    setUnlockedBusinessIds(new Set());
+    let cancelled = false;
+    void (async () => {
+      const raw = await AsyncStorage.getItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+      if (cancelled) return;
+      const nowMs = Date.now();
+      const freshCache = pruneOwnerRedemptionUnlockGraceCache(parseOwnerRedemptionUnlockGraceCache(raw), nowMs);
+      const restoredBusinessIds = Object.keys(freshCache).filter((businessId) =>
+        isOwnerRedemptionUnlockGraceValid(freshCache, businessId, userId, nowMs),
+      );
+      if (restoredBusinessIds.length > 0) {
+        setUnlockedBusinessIds((current) => {
+          const next = new Set(current);
+          for (const businessId of restoredBusinessIds) next.add(businessId);
+          return next;
+        });
+      }
+      const nextRaw = JSON.stringify(freshCache);
+      if (Object.keys(freshCache).length === 0) {
+        await AsyncStorage.removeItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+      } else if (nextRaw !== raw) {
+        await AsyncStorage.setItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY, nextRaw);
+      }
+    })().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInitialLoading, userId]);
 
   const isUnlocked = useCallback(
     (businessId: string | null | undefined) => Boolean(businessId && unlockedBusinessIds.has(businessId)),
@@ -25,7 +75,14 @@ export function OwnerRedemptionSecurityProvider({ children }: { children: ReactN
       next.add(businessId);
       return next;
     });
-  }, []);
+    if (!userId) return;
+    void (async () => {
+      const raw = await AsyncStorage.getItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+      const cache = pruneOwnerRedemptionUnlockGraceCache(parseOwnerRedemptionUnlockGraceCache(raw));
+      cache[businessId] = createOwnerRedemptionUnlockGraceEntry(userId);
+      await AsyncStorage.setItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY, JSON.stringify(cache));
+    })().catch(() => {});
+  }, [userId]);
 
   const clearUnlock = useCallback((businessId?: string | null) => {
     setUnlockedBusinessIds((current) => {
@@ -34,6 +91,20 @@ export function OwnerRedemptionSecurityProvider({ children }: { children: ReactN
       next.delete(businessId);
       return next;
     });
+    void (async () => {
+      if (!businessId) {
+        await AsyncStorage.removeItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+        return;
+      }
+      const raw = await AsyncStorage.getItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+      const cache = parseOwnerRedemptionUnlockGraceCache(raw);
+      delete cache[businessId];
+      if (Object.keys(cache).length === 0) {
+        await AsyncStorage.removeItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY);
+      } else {
+        await AsyncStorage.setItem(OWNER_REDEMPTION_UNLOCK_GRACE_KEY, JSON.stringify(cache));
+      }
+    })().catch(() => {});
   }, []);
 
   const isPinEnabled = useCallback(
