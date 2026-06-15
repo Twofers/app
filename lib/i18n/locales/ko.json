@@ -590,6 +590,8 @@
     "lowLegibility": "Some text was hard to read. Edit the list before saving.",
     "syntheticFallbackNotice": "이 프로젝트에 메뉴 AI가 설정되지 않아 샘플 항목을 표시했습니다.",
     "emptyExtract": "No items found. Try a clearer photo or add lines manually.",
+    "idleEmptyState": "메뉴를 촬영하거나 업로드해 항목을 찾아보세요.",
+    "errorEmptyState": "다른 메뉴 사진을 시도하거나 줄을 직접 추가하세요.",
     "needBusiness": "Create a business first.",
     "buildOffer": "Build an offer",
     "strongDealHint": "딜은 Twofer의 강한 딜 규칙(40% 이상 할인, BOGO, 또는 무료 품목)을 충족해야 합니다. 정확한 오퍼는 다음 화면에서 선택합니다.",

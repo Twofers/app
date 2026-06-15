@@ -590,6 +590,8 @@
     "lowLegibility": "Some text was hard to read. Edit the list before saving.",
     "syntheticFallbackNotice": "We couldn't read the menu, so we added sample items you can replace.",
     "emptyExtract": "No items found. Try a clearer photo or add lines manually.",
+    "idleEmptyState": "Scan or upload a menu to find items.",
+    "errorEmptyState": "Try another menu photo or add lines manually.",
     "needBusiness": "Create a business first.",
     "buildOffer": "Build an offer",
     "strongDealHint": "Every offer must be clearly high value: 40% off or better, BOGO, or a free item.",

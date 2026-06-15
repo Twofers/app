@@ -590,6 +590,8 @@
     "lowLegibility": "Some text was hard to read. Edit the list before saving.",
     "syntheticFallbackNotice": "Estos son elementos de ejemplo porque la IA de menú no está configurada en este proyecto.",
     "emptyExtract": "No items found. Try a clearer photo or add lines manually.",
+    "idleEmptyState": "Escanea o sube un menú para encontrar artículos.",
+    "errorEmptyState": "Prueba otra foto del menú o agrega líneas manualmente.",
     "needBusiness": "Create a business first.",
     "buildOffer": "Build an offer",
     "strongDealHint": "Las ofertas deben cumplir la regla de oferta fuerte de Twofer (40%+ de descuento, BOGO o un artículo gratis). Elegirás la oferta exacta en la siguiente pantalla.",

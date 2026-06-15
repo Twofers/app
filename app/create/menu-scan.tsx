@@ -19,6 +19,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useBusiness } from "@/hooks/use-business";
 import { aiExtractMenu } from "@/lib/functions";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
+import { getMenuScanEmptyStateKey, isMenuScanBusy, type MenuScanState } from "@/lib/menu-scan-state";
 import { looksLikeMissingMenuTable } from "@/lib/menu-workflow-errors";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -67,7 +68,7 @@ export default function MenuScanScreen() {
   const theme = Colors[colorScheme];
 
   const [rows, setRows] = useState<EditableRow[]>([]);
-  const [scanning, setScanning] = useState(false);
+  const [scanState, setScanState] = useState<MenuScanState>("idle");
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(
     null,
@@ -76,12 +77,14 @@ export default function MenuScanScreen() {
   const [skipDuplicatesOnSave, setSkipDuplicatesOnSave] = useState(true);
   const [scanProgress, setScanProgress] = useState<{ current: number; total: number } | null>(null);
   const scanRequestIdRef = useRef(0);
+  const scanning = isMenuScanBusy(scanState);
+  const emptyStateKey = getMenuScanEmptyStateKey(scanState);
 
   function cancelScan() {
     // Bumping the id makes any in-flight result a no-op when it returns; clearing the
     // flags here re-enables the buttons immediately so the owner is not stuck waiting.
     scanRequestIdRef.current += 1;
-    setScanning(false);
+    setScanState(rows.length > 0 ? "success" : "idle");
     setScanProgress(null);
     setBanner(null);
   }
@@ -112,19 +115,23 @@ export default function MenuScanScreen() {
     async (source: "camera" | "library", append: boolean) => {
       if (!businessId) {
         setBanner({ message: t("menuScan.needBusiness"), tone: "error" });
+        setScanState("error");
         return;
       }
+      setScanState("pickingPhoto");
       // Camera: live capture (one photo). Library: pick up to 10 photos.
       if (source === "camera") {
         const camPerm = await ImagePicker.requestCameraPermissionsAsync();
         if (!camPerm.granted) {
           setBanner({ message: t("menuScan.cameraPermissionDenied"), tone: "error" });
+          setScanState("error");
           return;
         }
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
           setBanner({ message: t("menuScan.photoPermissionDenied"), tone: "error" });
+          setScanState("error");
           return;
         }
       }
@@ -145,10 +152,11 @@ export default function MenuScanScreen() {
               selectionLimit: 10,
             });
       if (result.canceled || result.assets.length === 0) {
+        setScanState(rows.length > 0 ? "success" : "idle");
         return;
       }
       const requestId = ++scanRequestIdRef.current;
-      setScanning(true);
+      setScanState("analyzing");
       setBanner(null);
       setScanProgress({ current: 0, total: result.assets.length });
       try {
@@ -196,8 +204,10 @@ export default function MenuScanScreen() {
           // All photos either gave nothing OR were too large — pick the more informative banner.
           if (oversizedCount > 0 && oversizedCount === result.assets.length) {
             setBanner({ message: t("menuScan.allOversized"), tone: "error" });
+            setScanState("error");
           } else {
-            setBanner({ message: t("menuScan.emptyExtract"), tone: "info" });
+            setBanner(null);
+            setScanState("emptyResult");
           }
           return;
         }
@@ -210,6 +220,7 @@ export default function MenuScanScreen() {
           uniqueMerged.push(row);
         }
         setRows((prev) => (append ? [...prev, ...uniqueMerged] : uniqueMerged));
+        setScanState("success");
         // Combine oversize and low-legibility into a single info banner so the owner
         // sees both signals — fewer message-clobbers when both happen on the same batch.
         const notes: string[] = [];
@@ -233,18 +244,19 @@ export default function MenuScanScreen() {
           message: raw ? translateKnownApiMessage(raw, t) : t("menuScan.errScan"),
           tone: "error",
         });
+        setScanState("error");
       } finally {
         // Don't fight with cancelScan — it already cleared state for the canceled request.
         if (scanRequestIdRef.current === requestId) {
-          setScanning(false);
           setScanProgress(null);
         }
       }
     },
-    [businessId, t],
+    [businessId, rows.length, t],
   );
 
   const addRow = useCallback(() => {
+    setScanState("success");
     setRows((r) => [...r, { key: newKey(), name: "", category: "", price_text: "", size_options: [] }]);
   }, []);
 
@@ -506,7 +518,9 @@ export default function MenuScanScreen() {
           <Text style={{ opacity: 0.68, fontSize: 13, marginTop: 4, color: theme.text }}>{t("menuScan.strongDealHint")}</Text>
         </>
       ) : (
-        <Text style={{ opacity: 0.7, color: theme.text }}>{t("menuScan.emptyExtract")}</Text>
+        emptyStateKey ? (
+          <Text style={{ opacity: 0.7, color: theme.text }}>{t(emptyStateKey)}</Text>
+        ) : null
       )}
     </ScrollView>
     </KeyboardScreen>
