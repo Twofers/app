@@ -1670,6 +1670,8 @@
     "loading": "불러오는 중...",
     "claimsOverTime": "시간대별 클레임",
     "noClaims": "아직 클레임이 없습니다.",
+    "noClaimsHelp": "고객이 이 오퍼를 보거나 클레임하거나 사용하면 분석이 표시됩니다.",
+    "emptyNextStep": "딜 내용을 수정하거나 내 오퍼로 돌아갈 수 있습니다.",
     "dayRow": "클레임: {{claims}} · 사용: {{redeems}}",
     "notEnoughData": "데이터가 아직 충분하지 않습니다.",
     "bestTime": "가장 좋은 시간: {{day}} {{from}}–{{to}} {{period}}",
@@ -1683,6 +1685,7 @@
     "backToOffersLabel": "내 오퍼로 돌아가기",
     "exportPdf": "PDF",
     "exporting": "내보내는 중...",
+    "exportEmptyHelp": "이 오퍼에 클레임 또는 사용 데이터가 생기면 내보내기를 사용할 수 있습니다.",
     "errExport": "내보내기를 생성하지 못했습니다."
   },
   "createQuick": {

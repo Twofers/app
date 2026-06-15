@@ -15,6 +15,7 @@ import { formatAppDateFromDayKey } from "@/lib/i18n/format-datetime";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getDealAnalyticsActivityState } from "@/lib/deal-analytics-state";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 
@@ -219,6 +220,7 @@ export default function DealAnalyticsDetail() {
       .sort(([a], [b]) => (a < b ? 1 : -1))
       .map(([day, counts]) => ({ day, ...counts }));
   }, [claims]);
+  const analyticsActivityState = useMemo(() => getDealAnalyticsActivityState(claims), [claims]);
 
   if (loading) {
     return (
@@ -229,8 +231,16 @@ export default function DealAnalyticsDetail() {
     );
   }
 
-  async function handleExport(format: "csv" | "pdf") {
+  const hasAnalyticsData = analyticsActivityState.hasTimelineData;
+  const exportDisabled = exporting || !analyticsActivityState.canExport;
+
+  function openEditDeal() {
     if (!deal) return;
+    router.push({ pathname: "/create/ai", params: { dealId: deal.id } } as Href);
+  }
+
+  async function handleExport(format: "csv" | "pdf") {
+    if (!deal || !hasAnalyticsData) return;
     setExporting(true);
     try {
       const totalClaims = claims.length;
@@ -270,13 +280,11 @@ export default function DealAnalyticsDetail() {
         <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.xs, gap: Spacing.xs }}>
           <SecondaryButton
             title={t("offersDashboard.editDeal")}
-            onPress={() =>
-              router.push({ pathname: "/create/ai", params: { dealId: deal.id } } as Href)
-            }
+            onPress={openEditDeal}
           />
           <SecondaryButton
             title={exporting ? t("dealAnalytics.exporting", "Exporting...") : t("dealAnalytics.exportTitle", "Export analytics")}
-            disabled={exporting}
+            disabled={exportDisabled}
             onPress={() => {
               Alert.alert(
                 t("dealAnalytics.exportTitle", "Export analytics"),
@@ -295,6 +303,13 @@ export default function DealAnalyticsDetail() {
               );
             }}
           />
+          {!hasAnalyticsData ? (
+            <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+              {t("dealAnalytics.exportEmptyHelp", {
+                defaultValue: "Export turns on after this offer has claim or redemption data.",
+              })}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       {banner ? <Banner message={banner} tone="error" /> : null}
@@ -310,9 +325,20 @@ export default function DealAnalyticsDetail() {
         <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md }}>
           {t("dealAnalytics.claimsOverTime")}
         </Text>
-        {claimsByDay.length === 0 ? (
+        {!hasAnalyticsData ? (
           <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
-            <Text style={{ opacity: 0.7 }}>{t("dealAnalytics.noClaims")}</Text>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>{t("dealAnalytics.noClaims")}</Text>
+            <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+              {t("dealAnalytics.noClaimsHelp", {
+                defaultValue: "Analytics will appear after customers view, claim, or redeem this offer.",
+              })}
+            </Text>
+            <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+              {t("dealAnalytics.emptyNextStep", {
+                defaultValue: "You can edit the deal details or go back to My offers.",
+              })}
+            </Text>
+            {deal ? <SecondaryButton title={t("offersDashboard.editDeal")} onPress={openEditDeal} /> : null}
             <SecondaryButton
               title={t("dealAnalytics.backToOffersLabel", "Back to My offers")}
               accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to My offers")}

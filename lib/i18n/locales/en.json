@@ -1905,6 +1905,8 @@
     "loading": "Loading...",
     "claimsOverTime": "Claims over time",
     "noClaims": "No claims yet.",
+    "noClaimsHelp": "Analytics will appear after customers view, claim, or redeem this offer.",
+    "emptyNextStep": "You can edit the deal details or go back to My offers.",
     "dayRow": "Claims: {{claims}} · Redeems: {{redeems}}",
     "notEnoughData": "Not enough data yet.",
     "bestTime": "Best time: {{day}} {{from}}–{{to}} {{period}}",
@@ -1918,6 +1920,7 @@
     "backToOffersLabel": "Back to My offers",
     "exportPdf": "PDF",
     "exporting": "Exporting...",
+    "exportEmptyHelp": "Export turns on after this offer has claim or redemption data.",
     "errExport": "Could not generate export."
   },
   "menuManager": {

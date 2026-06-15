@@ -1670,6 +1670,8 @@
     "loading": "Cargando...",
     "claimsOverTime": "Reclamaciones en el tiempo",
     "noClaims": "Aún no hay reclamaciones.",
+    "noClaimsHelp": "Las analíticas aparecerán después de que los clientes vean, reclamen o canjeen esta oferta.",
+    "emptyNextStep": "Puedes editar los detalles de la oferta o volver a Mis ofertas.",
     "dayRow": "Reclamaciones: {{claims}} · Canjes: {{redeems}}",
     "notEnoughData": "Aún no hay datos suficientes.",
     "bestTime": "Mejor hora: {{day}} {{from}}–{{to}} {{period}}",
@@ -1683,6 +1685,7 @@
     "backToOffersLabel": "Volver a Mis ofertas",
     "exportPdf": "PDF",
     "exporting": "Exportando...",
+    "exportEmptyHelp": "La exportación se activa cuando esta oferta tiene datos de reclamaciones o canjes.",
     "errExport": "No se pudo generar la exportación."
   },
   "createQuick": {
