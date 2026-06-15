@@ -18,7 +18,7 @@ import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { buildMapCameraFitSignature } from "@/lib/map-camera-fit";
+import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
   collectMappableBusinesses,
   deriveLiveBusinessIds,
@@ -721,10 +721,22 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       markers: markers.map((marker) => ({ id: marker.id, lat: marker.lat, lng: marker.lng })),
     });
     if (lastCameraFitSignatureRef.current === signature) return;
-    const region = hasUser && userPos
-      ? safeRegion({ lat: userPos.lat, lng: userPos.lng }, 0.12, 0.12)
-      : safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
-    mapRef.current?.animateToRegion(region, 480);
+    const markerCoords = markers.map((marker) => ({ id: marker.id, lat: marker.lat, lng: marker.lng }));
+    const fitCoordinates = buildMapFitCoordinates({
+      userPos: hasUser && userPos ? userPos : null,
+      markers: markerCoords,
+    });
+    if (fitCoordinates.length > 1) {
+      mapRef.current?.fitToCoordinates(fitCoordinates, {
+        animated: true,
+        edgePadding: { top: 64, right: 64, bottom: 180, left: 64 },
+      });
+    } else {
+      const region = hasUser && userPos
+        ? safeRegion({ lat: userPos.lat, lng: userPos.lng }, 0.12, 0.12)
+        : safeRegion({ lat: markers[0].lat, lng: markers[0].lng }, 0.25, 0.25);
+      mapRef.current?.animateToRegion(region, 480);
+    }
     lastCameraFitSignatureRef.current = signature;
   }, [mapReady, androidMapsOk, userPos, markers]);
 
