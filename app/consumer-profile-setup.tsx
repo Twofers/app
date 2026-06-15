@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Modal, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { BackHandler, Modal, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -29,7 +30,7 @@ import {
 } from "@/lib/consumer-birthdate";
 import { getConsumerPreferences } from "@/lib/consumer-preferences";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-import { sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
+import { isValidUsZipFormat, sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 
 export default function ConsumerProfileSetupScreen() {
   const { t } = useTranslation();
@@ -50,6 +51,25 @@ export default function ConsumerProfileSetupScreen() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
   const maximumBirthDate = latestValidBirthdate();
+  const normalizedZip = zip.trim();
+  const canSubmitProfile = isValidUsZipFormat(normalizedZip) && !busy;
+
+  const goBackFromEdit = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/settings");
+  }, [router]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isEdit) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      goBackFromEdit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goBackFromEdit, isEdit]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -86,7 +106,7 @@ export default function ConsumerProfileSetupScreen() {
 
   async function onContinue() {
     setBanner(null);
-    const z = zip.trim();
+    const z = normalizedZip;
     if (!z) {
       setBanner({ message: t("consumerProfile.errZip"), tone: "error" });
       return;
@@ -170,12 +190,36 @@ export default function ConsumerProfileSetupScreen() {
   return (
     <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>
-        {isEdit ? t("consumerProfile.editTitle") : t("consumerProfile.title")}
-      </Text>
-      <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
-        {isEdit ? t("consumerProfile.editSubtitle") : t("consumerProfile.subtitle")}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.md }}>
+        {isEdit ? (
+          <Pressable
+            onPress={goBackFromEdit}
+            accessibilityRole="button"
+            accessibilityLabel={t("commonUi.goBack")}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: Radii.lg,
+              backgroundColor: C.surface,
+              borderWidth: 1,
+              borderColor: C.border,
+            }}
+          >
+            <MaterialIcons name="arrow-back" size={24} color={C.text} />
+          </Pressable>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>
+            {isEdit ? t("consumerProfile.editTitle") : t("consumerProfile.title")}
+          </Text>
+          <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
+            {isEdit ? t("consumerProfile.editSubtitle") : t("consumerProfile.subtitle")}
+          </Text>
+        </View>
+      </View>
       {email ? (
         <Text style={{ marginBottom: Spacing.md, fontSize: 14, color: C.mutedText }}>
           {t("consumerProfile.signedInAs", { email })}
@@ -280,8 +324,20 @@ export default function ConsumerProfileSetupScreen() {
               display="default"
               maximumDate={maximumBirthDate}
               minimumDate={new Date(1900, 0, 1)}
+              positiveButton={{ label: t("commonUi.ok"), textColor: C.primary }}
+              negativeButton={{ label: t("commonUi.cancel"), textColor: C.mutedText }}
+              neutralButton={{
+                label: t("commonUi.clear", { defaultValue: "Clear" }),
+                textColor: C.mutedText,
+              }}
               onChange={(event, d) => {
                 setShowPicker(false);
+                if (event.type === "neutralButtonPressed") {
+                  setBirthDate(defaultConsumerBirthdate);
+                  setDraftBirthDate(defaultConsumerBirthdate);
+                  setBirthdateTouched(false);
+                  return;
+                }
                 if (event.type === "dismissed" || !d) return;
                 setBirthDate(d.getTime() > maximumBirthDate.getTime() ? maximumBirthDate : d);
                 setBirthdateTouched(true);
@@ -293,7 +349,7 @@ export default function ConsumerProfileSetupScreen() {
         <PrimaryButton
           title={busy ? t("consumerProfile.saving") : t("consumerProfile.continue")}
           onPress={() => void onContinue()}
-          disabled={busy}
+          disabled={!canSubmitProfile}
         />
       </ScrollView>
       <Modal

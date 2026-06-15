@@ -117,13 +117,9 @@ export function resolveMarkerTapOutcome({
   selectedBusinessId: string | null;
   liveDealId: string | null;
 }): { nextSelectedBusinessId: string; href: `/deal/${string}` | `/business/${string}` | null } {
-  if (selectedBusinessId !== tappedBusinessId) {
-    return { nextSelectedBusinessId: tappedBusinessId, href: null };
-  }
-  return {
-    nextSelectedBusinessId: tappedBusinessId,
-    href: resolveMapTapHref({ businessId: tappedBusinessId, liveDealId }),
-  };
+  void selectedBusinessId;
+  void liveDealId;
+  return { nextSelectedBusinessId: tappedBusinessId, href: null };
 }
 
 export function shouldClearMapSelectionOnPress(action: string | undefined): boolean {

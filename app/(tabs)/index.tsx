@@ -39,7 +39,7 @@ import {
   shouldShowDealInNearbyFeed,
 } from "@/lib/consumer-feed-visibility";
 import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
-import { haversineMiles } from "@/lib/geo";
+import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
@@ -801,10 +801,12 @@ export default function HomeScreen() {
   const renderDealItem = useCallback(
     ({ item }: { item: Deal }) => {
       const coords = readBusinessCoordinates(item.businesses);
+      const distanceMiles = userGeo && coords ? haversineMiles(userGeo.lat, userGeo.lng, coords.lat, coords.lng) : null;
+      const formattedDistance = distanceMiles != null ? formatDistanceMiles(distanceMiles) : null;
       const distanceLabel =
-        userGeo && coords
+        formattedDistance
           ? t("dealsBrowse.distanceAwayMiles", {
-              distance: haversineMiles(userGeo.lat, userGeo.lng, coords.lat, coords.lng).toFixed(1),
+              distance: formattedDistance,
             })
           : undefined;
       const st = dealStatusForUser(item.id, userClaimsByDeal, nowTick);
@@ -1068,10 +1070,14 @@ export default function HomeScreen() {
       const b = item as BusinessRow;
       const la = typeof b.latitude === "number" ? b.latitude : b.latitude != null ? Number(b.latitude) : NaN;
       const ln = typeof b.longitude === "number" ? b.longitude : b.longitude != null ? Number(b.longitude) : NaN;
-      const distanceLabel =
+      const formattedDistance =
         userGeo && Number.isFinite(la) && Number.isFinite(ln)
+          ? formatDistanceMiles(haversineMiles(userGeo.lat, userGeo.lng, la, ln))
+          : null;
+      const distanceLabel =
+        formattedDistance
           ? t("dealsBrowse.distanceAwayMiles", {
-              distance: haversineMiles(userGeo.lat, userGeo.lng, la, ln).toFixed(1),
+              distance: formattedDistance,
             })
           : undefined;
       return (

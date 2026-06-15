@@ -25,7 +25,7 @@
     "nearMeHelp": "Tap again to clear the nearby filter.",
     "nearMeCoordsOnly": "Sorted by distance when location is available.",
     "distanceAway": "~{{distance}} km away",
-    "distanceAwayMiles": "~{{distance}} mi away",
+    "distanceAwayMiles": "{{distance}} mi away",
     "nearMeDenied": "Location permission is needed for Near me.",
     "nearMeNoHints": "Could not detect your area. Try again or search manually.",
     "nearMeError": "Couldn't find your location. Try again.",
@@ -139,7 +139,9 @@
     "a11yRefreshLabel": "Refresh map data",
     "a11yRefreshHint": "Reload businesses and live deals on the map",
     "a11yToggleAllHint": "Show every business on the map",
-    "a11yToggleLiveHint": "Show only businesses with a live deal"
+    "a11yToggleLiveHint": "Show only businesses with a live deal",
+    "viewDeal": "View deal",
+    "viewShop": "View shop"
   },
   "consumerSettings": {
     "accountCta": "Account & sign in",
@@ -793,7 +795,8 @@
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
     "viewBusiness": "Business profile",
     "reportBusinessLink": "Report this business",
-    "claimTimedOut": "Claim timed out \u2014 please try again."
+    "claimTimedOut": "Claim timed out \u2014 please try again.",
+    "unavailableActionBody": "This deal is no longer available to claim."
   },
   "shareDeal": {
     "shareDeal": "Share deal",
@@ -1158,6 +1161,7 @@
     "qaActiveTag": "Active label: {{tag}}",
     "capturePhoto": "Take photo",
     "cancel": "Cancel",
+    "clear": "Clear",
     "photo": "Photo",
     "takePhoto": "Take photo",
     "pickPhoto": "Pick photo",

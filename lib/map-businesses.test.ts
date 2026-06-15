@@ -106,14 +106,14 @@ describe("resolveMarkerTapOutcome", () => {
     expect(out.href).toBeNull();
   });
 
-  it("second tap on same marker opens destination", () => {
+  it("second tap on same marker keeps the preview open", () => {
     const out = resolveMarkerTapOutcome({
       tappedBusinessId: "biz-1",
       selectedBusinessId: "biz-1",
       liveDealId: "deal-1",
     });
     expect(out.nextSelectedBusinessId).toBe("biz-1");
-    expect(out.href).toBe("/deal/deal-1");
+    expect(out.href).toBeNull();
   });
 });
 

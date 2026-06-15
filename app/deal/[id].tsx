@@ -28,6 +28,7 @@ import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
 import { isShareDealEnabled } from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
+import { getDealDetailActionState } from "@/lib/deal-action-state";
 
 type Deal = {
   id: string;
@@ -507,6 +508,12 @@ export default function DealDetail() {
   const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
   const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
   const displayDescription = localizedDealDescription(deal, i18n.language);
+  const actionState = getDealDetailActionState({
+    hasActiveClaim: Boolean(activeClaim),
+    isClaiming,
+    unavailableLabel: claimBlockedLabel,
+  });
+  const canShareDeal = shareDealEnabled && !dealIsDemo && actionState.kind !== "unavailable";
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -671,12 +678,33 @@ export default function DealDetail() {
         </View>
 
         <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
-          <PrimaryButton
-            title={isClaiming ? t("dealDetail.claiming") : claimBlockedLabel ?? t("dealDetail.claim")}
-            onPress={doClaim}
-            disabled={isClaiming || claimBlockedLabel !== null}
-          />
-          {activeClaim ? (
+          {actionState.showClaim ? (
+            <PrimaryButton
+              title={actionState.kind === "claiming" ? t("dealDetail.claiming") : t("dealDetail.claim")}
+              onPress={doClaim}
+              disabled={actionState.claimDisabled}
+            />
+          ) : actionState.statusLabel ? (
+            <View
+              style={{
+                borderRadius: Radii.lg,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surfaceMuted,
+                padding: Spacing.lg,
+              }}
+            >
+              <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>
+                {actionState.statusLabel}
+              </Text>
+              <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+                {t("dealDetail.unavailableActionBody", {
+                  defaultValue: "This deal is no longer available to claim.",
+                })}
+              </Text>
+            </View>
+          ) : null}
+          {actionState.showQr ? (
             <Pressable
               onPress={viewQr}
               disabled={refreshingQr}
@@ -688,7 +716,7 @@ export default function DealDetail() {
               </Text>
             </Pressable>
           ) : null}
-          {shareDealEnabled ? (
+          {canShareDeal ? (
             <SecondaryButton
               title={
                 isSharing

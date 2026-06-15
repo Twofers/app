@@ -25,7 +25,7 @@
     "nearMeHelp": "Toca otra vez para quitar. Coincide ciudad/región en ubicaciones del perfil.",
     "nearMeCoordsOnly": "Orden por distancia si hay coordenadas; añade ciudad en Ubicación como respaldo.",
     "distanceAway": "~{{distance}} km",
-    "distanceAwayMiles": "~{{distance}} mi",
+    "distanceAwayMiles": "{{distance}} mi",
     "nearMeDenied": "Se necesita permiso de ubicación para Cerca de mí.",
     "nearMeNoHints": "No pudimos detectar tu zona. Prueba de nuevo o busca manualmente.",
     "nearMeError": "Falló la ubicación. Inténtalo de nuevo.",
@@ -139,7 +139,9 @@
     "a11yRefreshLabel": "Actualizar datos del mapa",
     "a11yRefreshHint": "Recarga los negocios y ofertas activas en el mapa",
     "a11yToggleAllHint": "Mostrar todos los negocios en el mapa",
-    "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa"
+    "a11yToggleLiveHint": "Mostrar solo negocios con oferta activa",
+    "viewDeal": "Ver oferta",
+    "viewShop": "Ver tienda"
   },
   "consumerSettings": {
     "accountCta": "Cuenta e inicio de sesión",
@@ -793,7 +795,8 @@
     "couldNotLoad": "No pudimos cargar esta oferta. Puede haber terminado o ya no estar disponible.",
     "viewBusiness": "Perfil del negocio",
     "reportBusinessLink": "Reportar este negocio",
-    "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo."
+    "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo.",
+    "unavailableActionBody": "Esta oferta ya no está disponible para reclamar."
   },
   "shareDeal": {
     "shareDeal": "Compartir oferta",
@@ -1124,6 +1127,7 @@
   "commonUi": {
     "ok": "OK",
     "cancel": "Cancelar",
+    "clear": "Borrar",
     "on": "Activado",
     "off": "Desactivado",
     "saving": "Guardando...",

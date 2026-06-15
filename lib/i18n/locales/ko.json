@@ -139,7 +139,9 @@
     "a11yRefreshLabel": "지도 데이터 새로고침",
     "a11yRefreshHint": "지도의 매장과 실시간 딜을 다시 불러옵니다",
     "a11yToggleAllHint": "지도의 모든 매장 표시",
-    "a11yToggleLiveHint": "실시간 딜이 있는 매장만 표시"
+    "a11yToggleLiveHint": "실시간 딜이 있는 매장만 표시",
+    "viewDeal": "딜 보기",
+    "viewShop": "매장 보기"
   },
   "consumerSettings": {
     "accountCta": "계정·로그인",
@@ -793,7 +795,8 @@
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
     "viewBusiness": "매장 프로필",
     "reportBusinessLink": "이 매장 신고",
-    "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요."
+    "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요.",
+    "unavailableActionBody": "이 딜은 더 이상 받을 수 없습니다."
   },
   "shareDeal": {
     "shareDeal": "딜 공유",
@@ -1124,6 +1127,7 @@
   "commonUi": {
     "ok": "확인",
     "cancel": "취소",
+    "clear": "지우기",
     "on": "켜짐",
     "off": "꺼짐",
     "saving": "저장 중…",

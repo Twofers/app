@@ -21,3 +21,8 @@ export function haversineKm(
 export function haversineMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
   return haversineKm(lat1, lon1, lat2, lon2) / 1.60934;
 }
+
+export function formatDistanceMiles(distanceMiles: number, fractionDigits = 1): string | null {
+  if (!Number.isFinite(distanceMiles)) return null;
+  return Math.abs(distanceMiles).toFixed(fractionDigits);
+}

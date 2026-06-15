@@ -329,11 +329,7 @@ function renderMapCanvas({
             bottom: Spacing.lg,
           }}
         >
-          <Pressable
-            onPress={() =>
-              router.push((previewDeal ? `/deal/${previewDeal.id}` : `/business/${selectedBusiness.id}`) as Href)
-            }
-            accessibilityRole="button"
+          <View
             style={{
               borderRadius: Radii.lg,
               backgroundColor: theme.surface,
@@ -374,8 +370,48 @@ function renderMapCanvas({
                   {selectedBusiness.location}
                 </Text>
               ) : null}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.md }}>
+                {previewDeal ? (
+                  <Pressable
+                    onPress={() => router.push(`/deal/${previewDeal.id}` as Href)}
+                    accessibilityRole="button"
+                    style={{
+                      minHeight: 44,
+                      flexGrow: 1,
+                      borderRadius: Radii.md,
+                      backgroundColor: theme.primary,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: Spacing.md,
+                    }}
+                  >
+                    <Text style={{ color: theme.primaryText, fontWeight: "800" }}>
+                      {t("consumerMap.viewDeal")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => router.push(`/business/${selectedBusiness.id}` as Href)}
+                  accessibilityRole="button"
+                  style={{
+                    minHeight: 44,
+                    flexGrow: 1,
+                    borderRadius: Radii.md,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.surfaceMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: Spacing.md,
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "800" }}>
+                    {t("consumerMap.viewShop")}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -406,16 +442,17 @@ function renderBusinessMarker({
       coordinate={{ latitude: marker.lat, longitude: marker.lng }}
       tracksViewChanges={false}
       zIndex={marker.live ? 10 : 5}
-      stopPropagation={Platform.OS === "ios"}
-      onPress={() =>
+      stopPropagation
+      onPress={(event) => {
+        event.stopPropagation?.();
         handleBusinessMarkerPress({
           markerId: marker.id,
           selectedBusinessId,
           deals,
           setSelectedBusinessId,
           router,
-        })
-      }
+        });
+      }}
     >
       <View
         style={{

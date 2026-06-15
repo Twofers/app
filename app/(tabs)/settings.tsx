@@ -72,6 +72,7 @@ export default function SettingsScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [locationMode, setLocationModeState] = useState<ConsumerLocationMode>("gps");
   const [zip, setZip] = useState("");
+  const [savedZip, setSavedZip] = useState("");
   const [zipSaving, setZipSaving] = useState(false);
   const [radius, setRadius] = useState<ConsumerRadiusMiles>(DEFAULT_RADIUS_MILES);
   const [notifMode, setNotifModeState] = useState<ConsumerNotificationMode>("all_nearby");
@@ -87,6 +88,7 @@ export default function SettingsScreen() {
       setAlertsEnabledState(a);
       setLocationModeState(p.locationMode);
       setZip(sanitizeUsZipInput(p.zipCode));
+      setSavedZip(sanitizeUsZipInput(p.zipCode));
       setRadius(p.radiusMiles);
       setNotifModeState(p.notificationPrefs.mode);
       setConsumerSession(!!session?.user);
@@ -251,6 +253,7 @@ export default function SettingsScreen() {
         return;
       }
       setZip(normalized);
+      setSavedZip(normalized);
       await setConsumerLocationMode("zip");
       setLocationModeState("zip");
       await setConsumerZipCode(normalized);
@@ -395,6 +398,9 @@ export default function SettingsScreen() {
       cancelLabel: t("commonUi.cancel"),
     });
   }
+
+  const normalizedZip = normalizeUsZipInput(zip);
+  const canSaveZip = Boolean(normalizedZip && isValidUsZipFormat(normalizedZip) && normalizedZip !== savedZip);
 
   function confirmFinalDeleteAccount(finalBodyKey: string) {
     confirm({
@@ -542,7 +548,7 @@ export default function SettingsScreen() {
                 <PrimaryButton
                   title={zipSaving ? t("consumerSettings.savingZip", { defaultValue: "Saving..." }) : t("consumerSettings.saveZip")}
                   onPress={() => void saveZip()}
-                  disabled={zipSaving}
+                  disabled={zipSaving || !canSaveZip}
                 />
               </View>
             </View>
