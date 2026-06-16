@@ -226,7 +226,7 @@ export default function OnboardingScreen() {
       </Text>
 
       {hint ? (
-        <Text style={{ marginTop: Spacing.md, color: "#b45309", fontSize: 14, lineHeight: 20 }}>{hint}</Text>
+        <Text style={{ marginTop: Spacing.md, color: C.accentText, fontSize: 14, lineHeight: 20 }}>{hint}</Text>
       ) : null}
 
       {step === "setup" ? (

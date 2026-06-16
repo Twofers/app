@@ -40,7 +40,7 @@ import { validateMenuOfferCanonicalSummary } from "@/lib/strong-deal-guard";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
-import { Colors, Radii } from "@/constants/theme";
+import { Colors, PrimaryTint, Radii } from "@/constants/theme";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 
 type DbMenuItem = {
@@ -345,10 +345,14 @@ export default function MenuOfferScreen() {
               borderRadius: Radii.md,
               borderWidth: params.selected === size ? 2 : 1,
               borderColor: params.selected === size ? theme.primary : theme.border,
-              backgroundColor: params.selected === size ? "#FFF3E0" : theme.surface,
+              backgroundColor: params.selected === size
+                ? colorScheme === "dark"
+                  ? "rgba(255,159,28,0.16)"
+                  : PrimaryTint.surfaceStrong
+                : theme.surface,
             }}
           >
-            <Text style={{ fontWeight: "700", fontSize: 13 }}>{size}</Text>
+            <Text style={{ fontWeight: "700", fontSize: 13, color: params.selected === size ? theme.accentText : theme.text }}>{size}</Text>
           </Pressable>
         ))}
       </View>

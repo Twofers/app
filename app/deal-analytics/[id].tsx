@@ -226,7 +226,7 @@ export default function DealAnalyticsDetail() {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
         <ScreenHeader title={t("dealAnalytics.title")} leftSlot={renderBackAction()} />
-        <Text style={{ marginTop: Spacing.md, opacity: 0.7 }}>{t("dealAnalytics.loading")}</Text>
+        <Text style={{ marginTop: Spacing.md, color: theme.mutedText }}>{t("dealAnalytics.loading")}</Text>
       </View>
     );
   }
@@ -322,7 +322,7 @@ export default function DealAnalyticsDetail() {
 
         <MerchantInsightsPanel insights={insights} />
 
-        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md }}>
+        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.md, color: theme.text }}>
           {t("dealAnalytics.claimsOverTime")}
         </Text>
         {!hasAnalyticsData ? (
@@ -356,10 +356,10 @@ export default function DealAnalyticsDetail() {
                   borderBottomColor: theme.border,
                 }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 16 }}>
+                <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>
                   {formatAppDateFromDayKey(item.day, i18n.language)}
                 </Text>
-                <Text style={{ opacity: 0.72, marginTop: Spacing.xs, fontSize: 15 }}>
+                <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 15 }}>
                   {t("dealAnalytics.dayRow", { claims: item.claims, redeems: item.redeems })}
                 </Text>
               </View>
@@ -367,10 +367,10 @@ export default function DealAnalyticsDetail() {
           </View>
         )}
 
-        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.sm }}>
+        <Text style={{ fontWeight: "700", fontSize: 17, marginBottom: Spacing.sm, color: theme.text }}>
           {t("businessDashboard.whatWorked")}
         </Text>
-        <Text style={{ opacity: 0.72, fontSize: 15, lineHeight: 22 }}>
+        <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
           {bestTime ?? t("dealAnalytics.notEnoughData")}
         </Text>
       </ScrollView>

@@ -1,5 +1,7 @@
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { MerchantInsightsRow } from "@/lib/merchant-insights";
 import { Spacing } from "@/lib/screen-layout";
 
@@ -31,6 +33,8 @@ type Props = {
 
 export function MerchantInsightsPanel({ insights }: Props) {
   const { t } = useTranslation();
+  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
+  const theme = Colors[colorScheme];
   if (!insights || insights.claims < 1) return null;
 
   const avgSec = insights.avg_claim_to_redeem_seconds;
@@ -52,11 +56,11 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
   return (
     <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>
-      <Text style={{ fontWeight: "700", fontSize: 15 }}>{t("merchantInsights.detailTitle")}</Text>
-      <Text style={{ fontSize: 14, opacity: 0.75, lineHeight: 20 }}>
+      <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("merchantInsights.detailTitle")}</Text>
+      <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
         {t("merchantInsights.avgRedeemDelay")}: {avgLine}
       </Text>
-      <Text style={{ fontSize: 14, opacity: 0.75, lineHeight: 20 }}>
+      <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
         {t("merchantInsights.newVsReturning", {
           new: insights.new_customer_claims,
           returning: insights.returning_customer_claims,
@@ -65,9 +69,9 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
       {mixEntries(insights.age_band_mix).length > 0 ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.ageMix")}</Text>
+          <Text style={{ fontWeight: "600", fontSize: 14, color: theme.text }}>{t("merchantInsights.ageMix")}</Text>
           {mixEntries(insights.age_band_mix).map(([k, n]) => (
-            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+            <Text key={k} style={{ fontSize: 13, color: theme.mutedText }}>
               {t(`ageBands.${k}`, { defaultValue: k })}: {n}
             </Text>
           ))}
@@ -76,9 +80,9 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
       {mixEntries(insights.zip_cluster_mix).length > 0 ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.zipMix")}</Text>
+          <Text style={{ fontWeight: "600", fontSize: 14, color: theme.text }}>{t("merchantInsights.zipMix")}</Text>
           {mixEntries(insights.zip_cluster_mix).map(([k, n]) => (
-            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+            <Text key={k} style={{ fontSize: 13, color: theme.mutedText }}>
               {k}: {n}
             </Text>
           ))}
@@ -87,9 +91,9 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
       {mixEntries(insights.acquisition_mix).length > 0 ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.acqMix")}</Text>
+          <Text style={{ fontWeight: "600", fontSize: 14, color: theme.text }}>{t("merchantInsights.acqMix")}</Text>
           {mixEntries(insights.acquisition_mix).map(([k, n]) => (
-            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+            <Text key={k} style={{ fontSize: 13, color: theme.mutedText }}>
               {formatAcquisitionLabel(k, t)}: {n}
             </Text>
           ))}
@@ -98,9 +102,9 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
       {mixEntries(insights.redeem_method_mix).length > 0 ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.methodMix")}</Text>
+          <Text style={{ fontWeight: "600", fontSize: 14, color: theme.text }}>{t("merchantInsights.methodMix")}</Text>
           {mixEntries(insights.redeem_method_mix).map(([k, n]) => (
-            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+            <Text key={k} style={{ fontSize: 13, color: theme.mutedText }}>
               {formatMethodLabel(k, t)}: {n}
             </Text>
           ))}
@@ -109,9 +113,9 @@ export function MerchantInsightsPanel({ insights }: Props) {
 
       {mixEntries(insights.claim_blocked_reason_mix).length > 0 ? (
         <View style={{ gap: 4 }}>
-          <Text style={{ fontWeight: "600", fontSize: 14 }}>{t("merchantInsights.claimBlockedMix")}</Text>
+          <Text style={{ fontWeight: "600", fontSize: 14, color: theme.text }}>{t("merchantInsights.claimBlockedMix")}</Text>
           {mixEntries(insights.claim_blocked_reason_mix).map(([k, n]) => (
-            <Text key={k} style={{ fontSize: 13, opacity: 0.72 }}>
+            <Text key={k} style={{ fontSize: 13, color: theme.mutedText }}>
               {formatClaimBlockedReasonLabel(k, t)}: {n}
             </Text>
           ))}
@@ -119,11 +123,11 @@ export function MerchantInsightsPanel({ insights }: Props) {
       ) : null}
 
       {peakHour.c > 0 ? (
-        <Text style={{ fontSize: 13, opacity: 0.72, lineHeight: 18 }}>
+        <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
           {t("merchantInsights.hourHeat")}: {t("merchantInsights.hourPeak", { hour: peakHour.h, count: peakHour.c })}
         </Text>
       ) : (
-        <Text style={{ fontSize: 13, opacity: 0.72, lineHeight: 18 }}>{t("merchantInsights.hourHeatSparse")}</Text>
+        <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>{t("merchantInsights.hourHeatSparse")}</Text>
       )}
     </View>
   );

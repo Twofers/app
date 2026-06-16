@@ -178,17 +178,17 @@ export default function CreateDeal() {
 
       {!isLoggedIn ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <Text style={{ opacity: 0.7 }}>{t("createHub.loginPrompt")}</Text>
+          <Text style={{ color: theme.mutedText }}>{t("createHub.loginPrompt")}</Text>
         </View>
       ) : loading || profileCheckLoading ? (
         <View style={{ marginTop: Spacing.lg }}>
-          <ActivityIndicator />
-          <Text style={{ opacity: 0.7, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>
+          <ActivityIndicator color={theme.primary} />
+          <Text style={{ color: theme.mutedText, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>
         </View>
       ) : !hasBusinessProfileAccess ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
-          <Text style={{ fontWeight: "700", fontSize: 16 }}>{t("createHub.createBusinessHeader")}</Text>
-          <Text style={{ opacity: 0.7 }}>{t("createHub.createBusinessBody")}</Text>
+          <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createHub.createBusinessHeader")}</Text>
+          <Text style={{ color: theme.mutedText }}>{t("createHub.createBusinessBody")}</Text>
           <PrimaryButton
             title={t("account.startBusinessSetup")}
             onPress={() => router.push("/business-setup" as Href)}
@@ -212,7 +212,7 @@ export default function CreateDeal() {
         </View>
       ) : !businessId ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
-          <Text style={{ opacity: 0.7 }}>
+          <Text style={{ color: theme.mutedText }}>
             {t("createHub.bizProfilePending")}
           </Text>
         </View>

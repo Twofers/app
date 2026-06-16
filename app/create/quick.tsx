@@ -578,8 +578,8 @@ export default function QuickDealExpress() {
                 marginTop: Spacing.md,
                 borderRadius: 24,
                 borderWidth: 1,
-                borderColor: "rgba(255,159,28,0.35)",
-                backgroundColor: "#fff8ed",
+                borderColor: colorScheme === "dark" ? "rgba(255,159,28,0.36)" : "rgba(255,159,28,0.35)",
+                backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : "#fff8ed",
                 padding: Spacing.md,
               }}
             >

@@ -19,7 +19,7 @@ import {
   KeyboardScreen,
 } from "@/components/ui/keyboard-screen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors, Gray, Radii } from "@/constants/theme";
+import { Colors, Radii } from "@/constants/theme";
 import { ReportSheet } from "@/components/report-sheet";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { submitUserReport, type UserReportReason } from "@/lib/reports";
@@ -375,7 +375,7 @@ export default function RedeemScanner() {
                 opacity: processing && mode !== "scan" ? 0.5 : 1,
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.primaryText : Gray[700] }}>{t("redeem.modeScan")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "scan" ? theme.primaryText : theme.text }}>{t("redeem.modeScan")}</Text>
             </Pressable>
             <Pressable
               onPress={() => setMode("manual")}
@@ -389,7 +389,7 @@ export default function RedeemScanner() {
                 opacity: processing && mode !== "manual" ? 0.5 : 1,
               }}
             >
-              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.primaryText : Gray[700] }}>{t("redeem.modeManual")}</Text>
+              <Text style={{ fontWeight: "700", color: mode === "manual" ? theme.primaryText : theme.text }}>{t("redeem.modeManual")}</Text>
             </Pressable>
           </View>
 
