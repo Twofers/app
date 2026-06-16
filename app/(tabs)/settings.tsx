@@ -446,7 +446,7 @@ export default function SettingsScreen() {
     <KeyboardScreen>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1 }}>
       <Text
-        style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}
+        style={{ color: theme.text, fontSize: 26, fontWeight: "700", letterSpacing: -0.3 }}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.78}
@@ -497,8 +497,8 @@ export default function SettingsScreen() {
               padding: Spacing.lg,
             }}
           >
-            <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("settingsConsumer.editTitle")}</Text>
-            <Text style={{ opacity: 0.7, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("settingsConsumer.editTitle")}</Text>
+            <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
               {t("settingsConsumer.editSub")}
             </Text>
           </Pressable>
@@ -513,15 +513,15 @@ export default function SettingsScreen() {
             gap: Spacing.md,
           }}
         >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.locationSection")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.locationHelp")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.locationSection")}</Text>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.locationHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {chip(locationMode === "gps", t("consumerSettings.locationGps"), () => void applyLocationMode("gps"))}
             {chip(locationMode === "zip", t("consumerSettings.locationZip"), () => void applyLocationMode("zip"))}
           </View>
           {locationMode === "zip" ? (
             <View>
-              <Text style={{ fontWeight: "600", marginBottom: Spacing.xs }}>{t("consumerSettings.zipLabel")}</Text>
+              <Text style={{ color: theme.text, fontWeight: "600", marginBottom: Spacing.xs }}>{t("consumerSettings.zipLabel")}</Text>
               <TextInput
                 value={zip}
                 onChangeText={(value) => setZip(sanitizeUsZipInput(value))}
@@ -541,6 +541,7 @@ export default function SettingsScreen() {
                   borderRadius: Radii.md,
                   padding: Spacing.md,
                   fontSize: 16,
+                  color: theme.text,
                 }}
               />
               <IosDoneInputAccessory />
@@ -564,8 +565,8 @@ export default function SettingsScreen() {
             gap: Spacing.md,
           }}
         >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.radiusSection")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.radiusHelp")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.radiusSection")}</Text>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.radiusHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {CONSUMER_RADIUS_MILES_OPTIONS.map((m) =>
               chip(radius === m, t("onboarding.radiusMiles", { miles: m }), () => void applyRadius(m), String(m)),
@@ -582,8 +583,8 @@ export default function SettingsScreen() {
             gap: Spacing.md,
           }}
         >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.notificationsSection")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.notificationsHelp")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("consumerSettings.notificationsSection")}</Text>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("consumerSettings.notificationsHelp")}</Text>
           <View
             style={{
               flexDirection: "row",
@@ -593,8 +594,8 @@ export default function SettingsScreen() {
             }}
           >
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
-              <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14 }}>{t("account.dealAlertsSubtitle")}</Text>
+              <Text style={{ color: theme.text, fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
+              <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14 }}>{t("account.dealAlertsSubtitle")}</Text>
             </View>
             <BrandedSwitch
               value={alertsEnabled}
@@ -606,7 +607,7 @@ export default function SettingsScreen() {
               accessibilityState={getSwitchAccessibilityState(alertsEnabled, loading)}
             />
           </View>
-          <Text style={{ fontWeight: "700", marginTop: Spacing.md }}>{t("consumerSettings.notificationModeTitle")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "700", marginTop: Spacing.md }}>{t("consumerSettings.notificationModeTitle")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {chip(
               notifMode === "all_nearby",
@@ -619,7 +620,7 @@ export default function SettingsScreen() {
               () => void applyNotifMode("favorites_only"),
             )}
           </View>
-          <Text style={{ fontSize: 12, opacity: 0.55, lineHeight: 18 }}>{t("consumerSettings.notifFavoritesOverride")}</Text>
+          <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 18 }}>{t("consumerSettings.notifFavoritesOverride")}</Text>
         </View>
 
         <View
@@ -631,8 +632,8 @@ export default function SettingsScreen() {
             gap: Spacing.sm,
           }}
         >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("language.sectionApp")}</Text>
-          <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("language.sectionAppHelp")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("language.sectionApp")}</Text>
+          <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("language.sectionAppHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: Spacing.sm }}>
             {(["en", "es", "ko"] as const).map((loc) => {
               const active = i18n.language === loc;
@@ -670,7 +671,7 @@ export default function SettingsScreen() {
               gap: Spacing.sm,
             }}
           >
-            <Text style={{ opacity: 0.7, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
+            <Text style={{ color: theme.mutedText, fontSize: 13 }}>{t("account.loggedInAsLabel")}</Text>
             {session?.user?.email ? (
               <Text style={{ fontWeight: "700", color: theme.text }}>{session.user.email}</Text>
             ) : null}
@@ -724,8 +725,8 @@ export default function SettingsScreen() {
                 gap: Spacing.sm,
               }}
             >
-              <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
-              <Text style={{ opacity: 0.7, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
+              <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("supportContact.sectionTitle")}</Text>
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("supportContact.sectionHelp")}</Text>
               {supportEmail ? (
                 <>
                   <SecondaryButton
@@ -759,7 +760,7 @@ export default function SettingsScreen() {
             gap: Spacing.sm,
           }}
         >
-          <Text style={{ fontWeight: "800", fontSize: 17 }}>{t("legal.sectionTitle")}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>{t("legal.sectionTitle")}</Text>
           <LegalExternalLinks />
         </View>
 
