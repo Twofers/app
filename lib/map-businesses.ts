@@ -4,6 +4,7 @@ type BizRow = {
   location?: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
+  is_demo?: boolean | null;
 };
 
 export type MappableBusiness = {
@@ -12,6 +13,7 @@ export type MappableBusiness = {
   location: string | null;
   lat: number;
   lng: number;
+  is_demo?: boolean | null;
 };
 
 export type LiveDealRow = {
@@ -70,6 +72,7 @@ export async function collectMappableBusinesses(
         location: row.location ?? null,
         lat,
         lng,
+        is_demo: row.is_demo === true,
       });
       seen.add(row.id);
     }
@@ -87,6 +90,14 @@ export function deriveLiveBusinessIds(rows: LiveDealRow[]): Set<string> {
     if (row.live && row.business_id) out.add(row.business_id);
   }
   return out;
+}
+
+export function findBusinessMarkerIndex(
+  businesses: readonly Pick<MappableBusiness, "id">[],
+  businessId: string | null | undefined,
+): number {
+  if (!businessId) return -1;
+  return businesses.findIndex((business) => business.id === businessId);
 }
 
 export function withLiveMarkerState(
