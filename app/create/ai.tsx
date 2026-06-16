@@ -50,6 +50,7 @@ import {
 } from "../../lib/functions";
 import {
   adToDealDraft,
+  buildFallbackTemplateAd,
   composeListingDescription,
   type GeneratedAd,
   type PhotoTreatment,
@@ -1674,6 +1675,39 @@ export default function AiDealScreen() {
     }, 200);
   }
 
+  function useFallbackTemplateAd() {
+    const maxClaimsNum = Number(maxClaims);
+    const fallbackAd = buildFallbackTemplateAd({
+      businessName,
+      title,
+      promoLine,
+      ctaText,
+      description,
+      ownerOfferHint: hintText,
+      lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
+      lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
+      scheduleSummary: displayScheduleSummary,
+      quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
+    });
+    setGeneratedAd(fallbackAd);
+    applyAdToDraft(fallbackAd);
+    setAdAccepted(true);
+    setManualDraftUnlocked(true);
+    setLastGenerationError(null);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    setBanner({
+      message: t("createAi.fallbackTemplateReady", {
+        defaultValue: "Fallback ad ready. Review the details, then publish when it looks right.",
+      }),
+      tone: "info",
+    });
+    trackEvent("owner_fallback_template_used", { businessId, hasPhoto: Boolean(photoPath || photoUri || posterUrl) });
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  }
+
   function showPublishError(message: string, tone: "error" | "warning" = "error") {
     setPublishStatus("error");
     setPublishStatusMessage(message);
@@ -2082,7 +2116,7 @@ export default function AiDealScreen() {
 
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-    : photoUri ?? posterUrl ?? null;
+    : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -2715,14 +2749,22 @@ export default function AiDealScreen() {
             </View>
 
             {lastGenerationError && !generating ? (
-              <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+              <View style={{ marginTop: 16, padding: 14, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                 {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
                     failure / timeout / ownership), not a generic "couldn't generate"
                     line — so the cause is visible instead of hidden. */}
                 <Text style={{ fontWeight: "700", color: theme.text }}>{lastGenerationError}</Text>
-                <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>{t("createAi.fallbackBody")}</Text>
+                <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
+                  {t("createAi.fallbackTemplateBody", {
+                    defaultValue: "AI image generation had trouble, so we made a clean fallback ad. You can publish this now or try AI again.",
+                  })}
+                </Text>
+                <PrimaryButton
+                  title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
+                  onPress={useFallbackTemplateAd}
+                />
                 <SecondaryButton
-                  title={t("createAi.showDraftFields")}
+                  title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
                   onPress={() => {
                     setManualDraftUnlocked(true);
                     setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });

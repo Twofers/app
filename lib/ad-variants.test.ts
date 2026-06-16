@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adToDealDraft, type GeneratedAd } from "./ad-variants";
+import { adToDealDraft, buildFallbackTemplateAd, type GeneratedAd } from "./ad-variants";
 
 describe("adToDealDraft", () => {
   it("uses structured short description and terms summary when present", () => {
@@ -34,5 +34,38 @@ describe("adToDealDraft", () => {
       cta_text: "Claim deal",
       offer_details: "Buy one cold brew, get one free.\n\nClaim deal",
     });
+  });
+});
+
+describe("buildFallbackTemplateAd", () => {
+  it("builds deterministic fallback copy from locked offer terms", () => {
+    const ad = buildFallbackTemplateAd({
+      businessName: "Cedar Bean",
+      ownerOfferHint: "BOGO iced latte today",
+      lockedOfferLine: "Buy one iced latte, get one iced latte free.",
+      lockedTermsLine: "Valid today from 11 AM to 1 PM.",
+      scheduleSummary: "Runs today until 1 PM.",
+      quantityLimit: 20,
+    });
+
+    expect(ad.copy_source).toBe("DETERMINISTIC_FALLBACK");
+    expect(ad.photo_source).toBe("fallback_template");
+    expect(ad.poster_storage_path).toBeNull();
+    expect(ad.locked_offer_line).toBe("Buy one iced latte, get one iced latte free.");
+    expect(ad.terms_summary).toContain("20 available");
+  });
+
+  it("prefers owner-edited fields when present", () => {
+    const ad = buildFallbackTemplateAd({
+      businessName: "Cedar Bean",
+      title: "Lunch BOGO",
+      promoLine: "Buy one sandwich, get one free.",
+      ctaText: "Grab it",
+      ownerOfferHint: "rough note",
+    });
+
+    expect(ad.headline).toBe("Lunch BOGO");
+    expect(ad.subheadline).toBe("Buy one sandwich, get one free.");
+    expect(ad.cta).toBe("Grab it");
   });
 });
