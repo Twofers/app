@@ -17,6 +17,13 @@ export type GeneratedAd = {
   short_description?: string;
   push_notification?: string;
   terms_summary?: string;
+  social_caption?: string;
+  locked_offer_line?: string;
+  locked_terms_line?: string;
+  copy_source?: "AI_VALIDATED" | "AI_RETRY_VALIDATED" | "DETERMINISTIC_FALLBACK";
+  variant_count?: number;
+  selected_variant_index?: number | null;
+  validation_reason_codes?: string[];
   cta: string;
   /** Storage path in deal-photos bucket; null if image production failed. */
   poster_storage_path?: string | null;
@@ -62,10 +69,13 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const hint = ownerOfferHint.trim();
   const shortDescription = (ad.short_description ?? ad.subheadline).trim();
   const termsSummary = ad.terms_summary?.trim() ?? "";
+  const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
+  const lockedTermsLine = ad.locked_terms_line?.trim() ?? termsSummary;
+  const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
   return {
     title: ad.headline.trim(),
     promo_line: shortDescription,
     cta_text: ad.cta.trim(),
-    offer_details: termsSummary || hint || [shortDescription, ad.cta].filter(Boolean).join("\n\n"),
+    offer_details: offerDetails || hint || [shortDescription, ad.cta].filter(Boolean).join("\n\n"),
   };
 }

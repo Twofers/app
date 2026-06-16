@@ -33,6 +33,13 @@ import {
   type OutputLanguage,
 } from "./prompt.ts";
 import {
+  buildDealOfferContract,
+  generateValidatedDealCopy,
+  parseAiDealCopyVariants,
+  type AiDealCopySource,
+  type DealOfferContract,
+} from "../../../lib/deal-offer-contract.ts";
+import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
   type DealEligibilityInput,
@@ -63,6 +70,13 @@ type SingleAd = {
   short_description: string;
   push_notification: string;
   terms_summary: string;
+  social_caption?: string;
+  locked_offer_line?: string;
+  locked_terms_line?: string;
+  copy_source?: AiDealCopySource;
+  variant_count?: number;
+  selected_variant_index?: number | null;
+  validation_reason_codes?: string[];
   /** Verb-first action (≤26 chars). */
   cta: string;
   /** Research the AI used to write the copy. Empty when it skipped/failed research. */
@@ -252,6 +266,7 @@ async function generateCopy(params: {
   research: ItemResearch;
   businessName: string;
   businessContext: BusinessContext;
+  offerContract: DealOfferContract;
   offerScheduleSummary: string;
   quantityLimit: number | null;
   redemptionLimit: string;
@@ -259,13 +274,14 @@ async function generateCopy(params: {
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: SingleAd;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta">> {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta">> {
   const {
     openAiKey,
     itemHint,
     research,
     businessName,
     businessContext,
+    offerContract,
     offerScheduleSummary,
     quantityLimit,
     redemptionLimit,
@@ -278,60 +294,94 @@ async function generateCopy(params: {
   // A previous ad is only passed in on revision calls (see the handler's generateCopy call).
   const isRevision = previousAd !== undefined;
 
-  const { system, userText, jsonSchema } = buildAdCopyPrompt({
-    itemHint,
-    research,
-    businessName,
-    businessContext,
-    offerScheduleSummary,
-    quantityLimit,
-    redemptionLimit,
-    outputLanguage,
-    revisionPreset,
-    revisionFeedback,
-    previousAd,
-  });
+  const selected = await generateValidatedDealCopy({
+    contract: offerContract,
+    requestCopy: async ({ attemptNumber, validationFeedback }) => {
+      const { system, userText, jsonSchema } = buildAdCopyPrompt({
+        itemHint,
+        research,
+        businessName,
+        businessContext,
+        offerScheduleSummary,
+        quantityLimit,
+        redemptionLimit,
+        outputLanguage,
+        revisionPreset,
+        revisionFeedback,
+        previousAd,
+        offerContract,
+        validationFeedback,
+      });
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openAiKey}`,
-      "Content-Type": "application/json",
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openAiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: CHAT_MODEL,
+          response_format: { type: "json_schema", json_schema: jsonSchema },
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userText },
+          ],
+          ...chatCompletionTuning(CHAT_MODEL, {
+            maxTokens: 650,
+            temperature: isRevision ? 0.7 : 0.6,
+          }),
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`OPENAI_COPY_${res.status}: ${body.slice(0, 200)}`);
+      }
+      const json = await res.json();
+      const content = json?.choices?.[0]?.message?.content ?? "";
+      try {
+        return parseAiDealCopyVariants(typeof content === "string" ? content : "{}");
+      } catch (e) {
+        console.log(
+          JSON.stringify({
+            tag: "ai_ads_v2",
+            event: "copy_parse_error",
+            attemptNumber,
+            err: String(e).slice(0, 200),
+          }),
+        );
+        return [];
+      }
     },
-    body: JSON.stringify({
-      model: CHAT_MODEL,
-      response_format: { type: "json_schema", json_schema: jsonSchema },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userText },
-      ],
-      ...chatCompletionTuning(CHAT_MODEL, {
-        maxTokens: 400,
-        temperature: isRevision ? 0.7 : 0.6,
-      }),
-    }),
+    logValidationFailure: ({ attemptNumber, reasonCodes }) => {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "copy_validation_failed",
+          attemptNumber,
+          dealType: offerContract.dealType,
+          businessId: offerContract.businessId,
+          locationId: offerContract.locationId,
+          reasonCodes,
+        }),
+      );
+    },
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OPENAI_COPY_${res.status}: ${body.slice(0, 200)}`);
-  }
-  const json = await res.json();
-  const content = json?.choices?.[0]?.message?.content ?? "";
-  const parsed = JSON.parse(typeof content === "string" ? content : "{}") as {
-    headline?: string;
-    short_description?: string;
-    push_notification?: string;
-    terms_summary?: string;
-  };
-  const shortDescription = clip(parsed.short_description ?? "", 220);
+  const shortDescription = clip(selected.short_description, 180);
 
   return {
-    headline: clip(parsed.headline ?? "", 70),
+    headline: clip(selected.headline, 55),
     subheadline: shortDescription,
     short_description: shortDescription,
-    push_notification: clip(parsed.push_notification ?? "", 90),
-    terms_summary: clip(parsed.terms_summary ?? "", 240),
+    push_notification: clip(selected.push_notification, 85),
+    terms_summary: clip(selected.terms_summary, 240),
+    social_caption: selected.social_caption ? clip(selected.social_caption, 220) : undefined,
+    locked_offer_line: selected.locked_offer_line,
+    locked_terms_line: selected.locked_terms_line,
+    copy_source: selected.copy_source,
+    variant_count: selected.variant_count,
+    selected_variant_index: selected.selected_variant_index,
+    validation_reason_codes: selected.validation_reason_codes,
     cta: defaultCta(outputLanguage),
   };
 }
@@ -669,11 +719,29 @@ serve(async (req) => {
       });
     }
 
-    const eligibilityResponse = dealNotEligibleForAiResponse(
-      parseDealEligibilityInput(body.deal_eligibility),
-      corsHeaders,
-    );
+    const eligibilityInput = parseDealEligibilityInput(body.deal_eligibility);
+    const eligibilityResponse = dealNotEligibleForAiResponse(eligibilityInput, corsHeaders);
     if (eligibilityResponse) return eligibilityResponse;
+    const eligibilityResult = validateDealEligibility(eligibilityInput!);
+    const offerContract = buildDealOfferContract({
+      businessId,
+      businessName,
+      locationId: businessId,
+      locationName: businessContext.address || businessContext.location || businessName,
+      dealEligibility: eligibilityInput!,
+      eligibilityResult,
+      activeWindowHumanReadable: offerScheduleSummary,
+      quantityLimit,
+    });
+    if (!offerContract) {
+      return new Response(
+        JSON.stringify({
+          error: "DEAL_NOT_ELIGIBLE_FOR_AI",
+          error_code: "DEAL_NOT_ELIGIBLE_FOR_AI",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     /**
      * Path-traversal guard: clients must only operate on photos under their own business folder.
@@ -795,7 +863,7 @@ serve(async (req) => {
       });
     }
 
-    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "cta">;
+    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta">;
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
       copy = {
@@ -803,7 +871,14 @@ serve(async (req) => {
         subheadline: previousAd.subheadline,
         short_description: previousAd.short_description || previousAd.subheadline,
         push_notification: previousAd.push_notification || previousAd.headline,
-        terms_summary: previousAd.terms_summary || previousAd.subheadline,
+        terms_summary: offerContract.canonicalShortTerms,
+        social_caption: previousAd.social_caption,
+        locked_offer_line: offerContract.canonicalOfferLine,
+        locked_terms_line: offerContract.canonicalShortTerms,
+        copy_source: previousAd.copy_source,
+        variant_count: previousAd.variant_count,
+        selected_variant_index: previousAd.selected_variant_index,
+        validation_reason_codes: previousAd.validation_reason_codes,
         cta: previousAd.cta,
       };
     } else {
@@ -814,6 +889,7 @@ serve(async (req) => {
           research,
           businessName,
           businessContext,
+          offerContract,
           offerScheduleSummary,
           quantityLimit,
           redemptionLimit,
@@ -845,10 +921,6 @@ serve(async (req) => {
       }
     }
 
-    // Guarantee a publishable offer phrase — the model usually writes one, but
-    // when it doesn't, the deal would be blocked by the strong-deal guard at publish.
-    copy = ensureOfferPhrase(copy, outputLanguage, research.item_name || sourceHint);
-
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
     if (isRevision && previousAd && revisionTarget === "copy") {
       // Copy-only revision: keep image
@@ -877,6 +949,13 @@ serve(async (req) => {
       short_description: copy.short_description,
       push_notification: copy.push_notification,
       terms_summary: copy.terms_summary,
+      social_caption: copy.social_caption,
+      locked_offer_line: copy.locked_offer_line,
+      locked_terms_line: copy.locked_terms_line,
+      copy_source: copy.copy_source,
+      variant_count: copy.variant_count,
+      selected_variant_index: copy.selected_variant_index,
+      validation_reason_codes: copy.validation_reason_codes,
       cta: copy.cta,
       item_research: research,
       photo_source: imageResult.source,
@@ -938,6 +1017,13 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     VALID_PHOTO_TREATMENTS.has(photoTreatmentRaw as PhotoTreatment)
       ? (photoTreatmentRaw as PhotoTreatment)
       : null;
+  const copySourceRaw = typeof raw.copy_source === "string" ? raw.copy_source : "";
+  const copySource: AiDealCopySource | undefined =
+    copySourceRaw === "AI_VALIDATED" ||
+    copySourceRaw === "AI_RETRY_VALIDATED" ||
+    copySourceRaw === "DETERMINISTIC_FALLBACK"
+      ? copySourceRaw
+      : undefined;
 
   const shortDescription = clip(
     typeof raw.short_description === "string"
@@ -960,6 +1046,26 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       typeof raw.terms_summary === "string" ? raw.terms_summary : shortDescription,
       240,
     ),
+    social_caption: clip(typeof raw.social_caption === "string" ? raw.social_caption : "", 220) || undefined,
+    locked_offer_line: clip(
+      typeof raw.locked_offer_line === "string" ? raw.locked_offer_line : "",
+      240,
+    ) || undefined,
+    locked_terms_line: clip(
+      typeof raw.locked_terms_line === "string" ? raw.locked_terms_line : "",
+      240,
+    ) || undefined,
+    copy_source: copySource,
+    variant_count: typeof raw.variant_count === "number" && Number.isFinite(raw.variant_count)
+      ? Math.max(0, Math.floor(raw.variant_count))
+      : undefined,
+    selected_variant_index:
+      typeof raw.selected_variant_index === "number" && Number.isFinite(raw.selected_variant_index)
+        ? Math.max(0, Math.floor(raw.selected_variant_index))
+        : null,
+    validation_reason_codes: Array.isArray(raw.validation_reason_codes)
+      ? raw.validation_reason_codes.filter((code): code is string => typeof code === "string").slice(0, 12)
+      : undefined,
     cta: clip(typeof raw.cta === "string" ? raw.cta : "", 26),
     item_research: {
       item_name: clip(typeof research.item_name === "string" ? research.item_name : "", 80),

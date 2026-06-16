@@ -1,12 +1,42 @@
 import { describe, expect, it } from "vitest";
 
 import { buildAdCopyPrompt } from "./prompt.ts";
+import { buildDealOfferContract, type DealOfferContract } from "../../../lib/deal-offer-contract.ts";
+import { validateDealEligibility, type DealEligibilityInput } from "../../../lib/deal-eligibility.ts";
+
+function contractFor(input: DealEligibilityInput): DealOfferContract {
+  const eligibilityResult = validateDealEligibility(input);
+  const contract = buildDealOfferContract({
+    businessId: "biz_123",
+    businessName: "Cedar Street Cafe",
+    locationId: "loc_123",
+    locationName: "Cedar Street Cafe - Main",
+    dealEligibility: input,
+    eligibilityResult,
+    activeWindowHumanReadable: "Today 11:30 AM to 1:00 PM",
+    quantityLimit: 20,
+  });
+  if (!contract) throw new Error("expected contract");
+  return contract;
+}
+
+const buySomethingContract = contractFor({
+  dealType: "BUY_ONE_GET_SOMETHING_FREE",
+  appliesTo: "SINGLE_ITEM",
+  requiredPurchaseQuantity: 1,
+  requiredItemDescription: "coffee",
+  requiredItemRetailValueCents: 400,
+  freeItemQuantity: 1,
+  freeItemDescription: "bagel",
+  freeItemRetailValueCents: 300,
+  freeItemDiscountPercent: 100,
+});
 
 const basePrompt = buildAdCopyPrompt({
-  itemHint: "Buy one iced vanilla latte and get a fresh blueberry muffin free",
+  itemHint: "Buy one coffee and get a bagel free",
   research: {
-    item_name: "iced vanilla latte and blueberry muffin",
-    description: "An iced espresso drink paired with a bakery-case muffin.",
+    item_name: "coffee and bagel",
+    description: "A coffee paired with a bakery-case bagel.",
     is_familiar: true,
   },
   businessName: "Cedar Street Cafe",
@@ -20,6 +50,7 @@ const basePrompt = buildAdCopyPrompt({
   quantityLimit: 20,
   redemptionLimit: "Claims close 15 minutes before the deal ends.",
   outputLanguage: "en",
+  offerContract: buySomethingContract,
 });
 
 describe("buildAdCopyPrompt", () => {
@@ -39,27 +70,18 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Afternoon coffee run?");
   });
 
-  it("passes product, BOGO, time window, and quantity facts", () => {
-    expect(basePrompt.userText).toContain("iced vanilla latte");
-    expect(basePrompt.userText).toContain("blueberry muffin free");
+  it("passes the locked contract, time window, and quantity facts", () => {
+    expect(basePrompt.userText).toContain("Customer buys 1 coffee.");
+    expect(basePrompt.userText).toContain("Customer gets 1 bagel free.");
+    expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
     expect(basePrompt.userText).toContain("Today 11:30 AM to 1:00 PM");
     expect(basePrompt.userText).toContain("20 available");
   });
 
   it("requires the structured output schema", () => {
     const schema = basePrompt.jsonSchema.schema;
-    expect(schema.required).toEqual([
-      "headline",
-      "short_description",
-      "push_notification",
-      "terms_summary",
-    ]);
-    expect(Object.keys(schema.properties)).toEqual([
-      "headline",
-      "short_description",
-      "push_notification",
-      "terms_summary",
-    ]);
+    expect(schema.required).toEqual(["variants"]);
+    expect(Object.keys(schema.properties)).toEqual(["variants"]);
   });
 
   it("tells the model not to invent missing facts", () => {
@@ -67,4 +89,70 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain("write around it without inventing it");
     expect(basePrompt.userText).toContain("stay neutral instead of naming a latte");
   });
+
+  it("adds buy-one-get-something-free guardrails", () => {
+    expect(basePrompt.userText).toContain('Do NOT say "Buy coffee and bagel."');
+    expect(basePrompt.userText).toContain('Do NOT say "BOGO."');
+    expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
+  });
+
+  it("allows BOGO language only for same-item BOGO", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Buy one coffee, get one coffee free", "coffee"),
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_ONE_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "coffee",
+        requiredItemRetailValueCents: 400,
+        freeItemQuantity: 1,
+        freeItemDescription: "coffee",
+        freeItemRetailValueCents: 400,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.userText).toContain("This is a true same-item BOGO free deal.");
+    expect(prompt.userText).toContain("BOGO");
+    expect(prompt.userText).toContain("Buy one, get one free");
+  });
+
+  it("bans BOGO, free, and entire-order language for percent-off deals", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("40% off one latte", "latte"),
+      offerContract: contractFor({
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 40,
+        itemDescription: "latte",
+        itemRetailValueCents: 600,
+      }),
+    });
+
+    expect(prompt.userText).toContain("This is not a BOGO deal.");
+    expect(prompt.userText).toContain('Do not mention "free."');
+    expect(prompt.userText).toContain('Do not mention "entire order."');
+  });
 });
+
+function basePromptParams(itemHint: string, itemName: string) {
+  return {
+    itemHint,
+    research: {
+      item_name: itemName,
+      description: "",
+      is_familiar: true,
+    },
+    businessName: "Cedar Street Cafe",
+    businessContext: {
+      category: "Coffee shop",
+      location: "Downtown Grapevine",
+      tone: "friendly and direct",
+      description: "Neighborhood cafe serving espresso and fresh pastries.",
+    },
+    offerScheduleSummary: "Today 11:30 AM to 1:00 PM",
+    quantityLimit: 20,
+    redemptionLimit: "Claims close 15 minutes before the deal ends.",
+    outputLanguage: "en" as const,
+  };
+}

@@ -78,6 +78,10 @@ import { markRecentPublish } from "../../lib/recent-publish";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { validateDealEligibility } from "../../lib/deal-eligibility";
 import {
+  buildDealOfferContract,
+  validateAiCopyAgainstOffer,
+} from "../../lib/deal-offer-contract";
+import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
   dealEligibilityFormFromDealRow,
@@ -528,6 +532,30 @@ export default function AiDealScreen() {
     () => validateDealEligibility(eligibilityInput),
     [eligibilityInput],
   );
+  const offerContract = useMemo(() => {
+    if (!businessId) return null;
+    const maxClaimsNum = Number(maxClaims);
+    return buildDealOfferContract({
+      businessId,
+      businessName: businessName || "",
+      locationId: publishLocationIds[0] ?? businessId,
+      locationName: businessContextForAi.address || businessContextForAi.location || businessName || "",
+      dealEligibility: eligibilityInput,
+      eligibilityResult,
+      activeWindowHumanReadable: offerScheduleSummary,
+      quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
+    });
+  }, [
+    businessContextForAi.address,
+    businessContextForAi.location,
+    businessId,
+    businessName,
+    eligibilityInput,
+    eligibilityResult,
+    maxClaims,
+    offerScheduleSummary,
+    publishLocationIds,
+  ]);
 
   const canPublish = useMemo(() => {
     return title.trim().length > 0 && listingBody.trim().length > 0;
@@ -1507,6 +1535,33 @@ export default function AiDealScreen() {
     // composedDescription includes the CTA — used ONLY for the quality + strong-deal
     // guards below, so an offer phrase that happens to live only in the CTA (e.g.
     // "Get one free") still satisfies validation.
+    if (offerContract) {
+      const mechanicsValidation = validateAiCopyAgainstOffer(
+        {
+          headline: title,
+          short_description: promoLine || description,
+          push_notification: generatedAd?.push_notification || title,
+          social_caption: generatedAd?.social_caption,
+          terms_summary: description,
+        },
+        offerContract,
+      );
+      if (!mechanicsValidation.valid) {
+        const message = t("createAi.offerMechanicsInvalid", {
+          defaultValue: "The ad copy changes the offer terms. Keep the required purchase, free item, discount, and location exactly as shown in the locked offer.",
+        });
+        showPublishError(message, "warning");
+        trackEvent("deal_validation_failed", {
+          businessId,
+          attemptedDealType: eligibilityForm.dealType,
+          reasonCode: mechanicsValidation.reasonCodes.join(","),
+          attemptedAction: "publish_mechanics_validation",
+          source: "create_ai",
+        });
+        return;
+      }
+    }
+
     const composedDescription = composeListingDescription(promoLine, ctaText, description);
     // listingDescription is what gets STORED and shown to consumers. The deal card already
     // renders its own Claim button, so the CTA is a button label, not body copy — leaving it
@@ -2393,8 +2448,22 @@ export default function AiDealScreen() {
                     ) : null}
                   </View>
 
+                  {(generatedAd.locked_offer_line || offerContract?.canonicalOfferLine) ? (
+                    <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
+                        {t("createAi.lockedOfferLabel", { defaultValue: "Offer" })}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 17, fontWeight: "800", color: theme.text, lineHeight: 23 }}>
+                        {generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {/* Headline + subline */}
                   <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
+                    <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
+                      {t("createAi.generatedCopyLabel", { defaultValue: "Generated ad copy" })}
+                    </Text>
                     <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: theme.primary, lineHeight: 28 }}>
                       {generatedAd.headline}
                     </Text>
@@ -2437,6 +2506,21 @@ export default function AiDealScreen() {
                       </Text>
                     ) : null}
                     <Text style={{ fontSize: 12, color: theme.mutedText }}>{displayScheduleSummary}</Text>
+                    {(generatedAd.locked_terms_line || offerContract?.canonicalShortTerms) ? (
+                      <View style={{ paddingTop: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
+                          {t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                        </Text>
+                        <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: theme.text }}>
+                          {generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
+                        </Text>
+                        <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                          {t("createAi.lockedTermsHelper", {
+                            defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                          })}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
 

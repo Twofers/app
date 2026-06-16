@@ -1,3 +1,5 @@
+import type { DealOfferContract } from "../../../lib/deal-offer-contract.ts";
+
 export type BusinessContext = {
   category?: string;
   tone?: string;
@@ -35,6 +37,8 @@ export type DealCopyPromptParams = {
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: PreviousAdCopy;
+  offerContract?: DealOfferContract;
+  validationFeedback?: string;
 };
 
 export const AD_COPY_PROMPT_VERSION = "v3";
@@ -45,22 +49,33 @@ export const AD_COPY_JSON_SCHEMA = {
   schema: {
     type: "object",
     properties: {
-      headline: { type: "string" },
-      short_description: { type: "string" },
-      push_notification: { type: "string" },
-      terms_summary: { type: "string" },
+      variants: {
+        type: "array",
+        minItems: 1,
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            headline: { type: "string" },
+            short_description: { type: "string" },
+            push_notification: { type: "string" },
+            social_caption: { type: "string" },
+          },
+          required: ["headline", "short_description", "push_notification", "social_caption"],
+          additionalProperties: false,
+        },
+      },
     },
-    required: ["headline", "short_description", "push_notification", "terms_summary"],
+    required: ["variants"],
     additionalProperties: false,
   },
 };
 
 export const COPY_VOICE_RULES = [
   "Write for a local coffee shop, cafe, bakery, or small food business, not a chain restaurant and not a generic image caption.",
-  "The job is to write a live, time-limited Twofer/BOGO deal ad for a mobile app.",
-  "Use owner-provided deal facts as ground truth. Product/deal terms beat photo context, research context, and generic cafe assumptions.",
+  "The job is to write a live, time-limited Twofer deal ad for a mobile app.",
+  "Use the validated offer contract as ground truth. Owner notes, photo context, research context, and generic cafe assumptions can add flavor but must never change deal terms.",
   "Clearly mention the actual product or deal item when one is provided.",
-  'Clearly explain the BOGO value using direct language such as "BOGO", "2-for-1", "buy one get one", or "<item> free".',
   "Include the time window when provided.",
   "Include quantity scarcity when provided.",
   "Make the offer feel immediate and live, but do not use fake urgency.",
@@ -80,9 +95,9 @@ export const COPY_VOICE_RULES = [
   "",
   "OUTPUT FIELD RULES:",
   "  - headline: 4 to 8 words, mention the product or moment, no generic hype.",
-  "  - short_description: 1 to 2 sentences. Mention the product, BOGO value, time window, and quantity when available.",
-  "  - push_notification: under 90 characters, direct and specific, makes sense on a phone lock screen.",
-  "  - terms_summary: plain-language deal terms. Include time, quantity, and redemption limits when available.",
+  "  - short_description: 1 to 2 sentences. Mention the product, the exact deal value, time window, and quantity when available.",
+  "  - push_notification: under 85 characters, direct and specific, makes sense on a phone lock screen.",
+  "  - social_caption: under 220 characters, plain and shareable.",
   "",
   "EXAMPLES:",
   '  Bad: "Enjoy a delicious treat today with this amazing offer from our business."',
@@ -99,6 +114,125 @@ function languageName(outputLanguage: OutputLanguage): string {
 
 function nonEmpty(value: string | undefined | null): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function contractSystemRules(contract: DealOfferContract): string[] {
+  return [
+    "",
+    "NON-NEGOTIABLE DEAL RULES:",
+    "1. You must not change the deal mechanics.",
+    "2. You must not change what the customer has to buy.",
+    "3. You must not change what the customer gets for free or discounted.",
+    "4. You must use the exact item names provided in the offer contract.",
+    "5. You must not add extra purchase requirements.",
+    "6. You must not invent new items, bundles, discounts, or conditions.",
+    "7. You must not describe a free reward as something the customer has to buy.",
+    "8. You must not describe a single-item discount as a BOGO or free-item deal.",
+    "9. You must not mention a deal is valid today unless the contract says it is active today.",
+    "10. You must write copy that matches the deal type exactly.",
+    "",
+    `Deal type: ${contract.dealType}`,
+    `Locked offer line: ${contract.canonicalOfferLine}`,
+    `Locked terms line: ${contract.canonicalShortTerms}`,
+  ];
+}
+
+function dealSpecificPrompt(contract: DealOfferContract): string[] {
+  const required = contract.requiredPurchase;
+  const reward = contract.freeReward;
+  const discount = contract.singleItemDiscount;
+  const availability = contract.activeWindow?.humanReadable || "Limited-time offer";
+  const quantity = contract.quantityLimit?.remaining
+    ? `${contract.quantityLimit.remaining} available`
+    : "Limited quantities available";
+
+  if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE" && required && reward) {
+    return [
+      "",
+      "DEAL CONTRACT:",
+      "Deal type: BUY_ONE_GET_SOMETHING_FREE",
+      `Locked offer line: ${contract.canonicalOfferLine}`,
+      `Customer buys ${required.quantity} ${required.itemName}.`,
+      `Customer gets ${reward.quantity} ${reward.itemName} free.`,
+      "",
+      "Important:",
+      "- The customer does NOT have to buy the free reward item.",
+      `- Do NOT say "Buy ${required.itemName} and ${reward.itemName}."`,
+      "- Do NOT say \"Buy both.\"",
+      "- Do NOT say \"BOGO.\"",
+      "- Do NOT say \"2-for-1.\"",
+      "- Do NOT say \"get one free\" without naming the free item.",
+      "- Do NOT combine the required item and free item into the purchase.",
+      `- Do NOT rewrite this as "Buy ${required.itemName} and ${reward.itemName}, get one free."`,
+      "",
+      "Good examples:",
+      `- "Buy a ${required.itemName}, get a ${reward.itemName} free."`,
+      `- "Grab a ${required.itemName} and enjoy a free ${reward.itemName}."`,
+      `- "Your ${required.itemName} comes with a free ${reward.itemName}."`,
+      "",
+      "Bad examples:",
+      `- "Buy a ${required.itemName} and ${reward.itemName}, get one free."`,
+      `- "BOGO ${required.itemName} and ${reward.itemName}s."`,
+      `- "Buy ${required.itemName} + ${reward.itemName} and get one free."`,
+      "- \"Buy both and get one free.\"",
+      "",
+      `Business: ${contract.businessName}`,
+      `Location: ${contract.locationName}`,
+      `Availability: ${availability}`,
+      `Quantity: ${quantity}`,
+    ];
+  }
+
+  if (contract.dealType === "BUY_ONE_GET_ONE_FREE" && required && reward) {
+    return [
+      "",
+      "DEAL CONTRACT:",
+      "Deal type: BUY_ONE_GET_ONE_FREE",
+      `Locked offer line: ${contract.canonicalOfferLine}`,
+      `Customer buys ${required.quantity} ${required.itemName}.`,
+      `Customer gets ${reward.quantity} ${reward.itemName} free.`,
+      "",
+      "This is a true same-item BOGO free deal.",
+      "You may use:",
+      "- BOGO",
+      "- Buy one, get one free",
+      "",
+      "Do not change the item.",
+      "Do not add a different free reward item.",
+      "Do not say the customer has to buy two items.",
+      "",
+      `Business: ${contract.businessName}`,
+      `Location: ${contract.locationName}`,
+      `Availability: ${availability}`,
+      `Quantity: ${quantity}`,
+    ];
+  }
+
+  if (contract.dealType === "PERCENT_OFF_SINGLE_ITEM" && discount) {
+    return [
+      "",
+      "DEAL CONTRACT:",
+      "Deal type: PERCENT_OFF_SINGLE_ITEM",
+      `Locked offer line: ${contract.canonicalOfferLine}`,
+      `Customer gets ${discount.discountPercent}% off one ${discount.itemName}.`,
+      "",
+      "Important:",
+      "- This is not a BOGO deal.",
+      "- This is not a free-item deal.",
+      "- Do not mention \"free.\"",
+      "- Do not mention \"buy one get one.\"",
+      "- Do not mention \"entire order.\"",
+      "- Do not change the discount percentage.",
+      `- Do not apply the discount to anything except one ${discount.itemName}.`,
+      "",
+      `Business: ${contract.businessName}`,
+      `Location: ${contract.locationName}`,
+      `Availability: ${availability}`,
+      `Quantity: ${quantity}`,
+    ];
+  }
+
+  return [];
 }
 
 export function buildAdCopyPrompt(params: DealCopyPromptParams): {
@@ -119,6 +253,8 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     revisionPreset,
     revisionFeedback,
     previousAd,
+    offerContract,
+    validationFeedback,
   } = params;
 
   const facts: string[] = [];
@@ -147,6 +283,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   if (cleanQuantity) facts.push(`Quantity scarcity: ${cleanQuantity}`);
   if (cleanRedemptionLimit) facts.push(`Redemption limit: ${cleanRedemptionLimit}`);
   if (cleanImageDescription) facts.push(`Uploaded image description: ${cleanImageDescription}`);
+  if (offerContract) facts.push("Offer contract above overrides owner notes, photo context, and research context.");
 
   const revisionBlock: string[] = [];
   if (previousAd) {
@@ -162,17 +299,24 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   }
 
   const system = [
-    `Write one mobile Twofer deal draft. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
+    `Write up to three mobile Twofer deal copy variants. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
     "",
     ...COPY_VOICE_RULES,
+    ...(offerContract ? contractSystemRules(offerContract) : []),
   ].join("\n");
 
   const userText = [
+    ...(offerContract ? dealSpecificPrompt(offerContract) : []),
+    ...(validationFeedback ? ["", "CORRECTIVE FEEDBACK:", validationFeedback] : []),
+    "",
     "FACTS AVAILABLE TO USE:",
     ...facts.map((fact) => `  - ${fact}`),
     ...revisionBlock,
     "",
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",
+    "",
+    "Return this exact JSON shape:",
+    '{ "variants": [{ "headline": "string, max 55 characters", "short_description": "string, max 180 characters", "push_notification": "string, max 85 characters", "social_caption": "string, max 220 characters" }] }',
   ].join("\n");
 
   return {
