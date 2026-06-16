@@ -485,6 +485,7 @@ export default function AiDealScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
   const menuOfferScrollDoneRef = useRef(false);
+  const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
   const [prefillSourceLocale, setPrefillSourceLocale] = useState<AppLocale | null>(null);
@@ -1266,6 +1267,16 @@ export default function AiDealScreen() {
     }, 400);
     return () => clearTimeout(tid);
   }, [params.fromMenuOffer, scheduleSectionY]);
+
+  useEffect(() => {
+    const fromReuse = String(params.fromReuse ?? "") === "1";
+    if (!fromReuse || reuseScrollDoneRef.current || scheduleSectionY == null || !showDraftEditor) return;
+    reuseScrollDoneRef.current = true;
+    const tid = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, scheduleSectionY - 16), animated: true });
+    }, 400);
+    return () => clearTimeout(tid);
+  }, [params.fromReuse, scheduleSectionY, showDraftEditor]);
 
   /**
    * Reset everything generated from the previous photo/offer combination. Called whenever

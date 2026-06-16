@@ -40,7 +40,55 @@ type DealRow = {
   timezone: string | null;
   max_claims: number | null;
   claim_cutoff_buffer_minutes: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  item_retail_value_cents?: number | null;
+  required_item_description?: string | null;
+  required_item_retail_value_cents?: number | null;
+  free_item_description?: string | null;
+  free_item_retail_value_cents?: number | null;
 };
+
+const REUSE_DEALS_BASE_SELECT =
+  "id,title,description,source_locale,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
+const REUSE_DEALS_ENRICHED_SELECT =
+  `${REUSE_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
+const OPTIONAL_REUSE_DEAL_COLUMNS = [
+  "deal_type",
+  "discount_percent",
+  "item_description",
+  "item_retail_value_cents",
+  "required_item_description",
+  "required_item_retail_value_cents",
+  "free_item_description",
+  "free_item_retail_value_cents",
+] as const;
+
+function isMissingOptionalReuseDealColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703" || message.toLowerCase().includes("schema cache")) &&
+    OPTIONAL_REUSE_DEAL_COLUMNS.some((column) => message.includes(column))
+  );
+}
+
+async function fetchReusableDeals(businessId: string) {
+  const enriched = await supabase
+    .from("deals")
+    .select(REUSE_DEALS_ENRICHED_SELECT)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (!isMissingOptionalReuseDealColumn(enriched.error)) return enriched;
+
+  return supabase
+    .from("deals")
+    .select(REUSE_DEALS_BASE_SELECT)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .limit(25);
+}
 
 export default function ReuseDealScreen() {
   const router = useRouter();
@@ -65,12 +113,7 @@ export default function ReuseDealScreen() {
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(25),
-      supabase
-        .from("deals")
-        .select("id,title,description,source_locale,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .limit(25),
+      fetchReusableDeals(businessId),
     ]);
     const errors: string[] = [];
     if (tpl.error) errors.push(translateKnownApiMessage(tpl.error.message, t));

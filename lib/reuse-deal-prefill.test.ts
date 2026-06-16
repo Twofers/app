@@ -4,28 +4,29 @@ import { buildReuseDealPrefillParams } from "./reuse-deal-prefill";
 
 describe("reuse deal prefill params", () => {
   it("copies publishable content, schedule metadata, and stored poster path", () => {
-    expect(
-      buildReuseDealPrefillParams({
-        title: "  BOGO latte  ",
-        description: " Buy one iced latte, get one free. ",
-        source_locale: "en",
-        price: 5,
-        poster_storage_path: " biz-1/latte.jpg ",
-        is_recurring: true,
-        days_of_week: [1, 5],
-        window_start_minutes: 540,
-        window_end_minutes: 660,
-        timezone: "America/Chicago",
-        max_claims: 25,
-        claim_cutoff_buffer_minutes: 10,
-      }),
-    ).toEqual({
+    const params = buildReuseDealPrefillParams({
+      title: "  BOGO latte  ",
+      description: " Buy one iced latte, get one free. ",
+      source_locale: "en",
+      price: 5,
+      poster_storage_path: " biz-1/latte.jpg ",
+      is_recurring: true,
+      days_of_week: [1, 5],
+      window_start_minutes: 540,
+      window_end_minutes: 660,
+      timezone: "America/Chicago",
+      max_claims: 25,
+      claim_cutoff_buffer_minutes: 10,
+    });
+
+    expect(params).toEqual({
       fromReuse: "1",
       prefillTitle: "BOGO latte",
       prefillHint: "Buy one iced latte, get one free.",
       prefillDescription: "Buy one iced latte, get one free.",
       prefillPrice: "5",
       prefillSourceLocale: "en",
+      prefillDealEligibility: params.prefillDealEligibility,
       prefillPosterPath: "biz-1/latte.jpg",
       prefillIsRecurring: "1",
       prefillDaysOfWeek: "1,5",
@@ -34,6 +35,45 @@ describe("reuse deal prefill params", () => {
       prefillTimezone: "America/Chicago",
       prefillMaxClaims: "25",
       prefillCutoffMins: "10",
+    });
+    expect(JSON.parse(params.prefillDealEligibility ?? "{}")).toMatchObject({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "BOGO latte",
+      requiredItemRetailValue: "5",
+      freeItemDescription: "BOGO latte",
+      freeItemRetailValue: "5",
+    });
+  });
+
+  it("splits stored listing body back into promo and details fields", () => {
+    expect(
+      buildReuseDealPrefillParams({
+        title: "Lunch Twofer",
+        description: "Buy one sandwich, get one free.\n\nValid after 2 PM.",
+        price: 8,
+      }),
+    ).toMatchObject({
+      prefillPromoLine: "Buy one sandwich, get one free.",
+      prefillDescription: "Valid after 2 PM.",
+      prefillHint: "Buy one sandwich, get one free.\n\nValid after 2 PM.",
+    });
+  });
+
+  it("reuses complete stored eligibility columns when present", () => {
+    const params = buildReuseDealPrefillParams({
+      title: "Half off cake slice",
+      description: "50% off a cake slice.",
+      price: 6,
+      deal_type: "PERCENT_OFF_SINGLE_ITEM",
+      discount_percent: 50,
+      item_description: "Cake slice",
+      item_retail_value_cents: 600,
+    });
+    expect(JSON.parse(params.prefillDealEligibility ?? "{}")).toMatchObject({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      discountPercent: "50",
+      itemDescription: "Cake slice",
+      itemRetailValue: "6",
     });
   });
 
