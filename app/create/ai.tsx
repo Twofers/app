@@ -83,6 +83,7 @@ import {
   parseAiDealRecoveryDraft,
   type AiDealRecoveryDraft,
 } from "../../lib/ai-deal-draft-recovery";
+import { uploadDealPhoto } from "../../lib/upload-deal-photo";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { validateDealEligibility } from "../../lib/deal-eligibility";
 import {
@@ -471,6 +472,12 @@ export default function AiDealScreen() {
     cta_text: string;
     description: string;
   } | null>(null);
+  const photoPersistRequestIdRef = useRef(0);
+  const photoPersistUploadRef = useRef<{
+    uri: string;
+    requestId: number;
+    promise: Promise<string>;
+  } | null>(null);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
@@ -827,10 +834,29 @@ export default function AiDealScreen() {
     }
   }, [businessId]);
 
+  const persistSelectedPhotoForRecovery = useCallback(
+    async (uri: string) => {
+      if (!businessId) return;
+      const requestId = ++photoPersistRequestIdRef.current;
+      const promise = uploadDealPhoto(businessId, uri);
+      photoPersistUploadRef.current = { uri, requestId, promise };
+      try {
+        const path = await promise;
+        if (requestId !== photoPersistRequestIdRef.current) return;
+        setPhotoPath(path);
+        setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(path));
+      } catch {
+        if (requestId !== photoPersistRequestIdRef.current) return;
+        setBanner({ message: t("createAi.errPublishPhoto"), tone: "error" });
+      }
+    },
+    [businessId, t],
+  );
+
   const applyRecoveredDraft = useCallback((draft: AiDealRecoveryDraft) => {
     setPhotoUri(null);
     setPhotoPath(draft.photoPath);
-    setPosterUrl(draft.posterUrl);
+    setPosterUrl(draft.posterUrl ?? (draft.photoPath ? buildPublicDealPhotoUrl(draft.photoPath) : null));
     setPhotoTreatment(draft.photoTreatment);
     setUsePhotoAsFinal(draft.usePhotoAsFinal);
     setHintText(draft.hintText);
@@ -1302,11 +1328,13 @@ export default function AiDealScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
     if (result.canceled || !result.assets?.[0]?.uri) return;
-    setPhotoUri(result.assets[0].uri);
+    const uri = result.assets[0].uri;
+    setPhotoUri(uri);
     setPosterUrl(null);
     setPhotoPath(null);
     setUsePhotoAsFinal(false);
     resetGenerationState();
+    void persistSelectedPhotoForRecovery(uri);
   }
 
   async function takePhoto() {
@@ -1328,6 +1356,7 @@ export default function AiDealScreen() {
       setUsePhotoAsFinal(false);
       resetGenerationState();
       setShowCamera(false);
+      void persistSelectedPhotoForRecovery(photo.uri);
     }
   }
 
@@ -1426,22 +1455,15 @@ export default function AiDealScreen() {
   async function ensureUploadedPhoto() {
     if (photoPath) return photoPath;
     if (!photoUri || !businessId) return null;
-    const path = `${businessId}/${Date.now()}.jpg`;
-    let body: Blob | ArrayBuffer;
-    if (Platform.OS === "web") {
-      const response = await fetch(photoUri);
-      body = await response.blob();
-    } else {
-      const b64 = await new ExpoFsFile(photoUri).base64();
-      const raw = atob(b64);
-      const bytes = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      body = bytes.buffer;
+    const pendingUpload = photoPersistUploadRef.current;
+    if (pendingUpload?.uri === photoUri) {
+      const pendingPath = await pendingUpload.promise;
+      if (pendingUpload.requestId !== photoPersistRequestIdRef.current) return null;
+      setPhotoPath(pendingPath);
+      setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(pendingPath));
+      return pendingPath;
     }
-    const { error: uploadError } = await supabase.storage
-      .from("deal-photos")
-      .upload(path, body, { contentType: "image/jpeg", upsert: false });
-    if (uploadError) throw uploadError;
+    const path = await uploadDealPhoto(businessId, photoUri);
     setPhotoPath(path);
     return path;
   }
@@ -1549,6 +1571,7 @@ export default function AiDealScreen() {
       try {
         path = await ensureUploadedPhoto();
         if (path) await ensurePosterUrl(path);
+        if (requestId !== generationRequestIdRef.current) return;
       } catch {
         // Upload errors from Supabase storage have ugly messages ("JWT expired",
         // "duplicate key", etc.). A non-technical owner can't act on those — give
@@ -2125,9 +2148,10 @@ export default function AiDealScreen() {
     );
   }
 
+  const selectedPhotoUri = photoUri ?? posterUrl ?? (photoPath ? buildPublicDealPhotoUrl(photoPath) : null);
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-    : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
+    : usePhotoAsFinal ? selectedPhotoUri : null;
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -2269,9 +2293,9 @@ export default function AiDealScreen() {
               </View>
             </View>
 
-            {photoUri || posterUrl ? (
+            {selectedPhotoUri ? (
               <Image
-                source={{ uri: photoUri ?? posterUrl ?? "" }}
+                source={{ uri: selectedPhotoUri }}
                 style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
                 contentFit="cover"
               />
@@ -2286,7 +2310,7 @@ export default function AiDealScreen() {
               </View>
             )}
 
-            {photoUri || posterUrl ? (
+            {selectedPhotoUri ? (
               <View style={{ marginTop: 14 }}>
                 <View
                   style={{
@@ -2735,7 +2759,7 @@ export default function AiDealScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <ActivityIndicator color={theme.primary} />
                     <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
-                      {photoUri || posterUrl
+                      {selectedPhotoUri
                         ? t("createAi.generatingWithPhoto")
                         : t("createAi.generatingNoPhoto")}
                     </Text>
