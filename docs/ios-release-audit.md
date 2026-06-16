@@ -149,6 +149,40 @@ READY TO ATTEMPT after static checks pass:
 - `eas build --platform ios --profile production`
 - `eas submit --platform ios --latest`
 
+## EAS Build Attempt
+
+Preview build command attempted:
+
+```powershell
+eas build --platform ios --profile preview --non-interactive --wait --freeze-credentials --message "iOS TestFlight preview preflight"
+```
+
+Result: BLOCKED before EAS created a build id.
+
+EAS found remote iOS credentials, but no credentials suitable for `distribution: internal`. Because the command was run non-interactively with credentials frozen, EAS could not create or repair an internal distribution provisioning setup. This preserves signing assets but blocks the plan's required preview/internal iOS build.
+
+No production build or TestFlight submit was attempted after this blocker because the release plan requires the preview/internal build and preview QA before production submission.
+
+Recent iOS EAS build history:
+
+| Build id | Status | Profile | Distribution | App version | Build number | Created |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ea2385d1-1818-49d9-9cdc-e5818562d3cc` | FINISHED | production | STORE | 1.0.0 | 11 | 2026-06-14 |
+| `5568bec8-c2b1-4ced-abea-2e7423469c15` | FINISHED | production | STORE | 1.0.0 | 10 | 2026-06-11 |
+| `5d4c10fb-d994-47a1-a1ff-1fb41d47b4bb` | CANCELED | production | STORE | 1.0.0 | 9 | 2026-06-11 |
+| `33319418-dd71-40a9-a149-87d29ef2409b` | FINISHED | production | STORE | 1.0.0 | 8 | 2026-06-10 |
+| `d99d9604-de95-407e-9b13-288259d32e85` | FINISHED | production | STORE | 1.0.0 | 7 | 2026-06-09 |
+
+Next exact owner step:
+
+```powershell
+eas build --platform ios --profile preview
+```
+
+Run it interactively if Dan wants an ad hoc/internal iOS preview. Follow EAS prompts to create or repair internal distribution credentials and register a test iPhone if needed. This may change iOS signing/provisioning, so it is intentionally not done by the non-interactive agent command.
+
+Alternative owner decision: skip ad hoc/internal preview and use the TestFlight-only iOS QA path. If Dan chooses that path, run a production STORE build and submit it to TestFlight, then perform real-iPhone QA from TestFlight. That is a process decision because it intentionally bypasses the plan's "preview/internal build first" requirement.
+
 ## Validation Results
 
 | Command | Result | Notes |
@@ -176,6 +210,7 @@ After the `.easignore` packaging update, `npm run lint`, `npm run typecheck`, an
 - `eas project:info --json`
 - `eas build:version:get --platform ios --profile production`
 - `eas build:version:get --platform android --profile production`
+- `eas build:list --platform ios --limit 5 --json`
 - `npm ci`
 - `npx expo-doctor`
 - `npx expo install --fix`
@@ -183,5 +218,6 @@ After the `.easignore` packaging update, `npm run lint`, `npm run typecheck`, an
 - `npm run typecheck`
 - `npm test`
 - `npx expo export --platform ios --output-dir .metro-health-check\ios-testflight --clear`
+- `eas build --platform ios --profile preview --non-interactive --wait --freeze-credentials --message "iOS TestFlight preview preflight"`
 
 Secret values are intentionally not included in this document.
