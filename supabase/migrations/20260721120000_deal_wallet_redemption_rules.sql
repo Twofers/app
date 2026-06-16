@@ -202,15 +202,19 @@ ALTER TABLE public.redemption_devices
   ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES public.business_locations(id) ON DELETE SET NULL;
 
 UPDATE public.redemption_devices rd
-SET location_id = loc.id
-FROM LATERAL (
+SET location_id = (
   SELECT bl.id
   FROM public.business_locations bl
   WHERE bl.business_id = rd.business_id
   ORDER BY bl.created_at ASC
   LIMIT 1
-) loc
-WHERE rd.location_id IS NULL;
+)
+WHERE rd.location_id IS NULL
+  AND EXISTS (
+    SELECT 1
+    FROM public.business_locations bl
+    WHERE bl.business_id = rd.business_id
+  );
 
 CREATE INDEX IF NOT EXISTS idx_redemption_devices_location_active
   ON public.redemption_devices (business_id, location_id, active, removed_at);
