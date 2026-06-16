@@ -52,9 +52,12 @@ export function resolveCurrentDealPosterStoragePath(params: {
   aiPosterStoragePath?: string | null;
   uploadedPhotoStoragePath?: string | null;
   posterUrl?: string | null;
+  allowPhotoFallback?: boolean;
 }): string | null {
   const aiPath = params.aiPosterStoragePath?.trim();
   if (aiPath) return aiPath;
+
+  if (params.allowPhotoFallback === false) return null;
 
   const uploadedPath = params.uploadedPhotoStoragePath?.trim();
   if (uploadedPath) return uploadedPath;

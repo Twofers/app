@@ -102,6 +102,7 @@ type TemplateRow = {
   description: string | null;
   price: number | null;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   max_claims: number;
   claim_cutoff_buffer_minutes: number;
   is_recurring: boolean;
@@ -394,6 +395,7 @@ export default function AiDealScreen() {
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+  const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -827,6 +829,7 @@ export default function AiDealScreen() {
         // selector renders empty when editing an existing deal that has a poster.
         setPhotoPath(loadedPhotoPath);
         setPosterUrl(loadedPosterUrl);
+        setUsePhotoAsFinal(Boolean(loadedPhotoPath || loadedPosterUrl));
         setMaxClaims(loadedMaxClaims);
         setCutoffMins(loadedCutoffMins);
         setValidityMode(loadedValidityMode);
@@ -903,7 +906,14 @@ export default function AiDealScreen() {
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
         setEligibilityForm(createDefaultDealEligibilityFormState());
-        setPosterUrl(row.poster_url ?? null);
+        const templatePhotoPath = row.poster_storage_path ?? extractDealPhotoStoragePath(row.poster_url);
+        const templatePosterUrl = templatePhotoPath
+          ? row.poster_url ?? buildPublicDealPhotoUrl(templatePhotoPath)
+          : row.poster_url ?? null;
+        setPhotoUri(null);
+        setPhotoPath(templatePhotoPath ?? null);
+        setPosterUrl(templatePosterUrl);
+        setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
         setMaxClaims(String(row.max_claims ?? 50));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
         setValidityMode(row.is_recurring ? "recurring" : "one-time");
@@ -967,8 +977,10 @@ export default function AiDealScreen() {
     if (posterPath) {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
+      setUsePhotoAsFinal(true);
     } else if (posterUrlParam) {
       setPosterUrl((prev) => prev || posterUrlParam);
+      setUsePhotoAsFinal(true);
     }
     if (prefillDealEligibility) {
       try {
@@ -1076,6 +1088,7 @@ export default function AiDealScreen() {
     setPhotoUri(result.assets[0].uri);
     setPosterUrl(null);
     setPhotoPath(null);
+    setUsePhotoAsFinal(false);
     resetGenerationState();
   }
 
@@ -1095,6 +1108,7 @@ export default function AiDealScreen() {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      setUsePhotoAsFinal(false);
       resetGenerationState();
       setShowCamera(false);
     }
@@ -1615,8 +1629,10 @@ export default function AiDealScreen() {
         aiPosterStoragePath: aiPosterPath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         posterUrl,
+        allowPhotoFallback: usePhotoAsFinal,
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
+      const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const translations = await translateDealCopy({
@@ -1643,7 +1659,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: finalPublicPoster ?? signedPoster ?? posterUrl ?? null,
+        poster_url: finalPublicPoster ?? explicitPhotoPoster,
         poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
@@ -1703,6 +1719,7 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(savedPosterPath);
         setPosterUrl(savedPosterUrl);
+        setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
         setGeneratedAd(null);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
@@ -1801,15 +1818,17 @@ export default function AiDealScreen() {
         aiPosterStoragePath: generatedAd?.poster_storage_path ?? null,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         posterUrl,
+        allowPhotoFallback: usePhotoAsFinal,
       });
       const durablePoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
+      const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
 
       const { error } = await supabase.from("deal_templates").insert({
         business_id: businessId,
         title: title.trim(),
         description: composedDescription.trim(),
         price: priceNum,
-        poster_url: durablePoster ?? signedPoster ?? posterUrl ?? null,
+        poster_url: durablePoster ?? explicitPhotoPoster,
         poster_storage_path: storagePath ?? null,
         max_claims: maxClaimsNum,
         claim_cutoff_buffer_minutes: cutoffNum,
@@ -1981,6 +2000,47 @@ export default function AiDealScreen() {
 
             {photoUri || posterUrl ? (
               <View style={{ marginTop: 14 }}>
+                <View
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: usePhotoAsFinal ? theme.primary : theme.border,
+                    backgroundColor: usePhotoAsFinal ? PrimaryTint.surface : theme.surfaceMuted,
+                    marginBottom: 12,
+                    gap: 8,
+                  }}
+                >
+                  <Text style={{ fontWeight: "800", color: usePhotoAsFinal ? theme.accentText : theme.text }}>
+                    {usePhotoAsFinal
+                      ? t("createAi.actualPhotoFinalSelected", { defaultValue: "Actual photo selected as final ad" })
+                      : t("createAi.photoGuidanceSelected", { defaultValue: "Used for AI guidance" })}
+                  </Text>
+                  <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                    {usePhotoAsFinal
+                      ? t("createAi.actualPhotoFinalHelp", {
+                          defaultValue: "Twofer will publish this photo unless you generate a new AI ad.",
+                        })
+                      : t("createAi.photoGuidanceHelp", {
+                          defaultValue: "Twofer uses this photo to understand the item, then creates a polished ad.",
+                        })}
+                  </Text>
+                  <SecondaryButton
+                    title={
+                      usePhotoAsFinal
+                        ? t("createAi.usePhotoAsGuidance", { defaultValue: "Use for AI guidance instead" })
+                        : t("createAi.useActualPhotoAsFinal", { defaultValue: "Use actual photo as final ad" })
+                    }
+                    onPress={() => {
+                      const nextUseAsFinal = !usePhotoAsFinal;
+                      setUsePhotoAsFinal(nextUseAsFinal);
+                      if (nextUseAsFinal) {
+                        if (generatedAd) resetGenerationState();
+                        setManualDraftUnlocked(true);
+                      }
+                    }}
+                  />
+                </View>
                 <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6, color: theme.text }}>{t("createAi.photoPolishTitle")}</Text>
                 <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>
                   {t("createAi.photoPolishHelp")}
@@ -2652,7 +2712,7 @@ export default function AiDealScreen() {
                   {(() => {
                     const previewUri = generatedAd?.poster_storage_path
                       ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                      : photoUri ?? posterUrl ?? null;
+                      : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
                     return previewUri ? (
                       <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
                     ) : (

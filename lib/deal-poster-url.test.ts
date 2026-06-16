@@ -72,4 +72,25 @@ describe("resolveCurrentDealPosterStoragePath", () => {
       }),
     ).toBe("biz-1/template.jpg");
   });
+
+  it("does not use uploaded or legacy photo fallback when disabled", () => {
+    expect(
+      resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: null,
+        uploadedPhotoStoragePath: "biz-1/reference-photo.jpg",
+        posterUrl: "https://abc.supabase.co/storage/v1/object/public/deal-photos/biz-1/reference-photo.jpg",
+        allowPhotoFallback: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("still prefers an AI poster when photo fallback is disabled", () => {
+    expect(
+      resolveCurrentDealPosterStoragePath({
+        aiPosterStoragePath: "biz-1/generated.jpg",
+        uploadedPhotoStoragePath: "biz-1/reference-photo.jpg",
+        allowPhotoFallback: false,
+      }),
+    ).toBe("biz-1/generated.jpg");
+  });
 });
