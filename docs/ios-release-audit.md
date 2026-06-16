@@ -181,7 +181,7 @@ eas build --platform ios --profile preview
 
 Run it interactively if Dan wants an ad hoc/internal iOS preview. Follow EAS prompts to create or repair internal distribution credentials and register a test iPhone if needed. This may change iOS signing/provisioning, so it is intentionally not done by the non-interactive agent command.
 
-Alternative owner decision: skip ad hoc/internal preview and use the TestFlight-only iOS QA path. If Dan chooses that path, run a production STORE build and submit it to TestFlight, then perform real-iPhone QA from TestFlight. That is a process decision because it intentionally bypasses the plan's "preview/internal build first" requirement.
+Owner decision on 2026-06-16: skip ad hoc/internal preview and use the TestFlight-only iOS QA path. Dan explicitly instructed: "i dont want to do the preview build skip it". This intentionally bypasses the plan's "preview/internal build first" requirement. Proceed with a production STORE build, submit it to TestFlight if successful, then perform real-iPhone QA from TestFlight.
 
 ## Validation Results
 
