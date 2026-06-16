@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Text, View } from "react-native";
 import Constants from "expo-constants";
 import MapView, { Circle, Marker, type Region } from "react-native-maps";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -22,10 +22,12 @@ import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-ca
 import {
   collectMappableBusinesses,
   deriveLiveBusinessIds,
+  findBusinessMarkerIndex,
   pickPreviewDeal,
   resolveMarkerTapOutcome,
   shouldClearMapSelectionOnPress,
   shouldIgnoreMapPressAfterMarkerPress,
+  withLiveMarkerState,
   type MappableBusiness,
 } from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
@@ -70,6 +72,7 @@ function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number,
 
 /** Dallas–Fort Worth service area fallback when GPS and markers are unavailable. */
 const DALLAS_FALLBACK = { lat: 32.7767, lng: -96.797 };
+const MAP_FETCH_MILES = 60;
 
 type MapDataPayload = {
   radiusMiles: number;
@@ -88,22 +91,52 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   const coords = await resolveConsumerCoordinates(prefs);
   const userPos = coords ? { lat: coords.lat, lng: coords.lng } : null;
   const showDeviceBlueDot = Boolean(coords?.showsDeviceLocationBlueDot);
+  const queryCenter = userPos ?? DALLAS_FALLBACK;
 
-  const businesses = await collectMappableBusinesses(async (offset, limit) => {
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("id,name,location,latitude,longitude")
-      .order("name", { ascending: true })
-      .range(offset, offset + limit - 1);
-    if (error) throw error;
-    return (data ?? []) as {
+  let businesses: MappableBusiness[] | null = null;
+  const { data: nearbyBusinesses, error: nearbyError } = await supabase.rpc("nearby_businesses", {
+    p_lat: queryCenter.lat,
+    p_lng: queryCenter.lng,
+    p_radius_miles: MAP_FETCH_MILES,
+    p_limit: 400,
+    p_offset: 0,
+    p_favorite_ids: [],
+  });
+  if (!nearbyError && Array.isArray(nearbyBusinesses)) {
+    const nearbyRows = nearbyBusinesses as {
       id: string;
       name: string;
       location: string | null;
       latitude: number | string | null;
       longitude: number | string | null;
+      is_demo?: boolean | null;
     }[];
-  }, 400);
+    businesses = await collectMappableBusinesses(
+      async (offset, limit) => nearbyRows.slice(offset, offset + limit),
+      400,
+    );
+  } else if (nearbyError) {
+    logPostgrestError("map screen nearby businesses", nearbyError);
+  }
+
+  if (businesses === null) {
+    businesses = await collectMappableBusinesses(async (offset, limit) => {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("id,name,location,latitude,longitude,is_demo")
+        .order("name", { ascending: true })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        name: string;
+        location: string | null;
+        latitude: number | string | null;
+        longitude: number | string | null;
+        is_demo?: boolean | null;
+      }[];
+    }, 400);
+  }
 
   const deals: DealLite[] = [];
   let dealsFetchFailed = false;
@@ -468,22 +501,136 @@ function renderBusinessMarker({
         });
       }}
     >
-      <View
-        style={{
-          minWidth: 28,
-          height: 28,
-          borderRadius: 14,
-          paddingHorizontal: 7,
-          backgroundColor: markerBg,
-          borderWidth: marker.live ? 2 : 1,
-          borderColor: markerBorderColor,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <MaterialIcons name={marker.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
+      <View style={{ alignItems: "center" }}>
+        {marker.is_demo ? (
+          <View
+            style={{
+              marginBottom: 3,
+              borderRadius: 4,
+              paddingHorizontal: 4,
+              paddingVertical: 1,
+              backgroundColor: theme.surface,
+              borderWidth: 1,
+              borderColor: markerBorderColor,
+            }}
+          >
+            <Text style={{ fontSize: 8, fontWeight: "900", color: theme.accentText, letterSpacing: 0 }}>
+              DEMO
+            </Text>
+          </View>
+        ) : null}
+        <View
+          style={{
+            minWidth: 28,
+            height: 28,
+            borderRadius: 14,
+            paddingHorizontal: 7,
+            backgroundColor: markerBg,
+            borderWidth: marker.live ? 2 : 1,
+            borderColor: markerBorderColor,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <MaterialIcons name={marker.live ? "local-fire-department" : "storefront"} size={13} color="#fff" />
+        </View>
       </View>
     </Marker>
+  );
+}
+
+function MapBusinessList({
+  markers,
+  selectedBusinessId,
+  listRef,
+  onBusinessCardPress,
+  t,
+  theme,
+  colorScheme,
+  horizontal,
+}: {
+  markers: MarkerWithLive[];
+  selectedBusinessId: string | null;
+  listRef: React.RefObject<FlatList<MarkerWithLive> | null>;
+  onBusinessCardPress: (business: MarkerWithLive) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  theme: AppTheme;
+  colorScheme: "light" | "dark";
+  horizontal: number;
+}) {
+  if (markers.length === 0) return null;
+  return (
+    <View style={{ paddingBottom: Spacing.sm, backgroundColor: theme.background }}>
+      <FlatList
+        ref={listRef}
+        horizontal
+        data={markers}
+        keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: horizontal, gap: Spacing.sm }}
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToOffset({
+              offset: Math.max(0, info.averageItemLength * info.index),
+              animated: true,
+            });
+          }, 80);
+        }}
+        renderItem={({ item }) => {
+          const selected = selectedBusinessId === item.id;
+          return (
+            <Pressable
+              onPress={() => onBusinessCardPress(item)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={t("consumerMap.businessCardA11y", {
+                defaultValue: "View {{name}} on map",
+                name: item.name,
+              })}
+              style={{
+                width: 236,
+                minHeight: 98,
+                borderRadius: 8,
+                borderWidth: selected ? 2 : 1,
+                borderColor: selected ? theme.primary : theme.border,
+                backgroundColor: selected
+                  ? colorScheme === "dark"
+                    ? "rgba(255,159,28,0.14)"
+                    : "#FFF7ED"
+                  : theme.surface,
+                padding: Spacing.md,
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flexDirection: "row", gap: Spacing.xs, flexWrap: "wrap", marginBottom: Spacing.xs }}>
+                {item.live ? (
+                  <View style={{ borderRadius: 4, backgroundColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "900", color: theme.primaryText, letterSpacing: 0 }}>
+                      {t("dealStatus.live", { defaultValue: "Live" })}
+                    </Text>
+                  </View>
+                ) : null}
+                {item.is_demo ? (
+                  <View style={{ borderRadius: 4, borderWidth: 1, borderColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "900", color: theme.accentText, letterSpacing: 0 }}>
+                      {t("demoOffer.shortLabel", { defaultValue: "DEMO" })}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={{ color: theme.text, fontSize: 15, fontWeight: "800" }} numberOfLines={2}>
+                {item.name || t("dealDetail.localBusiness")}
+              </Text>
+              {item.location ? (
+                <Text style={{ marginTop: 5, color: theme.mutedText, fontSize: 12 }} numberOfLines={1}>
+                  {item.location}
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        }}
+      />
+    </View>
   );
 }
 
@@ -561,6 +708,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
+  const businessListRef = useRef<FlatList<MarkerWithLive>>(null);
   const lastCameraFitSignatureRef = useRef<string | null>(null);
   const lastMarkerPressAtRef = useRef(0);
   const livePulse = useLiveDealPulse();
@@ -617,14 +765,13 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   }, [deals]);
 
   const markers = useMemo(() => {
-    return businesses
-      .map((b) => {
-        const live = liveByBusiness.has(b.id);
-        if (mode === "live" && !live) return null;
-        return { ...b, live };
-      })
-      .filter(Boolean) as (MappableBusiness & { live: boolean })[];
+    return withLiveMarkerState(businesses, liveByBusiness, mode);
   }, [businesses, liveByBusiness, mode]);
+
+  const onBusinessCardPress = useCallback((business: MarkerWithLive) => {
+    setSelectedBusinessId(business.id);
+    mapRef.current?.animateToRegion(safeRegion({ lat: business.lat, lng: business.lng }, 0.08, 0.08), 360);
+  }, []);
 
   const selectedBusiness = useMemo(
     () => markers.find((m) => m.id === selectedBusinessId) ?? null,
@@ -740,6 +887,15 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     lastCameraFitSignatureRef.current = signature;
   }, [mapReady, androidMapsOk, userPos, markers]);
 
+  useEffect(() => {
+    const index = findBusinessMarkerIndex(markers, selectedBusinessId);
+    if (index < 0) return;
+    const timeout = setTimeout(() => {
+      businessListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    }, 80);
+    return () => clearTimeout(timeout);
+  }, [markers, selectedBusinessId]);
+
   return (
     <View style={{ flex: 1, paddingTop: top, backgroundColor: theme.background }}>
       {banner ? (
@@ -846,6 +1002,18 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       ) : null}
 
       {renderMapBody({ loading, androidMapsOk, t, horizontal, mapCanvas, theme })}
+      {androidMapsOk ? (
+        <MapBusinessList
+          markers={markers}
+          selectedBusinessId={selectedBusinessId}
+          listRef={businessListRef}
+          onBusinessCardPress={onBusinessCardPress}
+          t={t}
+          theme={theme}
+          colorScheme={colorScheme}
+          horizontal={horizontal}
+        />
+      ) : null}
     </View>
   );
 }

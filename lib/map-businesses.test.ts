@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   collectMappableBusinesses,
   deriveLiveBusinessIds,
+  findBusinessMarkerIndex,
   isValidCoordinate,
   resolveMarkerTapOutcome,
   pickPreviewDeal,
   resolveMapTapHref,
   shouldClearMapSelectionOnPress,
   shouldIgnoreMapPressAfterMarkerPress,
+  withLiveMarkerState,
 } from "./map-businesses";
 
 describe("isValidCoordinate", () => {
@@ -46,6 +48,14 @@ describe("collectMappableBusinesses", () => {
     expect(out.map((b) => b.id)).toEqual(["a", "c"]);
     expect(out[0]?.name).toBe("A");
   });
+
+  it("preserves demo metadata for visible businesses", async () => {
+    const out = await collectMappableBusinesses(async () => [
+      { id: "demo-biz", name: "Demo", latitude: 32.7, longitude: -96.8, is_demo: true },
+    ]);
+
+    expect(out[0]?.is_demo).toBe(true);
+  });
 });
 
 describe("deriveLiveBusinessIds", () => {
@@ -57,6 +67,44 @@ describe("deriveLiveBusinessIds", () => {
       { business_id: "c", live: true },
     ]);
     expect(Array.from(ids)).toEqual(["a", "c"]);
+  });
+});
+
+describe("findBusinessMarkerIndex", () => {
+  const businesses = [
+    { id: "a", name: "A", location: null, lat: 32.7, lng: -96.8 },
+    { id: "b", name: "B", location: null, lat: 32.8, lng: -96.9 },
+  ];
+
+  it("returns the selected marker index for list scrolling", () => {
+    expect(findBusinessMarkerIndex(businesses, "b")).toBe(1);
+  });
+
+  it("returns -1 when the business is not in the visible marker list", () => {
+    expect(findBusinessMarkerIndex(businesses, "missing")).toBe(-1);
+    expect(findBusinessMarkerIndex(businesses, null)).toBe(-1);
+  });
+});
+
+describe("withLiveMarkerState", () => {
+  const businesses = [
+    { id: "live-biz", name: "Live", location: "Dallas", lat: 32.7, lng: -96.8 },
+    { id: "quiet-biz", name: "Quiet", location: "Dallas", lat: 32.8, lng: -96.9 },
+  ];
+
+  it("keeps businesses without active deals in all mode", () => {
+    const markers = withLiveMarkerState(businesses, new Set(["live-biz"]), "all");
+
+    expect(markers.map((marker) => [marker.id, marker.live])).toEqual([
+      ["live-biz", true],
+      ["quiet-biz", false],
+    ]);
+  });
+
+  it("shows only businesses with active deals in live mode", () => {
+    const markers = withLiveMarkerState(businesses, new Set(["live-biz"]), "live");
+
+    expect(markers.map((marker) => marker.id)).toEqual(["live-biz"]);
   });
 });
 

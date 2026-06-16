@@ -42,6 +42,7 @@ import {
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
 import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
@@ -146,6 +147,14 @@ type DealRow = {
   price: number | null;
   max_claims: number | null;
   claim_cutoff_buffer_minutes: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  item_retail_value_cents?: number | null;
+  required_item_description?: string | null;
+  required_item_retail_value_cents?: number | null;
+  free_item_description?: string | null;
+  free_item_retail_value_cents?: number | null;
   claims: number;
   redeems: number;
   expiredUnredeemed: number;
@@ -159,8 +168,47 @@ type PerDealMetrics = {
 };
 
 const DASHBOARD_DEALS_PAGE_SIZE = 100;
-const DASHBOARD_DEALS_SELECT =
+const DASHBOARD_DEALS_BASE_SELECT =
   "id,title,description,source_locale,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_demo,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
+const DASHBOARD_DEALS_ENRICHED_SELECT =
+  `${DASHBOARD_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
+const OPTIONAL_DASHBOARD_DEAL_COLUMNS = [
+  "deal_type",
+  "discount_percent",
+  "item_description",
+  "item_retail_value_cents",
+  "required_item_description",
+  "required_item_retail_value_cents",
+  "free_item_description",
+  "free_item_retail_value_cents",
+] as const;
+
+function isMissingOptionalDashboardDealColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return (
+    (error?.code === "PGRST204" || error?.code === "42703" || message.toLowerCase().includes("schema cache")) &&
+    OPTIONAL_DASHBOARD_DEAL_COLUMNS.some((column) => message.includes(column))
+  );
+}
+
+async function fetchDashboardDealsPage(businessId: string, from: number, to: number) {
+  const enriched = await supabase
+    .from("deals")
+    .select(DASHBOARD_DEALS_ENRICHED_SELECT)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to);
+  if (!isMissingOptionalDashboardDealColumn(enriched.error)) return enriched;
+
+  return supabase
+    .from("deals")
+    .select(DASHBOARD_DEALS_BASE_SELECT)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to);
+}
 
 function buildPerDealMap(monthOnly: ClaimRow[], nowMs: number): Record<string, PerDealMetrics> {
   const perDealMap: Record<string, PerDealMetrics> = {};
@@ -598,13 +646,11 @@ export default function BusinessDashboard() {
       const perDealMap = buildPerDealMap(monthOnly, nowMs);
       perDealMetricsRef.current = perDealMap;
 
-      const { data: dealsData, error: dealsError } = await supabase
-        .from("deals")
-        .select(DASHBOARD_DEALS_SELECT)
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(0, DASHBOARD_DEALS_PAGE_SIZE - 1);
+      const { data: dealsData, error: dealsError } = await fetchDashboardDealsPage(
+        businessId,
+        0,
+        DASHBOARD_DEALS_PAGE_SIZE - 1,
+      );
       if (dealsError) throw dealsError;
 
       const firstPage = (dealsData ?? []) as Omit<
@@ -659,13 +705,11 @@ export default function BusinessDashboard() {
     setBanner(null);
     try {
       const offset = deals.length;
-      const { data: dealsData, error: dealsError } = await supabase
-        .from("deals")
-        .select(DASHBOARD_DEALS_SELECT)
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(offset, offset + DASHBOARD_DEALS_PAGE_SIZE - 1);
+      const { data: dealsData, error: dealsError } = await fetchDashboardDealsPage(
+        businessId,
+        offset,
+        offset + DASHBOARD_DEALS_PAGE_SIZE - 1,
+      );
       if (dealsError) throw dealsError;
       const chunk = (dealsData ?? []) as Omit<
         DealRow,
@@ -824,21 +868,7 @@ export default function BusinessDashboard() {
     setDealManageFor(null);
     router.push({
       pathname: "/create/ai",
-      params: {
-        prefillTitle: deal.title ?? "",
-        prefillHint: deal.description ?? "",
-        prefillPrice: deal.price != null ? String(deal.price) : "",
-        prefillSourceLocale: deal.source_locale ?? "",
-        prefillPosterPath: deal.poster_storage_path ?? "",
-        prefillIsRecurring: deal.is_recurring ? "1" : "0",
-        prefillDaysOfWeek: deal.days_of_week ? deal.days_of_week.join(",") : "",
-        prefillWindowStartMin: deal.window_start_minutes != null ? String(deal.window_start_minutes) : "",
-        prefillWindowEndMin: deal.window_end_minutes != null ? String(deal.window_end_minutes) : "",
-        prefillTimezone: deal.timezone ?? "",
-        prefillMaxClaims: deal.max_claims != null ? String(deal.max_claims) : "",
-        prefillCutoffMins: deal.claim_cutoff_buffer_minutes != null ? String(deal.claim_cutoff_buffer_minutes) : "",
-        fromReuse: "1",
-      },
+      params: buildReuseDealPrefillParams(deal),
     });
   }
 

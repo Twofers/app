@@ -30,7 +30,7 @@ export type GeneratedAd = {
   /** Web-research context the AI used to write the copy. Empty when research returned nothing. */
   item_research?: ItemResearch;
   /** How the image was produced. */
-  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated";
+  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "fallback_template";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment?: PhotoTreatment | null;
 };
@@ -77,5 +77,60 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
     promo_line: shortDescription,
     cta_text: ad.cta.trim(),
     offer_details: offerDetails || hint || [shortDescription, ad.cta].filter(Boolean).join("\n\n"),
+  };
+}
+
+function fallbackClip(value: string, max: number): string {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1).trimEnd();
+}
+
+export function buildFallbackTemplateAd(params: {
+  businessName?: string | null;
+  title?: string | null;
+  promoLine?: string | null;
+  ctaText?: string | null;
+  description?: string | null;
+  ownerOfferHint?: string | null;
+  lockedOfferLine?: string | null;
+  lockedTermsLine?: string | null;
+  scheduleSummary?: string | null;
+  quantityLimit?: number | null;
+}): GeneratedAd {
+  const businessName = params.businessName?.trim() || "Twofer";
+  const lockedOffer = params.lockedOfferLine?.trim() ?? "";
+  const existingTitle = params.title?.trim() ?? "";
+  const existingPromo = params.promoLine?.trim() ?? "";
+  const existingDescription = params.description?.trim() ?? "";
+  const ownerHint = params.ownerOfferHint?.trim() ?? "";
+  const offerLine = lockedOffer || existingPromo || ownerHint || existingDescription || "Fresh local offer";
+  const schedule = params.scheduleSummary?.trim() ?? "";
+  const quantity =
+    params.quantityLimit && Number.isFinite(params.quantityLimit) && params.quantityLimit > 0
+      ? `${params.quantityLimit} available`
+      : "";
+  const terms = [params.lockedTermsLine?.trim(), schedule, quantity].filter(Boolean).join(" ");
+  const fallbackTitle = existingTitle || `${businessName} Twofer`;
+  const fallbackSubheadline = existingPromo || offerLine;
+
+  return {
+    headline: fallbackClip(fallbackTitle, 40),
+    subheadline: fallbackClip(fallbackSubheadline, 88),
+    short_description: fallbackClip(fallbackSubheadline, 120),
+    push_notification: fallbackClip(`${businessName}: ${offerLine}`, 120),
+    terms_summary: fallbackClip(terms || offerLine, 180),
+    social_caption: fallbackClip(`${offerLine}${schedule ? ` ${schedule}` : ""}`, 180),
+    locked_offer_line: lockedOffer || undefined,
+    locked_terms_line: params.lockedTermsLine?.trim() || undefined,
+    copy_source: "DETERMINISTIC_FALLBACK",
+    variant_count: 1,
+    selected_variant_index: 0,
+    validation_reason_codes: [],
+    cta: fallbackClip(params.ctaText?.trim() || "Claim deal", 26),
+    poster_storage_path: null,
+    item_research: { item_name: "", description: "", is_familiar: false },
+    photo_source: "fallback_template",
+    photo_treatment: null,
   };
 }

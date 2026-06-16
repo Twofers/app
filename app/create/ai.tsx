@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { File as ExpoFsFile } from "expo-file-system";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   useAudioRecorder,
@@ -49,6 +50,7 @@ import {
 } from "../../lib/functions";
 import {
   adToDealDraft,
+  buildFallbackTemplateAd,
   composeListingDescription,
   type GeneratedAd,
   type PhotoTreatment,
@@ -75,6 +77,13 @@ import {
   resolveCurrentDealPosterStoragePath,
 } from "../../lib/deal-poster-url";
 import { markRecentPublish } from "../../lib/recent-publish";
+import {
+  aiDealDraftStorageKey,
+  buildAiDealRecoveryDraft,
+  parseAiDealRecoveryDraft,
+  type AiDealRecoveryDraft,
+} from "../../lib/ai-deal-draft-recovery";
+import { uploadDealPhoto } from "../../lib/upload-deal-photo";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { validateDealEligibility } from "../../lib/deal-eligibility";
 import {
@@ -102,6 +111,7 @@ type TemplateRow = {
   description: string | null;
   price: number | null;
   poster_url: string | null;
+  poster_storage_path?: string | null;
   max_claims: number;
   claim_cutoff_buffer_minutes: number;
   is_recurring: boolean;
@@ -330,6 +340,7 @@ export default function AiDealScreen() {
     prefillHint?: string;
     prefillPrice?: string;
     prefillPosterPath?: string;
+    prefillPosterUrl?: string;
     fromAiCompose?: string;
     fromMenuOffer?: string;
     fromReuse?: string;
@@ -393,6 +404,7 @@ export default function AiDealScreen() {
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+  const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -460,6 +472,12 @@ export default function AiDealScreen() {
     cta_text: string;
     description: string;
   } | null>(null);
+  const photoPersistRequestIdRef = useRef(0);
+  const photoPersistUploadRef = useRef<{
+    uri: string;
+    requestId: number;
+    promise: Promise<string>;
+  } | null>(null);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
@@ -474,6 +492,7 @@ export default function AiDealScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
   const menuOfferScrollDoneRef = useRef(false);
+  const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [editingSourceLocale, setEditingSourceLocale] = useState<AppLocale | null>(null);
   const [prefillSourceLocale, setPrefillSourceLocale] = useState<AppLocale | null>(null);
@@ -481,12 +500,59 @@ export default function AiDealScreen() {
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
   const [editDirtyBaseline, setEditDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [pendingRecoveredDraft, setPendingRecoveredDraft] = useState<AiDealRecoveryDraft | null>(null);
+  const draftHydratedRef = useRef(false);
 
   const dealIdFromRoute = useMemo(() => {
     const raw = dealIdParam;
     const s = Array.isArray(raw) ? raw[0] : raw;
     return typeof s === "string" ? s.trim() : "";
   }, [dealIdParam]);
+
+  const hasCreatePrefillParams = useMemo(() => {
+    const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+    return Boolean(
+      g(params.prefillTitle).trim() ||
+        g(params.prefillPromoLine).trim() ||
+        g(params.prefillCta).trim() ||
+        g(params.prefillDescription).trim() ||
+        g(params.prefillHint).trim() ||
+        g(params.prefillPrice).trim() ||
+        g(params.prefillPosterPath).trim() ||
+        g(params.prefillPosterUrl).trim() ||
+        g(params.prefillDealEligibility).trim() ||
+        g(params.prefillLocationId).trim() ||
+        g(params.prefillExtraLocationIds).trim() ||
+        g(params.prefillIsRecurring).trim() ||
+        g(params.prefillDaysOfWeek).trim() ||
+        g(params.prefillWindowStartMin).trim() ||
+        g(params.prefillWindowEndMin).trim() ||
+        g(params.prefillTimezone).trim() ||
+        g(params.prefillMaxClaims).trim() ||
+        g(params.prefillCutoffMins).trim(),
+    );
+  }, [
+    params.prefillTitle,
+    params.prefillPromoLine,
+    params.prefillCta,
+    params.prefillDescription,
+    params.prefillHint,
+    params.prefillPrice,
+    params.prefillPosterPath,
+    params.prefillPosterUrl,
+    params.prefillDealEligibility,
+    params.prefillLocationId,
+    params.prefillExtraLocationIds,
+    params.prefillIsRecurring,
+    params.prefillDaysOfWeek,
+    params.prefillWindowStartMin,
+    params.prefillWindowEndMin,
+    params.prefillTimezone,
+    params.prefillMaxClaims,
+    params.prefillCutoffMins,
+  ]);
+
+  const shouldUseDraftRecovery = !dealIdFromRoute && !templateId && !hasCreatePrefillParams;
 
   /** Stable English — shipped to the AI. Do not localize. */
   const offerScheduleSummary = useMemo(
@@ -759,6 +825,176 @@ export default function AiDealScreen() {
     ),
   );
 
+  const clearAiRecoveryDraft = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      await AsyncStorage.removeItem(aiDealDraftStorageKey(businessId));
+    } catch {
+      /* non-fatal */
+    }
+  }, [businessId]);
+
+  const persistSelectedPhotoForRecovery = useCallback(
+    async (uri: string) => {
+      if (!businessId) return;
+      const requestId = ++photoPersistRequestIdRef.current;
+      const promise = uploadDealPhoto(businessId, uri);
+      photoPersistUploadRef.current = { uri, requestId, promise };
+      try {
+        const path = await promise;
+        if (requestId !== photoPersistRequestIdRef.current) return;
+        setPhotoPath(path);
+        setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(path));
+      } catch {
+        if (requestId !== photoPersistRequestIdRef.current) return;
+        setBanner({ message: t("createAi.errPublishPhoto"), tone: "error" });
+      }
+    },
+    [businessId, t],
+  );
+
+  const applyRecoveredDraft = useCallback((draft: AiDealRecoveryDraft) => {
+    setPhotoUri(null);
+    setPhotoPath(draft.photoPath);
+    setPosterUrl(draft.posterUrl ?? (draft.photoPath ? buildPublicDealPhotoUrl(draft.photoPath) : null));
+    setPhotoTreatment(draft.photoTreatment);
+    setUsePhotoAsFinal(draft.usePhotoAsFinal);
+    setHintText(draft.hintText);
+    setPrice(draft.price);
+    setTitle(draft.title);
+    setPromoLine(draft.promoLine);
+    setCtaText(draft.ctaText);
+    setDescription(draft.description);
+    setEligibilityForm(draft.eligibilityForm);
+    setMaxClaims(draft.maxClaims);
+    setCutoffMins(draft.cutoffMins);
+    setValidityMode(draft.validityMode);
+    setStartTime(new Date(draft.startTime));
+    setEndTime(new Date(draft.endTime));
+    setDaysOfWeek(draft.daysOfWeek.length ? draft.daysOfWeek : [1, 2, 3, 4, 5]);
+    setWindowStart(dateFromMinutes(draft.windowStartMinutes));
+    setWindowEnd(dateFromMinutes(draft.windowEndMinutes));
+    setTimezone(draft.timezone);
+    setPublishLocationIds(draft.publishLocationIds);
+    setGeneratedAd(draft.generatedAd);
+    setAdAccepted(draft.adAccepted);
+    setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
+    setLastGenerationError(null);
+    setTemplateLoaded(false);
+    setEditingSourceLocale(null);
+    setPrefillSourceLocale(null);
+    aiDraftBaselineRef.current = null;
+    lastSentPhotoTreatmentRef.current = draft.photoPath ? draft.photoTreatment : null;
+    setPendingRecoveredDraft(null);
+    setBanner({
+      message: t("createAi.draftRecoveredBanner", { defaultValue: "Draft recovered. Review it before publishing." }),
+      tone: "success",
+    });
+    trackEvent("owner_draft_recovered", { businessId: draft.businessId, hasGeneratedAd: draft.generatedAd != null });
+  }, [t]);
+
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    setPendingRecoveredDraft(null);
+    if (!businessId || !shouldUseDraftRecovery) {
+      draftHydratedRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(aiDealDraftStorageKey(businessId));
+        if (cancelled) return;
+        const draft = parseAiDealRecoveryDraft(raw, businessId);
+        if (draft) setPendingRecoveredDraft(draft);
+      } catch {
+        /* non-fatal */
+      } finally {
+        if (!cancelled) draftHydratedRef.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, shouldUseDraftRecovery]);
+
+  useEffect(() => {
+    if (!businessId || !shouldUseDraftRecovery || !draftHydratedRef.current || pendingRecoveredDraft || allowPostPublishNavigation) {
+      return;
+    }
+    const draft = buildAiDealRecoveryDraft({
+      businessId,
+      photoPath,
+      posterUrl,
+      photoTreatment,
+      usePhotoAsFinal,
+      hintText,
+      price,
+      title,
+      promoLine,
+      ctaText,
+      description,
+      eligibilityForm,
+      maxClaims,
+      cutoffMins,
+      validityMode,
+      startTime,
+      endTime,
+      daysOfWeek,
+      windowStartMinutes: minutesFromDate(windowStart),
+      windowEndMinutes: minutesFromDate(windowEnd),
+      timezone,
+      publishLocationIds,
+      generatedAd,
+      adAccepted,
+      manualDraftUnlocked,
+    });
+    const key = aiDealDraftStorageKey(businessId);
+    const timeout = setTimeout(() => {
+      void (async () => {
+        try {
+          if (draft) {
+            await AsyncStorage.setItem(key, JSON.stringify(draft));
+          } else {
+            await AsyncStorage.removeItem(key);
+          }
+        } catch {
+          /* non-fatal */
+        }
+      })();
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [
+    businessId,
+    shouldUseDraftRecovery,
+    pendingRecoveredDraft,
+    allowPostPublishNavigation,
+    photoPath,
+    posterUrl,
+    photoTreatment,
+    usePhotoAsFinal,
+    hintText,
+    price,
+    title,
+    promoLine,
+    ctaText,
+    description,
+    eligibilityForm,
+    maxClaims,
+    cutoffMins,
+    validityMode,
+    startTime,
+    endTime,
+    daysOfWeek,
+    windowStart,
+    windowEnd,
+    timezone,
+    publishLocationIds,
+    generatedAd,
+    adAccepted,
+    manualDraftUnlocked,
+  ]);
+
   useEffect(() => {
     if (!dealIdFromRoute || !businessId) return;
     let cancelled = false;
@@ -826,6 +1062,7 @@ export default function AiDealScreen() {
         // selector renders empty when editing an existing deal that has a poster.
         setPhotoPath(loadedPhotoPath);
         setPosterUrl(loadedPosterUrl);
+        setUsePhotoAsFinal(Boolean(loadedPhotoPath || loadedPosterUrl));
         setMaxClaims(loadedMaxClaims);
         setCutoffMins(loadedCutoffMins);
         setValidityMode(loadedValidityMode);
@@ -902,7 +1139,14 @@ export default function AiDealScreen() {
         setCtaText("");
         setPrice(row.price != null ? String(row.price) : "");
         setEligibilityForm(createDefaultDealEligibilityFormState());
-        setPosterUrl(row.poster_url ?? null);
+        const templatePhotoPath = row.poster_storage_path ?? extractDealPhotoStoragePath(row.poster_url);
+        const templatePosterUrl = templatePhotoPath
+          ? row.poster_url ?? buildPublicDealPhotoUrl(templatePhotoPath)
+          : row.poster_url ?? null;
+        setPhotoUri(null);
+        setPhotoPath(templatePhotoPath ?? null);
+        setPosterUrl(templatePosterUrl);
+        setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
         setMaxClaims(String(row.max_claims ?? 50));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
         setValidityMode(row.is_recurring ? "recurring" : "one-time");
@@ -941,6 +1185,7 @@ export default function AiDealScreen() {
     const ph = g(params.prefillHint).trim();
     const price0 = g(params.prefillPrice).trim();
     const posterPath = g(params.prefillPosterPath).trim();
+    const posterUrlParam = g(params.prefillPosterUrl).trim();
     const prefillDealEligibility = g(params.prefillDealEligibility).trim();
     const fromAi = g(params.fromAiCompose);
     const fromMenu = g(params.fromMenuOffer);
@@ -954,7 +1199,7 @@ export default function AiDealScreen() {
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
     const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -965,6 +1210,10 @@ export default function AiDealScreen() {
     if (posterPath) {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
+      setUsePhotoAsFinal(true);
+    } else if (posterUrlParam) {
+      setPosterUrl((prev) => prev || posterUrlParam);
+      setUsePhotoAsFinal(true);
     }
     if (prefillDealEligibility) {
       try {
@@ -1018,7 +1267,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
     } else if (fromMenu === "1" && (pt || pp || pc || pd || ph)) {
       setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
-    } else if (fromReuse === "1" && (pt || ph || price0)) {
+    } else if (fromReuse === "1" && (pt || pd || ph || price0 || posterPath || posterUrlParam)) {
       setBanner({ message: t("createAi.prefillFromReuse"), tone: "success" });
       setManualDraftUnlocked(true);
     } else if (fromHub === "1" && (pt || ph)) {
@@ -1027,7 +1276,7 @@ export default function AiDealScreen() {
     }
   }, [
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
-    params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
+    params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath, params.prefillPosterUrl,
     params.prefillDealEligibility,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
     params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
@@ -1044,6 +1293,16 @@ export default function AiDealScreen() {
     }, 400);
     return () => clearTimeout(tid);
   }, [params.fromMenuOffer, scheduleSectionY]);
+
+  useEffect(() => {
+    const fromReuse = String(params.fromReuse ?? "") === "1";
+    if (!fromReuse || reuseScrollDoneRef.current || scheduleSectionY == null || !showDraftEditor) return;
+    reuseScrollDoneRef.current = true;
+    const tid = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, scheduleSectionY - 16), animated: true });
+    }, 400);
+    return () => clearTimeout(tid);
+  }, [params.fromReuse, scheduleSectionY, showDraftEditor]);
 
   /**
    * Reset everything generated from the previous photo/offer combination. Called whenever
@@ -1069,10 +1328,13 @@ export default function AiDealScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
     if (result.canceled || !result.assets?.[0]?.uri) return;
-    setPhotoUri(result.assets[0].uri);
+    const uri = result.assets[0].uri;
+    setPhotoUri(uri);
     setPosterUrl(null);
     setPhotoPath(null);
+    setUsePhotoAsFinal(false);
     resetGenerationState();
+    void persistSelectedPhotoForRecovery(uri);
   }
 
   async function takePhoto() {
@@ -1091,8 +1353,10 @@ export default function AiDealScreen() {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      setUsePhotoAsFinal(false);
       resetGenerationState();
       setShowCamera(false);
+      void persistSelectedPhotoForRecovery(photo.uri);
     }
   }
 
@@ -1191,22 +1455,15 @@ export default function AiDealScreen() {
   async function ensureUploadedPhoto() {
     if (photoPath) return photoPath;
     if (!photoUri || !businessId) return null;
-    const path = `${businessId}/${Date.now()}.jpg`;
-    let body: Blob | ArrayBuffer;
-    if (Platform.OS === "web") {
-      const response = await fetch(photoUri);
-      body = await response.blob();
-    } else {
-      const b64 = await new ExpoFsFile(photoUri).base64();
-      const raw = atob(b64);
-      const bytes = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      body = bytes.buffer;
+    const pendingUpload = photoPersistUploadRef.current;
+    if (pendingUpload?.uri === photoUri) {
+      const pendingPath = await pendingUpload.promise;
+      if (pendingUpload.requestId !== photoPersistRequestIdRef.current) return null;
+      setPhotoPath(pendingPath);
+      setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(pendingPath));
+      return pendingPath;
     }
-    const { error: uploadError } = await supabase.storage
-      .from("deal-photos")
-      .upload(path, body, { contentType: "image/jpeg", upsert: false });
-    if (uploadError) throw uploadError;
+    const path = await uploadDealPhoto(businessId, photoUri);
     setPhotoPath(path);
     return path;
   }
@@ -1314,6 +1571,7 @@ export default function AiDealScreen() {
       try {
         path = await ensureUploadedPhoto();
         if (path) await ensurePosterUrl(path);
+        if (requestId !== generationRequestIdRef.current) return;
       } catch {
         // Upload errors from Supabase storage have ugly messages ("JWT expired",
         // "duplicate key", etc.). A non-technical owner can't act on those — give
@@ -1446,6 +1704,39 @@ export default function AiDealScreen() {
       regeneration_attempt: revisionsUsed,
     });
     // Scroll to draft editor
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  }
+
+  function useFallbackTemplateAd() {
+    const maxClaimsNum = Number(maxClaims);
+    const fallbackAd = buildFallbackTemplateAd({
+      businessName,
+      title,
+      promoLine,
+      ctaText,
+      description,
+      ownerOfferHint: hintText,
+      lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
+      lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
+      scheduleSummary: displayScheduleSummary,
+      quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
+    });
+    setGeneratedAd(fallbackAd);
+    applyAdToDraft(fallbackAd);
+    setAdAccepted(true);
+    setManualDraftUnlocked(true);
+    setLastGenerationError(null);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    setBanner({
+      message: t("createAi.fallbackTemplateReady", {
+        defaultValue: "Fallback ad ready. Review the details, then publish when it looks right.",
+      }),
+      tone: "info",
+    });
+    trackEvent("owner_fallback_template_used", { businessId, hasPhoto: Boolean(photoPath || photoUri || posterUrl) });
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 200);
@@ -1611,8 +1902,10 @@ export default function AiDealScreen() {
         aiPosterStoragePath: aiPosterPath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         posterUrl,
+        allowPhotoFallback: usePhotoAsFinal,
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
+      const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const translations = await translateDealCopy({
@@ -1639,7 +1932,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: finalPublicPoster ?? signedPoster ?? posterUrl ?? null,
+        poster_url: finalPublicPoster ?? explicitPhotoPoster,
         poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
@@ -1683,6 +1976,7 @@ export default function AiDealScreen() {
         });
       }
 
+      await clearAiRecoveryDraft();
       // Hand off a one-shot success flash to whichever tab the owner lands on
       // (usually dashboard). Without this the redirect is silent — nervous pilots
       // need a "yes, it worked" moment.
@@ -1699,6 +1993,7 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(savedPosterPath);
         setPosterUrl(savedPosterUrl);
+        setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
         setGeneratedAd(null);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
@@ -1797,15 +2092,17 @@ export default function AiDealScreen() {
         aiPosterStoragePath: generatedAd?.poster_storage_path ?? null,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         posterUrl,
+        allowPhotoFallback: usePhotoAsFinal,
       });
       const durablePoster = storagePath ? buildPublicDealPhotoUrl(storagePath) : null;
+      const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
 
       const { error } = await supabase.from("deal_templates").insert({
         business_id: businessId,
         title: title.trim(),
         description: composedDescription.trim(),
         price: priceNum,
-        poster_url: durablePoster ?? signedPoster ?? posterUrl ?? null,
+        poster_url: durablePoster ?? explicitPhotoPoster,
         poster_storage_path: storagePath ?? null,
         max_claims: maxClaimsNum,
         claim_cutoff_buffer_minutes: cutoffNum,
@@ -1851,9 +2148,10 @@ export default function AiDealScreen() {
     );
   }
 
+  const selectedPhotoUri = photoUri ?? posterUrl ?? (photoPath ? buildPublicDealPhotoUrl(photoPath) : null);
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-    : photoUri ?? posterUrl ?? null;
+    : usePhotoAsFinal ? selectedPhotoUri : null;
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -1933,6 +2231,43 @@ export default function AiDealScreen() {
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
+        {pendingRecoveredDraft ? (
+          <View
+            style={{
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.primary,
+              backgroundColor: PrimaryTint.surface,
+              gap: 10,
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 16, color: theme.accentText }}>
+              {t("createAi.recoverDraftTitle", { defaultValue: "Finish your deal?" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, lineHeight: 20 }}>
+              {t("createAi.recoverDraftBody", {
+                defaultValue: "We found an unfinished ad draft for this business.",
+              })}
+            </Text>
+            <PrimaryButton
+              title={t("createAi.continueDraft", { defaultValue: "Continue draft" })}
+              onPress={() => applyRecoveredDraft(pendingRecoveredDraft)}
+            />
+            <SecondaryButton
+              title={t("createAi.startOverDraft", { defaultValue: "Start over" })}
+              onPress={() => {
+                setPendingRecoveredDraft(null);
+                void clearAiRecoveryDraft();
+                setBanner({
+                  message: t("createAi.draftClearedBanner", { defaultValue: "Draft cleared. Start a fresh deal when you're ready." }),
+                  tone: "info",
+                });
+              }}
+            />
+          </View>
+        ) : null}
 
         {showCamera ? (
           <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
@@ -1958,9 +2293,9 @@ export default function AiDealScreen() {
               </View>
             </View>
 
-            {photoUri || posterUrl ? (
+            {selectedPhotoUri ? (
               <Image
-                source={{ uri: photoUri ?? posterUrl ?? "" }}
+                source={{ uri: selectedPhotoUri }}
                 style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
                 contentFit="cover"
               />
@@ -1975,8 +2310,49 @@ export default function AiDealScreen() {
               </View>
             )}
 
-            {photoUri || posterUrl ? (
+            {selectedPhotoUri ? (
               <View style={{ marginTop: 14 }}>
+                <View
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: usePhotoAsFinal ? theme.primary : theme.border,
+                    backgroundColor: usePhotoAsFinal ? PrimaryTint.surface : theme.surfaceMuted,
+                    marginBottom: 12,
+                    gap: 8,
+                  }}
+                >
+                  <Text style={{ fontWeight: "800", color: usePhotoAsFinal ? theme.accentText : theme.text }}>
+                    {usePhotoAsFinal
+                      ? t("createAi.actualPhotoFinalSelected", { defaultValue: "Actual photo selected as final ad" })
+                      : t("createAi.photoGuidanceSelected", { defaultValue: "Used for AI guidance" })}
+                  </Text>
+                  <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                    {usePhotoAsFinal
+                      ? t("createAi.actualPhotoFinalHelp", {
+                          defaultValue: "Twofer will publish this photo unless you generate a new AI ad.",
+                        })
+                      : t("createAi.photoGuidanceHelp", {
+                          defaultValue: "Twofer uses this photo to understand the item, then creates a polished ad.",
+                        })}
+                  </Text>
+                  <SecondaryButton
+                    title={
+                      usePhotoAsFinal
+                        ? t("createAi.usePhotoAsGuidance", { defaultValue: "Use for AI guidance instead" })
+                        : t("createAi.useActualPhotoAsFinal", { defaultValue: "Use actual photo as final ad" })
+                    }
+                    onPress={() => {
+                      const nextUseAsFinal = !usePhotoAsFinal;
+                      setUsePhotoAsFinal(nextUseAsFinal);
+                      if (nextUseAsFinal) {
+                        if (generatedAd) resetGenerationState();
+                        setManualDraftUnlocked(true);
+                      }
+                    }}
+                  />
+                </View>
                 <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6, color: theme.text }}>{t("createAi.photoPolishTitle")}</Text>
                 <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>
                   {t("createAi.photoPolishHelp")}
@@ -2383,7 +2759,7 @@ export default function AiDealScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <ActivityIndicator color={theme.primary} />
                     <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
-                      {photoUri || posterUrl
+                      {selectedPhotoUri
                         ? t("createAi.generatingWithPhoto")
                         : t("createAi.generatingNoPhoto")}
                     </Text>
@@ -2408,14 +2784,22 @@ export default function AiDealScreen() {
             </View>
 
             {lastGenerationError && !generating ? (
-              <View style={{ marginTop: 16, padding: 14, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+              <View style={{ marginTop: 16, padding: 14, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                 {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
                     failure / timeout / ownership), not a generic "couldn't generate"
                     line — so the cause is visible instead of hidden. */}
                 <Text style={{ fontWeight: "700", color: theme.text }}>{lastGenerationError}</Text>
-                <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>{t("createAi.fallbackBody")}</Text>
+                <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
+                  {t("createAi.fallbackTemplateBody", {
+                    defaultValue: "AI image generation had trouble, so we made a clean fallback ad. You can publish this now or try AI again.",
+                  })}
+                </Text>
+                <PrimaryButton
+                  title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
+                  onPress={useFallbackTemplateAd}
+                />
                 <SecondaryButton
-                  title={t("createAi.showDraftFields")}
+                  title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
                   onPress={() => {
                     setManualDraftUnlocked(true);
                     setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
@@ -2648,7 +3032,7 @@ export default function AiDealScreen() {
                   {(() => {
                     const previewUri = generatedAd?.poster_storage_path
                       ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                      : photoUri ?? posterUrl ?? null;
+                      : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
                     return previewUri ? (
                       <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
                     ) : (
