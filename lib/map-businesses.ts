@@ -19,6 +19,10 @@ export type LiveDealRow = {
   live: boolean;
 };
 
+export type MapMarkerMode = "all" | "live";
+
+export type MappableBusinessWithLive = MappableBusiness & { live: boolean };
+
 export type DealPreviewRow = {
   id: string;
   business_id: string;
@@ -83,6 +87,18 @@ export function deriveLiveBusinessIds(rows: LiveDealRow[]): Set<string> {
     if (row.live && row.business_id) out.add(row.business_id);
   }
   return out;
+}
+
+export function withLiveMarkerState(
+  businesses: MappableBusiness[],
+  liveBusinessIds: ReadonlySet<string>,
+  mode: MapMarkerMode,
+): MappableBusinessWithLive[] {
+  return businesses.flatMap((business) => {
+    const live = liveBusinessIds.has(business.id);
+    if (mode === "live" && !live) return [];
+    return [{ ...business, live }];
+  });
 }
 
 export function pickPreviewDeal<T extends DealPreviewRow>(

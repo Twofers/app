@@ -26,6 +26,7 @@ import {
   resolveMarkerTapOutcome,
   shouldClearMapSelectionOnPress,
   shouldIgnoreMapPressAfterMarkerPress,
+  withLiveMarkerState,
   type MappableBusiness,
 } from "@/lib/map-businesses";
 import { Banner } from "@/components/ui/banner";
@@ -70,6 +71,7 @@ function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number,
 
 /** Dallas–Fort Worth service area fallback when GPS and markers are unavailable. */
 const DALLAS_FALLBACK = { lat: 32.7767, lng: -96.797 };
+const MAP_FETCH_MILES = 60;
 
 type MapDataPayload = {
   radiusMiles: number;
@@ -88,22 +90,50 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   const coords = await resolveConsumerCoordinates(prefs);
   const userPos = coords ? { lat: coords.lat, lng: coords.lng } : null;
   const showDeviceBlueDot = Boolean(coords?.showsDeviceLocationBlueDot);
+  const queryCenter = userPos ?? DALLAS_FALLBACK;
 
-  const businesses = await collectMappableBusinesses(async (offset, limit) => {
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("id,name,location,latitude,longitude")
-      .order("name", { ascending: true })
-      .range(offset, offset + limit - 1);
-    if (error) throw error;
-    return (data ?? []) as {
+  let businesses: MappableBusiness[] | null = null;
+  const { data: nearbyBusinesses, error: nearbyError } = await supabase.rpc("nearby_businesses", {
+    p_lat: queryCenter.lat,
+    p_lng: queryCenter.lng,
+    p_radius_miles: MAP_FETCH_MILES,
+    p_limit: 400,
+    p_offset: 0,
+    p_favorite_ids: [],
+  });
+  if (!nearbyError && Array.isArray(nearbyBusinesses)) {
+    const nearbyRows = nearbyBusinesses as {
       id: string;
       name: string;
       location: string | null;
       latitude: number | string | null;
       longitude: number | string | null;
     }[];
-  }, 400);
+    businesses = await collectMappableBusinesses(
+      async (offset, limit) => nearbyRows.slice(offset, offset + limit),
+      400,
+    );
+  } else if (nearbyError) {
+    logPostgrestError("map screen nearby businesses", nearbyError);
+  }
+
+  if (businesses === null) {
+    businesses = await collectMappableBusinesses(async (offset, limit) => {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("id,name,location,latitude,longitude")
+        .order("name", { ascending: true })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        name: string;
+        location: string | null;
+        latitude: number | string | null;
+        longitude: number | string | null;
+      }[];
+    }, 400);
+  }
 
   const deals: DealLite[] = [];
   let dealsFetchFailed = false;
@@ -617,13 +647,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   }, [deals]);
 
   const markers = useMemo(() => {
-    return businesses
-      .map((b) => {
-        const live = liveByBusiness.has(b.id);
-        if (mode === "live" && !live) return null;
-        return { ...b, live };
-      })
-      .filter(Boolean) as (MappableBusiness & { live: boolean })[];
+    return withLiveMarkerState(businesses, liveByBusiness, mode);
   }, [businesses, liveByBusiness, mode]);
 
   const selectedBusiness = useMemo(

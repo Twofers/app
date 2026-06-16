@@ -9,6 +9,7 @@ import {
   resolveMapTapHref,
   shouldClearMapSelectionOnPress,
   shouldIgnoreMapPressAfterMarkerPress,
+  withLiveMarkerState,
 } from "./map-businesses";
 
 describe("isValidCoordinate", () => {
@@ -57,6 +58,28 @@ describe("deriveLiveBusinessIds", () => {
       { business_id: "c", live: true },
     ]);
     expect(Array.from(ids)).toEqual(["a", "c"]);
+  });
+});
+
+describe("withLiveMarkerState", () => {
+  const businesses = [
+    { id: "live-biz", name: "Live", location: "Dallas", lat: 32.7, lng: -96.8 },
+    { id: "quiet-biz", name: "Quiet", location: "Dallas", lat: 32.8, lng: -96.9 },
+  ];
+
+  it("keeps businesses without active deals in all mode", () => {
+    const markers = withLiveMarkerState(businesses, new Set(["live-biz"]), "all");
+
+    expect(markers.map((marker) => [marker.id, marker.live])).toEqual([
+      ["live-biz", true],
+      ["quiet-biz", false],
+    ]);
+  });
+
+  it("shows only businesses with active deals in live mode", () => {
+    const markers = withLiveMarkerState(businesses, new Set(["live-biz"]), "live");
+
+    expect(markers.map((marker) => marker.id)).toEqual(["live-biz"]);
   });
 });
 
