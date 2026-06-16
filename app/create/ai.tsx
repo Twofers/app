@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { File as ExpoFsFile } from "expo-file-system";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   useAudioRecorder,
@@ -75,6 +76,12 @@ import {
   resolveCurrentDealPosterStoragePath,
 } from "../../lib/deal-poster-url";
 import { markRecentPublish } from "../../lib/recent-publish";
+import {
+  aiDealDraftStorageKey,
+  buildAiDealRecoveryDraft,
+  parseAiDealRecoveryDraft,
+  type AiDealRecoveryDraft,
+} from "../../lib/ai-deal-draft-recovery";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
 import { validateDealEligibility } from "../../lib/deal-eligibility";
 import {
@@ -484,12 +491,59 @@ export default function AiDealScreen() {
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
   const [editDirtyBaseline, setEditDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [pendingRecoveredDraft, setPendingRecoveredDraft] = useState<AiDealRecoveryDraft | null>(null);
+  const draftHydratedRef = useRef(false);
 
   const dealIdFromRoute = useMemo(() => {
     const raw = dealIdParam;
     const s = Array.isArray(raw) ? raw[0] : raw;
     return typeof s === "string" ? s.trim() : "";
   }, [dealIdParam]);
+
+  const hasCreatePrefillParams = useMemo(() => {
+    const g = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+    return Boolean(
+      g(params.prefillTitle).trim() ||
+        g(params.prefillPromoLine).trim() ||
+        g(params.prefillCta).trim() ||
+        g(params.prefillDescription).trim() ||
+        g(params.prefillHint).trim() ||
+        g(params.prefillPrice).trim() ||
+        g(params.prefillPosterPath).trim() ||
+        g(params.prefillPosterUrl).trim() ||
+        g(params.prefillDealEligibility).trim() ||
+        g(params.prefillLocationId).trim() ||
+        g(params.prefillExtraLocationIds).trim() ||
+        g(params.prefillIsRecurring).trim() ||
+        g(params.prefillDaysOfWeek).trim() ||
+        g(params.prefillWindowStartMin).trim() ||
+        g(params.prefillWindowEndMin).trim() ||
+        g(params.prefillTimezone).trim() ||
+        g(params.prefillMaxClaims).trim() ||
+        g(params.prefillCutoffMins).trim(),
+    );
+  }, [
+    params.prefillTitle,
+    params.prefillPromoLine,
+    params.prefillCta,
+    params.prefillDescription,
+    params.prefillHint,
+    params.prefillPrice,
+    params.prefillPosterPath,
+    params.prefillPosterUrl,
+    params.prefillDealEligibility,
+    params.prefillLocationId,
+    params.prefillExtraLocationIds,
+    params.prefillIsRecurring,
+    params.prefillDaysOfWeek,
+    params.prefillWindowStartMin,
+    params.prefillWindowEndMin,
+    params.prefillTimezone,
+    params.prefillMaxClaims,
+    params.prefillCutoffMins,
+  ]);
+
+  const shouldUseDraftRecovery = !dealIdFromRoute && !templateId && !hasCreatePrefillParams;
 
   /** Stable English — shipped to the AI. Do not localize. */
   const offerScheduleSummary = useMemo(
@@ -761,6 +815,157 @@ export default function AiDealScreen() {
       [navigation, t, confirm],
     ),
   );
+
+  const clearAiRecoveryDraft = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      await AsyncStorage.removeItem(aiDealDraftStorageKey(businessId));
+    } catch {
+      /* non-fatal */
+    }
+  }, [businessId]);
+
+  const applyRecoveredDraft = useCallback((draft: AiDealRecoveryDraft) => {
+    setPhotoUri(null);
+    setPhotoPath(draft.photoPath);
+    setPosterUrl(draft.posterUrl);
+    setPhotoTreatment(draft.photoTreatment);
+    setUsePhotoAsFinal(draft.usePhotoAsFinal);
+    setHintText(draft.hintText);
+    setPrice(draft.price);
+    setTitle(draft.title);
+    setPromoLine(draft.promoLine);
+    setCtaText(draft.ctaText);
+    setDescription(draft.description);
+    setEligibilityForm(draft.eligibilityForm);
+    setMaxClaims(draft.maxClaims);
+    setCutoffMins(draft.cutoffMins);
+    setValidityMode(draft.validityMode);
+    setStartTime(new Date(draft.startTime));
+    setEndTime(new Date(draft.endTime));
+    setDaysOfWeek(draft.daysOfWeek.length ? draft.daysOfWeek : [1, 2, 3, 4, 5]);
+    setWindowStart(dateFromMinutes(draft.windowStartMinutes));
+    setWindowEnd(dateFromMinutes(draft.windowEndMinutes));
+    setTimezone(draft.timezone);
+    setPublishLocationIds(draft.publishLocationIds);
+    setGeneratedAd(draft.generatedAd);
+    setAdAccepted(draft.adAccepted);
+    setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
+    setLastGenerationError(null);
+    setTemplateLoaded(false);
+    setEditingSourceLocale(null);
+    setPrefillSourceLocale(null);
+    aiDraftBaselineRef.current = null;
+    lastSentPhotoTreatmentRef.current = draft.photoPath ? draft.photoTreatment : null;
+    setPendingRecoveredDraft(null);
+    setBanner({
+      message: t("createAi.draftRecoveredBanner", { defaultValue: "Draft recovered. Review it before publishing." }),
+      tone: "success",
+    });
+    trackEvent("owner_draft_recovered", { businessId: draft.businessId, hasGeneratedAd: draft.generatedAd != null });
+  }, [t]);
+
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    setPendingRecoveredDraft(null);
+    if (!businessId || !shouldUseDraftRecovery) {
+      draftHydratedRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(aiDealDraftStorageKey(businessId));
+        if (cancelled) return;
+        const draft = parseAiDealRecoveryDraft(raw, businessId);
+        if (draft) setPendingRecoveredDraft(draft);
+      } catch {
+        /* non-fatal */
+      } finally {
+        if (!cancelled) draftHydratedRef.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, shouldUseDraftRecovery]);
+
+  useEffect(() => {
+    if (!businessId || !shouldUseDraftRecovery || !draftHydratedRef.current || pendingRecoveredDraft || allowPostPublishNavigation) {
+      return;
+    }
+    const draft = buildAiDealRecoveryDraft({
+      businessId,
+      photoPath,
+      posterUrl,
+      photoTreatment,
+      usePhotoAsFinal,
+      hintText,
+      price,
+      title,
+      promoLine,
+      ctaText,
+      description,
+      eligibilityForm,
+      maxClaims,
+      cutoffMins,
+      validityMode,
+      startTime,
+      endTime,
+      daysOfWeek,
+      windowStartMinutes: minutesFromDate(windowStart),
+      windowEndMinutes: minutesFromDate(windowEnd),
+      timezone,
+      publishLocationIds,
+      generatedAd,
+      adAccepted,
+      manualDraftUnlocked,
+    });
+    const key = aiDealDraftStorageKey(businessId);
+    const timeout = setTimeout(() => {
+      void (async () => {
+        try {
+          if (draft) {
+            await AsyncStorage.setItem(key, JSON.stringify(draft));
+          } else {
+            await AsyncStorage.removeItem(key);
+          }
+        } catch {
+          /* non-fatal */
+        }
+      })();
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [
+    businessId,
+    shouldUseDraftRecovery,
+    pendingRecoveredDraft,
+    allowPostPublishNavigation,
+    photoPath,
+    posterUrl,
+    photoTreatment,
+    usePhotoAsFinal,
+    hintText,
+    price,
+    title,
+    promoLine,
+    ctaText,
+    description,
+    eligibilityForm,
+    maxClaims,
+    cutoffMins,
+    validityMode,
+    startTime,
+    endTime,
+    daysOfWeek,
+    windowStart,
+    windowEnd,
+    timezone,
+    publishLocationIds,
+    generatedAd,
+    adAccepted,
+    manualDraftUnlocked,
+  ]);
 
   useEffect(() => {
     if (!dealIdFromRoute || !businessId) return;
@@ -1703,6 +1908,7 @@ export default function AiDealScreen() {
         });
       }
 
+      await clearAiRecoveryDraft();
       // Hand off a one-shot success flash to whichever tab the owner lands on
       // (usually dashboard). Without this the redirect is silent — nervous pilots
       // need a "yes, it worked" moment.
@@ -1956,6 +2162,43 @@ export default function AiDealScreen() {
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
+        {pendingRecoveredDraft ? (
+          <View
+            style={{
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.primary,
+              backgroundColor: PrimaryTint.surface,
+              gap: 10,
+            }}
+          >
+            <Text style={{ fontWeight: "800", fontSize: 16, color: theme.accentText }}>
+              {t("createAi.recoverDraftTitle", { defaultValue: "Finish your deal?" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, lineHeight: 20 }}>
+              {t("createAi.recoverDraftBody", {
+                defaultValue: "We found an unfinished ad draft for this business.",
+              })}
+            </Text>
+            <PrimaryButton
+              title={t("createAi.continueDraft", { defaultValue: "Continue draft" })}
+              onPress={() => applyRecoveredDraft(pendingRecoveredDraft)}
+            />
+            <SecondaryButton
+              title={t("createAi.startOverDraft", { defaultValue: "Start over" })}
+              onPress={() => {
+                setPendingRecoveredDraft(null);
+                void clearAiRecoveryDraft();
+                setBanner({
+                  message: t("createAi.draftClearedBanner", { defaultValue: "Draft cleared. Start a fresh deal when you're ready." }),
+                  tone: "info",
+                });
+              }}
+            />
+          </View>
+        ) : null}
 
         {showCamera ? (
           <View style={{ marginTop: 16, borderRadius: 16, overflow: "hidden" }}>
