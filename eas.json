@@ -14,9 +14,11 @@
       }
     },
     "preview": {
-      "developmentClient": true,
       "distribution": "internal",
-      "environment": "preview",
+      "environment": "production",
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
         "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
@@ -42,6 +44,7 @@
     },
     "dev-client-apk": {
       "extends": "preview",
+      "developmentClient": true,
       "android": {
         "buildType": "apk"
       },
