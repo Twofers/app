@@ -81,6 +81,7 @@ These cannot be completed from this Windows workspace:
 
 ## Files Changed
 
+- `.easignore`
 - `eas.json`
 - `docs/ios-release-audit.md`
 - `docs/ios-parity-checklist.md`

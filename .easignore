@@ -56,6 +56,10 @@ artifacts/
 notification_emulator_*/
 twofer_rc_qa_*/
 share_deal_*
+customer_account_*/
+cedar_bean_claim_recheck_*/
+test_cafa_redemption_recheck_*/
+ux_remediation_final_smoke/
 website-screenshots-*/
 meeting minutes/
 docs/store-release-prep.md

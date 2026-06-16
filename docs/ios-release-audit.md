@@ -39,9 +39,12 @@ To preserve Android dev-client behavior, `dev-client-apk` now sets `developmentC
 
 Files changed:
 
+- `.easignore`
 - `eas.json`
 - `docs/ios-release-audit.md`
 - `docs/ios-parity-checklist.md`
+
+`.easignore` was also tightened so pre-existing local QA screenshot folders are not uploaded to EAS. The folders were preserved locally.
 
 ## Environment Variables
 
@@ -157,6 +160,8 @@ READY TO ATTEMPT after static checks pass:
 | `npm run typecheck` | PASS | `tsc --noEmit` completed without errors. |
 | `npm test` | PASS | 59 test files passed, 369 tests passed. Expected stderr appears in push failure-safety tests. |
 | `npx expo export --platform ios --output-dir .metro-health-check\ios-testflight --clear` | PASS | iOS bundle exported. Existing warnings remain for `country-flag-icons` subpath fallback imports. |
+
+After the `.easignore` packaging update, `npm run lint`, `npm run typecheck`, and `npm test` were rerun and passed again.
 
 ## Commands Run During Audit
 
