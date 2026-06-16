@@ -42,6 +42,7 @@ import {
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
 import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
@@ -824,21 +825,7 @@ export default function BusinessDashboard() {
     setDealManageFor(null);
     router.push({
       pathname: "/create/ai",
-      params: {
-        prefillTitle: deal.title ?? "",
-        prefillHint: deal.description ?? "",
-        prefillPrice: deal.price != null ? String(deal.price) : "",
-        prefillSourceLocale: deal.source_locale ?? "",
-        prefillPosterPath: deal.poster_storage_path ?? "",
-        prefillIsRecurring: deal.is_recurring ? "1" : "0",
-        prefillDaysOfWeek: deal.days_of_week ? deal.days_of_week.join(",") : "",
-        prefillWindowStartMin: deal.window_start_minutes != null ? String(deal.window_start_minutes) : "",
-        prefillWindowEndMin: deal.window_end_minutes != null ? String(deal.window_end_minutes) : "",
-        prefillTimezone: deal.timezone ?? "",
-        prefillMaxClaims: deal.max_claims != null ? String(deal.max_claims) : "",
-        prefillCutoffMins: deal.claim_cutoff_buffer_minutes != null ? String(deal.claim_cutoff_buffer_minutes) : "",
-        fromReuse: "1",
-      },
+      params: buildReuseDealPrefillParams(deal),
     });
   }
 

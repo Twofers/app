@@ -10,6 +10,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Banner } from "@/components/ui/banner";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
+import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Gray } from "@/constants/theme";
@@ -32,6 +33,13 @@ type DealRow = {
   poster_url: string | null;
   poster_storage_path?: string | null;
   end_time: string;
+  is_recurring: boolean | null;
+  days_of_week: number[] | null;
+  window_start_minutes: number | null;
+  window_end_minutes: number | null;
+  timezone: string | null;
+  max_claims: number | null;
+  claim_cutoff_buffer_minutes: number | null;
 };
 
 export default function ReuseDealScreen() {
@@ -59,7 +67,7 @@ export default function ReuseDealScreen() {
         .limit(25),
       supabase
         .from("deals")
-        .select("id,title,description,source_locale,price,poster_url,poster_storage_path,end_time")
+        .select("id,title,description,source_locale,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes")
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(25),
@@ -122,18 +130,9 @@ export default function ReuseDealScreen() {
   }
 
   function repeatDeal(row: DealRow) {
-    const title = row.title?.trim() ?? "";
-    const hint = row.description?.trim() ?? "";
-    const price = row.price != null && Number.isFinite(Number(row.price)) ? String(row.price) : "";
     router.push({
       pathname: "/create/ai",
-      params: {
-        prefillTitle: title,
-        prefillHint: hint || title,
-        prefillPrice: price,
-        prefillSourceLocale: row.source_locale ?? "",
-        fromReuse: "1",
-      },
+      params: buildReuseDealPrefillParams(row),
     } as Href);
   }
 

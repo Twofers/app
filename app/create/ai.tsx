@@ -330,6 +330,7 @@ export default function AiDealScreen() {
     prefillHint?: string;
     prefillPrice?: string;
     prefillPosterPath?: string;
+    prefillPosterUrl?: string;
     fromAiCompose?: string;
     fromMenuOffer?: string;
     fromReuse?: string;
@@ -941,6 +942,7 @@ export default function AiDealScreen() {
     const ph = g(params.prefillHint).trim();
     const price0 = g(params.prefillPrice).trim();
     const posterPath = g(params.prefillPosterPath).trim();
+    const posterUrlParam = g(params.prefillPosterUrl).trim();
     const prefillDealEligibility = g(params.prefillDealEligibility).trim();
     const fromAi = g(params.fromAiCompose);
     const fromMenu = g(params.fromMenuOffer);
@@ -954,7 +956,7 @@ export default function AiDealScreen() {
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
     const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -965,6 +967,8 @@ export default function AiDealScreen() {
     if (posterPath) {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
+    } else if (posterUrlParam) {
+      setPosterUrl((prev) => prev || posterUrlParam);
     }
     if (prefillDealEligibility) {
       try {
@@ -1018,7 +1022,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createQuick.prefillFromAiCompose"), tone: "success" });
     } else if (fromMenu === "1" && (pt || pp || pc || pd || ph)) {
       setBanner({ message: t("createQuick.prefillFromMenuOffer"), tone: "success" });
-    } else if (fromReuse === "1" && (pt || ph || price0)) {
+    } else if (fromReuse === "1" && (pt || pd || ph || price0 || posterPath || posterUrlParam)) {
       setBanner({ message: t("createAi.prefillFromReuse"), tone: "success" });
       setManualDraftUnlocked(true);
     } else if (fromHub === "1" && (pt || ph)) {
@@ -1027,7 +1031,7 @@ export default function AiDealScreen() {
     }
   }, [
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
-    params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath,
+    params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath, params.prefillPosterUrl,
     params.prefillDealEligibility,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
     params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
