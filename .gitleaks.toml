@@ -1,0 +1,34 @@
+# Gitleaks config for the Twofer release security gate.
+#
+# Extends gitleaks' default ruleset and allowlists only values that are
+# intentionally committed and safe. Everything else (real OpenAI / Stripe /
+# Supabase service-role keys, private keys, etc.) still fails the scan.
+#
+# Run locally:  gitleaks detect --source . --redact --no-banner --config .gitleaks.toml
+# CI runs the same command on every push/PR (.github/workflows/ci.yml -> secret-scan).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe committed values (mobile client config + doc placeholders)"
+
+# Paths whose contents are public-by-design, not secrets.
+paths = [
+  # Android client config. The AIza... value is a client API key restricted by
+  # package name + SHA and already ships inside the APK; it is not a server secret.
+  '''(^|/)google-services\.json$''',
+  # Documented placeholders only (no real values).
+  '''(^|/)\.env\.example$''',
+  # Vector art whose base64 path data can trip the JWT heuristic.
+  '''(^|/)assets/images/twofer-penguin\.svg$''',
+]
+
+# Incomplete placeholder strings that look like keys but cannot be real.
+regexes = [
+  '''sk-proj-…''',
+  '''sk-\.\.\.''',
+  '''sk_test_\.\.\.''',
+  '''sk_live_\.\.\.''',
+  '''whsec_\.\.\.''',
+]

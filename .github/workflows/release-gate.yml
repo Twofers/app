@@ -1,0 +1,66 @@
+name: Release security gate
+
+# Live (network) half of the gate: edge-function health + RLS probes against the
+# real project. Runs on demand and on PRs into main. If the Supabase secrets are
+# not configured (or the PR is from a fork), the live steps skip with a warning
+# rather than failing — the secret-scan job in ci.yml still runs unconditionally.
+#
+# Required repo secrets to activate:
+#   SUPABASE_URL, SUPABASE_ANON_KEY        -> edge + anon-exposure probes
+#   TWOFER_SMOKE_EMAIL, TWOFER_SMOKE_PASSWORD -> authenticated RLS smoke (throwaway shopper)
+#   SUPABASE_DB_URL                        -> catalog RLS gate (psql)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  live-probes:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TWOFER_SMOKE_EMAIL: ${{ secrets.TWOFER_SMOKE_EMAIL }}
+      TWOFER_SMOKE_PASSWORD: ${{ secrets.TWOFER_SMOKE_PASSWORD }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Notice when secrets are not configured
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL == '' }}
+        run: echo "::warning::Supabase secrets not set — live probes skipped. Add SUPABASE_URL / SUPABASE_ANON_KEY (+ smoke creds, DB url) to repo secrets to enable."
+
+      - name: Write .env for probes
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' }}
+        run: |
+          {
+            echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL"
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+            echo "TWOFER_SMOKE_EMAIL=$TWOFER_SMOKE_EMAIL"
+            echo "TWOFER_SMOKE_PASSWORD=$TWOFER_SMOKE_PASSWORD"
+          } > .env
+
+      - name: Edge-function health (deployed + authenticating)
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' }}
+        run: node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push deal-link ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event
+
+      - name: RLS smoke (authenticated user can read its own rows)
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' && env.TWOFER_SMOKE_EMAIL != '' }}
+        run: node scripts/probe-rls-smoke.mjs
+
+      - name: RLS anon-exposure (no sensitive table leaks to anon)
+        if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' }}
+        run: node scripts/probe-rls-inventory.mjs
+
+      - name: RLS catalog gate (no Data API table without RLS)
+        if: ${{ env.SUPABASE_DB_URL != '' }}
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
