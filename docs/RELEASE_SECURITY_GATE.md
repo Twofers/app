@@ -87,8 +87,11 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls-inventory.sql
   `google-services.json` is Android client config (no service-account key).
 - **RLS:** mature (76 migrations, smoke probe in place); needs a live run of the
   three checks above to confirm against prod.
-- **Rate limiting:** AI ad/copy gen capped; **gaps:** `deal-link` (public share
-  lookup) and `ai-translate-deal` have no limit yet.
+- **Rate limiting:** AI ad/copy/translate gen capped (translate added
+  2026-06-17, 30/mo per business). `deal-link` is a public QR/share landing page
+  that reads only already-public deal data (one indexed read, no writes, no AI) —
+  low risk; an app-level IP limit needs a rate-limit table (migration) and is
+  better handled at the platform/CDN layer.
 - **DB performance:** strong (55 indexes; `deal_shares.share_code` covered by a
   UNIQUE constraint).
 - **Authorization:** `verify_jwt=false` on ~30 functions, each doing its own
