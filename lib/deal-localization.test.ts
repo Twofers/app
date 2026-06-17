@@ -24,7 +24,7 @@ describe("deal localization", () => {
   });
 
   it("falls back to the original text when a translation is missing", () => {
-    expect(localizedDealTitle({ ...deal, title_es: " " }, "es")).toBe("BOGO iced latte");
+    expect(localizedDealTitle({ ...deal, title_es: " " }, "es")).toBe("Buy one iced latte, get one free");
     expect(localizedDealDescription({ ...deal, description_ko: null }, "ko")).toBe("Buy one iced latte, get one free.");
   });
 
@@ -40,7 +40,7 @@ describe("deal localization", () => {
       description_es: "Compra uno y lleva otro gratis.",
       description_ko: "Buy one iced coffee, get one free.",
     };
-    expect(localizedDealTitle(spanishSourceDeal, "en")).toBe("BOGO iced coffee");
+    expect(localizedDealTitle(spanishSourceDeal, "en")).toBe("Buy one iced coffee, get one free");
     expect(localizedDealDescription(spanishSourceDeal, "en")).toBe("Buy one iced coffee, get one free.");
     expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Cafe helado 2x1");
   });

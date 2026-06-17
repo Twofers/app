@@ -37,7 +37,7 @@ describe("buildStructuredOffer", () => {
       paired: { name: "Coffee" },
       pairing_type: "bogo_pair",
     });
-    expect(withPaired.human_summary).toMatch(/BOGO|2-for-1/i);
+    expect(withPaired.human_summary).toMatch(/Buy one, get one/i);
     expect(withPaired.human_summary).toContain("Muffin");
     expect(withPaired.human_summary).toContain("Coffee");
 
@@ -46,7 +46,7 @@ describe("buildStructuredOffer", () => {
       paired: null,
       pairing_type: "bogo_pair",
     });
-    expect(solo.human_summary).toMatch(/BOGO|2-for-1/i);
+    expect(solo.human_summary).toMatch(/Buy one, get one/i);
     expect(solo.human_summary).toContain("Muffin");
     expect(solo.paired_item).toBeNull();
   });

@@ -18,6 +18,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getDealAnalyticsActivityState } from "@/lib/deal-analytics-state";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -246,7 +247,7 @@ export default function DealAnalyticsDetail() {
       const totalClaims = claims.length;
       const totalRedeems = claims.filter((c) => c.redeemed_at).length;
       const row: ExportRow = {
-        dealTitle: deal.title ?? t("offersDashboard.dealFallback"),
+        dealTitle: getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback"),
         startDate: new Date(deal.start_time).toLocaleDateString(),
         endDate: new Date(deal.end_time).toLocaleDateString(),
         claims: totalClaims,
@@ -266,7 +267,7 @@ export default function DealAnalyticsDetail() {
   }
 
   const headerSubtitle = deal
-    ? `${deal.title ?? t("offersDashboard.dealFallback")}\n${formatValiditySummary(deal, {
+    ? `${getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback")}\n${formatValiditySummary(deal, {
         lang: i18n.language,
         endsVerb: t("commonUi.dealEndsVerb"),
         t,

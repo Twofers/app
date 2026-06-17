@@ -420,10 +420,10 @@ export default function AuthLandingScreen() {
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
   const consumerSubtitle = t("authLanding.subtitleConsumerPolished", {
-    defaultValue: "Claim high-value local BOGO deals nearby.",
+    defaultValue: "Claim high-value local deals nearby.",
   });
   const businessSubtitle = t("authLanding.subtitleBusinessPolished", {
-    defaultValue: "Create simple BOGO offers and redeem customer tickets.",
+    defaultValue: "Create simple buy-one-get-one offers and redeem customer tickets.",
   });
   const isSignup = screenMode === "signup";
 

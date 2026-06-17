@@ -52,6 +52,7 @@ import {
   adToDealDraft,
   buildFallbackTemplateAd,
   composeListingDescription,
+  normalizeGeneratedAdDisplayCopy,
   type GeneratedAd,
   type PhotoTreatment,
 } from "../../lib/ad-variants";
@@ -71,6 +72,7 @@ import {
   isDealFormDirty,
   type DealFormDirtySnapshot,
 } from "../../lib/deal-form-dirty";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import {
   buildPublicDealPhotoUrl,
   extractDealPhotoStoragePath,
@@ -1018,7 +1020,18 @@ export default function AiDealScreen() {
         }
         const row = data as Record<string, unknown>;
         const loadedSourceLocale = String(row.source_locale ?? "");
-        const loadedTitle = String(row.title ?? "");
+        const rawLoadedTitle = typeof row.title === "string" ? row.title : "";
+        const loadedTitle = getDealDisplayTitle(
+          {
+            title: rawLoadedTitle,
+            deal_type: typeof row.deal_type === "string" ? row.deal_type : null,
+            item_name: typeof row.item_description === "string" ? row.item_description : null,
+            required_item_description:
+              typeof row.required_item_description === "string" ? row.required_item_description : null,
+            free_item_description: typeof row.free_item_description === "string" ? row.free_item_description : null,
+          },
+          rawLoadedTitle,
+        );
         const loadedDescription = String(row.description ?? "");
         const loadedPrice = row.price != null ? String(row.price) : "";
         const rawPosterUrl = (row.poster_url as string | null) ?? null;
@@ -1133,7 +1146,7 @@ export default function AiDealScreen() {
         const row = data as TemplateRow;
         setEditingSourceLocale(null);
         setPrefillSourceLocale(null);
-        setTitle(row.title ?? "");
+        setTitle(getDealDisplayTitle({ title: row.title }, row.title));
         setDescription(row.description ?? "");
         setPromoLine("");
         setCtaText("");
@@ -1602,7 +1615,7 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
-      setGeneratedAd(ad);
+      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
       if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
@@ -1672,7 +1685,7 @@ export default function AiDealScreen() {
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
-      setGeneratedAd(ad);
+      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
       if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");

@@ -3,6 +3,8 @@
  * The 3-lane variants flow was removed in the 2026-05-01 quality rewrite.
  */
 
+import { getDealDisplayTitle } from "./deal-display-copy";
+
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
 export type ItemResearch = {
@@ -57,6 +59,20 @@ export function composeListingDescription(promo: string, cta: string, offerDetai
   return [promo.trim(), cta.trim(), offerDetails.trim()].filter(Boolean).join("\n\n");
 }
 
+function containsMechanicalOfferLanguage(value: string): boolean {
+  return /\bBOGO\b|\bSame[-\s]?Item\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b/i.test(value);
+}
+
+export function normalizeGeneratedAdDisplayCopy(ad: GeneratedAd): GeneratedAd {
+  const headline = getDealDisplayTitle({ title: ad.headline }, ad.headline);
+  const push = ad.push_notification?.trim() ?? "";
+  return {
+    ...ad,
+    headline,
+    push_notification: push ? (containsMechanicalOfferLanguage(push) ? headline : push) : ad.push_notification,
+  };
+}
+
 /**
  * Map a chosen ad into draft fields. Offer details default to the owner's hint (ground truth).
  */
@@ -72,8 +88,9 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
   const lockedTermsLine = ad.locked_terms_line?.trim() ?? termsSummary;
   const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
+  const displayAd = normalizeGeneratedAdDisplayCopy(ad);
   return {
-    title: ad.headline.trim(),
+    title: displayAd.headline,
     promo_line: shortDescription,
     cta_text: ad.cta.trim(),
     offer_details: offerDetails || hint || [shortDescription, ad.cta].filter(Boolean).join("\n\n"),
@@ -98,7 +115,6 @@ export function buildFallbackTemplateAd(params: {
   scheduleSummary?: string | null;
   quantityLimit?: number | null;
 }): GeneratedAd {
-  const businessName = params.businessName?.trim() || "Twofer";
   const lockedOffer = params.lockedOfferLine?.trim() ?? "";
   const existingTitle = params.title?.trim() ?? "";
   const existingPromo = params.promoLine?.trim() ?? "";
@@ -111,14 +127,14 @@ export function buildFallbackTemplateAd(params: {
       ? `${params.quantityLimit} available`
       : "";
   const terms = [params.lockedTermsLine?.trim(), schedule, quantity].filter(Boolean).join(" ");
-  const fallbackTitle = existingTitle || `${businessName} Twofer`;
+  const fallbackTitle = getDealDisplayTitle({ title: existingTitle || offerLine }, existingTitle || offerLine);
   const fallbackSubheadline = existingPromo || offerLine;
 
   return {
     headline: fallbackClip(fallbackTitle, 40),
     subheadline: fallbackClip(fallbackSubheadline, 88),
     short_description: fallbackClip(fallbackSubheadline, 120),
-    push_notification: fallbackClip(`${businessName}: ${offerLine}`, 120),
+    push_notification: fallbackClip(fallbackTitle, 120),
     terms_summary: fallbackClip(terms || offerLine, 180),
     social_caption: fallbackClip(`${offerLine}${schedule ? ` ${schedule}` : ""}`, 180),
     locked_offer_line: lockedOffer || undefined,

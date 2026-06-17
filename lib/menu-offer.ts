@@ -101,8 +101,8 @@ export function buildStructuredOffer(params: {
     }
     case "bogo_pair":
       human_summary = paired
-        ? `BOGO / 2-for-1: ${mainName} and ${pairedName}.`
-        : `BOGO / 2-for-1: ${mainName}.`;
+        ? `Buy one, get one: ${mainName} and ${pairedName}.`
+        : `Buy one, get one: ${mainName}.`;
       break;
     case "second_half_off":
       human_summary = paired

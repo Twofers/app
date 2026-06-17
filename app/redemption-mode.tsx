@@ -27,6 +27,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import {
   confirmStaffRedemption,
@@ -89,6 +90,13 @@ export default function RedemptionModeScreen() {
   const cameraHeight = Math.round(Math.min(430, Math.max(260, height * 0.42)));
   const manualCodeComplete = isRedemptionCodeComplete(manualCode);
   const manualPreviewDisabled = busy || !manualCodeComplete;
+  const dealTitleFallback = t("redeem.defaultDealTitle", { defaultValue: "Twofer deal" });
+  const previewDealTitle = preview?.deal_title
+    ? getDealDisplayTitle({ title: preview.deal_title }, preview.deal_title) || dealTitleFallback
+    : dealTitleFallback;
+  const successDealTitle = success?.deal_title
+    ? getDealDisplayTitle({ title: success.deal_title }, success.deal_title) || dealTitleFallback
+    : dealTitleFallback;
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -287,7 +295,7 @@ export default function RedemptionModeScreen() {
               <Text style={{ color: theme.text, fontWeight: "900", fontSize: 22 }}>
                 {t("redemptionMode.redeemed", { defaultValue: "Redeemed" })}
               </Text>
-              <Text style={{ color: theme.text, fontSize: 16 }}>{success.deal_title}</Text>
+              <Text style={{ color: theme.text, fontSize: 16 }}>{successDealTitle}</Text>
               <SecondaryButton title={t("redeem.scanNext", { defaultValue: "Scan next" })} onPress={resetForNext} />
             </View>
           ) : preview?.ok ? (
@@ -302,7 +310,7 @@ export default function RedemptionModeScreen() {
               }}
             >
               <Text style={{ color: theme.text, fontWeight: "900", fontSize: 18 }}>
-                {preview.deal_title || t("redeem.defaultDealTitle", { defaultValue: "Twofer deal" })}
+                {previewDealTitle}
               </Text>
               {preview.customer_first_name ? (
                 <Text style={{ color: theme.text, fontSize: 15 }}>

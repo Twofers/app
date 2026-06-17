@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -73,8 +74,8 @@ serve(async (req) => {
       return jsonResponse({ error: "Not your deal" }, 403);
     }
 
-    const businessName = biz.name ?? "Twofer";
-    const dealTitle = deal.title ?? "New deal available!";
+    const businessName = biz.name ?? "a local business";
+    const dealTitle = getDealDisplayTitle({ title: deal.title }, deal.title) || "Limited-time local offer";
 
     // --- 1. Favorites audience ---
     const { data: favRows } = await admin
@@ -118,7 +119,7 @@ serve(async (req) => {
     }
 
     // --- 4. Send push ---
-    const result = await sendExpoPushBatch(tokens, businessName, dealTitle, {
+    const result = await sendExpoPushBatch(tokens, dealTitle, `Live now at ${businessName}. Limited claims available.`, {
       dealId: deal.id,
       path: `/deal/${deal.id}`,
     });

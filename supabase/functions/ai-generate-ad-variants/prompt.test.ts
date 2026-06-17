@@ -102,7 +102,7 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
   });
 
-  it("allows BOGO language only for same-item BOGO", () => {
+  it("requires plain English for same-item buy-one-get-one offers", () => {
     const prompt = buildAdCopyPrompt({
       ...basePromptParams("Buy one coffee, get one coffee free", "coffee"),
       offerContract: contractFor({
@@ -118,9 +118,9 @@ describe("buildAdCopyPrompt", () => {
       }),
     });
 
-    expect(prompt.userText).toContain("This is a true same-item BOGO free deal.");
-    expect(prompt.userText).toContain("BOGO");
-    expect(prompt.userText).toContain("Buy one, get one free");
+    expect(prompt.userText).toContain("This is a true same-item buy-one-get-one free deal.");
+    expect(prompt.userText).toContain('Do not use:');
+    expect(prompt.userText).toContain("Buy one coffee, get one free.");
   });
 
   it("bans BOGO, free, and entire-order language for percent-off deals", () => {

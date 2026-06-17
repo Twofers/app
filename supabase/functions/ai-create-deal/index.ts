@@ -6,6 +6,7 @@ import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
@@ -427,7 +428,7 @@ serve(async (req) => {
         .eq("id", business_id)
         .single();
 
-      const bizName = bizRow?.name ?? "Twofer";
+      const bizName = bizRow?.name ?? "a local business";
       const bizLat = typeof bizRow?.latitude === "number" ? bizRow.latitude : null;
       const bizLng = typeof bizRow?.longitude === "number" ? bizRow.longitude : null;
 
@@ -474,7 +475,8 @@ serve(async (req) => {
           .in("user_id", [...allIds]);
         const tokens = (tRows ?? []).map((r: { expo_push_token: string }) => r.expo_push_token);
         if (tokens.length > 0) {
-          await sendExpoPushBatch(tokens, bizName, result.title, {
+          const pushTitle = getDealDisplayTitle({ title: result.title }, result.title);
+          await sendExpoPushBatch(tokens, pushTitle, `Live now at ${bizName}. Limited claims available.`, {
             dealId: deal.id,
             path: `/deal/${deal.id}`,
           });

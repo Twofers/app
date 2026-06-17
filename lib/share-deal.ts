@@ -111,14 +111,14 @@ export function buildShareCopy(args: {
 }): ShareDealCopy {
   const shareUrl = buildShareUrl(args.shareCode);
   const message = args.t("shareDeal.message", {
-    defaultValue:
-      "I found this Twofer deal:\n\n{{dealTitle}} at {{businessName}}.\n\nThey can claim their own here:\n{{shareUrl}}\n\nIf you don't have Twofer yet, install the app first, then tap this same link again.",
+    defaultValue: "{{dealTitle}}\n\nLimited-time local offer available now at {{businessName}}.\n{{shareUrl}}",
     dealTitle: args.dealTitle,
     businessName: args.businessName,
     shareUrl,
   });
   const title = args.t("shareDeal.shareSheetTitle", {
-    defaultValue: "Share this Twofer deal",
+    defaultValue: "{{dealTitle}}",
+    dealTitle: args.dealTitle,
   });
   return { shareUrl, message, title };
 }

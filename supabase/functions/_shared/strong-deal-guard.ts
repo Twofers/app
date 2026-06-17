@@ -1,5 +1,5 @@
 export const STRONG_DEAL_ONLY_MESSAGE =
-  "Twofer only allows strong deals (40%+ value). Try rephrasing to a clear BOGO.";
+  "Twofer only allows strong deals (40%+ value). Try rephrasing to a clear buy-one-get-one offer.";
 
 const STRONG_LANGUAGE_PATTERNS: RegExp[] = [
   /\bbogo\b/i,

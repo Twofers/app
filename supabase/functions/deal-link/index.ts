@@ -8,6 +8,7 @@ const WEBSITE_HOME = "https://www.twoferapp.com";
 // const APP_STORE  = "https://apps.apple.com/app/twofer/idXXXXXXXXXX";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 
 const SCHEME_PREFIX = "twoforone://deal/";
 const BRAND_COLOR = "#FF9F1C";
@@ -51,7 +52,7 @@ function buildLandingPage({
 }: LandingPageArgs): string {
   const schemeUrl = canOpenApp && dealId ? `${SCHEME_PREFIX}${dealId}` : "";
   const subtitle = canOpenApp
-    ? "Claim this BOGO deal in seconds - open Twofer and show it at the counter."
+    ? "Claim this local offer in seconds - open Twofer and show it at the counter."
     : "This Twofer deal is unavailable or has ended. Open Twofer to find live local deals.";
   const hint = canOpenApp
     ? "Don't have the app yet? Tap above to visit twoferapp.com.<br/>After installing, scan this code again to claim your deal!"
@@ -213,7 +214,7 @@ serve(async (req) => {
   return htmlResponse(
     buildLandingPage({
       dealId,
-      dealTitle: data.title || "A great deal is waiting for you",
+      dealTitle: getDealDisplayTitle({ title: data.title }, data.title) || "Limited-time local offer",
       businessName: nestedBusinessName(data),
       fallbackUrl,
       canOpenApp: true,

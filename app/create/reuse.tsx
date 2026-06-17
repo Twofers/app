@@ -15,6 +15,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Gray } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 
 type TemplateRow = {
   id: string;
@@ -179,6 +180,14 @@ export default function ReuseDealScreen() {
     } as Href);
   }
 
+  function templateTitle(row: TemplateRow): string {
+    return getDealDisplayTitle({ title: row.title }, row.title) || t("reuseHub.untitled");
+  }
+
+  function dealTitle(row: DealRow): string {
+    return getDealDisplayTitle(row, row.title) || t("reuseHub.untitled");
+  }
+
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
       {/* The stack header already shows the screen title; only the subtitle renders in-page. */}
@@ -223,7 +232,7 @@ export default function ReuseDealScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t("reuseHub.openTemplateA11y", {
                       defaultValue: "Open template {{title}}",
-                      title: row.title ?? t("reuseHub.untitled"),
+                      title: templateTitle(row),
                     })}
                   >
                     {tplPoster ? (
@@ -237,7 +246,7 @@ export default function ReuseDealScreen() {
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
-                        {row.title ?? t("reuseHub.untitled")}
+                        {templateTitle(row)}
                       </Text>
                       <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.55 }}>{t("reuseHub.openInAiAds")}</Text>
                     </View>
@@ -248,7 +257,7 @@ export default function ReuseDealScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t("reuseHub.deleteTemplateA11y", {
                       defaultValue: "Delete template {{title}}",
-                      title: row.title ?? t("reuseHub.untitled"),
+                      title: templateTitle(row),
                     })}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={{
@@ -304,7 +313,7 @@ export default function ReuseDealScreen() {
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
-                      {row.title ?? t("reuseHub.untitled")}
+                      {dealTitle(row)}
                     </Text>
                     {row.price != null ? (
                       <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>${Number(row.price).toFixed(2)}</Text>
