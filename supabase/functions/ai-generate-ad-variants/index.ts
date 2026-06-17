@@ -19,11 +19,14 @@ import { resolveOpenAiChatModel, chatCompletionTuning, isGpt5FamilyModel } from 
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import {
   buildPhotoAdImagePrompt,
-  enhanceUploadedPhoto,
-  generatePhotoAdImage,
+  enhanceUploadedPhotoWithTelemetry,
+  generatePhotoAdImageWithTelemetry,
   RESOLVED_IMAGE_GENERATE_MODEL,
   type PhotoTreatment,
+  type OpenAiImageAttempt,
 } from "../_shared/dalle-image.ts";
+import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
@@ -149,8 +152,9 @@ async function researchMenuItem(params: {
   itemHint: string;
   businessName: string;
   businessLocation: string;
+  costContext?: AiCostContext;
 }): Promise<ItemResearch> {
-  const { openAiKey, itemHint, businessName, businessLocation } = params;
+  const { openAiKey, itemHint, businessName, businessLocation, costContext } = params;
   const cleanHint = itemHint.trim().slice(0, 400);
   if (!cleanHint) {
     return { item_name: "", description: "", is_familiar: false };
@@ -173,26 +177,29 @@ async function researchMenuItem(params: {
     .filter(Boolean)
     .join("\n");
 
-  // Stage 1a: try the web-search model (best — looks up unfamiliar items live)
-  const webSearchResult = await callResearchModel({
-    openAiKey,
-    model: RESEARCH_MODEL,
-    prompt,
-    cleanHint,
-    isWebSearch: true,
-  });
-  if (webSearchResult) return webSearchResult;
-
-  // Stage 1b: fall back to the standard chat model — no live search, but uses training knowledge
-  // for the 90%+ of items that are well-known cafe staples.
+  // Stage 1a: use the standard model first; common cafe items do not need live lookup.
   const fallbackResult = await callResearchModel({
     openAiKey,
     model: CHAT_MODEL,
     prompt,
     cleanHint,
     isWebSearch: false,
+    costContext,
   });
-  if (fallbackResult) return fallbackResult;
+  if (fallbackResult?.is_familiar || shouldSkipWebSearchForMenuItem(cleanHint)) {
+    return fallbackResult ?? { item_name: cleanHint.slice(0, 60), description: "", is_familiar: true };
+  }
+
+  // Stage 1b: use search only for unfamiliar, ambiguous, local, or branded items.
+  const webSearchResult = await callResearchModel({
+    openAiKey,
+    model: RESEARCH_MODEL,
+    prompt,
+    cleanHint,
+    isWebSearch: true,
+    costContext,
+  });
+  if (webSearchResult) return webSearchResult;
 
   // Both failed — return the hint as item_name with no description
   return { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
@@ -204,8 +211,9 @@ async function callResearchModel(params: {
   prompt: string;
   cleanHint: string;
   isWebSearch: boolean;
+  costContext?: AiCostContext;
 }): Promise<ItemResearch | null> {
-  const { openAiKey, model, prompt, cleanHint, isWebSearch } = params;
+  const { openAiKey, model, prompt, cleanHint, isWebSearch, costContext } = params;
   try {
     // gpt-4o-search-preview rejects temperature; standard chat models accept it.
     // chatCompletionTuning also maps the token/temperature params correctly for the
@@ -240,9 +248,29 @@ async function callResearchModel(params: {
           status: res.status,
         }),
       );
+      await logAdCost(costContext ?? null, {
+        feature: "ad_research",
+        model,
+        endpoint: "chat.completions",
+        webSearchCalls: isWebSearch ? 1 : 0,
+        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+        success: false,
+        errorCode: `HTTP_${res.status}`,
+        errorMessage: `Research call failed with HTTP ${res.status}.`,
+      });
       return null;
     }
     const json = await res.json();
+    await logAdCost(costContext ?? null, {
+      feature: "ad_research",
+      model,
+      endpoint: "chat.completions",
+      usage: json?.usage ?? null,
+      webSearchCalls: isWebSearch ? 1 : 0,
+      openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+      responseId: typeof json?.id === "string" ? json.id : null,
+      success: true,
+    });
     const content = json?.choices?.[0]?.message?.content ?? "";
     const text = typeof content === "string" ? content.trim() : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -263,6 +291,15 @@ async function callResearchModel(params: {
         err: String(e).slice(0, 200),
       }),
     );
+    await logAdCost(costContext ?? null, {
+      feature: "ad_research",
+      model,
+      endpoint: "chat.completions",
+      webSearchCalls: isWebSearch ? 1 : 0,
+      success: false,
+      errorCode: "FETCH_ERROR",
+      errorMessage: String(e).slice(0, 500),
+    });
     return null;
   }
 }
@@ -283,6 +320,7 @@ async function generateCopy(params: {
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: SingleAd;
+  costContext: AiCostContext;
 }): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta">> {
   const {
     openAiKey,
@@ -298,6 +336,7 @@ async function generateCopy(params: {
     revisionPreset,
     revisionFeedback,
     previousAd,
+    costContext,
   } = params;
 
   // A previous ad is only passed in on revision calls (see the handler's generateCopy call).
@@ -344,9 +383,27 @@ async function generateCopy(params: {
 
       if (!res.ok) {
         const body = await res.text();
+        await logAdCost(costContext, {
+          feature: "ad_copy",
+          model: CHAT_MODEL,
+          endpoint: "chat.completions",
+          openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+          success: false,
+          errorCode: `HTTP_${res.status}`,
+          errorMessage: body.slice(0, 500),
+        });
         throw new Error(`OPENAI_COPY_${res.status}: ${body.slice(0, 200)}`);
       }
       const json = await res.json();
+      await logAdCost(costContext, {
+        feature: "ad_copy",
+        model: CHAT_MODEL,
+        endpoint: "chat.completions",
+        usage: json?.usage ?? null,
+        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+        responseId: typeof json?.id === "string" ? json.id : null,
+        success: true,
+      });
       const content = json?.choices?.[0]?.message?.content ?? "";
       try {
         return parseAiDealCopyVariants(typeof content === "string" ? content : "{}");
@@ -405,6 +462,57 @@ function defaultCta(lang: OutputLanguage): string {
 
 type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
 type AdQuota = { used: number; limit: number; remaining: number };
+
+type AiCostContext = {
+  admin: SupabaseClient;
+  businessId: string;
+  ownerUserId: string;
+  requestGroupId: string;
+};
+
+async function logAdCost(
+  ctx: AiCostContext | null,
+  input: {
+    feature: string;
+    model: string;
+    endpoint: string;
+    usage?: AiUsageInput | null;
+    webSearchCalls?: number;
+    openaiRequestId?: string | null;
+    responseId?: string | null;
+    success?: boolean;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  },
+): Promise<void> {
+  if (!ctx) return;
+  await logAiCost(ctx.admin, {
+    businessId: ctx.businessId,
+    ownerUserId: ctx.ownerUserId,
+    requestGroupId: ctx.requestGroupId,
+    ...input,
+  });
+}
+
+async function logImageAttempts(
+  ctx: AiCostContext,
+  feature: string,
+  attempts: readonly OpenAiImageAttempt[],
+): Promise<void> {
+  for (const attempt of attempts) {
+    await logAdCost(ctx, {
+      feature,
+      model: attempt.model,
+      endpoint: attempt.endpoint,
+      usage: attempt.usage,
+      openaiRequestId: attempt.openaiRequestId,
+      responseId: attempt.responseId,
+      success: attempt.success,
+      errorCode: attempt.errorCode,
+      errorMessage: attempt.errorMessage,
+    });
+  }
+}
 
 type ImageQaTelemetry = {
   checked: boolean;
@@ -472,6 +580,7 @@ async function inspectGeneratedImageForOffer(params: {
   openAiKey: string;
   imageBytes: Uint8Array;
   requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   if (requiredVisualItems.length === 0) return null;
@@ -511,14 +620,40 @@ async function inspectGeneratedImageForOffer(params: {
     });
     if (!res.ok) {
       console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_http", status: res.status }));
+      await logAdCost(params.costContext, {
+        feature: "image_qa",
+        model: CHAT_MODEL,
+        endpoint: "responses",
+        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+        success: false,
+        errorCode: `HTTP_${res.status}`,
+        errorMessage: `Image QA failed with HTTP ${res.status}.`,
+      });
       return null;
     }
     const json = await res.json();
+    await logAdCost(params.costContext, {
+      feature: "image_qa",
+      model: CHAT_MODEL,
+      endpoint: "responses",
+      usage: json?.usage ?? null,
+      openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+      responseId: typeof json?.id === "string" ? json.id : null,
+      success: true,
+    });
     const text = extractResponseOutputText(json);
     if (!text) return null;
     return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
   } catch (e) {
     console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", err: String(e).slice(0, 200) }));
+    await logAdCost(params.costContext, {
+      feature: "image_qa",
+      model: CHAT_MODEL,
+      endpoint: "responses",
+      success: false,
+      errorCode: "FETCH_ERROR",
+      errorMessage: String(e).slice(0, 500),
+    });
     return null;
   }
 }
@@ -534,6 +669,7 @@ async function produceImage(params: {
   itemHint: string;
   businessName: string;
   offerContract: DealOfferContract;
+  costContext: AiCostContext;
 }): Promise<{
   posterStoragePath: string | null;
   source: SingleAd["photo_source"];
@@ -552,6 +688,7 @@ async function produceImage(params: {
     itemHint,
     businessName,
     offerContract,
+    costContext,
   } = params;
 
   const ts = Date.now();
@@ -599,12 +736,14 @@ async function produceImage(params: {
       return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
     }
 
-    const enhanced = await enhanceUploadedPhoto({
+    const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
       openAiKey,
       imageBytes,
       imageMime,
       treatment: photoTreatment,
     });
+    await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
+    const enhanced = enhancedResult.bytes;
 
     if (!enhanced) {
       // Enhancement failed — fall back to the original photo so the user still gets an ad
@@ -639,7 +778,9 @@ async function produceImage(params: {
     businessName,
     requiredVisualItems,
   });
-  let png = await generatePhotoAdImage(openAiKey, prompt);
+  let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
+  await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
+  let png = imageGeneration.bytes;
   const qa: ImageQaTelemetry = {
     checked: requiredVisualItems.length > 1,
     attempts: 0,
@@ -656,6 +797,7 @@ async function produceImage(params: {
       openAiKey,
       imageBytes: png,
       requiredVisualItems,
+      costContext,
     });
     qa.attempts = 1;
     if (!firstQa) {
@@ -675,13 +817,16 @@ async function produceImage(params: {
         requiredVisualItems,
         missingItems: firstQa.missing_items,
       });
-      const retryPng = await generatePhotoAdImage(openAiKey, retryPrompt);
+      const retryGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, retryPrompt);
+      await logImageAttempts(costContext, "image_generation_retry", retryGeneration.attempts);
+      const retryPng = retryGeneration.bytes;
       if (retryPng) {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey,
           imageBytes: retryPng,
           requiredVisualItems,
+          costContext,
         });
         qa.attempts = 2;
         if (!retryQa) {
@@ -915,6 +1060,10 @@ serve(async (req) => {
       : "en";
     const outputLanguage: OutputLanguage =
       rawOutLang === "es" || rawOutLang === "ko" ? rawOutLang : "en";
+    const requestGroupId =
+      typeof body.request_group_id === "string" && /^[0-9a-f-]{36}$/i.test(body.request_group_id.trim())
+        ? body.request_group_id.trim()
+        : crypto.randomUUID();
 
     const previousAdRaw = body.previous_ad;
     const revisionTargetRaw = typeof body.revision_target === "string"
@@ -1093,6 +1242,13 @@ serve(async (req) => {
     }
 
     // ── Build a SingleAd by running the right stages ──
+    const costContext: AiCostContext = {
+      admin,
+      businessId,
+      ownerUserId: user.id,
+      requestGroupId,
+    };
+
     const previousAd = isRevision ? coerceSingleAd(previousAdRaw as Record<string, unknown>) : null;
     const sourceHint = hintText || previousAd?.item_research.item_name || "";
 
@@ -1106,6 +1262,7 @@ serve(async (req) => {
         itemHint: sourceHint,
         businessName,
         businessLocation: businessContext.location ?? "",
+        costContext,
       });
     }
 
@@ -1143,6 +1300,7 @@ serve(async (req) => {
           revisionPreset: revisionPreset || undefined,
           revisionFeedback: revisionFeedback || undefined,
           previousAd: previousAd ?? undefined,
+          costContext,
         });
       } catch (e) {
         console.log(
@@ -1194,6 +1352,7 @@ serve(async (req) => {
         itemHint: sourceHint,
         businessName,
         offerContract,
+        costContext,
       });
     }
 

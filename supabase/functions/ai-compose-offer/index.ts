@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
-import { buildPosterImagePrompt, tryGeneratePosterPng } from "../_shared/dalle-image.ts";
+import { buildPosterImagePrompt, tryGeneratePosterPngWithTelemetry } from "../_shared/dalle-image.ts";
+import { calculateAiCost, logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
@@ -25,6 +26,36 @@ const OFFER_TYPES = [
   "free_add_on_with_purchase",
   "simple_bundle_offer",
 ] as const;
+
+type AiCostContext = {
+  admin: any;
+  businessId: string;
+  ownerUserId: string;
+  requestGroupId: string;
+};
+
+async function logComposeCost(
+  ctx: AiCostContext,
+  input: {
+    feature: string;
+    model: string;
+    endpoint: string;
+    usage?: AiUsageInput | null;
+    audioSeconds?: number;
+    openaiRequestId?: string | null;
+    responseId?: string | null;
+    success?: boolean;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  },
+): Promise<void> {
+  await logAiCost(ctx.admin, {
+    businessId: ctx.businessId,
+    ownerUserId: ctx.ownerUserId,
+    requestGroupId: ctx.requestGroupId,
+    ...input,
+  });
+}
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -49,7 +80,18 @@ function normalizePrompt(parts: (string | null | undefined)[]): string {
 }
 
 
-async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<string> {
+function estimateAudioSecondsFromBase64(base64Audio: string): number {
+  const rawChars = base64Audio.includes(",") ? base64Audio.split(",").at(-1) ?? "" : base64Audio;
+  const approxBytes = Math.floor((rawChars.length * 3) / 4);
+  return Math.max(1, Math.ceil(approxBytes / 16_000));
+}
+
+async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<{
+  text: string;
+  usage: AiUsageInput | null;
+  openaiRequestId: string | null;
+  responseId: string | null;
+}> {
   const raw = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
   const blob = new Blob([raw], { type: "audio/m4a" });
   const form = new FormData();
@@ -65,7 +107,12 @@ async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<
     throw new Error(`Whisper failed: ${t.slice(0, 200)}`);
   }
   const j = await res.json();
-  return typeof j.text === "string" ? j.text.trim() : "";
+  return {
+    text: typeof j.text === "string" ? j.text.trim() : "",
+    usage: j?.usage ?? null,
+    openaiRequestId: openAiRequestIdFromHeaders(res.headers),
+    responseId: typeof j?.id === "string" ? j.id : null,
+  };
 }
 
 serve(async (req) => {
@@ -204,8 +251,28 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+      const audioSeconds = typeof body.audio_duration_seconds === "number" && Number.isFinite(body.audio_duration_seconds)
+        ? Math.max(0, body.audio_duration_seconds)
+        : estimateAudioSecondsFromBase64(audioBase64);
+      const costContext: AiCostContext = {
+        admin,
+        businessId: business_id,
+        ownerUserId: user.id,
+        requestGroupId: crypto.randomUUID(),
+      };
       try {
-        const tx = await transcribeAudio(openAiKey, audioBase64);
+        const txResult = await transcribeAudio(openAiKey, audioBase64);
+        await logComposeCost(costContext, {
+          feature: "voice_transcription",
+          model: WHISPER_MODEL,
+          endpoint: "audio.transcriptions",
+          usage: txResult.usage,
+          audioSeconds,
+          openaiRequestId: txResult.openaiRequestId,
+          responseId: txResult.responseId,
+          success: true,
+        });
+        const tx = txResult.text;
         const th = await sha256Hex(audioBase64.slice(0, 4000));
         await admin.from("ai_generation_logs").insert({
           business_id,
@@ -225,6 +292,15 @@ serve(async (req) => {
         );
       } catch (e) {
         console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error", err: String(e) }));
+        await logComposeCost(costContext, {
+          feature: "voice_transcription",
+          model: WHISPER_MODEL,
+          endpoint: "audio.transcriptions",
+          audioSeconds,
+          success: false,
+          errorCode: "TRANSCRIPTION_FAILED",
+          errorMessage: String(e).slice(0, 500),
+        });
         return new Response(
           JSON.stringify({
             error: e instanceof Error ? e.message : "Voice transcription failed.",
@@ -464,6 +540,13 @@ serve(async (req) => {
       );
     }
 
+    const costContext: AiCostContext = {
+      admin,
+      businessId: business_id,
+      ownerUserId: user.id,
+      requestGroupId: crypto.randomUUID(),
+    };
+
     const systemPrompt = [
       "You help local cafés and small businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
       `Allowed offer_type values only: ${OFFER_TYPES.join(", ")}.`,
@@ -546,6 +629,15 @@ serve(async (req) => {
 
     if (!openAiRes.ok) {
       const errText = await openAiRes.text();
+      await logComposeCost(costContext, {
+        feature: "compose_offer",
+        model: MODEL,
+        endpoint: "chat.completions",
+        openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
+        success: false,
+        errorCode: `HTTP_${openAiRes.status}`,
+        errorMessage: errText.slice(0, 500),
+      });
       await admin.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
@@ -569,14 +661,24 @@ serve(async (req) => {
     }
 
     const completion = await openAiRes.json();
+    await logComposeCost(costContext, {
+      feature: "compose_offer",
+      model: MODEL,
+      endpoint: "chat.completions",
+      usage: completion?.usage ?? null,
+      openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
+      responseId: typeof completion?.id === "string" ? completion.id : null,
+      success: true,
+    });
     const content = completion?.choices?.[0]?.message?.content;
     const usage = completion?.usage ?? {};
     const inTok = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
     const outTok = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null;
-    const estCost =
-      inTok != null && outTok != null
-        ? Number(((inTok * 0.15 + outTok * 0.6) / 1_000_000).toFixed(6))
-        : null;
+    const estCost = calculateAiCost({
+      model: MODEL,
+      endpoint: "chat.completions",
+      usage,
+    }).estimated_cost_usd;
 
     let parsed: Record<string, unknown>;
     try {
@@ -655,7 +757,21 @@ serve(async (req) => {
         sub,
         visualDirection,
       });
-      const png = await tryGeneratePosterPng(openAiKey, imgPrompt);
+      const posterResult = await tryGeneratePosterPngWithTelemetry(openAiKey, imgPrompt);
+      for (const attempt of posterResult.attempts) {
+        await logComposeCost(costContext, {
+          feature: "poster_image_generation",
+          model: attempt.model,
+          endpoint: attempt.endpoint,
+          usage: attempt.usage,
+          openaiRequestId: attempt.openaiRequestId,
+          responseId: attempt.responseId,
+          success: attempt.success,
+          errorCode: attempt.errorCode,
+          errorMessage: attempt.errorMessage,
+        });
+      }
+      const png = posterResult.bytes;
       if (png && png.length > 100) {
         const storagePath = `${business_id}/ai_poster_${Date.now()}.png`;
         const { error: upErr } = await admin.storage.from("deal-photos").upload(storagePath, png, {

@@ -5,6 +5,7 @@ import { validateStrongDealOnly } from "../_shared/strong-deal-guard.ts";
 import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
@@ -255,6 +256,7 @@ serve(async (req) => {
         }
       );
     }
+    const requestGroupId = crypto.randomUUID();
 
     const prompt = [
       "You are generating a mobile-optimized restaurant deal ad.",
@@ -313,6 +315,18 @@ serve(async (req) => {
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
+      await logAiCost(supabase, {
+        businessId: business_id,
+        ownerUserId: user.id,
+        requestGroupId,
+        feature: "legacy_create_deal",
+        model: CHAT_MODEL,
+        endpoint: "chat.completions",
+        openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+        success: false,
+        errorCode: `HTTP_${aiRes.status}`,
+        errorMessage: text.slice(0, 500),
+      });
       return new Response(
         JSON.stringify({ error: "AI generation failed.", details: text }),
         {
@@ -323,6 +337,18 @@ serve(async (req) => {
     }
 
     const aiJson = await aiRes.json();
+    await logAiCost(supabase, {
+      businessId: business_id,
+      ownerUserId: user.id,
+      requestGroupId,
+      feature: "legacy_create_deal",
+      model: CHAT_MODEL,
+      endpoint: "chat.completions",
+      usage: aiJson?.usage ?? null,
+      openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+      responseId: typeof aiJson?.id === "string" ? aiJson.id : null,
+      success: true,
+    });
     const content = aiJson?.choices?.[0]?.message?.content ?? "";
     let result: AiResult;
     try {

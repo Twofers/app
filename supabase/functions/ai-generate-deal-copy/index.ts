@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
@@ -155,6 +156,7 @@ serve(async (req) => {
     }
 
     const CHAT_MODEL = resolveOpenAiChatModel();
+    const requestGroupId = crypto.randomUUID();
 
     const DEFAULT_MONTHLY_LIMIT = Number(Deno.env.get("AI_COPY_MONTHLY_LIMIT") ?? "30");
     const monthStart = new Date();
@@ -239,6 +241,20 @@ serve(async (req) => {
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
+      if (resolvedBusinessId) {
+        await logAiCost(supabase, {
+          businessId: resolvedBusinessId,
+          ownerUserId: user.id,
+          requestGroupId,
+          feature: "deal_copy",
+          model: CHAT_MODEL,
+          endpoint: "chat.completions",
+          openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+          success: false,
+          errorCode: `HTTP_${aiRes.status}`,
+          errorMessage: text.slice(0, 500),
+        });
+      }
       return new Response(
         JSON.stringify({ error: "AI generation failed.", details: text }),
         {
@@ -249,6 +265,20 @@ serve(async (req) => {
     }
 
     const aiJson = await aiRes.json();
+    if (resolvedBusinessId) {
+      await logAiCost(supabase, {
+        businessId: resolvedBusinessId,
+        ownerUserId: user.id,
+        requestGroupId,
+        feature: "deal_copy",
+        model: CHAT_MODEL,
+        endpoint: "chat.completions",
+        usage: aiJson?.usage ?? null,
+        openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+        responseId: typeof aiJson?.id === "string" ? aiJson.id : null,
+        success: true,
+      });
+    }
     const usage = aiJson?.usage;
     const content = aiJson?.choices?.[0]?.message?.content ?? "";
     let result: AiResult;

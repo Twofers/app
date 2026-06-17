@@ -32,6 +32,48 @@ const MIN_EDIT_IMAGE_BYTES = 64;
  */
 const IMAGE_CALL_TIMEOUT_MS = 60_000;
 
+export type OpenAiImageAttempt = {
+  model: string;
+  endpoint: "images.generations" | "images.edits";
+  usage: Record<string, unknown> | null;
+  openaiRequestId: string | null;
+  responseId: string | null;
+  success: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  size: string;
+  quality: string | null;
+  outputFormat: string | null;
+};
+
+export type OpenAiImageResult = {
+  bytes: Uint8Array | null;
+  attempts: OpenAiImageAttempt[];
+};
+
+function requestIdFromHeaders(headers: Headers): string | null {
+  return headers.get("x-request-id") ?? headers.get("openai-request-id");
+}
+
+function errorCodeFromJson(value: unknown): string | null {
+  const err = value && typeof value === "object" ? (value as { error?: unknown }).error : null;
+  if (!err || typeof err !== "object") return null;
+  const code = (err as { code?: unknown; type?: unknown }).code ?? (err as { type?: unknown }).type;
+  return typeof code === "string" ? code.slice(0, 80) : null;
+}
+
+function imageResponseMetadata(json: unknown): {
+  usage: Record<string, unknown> | null;
+  responseId: string | null;
+} {
+  const obj = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+  const usage = obj.usage && typeof obj.usage === "object"
+    ? (obj.usage as Record<string, unknown>)
+    : null;
+  const responseId = typeof obj.id === "string" ? obj.id : null;
+  return { usage, responseId };
+}
+
 /**
  * Picks the first non-empty allowlisted value from ordered env candidates.
  * Legacy: `OPENAI_IMAGE_MODEL` / `OPENAI_IMAGE_EDIT_MODEL` remain supported for older secrets.
@@ -163,7 +205,20 @@ async function attemptImageGeneration(
   logTag: string,
   /** Poster flow historically used vivid + standard on DALL·E 3 only; ignored for GPT image models. */
   posterStyleDalle3?: boolean,
-): Promise<Uint8Array | null> {
+): Promise<OpenAiImageResult> {
+  const attemptBase: OpenAiImageAttempt = {
+    model,
+    endpoint: "images.generations",
+    usage: null,
+    openaiRequestId: null,
+    responseId: null,
+    success: false,
+    errorCode: null,
+    errorMessage: null,
+    size: "1024x1024",
+    quality: null,
+    outputFormat: null,
+  };
   try {
     const payload: Record<string, unknown> = {
       model,
@@ -175,12 +230,15 @@ async function attemptImageGeneration(
       payload.quality = posterStyleDalle3 ? "standard" : "hd";
       payload.style = posterStyleDalle3 ? "vivid" : "natural";
       payload.response_format = "b64_json";
+      attemptBase.quality = String(payload.quality);
     } else if (isDalle2(model)) {
       payload.response_format = "b64_json";
     } else if (usesGptImageGenerationShape(model)) {
       // GPT image models: b64 in response by default; do not send response_format or dall-e-3 style.
       payload.quality = "high";
       payload.output_format = "png";
+      attemptBase.quality = "high";
+      attemptBase.outputFormat = "png";
     }
     const res = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -191,8 +249,15 @@ async function attemptImageGeneration(
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
     });
+    attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
       const errBody = await res.text();
+      let errJson: unknown = null;
+      try {
+        errJson = JSON.parse(errBody);
+      } catch {
+        /* response was not JSON */
+      }
       console.log(
         JSON.stringify({
           tag: logTag,
@@ -202,12 +267,37 @@ async function attemptImageGeneration(
           body: errBody.slice(0, 800),
         }),
       );
-      return null;
+      return {
+        bytes: null,
+        attempts: [{
+          ...attemptBase,
+          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
+          errorMessage: errBody.slice(0, 500),
+        }],
+      };
     }
-    return await decodeImageResponse(res, logTag);
+    const decoded = await decodeImageResponse(res, logTag);
+    return {
+      bytes: decoded.bytes,
+      attempts: [{
+        ...attemptBase,
+        usage: decoded.usage,
+        responseId: decoded.responseId,
+        success: decoded.bytes !== null,
+        errorCode: decoded.bytes ? null : "NO_IMAGE_DATA",
+        errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
+      }],
+    };
   } catch (e) {
     console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, err: String(e) }));
-    return null;
+    return {
+      bytes: null,
+      attempts: [{
+        ...attemptBase,
+        errorCode: "FETCH_ERROR",
+        errorMessage: String(e).slice(0, 500),
+      }],
+    };
   }
 }
 
@@ -232,10 +322,10 @@ async function requestImageGenerationJson(
   prompt: string,
   logTag: string,
   posterStyleDalle3?: boolean,
-): Promise<Uint8Array | null> {
-  const png = await attemptImageGeneration(openAiKey, model, prompt, logTag, posterStyleDalle3);
-  if (png) return png;
-  if (model === OPENAI_IMAGE_MODEL_FALLBACK) return null; // already tried the safe model
+): Promise<OpenAiImageResult> {
+  const first = await attemptImageGeneration(openAiKey, model, prompt, logTag, posterStyleDalle3);
+  if (first.bytes) return first;
+  if (model === OPENAI_IMAGE_MODEL_FALLBACK) return first; // already tried the safe model
 
   console.log(
     JSON.stringify({
@@ -245,7 +335,8 @@ async function requestImageGenerationJson(
       to: OPENAI_IMAGE_MODEL_FALLBACK,
     }),
   );
-  return await attemptImageGeneration(openAiKey, OPENAI_IMAGE_MODEL_FALLBACK, prompt, logTag, posterStyleDalle3);
+  const fallback = await attemptImageGeneration(openAiKey, OPENAI_IMAGE_MODEL_FALLBACK, prompt, logTag, posterStyleDalle3);
+  return { bytes: fallback.bytes, attempts: [...first.attempts, ...fallback.attempts] };
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +348,15 @@ export async function generatePhotoAdImage(
   prompt: string,
   logTag = "ai_ads_v2",
 ): Promise<Uint8Array | null> {
+  const result = await generatePhotoAdImageWithTelemetry(openAiKey, prompt, logTag);
+  return result.bytes;
+}
+
+export async function generatePhotoAdImageWithTelemetry(
+  openAiKey: string,
+  prompt: string,
+  logTag = "ai_ads_v2",
+): Promise<OpenAiImageResult> {
   return await requestImageGenerationJson(
     openAiKey,
     RESOLVED_IMAGE_GENERATE_MODEL,
@@ -336,9 +436,40 @@ export async function enhanceUploadedPhoto(params: {
   treatment: PhotoTreatment;
   logTag?: string;
 }): Promise<Uint8Array | null> {
+  const result = await enhanceUploadedPhotoWithTelemetry(params);
+  return result.bytes;
+}
+
+export async function enhanceUploadedPhotoWithTelemetry(params: {
+  openAiKey: string;
+  imageBytes: Uint8Array;
+  imageMime: string;
+  treatment: PhotoTreatment;
+  logTag?: string;
+}): Promise<OpenAiImageResult> {
   const { openAiKey, imageBytes, imageMime, treatment, logTag = "ai_ads_v2_enhance" } = params;
+  const attemptBase: OpenAiImageAttempt = {
+    model: RESOLVED_IMAGE_EDIT_MODEL,
+    endpoint: "images.edits",
+    usage: null,
+    openaiRequestId: null,
+    responseId: null,
+    success: false,
+    errorCode: null,
+    errorMessage: null,
+    size: "1024x1024",
+    quality: "high",
+    outputFormat: "png",
+  };
   if (!validateEditInput(imageBytes, imageMime)) {
-    return null;
+    return {
+      bytes: null,
+      attempts: [{
+        ...attemptBase,
+        errorCode: "INVALID_INPUT_IMAGE",
+        errorMessage: "Image edit input validation failed.",
+      }],
+    };
   }
   try {
     const model = RESOLVED_IMAGE_EDIT_MODEL;
@@ -361,8 +492,15 @@ export async function enhanceUploadedPhoto(params: {
       body: form,
       signal: AbortSignal.timeout(IMAGE_CALL_TIMEOUT_MS),
     });
+    attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
       const errBody = await res.text();
+      let errJson: unknown = null;
+      try {
+        errJson = JSON.parse(errBody);
+      } catch {
+        /* response was not JSON */
+      }
       console.log(
         JSON.stringify({
           tag: logTag,
@@ -372,14 +510,39 @@ export async function enhanceUploadedPhoto(params: {
           body: errBody.slice(0, 800),
         }),
       );
-      return null;
+      return {
+        bytes: null,
+        attempts: [{
+          ...attemptBase,
+          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
+          errorMessage: errBody.slice(0, 500),
+        }],
+      };
     }
-    return await decodeImageResponse(res, logTag);
+    const decoded = await decodeImageResponse(res, logTag);
+    return {
+      bytes: decoded.bytes,
+      attempts: [{
+        ...attemptBase,
+        usage: decoded.usage,
+        responseId: decoded.responseId,
+        success: decoded.bytes !== null,
+        errorCode: decoded.bytes ? null : "NO_IMAGE_DATA",
+        errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
+      }],
+    };
   } catch (e) {
     console.log(
       JSON.stringify({ tag: logTag, event: "enhance_error", treatment, err: String(e) }),
     );
-    return null;
+    return {
+      bytes: null,
+      attempts: [{
+        ...attemptBase,
+        errorCode: "FETCH_ERROR",
+        errorMessage: String(e).slice(0, 500),
+      }],
+    };
   }
 }
 
@@ -392,6 +555,15 @@ export async function tryGeneratePosterPng(
   prompt: string,
   logTag = "ai_image",
 ): Promise<Uint8Array | null> {
+  const result = await tryGeneratePosterPngWithTelemetry(openAiKey, prompt, logTag);
+  return result.bytes;
+}
+
+export async function tryGeneratePosterPngWithTelemetry(
+  openAiKey: string,
+  prompt: string,
+  logTag = "ai_image",
+): Promise<OpenAiImageResult> {
   const model = RESOLVED_IMAGE_GENERATE_MODEL;
   return await requestImageGenerationJson(openAiKey, model, prompt, logTag, isDalle3(model));
 }
@@ -403,15 +575,16 @@ export async function tryGeneratePosterPng(
 async function decodeImageResponse(
   res: Response,
   logTag: string,
-): Promise<Uint8Array | null> {
+): Promise<{ bytes: Uint8Array | null; usage: Record<string, unknown> | null; responseId: string | null }> {
   const j = await res.json();
+  const meta = imageResponseMetadata(j);
   const row = j?.data?.[0] as Record<string, unknown> | undefined;
   const b64 = row?.b64_json;
   if (typeof b64 === "string" && b64.length > 0) {
     const bin = atob(b64);
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
+    return { bytes: out, ...meta };
   }
   const imageUrl = typeof row?.url === "string" ? row.url : null;
   if (imageUrl) {
@@ -424,13 +597,13 @@ async function decodeImageResponse(
           status: imgRes.status,
         }),
       );
-      return null;
+      return { bytes: null, ...meta };
     }
     const buf = new Uint8Array(await imgRes.arrayBuffer());
-    return buf.length > 0 ? buf : null;
+    return { bytes: buf.length > 0 ? buf : null, ...meta };
   }
   console.log(
     JSON.stringify({ tag: logTag, event: "image_gen_no_data" }),
   );
-  return null;
+  return { bytes: null, ...meta };
 }

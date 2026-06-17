@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 
 type AppLocale = "en" | "es" | "ko";
 type TransPhrase = { rx: RegExp; es: string; ko: string };
@@ -183,6 +184,10 @@ serve(async (req) => {
     const businessIdFromBody = typeof body.business_id === "string" ? body.business_id.trim() : "";
     const directMode = Boolean(businessIdFromBody && ("title" in body || "description" in body));
     const requestHash = dealId ? `translate:${dealId}` : `translate:direct:${crypto.randomUUID()}`;
+    const requestGroupId =
+      typeof body.request_group_id === "string" && /^[0-9a-f-]{36}$/i.test(body.request_group_id.trim())
+        ? body.request_group_id.trim()
+        : crypto.randomUUID();
 
     let title = "";
     let description = "";
@@ -298,6 +303,19 @@ serve(async (req) => {
 
     if (!aiRes.ok) {
       console.log(JSON.stringify({ tag: "ai_translate_deal", event: "openai_error", status: aiRes.status }));
+      await logAiCost(admin, {
+        businessId,
+        dealId: dealId || null,
+        ownerUserId: user.id,
+        requestGroupId,
+        feature: "deal_translation",
+        model: chatModel,
+        endpoint: "chat.completions",
+        openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+        success: false,
+        errorCode: `HTTP_${aiRes.status}`,
+        errorMessage: `Translation call failed with HTTP ${aiRes.status}.`,
+      });
       await logTranslation(admin, {
         businessId,
         userId: user.id,
@@ -313,6 +331,19 @@ serve(async (req) => {
     const aiJson = await aiRes.json();
     const usage = aiJson?.usage;
     const content = aiJson?.choices?.[0]?.message?.content ?? "";
+    await logAiCost(admin, {
+      businessId,
+      dealId: dealId || null,
+      ownerUserId: user.id,
+      requestGroupId,
+      feature: "deal_translation",
+      model: chatModel,
+      endpoint: "chat.completions",
+      usage: usage ?? null,
+      openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
+      responseId: typeof aiJson?.id === "string" ? aiJson.id : null,
+      success: true,
+    });
 
     let result: TranslationResult;
     try {

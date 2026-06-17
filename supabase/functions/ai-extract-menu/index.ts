@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
@@ -338,6 +339,18 @@ serve(async (req) => {
     if (!openAiRes.ok) {
       const errText = await openAiRes.text();
       console.log(JSON.stringify({ tag: "ai_extract_menu", event: "openai_http", status: openAiRes.status }));
+      await logAiCost(admin, {
+        businessId: business_id,
+        ownerUserId: user.id,
+        requestGroupId: crypto.randomUUID(),
+        feature: "menu_extraction",
+        model: MODEL,
+        endpoint: "responses",
+        openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
+        success: false,
+        errorCode: `HTTP_${openAiRes.status}`,
+        errorMessage: errText.slice(0, 500),
+      });
       return new Response(
         JSON.stringify({
           error: "Menu scan service error. Try again shortly.",
@@ -348,6 +361,19 @@ serve(async (req) => {
     }
 
     const responseJson = await openAiRes.json();
+    const menuRequestGroupId = crypto.randomUUID();
+    await logAiCost(admin, {
+      businessId: business_id,
+      ownerUserId: user.id,
+      requestGroupId: menuRequestGroupId,
+      feature: "menu_extraction",
+      model: MODEL,
+      endpoint: "responses",
+      usage: responseJson?.usage ?? null,
+      openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
+      responseId: typeof responseJson?.id === "string" ? responseJson.id : null,
+      success: true,
+    });
     const apiStatus = (responseJson as { status?: string }).status;
     if (apiStatus && apiStatus !== "completed") {
       const incomplete = (responseJson as { incomplete_details?: unknown }).incomplete_details;
