@@ -144,6 +144,26 @@ export function DealEligibilityForm({
     );
   }
 
+  function eligibleMessage() {
+    if (activeType.id !== "PERCENT_OFF_SINGLE_ITEM") {
+      const estimate =
+        eligibility.customerValuePercent != null
+          ? ` Estimated value is about ${eligibility.customerValuePercent}%.`
+          : "";
+      return t("dealEligibility.validFreeItemBody", {
+        defaultValue: `Eligible: customers get a named item free with purchase.${estimate}`,
+      });
+    }
+    if (eligibility.customerValuePercent == null) {
+      return t("dealEligibility.validPercentBody", {
+        defaultValue: "Eligible: discount is at least 40% for one item.",
+      });
+    }
+    return t("dealEligibility.validBody", {
+      defaultValue: `Customer value is about ${eligibility.customerValuePercent}%.`,
+    });
+  }
+
   return (
     <View
       style={{
@@ -226,7 +246,7 @@ export function DealEligibilityForm({
               />
             </View>
             {renderCurrencyField(
-              t("dealEligibility.itemValueLabel", { defaultValue: "Retail value" }),
+              t("dealEligibility.itemValueLabel", { defaultValue: "Retail value (optional)" }),
               "itemRetailValue",
             )}
           </View>
@@ -247,11 +267,11 @@ export function DealEligibilityForm({
             : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {renderCurrencyField(
-              t("dealEligibility.requiredValueLabel", { defaultValue: "Buy item value" }),
+              t("dealEligibility.requiredValueLabel", { defaultValue: "Buy item value (optional)" }),
               "requiredItemRetailValue",
             )}
             {renderCurrencyField(
-              t("dealEligibility.freeValueLabel", { defaultValue: "Free item value" }),
+              t("dealEligibility.freeValueLabel", { defaultValue: "Free item value (optional)" }),
               "freeItemRetailValue",
             )}
           </View>
@@ -274,9 +294,7 @@ export function DealEligibilityForm({
         </Text>
         <Text style={{ marginTop: 4, color: textOnMuted, lineHeight: 18, fontSize: 12 }}>
           {eligibility.eligible
-            ? t("dealEligibility.validBody", {
-                defaultValue: `Customer value is about ${eligibility.customerValuePercent ?? 40}%.`,
-              })
+            ? eligibleMessage()
             : eligibility.message ??
               t("dealEligibility.invalidBody", {
                 defaultValue:
