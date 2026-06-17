@@ -232,6 +232,28 @@ serve(async (req) => {
       return jsonResponse({ ok: true, skipped: true, ...emptyResult }, 200, corsHeaders);
     }
 
+    // Monthly per-business cap (section-4 decision: 30 AI generations/month per
+    // feature). Mirrors ai-generate-deal-copy. The background caller
+    // (translateDeal) swallows this 429 — the deal simply keeps its source text;
+    // the direct caller surfaces the message. Override via AI_TRANSLATE_MONTHLY_LIMIT.
+    const TRANSLATE_MONTHLY_LIMIT = Number(Deno.env.get("AI_TRANSLATE_MONTHLY_LIMIT") ?? "30");
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const { count: usedThisMonth } = await admin
+      .from("ai_generation_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("request_type", "deal_translate")
+      .gte("created_at", monthStart.toISOString());
+    if (usedThisMonth !== null && usedThisMonth >= TRANSLATE_MONTHLY_LIMIT) {
+      return jsonResponse(
+        { error: "Monthly translation limit reached. Try again next month." },
+        429,
+        corsHeaders,
+      );
+    }
+
     if (!openAiKey) {
       const result = fallbackResult(title, description, sourceLocale);
       if (!directMode) {
