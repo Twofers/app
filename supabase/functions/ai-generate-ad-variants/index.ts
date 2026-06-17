@@ -21,6 +21,7 @@ import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhoto,
   generatePhotoAdImage,
+  RESOLVED_IMAGE_GENERATE_MODEL,
   type PhotoTreatment,
 } from "../_shared/dalle-image.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -798,6 +799,12 @@ function buildGenerationTelemetry(params: {
       headline: copy.headline,
       offer: copy.short_description,
       image_prompt: imageResult.prompt,
+    },
+    image_generation: {
+      source: imageResult.source,
+      treatment: imageResult.treatment,
+      model: imageResult.source === "generated" ? RESOLVED_IMAGE_GENERATE_MODEL : null,
+      produced_image: imageResult.posterStoragePath !== null,
     },
     required_visual_items: buildRequiredVisualItems(offerContract),
     validation_rule_ids: validationRuleIds,
