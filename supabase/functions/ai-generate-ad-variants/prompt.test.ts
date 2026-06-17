@@ -66,16 +66,22 @@ describe("buildAdCopyPrompt", () => {
   it("includes good and bad examples", () => {
     expect(basePrompt.system).toContain("Bad:");
     expect(basePrompt.system).toContain("Enjoy a delicious treat today");
-    expect(basePrompt.system).toContain("Midday latte break?");
-    expect(basePrompt.system).toContain("Afternoon coffee run?");
+    expect(basePrompt.system).toContain("9460 N MacArthur Blvd");
+    expect(basePrompt.system).toContain("Buy any bagel, get one coffee free.");
+    expect(basePrompt.system).toContain("Buy one cold brew and get one cold brew free.");
   });
 
-  it("passes the locked contract, time window, and quantity facts", () => {
+  it("passes the locked contract while keeping metadata out of generated fields", () => {
     expect(basePrompt.userText).toContain("Customer buys 1 coffee.");
     expect(basePrompt.userText).toContain("Customer gets 1 bagel free.");
     expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
-    expect(basePrompt.userText).toContain("Today 11:30 AM to 1:00 PM");
-    expect(basePrompt.userText).toContain("20 available");
+    expect(basePrompt.system).toContain("Do not include street addresses");
+    expect(basePrompt.system).toContain("Terms, location, schedule, and quantity are app metadata");
+    expect(basePrompt.system).not.toContain("Locked terms line:");
+    expect(basePrompt.userText).toContain("Do not include business name, address, availability, or quantity");
+    expect(basePrompt.userText).not.toContain("Address context:");
+    expect(basePrompt.userText).not.toContain("Time window:");
+    expect(basePrompt.userText).not.toContain("Quantity scarcity:");
   });
 
   it("requires the structured output schema", () => {

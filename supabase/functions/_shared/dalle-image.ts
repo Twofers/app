@@ -129,10 +129,15 @@ export function buildPhotoAdImagePrompt(params: {
   itemName: string;
   itemDescription?: string;
   businessName?: string;
+  requiredVisualItems?: readonly string[];
 }): string {
-  const { itemName, itemDescription, businessName } = params;
+  const { itemName, itemDescription, businessName, requiredVisualItems } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
+  const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
   return [
+    visualItems.length > 1
+      ? `Required offer items: ${visualItems.join(", ")}. Show all required items together as equally important main subjects. Do not show only one item.`
+      : "",
     `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`,
     itemDescription ? `Description: ${esc(itemDescription)}.` : "",
     businessName ? `For an independent cafe called ${esc(businessName)}.` : "",

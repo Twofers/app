@@ -122,8 +122,86 @@ type BuildDealOfferContractParams = {
   quantityLimit?: number | null;
 };
 
+export type StructuredOffer = DealOfferContract;
+
+export type CanonicalizedItem = {
+  original: string;
+  canonical: string;
+  confidence: "high" | "medium" | "low";
+  source: "menu_catalog" | "known_food_dictionary" | "spellcheck" | "unchanged";
+};
+
+const KNOWN_FOOD_ITEM_CANONICALS: Record<string, string> = {
+  bagle: "bagel",
+  bagles: "bagel",
+  bagel: "bagel",
+  bagels: "bagel",
+  coffee: "coffee",
+  coffees: "coffee",
+  latte: "latte",
+  lattes: "latte",
+  cappuccino: "cappuccino",
+  cappuccinos: "cappuccino",
+  croissant: "croissant",
+  croissants: "croissant",
+  sandwich: "sandwich",
+  sandwiches: "sandwich",
+  pastry: "pastry",
+  pastries: "pastry",
+  taco: "taco",
+  tacos: "taco",
+  dessert: "dessert",
+  desserts: "dessert",
+  entree: "entree",
+  entrees: "entree",
+  drink: "drink",
+  drinks: "drink",
+};
+
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function normalizeItemKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function canonicalizeOfferItem(
+  original: string,
+  menuCatalogNames: readonly string[] = [],
+): CanonicalizedItem {
+  const clean = cleanText(original);
+  if (!clean) {
+    return { original: "", canonical: "", confidence: "low", source: "unchanged" };
+  }
+
+  const cleanKey = normalizeItemKey(clean);
+  const catalogMatch = menuCatalogNames.find((name) => normalizeItemKey(name) === cleanKey);
+  if (catalogMatch) {
+    return {
+      original: clean,
+      canonical: cleanText(catalogMatch),
+      confidence: "high",
+      source: "menu_catalog",
+    };
+  }
+
+  const known = KNOWN_FOOD_ITEM_CANONICALS[cleanKey];
+  if (known) {
+    return {
+      original: clean,
+      canonical: known,
+      confidence: cleanKey === known ? "medium" : "high",
+      source: "known_food_dictionary",
+    };
+  }
+
+  return { original: clean, canonical: clean, confidence: "low", source: "unchanged" };
 }
 
 function numeric(value: unknown): number | null {
@@ -151,6 +229,11 @@ function sentence(value: string): string {
   const clean = value.trim();
   if (!clean) return "";
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+}
+
+function capitalizeFirst(value: string): string {
+  const clean = cleanText(value);
+  return clean ? `${clean.charAt(0).toUpperCase()}${clean.slice(1)}` : "";
 }
 
 function canonicalLocationName(params: {
@@ -211,11 +294,11 @@ export function buildDealOfferContract(
       : 0;
 
   if (dealType === "BUY_ONE_GET_ONE_FREE" || dealType === "BUY_ONE_GET_SOMETHING_FREE") {
-    const requiredItem = cleanText(params.dealEligibility.requiredItemDescription);
+    const requiredItem = canonicalizeOfferItem(cleanText(params.dealEligibility.requiredItemDescription)).canonical;
     const freeItem =
       dealType === "BUY_ONE_GET_ONE_FREE"
-        ? cleanText(params.dealEligibility.freeItemDescription) || requiredItem
-        : cleanText(params.dealEligibility.freeItemDescription);
+        ? canonicalizeOfferItem(cleanText(params.dealEligibility.freeItemDescription)).canonical || requiredItem
+        : canonicalizeOfferItem(cleanText(params.dealEligibility.freeItemDescription)).canonical;
     if (!requiredItem || !freeItem) return null;
 
     const requiredQuantity = positiveQuantity(params.dealEligibility.requiredPurchaseQuantity);
@@ -277,7 +360,7 @@ export function buildDealOfferContract(
   }
 
   if (dealType === "PERCENT_OFF_SINGLE_ITEM") {
-    const itemName = cleanText(params.dealEligibility.itemDescription);
+    const itemName = canonicalizeOfferItem(cleanText(params.dealEligibility.itemDescription)).canonical;
     const discountPercent = Math.round(numeric(params.dealEligibility.discountPercent) ?? 0);
     if (!itemName || discountPercent < 40) return null;
 
@@ -357,6 +440,16 @@ function copyText(copy: Partial<AiDealCopyVariant> & { terms_summary?: string })
   ]
     .filter((part): part is string => typeof part === "string")
     .join(" ");
+}
+
+function containsMetadataLeak(text: string): boolean {
+  if (/\b\d{5}(?:-\d{4})?\b/.test(text)) return true;
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(text)) return true;
+  if (/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(text)) return true;
+  if (/\b\d{1,2}:\d{2}\s*(?:am|pm)\b/i.test(text)) return true;
+  if (/\b\d+\s+available\b/i.test(text)) return true;
+  if (/\bavailable\s+(?:from|until|through|between)\b/i.test(text)) return true;
+  return false;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -465,6 +558,7 @@ export function validateAiCopyAgainstOffer(
   validateShape(copy, reasonCodes);
 
   const text = copyText(copy);
+  if (containsMetadataLeak(text)) reasonCodes.push("COPY_CONTAINS_METADATA");
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     validateBuyOneGetSomethingFree(text, contract, reasonCodes);
   } else if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
@@ -478,6 +572,71 @@ export function validateAiCopyAgainstOffer(
     reasonCodes: [...new Set(reasonCodes)],
     ...(reasonCodes.length > 0 ? { message: reasonCodes.join(", ") } : {}),
   };
+}
+
+export function buildOfferCopyCandidates(contract: DealOfferContract): string[] {
+  if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
+    const required = contract.requiredPurchase?.itemName ?? "item";
+    const free = contract.freeReward?.itemName ?? "item";
+    return [
+      `Buy any ${required}, get one ${free} free.`,
+      `Buy one ${required}, get one ${free} free.`,
+      `Your ${required} comes with a free ${free}.`,
+    ];
+  }
+
+  if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
+    const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
+    return [
+      `Buy one ${item}, get one ${item} free.`,
+      `Buy one ${item}, get one free.`,
+      `BOGO ${item}.`,
+    ];
+  }
+
+  const item = contract.singleItemDiscount?.itemName ?? "item";
+  const discount = contract.singleItemDiscount?.discountPercent ?? 40;
+  return [
+    `Get ${discount}% off one ${item}.`,
+    `Save ${discount}% on one ${item}.`,
+  ];
+}
+
+export function buildHeadlineCandidates(contract: DealOfferContract): string[] {
+  if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
+    const required = contract.requiredPurchase?.itemName ?? "item";
+    const free = contract.freeReward?.itemName ?? "item";
+    return [
+      `Free ${free} with any ${required}`,
+      `${capitalizeFirst(free)} included with any ${required}`,
+      `${capitalizeFirst(free)} on us with any ${required}`,
+      `${capitalizeFirst(required)} ${free} deal`,
+    ];
+  }
+
+  if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
+    const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
+    return [
+      `BOGO ${item}`,
+      `Buy one ${item}, get one free`,
+      `${capitalizeFirst(item)} two-for-one`,
+    ];
+  }
+
+  const item = contract.singleItemDiscount?.itemName ?? "item";
+  const discount = contract.singleItemDiscount?.discountPercent ?? 40;
+  return [
+    `${discount}% off ${item}`,
+    `Save ${discount}% on ${item}`,
+  ];
+}
+
+export function buildRequiredVisualItems(contract: DealOfferContract): string[] {
+  const items =
+    contract.dealType === "PERCENT_OFF_SINGLE_ITEM"
+      ? [contract.singleItemDiscount?.itemName]
+      : [contract.requiredPurchase?.itemName, contract.freeReward?.itemName];
+  return [...new Set(items.filter((item): item is string => cleanText(item).length > 0).map(cleanText))];
 }
 
 function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
@@ -557,33 +716,30 @@ export function selectBestValidAiCopy(
 }
 
 export function deterministicFallbackCopy(contract: DealOfferContract): AiDealCopyVariant {
-  const businessName = contract.businessName;
+  const headline = buildHeadlineCandidates(contract)[0] ?? "Twofer deal";
+  const offerCopy = buildOfferCopyCandidates(contract)[0] ?? contract.canonicalOfferLine;
+
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
-    const required = contract.requiredPurchase?.itemName ?? "item";
-    const free = contract.freeReward?.itemName ?? "item";
     return cleanVariant({
-      headline: `Free ${free} with your ${required}`,
-      short_description: `Buy one ${required} at ${businessName} and get one ${free} free. Limited quantities available.`,
-      push_notification: `Buy ${required}, get ${free} free at ${businessName}.`,
-      social_caption: `Limited-time Twofer: buy one ${required}, get one ${free} free at ${businessName}.`,
+      headline,
+      short_description: offerCopy,
+      push_notification: offerCopy,
+      social_caption: offerCopy,
     });
   }
   if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
-    const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
     return cleanVariant({
-      headline: `Buy one ${item}, get one ${item} free`,
-      short_description: `Stop by ${businessName} for a limited-time BOGO: buy one ${item}, get one ${item} free.`,
-      push_notification: `BOGO ${item} at ${businessName}.`,
-      social_caption: `Limited-time Twofer: buy one ${item}, get one free at ${businessName}.`,
+      headline,
+      short_description: offerCopy,
+      push_notification: offerCopy,
+      social_caption: offerCopy,
     });
   }
-  const item = contract.singleItemDiscount?.itemName ?? "item";
-  const discount = contract.singleItemDiscount?.discountPercent ?? 40;
   return cleanVariant({
-    headline: `${discount}% off one ${item}`,
-    short_description: `Get ${discount}% off one ${item} at ${businessName}. Limited quantities available.`,
-    push_notification: `${discount}% off ${item} at ${businessName}.`,
-    social_caption: `Limited-time Twofer: get ${discount}% off one ${item} at ${businessName}.`,
+    headline,
+    short_description: offerCopy,
+    push_notification: offerCopy,
+    social_caption: offerCopy,
   });
 }
 

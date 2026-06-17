@@ -34,6 +34,7 @@ import {
 } from "./prompt.ts";
 import {
   buildDealOfferContract,
+  buildRequiredVisualItems,
   generateValidatedDealCopy,
   parseAiDealCopyVariants,
   type AiDealCopySource,
@@ -425,6 +426,7 @@ async function produceImage(params: {
   research: ItemResearch;
   itemHint: string;
   businessName: string;
+  offerContract: DealOfferContract;
 }): Promise<{
   posterStoragePath: string | null;
   source: SingleAd["photo_source"];
@@ -440,6 +442,7 @@ async function produceImage(params: {
     research,
     itemHint,
     businessName,
+    offerContract,
   } = params;
 
   const ts = Date.now();
@@ -514,11 +517,15 @@ async function produceImage(params: {
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
-  const itemName = research.item_name || itemHint || "menu item";
+  const requiredVisualItems = buildRequiredVisualItems(offerContract);
+  const itemName = requiredVisualItems.length > 0
+    ? requiredVisualItems.join(" and ")
+    : research.item_name || itemHint || "menu item";
   const prompt = buildPhotoAdImagePrompt({
     itemName,
     itemDescription: research.is_familiar ? research.description : "",
     businessName,
+    requiredVisualItems,
   });
   const png = await generatePhotoAdImage(openAiKey, prompt);
   if (!png) {
@@ -940,6 +947,7 @@ serve(async (req) => {
         research,
         itemHint: sourceHint,
         businessName,
+        offerContract,
       });
     }
 
