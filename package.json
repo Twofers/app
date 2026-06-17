@@ -19,7 +19,7 @@
     "test:watch": "vitest",
     "gate:rls": "node scripts/probe-rls-inventory.mjs",
     "gate:rls-smoke": "node scripts/probe-rls-smoke.mjs",
-    "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push deal-link ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
+    "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
     "screenshots:pages": "node scripts/screenshot-pages.mjs"
   },
   "dependencies": {

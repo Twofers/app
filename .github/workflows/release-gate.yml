@@ -50,8 +50,11 @@ jobs:
           } > .env
 
       - name: Edge-function health (deployed + authenticating)
+        # deal-link is intentionally omitted: it is the one PUBLIC function
+        # (a share/QR landing page) and returns 200 to anon, which this
+        # auth-rejection smoke would misread as unhealthy.
         if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' }}
-        run: node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push deal-link ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event
+        run: node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event
 
       - name: RLS smoke (authenticated user can read its own rows)
         if: ${{ env.EXPO_PUBLIC_SUPABASE_URL != '' && env.TWOFER_SMOKE_EMAIL != '' }}
