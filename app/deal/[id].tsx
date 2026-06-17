@@ -108,7 +108,7 @@ export default function DealDetail() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { height: winH } = useWindowDimensions();
-  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const { top, horizontal, scrollBottom, insets } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
@@ -505,7 +505,7 @@ export default function DealDetail() {
       : scheduleBlockReason
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
-  const heroHeight = Math.round(Math.min(400, Math.max(248, winH * 0.4)));
+  const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
   const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
   const displayDescription = localizedDealDescription(deal, i18n.language);
   const actionState = getDealDetailActionState({
@@ -514,44 +514,91 @@ export default function DealDetail() {
     unavailableLabel: claimBlockedLabel,
   });
   const canShareDeal = shareDealEnabled && !dealIsDemo && actionState.kind !== "unavailable";
+  const stickyBottom = Math.max(insets.bottom, Spacing.lg);
+  const stickyBarHeight = 76;
+  const ctaLabel =
+    actionState.kind === "active_claimed"
+      ? t("dealDetail.viewYourDeal", { defaultValue: "View your deal" })
+      : actionState.kind === "unavailable"
+        ? scheduleBlockReason === "expired" || scheduleBlockReason === "claim_closed"
+          ? t("dealDetail.dealEnded", { defaultValue: "Deal ended" })
+          : actionState.statusLabel
+        : actionState.kind === "claiming"
+          ? t("dealDetail.claiming")
+          : t("dealDetail.claim");
+  const ctaDisabled = actionState.kind === "claiming" || actionState.kind === "unavailable";
+  const ctaPress = actionState.kind === "active_claimed" ? viewQr : doClaim;
+  const biz = deal.businesses;
+  const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
+  const directionsAvailable = hasDirectionsTarget(biz);
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
-      <ScreenHeader title={displayTitle} leftSlot={renderBackAction()} style={{ marginBottom: Spacing.md }} />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md, marginBottom: Spacing.md }}>
+        {renderBackAction()}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+          <Pressable
+            onPress={toggleFavorite}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? t("dealDetail.removeSavedDeal", { defaultValue: "Remove saved deal" }) : t("dealDetail.saveDeal", { defaultValue: "Save deal" })}
+            accessibilityState={{ selected: isFavorite }}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: Radii.lg,
+              backgroundColor: isFavorite ? theme.surface : theme.surfaceMuted,
+              borderWidth: 1,
+              borderColor: isFavorite ? theme.favorite : theme.border,
+            }}
+          >
+            <MaterialIcons
+              name={isFavorite ? "favorite" : "favorite-border"}
+              size={23}
+              color={isFavorite ? theme.favorite : theme.text}
+            />
+          </Pressable>
+          {shareDealEnabled ? (
+            <Pressable
+              onPress={handleShare}
+              disabled={!canShareDeal || isSharing}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={t("shareDeal.shareDeal", { defaultValue: "Share deal" })}
+              style={{
+                minHeight: 44,
+                minWidth: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: Radii.lg,
+                backgroundColor: theme.surfaceMuted,
+                borderWidth: 1,
+                borderColor: theme.border,
+                opacity: !canShareDeal || isSharing ? 0.5 : 1,
+              }}
+            >
+              <MaterialIcons name="ios-share" size={22} color={theme.text} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
       {banner ? <Banner message={banner} tone="error" /> : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: scrollBottom }}
+        contentContainerStyle={{ paddingBottom: scrollBottom + stickyBarHeight + stickyBottom }}
       >
-        <Pressable
-          onPress={toggleFavorite}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: Spacing.sm,
-            marginBottom: Spacing.md,
-            marginTop: Spacing.sm,
-            minHeight: 44,
-          }}
-        >
-          <MaterialIcons
-            name={isFavorite ? "favorite" : "favorite-border"}
-            size={22}
-            color={isFavorite ? theme.favorite : theme.mutedText}
-          />
-          <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}>
-            {isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite")}
-          </Text>
-        </Pressable>
+        <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+          {displayTitle}
+        </Text>
         {(() => {
           const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
           return posterUri ? (
             <Image
               source={{ uri: posterUri }}
-              style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg }}
+              style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg, marginTop: Spacing.lg }}
               contentFit="cover"
             />
           ) : (
@@ -559,6 +606,7 @@ export default function DealDetail() {
               style={{
                 height: heroHeight,
                 borderRadius: Radii.lg,
+                marginTop: Spacing.lg,
                 backgroundColor: theme.surfaceMuted,
                 alignItems: "center",
                 justifyContent: "center",
@@ -569,69 +617,38 @@ export default function DealDetail() {
           );
         })()}
 
-        <View style={{ marginTop: Spacing.lg, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: Spacing.sm }}>
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "600",
-              opacity: 0.55,
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-              color: theme.text,
-              flex: 1,
-            }}
-          >
-            {deal.businesses?.name ?? t("dealDetail.localBusiness")}
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text }}>
+            {t("dealDetail.whereToGo", { defaultValue: "Where to go" })}
           </Text>
-        </View>
-        <Pressable
-          onPress={() => router.push(`/business/${deal.business_id}` as Href)}
-          accessibilityRole="button"
-          style={{ marginTop: Spacing.xs, alignSelf: "flex-start" }}
-        >
-          <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>{t("consumerHome.shopInfoLink")}</Text>
-        </Pressable>
-        {(() => {
-          const biz = deal.businesses;
-          const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
-          const directionsAvailable = hasDirectionsTarget(biz);
-          if (!addressLine && !directionsAvailable) return null;
-          return (
-            <View
-              style={{
-                marginTop: Spacing.xs,
-                marginBottom: Spacing.sm,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                flexWrap: "wrap",
-              }}
+          <Pressable
+            onPress={() => router.push(`/business/${deal.business_id}` as Href)}
+            accessibilityRole="button"
+            style={{ marginTop: Spacing.sm, alignSelf: "flex-start", maxWidth: "100%" }}
+          >
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }} numberOfLines={1}>
+              {deal.businesses?.name ?? t("dealDetail.localBusiness")}
+            </Text>
+          </Pressable>
+          {addressLine ? (
+            <Text style={{ color: theme.mutedText, fontSize: 14, marginTop: Spacing.xs }} numberOfLines={1}>
+              {addressLine}
+            </Text>
+          ) : null}
+          {directionsAvailable ? (
+            <Pressable
+              onPress={() => void handleDirections()}
+              accessibilityRole="button"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ marginTop: Spacing.sm, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: Spacing.xs }}
             >
-              {addressLine ? (
-                <>
-                  <MaterialIcons name="place" size={16} color={theme.mutedText} />
-                  <Text style={{ color: theme.mutedText, fontSize: 14, flexShrink: 1 }} numberOfLines={1}>
-                    {addressLine}
-                  </Text>
-                </>
-              ) : null}
-              {directionsAvailable ? (
-                <Pressable
-                  onPress={() => void handleDirections()}
-                  accessibilityRole="button"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>
-                    {t("businessProfile.directions")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          );
-        })()}
-        <Text style={{ fontSize: 24, fontWeight: "700", marginTop: Spacing.xs, lineHeight: 30, color: theme.text }}>
-          {displayTitle}
-        </Text>
+              <MaterialIcons name="directions" size={18} color={theme.accentText} />
+              <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 15 }}>
+                {t("dealDetail.getDirections", { defaultValue: "Get directions" })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         {dealIsDemo ? (
           <View style={{ marginTop: Spacing.md }}>
             <DemoOfferNotice detail />
@@ -642,24 +659,17 @@ export default function DealDetail() {
             ${deal.price.toFixed(2)}
           </Text>
         ) : null}
-        {displayDescription ? (
-          <Text style={{ marginTop: Spacing.md, fontSize: 16, lineHeight: 24, color: theme.text }}>{displayDescription}</Text>
-        ) : null}
-        <View
-          style={{
-            marginTop: Spacing.lg,
-            borderRadius: Radii.lg,
-            backgroundColor: theme.surfaceMuted,
-            padding: Spacing.lg,
-            borderWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <Text style={{ fontWeight: "700", marginBottom: Spacing.sm, fontSize: 16, color: theme.text }}>
-            {t("dealDetail.finePrint")}
+        <View style={{ marginTop: Spacing.lg }}>
+          <Text style={{ fontWeight: "800", marginBottom: Spacing.sm, fontSize: 18, color: theme.text }}>
+            {t("dealDetail.dealDetails", { defaultValue: "Deal details" })}
           </Text>
-          <Text style={{ opacity: 0.78, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {t("dealDetail.validityPrefix")}{" "}
+          {displayDescription ? (
+            <Text style={{ fontSize: 16, lineHeight: 24, color: theme.text }}>{displayDescription}</Text>
+          ) : null}
+          <Text style={{ opacity: 0.78, marginTop: displayDescription ? Spacing.sm : 0, fontSize: 15, lineHeight: 22, color: theme.text }}>
+            {t("dealDetail.claimsAvailable", { count: remaining })}
+          </Text>
+          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {formatValiditySummary(deal, {
               lang: i18n.language,
               endsVerb: t("commonUi.dealEndsVerb"),
@@ -672,62 +682,6 @@ export default function DealDetail() {
               ? t("dealDetail.claimingClosesBeforeEnd", { count: deal.claim_cutoff_buffer_minutes })
               : t("dealDetail.claimingOpenUntilEnd")}
           </Text>
-          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {t("dealDetail.claimsAvailable", { count: remaining })}
-          </Text>
-        </View>
-
-        <View style={{ marginTop: Spacing.xl, gap: Spacing.md }}>
-          {actionState.showClaim ? (
-            <PrimaryButton
-              title={actionState.kind === "claiming" ? t("dealDetail.claiming") : t("dealDetail.claim")}
-              onPress={doClaim}
-              disabled={actionState.claimDisabled}
-            />
-          ) : actionState.statusLabel ? (
-            <View
-              style={{
-                borderRadius: Radii.lg,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.surfaceMuted,
-                padding: Spacing.lg,
-              }}
-            >
-              <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>
-                {actionState.statusLabel}
-              </Text>
-              <Text style={{ color: theme.mutedText, marginTop: Spacing.xs, fontSize: 14, lineHeight: 20 }}>
-                {t("dealDetail.unavailableActionBody", {
-                  defaultValue: "This deal is no longer available to claim.",
-                })}
-              </Text>
-            </View>
-          ) : null}
-          {actionState.showQr ? (
-            <Pressable
-              onPress={viewQr}
-              disabled={refreshingQr}
-              accessibilityRole="button"
-              style={{ paddingVertical: Spacing.sm, alignItems: "center", opacity: refreshingQr ? 0.6 : 1 }}
-            >
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
-                {refreshingQr ? t("dealDetail.refreshingQr") : t("dealDetail.viewQr")}
-              </Text>
-            </Pressable>
-          ) : null}
-          {canShareDeal ? (
-            <SecondaryButton
-              title={
-                isSharing
-                  ? t("shareDeal.preparing", { defaultValue: "Preparing link..." })
-                  : t("shareDeal.shareDeal", { defaultValue: "Share deal" })
-              }
-              onPress={handleShare}
-              disabled={isSharing || dealIsDemo}
-            />
-          ) : null}
-          <SecondaryButton title={t("commonUi.goBack")} onPress={goBack} />
         </View>
 
         <Pressable
@@ -744,6 +698,27 @@ export default function DealDetail() {
           </Text>
         </Pressable>
       </ScrollView>
+
+      <View
+        style={{
+          position: "absolute",
+          left: horizontal,
+          right: horizontal,
+          bottom: stickyBottom,
+          minHeight: stickyBarHeight,
+          justifyContent: "center",
+          paddingTop: Spacing.sm,
+          paddingBottom: Spacing.sm,
+          backgroundColor: theme.background,
+        }}
+      >
+        <PrimaryButton
+          title={ctaLabel}
+          onPress={() => void ctaPress()}
+          disabled={ctaDisabled || dealIsDemo}
+          style={ctaDisabled ? { backgroundColor: theme.surfaceMuted } : undefined}
+        />
+      </View>
 
       <ReportSheet
         visible={reportVisible}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adToDealDraft, buildFallbackTemplateAd, type GeneratedAd } from "./ad-variants";
+import { adToDealDraft, buildFallbackTemplateAd, normalizeGeneratedAdDisplayCopy, type GeneratedAd } from "./ad-variants";
 
 describe("adToDealDraft", () => {
   it("uses structured short description and terms summary when present", () => {
@@ -14,7 +14,7 @@ describe("adToDealDraft", () => {
     };
 
     expect(adToDealDraft(ad, "rough owner note")).toEqual({
-      title: "Midday Latte BOGO",
+      title: "Buy one midday latte, get one free",
       promo_line: "Buy one iced vanilla latte and get a muffin free until 1:00.",
       cta_text: "Claim deal",
       offer_details: "Buy one iced vanilla latte, get one blueberry muffin free. 20 available.",
@@ -29,11 +29,25 @@ describe("adToDealDraft", () => {
     };
 
     expect(adToDealDraft(legacyAd, "")).toEqual({
-      title: "BOGO Cold Brew",
+      title: "Buy one cold brew, get one free",
       promo_line: "Buy one cold brew, get one free.",
       cta_text: "Claim deal",
       offer_details: "Buy one cold brew, get one free.\n\nClaim deal",
     });
+  });
+});
+
+describe("normalizeGeneratedAdDisplayCopy", () => {
+  it("cleans generated headlines and mechanical push text", () => {
+    const ad = normalizeGeneratedAdDisplayCopy({
+      headline: "BOGO Cold Brew",
+      subheadline: "Buy one cold brew, get one free.",
+      push_notification: "BOGO cold brew until noon",
+      cta: "Claim deal",
+    });
+
+    expect(ad.headline).toBe("Buy one cold brew, get one free");
+    expect(ad.push_notification).toBe("Buy one cold brew, get one free");
   });
 });
 
@@ -64,7 +78,8 @@ describe("buildFallbackTemplateAd", () => {
       ownerOfferHint: "rough note",
     });
 
-    expect(ad.headline).toBe("Lunch BOGO");
+    expect(ad.headline).toBe("Buy one lunch, get one free");
+    expect(ad.push_notification).toBe("Buy one lunch, get one free");
     expect(ad.subheadline).toBe("Buy one sandwich, get one free.");
     expect(ad.cta).toBe("Grab it");
   });

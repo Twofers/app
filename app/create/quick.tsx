@@ -29,7 +29,7 @@ import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyb
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { supabase } from "@/lib/supabase";
 import { aiGenerateAd, notifyDealPublished, translateDealCopy } from "@/lib/functions";
-import { adToDealDraft, type GeneratedAd } from "@/lib/ad-variants";
+import { adToDealDraft, normalizeGeneratedAdDisplayCopy, type GeneratedAd } from "@/lib/ad-variants";
 import { resolveDealFlowLanguage, translateDealQualityBlock } from "@/lib/translate-deal-quality";
 import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
@@ -224,8 +224,9 @@ export default function QuickDealExpress() {
         redemption_limit: `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`,
         ...(path ? { photo_path: path } : {}),
       });
-      const d = adToDealDraft(ad, hint);
-      setDraft(ad);
+      const displayAd = normalizeGeneratedAdDisplayCopy(ad);
+      const d = adToDealDraft(displayAd, hint);
+      setDraft(displayAd);
       setTitle(d.title);
       setOfferLine(d.promo_line || d.offer_details);
     } catch (err) {
@@ -263,7 +264,7 @@ export default function QuickDealExpress() {
         message: firstError
           ? messageForQuickDealError(firstError)
           : t("createQuick.needOffer", {
-              defaultValue: "Spell out the offer before previewing, like BOGO lattes or buy one croissant, get one free.",
+              defaultValue: "Spell out the offer before previewing, like buy one latte, get one free or buy one croissant, get one free.",
             }),
         tone: firstError?.ruleId === "RULE_STRONG_DEAL_REQUIRED" ? "warning" : "error",
       });
@@ -402,12 +403,12 @@ export default function QuickDealExpress() {
     if (error.ruleId === "RULE_HEADLINE_REQUIRED") return t("createQuick.needTitle");
     if (error.ruleId === "RULE_HEADLINE_TOO_SHORT") {
       return t("createQuick.titleTooShort", {
-        defaultValue: "Use a specific headline with the item and value, like BOGO iced latte.",
+        defaultValue: "Use a specific headline with the item and value, like buy one iced latte, get one free.",
       });
     }
     if (error.ruleId === "RULE_OFFER_REQUIRED") {
       return t("createQuick.needOffer", {
-        defaultValue: "Spell out the offer, like BOGO lattes or buy one croissant, get one free.",
+        defaultValue: "Spell out the offer, like buy one latte, get one free or buy one croissant, get one free.",
       });
     }
     if (error.ruleId === "RULE_INELIGIBLE_DEAL") {
@@ -618,12 +619,12 @@ export default function QuickDealExpress() {
               <Text style={{ marginTop: 6, fontSize: 13, lineHeight: 19, color: theme.text }}>
                 {t("createQuick.strongGuidanceBody", {
                   defaultValue:
-                    "Use BOGO, 2-for-1, buy one get one, a clearly free item, or 40%+ off. Put that value in the headline or offer so customers see it immediately.",
+                    "Use buy one, get one free, a clearly free item, or 40%+ off. Put that value in the headline or offer so customers see it immediately.",
                 })}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.mutedText }}>
                 {t("createQuick.strongGuidanceExamples", {
-                  defaultValue: "Good: BOGO iced lattes. Weak: 10% off or buy one + 20% off another item.",
+                  defaultValue: "Good: Buy one iced latte, get one free. Weak: 10% off or buy one + 20% off another item.",
                 })}
               </Text>
             </View>

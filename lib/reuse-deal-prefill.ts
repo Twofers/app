@@ -3,6 +3,7 @@ import {
   dealEligibilityFormFromDealRow,
   type DealEligibilityFormState,
 } from "./deal-eligibility-form";
+import { getDealDisplayTitle } from "./deal-display-copy";
 
 export type ReusableDeal = {
   title?: string | null;
@@ -119,7 +120,7 @@ function splitStoredDescription(description: string): { promoLine: string; detai
 
 export function buildReuseDealPrefillParams(deal: ReusableDeal): Record<string, string> {
   const params: Record<string, string> = { fromReuse: "1" };
-  const title = clean(deal.title);
+  const title = clean(getDealDisplayTitle(deal, deal.title));
   const description = clean(deal.description);
   const { promoLine, details } = splitStoredDescription(description);
   const price = finiteString(deal.price);

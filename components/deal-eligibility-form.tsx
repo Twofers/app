@@ -40,7 +40,7 @@ type Props = {
 const OFFER_TYPES: { id: DealEligibilityDealType; label: string; helper: string }[] = [
   {
     id: "BUY_ONE_GET_ONE_FREE",
-    label: "BOGO free",
+    label: "Buy one, get one free",
     helper: "Buy one item, get one item free.",
   },
   {
@@ -183,7 +183,7 @@ export function DealEligibilityForm({
         <Text style={{ marginTop: 4, color: theme.mutedText, lineHeight: 18, fontSize: 12 }}>
           {t("dealEligibility.helper", {
             defaultValue:
-              "Twofer accepts BOGO free, buy-one-get-something-free, or 40%+ off one single item.",
+              "Twofer accepts buy-one-get-one free, buy-one-get-something-free, or 40%+ off one single item.",
           })}
         </Text>
       </View>

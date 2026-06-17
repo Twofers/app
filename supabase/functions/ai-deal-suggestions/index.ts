@@ -165,7 +165,7 @@ serve(async (req) => {
       "- Think like a craft-focused brand consultant, not a generic marketing bot.",
       "- Suggestions should help the owner highlight what makes their business special — ingredients, process, sourcing, freshness.",
       "- Be specific and data-driven: reference actual numbers, days, or deal names from the data.",
-      "- Frame suggestions around quality and craft: \"Your cold brew BOGO is strong — try a cortado variant\" not \"Try more deals\".",
+      "- Frame suggestions around quality and craft: \"Your buy-one-get-one cold brew offer is strong — try a cortado variant\" not \"Try more deals\".",
       "- If claims are low on certain days, suggest targeted quality deals for those days.",
       "- If a deal is performing well, suggest expanding that product line or pairing it with something complementary.",
       "- One suggestion should always encourage storytelling: origin stories, process details, or ingredient highlights that build customer loyalty.",

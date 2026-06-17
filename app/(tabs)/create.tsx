@@ -20,6 +20,7 @@ import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/l
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 
 type TemplateRow = {
   id: string;
@@ -394,6 +395,7 @@ export default function CreateDeal() {
             ) : (
               templates.map((tpl) => {
                 const tplPoster = resolveDealPosterDisplayUri(tpl.poster_url, null);
+                const tplTitle = getDealDisplayTitle({ title: tpl.title }, tpl.title) || t("createHub.templateUntitled");
                 return (
                 <View
                   key={tpl.id}
@@ -410,7 +412,7 @@ export default function CreateDeal() {
                     accessibilityRole="button"
                     accessibilityLabel={t("reuseHub.openTemplateA11y", {
                       defaultValue: "Open template {{title}}",
-                      title: tpl.title ?? t("createHub.templateUntitled"),
+                      title: tplTitle,
                     })}
                     style={{ padding: Spacing.md }}
                   >
@@ -423,7 +425,7 @@ export default function CreateDeal() {
                     ) : (
                       <View style={{ height: 140, borderRadius: 14, backgroundColor: theme.surfaceMuted }} />
                     )}
-                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16, color: theme.text }}>{tpl.title ?? t("createHub.templateUntitled")}</Text>
+                    <Text style={{ marginTop: Spacing.md, fontWeight: "700", fontSize: 16, color: theme.text }}>{tplTitle}</Text>
                     {tpl.price != null ? (
                       <Text style={{ marginTop: Spacing.xs, color: theme.mutedText, fontSize: 15 }}>${Number(tpl.price).toFixed(2)}</Text>
                     ) : null}
@@ -444,7 +446,7 @@ export default function CreateDeal() {
                       accessibilityRole="button"
                       accessibilityLabel={t("reuseHub.deleteTemplateA11y", {
                         defaultValue: "Delete template {{title}}",
-                        title: tpl.title ?? t("createHub.templateUntitled"),
+                        title: tplTitle,
                       })}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{

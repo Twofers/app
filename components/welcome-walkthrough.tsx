@@ -93,8 +93,8 @@ export function WelcomeWalkthrough({
     (async () => {
       try {
         const hint = businessCategory
-          ? `BOGO deal for a ${businessCategory}`
-          : "BOGO deal to attract first-time customers";
+          ? `Buy-one-get-one deal for a ${businessCategory}`
+          : "Buy-one-get-one deal to attract first-time customers";
 
         const { data, error } = await supabase.functions.invoke(
           "ai-generate-deal-copy",

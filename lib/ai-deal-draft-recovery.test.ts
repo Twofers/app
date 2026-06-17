@@ -82,6 +82,8 @@ describe("AI deal draft recovery", () => {
 
     const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
 
+    expect(parsed?.title).toBe("Buy one iced latte, get one free");
+    expect(parsed?.generatedAd?.headline).toBe("Buy one iced latte, get one free");
     expect(parsed?.photoPath).toBe("biz-1/reference.jpg");
     expect(parsed?.generatedAd?.poster_storage_path).toBe("biz-1/generated.jpg");
     expect(parsed?.daysOfWeek).toEqual([1, 5]);

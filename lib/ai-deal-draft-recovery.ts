@@ -1,5 +1,6 @@
-import type { GeneratedAd, PhotoTreatment } from "./ad-variants";
+import { normalizeGeneratedAdDisplayCopy, type GeneratedAd, type PhotoTreatment } from "./ad-variants";
 import { createDefaultDealEligibilityFormState, type DealEligibilityFormState } from "./deal-eligibility-form";
+import { getDealDisplayTitle } from "./deal-display-copy";
 
 export const AI_DEAL_DRAFT_VERSION = 1;
 
@@ -48,6 +49,15 @@ export function aiDealDraftStorageKey(businessId: string): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function cleanDisplayTitle(value: unknown): string {
+  const title = cleanString(value);
+  return title ? getDealDisplayTitle({ title }, title) : "";
+}
+
+function cleanGeneratedAd(value: GeneratedAd | null | undefined): GeneratedAd | null {
+  return value ? normalizeGeneratedAdDisplayCopy(value) : null;
 }
 
 function cleanNullableString(value: unknown): string | null {
@@ -111,7 +121,7 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     usePhotoAsFinal: input.usePhotoAsFinal === true,
     hintText: cleanString(input.hintText),
     price: cleanString(input.price),
-    title: cleanString(input.title),
+    title: cleanDisplayTitle(input.title),
     promoLine: cleanString(input.promoLine),
     ctaText: cleanString(input.ctaText),
     description: cleanString(input.description),
@@ -126,7 +136,7 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     windowEndMinutes: cleanMinute(input.windowEndMinutes, 1020),
     timezone: cleanString(input.timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
     publishLocationIds: cleanStringArray(input.publishLocationIds),
-    generatedAd: input.generatedAd ?? null,
+    generatedAd: cleanGeneratedAd(input.generatedAd),
     adAccepted: input.adAccepted === true,
     manualDraftUnlocked: input.manualDraftUnlocked === true,
   };

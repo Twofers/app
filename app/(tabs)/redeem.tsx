@@ -29,6 +29,7 @@ import {
   type OwnerRedemptionSecurityStatus,
 } from "@/lib/owner-redemption-security";
 import { isRedemptionCodeComplete, normalizeRedemptionCode } from "@/lib/redemption-mode-logic";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 
 type RedeemMode = "scan" | "manual";
 
@@ -157,7 +158,9 @@ export default function RedeemScanner() {
     try {
       const result = await redeemToken(body);
       setSuccess({
-        dealTitle: result.deal_title ?? t("redeem.defaultDealTitle"),
+        dealTitle: result.deal_title
+          ? getDealDisplayTitle({ title: result.deal_title }, result.deal_title)
+          : t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
         claimId: result.claim_id ?? null,
       });

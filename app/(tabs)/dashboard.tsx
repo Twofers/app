@@ -41,6 +41,7 @@ import {
   getMerchantDealScheduleStatus,
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
+import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
@@ -969,7 +970,7 @@ export default function BusinessDashboard() {
       const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
       await printDealFlyer({
         dealId: deal.id,
-        title: deal.title ?? t("offersDashboard.dealFallback"),
+        title: getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback"),
         description: deal.description,
         posterUri,
         businessName: businessName ?? "",
@@ -999,6 +1000,10 @@ export default function BusinessDashboard() {
       timezone: item.timezone,
     });
   }
+
+  const displayDealTitle = useCallback((item: DealRow): string => {
+    return getDealDisplayTitle(item, item.title) || t("offersDashboard.dealFallback");
+  }, [t]);
 
   function isDealPaused(item: DealRow): boolean {
     return !item.is_active && new Date(item.end_time) > new Date();
@@ -1093,7 +1098,7 @@ export default function BusinessDashboard() {
     setBanner(null);
     try {
       const rows: ExportRow[] = filteredDeals.map((d) => ({
-        dealTitle: d.title ?? t("offersDashboard.dealFallback"),
+        dealTitle: displayDealTitle(d),
         startDate: new Date(d.start_time).toLocaleDateString(),
         endDate: new Date(d.end_time).toLocaleDateString(),
         claims: d.claims,
@@ -1111,7 +1116,7 @@ export default function BusinessDashboard() {
     } finally {
       setExportingAnalytics(false);
     }
-  }, [businessName, filteredDeals, t]);
+  }, [businessName, displayDealTitle, filteredDeals, t]);
 
   const handleExportAnalytics = useCallback(() => {
     if (filteredDeals.length === 0) return;
@@ -1441,7 +1446,7 @@ export default function BusinessDashboard() {
             businessName={businessName}
             businessCategory={businessProfile?.category ?? null}
             weekCounts={weekCounts}
-            dealTitles={deals.slice(0, 5).map((d) => d.title ?? "")}
+            dealTitles={deals.slice(0, 5).map((d) => displayDealTitle(d))}
             totalClaims={monthClaims}
             totalRedeems={monthRedeems}
             dealsLaunched={dealsLaunchedMonth}
@@ -1521,6 +1526,7 @@ export default function BusinessDashboard() {
       businessName,
       businessProfile,
       filteredDeals,
+      displayDealTitle,
       handleExportAnalytics,
       exportingAnalytics,
     ],
@@ -1678,7 +1684,7 @@ export default function BusinessDashboard() {
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
                                 <Text style={{ fontWeight: "800", fontSize: 17, flex: 1, color: theme.text }} numberOfLines={2}>
-                                {item.title ?? t("offersDashboard.dealFallback")}
+                                {displayDealTitle(item)}
                               </Text>
                               {item.is_recurring ? (
                                 <View
@@ -1976,7 +1982,7 @@ export default function BusinessDashboard() {
                 }}
               >
                 <Text style={{ fontWeight: "900", fontSize: 18, lineHeight: 23, color: theme.text }} numberOfLines={2}>
-                  {dealManageFor.title ?? t("offersDashboard.dealFallback")}
+                  {displayDealTitle(dealManageFor)}
                 </Text>
               </View>
               {dealScheduleStatus(dealManageFor) !== "ended" && !isDealPaused(dealManageFor) ? (

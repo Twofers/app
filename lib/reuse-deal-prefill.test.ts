@@ -21,7 +21,7 @@ describe("reuse deal prefill params", () => {
 
     expect(params).toEqual({
       fromReuse: "1",
-      prefillTitle: "BOGO latte",
+      prefillTitle: "Buy one latte, get one free",
       prefillHint: "Buy one iced latte, get one free.",
       prefillDescription: "Buy one iced latte, get one free.",
       prefillPrice: "5",
@@ -38,9 +38,9 @@ describe("reuse deal prefill params", () => {
     });
     expect(JSON.parse(params.prefillDealEligibility ?? "{}")).toMatchObject({
       dealType: "BUY_ONE_GET_ONE_FREE",
-      requiredItemDescription: "BOGO latte",
+      requiredItemDescription: "Buy one latte, get one free",
       requiredItemRetailValue: "5",
-      freeItemDescription: "BOGO latte",
+      freeItemDescription: "Buy one latte, get one free",
       freeItemRetailValue: "5",
     });
   });
