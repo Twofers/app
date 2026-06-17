@@ -1,0 +1,26 @@
+# gitleaks accepted findings (false positives / client-side config).
+# Each line is a finding fingerprint (commit:file:rule:line). gitleaks reads this
+# file automatically. Reviewed 2026-06-17 — none are real secrets:
+#
+# - app.json gcp-api-key: history-only Google Maps ANDROID client key (now read
+#   from EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY; current tree is clean). Client key
+#   ships in the APK by design — keep it package/SHA-restricted in GCP console.
+# - deno.lock generic-api-key: a Deno module integrity (SRI) hash, not a secret.
+# - lib/recent-publish.ts generic-api-key: the AsyncStorage key constant
+#   "twofer.recentPublish.v1" / import path — not a credential.
+# - twofer_rc_qa_*/expo-share-enabled.out.log generic-api-key: "authUserId"
+#   UUIDs captured in a QA log. User IDs are identifiers, not secrets. (This QA
+#   log should ideally not be tracked at all — candidate for repo cleanup.)
+1595ba9bb465bbcc3a3b3256f6e3b999f9948ca5:app.json:gcp-api-key:82
+8c7159a5ffa293163038280e9e4cdde8a76b0f1c:app.json:gcp-api-key:96
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:deno.lock:generic-api-key:20
+f2e1f972e88727b6f68a6a2eaa2c079ab26b6ea9:lib/recent-publish.ts:generic-api-key:14
+f474780e3da8ce0619bad933e200776342d1bc7d:lib/recent-publish.ts:generic-api-key:14
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:47
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:229
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:276
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:323
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:384
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:440
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:494
+35bc67124af89bcf91f0d72f7c462b2a5d48e8a0:twofer_rc_qa_20260607/expo-share-enabled.out.log:generic-api-key:544
