@@ -29,15 +29,17 @@ import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyb
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { supabase } from "@/lib/supabase";
 import { aiGenerateAd, notifyDealPublished, translateDealCopy } from "@/lib/functions";
-import { adToDealDraft, composeListingDescription, type GeneratedAd } from "@/lib/ad-variants";
-import { assessDealQuality } from "@/lib/deal-quality";
+import { adToDealDraft, type GeneratedAd } from "@/lib/ad-variants";
 import { resolveDealFlowLanguage, translateDealQualityBlock } from "@/lib/translate-deal-quality";
-import { validateStrongDealOnly } from "@/lib/strong-deal-guard";
 import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
 import { markRecentPublish } from "@/lib/recent-publish";
 import { buildQuickDealFullBuilderParams } from "@/lib/quick-deal-full-builder";
 import { validateDealEligibility } from "@/lib/deal-eligibility";
+import {
+  validateQuickDealAd,
+  type QuickDealAdValidationError,
+} from "@/lib/quick-deal-ad-validation";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -236,37 +238,21 @@ export default function QuickDealExpress() {
     if (!draft) return null;
     const cleanTitle = title.trim();
     const cleanOffer = offerLine.trim();
-    if (!cleanTitle) {
-      setBanner({ message: t("createQuick.needTitle"), tone: "info" });
-      return null;
-    }
-    if (!cleanOffer) {
+    const listingDescription = cleanOffer;
+    if (!quickDealValidation?.ok || !quickDealValidation.quality) {
+      const firstError = quickDealValidation?.blockingErrors[0] ?? null;
       setBanner({
-        message: t("createQuick.needOffer", {
-          defaultValue: "Spell out the offer before previewing, like BOGO lattes or buy one croissant, get one free.",
-        }),
-        tone: "info",
+        message: firstError
+          ? messageForQuickDealError(firstError)
+          : t("createQuick.needOffer", {
+              defaultValue: "Spell out the offer before previewing, like BOGO lattes or buy one croissant, get one free.",
+            }),
+        tone: firstError?.ruleId === "RULE_STRONG_DEAL_REQUIRED" ? "warning" : "error",
       });
       return null;
     }
 
-    const guardDescription = composeListingDescription(cleanOffer, draft.cta ?? "", "");
-    const listingDescription = cleanOffer;
-
-    const quality = assessDealQuality({ title: cleanTitle, description: guardDescription, price: null });
-    if (quality.blocked) {
-      setBanner({ message: translateDealQualityBlock(quality, dealOutputLang), tone: "error" });
-      return null;
-    }
-    const guard = validateStrongDealOnly({ title: cleanTitle, description: guardDescription });
-    if (!guard.ok) {
-      const key = `dealQuality.strongGuard.${guard.reason}`;
-      setBanner({ message: t(key, { defaultValue: t("dealQuality.strongDealMessage") }), tone: "warning" });
-      return null;
-    }
-    if (blockIneligibleOffer("publish")) return null;
-
-    return { cleanTitle, listingDescription, quality };
+    return { cleanTitle, listingDescription, quality: quickDealValidation.quality };
   }
 
   function onPreview() {
@@ -375,41 +361,66 @@ export default function QuickDealExpress() {
     } as Href);
   }
 
-  const strongHint =
-    draft && title.trim()
-      ? validateStrongDealOnly({
-          title: title.trim(),
-          description: composeListingDescription(offerLine.trim(), draft.cta ?? "", ""),
-        })
-      : null;
   const cleanTitle = title.trim();
   const cleanOffer = offerLine.trim();
-  const currentGuardDescription = draft ? composeListingDescription(cleanOffer, draft.cta ?? "", "") : "";
-  const inlineQuality =
-    draft && cleanTitle.length >= 8 && cleanOffer
-      ? assessDealQuality({ title: cleanTitle, description: currentGuardDescription, price: null })
-      : null;
-  const titleValidationMessage =
-    draft && !cleanTitle
-      ? t("createQuick.needTitle")
-      : draft && cleanTitle.length > 0 && cleanTitle.length < 8
-      ? t("createQuick.titleTooShort", {
-          defaultValue: "Use a specific headline with the item and value, like BOGO iced latte.",
-        })
-      : null;
-  const offerValidationMessage =
-    draft && !cleanOffer
-      ? t("createQuick.needOffer", {
-          defaultValue: "Spell out the offer, like BOGO lattes or buy one croissant, get one free.",
-        })
-      : inlineQuality?.blocked
-      ? translateDealQualityBlock(inlineQuality, dealOutputLang)
-      : strongHint && !strongHint.ok
-      ? t(`dealQuality.strongGuard.${strongHint.reason}`, { defaultValue: t("dealQuality.strongDealMessage") })
-      : draft && !titleValidationMessage && cleanTitle && cleanOffer
-      ? t("createQuick.strongDealReady", { defaultValue: "Looks strong. Preview the customer card before publishing." })
-      : null;
-  const offerValidationTone = offerValidationMessage && strongHint?.ok && !inlineQuality?.blocked ? theme.success : theme.danger;
+  const quickDealValidation = draft
+    ? validateQuickDealAd(
+        {
+          headline: cleanTitle,
+          offer: cleanOffer,
+          cta: draft.cta ?? "",
+        },
+        {
+          businessId: businessId ?? "quick_deal",
+          businessName: businessName || "this business",
+          locationName: businessContextForAi.address || businessContextForAi.location || businessName || "this location",
+          dealEligibility: eligibilityInput,
+          eligibilityResult,
+        },
+      )
+    : null;
+
+  function messageForQuickDealError(error: QuickDealAdValidationError): string {
+    if (error.ruleId === "RULE_HEADLINE_REQUIRED") return t("createQuick.needTitle");
+    if (error.ruleId === "RULE_HEADLINE_TOO_SHORT") {
+      return t("createQuick.titleTooShort", {
+        defaultValue: "Use a specific headline with the item and value, like BOGO iced latte.",
+      });
+    }
+    if (error.ruleId === "RULE_OFFER_REQUIRED") {
+      return t("createQuick.needOffer", {
+        defaultValue: "Spell out the offer, like BOGO lattes or buy one croissant, get one free.",
+      });
+    }
+    if (error.ruleId === "RULE_INELIGIBLE_DEAL") {
+      return eligibilityResult.message ?? error.message;
+    }
+    if (
+      (error.ruleId === "RULE_VALUE_PRESENT" || error.ruleId === "RULE_VALUE_AT_A_GLANCE") &&
+      quickDealValidation?.quality?.blocked
+    ) {
+      return translateDealQualityBlock(quickDealValidation.quality, dealOutputLang);
+    }
+    if (error.ruleId === "RULE_STRONG_DEAL_REQUIRED" && quickDealValidation?.strongGuard && !quickDealValidation.strongGuard.ok) {
+      return t(`dealQuality.strongGuard.${quickDealValidation.strongGuard.reason}`, {
+        defaultValue: t("dealQuality.strongDealMessage"),
+      });
+    }
+    return error.message;
+  }
+
+  const headlineBlockingError =
+    quickDealValidation?.blockingErrors.find((error) => error.field === "headline") ?? null;
+  const offerBlockingError =
+    quickDealValidation?.blockingErrors.find((error) => error.field === "offer") ?? null;
+  const titleValidationMessage = headlineBlockingError ? messageForQuickDealError(headlineBlockingError) : null;
+  const offerValidationMessage = offerBlockingError
+    ? messageForQuickDealError(offerBlockingError)
+    : quickDealValidation?.ok
+    ? t("createQuick.strongDealReady", { defaultValue: "Strong: all release checks pass." })
+    : null;
+  const offerValidationTone = quickDealValidation?.ok ? theme.success : theme.danger;
+  const previewBlocked = draft ? !quickDealValidation?.ok : false;
 
   if (publishedDealId) {
     return (
@@ -666,7 +677,7 @@ export default function QuickDealExpress() {
               <PrimaryButton
                 title={t("createQuick.previewDeal", { defaultValue: "Preview deal" })}
                 onPress={onPreview}
-                disabled={publishing}
+                disabled={publishing || previewBlocked}
               />
             </View>
             <View style={{ marginTop: Spacing.sm }}>
