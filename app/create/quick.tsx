@@ -35,6 +35,7 @@ import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
 import { markRecentPublish } from "@/lib/recent-publish";
 import { buildQuickDealFullBuilderParams } from "@/lib/quick-deal-full-builder";
+import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { validateDealEligibility } from "@/lib/deal-eligibility";
 import {
   validateQuickDealAd,
@@ -234,13 +235,30 @@ export default function QuickDealExpress() {
     }
   }
 
-  function validateDraftForPublish() {
+  function trackQuickDealBlocked(
+    action: "preview" | "publish",
+    firstError: QuickDealAdValidationError | null,
+  ) {
+    trackAppAnalyticsEvent({
+      event_name: action === "preview" ? "quick_deal_preview_blocked" : "quick_deal_release_blocked",
+      business_id: businessId ?? null,
+      context: {
+        action,
+        rule_id: firstError?.ruleId ?? "UNKNOWN",
+        field: firstError?.field ?? null,
+        source_reason: firstError?.sourceReason ?? null,
+      },
+    });
+  }
+
+  function validateDraftForPublish(action: "preview" | "publish") {
     if (!draft) return null;
     const cleanTitle = title.trim();
     const cleanOffer = offerLine.trim();
     const listingDescription = cleanOffer;
     if (!quickDealValidation?.ok || !quickDealValidation.quality) {
       const firstError = quickDealValidation?.blockingErrors[0] ?? null;
+      trackQuickDealBlocked(action, firstError);
       setBanner({
         message: firstError
           ? messageForQuickDealError(firstError)
@@ -256,7 +274,7 @@ export default function QuickDealExpress() {
   }
 
   function onPreview() {
-    const ready = validateDraftForPublish();
+    const ready = validateDraftForPublish("preview");
     if (!ready) return;
     setBanner(null);
     setPreviewVisible(true);
@@ -264,7 +282,7 @@ export default function QuickDealExpress() {
 
   async function onPublish() {
     if (!businessId || !draft) return;
-    const ready = validateDraftForPublish();
+    const ready = validateDraftForPublish("publish");
     if (!ready) {
       setPreviewVisible(false);
       return;

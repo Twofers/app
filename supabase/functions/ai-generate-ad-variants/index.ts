@@ -15,7 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import {
   buildPhotoAdImagePrompt,
@@ -45,6 +45,13 @@ import {
   validateDealEligibility,
   type DealEligibilityInput,
 } from "../../../lib/deal-eligibility.ts";
+import {
+  QUICK_DEAL_IMAGE_QA_SCHEMA,
+  buildQuickDealImageQaPrompt,
+  buildQuickDealImageRegenerationPrompt,
+  normalizeQuickDealImageQaResult,
+  type QuickDealImageQaResult,
+} from "../../../lib/quick-deal-image-qa.ts";
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
@@ -398,6 +405,24 @@ function defaultCta(lang: OutputLanguage): string {
 type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
 type AdQuota = { used: number; limit: number; remaining: number };
 
+type ImageQaTelemetry = {
+  checked: boolean;
+  attempts: number;
+  missingItems: string[];
+  regenerated: boolean;
+  unavailable: boolean;
+};
+
+function skippedImageQaTelemetry(): ImageQaTelemetry {
+  return {
+    checked: false,
+    attempts: 0,
+    missingItems: [],
+    regenerated: false,
+    unavailable: false,
+  };
+}
+
 async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<AdQuota> {
   const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
   const { count } = await admin
@@ -416,6 +441,87 @@ async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<
   };
 }
 
+function extractResponseOutputText(data: unknown): string | null {
+  const out = (data as { output?: unknown[] })?.output;
+  if (!Array.isArray(out)) return null;
+  for (const item of out) {
+    if (!item || typeof item !== "object") continue;
+    const message = item as { type?: string; content?: unknown[] };
+    if (message.type !== "message" || !Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      if (!part || typeof part !== "object") continue;
+      const textPart = part as { type?: string; text?: string };
+      if (textPart.type === "output_text" && typeof textPart.text === "string") return textPart.text;
+    }
+  }
+  return null;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function inspectGeneratedImageForOffer(params: {
+  openAiKey: string;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+}): Promise<QuickDealImageQaResult | null> {
+  const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
+  if (requiredVisualItems.length === 0) return null;
+
+  try {
+    const imageUrl = `data:image/png;base64,${bytesToBase64(params.imageBytes)}`;
+    const responsesBody = {
+      model: CHAT_MODEL,
+      ...(isGpt5FamilyModel(CHAT_MODEL) ? {} : { temperature: 0.1 }),
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: buildQuickDealImageQaPrompt(requiredVisualItems) },
+            { type: "input_image", image_url: imageUrl, detail: "low" },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: QUICK_DEAL_IMAGE_QA_SCHEMA.name,
+          strict: QUICK_DEAL_IMAGE_QA_SCHEMA.strict,
+          schema: QUICK_DEAL_IMAGE_QA_SCHEMA.schema,
+        },
+      },
+    };
+
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(responsesBody),
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!res.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_http", status: res.status }));
+      return null;
+    }
+    const json = await res.json();
+    const text = extractResponseOutputText(json);
+    if (!text) return null;
+    return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
+  } catch (e) {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", err: String(e).slice(0, 200) }));
+    return null;
+  }
+}
+
 async function produceImage(params: {
   openAiKey: string;
   admin: SupabaseClient;
@@ -431,6 +537,8 @@ async function produceImage(params: {
   posterStoragePath: string | null;
   source: SingleAd["photo_source"];
   treatment: PhotoTreatment | null;
+  prompt: string | null;
+  qa: ImageQaTelemetry;
 }> {
   const {
     openAiKey,
@@ -447,6 +555,7 @@ async function produceImage(params: {
 
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
+  const skippedQa = skippedImageQaTelemetry();
 
   // Path A — owner uploaded a photo
   if (photoPath) {
@@ -457,6 +566,8 @@ async function produceImage(params: {
         posterStoragePath: photoPath,
         source: "uploaded_original",
         treatment: null,
+        prompt: null,
+        qa: skippedQa,
       };
     }
 
@@ -471,7 +582,7 @@ async function produceImage(params: {
           err: signedErr?.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
     }
 
     let imageBytes: Uint8Array;
@@ -479,12 +590,12 @@ async function produceImage(params: {
     try {
       const fetched = await fetch(signed.signedUrl);
       if (!fetched.ok) {
-        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null };
+        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
       }
       imageMime = fetched.headers.get("content-type") || "image/png";
       imageBytes = new Uint8Array(await fetched.arrayBuffer());
     } catch {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
     }
 
     const enhanced = await enhanceUploadedPhoto({
@@ -496,7 +607,7 @@ async function produceImage(params: {
 
     if (!enhanced) {
       // Enhancement failed — fall back to the original photo so the user still gets an ad
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
     }
 
     const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
@@ -511,9 +622,9 @@ async function produceImage(params: {
           err: upErr.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
     }
-    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment };
+    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: skippedQa };
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
@@ -527,9 +638,60 @@ async function produceImage(params: {
     businessName,
     requiredVisualItems,
   });
-  const png = await generatePhotoAdImage(openAiKey, prompt);
+  let png = await generatePhotoAdImage(openAiKey, prompt);
+  const qa: ImageQaTelemetry = {
+    checked: requiredVisualItems.length > 1,
+    attempts: 0,
+    missingItems: [],
+    regenerated: false,
+    unavailable: false,
+  };
   if (!png) {
-    return { posterStoragePath: null, source: "generated", treatment: null };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
+  }
+
+  if (requiredVisualItems.length > 1) {
+    const firstQa = await inspectGeneratedImageForOffer({
+      openAiKey,
+      imageBytes: png,
+      requiredVisualItems,
+    });
+    qa.attempts = 1;
+    if (!firstQa) {
+      qa.unavailable = true;
+    } else if (!firstQa.all_required_items_present) {
+      qa.missingItems = firstQa.missing_items;
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "image_missing_required_item",
+          businessId,
+          missingItems: qa.missingItems,
+        }),
+      );
+      const retryPrompt = buildQuickDealImageRegenerationPrompt({
+        basePrompt: prompt,
+        requiredVisualItems,
+        missingItems: firstQa.missing_items,
+      });
+      const retryPng = await generatePhotoAdImage(openAiKey, retryPrompt);
+      if (retryPng) {
+        qa.regenerated = true;
+        const retryQa = await inspectGeneratedImageForOffer({
+          openAiKey,
+          imageBytes: retryPng,
+          requiredVisualItems,
+        });
+        qa.attempts = 2;
+        if (!retryQa) {
+          qa.unavailable = true;
+          png = retryPng;
+        } else if (retryQa.all_required_items_present || retryQa.missing_items.length <= firstQa.missing_items.length) {
+          qa.missingItems = retryQa.missing_items;
+          png = retryPng;
+        }
+      }
+    }
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
   const { error: upErr } = await admin.storage
@@ -543,9 +705,9 @@ async function produceImage(params: {
         err: upErr.message?.slice(0, 200),
       }),
     );
-    return { posterStoragePath: null, source: "generated", treatment: null };
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
-  return { posterStoragePath: generatedPath, source: "generated", treatment: null };
+  return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa };
 }
 
 // ─── Strong-deal phrase guarantee ──────────────────────────────────────────
@@ -578,6 +740,76 @@ function ensureOfferPhrase(
   }
   const fallback = offerFallbackSubline(lang, item);
   return { ...copy, subheadline: fallback, short_description: fallback };
+}
+
+function offerTelemetry(contract: DealOfferContract) {
+  return {
+    deal_type: contract.dealType,
+    customer_value_percent: contract.customerValuePercent,
+    required_purchase: contract.requiredPurchase
+      ? {
+          quantity: contract.requiredPurchase.quantity,
+          item_name: contract.requiredPurchase.itemName,
+        }
+      : null,
+    free_reward: contract.freeReward
+      ? {
+          quantity: contract.freeReward.quantity,
+          item_name: contract.freeReward.itemName,
+          discount_percent: contract.freeReward.discountPercent,
+        }
+      : null,
+    single_item_discount: contract.singleItemDiscount
+      ? {
+          item_name: contract.singleItemDiscount.itemName,
+          discount_percent: contract.singleItemDiscount.discountPercent,
+        }
+      : null,
+  };
+}
+
+function copyRepairAttemptCount(source: AiDealCopySource | undefined): number {
+  if (source === "AI_RETRY_VALIDATED") return 1;
+  if (source === "DETERMINISTIC_FALLBACK") return 2;
+  return 0;
+}
+
+function buildGenerationTelemetry(params: {
+  offerContract: DealOfferContract;
+  copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes">;
+  imageResult: Awaited<ReturnType<typeof produceImage>>;
+  productionSuccess: boolean;
+}) {
+  const { offerContract, copy, imageResult, productionSuccess } = params;
+  const validationRuleIds = copy.validation_reason_codes ?? [];
+  const repairAttempts = copyRepairAttemptCount(copy.copy_source);
+  const deterministicFallbackUsed = copy.copy_source === "DETERMINISTIC_FALLBACK";
+  const events = ["quick_deal_ai_generated"];
+  if (validationRuleIds.length > 0) events.push("quick_deal_ai_validation_failed");
+  if (repairAttempts > 0) events.push("quick_deal_ai_repair_attempted");
+  if (deterministicFallbackUsed) events.push("quick_deal_ai_fallback_used");
+  if (imageResult.qa.missingItems.length > 0) events.push("quick_deal_ai_image_missing_required_item");
+
+  return {
+    events,
+    success: productionSuccess,
+    structured_offer: offerTelemetry(offerContract),
+    generated: {
+      headline: copy.headline,
+      offer: copy.short_description,
+      image_prompt: imageResult.prompt,
+    },
+    required_visual_items: buildRequiredVisualItems(offerContract),
+    validation_rule_ids: validationRuleIds,
+    repair_attempts: repairAttempts,
+    deterministic_fallback_used: deterministicFallbackUsed,
+    copy: {
+      source: copy.copy_source ?? null,
+      variant_count: copy.variant_count ?? null,
+      selected_variant_index: copy.selected_variant_index ?? null,
+    },
+    image_qa: imageResult.qa,
+  };
 }
 
 // ─── HTTP handler ──────────────────────────────────────────────────────────
@@ -920,6 +1152,11 @@ serve(async (req) => {
           success: false,
           failure_reason: String(e).slice(0, 100),
           openai_called: true,
+          response_payload: {
+            events: ["quick_deal_ai_generation_failed"],
+            stage: "copy",
+            structured_offer: offerTelemetry(offerContract),
+          },
         });
         return new Response(
           JSON.stringify({ error: "AI copy generation failed. Tap try again.", error_code: "COPY_FAILED" }),
@@ -935,6 +1172,8 @@ serve(async (req) => {
         posterStoragePath: previousAd.poster_storage_path ?? null,
         source: previousAd.photo_source,
         treatment: previousAd.photo_treatment,
+        prompt: null,
+        qa: skippedImageQaTelemetry(),
       };
     } else {
       imageResult = await produceImage({
@@ -990,6 +1229,12 @@ serve(async (req) => {
       success: productionSuccess,
       failure_reason: productionSuccess ? null : "IMAGE_NULL",
       openai_called: true,
+      response_payload: buildGenerationTelemetry({
+        offerContract,
+        copy,
+        imageResult,
+        productionSuccess,
+      }),
     });
 
     /** Quota only ticks on a real successful production (matches the log row above). */
