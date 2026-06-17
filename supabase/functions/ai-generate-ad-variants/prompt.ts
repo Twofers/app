@@ -76,8 +76,7 @@ export const COPY_VOICE_RULES = [
   "The job is to write a live, time-limited Twofer deal ad for a mobile app.",
   "Use the validated offer contract as ground truth. Owner notes, photo context, research context, and generic cafe assumptions can add flavor but must never change deal terms.",
   "Clearly mention the actual product or deal item when one is provided.",
-  "Include the time window when provided.",
-  "Include quantity scarcity when provided.",
+  "Do not include street addresses, city/state/ZIP, availability dates, exact times, or inventory counts in the generated ad copy. The app shows those as separate metadata.",
   "Make the offer feel immediate and live, but do not use fake urgency.",
   "Keep all copy short enough for a mobile app.",
   "Avoid generic marketing language and vague restaurant-promo copy.",
@@ -95,15 +94,16 @@ export const COPY_VOICE_RULES = [
   "",
   "OUTPUT FIELD RULES:",
   "  - headline: 4 to 8 words, mention the product or moment, no generic hype.",
-  "  - short_description: 1 to 2 sentences. Mention the product, the exact deal value, time window, and quantity when available.",
+  "  - short_description: 1 sentence. Mention the product and exact deal value only.",
   "  - push_notification: under 85 characters, direct and specific, makes sense on a phone lock screen.",
   "  - social_caption: under 220 characters, plain and shareable.",
   "",
   "EXAMPLES:",
   '  Bad: "Enjoy a delicious treat today with this amazing offer from our business."',
-  '  Good: "Midday latte break? Buy one iced vanilla latte and get a fresh blueberry muffin free from 11:30 to 1:00. Only 20 Twofers available."',
-  '  Good: "Lunch hour slowdown special: buy one turkey croissant and get one drip coffee free today. Available nearby until 1:00."',
-  '  Good: "Afternoon coffee run? Buy one cold brew and get one free for a friend. 15 available today."',
+  '  Bad: "Buy one bagel and get one coffee free at 9460 N MacArthur Blvd. Available 6/16/2026 to 6/23/2026. 50 available."',
+  '  Good: "Buy any bagel, get one coffee free."',
+  '  Good: "Buy one turkey croissant and get one drip coffee free."',
+  '  Good: "Buy one cold brew and get one cold brew free."',
 ];
 
 function languageName(outputLanguage: OutputLanguage): string {
@@ -133,7 +133,7 @@ function contractSystemRules(contract: DealOfferContract): string[] {
     "",
     `Deal type: ${contract.dealType}`,
     `Locked offer line: ${contract.canonicalOfferLine}`,
-    `Locked terms line: ${contract.canonicalShortTerms}`,
+    "Terms, location, schedule, and quantity are app metadata. Do not include them in generated output fields.",
   ];
 }
 
@@ -141,10 +141,6 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
   const required = contract.requiredPurchase;
   const reward = contract.freeReward;
   const discount = contract.singleItemDiscount;
-  const availability = contract.activeWindow?.humanReadable || "Limited-time offer";
-  const quantity = contract.quantityLimit?.remaining
-    ? `${contract.quantityLimit.remaining} available`
-    : "Limited quantities available";
 
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE" && required && reward) {
     return [
@@ -176,10 +172,7 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       `- "Buy ${required.itemName} + ${reward.itemName} and get one free."`,
       "- \"Buy both and get one free.\"",
       "",
-      `Business: ${contract.businessName}`,
-      `Location: ${contract.locationName}`,
-      `Availability: ${availability}`,
-      `Quantity: ${quantity}`,
+      "Do not include business name, address, availability, or quantity in the generated output fields.",
     ];
   }
 
@@ -201,10 +194,7 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       "Do not add a different free reward item.",
       "Do not say the customer has to buy two items.",
       "",
-      `Business: ${contract.businessName}`,
-      `Location: ${contract.locationName}`,
-      `Availability: ${availability}`,
-      `Quantity: ${quantity}`,
+      "Do not include business name, address, availability, or quantity in the generated output fields.",
     ];
   }
 
@@ -225,10 +215,7 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       "- Do not change the discount percentage.",
       `- Do not apply the discount to anything except one ${discount.itemName}.`,
       "",
-      `Business: ${contract.businessName}`,
-      `Location: ${contract.locationName}`,
-      `Availability: ${availability}`,
-      `Quantity: ${quantity}`,
+      "Do not include business name, address, availability, or quantity in the generated output fields.",
     ];
   }
 
@@ -243,11 +230,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   const {
     itemHint,
     research,
-    businessName,
     businessContext,
-    offerScheduleSummary,
-    quantityLimit,
-    redemptionLimit,
     uploadedImageDescription,
     outputLanguage,
     revisionPreset,
@@ -258,30 +241,17 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   } = params;
 
   const facts: string[] = [];
-  const cleanBusinessName = nonEmpty(businessName);
   const cleanItemHint = nonEmpty(itemHint);
   const cleanResearchName = nonEmpty(research.item_name);
   const cleanResearchDescription = nonEmpty(research.description);
-  const cleanSchedule = nonEmpty(offerScheduleSummary);
-  const cleanQuantity =
-    typeof quantityLimit === "number" && Number.isFinite(quantityLimit) && quantityLimit > 0
-      ? `${Math.floor(quantityLimit)} available`
-      : "";
-  const cleanRedemptionLimit = nonEmpty(redemptionLimit);
   const cleanImageDescription = nonEmpty(uploadedImageDescription);
 
-  if (cleanBusinessName) facts.push(`Business name: ${cleanBusinessName}`);
   if (businessContext.category) facts.push(`Business category: ${businessContext.category.trim()}`);
-  if (businessContext.location) facts.push(`Neighborhood or city: ${businessContext.location.trim()}`);
-  if (businessContext.address) facts.push(`Address context: ${businessContext.address.trim()}`);
   if (businessContext.description) facts.push(`Business description: ${businessContext.description.trim()}`);
   if (businessContext.tone) facts.push(`Selected tone, style only: ${businessContext.tone.trim()}`);
   facts.push(`Owner-provided notes and deal terms: ${cleanItemHint || "(not provided)"}`);
   if (cleanResearchName) facts.push(`Product or deal item understood from notes: ${cleanResearchName}`);
   if (cleanResearchDescription) facts.push(`Product description context: ${cleanResearchDescription}`);
-  if (cleanSchedule) facts.push(`Time window: ${cleanSchedule}`);
-  if (cleanQuantity) facts.push(`Quantity scarcity: ${cleanQuantity}`);
-  if (cleanRedemptionLimit) facts.push(`Redemption limit: ${cleanRedemptionLimit}`);
   if (cleanImageDescription) facts.push(`Uploaded image description: ${cleanImageDescription}`);
   if (offerContract) facts.push("Offer contract above overrides owner notes, photo context, and research context.");
 

@@ -9,7 +9,6 @@ describe("validateDealEligibility", () => {
         appliesTo: "SINGLE_ITEM",
         discountPercent: 40,
         itemDescription: "croissant",
-        itemRetailValueCents: 500,
       }),
     ).toMatchObject({ eligible: true, eligibilityStatus: "VALID", customerValuePercent: 40 });
   });
@@ -118,7 +117,7 @@ describe("validateDealEligibility", () => {
     ).toMatchObject({ eligible: false, reasonCode: "FREE_ITEM_MUST_BE_100_PERCENT_FREE" });
   });
 
-  it("rejects weak free item value below 40%", () => {
+  it("accepts free item offers even when estimated item values are below 40%", () => {
     const result = validateDealEligibility({
       dealType: "BUY_ONE_GET_SOMETHING_FREE",
       requiredItemDescription: "coffee",
@@ -128,22 +127,21 @@ describe("validateDealEligibility", () => {
       freeItemDiscountPercent: 100,
     });
     expect(result).toMatchObject({
-      eligible: false,
-      reasonCode: "TOTAL_CUSTOMER_VALUE_TOO_LOW",
+      eligible: true,
+      eligibilityStatus: "VALID",
       customerValuePercent: 16.67,
     });
   });
 
-  it("rejects custom free item with missing retail value", () => {
+  it("accepts custom free item with missing retail values", () => {
     expect(
       validateDealEligibility({
         dealType: "BUY_ONE_GET_SOMETHING_FREE",
         requiredItemDescription: "coffee",
-        requiredItemRetailValueCents: 500,
         freeItemDescription: "any pastry",
         freeItemDiscountPercent: 100,
       }),
-    ).toMatchObject({ eligible: false, reasonCode: "MISSING_FREE_ITEM_VALUE" });
+    ).toMatchObject({ eligible: true, eligibilityStatus: "VALID" });
   });
 
   it("rejects free item with no description", () => {

@@ -13,7 +13,9 @@ export type AppAnalyticsEventName =
   | "redeem_completed"
   | "redeem_failed"
   | "claim_expired"
-  | "claim_blocked";
+  | "claim_blocked"
+  | "quick_deal_preview_blocked"
+  | "quick_deal_release_blocked";
 
 type Payload = {
   event_name: AppAnalyticsEventName;

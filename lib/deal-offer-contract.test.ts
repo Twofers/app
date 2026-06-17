@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildDealOfferContract,
+  buildHeadlineCandidates,
+  buildOfferCopyCandidates,
+  buildRequiredVisualItems,
+  canonicalizeOfferItem,
   deterministicFallbackCopy,
   generateValidatedDealCopy,
   validateAiCopyAgainstOffer,
@@ -58,6 +62,17 @@ function copyText(text: string): AiDealCopyVariant {
 }
 
 describe("buildDealOfferContract", () => {
+  it("canonicalizes common food item typos without touching merchant metadata", () => {
+    expect(canonicalizeOfferItem("Bagle")).toEqual({
+      original: "Bagle",
+      canonical: "bagel",
+      confidence: "high",
+      source: "known_food_dictionary",
+    });
+    expect(canonicalizeOfferItem("Coffee").canonical).toBe("coffee");
+    expect(canonicalizeOfferItem("Test Cafa").canonical).toBe("Test Cafa");
+  });
+
   it("builds canonical copy for BUY_ONE_GET_ONE_FREE", () => {
     const contract = contractFor({
       dealType: "BUY_ONE_GET_ONE_FREE",
@@ -78,6 +93,38 @@ describe("buildDealOfferContract", () => {
   it("builds canonical copy for BUY_ONE_GET_SOMETHING_FREE", () => {
     expect(coffeeBagelContract.canonicalOfferLine).toBe("Buy one coffee, get one bagel free.");
     expect(coffeeBagelContract.canonicalShortTerms).toContain("Purchase 1 coffee to receive 1 bagel free.");
+  });
+
+  it("builds a structured fixture for buy bagel get coffee without ad-copy metadata", () => {
+    const quickDealBuyBagelGetCoffeeFreeFixture = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Bagle",
+      requiredItemRetailValueCents: 300,
+      freeItemQuantity: 1,
+      freeItemDescription: "Coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(quickDealBuyBagelGetCoffeeFreeFixture.canonicalOfferLine).toBe("Buy one bagel, get one coffee free.");
+    expect(buildHeadlineCandidates(quickDealBuyBagelGetCoffeeFreeFixture)).toEqual([
+      "Free coffee with any bagel",
+      "Coffee included with any bagel",
+      "Coffee on us with any bagel",
+      "Bagel coffee deal",
+    ]);
+    expect(buildOfferCopyCandidates(quickDealBuyBagelGetCoffeeFreeFixture)[0]).toBe(
+      "Buy any bagel, get one coffee free.",
+    );
+    expect(buildRequiredVisualItems(quickDealBuyBagelGetCoffeeFreeFixture)).toEqual(["bagel", "coffee"]);
+
+    const fallback = deterministicFallbackCopy(quickDealBuyBagelGetCoffeeFreeFixture);
+    expect(fallback.headline).toBe("Free coffee with any bagel");
+    expect(fallback.short_description).toBe("Buy any bagel, get one coffee free.");
+    expect(fallback.short_description).not.toMatch(/MacArthur|Irving|75063|Available|2026|50 available/i);
+    expect(validateAiCopyAgainstOffer(fallback, quickDealBuyBagelGetCoffeeFreeFixture).valid).toBe(true);
   });
 
   it("builds canonical copy for PERCENT_OFF_SINGLE_ITEM", () => {
@@ -136,6 +183,31 @@ describe("validateAiCopyAgainstOffer", () => {
       const result = validateAiCopyAgainstOffer(copyText(invalidText), coffeeBagelContract);
       expect(result.valid, invalidText).toBe(false);
     }
+  });
+
+  it("rejects offer copy that leaks address, date, or inventory metadata", () => {
+    const badScreenshotCopy = copy({
+      headline: "Bagels and free coffee",
+      short_description:
+        "Buy one Bagle and get one Coffee free at Test Cafa, 9460 N MacArthur Blvd, Irving, TX 75063, USA. Available 6/16/2026 7:29 PM to 6/23/2026 7:29 PM. 50 available.",
+      push_notification: "Buy Bagle, get Coffee free.",
+      social_caption: "Buy Bagle, get Coffee free.",
+    });
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Bagle",
+      requiredItemRetailValueCents: 300,
+      freeItemQuantity: 1,
+      freeItemDescription: "Coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+
+    const result = validateAiCopyAgainstOffer(badScreenshotCopy, contract);
+    expect(result.valid).toBe(false);
+    expect(result.reasonCodes).toContain("COPY_CONTAINS_METADATA");
   });
 
   it("allows true same-item BOGO language and rejects changed mechanics", () => {
@@ -221,7 +293,7 @@ describe("generateValidatedDealCopy", () => {
 
     expect(requestCopy).toHaveBeenCalledTimes(2);
     expect(result.copy_source).toBe("DETERMINISTIC_FALLBACK");
-    expect(result.short_description).toContain("Buy one coffee");
+    expect(result.short_description).toContain("Buy any coffee");
     expect(result.short_description).toContain("get one bagel free");
     expect(validateAiCopyAgainstOffer(deterministicFallbackCopy(coffeeBagelContract), coffeeBagelContract).valid).toBe(true);
   });

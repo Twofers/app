@@ -108,11 +108,11 @@ function invalid(
   };
 }
 
-function valid(customerValuePercent: number): DealEligibilityResult {
+function valid(customerValuePercent?: number): DealEligibilityResult {
   return {
     eligible: true,
     eligibilityStatus: "VALID",
-    customerValuePercent: roundPercent(customerValuePercent),
+    ...(customerValuePercent != null ? { customerValuePercent: roundPercent(customerValuePercent) } : {}),
   };
 }
 
@@ -162,21 +162,12 @@ function validateFreeItemDeal(
     fieldErrors.requiredItemDescription = "Enter the item customers must buy.";
   }
 
-  if (requiredItemValue == null) {
-    fieldErrors.requiredItemRetailValueCents = "Enter the estimated retail value of the required item.";
-  }
-
   if (dealType === "BUY_ONE_GET_SOMETHING_FREE" && !freeDescription) {
     fieldErrors.freeItemDescription = "Enter the free item customers receive.";
   }
 
   if (freeQty < 1) {
     fieldErrors.freeItemQuantity = "Enter how many free items customers receive.";
-  }
-
-  if (freeItemValue == null) {
-    fieldErrors.freeItemRetailValueCents =
-      "Enter the estimated retail value of the free item so Twofer can confirm this deal gives customers at least 40% value.";
   }
 
   if (freeDiscount == null || freeDiscount !== 100) {
@@ -207,31 +198,18 @@ function validateFreeItemDeal(
     );
   }
 
-  if (fieldErrors.requiredItemRetailValueCents) {
-    return invalid(
-      "MISSING_REQUIRED_ITEM_VALUE",
-      "Enter the estimated retail value of the required item.",
-      fieldErrors,
-    );
-  }
-
-  if (fieldErrors.freeItemRetailValueCents || fieldErrors.freeItemQuantity) {
+  if (fieldErrors.freeItemQuantity) {
     return invalid(
       "MISSING_FREE_ITEM_VALUE",
-      "Enter the estimated retail value of the free item so Twofer can confirm this deal gives customers at least 40% value.",
+      "Enter how many free items customers receive.",
       fieldErrors,
     );
   }
 
-  const customerValuePercent = freeItemCustomerValuePercent(requiredItemValue!, freeItemValue!);
-  if (customerValuePercent < MIN_CUSTOMER_VALUE_PERCENT) {
-    return invalid(
-      "TOTAL_CUSTOMER_VALUE_TOO_LOW",
-      `This deal gives customers about ${Math.round(customerValuePercent)}% value. Twofer deals must give customers at least 40% value.`,
-      undefined,
-      customerValuePercent,
-    );
-  }
+  const customerValuePercent =
+    requiredItemValue != null && freeItemValue != null
+      ? freeItemCustomerValuePercent(requiredItemValue, freeItemValue)
+      : undefined;
 
   return valid(customerValuePercent);
 }
@@ -285,18 +263,11 @@ export function validateDealEligibility(input: DealEligibilityInput): DealEligib
   if (!hasItem(input.itemId, input.itemDescription)) {
     fieldErrors.itemDescription = "Enter the single item this discount applies to.";
   }
-  if (positiveCents(input.itemRetailValueCents) == null) {
-    fieldErrors.itemRetailValueCents = "Enter the estimated retail value of the discounted item.";
-  }
-
   if (fieldErrors.discountPercent) {
     return invalid("DISCOUNT_TOO_LOW", "Enter a discount of at least 40% for one single item.", fieldErrors);
   }
   if (fieldErrors.itemDescription) {
     return invalid("MISSING_REQUIRED_ITEM", "Enter the single item this discount applies to.", fieldErrors);
-  }
-  if (fieldErrors.itemRetailValueCents) {
-    return invalid("MISSING_REQUIRED_ITEM_VALUE", "Enter the estimated retail value of the discounted item.", fieldErrors);
   }
 
   return valid(discountPercent!);

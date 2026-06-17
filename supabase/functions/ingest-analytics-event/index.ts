@@ -27,6 +27,8 @@ const ALLOWED = new Set([
   "business_deal_created",
   "claim_expired",
   "claim_blocked",
+  "quick_deal_preview_blocked",
+  "quick_deal_release_blocked",
   "app_error",
 ]);
 

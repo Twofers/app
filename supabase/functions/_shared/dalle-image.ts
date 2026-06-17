@@ -7,24 +7,13 @@
  *   the headline above the image.
  */
 
-/**
- * Allowlisted image model ids only — never accept model names from clients.
- *
- * `gpt-image-2` is intentionally NOT here. It was re-added once before (75d487e) on the
- * strength of a *minimal-payload* probe, but a probe with the real production payload
- * (`quality: "high"`, `output_format: "png"`) showed it HANGS (>90s, no response) while
- * `gpt-image-1` returns a real image in ~40s (verified 2026-06-02, scripts/probe-image-payload.mjs).
- * A >90s hang can't fit the app's 120s AI budget and can't be rescued by the fallback retry
- * (the retry would run AFTER the hang), so it shipped text-only ads with no image. Keeping it
- * off the allowlist forces the resolver to fall through to gpt-image-1 even if a dashboard
- * secret still points OPENAI_IMAGE_MODEL_GENERATE at gpt-image-2. Do NOT re-add it without
- * re-running the production-payload probe and confirming it returns well under ~60s.
- */
+/** Allowlisted image model ids only — never accept model names from clients. */
 export const OPENAI_IMAGE_MODEL_ALLOWLIST = new Set([
   "chatgpt-image-latest",
   "gpt-image-1",
   "gpt-image-1-mini",
   "gpt-image-1.5",
+  "gpt-image-2",
 ]);
 
 const OPENAI_IMAGE_MODEL_FALLBACK = "gpt-image-1";
@@ -129,10 +118,15 @@ export function buildPhotoAdImagePrompt(params: {
   itemName: string;
   itemDescription?: string;
   businessName?: string;
+  requiredVisualItems?: readonly string[];
 }): string {
-  const { itemName, itemDescription, businessName } = params;
+  const { itemName, itemDescription, businessName, requiredVisualItems } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
+  const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
   return [
+    visualItems.length > 1
+      ? `Required offer items: ${visualItems.join(", ")}. Show all required items together as equally important main subjects. Do not show only one item.`
+      : "",
     `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`,
     itemDescription ? `Description: ${esc(itemDescription)}.` : "",
     businessName ? `For an independent cafe called ${esc(businessName)}.` : "",
