@@ -72,6 +72,9 @@ const CLEAR_FREE_ITEM_PHRASE_PATTERNS: RegExp[] = [
 ];
 
 /** Meaningful free add-ons only (EN + ES). No generic “free thing with purchase”. */
+const NAMED_FREE_REWARD_WORDS =
+  "(?:drink|beverage|coffee|tea|latte|espresso|cappuccino|soda|juice|side|dessert|cookie|pastry|bagel|muffin|donut|doughnut|sandwich|taco|slice|appetizer|meal)s?";
+
 const MEANINGFUL_FREE_PATTERNS: RegExp[] = [
   /\bfree\s+drink\s+with\b/i,
   /\bfree\s+side\s+with\b/i,
@@ -85,6 +88,12 @@ const MEANINGFUL_FREE_PATTERNS: RegExp[] = [
   /\bsegundo\s+(art[ií]culo\s+)?gratis\b/i,
   /\b2[º°]\s+gratis\b/i,
 ];
+
+MEANINGFUL_FREE_PATTERNS.push(
+  new RegExp(`\\bfree\\s+${NAMED_FREE_REWARD_WORDS}\\s+with\\b`, "i"),
+  new RegExp(`\\bget\\s+(?:a|one|1)\\s+${NAMED_FREE_REWARD_WORDS}\\s+free\\b`, "i"),
+  new RegExp(`\\bbuy\\s+[^,\\n]{1,120},\\s*get\\s+(?:a|one|1)\\s+${NAMED_FREE_REWARD_WORDS}\\s+free\\b`, "i"),
+);
 
 /** BOGO, 2-for-1, b2g1, half-price, second 50%, dozen-style (EN + ES). */
 const CORE_STRONG_PATTERNS: RegExp[] = [

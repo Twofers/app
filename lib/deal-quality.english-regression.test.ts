@@ -92,6 +92,16 @@ describe("deal quality — English regression", () => {
     expect(r.tier).toBe("strong");
   });
 
+  it("accepts a named free coffee reward as strong", () => {
+    const r = assessDealQuality({
+      title: "Bagel with a free coffee",
+      description: "Buy one bagel, get one coffee free.",
+    });
+    expect(r.blocked).toBe(false);
+    expect(r.blockReason).toBeNull();
+    expect(r.tier).toBe("strong");
+  });
+
   it("blocks vague free item (not named drink/side/dessert/second)", () => {
     const r = assessDealQuality({
       title: "Free surprise with order",

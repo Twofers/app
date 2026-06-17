@@ -30,8 +30,8 @@ describe("validateQuickDealAd", () => {
   it("passes the repaired screenshot fixture", () => {
     const result = validateQuickDealAd(
       {
-        headline: "Free coffee with any bagel",
-        offer: "Buy any bagel, get one coffee free.",
+        headline: "Bagel with a free coffee",
+        offer: "Buy one bagel, get one coffee free.",
         cta: "Claim deal",
       },
       contextFor(bagelCoffeeInput),
@@ -39,7 +39,8 @@ describe("validateQuickDealAd", () => {
 
     expect(result.ok).toBe(true);
     expect(result.blockingErrors).toEqual([]);
-    expect(result.quality?.blocked).toBe(true);
+    expect(result.quality?.blocked).toBe(false);
+    expect(result.quality?.tier).toBe("strong");
   });
 
   it("blocks screenshot-style metadata even when the offer mentions value", () => {
