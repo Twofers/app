@@ -48,6 +48,11 @@ type DealRow = {
   window_start_minutes: number | null;
   window_end_minutes: number | null;
   timezone: string | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
 };
 
 function dayKey(dateStr: string) {
@@ -140,7 +145,7 @@ export default function DealAnalyticsDetail() {
     try {
       const { data: dealData, error: dealError } = await supabase
         .from("deals")
-        .select("id,title,poster_url,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+        .select("id,title,poster_url,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,deal_type,discount_percent,item_description,required_item_description,free_item_description")
         .eq("id", id)
         .single();
       if (dealError) throw dealError;

@@ -48,6 +48,11 @@ type Deal = {
   poster_storage_path?: string | null;
   business_id: string;
   price: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
   claim_cutoff_buffer_minutes: number;
   max_claims: number;
   businesses?: {
@@ -247,7 +252,7 @@ export default function DealDetail() {
     const { data, error } = await supabase
       .from("deals")
       .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)",
+        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,deal_type,discount_percent,item_description,required_item_description,free_item_description,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)",
       )
       .eq("id", id)
       .single();

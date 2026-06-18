@@ -111,9 +111,8 @@ export function buildShareCopy(args: {
 }): ShareDealCopy {
   const shareUrl = buildShareUrl(args.shareCode);
   const message = args.t("shareDeal.message", {
-    defaultValue: "{{dealTitle}}\n\nLimited-time local offer available now at {{businessName}}.\n{{shareUrl}}",
+    defaultValue: "{{dealTitle}}\n{{shareUrl}}",
     dealTitle: args.dealTitle,
-    businessName: args.businessName,
     shareUrl,
   });
   const title = args.t("shareDeal.shareSheetTitle", {

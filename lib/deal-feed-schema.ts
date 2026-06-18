@@ -1,6 +1,6 @@
 /** Shared Supabase select string for the deals feed query. Used by loadDeals and useRealtimeDeals. */
 export const DEAL_FEED_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,deal_type,discount_percent,item_description,required_item_description,free_item_description,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 
 export type Deal = {
   id: string;
@@ -21,6 +21,11 @@ export type Deal = {
   business_id: string;
   price: number | null;
   max_claims: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
   businesses?: {
     name: string | null;
     category: string | null;

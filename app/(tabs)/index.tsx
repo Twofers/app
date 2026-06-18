@@ -74,7 +74,7 @@ const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
  */
 const NEARBY_FETCH_MILES = 60;
 const FEED_DEAL_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,start_time,end_time,is_active,is_demo,poster_url,poster_storage_path,business_id,price,max_claims,deal_type,discount_percent,item_description,required_item_description,free_item_description,businesses(name,category,location,latitude,longitude,is_demo),is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 
 function businessDetailHref(businessId: string, distanceLabel?: string | null): Href {
   const encodedId = encodeURIComponent(businessId);
@@ -102,6 +102,11 @@ type Deal = {
   business_id: string;
   price: number | null;
   max_claims: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
   businesses?: {
     name: string | null;
     category: string | null;
@@ -608,6 +613,7 @@ export default function HomeScreen() {
           claimExpiresAt: out.expires_at,
           graceMinutes: DEFAULT_CLAIM_GRACE_MINUTES,
           dealTitle: claimedDeal ? localizedDealTitle(claimedDeal, i18n.language) : null,
+          businessName: claimedDeal?.businesses?.name ?? null,
         });
       } catch (e: unknown) {
         const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");

@@ -12,6 +12,12 @@ export type DealDisplayTitleFields = {
   requiredItemDescription?: string | null;
   free_item_description?: string | null;
   freeItemDescription?: string | null;
+  item_description?: string | null;
+  itemDescription?: string | null;
+  discount_percent?: number | string | null;
+  discountPercent?: number | string | null;
+  percent_off?: number | string | null;
+  percentOff?: number | string | null;
   size?: string | null;
   item_size?: string | null;
   modifier?: string | null;
@@ -95,13 +101,21 @@ function firstPresent(values: Array<string | null | undefined>): string {
 }
 
 function containsInternalDealLanguage(value: string): boolean {
-  return /\bBOGO\b/i.test(value) || /\bSame[-\s]?Item\b/i.test(value);
+  return (
+    /\bBOGO\b/i.test(value) ||
+    /\bSame[-\s]?Item\b/i.test(value) ||
+    /\b2\s*[-xX]\s*for\s*[-xX]?\s*1\b/i.test(value) ||
+    /\b2\s*x\s*1\b/i.test(value) ||
+    /1\s*\+\s*1/.test(value)
+  );
 }
 
 function containsSameItemLanguage(value: string): boolean {
   return (
     containsInternalDealLanguage(value) ||
     /\b2\s*[- ]?\s*for\s*[- ]?\s*1\b/i.test(value) ||
+    /\b2\s*x\s*1\b/i.test(value) ||
+    /1\s*\+\s*1/.test(value) ||
     /\btwo\s+for\s+one\b/i.test(value) ||
     /\bbuy\s+one\b.*\bget\s+one\b.*\bfree\b/i.test(value)
   );
@@ -118,6 +132,8 @@ function stripMechanicalOfferWords(value: string): string {
       .replace(/\bSame[-\s]?Item\b/gi, " ")
       .replace(/\bBOGO\b/gi, " ")
       .replace(/\b2\s*[- ]?\s*for\s*[- ]?\s*1\b/gi, " ")
+      .replace(/\b2\s*x\s*1\b/gi, " ")
+      .replace(/1\s*\+\s*1/g, " ")
       .replace(/\btwo\s+for\s+one\b/gi, " ")
       .replace(/^[\s:|/-]+|[\s:|/-]+$/g, " ")
       .replace(/\b\d{10,}\b/g, " "),
@@ -130,6 +146,8 @@ function extractSameItemFromTitle(rawTitle: string): string | null {
   if (bogoPrefix) return stripMechanicalOfferWords(bogoPrefix);
   const bogoSuffix = withoutPrefix.match(/^(.+?)\s*(?:BOGO|2\s*[- ]?\s*for\s*[- ]?\s*1|two\s+for\s+one)\s*$/i)?.[1];
   if (bogoSuffix) return stripMechanicalOfferWords(bogoSuffix);
+  const compactSuffix = withoutPrefix.match(/^(.+?)\s*(?:2\s*x\s*1|1\s*\+\s*1)\s*$/i)?.[1];
+  if (compactSuffix) return stripMechanicalOfferWords(compactSuffix);
   return null;
 }
 
@@ -164,12 +182,18 @@ function itemNameFromDeal(deal: DealDisplayTitleFields): string | null {
     firstPresent([
       deal.item_name,
       deal.itemName,
+      deal.item_description,
+      deal.itemDescription,
       deal.product_name,
       deal.productName,
       deal.required_item_description,
       deal.requiredItemDescription,
     ]),
   );
+}
+
+function freeItemNameFromDeal(deal: DealDisplayTitleFields): string | null {
+  return present(firstPresent([deal.free_item_description, deal.freeItemDescription]));
 }
 
 function itemModifierFromDeal(deal: DealDisplayTitleFields): string | null {
@@ -189,6 +213,58 @@ function isPlainEnglishOfferTitle(value: string): boolean {
   return /\bbuy\b.+\bget\b.+\bfree\b/i.test(value) || /\bget\b.+\bsecond\b.+\bfree\b/i.test(value);
 }
 
+function numericPercent(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : null;
+  if (typeof value === "string") {
+    const n = Number(value.replace(/[%\s]/g, ""));
+    return Number.isFinite(n) ? Math.round(n) : null;
+  }
+  return null;
+}
+
+function discountPercentFromDeal(deal: DealDisplayTitleFields, rawTitle: string): number | null {
+  const explicit = numericPercent(
+    firstPresent([
+      deal.discount_percent != null ? String(deal.discount_percent) : null,
+      deal.discountPercent != null ? String(deal.discountPercent) : null,
+      deal.percent_off != null ? String(deal.percent_off) : null,
+      deal.percentOff != null ? String(deal.percentOff) : null,
+    ]),
+  );
+  if (explicit != null) return explicit;
+  const fromTitle = rawTitle.match(/\b(\d{1,3})\s*%\s*off\b/i)?.[1];
+  return fromTitle ? numericPercent(fromTitle) : null;
+}
+
+function knownDifferentItemOffer(deal: DealDisplayTitleFields, rawTitle: string): boolean {
+  const typeText = firstPresent([deal.deal_type, deal.offer_type, deal.type]);
+  return (
+    /something[-_\s]?free|different[-_\s]?item|buy[-_\s]?one[-_\s]?get[-_\s]?something/i.test(typeText) ||
+    Boolean(freeItemNameFromDeal(deal)) ||
+    /\bbuy\s+(?:a|one)\b.+\bget\s+(?:a|one)\b.+\bfree\b/i.test(rawTitle)
+  );
+}
+
+function knownDiscountOffer(deal: DealDisplayTitleFields, rawTitle: string): boolean {
+  const typeText = firstPresent([deal.deal_type, deal.offer_type, deal.type]);
+  return /percent|discount|off[-_\s]?single/i.test(typeText) || /\b\d{1,3}\s*%\s*off\b/i.test(rawTitle);
+}
+
+function articleFor(nounPhrase: string): "a" | "an" {
+  return /^[aeiou]/i.test(nounPhrase.trim()) ? "an" : "a";
+}
+
+function normalizeForComparison(value: string): string {
+  return stripMechanicalOfferWords(value)
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9%+\s]/g, " ")
+    .replace(/\b(?:a|an|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefined, preferredTitle?: string | null): string {
   const source = deal ?? {};
   const rawTitle = firstPresent([
@@ -200,11 +276,19 @@ export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefi
     source.title,
   ]);
   const sameItemOffer = knownSameItemOffer(source, rawTitle);
+  const differentItemOffer = knownDifferentItemOffer(source, rawTitle);
+  const discountOffer = knownDiscountOffer(source, rawTitle);
   const itemFromTitle = extractSameItemFromTitle(rawTitle);
   const item = buildItemWithModifier(itemNameFromDeal(source) ?? itemFromTitle, itemModifierFromDeal(source));
+  const freeItem = freeItemNameFromDeal(source) ? normalizeNounPhrase(stripMechanicalOfferWords(freeItemNameFromDeal(source)!)) : null;
+  const discountPercent = discountPercentFromDeal(source, rawTitle);
 
   if (isPlainEnglishOfferTitle(rawTitle) && !containsInternalDealLanguage(rawTitle)) {
     return toCustomerSentenceCase(rawTitle);
+  }
+
+  if (differentItemOffer && item && freeItem && item !== freeItem) {
+    return `Buy ${articleFor(item)} ${item}, get ${articleFor(freeItem)} ${freeItem} free`;
   }
 
   if (sameItemOffer && item) {
@@ -215,8 +299,32 @@ export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefi
     return FALLBACK_SAME_ITEM;
   }
 
+  if (discountOffer && discountPercent != null && item) {
+    return `${discountPercent}% off ${item}`;
+  }
+
   const cleaned = stripMechanicalOfferWords(rawTitle);
   if (!cleaned || containsInternalDealLanguage(cleaned)) return FALLBACK_UNKNOWN;
 
   return toCustomerSentenceCase(cleaned) || FALLBACK_UNKNOWN;
+}
+
+export function getDealDisplayDescription(
+  deal: DealDisplayTitleFields | null | undefined,
+  preferredDescription?: string | null,
+  preferredTitle?: string | null,
+): string {
+  const description = present(preferredDescription);
+  if (!description) return "";
+
+  const title = getDealDisplayTitle(deal, preferredTitle);
+  const normalizedTitle = normalizeForComparison(title);
+  const normalizedDescription = normalizeForComparison(description);
+  const normalizedDescriptionAsTitle = normalizeForComparison(getDealDisplayTitle({ ...(deal ?? {}), title: description }, description));
+
+  if (!normalizedDescription) return "";
+  if (normalizedDescription === normalizedTitle) return "";
+  if (normalizedDescriptionAsTitle === normalizedTitle) return "";
+
+  return description;
 }

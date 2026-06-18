@@ -9,6 +9,7 @@ import i18n from "./i18n/config";
 import { supabase } from "./supabase";
 import { getConsumerPreferences, milesToKm } from "./consumer-preferences";
 import { haversineKm } from "./geo";
+import { formatCompactAppDateTime } from "./i18n/format-datetime";
 
 const ALERTS_KEY = "deal_alerts_enabled";
 const LAST_SEEN_KEY = "last_seen_deals_at";
@@ -93,6 +94,7 @@ export async function scheduleClaimExpiryReminder(params: {
   claimExpiresAt: string;
   graceMinutes?: number | null;
   dealTitle?: string | null;
+  businessName?: string | null;
 }): Promise<void> {
   const base = new Date(params.claimExpiresAt).getTime();
   if (Number.isNaN(base)) return;
@@ -101,12 +103,15 @@ export async function scheduleClaimExpiryReminder(params: {
   // Skip if the reminder time isn't at least 5 minutes out (window too short to help).
   if (remindAt.getTime() <= Date.now() + 5 * 60_000) return;
   const lng = i18n.language;
+  const deadlineLabel = formatCompactAppDateTime(new Date(deadlineMs), lng);
   await scheduleLocalNotificationAtSafe(
     {
-      title: String(i18n.t("pushTemplates.claimExpiringTitle", { lng })),
-      body: params.dealTitle
-        ? String(i18n.t("pushTemplates.claimExpiringBody", { lng, deal: params.dealTitle }))
-        : String(i18n.t("pushTemplates.claimExpiringBodyGeneric", { lng })),
+      title: params.dealTitle
+        ? params.dealTitle
+        : String(i18n.t("pushTemplates.claimExpiringTitle", { lng })),
+      body: params.businessName
+        ? String(i18n.t("pushTemplates.claimExpiringBodyWithBusiness", { lng, business: params.businessName, time: deadlineLabel }))
+        : String(i18n.t("pushTemplates.claimExpiringBodyGeneric", { lng, time: deadlineLabel })),
       data: { path: "/(tabs)/wallet" },
     },
     remindAt,

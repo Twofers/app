@@ -65,6 +65,11 @@ type ClaimRow = {
     poster_storage_path?: string | null;
     end_time: string;
     price: number | null;
+    deal_type?: string | null;
+    discount_percent?: number | null;
+    item_description?: string | null;
+    required_item_description?: string | null;
+    free_item_description?: string | null;
     timezone: string | null;
     businesses: {
       name: string | null;
@@ -158,7 +163,7 @@ export default function WalletScreen() {
       const { data, error } = await supabase
         .from("deal_claims")
         .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))",
+          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,deal_type,discount_percent,item_description,required_item_description,free_item_description,timezone,businesses(name,address,location,latitude,longitude,is_demo))",
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })

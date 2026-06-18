@@ -1,7 +1,8 @@
 import type { TFunction } from "i18next";
-import { addDays, format, isValid } from "date-fns";
+import { addDays, format } from "date-fns";
 import type { Locale } from "date-fns";
 import { dateFnsLocaleFor } from "./i18n/date-locale";
+import { formatAppDateTimeRange, formatCompactAppDateTime } from "./i18n/format-datetime";
 import { devWarn } from "./dev-log";
 
 type RecurringInfo = {
@@ -24,7 +25,7 @@ const dayMap: Record<string, number> = {
   Sun: 7,
 };
 
-/** Jan 1, 2024 is Monday — aligns with `days_of_week` 1=Mon … 7=Sun. */
+// Jan 1, 2024 is Monday; aligns with days_of_week 1=Mon through 7=Sun.
 const BASE_MONDAY = new Date(2024, 0, 1);
 
 function dayNumberToDate(dayNum: number): Date {
@@ -54,8 +55,8 @@ function formatMinutesLocalized(minutes: number, locale: Locale) {
 function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
   const sorted = [...days].sort((a, b) => a - b);
   if (sorted.length === 7) return t?.("dealValidity.everyDay") ?? "Every day";
-  if (sorted.join(",") === "1,2,3,4,5") return t?.("dealValidity.weekdaysMonFri") ?? "Mon–Fri";
-  if (sorted.join(",") === "6,7") return t?.("dealValidity.weekend") ?? "Sat–Sun";
+  if (sorted.join(",") === "1,2,3,4,5") return t?.("dealValidity.weekdaysMonFri") ?? "Mon-Fri";
+  if (sorted.join(",") === "6,7") return t?.("dealValidity.weekend") ?? "Sat-Sun";
   return sorted
     .map((d) => format(dayNumberToDate(d), "EEE", { locale }))
     .join(", ");
@@ -80,8 +81,6 @@ export function isDealActiveNow(deal: RecurringInfo, now = new Date()) {
     if (!days.length || windowStart == null || windowEnd == null) return false;
     const { day, minutes } = getLocalParts(now, tz);
     if (windowEnd <= windowStart) {
-      // Overnight window (e.g., 10PM-2AM): active if on a scheduled day after windowStart,
-      // or on the following day before windowEnd.
       if (days.includes(day) && minutes >= windowStart) return true;
       const prevDay = day === 1 ? 7 : day - 1;
       if (days.includes(prevDay) && minutes < windowEnd) return true;
@@ -150,20 +149,18 @@ export function getDealClaimScheduleBlock(
 
 export type FormatValiditySummaryOptions = {
   lang?: string;
-  /** Prefix before end date when only `end_time` is set (e.g. t('commonUi.dealEndsVerb')). */
+  /** Prefix before end date when only end_time is set, e.g. t("commonUi.dealEndsVerb"). */
   endsVerb?: string;
-  /** When set, preset day patterns (every day, weekdays, weekend) use translated copy. */
+  /** When set, preset day patterns use translated copy. */
   t?: TFunction;
   /** Customer-facing screens should avoid exposing raw IANA timezone ids. */
   showTimeZone?: boolean;
 };
 
-/** Merchant dashboard: how this deal should be labeled (not identical to consumer "live"). */
 export type MerchantDealScheduleStatus =
   | "ended"
   | "scheduled"
   | "live"
-  /** Recurring campaign active but outside the weekly window right now */
   | "recurring_inactive";
 
 export function getMerchantDealScheduleStatus(
@@ -189,7 +186,6 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
   const endsVerb = options?.endsVerb ?? "Ends";
   const t = options?.t;
   const loc = dateFnsLocaleFor(lang);
-  const fmt = (d: Date) => (isValid(d) ? format(d, "PPp", { locale: loc }) : "");
 
   if (!deal) return t?.("dealValidity.unavailable") ?? "Validity unavailable";
   if (deal.is_recurring) {
@@ -201,13 +197,13 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
       return t?.("dealValidity.recurringWindow") ?? "Recurring window";
     }
     const timeZoneSuffix = options?.showTimeZone === false ? "" : ` (${tz})`;
-    return `${formatDaysLocalized(days, loc, t)} · ${formatMinutesLocalized(windowStart, loc)}–${formatMinutesLocalized(windowEnd, loc)}${timeZoneSuffix}`;
+    return `${formatDaysLocalized(days, loc, t)} \u00B7 ${formatMinutesLocalized(windowStart, loc)}-${formatMinutesLocalized(windowEnd, loc)}${timeZoneSuffix}`;
   }
   const start = deal.start_time ? new Date(deal.start_time) : null;
   const end = deal.end_time ? new Date(deal.end_time) : null;
   if (start && end) {
-    return `${fmt(start)} → ${fmt(end)}`;
+    return formatAppDateTimeRange(start, end, lang);
   }
-  if (end) return `${endsVerb} ${fmt(end)}`.trim();
+  if (end && Number.isFinite(end.getTime())) return `${endsVerb} ${formatCompactAppDateTime(end, lang)}`.trim();
   return t?.("dealValidity.oneTime") ?? "One-time deal";
 }

@@ -52,6 +52,11 @@ type DealRow = {
   end_time: string;
   start_time: string;
   price: number | null;
+  deal_type?: string | null;
+  discount_percent?: number | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
   is_recurring: boolean;
   days_of_week: number[] | null;
   window_start_minutes: number | null;
@@ -109,7 +114,7 @@ export default function BusinessProfileScreen() {
     const { data: deals } = await supabase
       .from("deals")
       .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
+        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,deal_type,discount_percent,item_description,required_item_description,free_item_description,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
       )
       .eq("business_id", id)
       .eq("is_active", true)
