@@ -1,6 +1,6 @@
-import { getDealDisplayTitle } from "./deal-display-copy";
+import { getDealDisplayDescription, getDealDisplayTitle, type DealDisplayTitleFields } from "./deal-display-copy";
 
-export type LocalizedDealFields = {
+export type LocalizedDealFields = DealDisplayTitleFields & {
   source_locale?: string | null;
   title?: string | null;
   description?: string | null;
@@ -37,7 +37,11 @@ export function localizedDealTitle(deal: LocalizedDealFields, language: string):
 
 export function localizedDealDescription(deal: LocalizedDealFields, language: string): string {
   const lang = baseLanguage(language);
-  if (lang === "en") return present(deal.description_en) ?? present(deal.description) ?? "";
-  if (lang === "es") return present(deal.description_es) ?? present(deal.description) ?? "";
-  return present(deal.description_ko) ?? present(deal.description) ?? "";
+  const description =
+    lang === "en"
+      ? present(deal.description_en) ?? present(deal.description) ?? ""
+      : lang === "es"
+        ? present(deal.description_es) ?? present(deal.description) ?? ""
+        : present(deal.description_ko) ?? present(deal.description) ?? "";
+  return getDealDisplayDescription(deal, description, localizedDealTitle(deal, language));
 }

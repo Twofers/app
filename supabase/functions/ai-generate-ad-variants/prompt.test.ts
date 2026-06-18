@@ -64,11 +64,11 @@ describe("buildAdCopyPrompt", () => {
   });
 
   it("includes good and bad examples", () => {
-    expect(basePrompt.system).toContain("Bad:");
-    expect(basePrompt.system).toContain("Enjoy a delicious treat today");
-    expect(basePrompt.system).toContain("9460 N MacArthur Blvd");
-    expect(basePrompt.system).toContain("Buy any bagel, get one coffee free.");
-    expect(basePrompt.system).toContain("Buy one cold brew and get one cold brew free.");
+    expect(basePrompt.system).toContain("Bad headlineAlternative");
+    expect(basePrompt.system).toContain("Egg sandwich with free coffee");
+    expect(basePrompt.system).toContain("Buy an egg sandwich and get a free coffee");
+    expect(basePrompt.system).toContain("Buy two muffins and get a free drip coffee");
+    expect(basePrompt.system).toContain("Buy one latte and get one free");
   });
 
   it("passes the locked contract while keeping metadata out of generated fields", () => {
@@ -88,6 +88,8 @@ describe("buildAdCopyPrompt", () => {
     const schema = basePrompt.jsonSchema.schema;
     expect(schema.required).toEqual(["variants"]);
     expect(Object.keys(schema.properties)).toEqual(["variants"]);
+    const item = schema.properties.variants.items;
+    expect(item.required).toEqual(["headlineAlternative", "description", "pushTitle", "pushBody", "socialCaption"]);
   });
 
   it("tells the model not to invent missing facts", () => {
@@ -100,6 +102,8 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain('Do NOT say "Buy coffee and bagel."');
     expect(basePrompt.userText).toContain('Do NOT say "BOGO."');
     expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
+    expect(basePrompt.userText).toContain("Normalized deal facts JSON");
+    expect(basePrompt.userText).toContain("Deterministic canonical headline: Buy a coffee and get a free bagel");
   });
 
   it("requires plain English for same-item buy-one-get-one offers", () => {
@@ -120,7 +124,7 @@ describe("buildAdCopyPrompt", () => {
 
     expect(prompt.userText).toContain("This is a true same-item buy-one-get-one free deal.");
     expect(prompt.userText).toContain('Do not use:');
-    expect(prompt.userText).toContain("Buy one coffee, get one free.");
+    expect(prompt.userText).toContain("Buy one coffee and get one free");
   });
 
   it("bans BOGO, free, and entire-order language for percent-off deals", () => {

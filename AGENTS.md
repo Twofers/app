@@ -62,6 +62,15 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 2. Do not delete the untracked local QA and docs artifacts, or anything in `outdated/`, without asking.
 3. Do not claim the app is production or store ready.
 
+## AI promotional-copy rules
+
+- Deal facts are authoritative; creativity must never alter them.
+- Headlines must explain the customer action and reward naturally.
+- Do not solve copy-quality bugs with example-specific string replacements.
+- Every prompt change requires fixture updates and regression tests.
+- AI output must pass validation and have a deterministic fallback.
+- Run lint, type checking, unit tests, and the copy evaluation suite before completing changes.
+
 ## Environment facts
 
 - This is a Windows machine. You cannot build or sign an iOS app locally here. All iOS builds run on EAS cloud, and all iOS device testing runs through TestFlight on a real iPhone.

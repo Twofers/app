@@ -4,6 +4,108 @@ import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
+import {
+  buildDealOfferContract,
+  buildDeterministicDealChannelCopy,
+} from "../../../lib/deal-offer-contract.ts";
+import {
+  validateDealEligibility,
+  type DealEligibilityInput,
+} from "../../../lib/deal-eligibility.ts";
+
+const BASE_DEAL_SELECT = "id,title,business_id,businesses(name,owner_id)";
+const STRUCTURED_DEAL_SELECT = [
+  "id",
+  "title",
+  "business_id",
+  "start_time",
+  "end_time",
+  "max_claims",
+  "deal_type",
+  "applies_to",
+  "discount_percent",
+  "required_purchase_quantity",
+  "free_item_quantity",
+  "required_item_description",
+  "required_item_retail_value_cents",
+  "free_item_description",
+  "free_item_retail_value_cents",
+  "free_item_discount_percent",
+  "item_description",
+  "item_retail_value_cents",
+  "businesses(name,owner_id)",
+].join(",");
+
+type DealPushBusiness = {
+  name: string | null;
+  owner_id: string | null;
+};
+
+type DealPushRow = Record<string, unknown> & {
+  id: string;
+  title: string | null;
+  business_id: string;
+  businesses: DealPushBusiness | DealPushBusiness[] | null;
+};
+
+function isMissingStructuredColumn(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === "PGRST204" || error?.code === "42703";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function dealEligibilityFromRow(row: Record<string, unknown>): DealEligibilityInput | null {
+  const dealType = typeof row.deal_type === "string" ? row.deal_type : "";
+  if (!dealType) return null;
+  return {
+    dealType,
+    appliesTo: typeof row.applies_to === "string" ? row.applies_to : "SINGLE_ITEM",
+    discountPercent: row.discount_percent as number | string | null | undefined,
+    requiredPurchaseQuantity: row.required_purchase_quantity as number | string | null | undefined,
+    freeItemQuantity: row.free_item_quantity as number | string | null | undefined,
+    requiredItemDescription: row.required_item_description as string | null | undefined,
+    requiredItemRetailValueCents: row.required_item_retail_value_cents as number | string | null | undefined,
+    freeItemDescription: row.free_item_description as string | null | undefined,
+    freeItemRetailValueCents: row.free_item_retail_value_cents as number | string | null | undefined,
+    freeItemDiscountPercent: row.free_item_discount_percent as number | string | null | undefined,
+    itemDescription: row.item_description as string | null | undefined,
+    itemRetailValueCents: row.item_retail_value_cents as number | string | null | undefined,
+  };
+}
+
+function buildPushCopy(row: Record<string, unknown>, businessName: string): { title: string; body: string } {
+  const fallbackTitle = getDealDisplayTitle(row, typeof row.title === "string" ? row.title : null) || "Limited-time local offer";
+  const eligibilityInput = dealEligibilityFromRow(row);
+  if (eligibilityInput) {
+    const eligibilityResult = validateDealEligibility(eligibilityInput);
+    const contract = buildDealOfferContract({
+      businessId: String(row.business_id ?? ""),
+      businessName,
+      locationName: businessName,
+      dealEligibility: eligibilityInput,
+      eligibilityResult,
+      quantityLimit: asNumber(row.max_claims),
+      activeWindowHumanReadable:
+        row.start_time && row.end_time ? `${String(row.start_time)} to ${String(row.end_time)}` : null,
+    });
+    if (contract) {
+      const copy = buildDeterministicDealChannelCopy(contract);
+      return { title: copy.pushTitle, body: copy.pushBody };
+    }
+  }
+  const hasLimit = asNumber(row.max_claims) != null;
+  return {
+    title: fallbackTitle,
+    body: hasLimit ? `Live now at ${businessName}. Claims are limited.` : `Live now at ${businessName}. Open Twofer for details.`,
+  };
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -55,27 +157,33 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const { data: deal, error: dealErr } = await admin
+    let dealQuery = await admin
       .from("deals")
-      .select("id, title, business_id, businesses(name, owner_id)")
+      .select(STRUCTURED_DEAL_SELECT)
       .eq("id", dealId)
       .single();
+    if (isMissingStructuredColumn(dealQuery.error)) {
+      dealQuery = await admin
+        .from("deals")
+        .select(BASE_DEAL_SELECT)
+        .eq("id", dealId)
+        .single();
+    }
+    const { data: rawDeal, error: dealErr } = dealQuery;
+    const deal = rawDeal as unknown as DealPushRow | null;
 
     if (dealErr || !deal) {
       return jsonResponse({ error: "Deal not found" }, 404);
     }
 
-    const biz = deal.businesses as unknown as {
-      name: string | null;
-      owner_id: string;
-    } | null;
+    const biz = Array.isArray(deal.businesses) ? deal.businesses[0] ?? null : deal.businesses;
 
     if (!biz || biz.owner_id !== user.id) {
       return jsonResponse({ error: "Not your deal" }, 403);
     }
 
     const businessName = biz.name ?? "a local business";
-    const dealTitle = getDealDisplayTitle({ title: deal.title }, deal.title) || "Limited-time local offer";
+    const pushCopy = buildPushCopy(deal, businessName);
 
     // --- 1. Favorites audience ---
     const { data: favRows } = await admin
@@ -119,7 +227,7 @@ serve(async (req) => {
     }
 
     // --- 4. Send push ---
-    const result = await sendExpoPushBatch(tokens, dealTitle, `Live now at ${businessName}. Limited claims available.`, {
+    const result = await sendExpoPushBatch(tokens, pushCopy.title, pushCopy.body, {
       dealId: deal.id,
       path: `/deal/${deal.id}`,
     });

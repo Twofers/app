@@ -37,6 +37,7 @@ import {
   type OutputLanguage,
 } from "./prompt.ts";
 import {
+  DEAL_COPY_LIMITS,
   buildDealOfferContract,
   buildRequiredVisualItems,
   generateValidatedDealCopy,
@@ -321,7 +322,7 @@ async function generateCopy(params: {
   revisionFeedback?: string;
   previousAd?: SingleAd;
   costContext: AiCostContext;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta">> {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & { fallback_reason?: string; generator_version?: string; copy_latency_ms?: number }> {
   const {
     openAiKey,
     itemHint,
@@ -342,6 +343,7 @@ async function generateCopy(params: {
   // A previous ad is only passed in on revision calls (see the handler's generateCopy call).
   const isRevision = previousAd !== undefined;
 
+  const copyStartedAt = Date.now();
   const selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
@@ -433,21 +435,25 @@ async function generateCopy(params: {
       );
     },
   });
-  const shortDescription = clip(selected.short_description, 180);
+  const copyLatencyMs = Date.now() - copyStartedAt;
+  const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
 
   return {
-    headline: clip(selected.headline, 55),
+    headline: clip(selected.headline, DEAL_COPY_LIMITS.headline),
     subheadline: shortDescription,
     short_description: shortDescription,
-    push_notification: clip(selected.push_notification, 85),
-    terms_summary: clip(selected.terms_summary, 240),
-    social_caption: selected.social_caption ? clip(selected.social_caption, 220) : undefined,
+    push_notification: clip(selected.push_body || selected.push_notification, DEAL_COPY_LIMITS.pushBody),
+    terms_summary: clip(selected.terms_summary, DEAL_COPY_LIMITS.terms),
+    social_caption: selected.social_caption ? clip(selected.social_caption, DEAL_COPY_LIMITS.socialCaption) : undefined,
     locked_offer_line: selected.locked_offer_line,
     locked_terms_line: selected.locked_terms_line,
     copy_source: selected.copy_source,
     variant_count: selected.variant_count,
     selected_variant_index: selected.selected_variant_index,
     validation_reason_codes: selected.validation_reason_codes,
+    fallback_reason: selected.fallback_reason,
+    generator_version: selected.generator_version,
+    copy_latency_ms: copyLatencyMs,
     cta: defaultCta(outputLanguage),
   };
 }
@@ -922,7 +928,11 @@ function copyRepairAttemptCount(source: AiDealCopySource | undefined): number {
 
 function buildGenerationTelemetry(params: {
   offerContract: DealOfferContract;
-  copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes">;
+  copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
+    fallback_reason?: string;
+    generator_version?: string;
+    copy_latency_ms?: number;
+  };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
 }) {
@@ -959,6 +969,10 @@ function buildGenerationTelemetry(params: {
       source: copy.copy_source ?? null,
       variant_count: copy.variant_count ?? null,
       selected_variant_index: copy.selected_variant_index ?? null,
+      generator_version: copy.generator_version ?? null,
+      latency_ms: copy.copy_latency_ms ?? null,
+      fallback_reason: copy.fallback_reason ?? null,
+      validation_failure_count: validationRuleIds.length,
     },
     image_qa: imageResult.qa,
   };
@@ -1266,7 +1280,11 @@ serve(async (req) => {
       });
     }
 
-    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta">;
+    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+      fallback_reason?: string;
+      generator_version?: string;
+      copy_latency_ms?: number;
+    };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
       copy = {
