@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Image, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 
@@ -24,6 +25,7 @@ import { aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } 
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
+import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import {
   BUSINESS_INVITE_PENDING_META_KEY,
   isUserInviteValidated,
@@ -54,6 +56,44 @@ const HOURS_PRESET_KEYS = [
 
 type CategoryKey = (typeof CATEGORY_KEYS)[number];
 
+type BusinessSetupSnapshot = {
+  businessName: string;
+  address: string;
+  phone: string;
+  shortDescription: string;
+  category: string;
+  customCategory: string;
+  hoursPreset: string;
+  customHours: string;
+  logoUri: string;
+};
+
+function serializeBusinessSetupSnapshot(snapshot: BusinessSetupSnapshot): string {
+  return JSON.stringify({
+    businessName: snapshot.businessName.trim(),
+    address: snapshot.address.trim(),
+    phone: snapshot.phone.trim(),
+    shortDescription: snapshot.shortDescription.trim(),
+    category: snapshot.category.trim(),
+    customCategory: snapshot.customCategory.trim(),
+    hoursPreset: snapshot.hoursPreset.trim(),
+    customHours: snapshot.customHours.trim(),
+    logoUri: snapshot.logoUri.trim(),
+  });
+}
+
+const EMPTY_BUSINESS_SETUP_SNAPSHOT = serializeBusinessSetupSnapshot({
+  businessName: "",
+  address: "",
+  phone: "",
+  shortDescription: "",
+  category: "",
+  customCategory: "",
+  hoursPreset: "",
+  customHours: "",
+  logoUri: "",
+});
+
 function categoryKeyFromLookup(value: string): CategoryKey | null {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return null;
@@ -70,9 +110,11 @@ function categoryKeyFromLookup(value: string): CategoryKey | null {
 export default function BusinessSetupScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { session, isInitialLoading: authLoading } = useAuthSession();
+  const { confirm, confirmModal } = useBrandedConfirm();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
   const primary = theme.primary;
@@ -94,6 +136,9 @@ export default function BusinessSetupScreen() {
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
+  const [dirtyBaseline, setDirtyBaseline] = useState<string | null>(null);
+  const [allowDiscardNavigation, setAllowDiscardNavigation] = useState(false);
+  const dirtyRef = useRef(false);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -114,7 +159,41 @@ export default function BusinessSetupScreen() {
     };
   }, []);
 
+  const confirmDiscardProfileChanges = useCallback(
+    (onDiscard: () => void) => {
+      confirm({
+        iconName: "edit-off",
+        title: t("businessSetup.unsavedTitle", { defaultValue: "Discard profile changes?" }),
+        message: t("businessSetup.unsavedBody", {
+          defaultValue: "You have unsaved business profile edits. Discard them and leave?",
+        }),
+        confirmLabel: t("dealDraft.discard", { defaultValue: "Discard" }),
+        onConfirm: () => {
+          dirtyRef.current = false;
+          setAllowDiscardNavigation(true);
+          onDiscard();
+        },
+        cancelLabel: t("dealDraft.keepEditing", { defaultValue: "Keep editing" }),
+      });
+    },
+    [confirm, t],
+  );
+
   const exitSetup = useCallback(async () => {
+    if (dirtyRef.current) {
+      confirmDiscardProfileChanges(() => {
+        if (router.canGoBack()) {
+          router.back();
+          return;
+        }
+        if (!session?.user?.id) {
+          router.replace("/auth-landing");
+          return;
+        }
+        void signOutAndRedirectToAuthLanding({ userId: session.user.id, replace: router.replace });
+      });
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;
@@ -126,16 +205,17 @@ export default function BusinessSetupScreen() {
     // Hard role split: a Business account can't bail into the Shopper side.
     // With no back stack and an incomplete profile, the only clean exit is sign-out.
     await signOutAndRedirectToAuthLanding({ userId: session.user.id, replace: router.replace });
-  }, [router, session?.user?.id]);
+  }, [confirmDiscardProfileChanges, router, session?.user?.id]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (router.canGoBack()) return false;
       void exitSetup();
       return true;
     });
     return () => sub.remove();
-  }, [exitSetup]);
+  }, [exitSetup, router]);
 
   const trimmed = useMemo(
     () => ({
@@ -150,6 +230,46 @@ export default function BusinessSetupScreen() {
   const resolvedCategory = category === "other" ? customCategory.trim() : category;
   const resolvedHours = hoursPreset === "custom_prompt" ? customHours.trim() : hoursPreset ? t(`businessSetup.hoursPreset.${hoursPreset}`) : "";
   const copyKeys = useMemo(() => getBusinessSetupCopyKeys(setupMode, busy), [setupMode, busy]);
+  const currentBusinessSetupSnapshot = useMemo(
+    () =>
+      serializeBusinessSetupSnapshot({
+        businessName,
+        address,
+        phone,
+        shortDescription,
+        category,
+        customCategory,
+        hoursPreset,
+        customHours,
+        logoUri: logoUri ?? "",
+      }),
+    [address, businessName, category, customCategory, customHours, hoursPreset, logoUri, phone, shortDescription],
+  );
+  const businessSetupDirty = Boolean(
+    dirtyBaseline &&
+      setupMode !== "loading" &&
+      currentBusinessSetupSnapshot !== dirtyBaseline,
+  );
+
+  useEffect(() => {
+    dirtyRef.current = businessSetupDirty && !allowDiscardNavigation;
+  }, [allowDiscardNavigation, businessSetupDirty]);
+
+  useEffect(() => {
+    if (dirtyBaseline && currentBusinessSetupSnapshot !== dirtyBaseline && allowDiscardNavigation) {
+      setAllowDiscardNavigation(false);
+    }
+  }, [allowDiscardNavigation, currentBusinessSetupSnapshot, dirtyBaseline]);
+
+  usePreventRemove(
+    businessSetupDirty && !allowDiscardNavigation,
+    useCallback(
+      ({ data }) => {
+        confirmDiscardProfileChanges(() => navigation.dispatch(data.action));
+      },
+      [confirmDiscardProfileChanges, navigation],
+    ),
+  );
 
   useEffect(() => {
     if (authLoading) return;
@@ -180,6 +300,7 @@ export default function BusinessSetupScreen() {
       if (cancelled) return;
       if (error || !row) {
         setSetupMode("create");
+        setDirtyBaseline(EMPTY_BUSINESS_SETUP_SNAPSHOT);
         return;
       }
       setSetupMode("edit");
@@ -188,26 +309,47 @@ export default function BusinessSetupScreen() {
       setPhone((prev) => prev || (row.phone ?? ""));
       setShortDescription((prev) => prev || (row.short_description ?? ""));
       const storedCategory = row.category?.trim();
+      let baselineCategory = "";
+      let baselineCustomCategory = "";
       if (storedCategory) {
         const categoryKey = CATEGORY_KEYS.includes(storedCategory as CategoryKey)
           ? (storedCategory as CategoryKey)
           : categoryKeyFromLookup(storedCategory);
-        setCategory((prev) => prev || categoryKey || "other");
-        if (!categoryKey) setCustomCategory((prev) => prev || storedCategory);
+        baselineCategory = categoryKey || "other";
+        baselineCustomCategory = categoryKey ? "" : storedCategory;
+        setCategory((prev) => prev || baselineCategory);
+        if (baselineCustomCategory) setCustomCategory((prev) => prev || baselineCustomCategory);
       }
       const storedHours = row.hours_text?.trim();
+      let baselineHoursPreset = "";
+      let baselineCustomHours = "";
       if (storedHours) {
         const presetKey = HOURS_PRESET_KEYS.find(
           (key) => key !== "custom_prompt" && t(`businessSetup.hoursPreset.${key}`) === storedHours,
         );
-        setHoursPreset((prev) => prev || presetKey || "custom_prompt");
-        if (!presetKey) setCustomHours((prev) => prev || storedHours);
+        baselineHoursPreset = presetKey || "custom_prompt";
+        baselineCustomHours = presetKey ? "" : storedHours;
+        setHoursPreset((prev) => prev || baselineHoursPreset);
+        if (baselineCustomHours) setCustomHours((prev) => prev || baselineCustomHours);
       }
       const lat = row.latitude != null ? Number(row.latitude) : NaN;
       const lng = row.longitude != null ? Number(row.longitude) : NaN;
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
         setVerifiedLookupCoords((prev) => prev ?? { lat, lng });
       }
+      setDirtyBaseline(
+        serializeBusinessSetupSnapshot({
+          businessName: row.name ?? "",
+          address: row.address ?? "",
+          phone: row.phone ?? "",
+          shortDescription: row.short_description ?? "",
+          category: baselineCategory,
+          customCategory: baselineCustomCategory,
+          hoursPreset: baselineHoursPreset,
+          customHours: baselineCustomHours,
+          logoUri: "",
+        }),
+      );
     })();
     return () => {
       cancelled = true;
@@ -506,6 +648,9 @@ export default function BusinessSetupScreen() {
       }
 
       setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+      setDirtyBaseline(currentBusinessSetupSnapshot);
+      setAllowDiscardNavigation(true);
+      dirtyRef.current = false;
       redirectTimerRef.current = setTimeout(async () => {
         const pending = await consumePendingDeepLink();
         router.replace((pending ?? "/(tabs)/dashboard") as Href);
@@ -648,7 +793,7 @@ export default function BusinessSetupScreen() {
               </View>
             )}
             <Text style={{ marginTop: Spacing.xs, fontSize: 13, opacity: 0.6, color: theme.text }}>
-              {t("businessSetup.logoUploadHint", "Tap to upload your logo")}
+              {t("businessSetup.logoUploadHint", "Add a logo")}
             </Text>
           </Pressable>
         </View>
@@ -730,6 +875,11 @@ export default function BusinessSetupScreen() {
         {/* Category picker */}
         <View>
           <Text style={{ fontWeight: "700", marginBottom: 6, color: theme.text }}>{t("businessSetup.categoryLabel")}</Text>
+          {!category ? (
+            <Text style={{ marginBottom: Spacing.xs, color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+              {t("businessSetup.categoryUnset", { defaultValue: "Choose one" })}
+            </Text>
+          ) : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs }}>
             {CATEGORY_KEYS.map((key) => {
               const active = category === key;
@@ -831,6 +981,7 @@ export default function BusinessSetupScreen() {
           disabled={busy || logoUploading || setupMode === "loading"}
         />
       </ScrollView>
+      {confirmModal}
     </View>
     </KeyboardScreen>
   );

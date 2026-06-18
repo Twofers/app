@@ -253,7 +253,7 @@ export default function DealAnalyticsDetail() {
         }}
       >
         <EmptyState
-          title={t("dealAnalytics.offerLoadErrorTitle", { defaultValue: "We couldn't load this offer." })}
+          title={t("dealAnalytics.offerLoadErrorTitle", { defaultValue: "We couldn’t load this offer." })}
           message={t("dealAnalytics.offerLoadErrorBody", { defaultValue: "Check your connection and try again." })}
           actionLabel={t("commonUi.tryAgain")}
           onAction={() => void loadData()}

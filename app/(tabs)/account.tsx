@@ -911,9 +911,22 @@ export default function AccountScreen() {
                   <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
                     {businessSummaryAddress ?? t("account.bizNoAddress")}
                   </Text>
-                  <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
-                    {t("account.bizCategory")}: {businessSummaryCategory ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
-                  </Text>
+                  {businessSummaryCategory ? (
+                    <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                      {t("account.bizCategory")}: {businessSummaryCategory}
+                    </Text>
+                  ) : (
+                    <View style={{ gap: 2 }}>
+                      <Text style={{ opacity: 0.8, lineHeight: 20, fontWeight: "700", color: theme.text }}>
+                        {t("account.bizCategoryMissing", { defaultValue: "Category not set" })}
+                      </Text>
+                      <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
+                        {t("account.bizCategoryMissingHelp", {
+                          defaultValue: "Choose a category to help customers find you.",
+                        })}
+                      </Text>
+                    </View>
+                  )}
                   {visibleBusinessContactName ? (
                     <Text style={{ opacity: 0.7, lineHeight: 20, color: theme.text }}>
                       {t("account.fieldContactName")}: {visibleBusinessContactName}

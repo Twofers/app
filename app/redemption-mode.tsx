@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
+  Linking,
   Platform,
   ScrollView,
   Text,
@@ -70,13 +71,14 @@ export default function RedemptionModeScreen() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { session } = useAuthSession();
   const { state, loading, sessionStatus, refresh } = useRedemptionMode();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission] = useCameraPermissions();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const [mode, setMode] = useState<EntryMode>("scan");
   const [manualCode, setManualCode] = useState("");
   const [exitPin, setExitPin] = useState("");
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" | "warning" } | null>(null);
+  const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
   const [preview, setPreview] = useState<StaffRedemptionResult | null>(null);
   const [success, setSuccess] = useState<StaffRedemptionResult | null>(null);
   const [lastInput, setLastInput] = useState<InputBody | null>(null);
@@ -97,6 +99,27 @@ export default function RedemptionModeScreen() {
   const successDealTitle = success?.deal_title
     ? getDealDisplayTitle({ title: success.deal_title }, success.deal_title) || dealTitleFallback
     : dealTitleFallback;
+
+  const redemptionFailureMessage = useCallback(
+    (result: StaffRedemptionResult) => {
+      switch (result.status) {
+        case "not_found":
+        case "invalid_input":
+          return t("apiErrors.redeemInvalidCode", { defaultValue: "That code doesn’t match an active deal." });
+        case "already_redeemed":
+          return t("apiErrors.redeemTokenAlreadyUsed", { defaultValue: "This ticket has already been used." });
+        case "expired":
+          return t("apiErrors.redeemTokenExpired", { defaultValue: "This ticket has expired." });
+        case "not_redeemable":
+          return t("apiErrors.redeemClaimCannotRedeem", { defaultValue: "This ticket can’t be redeemed." });
+        case "deal_inactive":
+          return t("apiErrors.claimDealInactive", { defaultValue: "This deal isn't live." });
+        default:
+          return result.message || t("redemptionMode.previewFailed", { defaultValue: "Cannot redeem this code." });
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -144,7 +167,7 @@ export default function RedemptionModeScreen() {
       setPreview(result);
       setLastInput(body);
       if (!result.ok) {
-        setBanner({ message: result.message || t("redemptionMode.previewFailed", { defaultValue: "Cannot redeem this code." }), tone: "error" });
+        setBanner({ message: redemptionFailureMessage(result), tone: "error" });
       }
     } catch (err) {
       setPreview(null);
@@ -168,7 +191,7 @@ export default function RedemptionModeScreen() {
     try {
       const result = await confirmStaffRedemption(lastInput);
       if (!result.ok) {
-        setBanner({ message: result.message || t("redemptionMode.confirmFailed", { defaultValue: "Redemption failed." }), tone: "error" });
+        setBanner({ message: redemptionFailureMessage(result), tone: "error" });
         return;
       }
       setPreview(null);
@@ -193,6 +216,19 @@ export default function RedemptionModeScreen() {
       return;
     }
     await runPreview(body);
+  }
+
+  async function openCameraSettings() {
+    setCameraPermissionError(null);
+    try {
+      await Linking.openSettings();
+    } catch {
+      setCameraPermissionError(
+        t("redeem.cameraPermissionFailed", {
+          defaultValue: "Camera permission did not open. Try again or enter the ticket code.",
+        }),
+      );
+    }
   }
 
   async function runExit() {
@@ -291,13 +327,16 @@ export default function RedemptionModeScreen() {
                 padding: Spacing.lg,
                 backgroundColor: colorScheme === "dark" ? "#2b1c08" : "#fff7ed",
                 gap: Spacing.sm,
-              }}
-            >
+            }}
+          >
               <Text style={{ color: theme.text, fontWeight: "900", fontSize: 22 }}>
-                {t("redemptionMode.redeemed", { defaultValue: "Redeemed" })}
+                {t("redeem.redeemed", { defaultValue: "Deal redeemed" })}
+              </Text>
+              <Text style={{ color: theme.mutedText, fontSize: 13, fontWeight: "800" }}>
+                {t("redeem.successOfferLabel", { defaultValue: "Offer" })}
               </Text>
               <Text style={{ color: theme.text, fontSize: 16 }}>{successDealTitle}</Text>
-              <SecondaryButton title={t("redeem.scanNext", { defaultValue: "Scan next" })} onPress={resetForNext} />
+              <SecondaryButton title={t("redeem.scanNext", { defaultValue: "Scan another code" })} onPress={resetForNext} />
             </View>
           ) : preview?.ok ? (
             <View
@@ -356,6 +395,9 @@ export default function RedemptionModeScreen() {
                       defaultValue: "Enter the 6-character code shown under the customer's QR. Spaces and dashes are okay.",
                     })}
                   </Text>
+                  <Text style={{ color: theme.text, fontSize: 13, fontWeight: "800" }}>
+                    {t("redeem.manualCodeInputLabel", { defaultValue: "Ticket code" })}
+                  </Text>
                   <TextInput
                     value={manualCode}
                     onChangeText={(value) => setManualCode(normalizeRedemptionCode(value))}
@@ -400,9 +442,30 @@ export default function RedemptionModeScreen() {
               ) : !permission ? (
                 <ActivityIndicator color={theme.primary} />
               ) : !permission.granted ? (
-                <View style={{ gap: Spacing.md }}>
-                  <Text style={{ color: theme.mutedText }}>{t("redeem.cameraRequired", { defaultValue: "Camera permission is required." })}</Text>
-                  <PrimaryButton title={t("redeem.grantPermission", { defaultValue: "Grant camera permission" })} onPress={requestPermission} />
+                <View
+                  style={{
+                    gap: Spacing.md,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: Radii.lg,
+                    backgroundColor: theme.surface,
+                    padding: Spacing.lg,
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "900", fontSize: 18 }}>
+                    {t("redeem.cameraUnavailableTitle", { defaultValue: "Camera unavailable" })}
+                  </Text>
+                  <Text style={{ color: theme.mutedText, lineHeight: 20 }}>
+                    {t("redeem.cameraUnavailableBody", {
+                      defaultValue: "Allow camera access in settings, or enter the ticket code instead.",
+                    })}
+                  </Text>
+                  {cameraPermissionError ? <Banner message={cameraPermissionError} tone="error" /> : null}
+                  <PrimaryButton title={t("redeem.openCameraSettings", { defaultValue: "Open settings" })} onPress={() => void openCameraSettings()} />
+                  <SecondaryButton
+                    title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code" })}
+                    onPress={() => setMode("manual")}
+                  />
                 </View>
               ) : (
                 <View style={{ gap: Spacing.md }}>
@@ -422,6 +485,24 @@ export default function RedemptionModeScreen() {
                             }
                       }
                     />
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        left: Spacing.md,
+                        right: Spacing.md,
+                        bottom: Spacing.md,
+                        borderRadius: Radii.md,
+                        backgroundColor: "rgba(0,0,0,0.62)",
+                        paddingHorizontal: Spacing.md,
+                        paddingVertical: Spacing.sm,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center" }}>
+                        {t("redeem.scanFrameHint", { defaultValue: "Place the QR code inside the frame." })}
+                      </Text>
+                    </View>
                     {busy ? (
                       <View
                         style={{
@@ -436,7 +517,6 @@ export default function RedemptionModeScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <SecondaryButton title={t("redeem.scanNext", { defaultValue: "Scan next" })} onPress={() => setScanned(false)} disabled={busy} />
                 </View>
               )}
             </>

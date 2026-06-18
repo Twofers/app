@@ -332,6 +332,9 @@ export default function RedeemScanner() {
               </View>
               <Text style={{ fontWeight: "900", fontSize: 18, color: theme.text }}>{t("redeem.redeemed")}</Text>
             </View>
+            <Text style={{ marginTop: Spacing.md, fontSize: 13, fontWeight: "800", color: theme.mutedText }}>
+              {t("redeem.successOfferLabel", { defaultValue: "Offer" })}
+            </Text>
             <Text style={{ marginTop: Spacing.sm, fontSize: 16, color: theme.text }}>{success.dealTitle}</Text>
             <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 14, color: theme.text }}>
               {t("redeem.redeemedAt")}{" "}
@@ -344,6 +347,7 @@ export default function RedeemScanner() {
               onPress={() => {
                 setSuccess(null);
                 setScanned(false);
+                setMode("scan");
               }}
             />
           </View>
@@ -403,6 +407,9 @@ export default function RedeemScanner() {
               {...FORM_SCROLL_KEYBOARD_PROPS}
             >
               <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20, color: theme.text }}>{t("redeem.manualHelp")}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>
+                {t("redeem.manualCodeInputLabel", { defaultValue: "Ticket code" })}
+              </Text>
               <TextInput
                 value={claimCodeInput}
                 onChangeText={(value) => setClaimCodeInput(normalizeRedemptionCode(value))}
@@ -458,29 +465,28 @@ export default function RedeemScanner() {
               </Text>
             </View>
           ) : !permission.granted ? (
-            <View style={{ gap: Spacing.md }}>
-              <Text style={{ opacity: 0.7, color: theme.text }}>
-                {cameraPermissionBlocked
-                  ? t("redeem.cameraBlocked", {
-                      defaultValue:
-                        "Camera access is blocked. Open Android settings to allow camera, or enter the ticket code instead.",
-                    })
-                  : t("redeem.cameraRequired")}
+            <View
+              style={{
+                gap: Spacing.md,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                backgroundColor: theme.surface,
+                padding: Spacing.lg,
+              }}
+            >
+              <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>
+                {t("redeem.cameraUnavailableTitle", { defaultValue: "Camera unavailable" })}
+              </Text>
+              <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+                {t("redeem.cameraUnavailableBody", {
+                  defaultValue: "Allow camera access in settings, or enter the ticket code instead.",
+                })}
               </Text>
               {cameraPermissionError ? <Banner message={cameraPermissionError} tone="error" /> : null}
               <PrimaryButton
-                title={
-                  cameraPermissionBlocked
-                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
-                    : cameraPermissionRequesting
-                      ? t("redeem.requestingCamera")
-                      : t("redeem.grantPermission")
-                }
-                accessibilityLabel={
-                  cameraPermissionBlocked
-                    ? t("redeem.openCameraSettings", { defaultValue: "Open camera settings" })
-                    : t("redeem.grantPermission")
-                }
+                title={t("redeem.openCameraSettings", { defaultValue: "Open settings" })}
+                accessibilityLabel={t("redeem.openCameraSettings", { defaultValue: "Open settings" })}
                 testID={cameraPermissionBlocked ? "redeem-open-camera-settings" : "redeem-grant-camera-permission"}
                 onPress={() => {
                   if (cameraPermissionBlocked) {
@@ -492,8 +498,8 @@ export default function RedeemScanner() {
                 disabled={cameraPermissionRequesting}
               />
               <SecondaryButton
-                title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
-                accessibilityLabel={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
+                title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code" })}
+                accessibilityLabel={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code" })}
                 testID="redeem-camera-manual-fallback"
                 onPress={() => setMode("manual")}
                 disabled={processing}
@@ -515,6 +521,24 @@ export default function RedeemScanner() {
                   onBarcodeScanned={scanned || processing ? undefined : (result) => void onScan(result.data)}
                   barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
                 />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    left: Spacing.md,
+                    right: Spacing.md,
+                    bottom: Spacing.md,
+                    borderRadius: Radii.md,
+                    backgroundColor: "rgba(0,0,0,0.62)",
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: Spacing.sm,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center" }}>
+                    {t("redeem.scanFrameHint", { defaultValue: "Place the QR code inside the frame." })}
+                  </Text>
+                </View>
                 {processing ? (
                   <View
                     style={{
@@ -530,17 +554,6 @@ export default function RedeemScanner() {
                   </View>
                 ) : null}
               </View>
-              <Pressable
-                onPress={() => setScanned(false)}
-                style={{
-                  marginTop: Spacing.sm,
-                  paddingVertical: Spacing.md,
-                  borderRadius: 12,
-                  backgroundColor: theme.surfaceMuted,
-                }}
-              >
-                <Text style={{ textAlign: "center", fontWeight: "700", color: theme.text }}>{t("redeem.scanNext")}</Text>
-              </Pressable>
             </>
           )}
         </View>

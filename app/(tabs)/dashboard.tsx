@@ -41,6 +41,7 @@ import {
   getMerchantDealScheduleStatus,
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
+import { formatDealTimingLabel } from "@/lib/i18n/format-datetime";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
@@ -557,6 +558,7 @@ export default function BusinessDashboard() {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [dealFilter, setDealFilter] = useState<"all" | "live" | "ended" | "recurring">("all");
   const [dealSort, setDealSort] = useState<"newest" | "claims" | "conversion">("newest");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -1041,33 +1043,6 @@ export default function BusinessDashboard() {
     [deals],
   );
 
-  const engagementSnapshot = useMemo(() => {
-    if (monthOpens > 0) {
-      return {
-        value: String(monthOpens),
-        sublabel: t("offersDashboard.engagementOpensSub", {
-          defaultValue: "Deal opens this month",
-        }),
-      };
-    }
-    if (monthClaims > 0) {
-      return {
-        value: `${monthRedemptionPct}%`,
-        sublabel: t("offersDashboard.engagementRedemptionSub", {
-          defaultValue: "Claims redeemed this month",
-        }),
-      };
-    }
-    return {
-      value: t("offersDashboard.engagementWaitingValue", {
-        defaultValue: "Waiting",
-      }),
-      sublabel: t("offersDashboard.engagementWaitingSub", {
-        defaultValue: "Shows after customers open or claim a deal",
-      }),
-    };
-  }, [monthClaims, monthOpens, monthRedemptionPct, t]);
-
   const lastUpdatedLabel = lastUpdatedAt
     ? t("offersDashboard.lastUpdatedAt", {
         defaultValue: "Updated {{time}}",
@@ -1079,19 +1054,47 @@ export default function BusinessDashboard() {
 
   const dashboardNextActionTitle =
     liveDeals.length > 0
-      ? t("offersDashboard.reviewLiveDeal", { defaultValue: "Review live deal" })
+      ? t("offersDashboard.viewLiveOffers", { defaultValue: "View live offers" })
       : deals.length === 0
         ? t("offersDashboard.createFirstDeal")
         : t("offersDashboard.createDealCta");
 
   const handleDashboardNextAction = useCallback(() => {
-    const firstLiveDeal = liveDeals[0];
-    if (firstLiveDeal) {
-      router.push(`/deal-analytics/${firstLiveDeal.id}`);
+    if (liveDeals.length > 0) {
+      setDealFilter("live");
       return;
     }
     router.push("/create/ai");
-  }, [liveDeals, router]);
+  }, [liveDeals.length, router]);
+
+  const sortOptions = useMemo(
+    () => [
+      { key: "newest", label: t("offersDashboard.sortNewest") },
+      { key: "claims", label: t("offersDashboard.sortClaims") },
+      { key: "conversion", label: t("offersDashboard.sortConversion") },
+    ],
+    [t],
+  );
+  const selectedSortLabel = sortOptions.find((item) => item.key === dealSort)?.label ?? sortOptions[0]?.label ?? "";
+
+  const formatOfferCardTiming = useCallback(
+    (deal: DealRow, status: MerchantDealScheduleStatus) => {
+      if (status === "live" || status === "scheduled") {
+        const compact = formatDealTimingLabel({
+          startTime: deal.start_time,
+          endTime: deal.end_time,
+          lang: i18n.language,
+        });
+        if (compact) return compact;
+      }
+      return formatValiditySummary(deal, {
+        lang: i18n.language,
+        endsVerb: t("commonUi.dealEndsVerb"),
+        t,
+      });
+    },
+    [i18n.language, t],
+  );
 
   const doExportAnalytics = useCallback(async (format: "csv" | "pdf") => {
     setExportingAnalytics(true);
@@ -1144,61 +1147,23 @@ export default function BusinessDashboard() {
                 {liveDeals.length > 0
                   ? liveDeals.length === 1
                     ? t("offersDashboard.snapshotLiveTitleOne", {
-                        defaultValue: "1 live deal ready for customers",
+                        defaultValue: "1 offer is live",
                       })
                     : t("offersDashboard.snapshotLiveTitleMany", {
-                        defaultValue: "{{count}} live deals ready for customers",
+                        defaultValue: "{{count}} offers are live",
                         count: liveDeals.length,
                       })
                   : t("offersDashboard.snapshotNoLiveTitle", {
-                      defaultValue: "No live deal right now",
+                      defaultValue: "No offers are live",
                     })}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: theme.mutedText }}>
                 {lastUpdatedLabel}
               </Text>
             </View>
-            <View
-              style={{
-                borderRadius: Radii.pill,
-                backgroundColor: liveDeals.length > 0 ? "rgba(255,159,28,0.16)" : theme.surfaceMuted,
-                borderWidth: 1,
-                borderColor: liveDeals.length > 0 ? "rgba(255,159,28,0.36)" : theme.border,
-                paddingHorizontal: Spacing.md,
-                paddingVertical: 7,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "900",
-                  color: liveDeals.length > 0 ? theme.accentText : theme.mutedText,
-                }}
-              >
-                {t("offersDashboard.liveDealCount", {
-                  defaultValue: "{{count}} live",
-                  count: liveDeals.length,
-                })}
-              </Text>
-            </View>
           </View>
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.lg }}>
-            <SnapshotMetric
-              label={t("offersDashboard.metricLiveDeals", { defaultValue: "Live deals" })}
-              value={String(liveDeals.length)}
-              sublabel={
-                deals.length > 0
-                  ? t("offersDashboard.metricLiveDealsSub", {
-                      defaultValue: "{{count}} total deals",
-                      count: deals.length,
-                    })
-                  : t("offersDashboard.metricLiveDealsEmptySub", {
-                      defaultValue: "Create one to start tracking",
-                    })
-              }
-              accent={liveDeals.length > 0}
-            />
             <SnapshotMetric
               label={t("offersDashboard.metricClaimsMonth", { defaultValue: "Claims" })}
               value={String(monthClaims)}
@@ -1210,16 +1175,16 @@ export default function BusinessDashboard() {
               sublabel={t("offersDashboard.metricMonthToDate", { defaultValue: "This month" })}
             />
             <SnapshotMetric
-              label={t("offersDashboard.metricEngagement", { defaultValue: "Engagement" })}
-              value={engagementSnapshot.value}
-              sublabel={engagementSnapshot.sublabel}
-              accent={monthOpens > 0 || monthClaims > 0}
+              label={t("offersDashboard.metricOfferViews", { defaultValue: "Offer views" })}
+              value={String(monthOpens)}
+              sublabel={t("offersDashboard.metricMonthToDate", { defaultValue: "This month" })}
+              accent={monthOpens > 0}
             />
           </View>
 
           <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
             {t("offersDashboard.dashboardDataNote", {
-              defaultValue: "Claims and redemptions use customer activity. Engagement shows opens when available, otherwise redemption rate after claims.",
+              defaultValue: "Claims are reserved deals. Redemptions are completed at checkout.",
             })}
           </Text>
 
@@ -1252,8 +1217,8 @@ export default function BusinessDashboard() {
             }}
           >
             {deals.length > 0
-              ? t("offersDashboard.yourDealsCount", { count: deals.length })
-              : t("offersDashboard.yourDeals")}
+              ? t("offersDashboard.yourOffersCount", { count: deals.length, defaultValue: "Your offers ({{count}})" })
+              : t("offersDashboard.yourOffers", { defaultValue: "Your offers" })}
           </Text>
           {deals.length > 0 ? (
             <Pressable
@@ -1271,7 +1236,7 @@ export default function BusinessDashboard() {
               >
                 {bulkSelectMode
                   ? t("offersDashboard.selectDone", "Done")
-                  : t("offersDashboard.selectMode", "Select")}
+                  : t("offersDashboard.manageMode", { defaultValue: "Manage" })}
               </Text>
             </Pressable>
           ) : null}
@@ -1306,24 +1271,75 @@ export default function BusinessDashboard() {
                 { key: "recurring", label: t("offersDashboard.filterRecurring") },
               ]}
               selected={dealFilter}
-              onSelect={(k) => setDealFilter(k as typeof dealFilter)}
+              onSelect={(k) => {
+                setDealFilter(k as typeof dealFilter);
+                setSortMenuOpen(false);
+              }}
             />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.mutedText }}>
-                {t("offersDashboard.sortPrefix")}
-              </Text>
-              <View style={{ flex: 1 }}>
-                <ScrollFilterRow
-                  items={[
-                    { key: "newest", label: t("offersDashboard.sortNewest") },
-                    { key: "claims", label: t("offersDashboard.sortClaims") },
-                    { key: "conversion", label: t("offersDashboard.sortConversion") },
-                  ]}
-                  selected={dealSort}
-                  onSelect={(k) => setDealSort(k as typeof dealSort)}
-                  activeTone="subtle"
-                />
-              </View>
+            <View style={{ gap: Spacing.xs }}>
+              <Pressable
+                onPress={() => setSortMenuOpen((open) => !open)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: sortMenuOpen }}
+                style={{
+                  alignSelf: "flex-start",
+                  minHeight: 38,
+                  borderRadius: Radii.pill,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
+                  paddingHorizontal: Spacing.md,
+                  paddingVertical: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: Spacing.xs,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }} numberOfLines={1}>
+                  {t("offersDashboard.sortControl", {
+                    defaultValue: "Sort: {{label}}",
+                    label: selectedSortLabel,
+                  })}
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: "900", color: theme.mutedText }}>
+                  {sortMenuOpen ? "^" : "v"}
+                </Text>
+              </Pressable>
+              {sortMenuOpen ? (
+                <View
+                  style={{
+                    alignSelf: "flex-start",
+                    borderRadius: Radii.lg,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.surface,
+                    overflow: "hidden",
+                  }}
+                >
+                  {sortOptions.map((item) => {
+                    const active = item.key === dealSort;
+                    return (
+                      <Pressable
+                        key={item.key}
+                        onPress={() => {
+                          setDealSort(item.key as typeof dealSort);
+                          setSortMenuOpen(false);
+                        }}
+                        style={{
+                          minWidth: 180,
+                          paddingHorizontal: Spacing.md,
+                          paddingVertical: 10,
+                          backgroundColor: active ? theme.surfaceMuted : theme.surface,
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: active ? "900" : "700", color: active ? theme.accentText : theme.text }}>
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
             {dealFilter !== "all" ? (
               <Text style={{ fontSize: 13, color: theme.mutedText }}>
@@ -1341,6 +1357,9 @@ export default function BusinessDashboard() {
       deals.length,
       dealFilter,
       dealSort,
+      sortMenuOpen,
+      sortOptions,
+      selectedSortLabel,
       bulkSelectMode,
       selectedDealIds.size,
       filteredDeals,
@@ -1351,7 +1370,6 @@ export default function BusinessDashboard() {
       monthClaims,
       monthRedeems,
       monthOpens,
-      engagementSnapshot,
       dashboardNextActionTitle,
       handleDashboardNextAction,
     ],
@@ -1543,9 +1561,7 @@ export default function BusinessDashboard() {
     return <Redirect href="/(tabs)" />;
   }
 
-  const dashboardSubtitle = businessName
-    ? `${t("businessDashboard.welcomeBack")} ${businessName}\n${t("offersDashboard.subtitle")}`
-    : t("offersDashboard.subtitle");
+  const dashboardSubtitle = t("offersDashboard.subtitle");
 
   return (
     <AppErrorBoundary>
@@ -1732,11 +1748,7 @@ export default function BusinessDashboard() {
                               style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 13, fontWeight: "600", color: theme.text }}
                               numberOfLines={2}
                             >
-                              {formatValiditySummary(item, {
-                                lang: i18n.language,
-                                endsVerb: t("commonUi.dealEndsVerb"),
-                                t,
-                              })}
+                              {formatOfferCardTiming(item, sched)}
                             </Text>
                             <View
                               style={{
