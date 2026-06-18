@@ -27,7 +27,7 @@ export type DealDisplayTitleFields = {
   type?: string | null;
 };
 
-const FALLBACK_SAME_ITEM = "Buy one item, get one free";
+const FALLBACK_SAME_ITEM = "Buy one item and get one free";
 const FALLBACK_UNKNOWN = "Limited-time local offer";
 
 const CUSTOMER_LOWERCASE_WORDS = new Set([
@@ -151,6 +151,14 @@ function extractSameItemFromTitle(rawTitle: string): string | null {
   return null;
 }
 
+function extractWithFreeOfferFromTitle(rawTitle: string): { item: string; freeItem: string } | null {
+  const match = normalizeWhitespace(rawTitle).match(/^(.+?)\s+with\s+(?:a\s+|an\s+|one\s+)?free\s+(.+)$/i);
+  if (!match?.[1] || !match[2]) return null;
+  const item = stripMechanicalOfferWords(match[1]);
+  const freeItem = stripMechanicalOfferWords(match[2]);
+  return item && freeItem ? { item, freeItem } : null;
+}
+
 function normalizeWordCase(word: string, index: number): string {
   if (PRESERVE_TITLECASE_WORDS.has(word)) return word;
   if (word.length <= 1) return word.toLowerCase();
@@ -211,6 +219,25 @@ function buildItemWithModifier(item: string | null, modifier: string | null): st
 
 function isPlainEnglishOfferTitle(value: string): boolean {
   return /\bbuy\b.+\bget\b.+\bfree\b/i.test(value) || /\bget\b.+\bsecond\b.+\bfree\b/i.test(value);
+}
+
+function normalizePlainBuyGetTitle(rawTitle: string): string | null {
+  const same = normalizeWhitespace(rawTitle).match(/^buy\s+one\s+(.+?)(?:,|\s+and)?\s+get\s+one\s+free\.?$/i);
+  if (same?.[1]) {
+    return `Buy one ${normalizeNounPhrase(same[1])} and get one free`;
+  }
+  const different = normalizeWhitespace(rawTitle).match(
+    /^buy\s+(?:(?:a|an|one)\s+)?(.+?)(?:,|\s+and)?\s+get\s+(?:(?:a|an|one)\s+)?(.+?)\s+free\.?$/i,
+  );
+  if (different?.[1] && different[2]) {
+    const item = normalizeNounPhrase(different[1]);
+    const freeItem = normalizeNounPhrase(different[2]);
+    if (normalizeForComparison(item) === normalizeForComparison(freeItem)) {
+      return `Buy one ${item} and get one free`;
+    }
+    return `Buy ${articleFor(item)} ${item} and get a free ${freeItem}`;
+  }
+  return null;
 }
 
 function numericPercent(value: unknown): number | null {
@@ -279,20 +306,32 @@ export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefi
   const differentItemOffer = knownDifferentItemOffer(source, rawTitle);
   const discountOffer = knownDiscountOffer(source, rawTitle);
   const itemFromTitle = extractSameItemFromTitle(rawTitle);
+  const withFreeOffer = extractWithFreeOfferFromTitle(rawTitle);
   const item = buildItemWithModifier(itemNameFromDeal(source) ?? itemFromTitle, itemModifierFromDeal(source));
   const freeItem = freeItemNameFromDeal(source) ? normalizeNounPhrase(stripMechanicalOfferWords(freeItemNameFromDeal(source)!)) : null;
   const discountPercent = discountPercentFromDeal(source, rawTitle);
+
+  const normalizedPlainOffer = normalizePlainBuyGetTitle(rawTitle);
+  if (normalizedPlainOffer && !containsInternalDealLanguage(rawTitle)) {
+    return normalizedPlainOffer;
+  }
 
   if (isPlainEnglishOfferTitle(rawTitle) && !containsInternalDealLanguage(rawTitle)) {
     return toCustomerSentenceCase(rawTitle);
   }
 
   if (differentItemOffer && item && freeItem && item !== freeItem) {
-    return `Buy ${articleFor(item)} ${item}, get ${articleFor(freeItem)} ${freeItem} free`;
+    return `Buy ${articleFor(item)} ${item} and get a free ${freeItem}`;
+  }
+
+  if (withFreeOffer) {
+    const purchase = normalizeNounPhrase(withFreeOffer.item);
+    const reward = normalizeNounPhrase(withFreeOffer.freeItem);
+    return `Buy ${articleFor(purchase)} ${purchase} and get a free ${reward}`;
   }
 
   if (sameItemOffer && item) {
-    return `Buy one ${item}, get one free`;
+    return `Buy one ${item} and get one free`;
   }
 
   if (sameItemOffer) {

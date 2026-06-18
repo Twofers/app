@@ -27,7 +27,7 @@ describe("buildReuseHistoryRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.deal.id).toBe("latest");
-    expect(rows[0]?.title).toBe("Buy one latte, get one free");
+    expect(rows[0]?.title).toBe("Buy one latte and get one free");
     expect(rows[0]?.regularPrice).toBe("$4.25");
   });
 

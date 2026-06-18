@@ -8,6 +8,11 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
+  buildDealOfferContract,
+  buildDeterministicDealChannelCopy,
+  validateAiCopyAgainstOffer,
+} from "../../../lib/deal-offer-contract.ts";
+import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
   type DealEligibilityInput,
@@ -210,7 +215,7 @@ serve(async (req) => {
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
-      .select("id, owner_id")
+      .select("id, owner_id, name")
       .eq("id", business_id)
       .single();
 
@@ -261,8 +266,11 @@ serve(async (req) => {
 
     const prompt = [
       "You are generating a mobile-optimized restaurant deal ad.",
-      "Return concise, punchy copy.",
-      "Use the provided hint and price.",
+      "Return concise, factual copy.",
+      "Use the structured deal facts as authoritative. Do not infer quantities, items, prices, or restrictions from the hint when structured facts are present.",
+      "Headlines must explain the customer action and reward with a complete sentence beginning with Buy, Get, Order, Save, or Claim.",
+      "Avoid fragments like item with free item.",
+      "Never invent urgency, ingredients, sizes, prices, or business facts.",
       "Keep title <= 50 chars and description <= 160 chars.",
       "Return JSON with title, description, promo_line.",
     ].join(" ");
@@ -362,6 +370,33 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    const offerContract = buildDealOfferContract({
+      businessId: business_id,
+      businessName: typeof business.name === "string" && business.name.trim() ? business.name.trim() : "this business",
+      dealEligibility: eligibilityInput,
+      eligibilityResult,
+      quantityLimit: Number(max_claims),
+      activeWindowHumanReadable: end_time ? `Now to ${String(end_time)}` : null,
+    });
+    if (offerContract) {
+      const deterministic = buildDeterministicDealChannelCopy(offerContract);
+      const validation = validateAiCopyAgainstOffer(
+        {
+          headline: deterministic.headline,
+          short_description: typeof result.description === "string" ? result.description : deterministic.description,
+          push_notification: deterministic.pushBody,
+          social_caption: typeof result.promo_line === "string" ? result.promo_line : deterministic.socialCaption,
+        },
+        offerContract,
+      );
+      result = {
+        ...result,
+        title: deterministic.headline,
+        promo_line: validation.valid ? result.promo_line : deterministic.description,
+        description: validation.valid ? result.description : deterministic.description,
+      };
     }
 
     // Keep AI generation as-is; enforce marketplace quality after model output.
@@ -476,7 +511,7 @@ serve(async (req) => {
         const tokens = (tRows ?? []).map((r: { expo_push_token: string }) => r.expo_push_token);
         if (tokens.length > 0) {
           const pushTitle = getDealDisplayTitle({ title: result.title }, result.title);
-          await sendExpoPushBatch(tokens, pushTitle, `Live now at ${bizName}. Limited claims available.`, {
+          await sendExpoPushBatch(tokens, pushTitle, max_claims ? `Live now at ${bizName}. Claims are limited.` : `Live now at ${bizName}. Open Twofer for details.`, {
             dealId: deal.id,
             path: `/deal/${deal.id}`,
           });

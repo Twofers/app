@@ -478,16 +478,16 @@ serve(async (req) => {
 
       type CI2 = { item: string; offerType: string; display: string };
       const itemMap2: [RegExp, CI2][] = [
-        [/oat\s*milk\s*latte|latte/i, { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte, get one free" }],
-        [/cortado|espresso/i, { item: "vanilla cortado", offerType: "bogo_same_item", display: "Buy one vanilla cortado, get one free" }],
-        [/cold\s*brew|iced/i, { item: "single-origin cold brew", offerType: "bogo_same_item", display: "Buy one cold brew, get one free" }],
-        [/matcha|green\s*tea/i, { item: "matcha latte", offerType: "bogo_same_item", display: "Buy one matcha latte, get one free" }],
-        [/croissant/i, { item: "butter croissant", offerType: "bogo_same_item", display: "Buy one butter croissant, get one free" }],
-        [/muffin|blueberry/i, { item: "blueberry muffin", offerType: "bogo_same_item", display: "Buy one blueberry muffin, get one free" }],
-        [/pastry|baked/i, { item: "pastry", offerType: "bogo_same_item", display: "Buy one pastry, get one free" }],
-        [/combo|pair|\+|and a|with a/i, { item: "latte + pastry", offerType: "free_add_on_with_purchase", display: "Free pastry with any latte purchase" }],
+        [/oat\s*milk\s*latte|latte/i, { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte and get one free" }],
+        [/cortado|espresso/i, { item: "vanilla cortado", offerType: "bogo_same_item", display: "Buy one vanilla cortado and get one free" }],
+        [/cold\s*brew|iced/i, { item: "single-origin cold brew", offerType: "bogo_same_item", display: "Buy one cold brew and get one free" }],
+        [/matcha|green\s*tea/i, { item: "matcha latte", offerType: "bogo_same_item", display: "Buy one matcha latte and get one free" }],
+        [/croissant/i, { item: "butter croissant", offerType: "bogo_same_item", display: "Buy one butter croissant and get one free" }],
+        [/muffin|blueberry/i, { item: "blueberry muffin", offerType: "bogo_same_item", display: "Buy one blueberry muffin and get one free" }],
+        [/pastry|baked/i, { item: "pastry", offerType: "bogo_same_item", display: "Buy one pastry and get one free" }],
+        [/combo|pair|\+|and a|with a/i, { item: "latte + pastry", offerType: "free_add_on_with_purchase", display: "Buy a latte and get a free pastry" }],
       ];
-      let matched2: CI2 = { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte, get one free" };
+      let matched2: CI2 = { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte and get one free" };
       for (const [rx, ci] of itemMap2) { if (rx.test(rawInput2)) { matched2 = ci; break; } }
 
       const bizName = typeof body.business_name === "string" ? body.business_name : "your business";
@@ -562,8 +562,8 @@ serve(async (req) => {
       "",
       "SHORTHAND INTERPRETATION — very important:",
       "- 'item1 + item2' (two items joined by +) always means: buy item1, get item2 FREE.",
-      "  Example: 'coffee + muffin' → 'Buy a coffee, get a free muffin'.",
-      "  Example: 'latte + cookie' → 'Buy a latte, get a free cookie'.",
+      "  Example: 'coffee + muffin' → 'Buy a coffee and get a free muffin'.",
+      "  Example: 'latte + cookie' → 'Buy a latte and get a free cookie'.",
       "  Use offer_type 'free_add_on_with_purchase' for these.",
       "- A single item with no offer context → recommend a same-item buy-one-get-one offer (internal offer_type bogo_same_item).",
       "",

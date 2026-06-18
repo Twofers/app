@@ -4,6 +4,7 @@
  */
 
 import { getDealDisplayTitle } from "./deal-display-copy";
+import { DEAL_COPY_LIMITS } from "./deal-offer-contract";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -100,7 +101,12 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
 function fallbackClip(value: string, max: number): string {
   const clean = value.replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
-  return clean.slice(0, max - 1).trimEnd();
+  const clipped = clean.slice(0, max + 1);
+  const lastSpace = clipped.search(/\s+\S*$/);
+  if (lastSpace > Math.max(16, Math.floor(max * 0.65))) {
+    return clipped.slice(0, lastSpace).trimEnd();
+  }
+  return clean.slice(0, max).trimEnd();
 }
 
 export function buildFallbackTemplateAd(params: {
@@ -131,10 +137,10 @@ export function buildFallbackTemplateAd(params: {
   const fallbackSubheadline = existingPromo || offerLine;
 
   return {
-    headline: fallbackClip(fallbackTitle, 40),
+    headline: fallbackClip(fallbackTitle, DEAL_COPY_LIMITS.headline),
     subheadline: fallbackClip(fallbackSubheadline, 88),
     short_description: fallbackClip(fallbackSubheadline, 120),
-    push_notification: fallbackClip(fallbackTitle, 120),
+    push_notification: fallbackClip(fallbackTitle, DEAL_COPY_LIMITS.pushBody),
     terms_summary: fallbackClip(terms || offerLine, 180),
     social_caption: fallbackClip(`${offerLine}${schedule ? ` ${schedule}` : ""}`, 180),
     locked_offer_line: lockedOffer || undefined,

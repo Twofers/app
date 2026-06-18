@@ -31,12 +31,12 @@ describe("buildShareCopy", () => {
   it("shares the deal title and link only", () => {
     const copy = buildShareCopy({
       shareCode: "ABCD234",
-      dealTitle: "Buy one iced Americano, get one free",
+      dealTitle: "Buy one iced Americano and get one free",
       businessName: "Cedar & Bean Cafe",
       t,
     });
 
-    expect(copy.message).toBe("Buy one iced Americano, get one free\nhttps://www.twoferapp.com/s/ABCD234");
+    expect(copy.message).toBe("Buy one iced Americano and get one free\nhttps://www.twoferapp.com/s/ABCD234");
     expect(copy.message).not.toContain("Twofer");
     expect(copy.message).not.toContain("BOGO");
     expect(copy.message).not.toContain("Cedar & Bean Cafe");

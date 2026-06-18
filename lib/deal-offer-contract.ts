@@ -74,6 +74,9 @@ export type AiDealCopyVariant = {
   short_description: string;
   push_notification: string;
   social_caption?: string;
+  headline_alternative?: string;
+  push_title?: string;
+  push_body?: string;
 };
 
 export type AiDealCopyValidationResult = {
@@ -95,6 +98,43 @@ export type ValidatedDealCopy = AiDealCopyVariant & {
   variant_count: number;
   selected_variant_index: number | null;
   validation_reason_codes: string[];
+  fallback_reason?: string;
+  generator_version: string;
+};
+
+export const AI_COPY_GENERATOR_VERSION = "ai-copy-v2";
+
+export const DEAL_COPY_LIMITS = {
+  headline: 96,
+  description: 180,
+  pushTitle: 64,
+  pushBody: 120,
+  socialCaption: 220,
+  terms: 240,
+} as const;
+
+export type NormalizedDealFacts = {
+  merchantName: string;
+  buyQuantity?: number;
+  buyItem?: string;
+  rewardQuantity?: number;
+  rewardItem?: string;
+  rewardType: "free" | "percent_off";
+  rewardValue?: number;
+  eligibility?: string;
+  variantRestrictions?: string;
+  startTime?: string;
+  endTime?: string;
+  claimLimit?: number;
+  tonePreference?: string;
+};
+
+export type DeterministicDealChannelCopy = {
+  headline: string;
+  description: string;
+  pushTitle: string;
+  pushBody: string;
+  socialCaption: string;
 };
 
 export type CopyAttemptContext = {
@@ -231,9 +271,248 @@ function sentence(value: string): string {
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
-function capitalizeFirst(value: string): string {
+function stripEndingPunctuation(value: string): string {
+  return cleanText(value).replace(/[.!?]+$/g, "");
+}
+
+const SMALL_NUMBER_WORDS: Record<number, string> = {
+  1: "one",
+  2: "two",
+  3: "three",
+  4: "four",
+  5: "five",
+  6: "six",
+  7: "seven",
+  8: "eight",
+  9: "nine",
+  10: "ten",
+};
+
+const QUANTITY_PREFIXES = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "single",
+  "double",
+  "triple",
+  "half-dozen",
+  "half dozen",
+  "dozen",
+];
+
+function numberWord(value: number): string {
+  return SMALL_NUMBER_WORDS[value] ?? String(value);
+}
+
+function lowerFirst(value: string): string {
   const clean = cleanText(value);
-  return clean ? `${clean.charAt(0).toUpperCase()}${clean.slice(1)}` : "";
+  if (!clean) return "";
+  if (/^[A-Z]{2,}\b/.test(clean)) return clean;
+  if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+/.test(clean)) return clean;
+  return `${clean.charAt(0).toLowerCase()}${clean.slice(1)}`;
+}
+
+function startsWithArticle(value: string): boolean {
+  return /^(?:a|an|the)\s+/i.test(cleanText(value));
+}
+
+function stripLeadingArticle(value: string): string {
+  return cleanText(value).replace(/^(?:a|an|the)\s+/i, "");
+}
+
+function startsWithQuantityPhrase(value: string): boolean {
+  const clean = cleanText(value).toLowerCase();
+  if (!clean) return false;
+  if (/^\d+\s*[-]?\s*(?:pack|ct|count|piece|pc|dozen)\b/.test(clean)) return true;
+  return QUANTITY_PREFIXES.some((prefix) => clean === prefix || clean.startsWith(`${prefix} `) || clean.startsWith(`${prefix}-`));
+}
+
+function articleFor(nounPhrase: string): "a" | "an" {
+  const clean = stripLeadingArticle(nounPhrase).trim();
+  if (!clean) return "a";
+  if (/^(?:honest|hour|heir|herb)\b/i.test(clean)) return "an";
+  if (/^(?:uni([^nmd]|$)|user|useful|utensil|u[bcfhjkqrst][a-z])/i.test(clean)) return "a";
+  return /^[aeiou]/i.test(clean) ? "an" : "a";
+}
+
+function pluralizeWord(word: string): string {
+  if (!word) return word;
+  if (/[^A-Za-z]$/.test(word)) return word;
+  if (/(?:s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/fe$/i.test(word)) return `${word.slice(0, -2)}ves`;
+  if (/f$/i.test(word)) return `${word.slice(0, -1)}ves`;
+  return `${word}s`;
+}
+
+function pluralizeItemPhrase(itemName: string): string {
+  const clean = stripLeadingArticle(itemName);
+  const match = clean.match(/([A-Za-z][A-Za-z'-]*)([^A-Za-z]*)$/);
+  if (!match) return clean;
+  const [full, word, suffix] = match;
+  if (/s$/i.test(word) && !/(?:ss|us)$/i.test(word)) return clean;
+  return `${clean.slice(0, clean.length - full.length)}${pluralizeWord(word)}${suffix}`;
+}
+
+function looksPluralLike(itemName: string): boolean {
+  const clean = stripLeadingArticle(itemName).toLowerCase();
+  const lastWord = clean.match(/[a-z][a-z'-]*$/)?.[0] ?? "";
+  return Boolean(lastWord && /s$/.test(lastWord) && !/(?:ss|us)$/.test(lastWord));
+}
+
+function formatPurchasePhrase(quantity: number, itemName: string): string {
+  const item = cleanText(itemName);
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+    return `${articleFor(item)} ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
+}
+
+function formatCountedItem(quantity: number, itemName: string): string {
+  const item = stripLeadingArticle(itemName);
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithQuantityPhrase(item)) return lowerFirst(item);
+    return `one ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
+}
+
+function formatFreeRewardPhrase(quantity: number, itemName: string): string {
+  const item = cleanText(itemName);
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
+    if (looksPluralLike(item)) return `free ${lowerFirst(stripLeadingArticle(item))}`;
+    return `a free ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} free ${pluralizeItemPhrase(item)}`;
+}
+
+function normalizeItemForComparison(value: string): string {
+  const clean = stripLeadingArticle(value)
+    .toLowerCase()
+    .replace(/[â€™']/g, "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (KNOWN_FOOD_ITEM_CANONICALS[clean]) return KNOWN_FOOD_ITEM_CANONICALS[clean];
+  return clean.replace(/ies\b/g, "y").replace(/(?:ches|shes|xes|zes|ses)\b/g, (m) => m.slice(0, -2)).replace(/s\b/g, "");
+}
+
+function sameOfferItem(a: string, b: string): boolean {
+  const left = normalizeItemForComparison(a);
+  const right = normalizeItemForComparison(b);
+  return Boolean(left && right && left === right);
+}
+
+function compactText(value: string, max: number): string {
+  const clean = cleanText(value);
+  if (clean.length <= max) return clean;
+  const clipped = clean.slice(0, max + 1);
+  const lastSpace = clipped.search(/\s+\S*$/);
+  if (lastSpace > Math.max(16, Math.floor(max * 0.65))) {
+    return clipped.slice(0, lastSpace).trimEnd();
+  }
+  return clean.slice(0, max).trimEnd();
+}
+
+export function buildCanonicalHeadlineFromFacts(facts: NormalizedDealFacts): string {
+  if (facts.rewardType === "free") {
+    const buyItem = cleanText(facts.buyItem);
+    const rewardItem = cleanText(facts.rewardItem);
+    if (!buyItem || !rewardItem) return "Limited-time local offer";
+    const buyQuantity = Math.max(1, Math.floor(facts.buyQuantity ?? 1));
+    const rewardQuantity = Math.max(1, Math.floor(facts.rewardQuantity ?? 1));
+    if (sameOfferItem(buyItem, rewardItem)) {
+      const rewardPhrase = rewardQuantity === 1 ? "one free" : `${numberWord(rewardQuantity)} free`;
+      return `Buy ${formatCountedItem(buyQuantity, buyItem)} and get ${rewardPhrase}`;
+    }
+    return `Buy ${formatPurchasePhrase(buyQuantity, buyItem)} and get ${formatFreeRewardPhrase(rewardQuantity, rewardItem)}`;
+  }
+
+  const item = cleanText(facts.buyItem);
+  const value = facts.rewardValue;
+  if (item && typeof value === "number" && Number.isFinite(value)) {
+    return `Get ${Math.round(value)}% off one ${lowerFirst(stripLeadingArticle(item))}`;
+  }
+  return "Limited-time local offer";
+}
+
+export function normalizeDealFactsFromContract(contract: DealOfferContract): NormalizedDealFacts {
+  if (contract.dealType === "PERCENT_OFF_SINGLE_ITEM") {
+    return {
+      merchantName: contract.businessName,
+      buyQuantity: 1,
+      buyItem: contract.singleItemDiscount?.itemName,
+      rewardType: "percent_off",
+      rewardValue: contract.singleItemDiscount?.discountPercent,
+      eligibility: contract.canonicalShortTerms,
+      startTime: contract.activeWindow?.humanReadable,
+      claimLimit: contract.quantityLimit?.totalAvailable,
+    };
+  }
+
+  return {
+    merchantName: contract.businessName,
+    buyQuantity: contract.requiredPurchase?.quantity ?? 1,
+    buyItem: contract.requiredPurchase?.itemName,
+    rewardQuantity: contract.freeReward?.quantity ?? 1,
+    rewardItem: contract.freeReward?.itemName,
+    rewardType: "free",
+    eligibility: contract.canonicalShortTerms,
+    startTime: contract.activeWindow?.humanReadable,
+    claimLimit: contract.quantityLimit?.totalAvailable,
+  };
+}
+
+function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
+  if (facts.rewardType === "percent_off") {
+    const item = cleanText(facts.buyItem);
+    const value = facts.rewardValue;
+    if (item && typeof value === "number" && Number.isFinite(value)) {
+      return `The ${Math.round(value)}% discount applies to one ${lowerFirst(stripLeadingArticle(item))}.`;
+    }
+    return "Review the offer details before publishing.";
+  }
+
+  const buyItem = cleanText(facts.buyItem);
+  const rewardItem = cleanText(facts.rewardItem);
+  if (!buyItem || !rewardItem) return "Review the offer details before publishing.";
+  if (sameOfferItem(buyItem, rewardItem)) {
+    return `Buy the first ${lowerFirst(stripLeadingArticle(buyItem))}; the next one is free.`;
+  }
+  return `The free ${lowerFirst(stripLeadingArticle(rewardItem))} is included after the qualifying ${lowerFirst(stripLeadingArticle(buyItem))} purchase.`;
+}
+
+export function buildDeterministicDealChannelCopy(contract: DealOfferContract): DeterministicDealChannelCopy {
+  const facts = normalizeDealFactsFromContract(contract);
+  const headline = buildCanonicalHeadlineFromFacts(facts);
+  const description = compactText(deterministicDescriptionForFacts(facts), DEAL_COPY_LIMITS.description);
+  const pushTitle =
+    facts.rewardType === "free" && facts.buyItem && facts.rewardItem && !sameOfferItem(facts.buyItem, facts.rewardItem)
+      ? compactText(`Free ${lowerFirst(stripLeadingArticle(facts.rewardItem))} with ${lowerFirst(stripLeadingArticle(facts.buyItem))}`, DEAL_COPY_LIMITS.pushTitle)
+      : compactText(headline, DEAL_COPY_LIMITS.pushTitle);
+  const timing = facts.startTime ? " Check the app for the live window." : "";
+  const quantity = facts.claimLimit ? " Claims are limited." : "";
+  const pushBody = compactText(`${headline}.${timing}${quantity}`.replace(/\s+/g, " "), DEAL_COPY_LIMITS.pushBody);
+  return {
+    headline,
+    description,
+    pushTitle,
+    pushBody,
+    socialCaption: compactText(`${headline}. ${description}`, DEAL_COPY_LIMITS.socialCaption),
+  };
 }
 
 function canonicalLocationName(params: {
@@ -314,7 +593,17 @@ export function buildDealOfferContract(
       retailValueCents: positiveCents(params.dealEligibility.freeItemRetailValueCents),
       discountPercent: 100 as const,
     };
-    const canonicalOfferLine = sentence(`Buy one ${requiredItem}, get one ${freeItem} free`);
+    const canonicalFacts: NormalizedDealFacts = {
+      merchantName: businessName,
+      buyQuantity: requiredQuantity,
+      buyItem: requiredItem,
+      rewardQuantity: freeQuantity,
+      rewardItem: freeItem,
+      rewardType: "free",
+      startTime: params.activeWindowHumanReadable ?? undefined,
+      claimLimit: quantityLimit ?? undefined,
+    };
+    const canonicalOfferLine = buildCanonicalHeadlineFromFacts(canonicalFacts);
     const canonicalShortTerms = canonicalFreeItemTerms(
       requiredQuantity,
       requiredItem,
@@ -353,7 +642,7 @@ export function buildDealOfferContract(
           : ["BOGO", "2-for-1", "buy both", `buy ${requiredItem} and ${freeItem}`],
         allowedPhrases: isSameItem
           ? ["BOGO", "Buy one, get one free", canonicalOfferLine]
-          : [canonicalOfferLine, `free ${freeItem} with your ${requiredItem}`],
+          : [canonicalOfferLine, `get a free ${freeItem}`],
         doNotChangeMechanics: true,
       },
     };
@@ -364,7 +653,15 @@ export function buildDealOfferContract(
     const discountPercent = Math.round(numeric(params.dealEligibility.discountPercent) ?? 0);
     if (!itemName || discountPercent < 40) return null;
 
-    const canonicalOfferLine = sentence(`${discountPercent}% off one ${itemName}`);
+    const canonicalOfferLine = buildCanonicalHeadlineFromFacts({
+      merchantName: businessName,
+      buyQuantity: 1,
+      buyItem: itemName,
+      rewardType: "percent_off",
+      rewardValue: discountPercent,
+      startTime: params.activeWindowHumanReadable ?? undefined,
+      claimLimit: quantityLimit ?? undefined,
+    });
     const canonicalShortTerms = canonicalPercentTerms(
       discountPercent,
       itemName,
@@ -434,7 +731,9 @@ function copyText(copy: Partial<AiDealCopyVariant> & { terms_summary?: string })
   return [
     copy.headline,
     copy.short_description,
+    copy.push_title,
     copy.push_notification,
+    copy.push_body,
     copy.social_caption,
     copy.terms_summary,
   ]
@@ -460,16 +759,64 @@ function validateShape(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]):
   if (!isNonEmptyString(copy.headline)) reasonCodes.push("EMPTY_HEADLINE");
   if (!isNonEmptyString(copy.short_description)) reasonCodes.push("EMPTY_SHORT_DESCRIPTION");
   if (!isNonEmptyString(copy.push_notification)) reasonCodes.push("EMPTY_PUSH_NOTIFICATION");
-  if (isNonEmptyString(copy.headline) && copy.headline.trim().length > 55) reasonCodes.push("HEADLINE_TOO_LONG");
-  if (isNonEmptyString(copy.short_description) && copy.short_description.trim().length > 180) {
+  if (isNonEmptyString(copy.headline) && copy.headline.trim().length > DEAL_COPY_LIMITS.headline) reasonCodes.push("HEADLINE_TOO_LONG");
+  if (isNonEmptyString(copy.short_description) && copy.short_description.trim().length > DEAL_COPY_LIMITS.description) {
     reasonCodes.push("SHORT_DESCRIPTION_TOO_LONG");
   }
-  if (isNonEmptyString(copy.push_notification) && copy.push_notification.trim().length > 85) {
+  if (isNonEmptyString(copy.push_notification) && copy.push_notification.trim().length > DEAL_COPY_LIMITS.pushBody) {
     reasonCodes.push("PUSH_NOTIFICATION_TOO_LONG");
   }
-  if (copy.social_caption != null && (!isNonEmptyString(copy.social_caption) || copy.social_caption.trim().length > 220)) {
+  if (copy.push_title != null && (!isNonEmptyString(copy.push_title) || copy.push_title.trim().length > DEAL_COPY_LIMITS.pushTitle)) {
+    reasonCodes.push("PUSH_TITLE_INVALID");
+  }
+  if (copy.social_caption != null && (!isNonEmptyString(copy.social_caption) || copy.social_caption.trim().length > DEAL_COPY_LIMITS.socialCaption)) {
     reasonCodes.push("SOCIAL_CAPTION_INVALID");
   }
+}
+
+function normalizedCopyField(value: string | null | undefined): string {
+  return cleanText(value ?? "")
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsCopySyntaxLeak(text: string): boolean {
+  if (/```|[*_`#]|^\s*[-*]\s+/m.test(text)) return true;
+  if (/[{}[\]]/.test(text)) return true;
+  if (/(?:^|\s)(?:headline|description|push\s*title|push\s*body|json)\s*:/i.test(text)) return true;
+  if (/["“”]/.test(text)) return true;
+  return false;
+}
+
+function containsUnsupportedPrice(text: string): boolean {
+  return /\$\s*\d|\b\d+(?:\.\d{2})?\s+dollars?\b|\b\d+(?:\.\d{2})?\s+bucks?\b/i.test(text);
+}
+
+function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]): void {
+  const headline = cleanText(copy.headline);
+  const description = cleanText(copy.short_description);
+  const push = cleanText(copy.push_notification);
+  const social = cleanText(copy.social_caption);
+  const text = copyText(copy);
+
+  if (headline && /[.!?]$/.test(headline)) reasonCodes.push("HEADLINE_TRAILING_PUNCTUATION");
+  if (headline && /\bwith\s+(?:a\s+|an\s+|one\s+)?free\b/i.test(headline)) reasonCodes.push("HEADLINE_WITH_FREE_FRAGMENT");
+  if (headline && !/^(?:buy|get|order|save|claim)\b/i.test(headline)) reasonCodes.push("HEADLINE_DOES_NOT_START_WITH_ACTION");
+  if (containsCopySyntaxLeak(text)) reasonCodes.push("COPY_SYNTAX_LEAK");
+  if (containsUnsupportedPrice(text)) reasonCodes.push("UNSUPPORTED_PRICE");
+  if (/\b(?:delicious|fresh|best|artisan|amazing|incredible|ultimate|perfect)\b/i.test(text)) {
+    reasonCodes.push("UNSUPPORTED_PROMO_CLAIM");
+  }
+
+  const normalizedHeadline = normalizedCopyField(headline);
+  const normalizedDescription = normalizedCopyField(description);
+  const normalizedPush = normalizedCopyField(push);
+  const normalizedSocial = normalizedCopyField(social);
+  if (normalizedHeadline && normalizedHeadline === normalizedDescription) reasonCodes.push("DUPLICATE_HEADLINE_DESCRIPTION");
+  if (normalizedDescription && normalizedDescription === normalizedPush) reasonCodes.push("DUPLICATE_DESCRIPTION_PUSH");
+  if (normalizedHeadline && normalizedHeadline === normalizedSocial) reasonCodes.push("DUPLICATE_HEADLINE_SOCIAL");
 }
 
 function validateBuyOneGetSomethingFree(
@@ -479,6 +826,8 @@ function validateBuyOneGetSomethingFree(
 ): void {
   const required = contract.requiredPurchase?.itemName ?? "";
   const free = contract.freeReward?.itemName ?? "";
+  const requiredQuantity = contract.requiredPurchase?.quantity ?? 1;
+  const freeQuantity = contract.freeReward?.quantity ?? 1;
   const normalized = normalizeForSearch(text);
   const requiredPattern = escapeRegex(normalizeForSearch(required));
   const freePattern = escapeRegex(normalizeForSearch(free));
@@ -497,6 +846,18 @@ function validateBuyOneGetSomethingFree(
   }
   if (/\bget\s+(?:one|1)\s+free\b/.test(normalized)) {
     reasonCodes.push("VAGUE_GET_ONE_FREE");
+  }
+  if (
+    requiredQuantity === 1 &&
+    new RegExp(`\\bbuy\\s+(?:two|2|three|3|four|4|five|5)\\s+${requiredPattern}s?\\b`).test(normalized)
+  ) {
+    reasonCodes.push("REQUIRED_QUANTITY_CHANGED");
+  }
+  if (
+    freeQuantity === 1 &&
+    new RegExp(`\\b(?:two|2|three|3|four|4|five|5)\\s+free\\s+${freePattern}s?\\b`).test(normalized)
+  ) {
+    reasonCodes.push("FREE_QUANTITY_CHANGED");
   }
   if (!containsItem(normalized, required)) reasonCodes.push("MISSING_REQUIRED_ITEM");
   if (!containsItem(normalized, free)) reasonCodes.push("MISSING_FREE_ITEM");
@@ -556,6 +917,7 @@ export function validateAiCopyAgainstOffer(
 ): AiDealCopyValidationResult {
   const reasonCodes: string[] = [];
   validateShape(copy, reasonCodes);
+  validateGeneralCopyQuality(copy, reasonCodes);
 
   const text = copyText(copy);
   if (containsMetadataLeak(text)) reasonCodes.push("COPY_CONTAINS_METADATA");
@@ -575,22 +937,23 @@ export function validateAiCopyAgainstOffer(
 }
 
 export function buildOfferCopyCandidates(contract: DealOfferContract): string[] {
+  const deterministic = buildDeterministicDealChannelCopy(contract);
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     const required = contract.requiredPurchase?.itemName ?? "item";
     const free = contract.freeReward?.itemName ?? "item";
     return [
-      `Buy any ${required}, get one ${free} free.`,
-      `Buy one ${required}, get one ${free} free.`,
-      `Your ${required} comes with a free ${free}.`,
+      sentence(deterministic.headline),
+      deterministic.description,
+      `The ${free} is free with the qualifying ${required} purchase.`,
     ];
   }
 
   if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
     const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
     return [
-      `Buy one ${item}, get one ${item} free.`,
-      `Buy one ${item}, get one free.`,
-      `Get a free ${item} when you buy one.`,
+      sentence(deterministic.headline),
+      deterministic.description,
+      `The second ${item} is free with the qualifying purchase.`,
     ];
   }
 
@@ -603,23 +966,23 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
 }
 
 export function buildHeadlineCandidates(contract: DealOfferContract): string[] {
+  const deterministic = buildDeterministicDealChannelCopy(contract);
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     const required = contract.requiredPurchase?.itemName ?? "item";
     const free = contract.freeReward?.itemName ?? "item";
     return [
-      `Free ${free} with any ${required}`,
-      `${capitalizeFirst(free)} included with any ${required}`,
-      `${capitalizeFirst(free)} on us with any ${required}`,
-      `${capitalizeFirst(required)} ${free} deal`,
+      deterministic.headline,
+      `Get a free ${free} with ${formatPurchasePhrase(contract.requiredPurchase?.quantity ?? 1, required)}`,
+      `Claim ${formatFreeRewardPhrase(contract.freeReward?.quantity ?? 1, free)} with ${lowerFirst(stripLeadingArticle(required))}`,
     ];
   }
 
   if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
     const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
     return [
-      `Buy one ${item}, get one free`,
-      `Free ${item} when you buy one`,
-      `${capitalizeFirst(item)} buy-one-get-one offer`,
+      deterministic.headline,
+      `Get the next ${item} free`,
+      `Claim a second ${item} free`,
     ];
   }
 
@@ -640,11 +1003,33 @@ export function buildRequiredVisualItems(contract: DealOfferContract): string[] 
 }
 
 function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
+  const raw = copy as Partial<AiDealCopyVariant> & {
+    headlineAlternative?: unknown;
+    description?: unknown;
+    pushTitle?: unknown;
+    pushBody?: unknown;
+    socialCaption?: unknown;
+  };
+  const headlineAlternative =
+    typeof raw.headlineAlternative === "string" ? raw.headlineAlternative : copy.headline_alternative;
+  const description = typeof raw.description === "string" ? raw.description : copy.short_description;
+  const pushTitle = typeof raw.pushTitle === "string" ? raw.pushTitle : copy.push_title;
+  const pushBody =
+    typeof raw.pushBody === "string"
+      ? raw.pushBody
+      : copy.push_body ?? copy.push_notification;
+  const socialCaption =
+    typeof raw.socialCaption === "string"
+      ? raw.socialCaption
+      : copy.social_caption;
   return {
-    headline: cleanText(copy.headline).slice(0, 55),
-    short_description: cleanText(copy.short_description).slice(0, 180),
-    push_notification: cleanText(copy.push_notification).slice(0, 85),
-    ...(isNonEmptyString(copy.social_caption) ? { social_caption: cleanText(copy.social_caption).slice(0, 220) } : {}),
+    headline: compactText(cleanText(headlineAlternative ?? copy.headline), DEAL_COPY_LIMITS.headline),
+    short_description: compactText(cleanText(description), DEAL_COPY_LIMITS.description),
+    push_notification: compactText(cleanText(pushBody), DEAL_COPY_LIMITS.pushBody),
+    ...(isNonEmptyString(headlineAlternative) ? { headline_alternative: compactText(headlineAlternative, DEAL_COPY_LIMITS.headline) } : {}),
+    ...(isNonEmptyString(pushTitle) ? { push_title: compactText(pushTitle, DEAL_COPY_LIMITS.pushTitle) } : {}),
+    ...(isNonEmptyString(pushBody) ? { push_body: compactText(pushBody, DEAL_COPY_LIMITS.pushBody) } : {}),
+    ...(isNonEmptyString(socialCaption) ? { social_caption: compactText(socialCaption, DEAL_COPY_LIMITS.socialCaption) } : {}),
   };
 }
 
@@ -716,30 +1101,35 @@ export function selectBestValidAiCopy(
 }
 
 export function deterministicFallbackCopy(contract: DealOfferContract): AiDealCopyVariant {
-  const headline = buildHeadlineCandidates(contract)[0] ?? "Twofer deal";
-  const offerCopy = buildOfferCopyCandidates(contract)[0] ?? contract.canonicalOfferLine;
+  const deterministic = buildDeterministicDealChannelCopy(contract);
 
   if (contract.dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     return cleanVariant({
-      headline,
-      short_description: offerCopy,
-      push_notification: offerCopy,
-      social_caption: offerCopy,
+      headline: deterministic.headline,
+      short_description: deterministic.description,
+      push_title: deterministic.pushTitle,
+      push_notification: deterministic.pushBody,
+      push_body: deterministic.pushBody,
+      social_caption: deterministic.socialCaption,
     });
   }
   if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
     return cleanVariant({
-      headline,
-      short_description: offerCopy,
-      push_notification: offerCopy,
-      social_caption: offerCopy,
+      headline: deterministic.headline,
+      short_description: deterministic.description,
+      push_title: deterministic.pushTitle,
+      push_notification: deterministic.pushBody,
+      push_body: deterministic.pushBody,
+      social_caption: deterministic.socialCaption,
     });
   }
   return cleanVariant({
-    headline,
-    short_description: offerCopy,
-    push_notification: offerCopy,
-    social_caption: offerCopy,
+    headline: deterministic.headline,
+    short_description: deterministic.description,
+    push_title: deterministic.pushTitle,
+    push_notification: deterministic.pushBody,
+    push_body: deterministic.pushBody,
+    social_caption: deterministic.socialCaption,
   });
 }
 
@@ -750,9 +1140,16 @@ function lockCopy(
   variantCount: number,
   selectedVariantIndex: number | null,
   validationReasonCodes: string[],
+  fallbackReason?: string,
 ): ValidatedDealCopy {
+  const clean = cleanVariant(copy);
+  const deterministic = buildDeterministicDealChannelCopy(contract);
   return {
-    ...cleanVariant(copy),
+    ...clean,
+    headline: deterministic.headline,
+    push_title: clean.push_title || deterministic.pushTitle,
+    push_body: clean.push_body || clean.push_notification || deterministic.pushBody,
+    push_notification: clean.push_body || clean.push_notification || deterministic.pushBody,
     terms_summary: contract.canonicalShortTerms,
     locked_offer_line: contract.canonicalOfferLine,
     locked_terms_line: contract.canonicalShortTerms,
@@ -760,6 +1157,8 @@ function lockCopy(
     variant_count: variantCount,
     selected_variant_index: selectedVariantIndex,
     validation_reason_codes: [...new Set(validationReasonCodes)],
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
+    generator_version: AI_COPY_GENERATOR_VERSION,
   };
 }
 
@@ -785,7 +1184,23 @@ function feedbackFor(reasonCodes: readonly string[], contract: DealOfferContract
 export async function generateValidatedDealCopy(
   params: GenerateValidatedDealCopyParams,
 ): Promise<ValidatedDealCopy> {
-  const firstVariants = await params.requestCopy({ attemptNumber: 1 });
+  let firstVariants: AiDealCopyVariant[];
+  try {
+    firstVariants = await params.requestCopy({ attemptNumber: 1 });
+  } catch (err) {
+    const reasonCodes = ["MODEL_REQUEST_FAILED"];
+    await params.logValidationFailure?.({ attemptNumber: 1, reasonCodes });
+    const fallback = deterministicFallbackCopy(params.contract);
+    return lockCopy(
+      fallback,
+      params.contract,
+      "DETERMINISTIC_FALLBACK",
+      0,
+      null,
+      reasonCodes,
+      `MODEL_REQUEST_FAILED:${String(err).slice(0, 80)}`,
+    );
+  }
   const firstSelection = selectBestValidAiCopy(firstVariants, params.contract);
   if (firstSelection.copy) {
     return lockCopy(
@@ -803,10 +1218,26 @@ export async function generateValidatedDealCopy(
     reasonCodes: firstSelection.reasonCodes,
   });
 
-  const secondVariants = await params.requestCopy({
-    attemptNumber: 2,
-    validationFeedback: feedbackFor(firstSelection.reasonCodes, params.contract),
-  });
+  let secondVariants: AiDealCopyVariant[];
+  try {
+    secondVariants = await params.requestCopy({
+      attemptNumber: 2,
+      validationFeedback: feedbackFor(firstSelection.reasonCodes, params.contract),
+    });
+  } catch (err) {
+    const reasonCodes = [...firstSelection.reasonCodes, "MODEL_RETRY_FAILED"];
+    await params.logValidationFailure?.({ attemptNumber: 2, reasonCodes });
+    const fallback = deterministicFallbackCopy(params.contract);
+    return lockCopy(
+      fallback,
+      params.contract,
+      "DETERMINISTIC_FALLBACK",
+      firstVariants.length,
+      null,
+      reasonCodes,
+      `MODEL_RETRY_FAILED:${String(err).slice(0, 80)}`,
+    );
+  }
   const secondSelection = selectBestValidAiCopy(secondVariants, params.contract);
   if (secondSelection.copy) {
     return lockCopy(
@@ -836,5 +1267,6 @@ export async function generateValidatedDealCopy(
     secondVariants.length,
     null,
     secondSelection.reasonCodes,
+    secondSelection.reasonCodes.length ? secondSelection.reasonCodes.join(",") : "NO_VALID_AI_COPY",
   );
 }

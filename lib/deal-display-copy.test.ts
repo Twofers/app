@@ -4,27 +4,27 @@ import { getDealDisplayDescription, getDealDisplayTitle } from "./deal-display-c
 describe("getDealDisplayTitle", () => {
   it("turns Same-Item BOGO titles into plain English", () => {
     expect(getDealDisplayTitle({ title: "Same-Item Iced Americano BOGO" })).toBe(
-      "Buy one iced Americano, get one free",
+      "Buy one iced Americano and get one free",
     );
   });
 
   it("turns item BOGO titles into plain English", () => {
     expect(getDealDisplayTitle({ title: "Iced Americano BOGO" })).toBe(
-      "Buy one iced Americano, get one free",
+      "Buy one iced Americano and get one free",
     );
   });
 
   it("keeps good plain-English titles while normalizing sentence case", () => {
     expect(getDealDisplayTitle({ title: "Buy one iced Americano, get one free" })).toBe(
-      "Buy one iced Americano, get one free",
+      "Buy one iced Americano and get one free",
     );
     expect(getDealDisplayTitle({ title: "Buy a Latte, Get a Cookie Free" })).toBe(
-      "Buy a latte, get a cookie free",
+      "Buy a latte and get a free cookie",
     );
   });
 
   it("normalizes simple same-item titles", () => {
-    expect(getDealDisplayTitle({ title: "Same-Item Latte BOGO" })).toBe("Buy one latte, get one free");
+    expect(getDealDisplayTitle({ title: "Same-Item Latte BOGO" })).toBe("Buy one latte and get one free");
   });
 
   it("includes material size or modifier restrictions from structured fields", () => {
@@ -34,7 +34,7 @@ describe("getDealDisplayTitle", () => {
         item_name: "Iced Americano",
         size: "medium",
       }),
-    ).toBe("Buy one medium iced Americano, get one free");
+    ).toBe("Buy one medium iced Americano and get one free");
   });
 
   it("formats different-item free offers from structured fields", () => {
@@ -44,7 +44,13 @@ describe("getDealDisplayTitle", () => {
         required_item_description: "Latte",
         free_item_description: "Cookie",
       }),
-    ).toBe("Buy a latte, get a cookie free");
+    ).toBe("Buy a latte and get a free cookie");
+  });
+
+  it("rewrites legacy with-free fragments without hard-coding items", () => {
+    expect(getDealDisplayTitle({ title: "Egg sandwich with free coffee" })).toBe(
+      "Buy an egg sandwich and get a free coffee",
+    );
   });
 
   it("formats single-item discounts from structured fields", () => {
@@ -64,11 +70,11 @@ describe("getDealDisplayTitle", () => {
         deal_type: "BUY_ONE_GET_ONE_FREE",
         item_description: "Iced Americano",
       }),
-    ).toBe("Buy one iced Americano, get one free");
+    ).toBe("Buy one iced Americano and get one free");
   });
 
   it("uses the same-item fallback when the item is missing", () => {
-    expect(getDealDisplayTitle({ title: "BOGO" })).toBe("Buy one item, get one free");
+    expect(getDealDisplayTitle({ title: "BOGO" })).toBe("Buy one item and get one free");
   });
 
   it("uses a safe fallback when the offer is unknown", () => {
@@ -80,7 +86,7 @@ describe("getDealDisplayDescription", () => {
   it("omits descriptions that repeat the display title after punctuation and case normalization", () => {
     const deal = { title: "Same-Item Iced Americano BOGO" };
 
-    expect(getDealDisplayDescription(deal, "Buy one iced Americano, get one free.", deal.title)).toBe("");
+    expect(getDealDisplayDescription(deal, "Buy one iced Americano and get one free.", deal.title)).toBe("");
   });
 
   it("keeps descriptions that add restrictions", () => {

@@ -14,7 +14,7 @@ describe("adToDealDraft", () => {
     };
 
     expect(adToDealDraft(ad, "rough owner note")).toEqual({
-      title: "Buy one midday latte, get one free",
+      title: "Buy one midday latte and get one free",
       promo_line: "Buy one iced vanilla latte and get a muffin free until 1:00.",
       cta_text: "Claim deal",
       offer_details: "Buy one iced vanilla latte, get one blueberry muffin free. 20 available.",
@@ -29,7 +29,7 @@ describe("adToDealDraft", () => {
     };
 
     expect(adToDealDraft(legacyAd, "")).toEqual({
-      title: "Buy one cold brew, get one free",
+      title: "Buy one cold brew and get one free",
       promo_line: "Buy one cold brew, get one free.",
       cta_text: "Claim deal",
       offer_details: "Buy one cold brew, get one free.\n\nClaim deal",
@@ -46,8 +46,8 @@ describe("normalizeGeneratedAdDisplayCopy", () => {
       cta: "Claim deal",
     });
 
-    expect(ad.headline).toBe("Buy one cold brew, get one free");
-    expect(ad.push_notification).toBe("Buy one cold brew, get one free");
+    expect(ad.headline).toBe("Buy one cold brew and get one free");
+    expect(ad.push_notification).toBe("Buy one cold brew and get one free");
   });
 });
 
@@ -56,7 +56,7 @@ describe("buildFallbackTemplateAd", () => {
     const ad = buildFallbackTemplateAd({
       businessName: "Cedar Bean",
       ownerOfferHint: "BOGO iced latte today",
-      lockedOfferLine: "Buy one iced latte, get one iced latte free.",
+      lockedOfferLine: "Buy one iced latte and get one free",
       lockedTermsLine: "Valid today from 11 AM to 1 PM.",
       scheduleSummary: "Runs today until 1 PM.",
       quantityLimit: 20,
@@ -65,7 +65,7 @@ describe("buildFallbackTemplateAd", () => {
     expect(ad.copy_source).toBe("DETERMINISTIC_FALLBACK");
     expect(ad.photo_source).toBe("fallback_template");
     expect(ad.poster_storage_path).toBeNull();
-    expect(ad.locked_offer_line).toBe("Buy one iced latte, get one iced latte free.");
+    expect(ad.locked_offer_line).toBe("Buy one iced latte and get one free");
     expect(ad.terms_summary).toContain("20 available");
   });
 
@@ -78,8 +78,8 @@ describe("buildFallbackTemplateAd", () => {
       ownerOfferHint: "rough note",
     });
 
-    expect(ad.headline).toBe("Buy one lunch, get one free");
-    expect(ad.push_notification).toBe("Buy one lunch, get one free");
+    expect(ad.headline).toBe("Buy one lunch and get one free");
+    expect(ad.push_notification).toBe("Buy one lunch and get one free");
     expect(ad.subheadline).toBe("Buy one sandwich, get one free.");
     expect(ad.cta).toBe("Grab it");
   });

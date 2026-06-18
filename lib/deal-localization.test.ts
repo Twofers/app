@@ -14,17 +14,17 @@ const deal = {
 
 describe("deal localization", () => {
   it("uses Spanish deal fields while cleaning legacy shorthand for Spanish language tags", () => {
-    expect(localizedDealTitle(deal, "es-MX")).toBe("Buy one latte helado, get one free");
+    expect(localizedDealTitle(deal, "es-MX")).toBe("Buy one latte helado and get one free");
     expect(localizedDealDescription(deal, "es-MX")).toBe("Compra un latte helado y lleva otro gratis.");
   });
 
   it("uses Korean deal fields while cleaning legacy shorthand for Korean language tags", () => {
-    expect(localizedDealTitle(deal, "ko-KR")).toBe("Buy one iced latte, get one free");
+    expect(localizedDealTitle(deal, "ko-KR")).toBe("Buy one iced latte and get one free");
     expect(localizedDealDescription(deal, "ko-KR")).toBe("");
   });
 
   it("falls back to the original text when a translation is missing", () => {
-    expect(localizedDealTitle({ ...deal, title_es: " " }, "es")).toBe("Buy one iced latte, get one free");
+    expect(localizedDealTitle({ ...deal, title_es: " " }, "es")).toBe("Buy one iced latte and get one free");
     expect(localizedDealDescription({ ...deal, description_ko: null }, "ko")).toBe("");
   });
 
@@ -40,8 +40,8 @@ describe("deal localization", () => {
       description_es: "Compra uno y lleva otro gratis.",
       description_ko: "Buy one iced coffee, get one free.",
     };
-    expect(localizedDealTitle(spanishSourceDeal, "en")).toBe("Buy one iced coffee, get one free");
+    expect(localizedDealTitle(spanishSourceDeal, "en")).toBe("Buy one iced coffee and get one free");
     expect(localizedDealDescription(spanishSourceDeal, "en")).toBe("");
-    expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Buy one cafe helado, get one free");
+    expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Buy one cafe helado and get one free");
   });
 });
