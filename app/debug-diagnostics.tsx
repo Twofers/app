@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
+import { Redirect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Gray } from "@/constants/theme";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -16,7 +17,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/runtime-env";
 
-export default function DebugDiagnosticsScreen() {
+function DebugDiagnosticsContent() {
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { i18n } = useTranslation();
   const { session } = useAuthSession();
@@ -24,8 +25,8 @@ export default function DebugDiagnosticsScreen() {
   const authSnap = useMemo(
     () => ({
       error: null as string | null,
-      userId: session?.user?.id ?? null,
-      email: session?.user?.email ?? null,
+      userId: redactDiagnosticValue(session?.user?.id ?? null),
+      email: redactEmail(session?.user?.email ?? null),
       expiresAt: session?.expires_at ?? null,
     }),
     [session],
@@ -42,7 +43,9 @@ export default function DebugDiagnosticsScreen() {
     tabMode: mode,
     language: i18n.language,
     supabaseConfigured: isSupabaseConfigured(),
-    publicEnv: getPublicEnvSnapshot(),
+    publicEnv: Object.fromEntries(
+      Object.entries(getPublicEnvSnapshot()).map(([key, value]) => [key, redactDiagnosticValue(value)]),
+    ),
     auth: authSnap,
   };
 
@@ -60,4 +63,28 @@ export default function DebugDiagnosticsScreen() {
       </ScrollView>
     </View>
   );
+}
+
+export default function DebugDiagnosticsScreen() {
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)" />;
+  }
+  return <DebugDiagnosticsContent />;
+}
+
+function redactEmail(value: string | null): string | null {
+  if (!value) return null;
+  const [name, domain] = value.split("@");
+  if (!name || !domain) return "(redacted email)";
+  return `${name.slice(0, 2)}***@${domain.replace(/^[^.]+/, "***")}`;
+}
+
+function redactDiagnosticValue(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value);
+  if (!text || text === "(unset)" || text === "(missing)" || text === "unknown") return text;
+  if (/^set(?:\s|\()/i.test(text)) return "set";
+  if (/https?:\/\//i.test(text) || text.includes(".supabase.co")) return "(redacted URL)";
+  if (/^[0-9a-f-]{24,}$/i.test(text)) return `${text.slice(0, 8)}...`;
+  return text;
 }

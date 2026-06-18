@@ -9,6 +9,7 @@ import { Colors, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { formatValiditySummary, isDealActiveNow } from "@/lib/deal-time";
 import { Banner } from "@/components/ui/banner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useBusiness } from "@/hooks/use-business";
@@ -17,6 +18,7 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
@@ -74,8 +76,11 @@ export default function BusinessProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadTimedOut = useLoadingTimeout(loading, undefined, loadAttempt);
 
   const load = useCallback(async () => {
+    setLoadAttempt((value) => value + 1);
     if (!id?.trim()) {
       setBiz(null);
       setDeals([]);
@@ -262,6 +267,34 @@ export default function BusinessProfileScreen() {
   }
 
   if (loading) {
+    if (loadTimedOut) {
+      return (
+        <View
+          style={{
+            paddingTop: top,
+            paddingHorizontal: horizontal,
+            flex: 1,
+            gap: Spacing.md,
+            justifyContent: "center",
+            backgroundColor: theme.background,
+          }}
+        >
+          <EmptyState
+            title={t("businessProfile.loadErrorTitle", { defaultValue: "We couldn't load this shop." })}
+            message={t("businessProfile.loadErrorBody", { defaultValue: "Check your connection and try again." })}
+            actionLabel={t("commonUi.tryAgain")}
+            onAction={() => void load()}
+          />
+          <SecondaryButton
+            title={t("commonUi.back", { defaultValue: "Back" })}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace("/(tabs)" as Href);
+            }}
+          />
+        </View>
+      );
+    }
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
         <ActivityIndicator size="large" color={theme.primary} />
@@ -276,25 +309,14 @@ export default function BusinessProfileScreen() {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, gap: Spacing.lg, backgroundColor: theme.background }}>
         {banner ? <Banner message={banner} tone="error" /> : null}
-        <View
-          style={{
-            borderRadius: Radii.lg,
-            borderWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
-            padding: Spacing.xxl,
-            alignItems: "center",
-            gap: Spacing.sm,
-            ...Shadows.soft,
-          }}
-        >
-          <MaterialIcons name="storefront" size={34} color={theme.primary} />
-          <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text, textAlign: "center" }}>
-            {t("businessProfile.notFound")}
-          </Text>
-        </View>
+        <EmptyState
+          title={t("businessProfile.loadErrorTitle", { defaultValue: "We couldn't load this shop." })}
+          message={t("businessProfile.loadErrorBody", { defaultValue: "Check your connection and try again." })}
+          actionLabel={t("commonUi.tryAgain")}
+          onAction={() => void load()}
+        />
         <SecondaryButton
-          title={t("commonUi.goBack")}
+          title={t("commonUi.back", { defaultValue: "Back" })}
           onPress={() => {
             if (router.canGoBack()) router.back();
             else router.replace("/(tabs)");

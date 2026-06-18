@@ -1,4 +1,3 @@
-import * as Linking from "expo-linking";
 import type { Href } from "expo-router";
 
 /** Tab route segments under `app/(tabs)/` (omit groups like `(tabs)` from URLs). */
@@ -20,26 +19,53 @@ const KNOWN_TAB_SEGMENTS = new Set([
  */
 export function normalizeLegacyTabsDeepLink(url: string | null): Href | null {
   if (!url) return null;
-  let parsed: ReturnType<typeof Linking.parse>;
+  const candidates = buildRouteCandidates(url);
+
+  for (const candidate of candidates) {
+    const parts = decodedPathParts(candidate);
+    if (parts.length === 0) continue;
+    const root = parts[0]?.toLowerCase();
+    if (root !== "tabs" && root !== "(tabs)") continue;
+    const segment = parts[1] ?? "index";
+    if (!KNOWN_TAB_SEGMENTS.has(segment)) continue;
+    const remainder = parts.slice(1).join("/");
+    return (remainder === "index" ? "/(tabs)" : `/(tabs)/${remainder}`) as Href;
+  }
+
+  return null;
+}
+
+function buildRouteCandidates(url: string): string[] {
+  const candidates: string[] = [];
   try {
-    parsed = Linking.parse(url);
+    const parsed = new URL(url);
+    const host = parsed.hostname || "";
+    const path = parsed.pathname.replace(/^\/+/, "");
+    if (host || path) candidates.push([host, path].filter(Boolean).join("/"));
+    if (path) candidates.push(path);
+  } catch {
+    candidates.push(url);
+  }
+  return candidates;
+}
+
+function decodedPathParts(path: string): string[] {
+  const withoutQuery = path.split(/[?#]/)[0] ?? "";
+  const once = decodeRoutePath(withoutQuery);
+  if (once == null) return [];
+  const decoded = decodeRoutePath(once);
+  if (decoded == null) return [];
+  return decoded
+    .replace(/^\/+/, "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function decodeRoutePath(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
   } catch {
     return null;
   }
-
-  let remainder: string | null = null;
-  const host = (parsed.hostname ?? "").toLowerCase();
-  const rawPath = (parsed.path ?? "").replace(/^\/+/, "");
-
-  if (host === "tabs") {
-    remainder = rawPath || null;
-  } else if (rawPath.startsWith("tabs/")) {
-    remainder = rawPath.slice("tabs/".length);
-  }
-
-  if (!remainder) return null;
-  const segment = remainder.split("/")[0] ?? "";
-  if (!KNOWN_TAB_SEGMENTS.has(segment)) return null;
-
-  return `/(tabs)/${remainder}` as Href;
 }

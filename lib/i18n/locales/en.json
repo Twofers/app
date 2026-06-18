@@ -173,6 +173,8 @@
   },
   "onboarding": {
     "title": "Welcome to Twofer",
+    "shopsLoadErrorTitle": "We couldn't load nearby shops.",
+    "shopsLoadErrorBody": "Check your connection and try again.",
     "subtitle": "Choose how we find deals near you.",
     "getStarted": "Get started",
     "introBody": "Twofer shows live offers from nearby businesses. Save places you like, claim in one tap, and keep tickets in your wallet.",
@@ -213,6 +215,8 @@
   },
   "businessProfile": {
     "title": "Business",
+    "loadErrorTitle": "We couldn't load this shop.",
+    "loadErrorBody": "Check your connection and try again.",
     "loading": "Loading…",
     "notFound": "We couldn’t find this business.",
     "directions": "Directions",
@@ -1374,6 +1378,7 @@
     "unlock": "Unlock",
     "unlocking": "Unlocking...",
     "goBack": "Go back",
+    "back": "Back",
     "invalidDealLinkTitle": "Invalid link",
     "invalidDealLinkBody": "This deal link is not valid.",
     "dealNotFound": "Deal not found",
@@ -1391,6 +1396,13 @@
     "modalTitle": "Modal",
     "tapToRetry": "Tap to retry",
     "tryAgain": "Try again"
+  },
+  "webFallback": {
+    "mobileOnlyTitle": "Twofer is currently available in the mobile app.",
+    "mobileOnlyBody": "App Store and Google Play links are coming soon.",
+    "loadErrorTitle": "We couldn't load this page.",
+    "notFoundBody": "The link may be old or typed incorrectly.",
+    "goHome": "Go home"
   },
   "debugDiagnostics": {
     "title": "Diagnostics"
@@ -1432,6 +1444,7 @@
     "guestSignInCta": "Sign in or create account",
     "loadError": "Couldn’t load your wallet. Try again.",
     "loadErrorTitle": "Couldn’t load your wallet",
+    "loadDealsErrorTitle": "We couldn't load your deals.",
     "loadErrorBody": "Check your connection and try again.",
     "dealFallback": "Deal",
     "localBusiness": "Local business",
@@ -1442,8 +1455,9 @@
     "refreshingQr": "Refreshing…",
     "errRefreshQr": "Couldn't refresh your QR.",
     "errNoDealForQr": "Claim a deal first to refresh the QR.",
-    "emptyClaimsTitle": "No tickets yet",
+    "emptyClaimsTitle": "You haven't claimed a deal yet.",
     "emptyClaimsSub": "Claim an offer from Home. It will appear here with your QR.",
+    "browseDeals": "Browse deals",
     "qrModalTitle": "Your QR",
     "qrValidUntil": "Valid until: {{time}}",
     "qrExpiresAt": "Expires: {{datetime}}",
@@ -1822,6 +1836,8 @@
   },
   "consumerProfile": {
     "navTitle": "Your profile",
+    "loadErrorTitle": "We couldn't load your profile.",
+    "loadErrorBody": "Check your connection and try again.",
     "title": "Quick profile",
     "subtitle": "Your ZIP helps us show relevant offers. Then we'll set up location and alerts.",
     "editTitle": "Update profile",
@@ -1924,6 +1940,8 @@
   },
   "dealAnalytics": {
     "title": "Deal analytics",
+    "offerLoadErrorTitle": "We couldn't load this offer.",
+    "offerLoadErrorBody": "Check your connection and try again.",
     "loading": "Loading...",
     "claimsOverTime": "Claims over time",
     "noClaims": "No claims yet.",

@@ -9,6 +9,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Gray, PrimaryTint, Radii, Shadows } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import { supabase } from "@/lib/supabase";
 import { claimDeal, beginVisualRedeem, finalizeStaleRedeems, releaseClaim } from "@/lib/functions";
 import {
@@ -141,6 +142,8 @@ export default function WalletScreen() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadTimedOut = useLoadingTimeout(loading, undefined, loadAttempt);
 
   const loadClaims = useCallback(async () => {
     if (!userId) {
@@ -203,6 +206,7 @@ export default function WalletScreen() {
   useFocusEffect(
     useCallback(() => {
       trackAppAnalyticsEvent({ event_name: "wallet_opened" });
+      setLoadAttempt((value) => value + 1);
       setLoading(true);
       void loadClaims();
     }, [loadClaims]),
@@ -215,6 +219,12 @@ export default function WalletScreen() {
     } finally {
       setRefreshing(false);
     }
+  }
+
+  async function retryLoadClaims() {
+    setLoadAttempt((value) => value + 1);
+    setLoading(true);
+    await loadClaims();
   }
 
   function openVerifyForClaim(row: ClaimRow) {
@@ -932,20 +942,20 @@ export default function WalletScreen() {
 
       {banner ? <Banner message={banner} tone="error" /> : null}
 
-      {loading ? (
+      {loading && !loadTimedOut ? (
         <LoadingSkeleton rows={4} />
-      ) : loadFailed ? (
+      ) : loadFailed || loadTimedOut ? (
         <EmptyState
-          title={t("consumerWallet.loadErrorTitle")}
+          title={t("consumerWallet.loadDealsErrorTitle", { defaultValue: "We couldn't load your deals." })}
           message={t("consumerWallet.loadErrorBody")}
           actionLabel={t("commonUi.tryAgain")}
-          onAction={() => void onRefresh()}
+          onAction={() => void retryLoadClaims()}
         />
       ) : claims.length === 0 ? (
         <EmptyState
-          title={t("consumerWallet.emptyClaimsTitle")}
+          title={t("consumerWallet.emptyClaimsTitle", { defaultValue: "You haven't claimed a deal yet." })}
           message={t("consumerWallet.emptyClaimsSub")}
-          actionLabel={t("consumerWallet.browseOffers")}
+          actionLabel={t("consumerWallet.browseDeals", { defaultValue: "Browse deals" })}
           onAction={() => router.push("/(tabs)" as Href)}
         />
       ) : (

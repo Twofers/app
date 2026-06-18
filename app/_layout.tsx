@@ -16,6 +16,7 @@ import { NotificationDeepLinkHandler } from '@/components/notification-deeplink-
 import { DealDeepLinkHandler } from '@/components/deal-deeplink-handler';
 import { BillingDeepLinkHandler } from '@/components/billing-deeplink-handler';
 import { LegacyTabsDeepLinkHandler } from '@/components/legacy-tabs-deeplink-handler';
+import { MobileOnlyWebFallback } from '@/components/mobile-only-web-fallback';
 import { AuthStackGate } from '@/components/auth-stack-gate';
 import { AppI18nGate } from '@/components/providers/app-i18n-gate';
 import { AppThemeProvider } from '@/components/providers/app-theme-provider';
@@ -186,7 +187,7 @@ function RootNavigationStack() {
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
 
         <Stack.Screen name="deal-analytics/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />
+        {__DEV__ ? <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} /> : null}
       </Stack>
       </CreateMenuOfferWizardProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={uiTheme.background} />
@@ -204,6 +205,14 @@ export default function RootLayout() {
     }, 3000);
     return () => clearTimeout(id);
   }, []);
+
+  if (Platform.OS === 'web') {
+    return (
+      <AppErrorBoundary>
+        <MobileOnlyWebFallback />
+      </AppErrorBoundary>
+    );
+  }
 
   return (
     <AppErrorBoundary>

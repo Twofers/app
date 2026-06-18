@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import {
   FORM_SCROLL_KEYBOARD_PROPS,
@@ -15,6 +16,7 @@ import {
   KeyboardScreen,
 } from "@/components/ui/keyboard-screen";
 import { Banner } from "@/components/ui/banner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import {
@@ -131,6 +133,8 @@ export default function ConsumerProfileSetupScreen() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" } | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const loadTimedOut = useLoadingTimeout(loading, undefined, retryNonce);
   const maximumBirthDate = latestValidBirthdate();
   const normalizedZip = zip.trim();
   const canSubmitProfile = isValidUsZipFormat(normalizedZip) && !busy;
@@ -183,7 +187,7 @@ export default function ConsumerProfileSetupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, isEdit, session, authLoading]);
+  }, [router, isEdit, session, authLoading, retryNonce]);
 
   async function onContinue() {
     setBanner(null);
@@ -274,6 +278,22 @@ export default function ConsumerProfileSetupScreen() {
   function shiftDraftDay(delta: number) {
     setDraftBirthDate((current) =>
       makeConsumerBirthdateFromParts(current.getFullYear(), current.getMonth(), current.getDate() + delta),
+    );
+  }
+
+  if (loading && loadTimedOut) {
+    return (
+      <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, justifyContent: "center", backgroundColor: C.background }}>
+        <EmptyState
+          title={t("consumerProfile.loadErrorTitle", { defaultValue: "We couldn't load your profile." })}
+          message={t("consumerProfile.loadErrorBody", { defaultValue: "Check your connection and try again." })}
+          actionLabel={t("commonUi.tryAgain")}
+          onAction={() => {
+            setLoading(true);
+            setRetryNonce((value) => value + 1);
+          }}
+        />
+      </View>
     );
   }
 

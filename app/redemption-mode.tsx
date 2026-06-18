@@ -113,7 +113,8 @@ export default function RedemptionModeScreen() {
   useEffect(() => {
     if (loading) return;
     if (!state && !isRedeemerSession(session)) {
-      router.replace("/auth-landing" as Href);
+      const target = session?.user ? ("/(tabs)/redeem" as Href) : ("/auth-landing" as Href);
+      router.replace(target);
     }
   }, [loading, router, session, state]);
 

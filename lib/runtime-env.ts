@@ -99,8 +99,7 @@ export function isShareDealEnabled(): boolean {
 }
 
 export function isDebugPanelEnabled(): boolean {
-  if (__DEV__) return true;
-  return process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL === "true";
+  return __DEV__;
 }
 
 export function isDebugBootLogEnabled(): boolean {

@@ -7,6 +7,7 @@ import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Gray, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   FORM_SCROLL_KEYBOARD_PROPS,
   IOS_DONE_INPUT_ACCESSORY_ID,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import {
   CONSUMER_RADIUS_MILES_OPTIONS,
   type ConsumerRadiusMiles,
@@ -57,6 +59,9 @@ export default function OnboardingScreen() {
   const [nearbyShops, setNearbyShops] = useState<{ id: string; name: string; location: string | null }[]>([]);
   const [selectedShopIds, setSelectedShopIds] = useState<string[]>([]);
   const [loadingShops, setLoadingShops] = useState(false);
+  const [lastShopCoords, setLastShopCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [shopLoadAttempt, setShopLoadAttempt] = useState(0);
+  const shopsLoadTimedOut = useLoadingTimeout(loadingShops, undefined, shopLoadAttempt);
 
   useEffect(() => {
     void getConsumerPreferences().then((p) => {
@@ -75,11 +80,13 @@ export default function OnboardingScreen() {
   async function goToShops(coords: { lat: number; lng: number }) {
     await setConsumerRadiusMiles(radius);
     await setLastKnownConsumerCoords(coords.lat, coords.lng);
+    setLastShopCoords(coords);
     setStep("shops");
     void loadNearbyShops(coords);
   }
 
   async function loadNearbyShops(coords: { lat: number; lng: number }) {
+    setShopLoadAttempt((value) => value + 1);
     setLoadingShops(true);
     try {
       let shops: { id: string; name: string; location: string | null }[] = [];
@@ -388,10 +395,20 @@ export default function OnboardingScreen() {
         contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
         showsVerticalScrollIndicator={false}
       >
-        {loadingShops ? (
+        {loadingShops && !shopsLoadTimedOut ? (
           <View style={{ paddingVertical: Spacing.xl, alignItems: "center" }}>
             <ActivityIndicator color={C.primary} />
           </View>
+        ) : shopsLoadTimedOut ? (
+          <EmptyState
+            title={t("onboarding.shopsLoadErrorTitle", { defaultValue: "We couldn't load nearby shops." })}
+            message={t("onboarding.shopsLoadErrorBody", { defaultValue: "Check your connection and try again." })}
+            actionLabel={t("commonUi.tryAgain")}
+            onAction={() => {
+              if (lastShopCoords) void loadNearbyShops(lastShopCoords);
+              else setStep("setup");
+            }}
+          />
         ) : nearbyShops.length === 0 ? (
           <Text style={{ color: C.mutedText, fontSize: 14, lineHeight: 20 }}>{t("onboarding.shopsEmpty")}</Text>
         ) : (

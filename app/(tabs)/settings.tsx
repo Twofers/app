@@ -54,6 +54,7 @@ import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { getSupportEmail, getSupportPhone } from "@/lib/support-contact";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import { devWarn } from "@/lib/dev-log";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
@@ -79,8 +80,11 @@ export default function SettingsScreen() {
   const [consumerSession, setConsumerSession] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadTimedOut = useLoadingTimeout(loading, undefined, loadAttempt);
 
   const reload = useCallback(async () => {
+    setLoadAttempt((value) => value + 1);
     setLoading(true);
     setLoadFailed(false);
     try {
@@ -461,7 +465,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >
-        {loading ? (
+        {loading && !loadTimedOut ? (
           <View
             style={{
               borderWidth: 1,
@@ -478,7 +482,7 @@ export default function SettingsScreen() {
               {t("settingsScreen.loading", { defaultValue: "Loading settings..." })}
             </Text>
           </View>
-        ) : loadFailed ? (
+        ) : loadFailed || loadTimedOut ? (
           <EmptyState
             title={t("settingsScreen.loadErrorTitle", { defaultValue: "Couldn't load settings" })}
             message={t("settingsScreen.loadErrorBody", { defaultValue: "Check your connection and try again." })}

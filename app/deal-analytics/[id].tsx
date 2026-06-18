@@ -6,6 +6,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { supabase } from "@/lib/supabase";
 import { devWarn } from "@/lib/dev-log";
 import { Banner } from "@/components/ui/banner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { MerchantInsightsPanel } from "@/components/merchant-insights-panel";
@@ -15,6 +16,7 @@ import { formatAppDateFromDayKey } from "@/lib/i18n/format-datetime";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useLoadingTimeout } from "@/hooks/use-loading-timeout";
 import { getDealAnalyticsActivityState } from "@/lib/deal-analytics-state";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -64,9 +66,12 @@ export default function DealAnalyticsDetail() {
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [bestTime, setBestTime] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
   const [exporting, setExporting] = useState(false);
+  const loadTimedOut = useLoadingTimeout(loading, undefined, loadAttempt);
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -123,8 +128,14 @@ export default function DealAnalyticsDetail() {
   }
 
   const loadData = useCallback(async () => {
-    if (!id) return;
+    setLoadAttempt((value) => value + 1);
+    if (!id) {
+      setLoading(false);
+      setLoadFailed(true);
+      return;
+    }
     setLoading(true);
+    setLoadFailed(false);
     setBanner(null);
     try {
       const { data: dealData, error: dealError } = await supabase
@@ -200,6 +211,7 @@ export default function DealAnalyticsDetail() {
     } catch (err: unknown) {
       devWarn("[deal-analytics] load failed", err);
       setBanner(t("dealAnalytics.errLoad"));
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -223,6 +235,37 @@ export default function DealAnalyticsDetail() {
   }, [claims]);
   const analyticsActivityState = useMemo(() => getDealAnalyticsActivityState(claims), [claims]);
 
+  function renderOfferLoadRecovery() {
+    return (
+      <View
+        style={{
+          paddingTop: top,
+          paddingHorizontal: horizontal,
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          gap: Spacing.md,
+        }}
+      >
+        <EmptyState
+          title={t("dealAnalytics.offerLoadErrorTitle", { defaultValue: "We couldn't load this offer." })}
+          message={t("dealAnalytics.offerLoadErrorBody", { defaultValue: "Check your connection and try again." })}
+          actionLabel={t("commonUi.tryAgain")}
+          onAction={() => void loadData()}
+        />
+        <SecondaryButton
+          title={t("dealAnalytics.backToOffersLabel", "Back to offers")}
+          accessibilityLabel={t("dealAnalytics.backToOffersLabel", "Back to offers")}
+          onPress={goBack}
+        />
+      </View>
+    );
+  }
+
+  if (loading && loadTimedOut) {
+    return renderOfferLoadRecovery();
+  }
+
   if (loading) {
     return (
       <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -230,6 +273,10 @@ export default function DealAnalyticsDetail() {
         <Text style={{ marginTop: Spacing.md, color: theme.mutedText }}>{t("dealAnalytics.loading")}</Text>
       </View>
     );
+  }
+
+  if (loadFailed && !deal) {
+    return renderOfferLoadRecovery();
   }
 
   const hasAnalyticsData = analyticsActivityState.hasTimelineData;
