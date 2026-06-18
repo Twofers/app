@@ -161,7 +161,6 @@ function isMissingDealLocationColumn(error: { code?: string; message?: string } 
     error.message?.includes("location_id")
   );
 }
-
 function isMissingDealEligibilityColumn(error: { code?: string; message?: string } | null | undefined) {
   const message = error?.message ?? "";
   return (
@@ -2294,7 +2293,6 @@ export default function AiDealScreen() {
           </View>
         ) : (
           <>
-            <StepBadge n={1} total={3} t={t} />
             <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.photo")}</Text>
             {/* Both buttons default to width:100%; flex wrappers keep the row inside the viewport. */}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
@@ -2315,10 +2313,7 @@ export default function AiDealScreen() {
             ) : (
               <View style={{ marginTop: 12 }}>
                 <View style={{ height: 260, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1.5, borderColor: theme.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
-                    {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
-                  </Text>
-                  <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center", color: theme.text }}>{t("createAi.photoHint")}</Text>
+                  <Text style={{ opacity: 0.72, textAlign: "center", color: theme.text, lineHeight: 20 }}>{t("createAi.photoHint")}</Text>
                 </View>
               </View>
             )}
@@ -2338,8 +2333,8 @@ export default function AiDealScreen() {
                 >
                   <Text style={{ fontWeight: "800", color: usePhotoAsFinal ? theme.accentText : theme.text }}>
                     {usePhotoAsFinal
-                      ? t("createAi.actualPhotoFinalSelected", { defaultValue: "Actual photo selected as final ad" })
-                      : t("createAi.photoGuidanceSelected", { defaultValue: "Used for AI guidance" })}
+                      ? t("createAi.actualPhotoFinalSelected", { defaultValue: "Photo selected for the offer" })
+                      : t("createAi.photoGuidanceSelected", { defaultValue: "Photo selected" })}
                   </Text>
                   <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
                     {usePhotoAsFinal
@@ -2353,8 +2348,8 @@ export default function AiDealScreen() {
                   <SecondaryButton
                     title={
                       usePhotoAsFinal
-                        ? t("createAi.usePhotoAsGuidance", { defaultValue: "Use for AI guidance instead" })
-                        : t("createAi.useActualPhotoAsFinal", { defaultValue: "Use actual photo as final ad" })
+                        ? t("createAi.usePhotoAsGuidance", { defaultValue: "Use as the reference photo instead" })
+                        : t("createAi.useActualPhotoAsFinal", { defaultValue: "Use this photo in the offer" })
                     }
                     onPress={() => {
                       const nextUseAsFinal = !usePhotoAsFinal;
@@ -2407,9 +2402,8 @@ export default function AiDealScreen() {
             ) : null}
 
             <View style={{ marginTop: 16 }}>
-              <StepBadge n={2} total={3} t={t} />
+              <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.fewWords")}</Text>
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.fewWords")}</Text>
             <View style={{ marginTop: 6 }}>
               <TextInput
                 value={hintText}
@@ -2432,6 +2426,13 @@ export default function AiDealScreen() {
                 <Pressable
                   onPress={isRecording ? () => void stopRecordingAndTranscribe() : () => void startRecording()}
                   disabled={transcribing}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isRecording
+                      ? t("createAi.stopRecordingA11y", { defaultValue: "Stop recording" })
+                      : t("createAi.recordVoiceA11y", { defaultValue: "Add details by voice" })
+                  }
+                  accessibilityState={{ busy: transcribing }}
                   style={{ position: "absolute", right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? theme.danger : theme.primary, alignItems: "center", justifyContent: "center" }}
                 >
                   {transcribing ? (
@@ -2442,6 +2443,14 @@ export default function AiDealScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {isRecording ? (
+              <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <MaterialIcons name="fiber-manual-record" size={14} color={theme.danger} />
+                <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>
+                  {t("createAi.recordingState", { defaultValue: "Recording..." })}
+                </Text>
+              </View>
+            ) : null}
 
             <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.priceOptional")}</Text>
             <TextInput
@@ -2455,6 +2464,7 @@ export default function AiDealScreen() {
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
             />
 
+            <Text style={{ marginTop: 16, fontWeight: "700", color: theme.text }}>{t("createAi.sectionOffer", { defaultValue: "Offer" })}</Text>
             <DealEligibilityForm
               value={eligibilityForm}
               onChange={setEligibilityForm}
@@ -2469,9 +2479,8 @@ export default function AiDealScreen() {
               onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
               style={{ marginTop: 16 }}
             >
-              <StepBadge n={3} total={3} t={t} />
+              <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.validity")}</Text>
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.validity")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
@@ -3187,17 +3196,5 @@ export default function AiDealScreen() {
       </Modal>
       {confirmModal}
     </KeyboardScreen>
-  );
-}
-
-function StepBadge({ n, total, t }: { n: number; total: number; t: (key: string, opts?: Record<string, unknown>) => string }) {
-  const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
-  const theme = Colors[colorScheme];
-  return (
-    <View style={{ borderRadius: 14, backgroundColor: theme.surfaceMuted, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "flex-start" }}>
-      <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.2, opacity: 0.72, color: theme.text }}>
-        {t("createAi.stepOfTotal", { current: n, total })}
-      </Text>
-    </View>
   );
 }

@@ -374,6 +374,7 @@ export default function MenuScanScreen() {
       {...FORM_SCROLL_KEYBOARD_PROPS}
     >
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+      <Text style={{ opacity: 0.72, fontSize: 14, lineHeight: 20, color: theme.text }}>{t("menuScan.helper")}</Text>
 
       <PrimaryButton
         title={scanning ? t("menuScan.scanning") : t("menuScan.takePhoto")}
@@ -385,16 +386,15 @@ export default function MenuScanScreen() {
         onPress={() => void pickAndScan("library", false)}
         disabled={scanning || !businessId}
       />
-      <Text style={{ opacity: 0.65, fontSize: 13, color: theme.text }}>{t("menuScan.multiHint")}</Text>
       {showAppendPhotoActions ? (
         <>
           <SecondaryButton
-            title={scanning ? t("menuScan.scanning") : t("menuScan.takeMore")}
+            title={scanning ? t("menuScan.scanning") : t("menuScan.takePhoto")}
             onPress={() => void pickAndScan("camera", true)}
             disabled={scanning || !businessId}
           />
           <SecondaryButton
-            title={scanning ? t("menuScan.scanning") : t("menuScan.pickMore")}
+            title={scanning ? t("menuScan.scanning") : t("menuScan.pickImage")}
             onPress={() => void pickAndScan("library", true)}
             disabled={scanning || !businessId}
           />

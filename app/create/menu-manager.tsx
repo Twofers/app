@@ -179,14 +179,16 @@ export default function MenuManagerScreen() {
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {loadErr ? <Banner message={loadErr} tone="error" /> : null}
 
-        <SecondaryButton
-          title={showArchived ? t("menuManager.hideArchived") : t("menuManager.showArchived")}
-          onPress={() => {
-            setShowArchived((s) => !s);
-            setAdding(false);
-            setEditingId(null);
-          }}
-        />
+        {menuState.archivedRows.length > 0 ? (
+          <SecondaryButton
+            title={showArchived ? t("menuManager.hideArchived") : t("menuManager.showArchived")}
+            onPress={() => {
+              setShowArchived((s) => !s);
+              setAdding(false);
+              setEditingId(null);
+            }}
+          />
+        ) : null}
 
         {!showArchived && !adding && !menuState.isActiveEmpty ? (
           <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />

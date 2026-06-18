@@ -1,26 +1,11 @@
 /**
- * Deprecated: AI Compose is now handled by the unified Create screen (ai.tsx).
- * Voice input and quota display are built into the unified screen.
- * This file redirects to /create/ai preserving all params.
+ * Deprecated: AI Compose is now handled by the supported photo route.
+ * This compatibility path redirects before painting duplicate UI.
  */
-import { useEffect } from "react";
-import { View, Text } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Redirect, useLocalSearchParams, type Href } from "expo-router";
 
 export default function AiComposeRedirect() {
-  const router = useRouter();
   const params = useLocalSearchParams();
 
-  useEffect(() => {
-    router.replace({
-      pathname: "/create/ai",
-      params: params as Record<string, string>,
-    } as Href);
-  }, [params, router]);
-
-  return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text style={{ opacity: 0.5 }}>Redirecting...</Text>
-    </View>
-  );
+  return <Redirect href={{ pathname: "/create/ai", params: params as Record<string, string> } as Href} />;
 }

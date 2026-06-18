@@ -461,7 +461,17 @@ export default function MenuOfferScreen() {
       ) : null}
 
       {items.length === 0 && !loadErr && step === "main" ? (
-        <Text style={{ opacity: 0.75 }}>{t("menuOffer.emptyMenu")}</Text>
+        <View style={{ gap: Spacing.md }}>
+          <Text style={{ color: theme.text, fontSize: 16, lineHeight: 22 }}>{t("menuOffer.emptyMenu")}</Text>
+          <PrimaryButton
+            title={t("menuOffer.addMenuItems", { defaultValue: "Add menu items" })}
+            onPress={() => router.push("/create/menu-manager" as Href)}
+          />
+          <SecondaryButton
+            title={t("menuOffer.scanMenu", { defaultValue: "Scan a menu" })}
+            onPress={() => router.push("/create/menu-scan" as Href)}
+          />
+        </View>
       ) : null}
 
       {step === "main" && items.length > 0 ? (
