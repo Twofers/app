@@ -6,6 +6,7 @@ import {
 } from "./deal-quality";
 import {
   buildDealOfferContract,
+  buildDeterministicDealChannelCopy,
   validateAiCopyAgainstOffer,
   type DealOfferContract,
 } from "./deal-offer-contract";
@@ -202,12 +203,13 @@ export function validateQuickDealAd(
 
   let offerContractValid = false;
   if (headline && offer && offerContract) {
+    const deterministicCopy = buildDeterministicDealChannelCopy(offerContract);
     const offerValidation = validateAiCopyAgainstOffer(
       {
         headline,
         short_description: offer,
-        push_notification: offer,
-        social_caption: offer,
+        push_notification: deterministicCopy.pushBody,
+        social_caption: `${headline}. ${offer}`,
       },
       offerContract,
     );

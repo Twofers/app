@@ -30,8 +30,8 @@ describe("validateQuickDealAd", () => {
   it("passes the repaired screenshot fixture", () => {
     const result = validateQuickDealAd(
       {
-        headline: "Bagel with a free coffee",
-        offer: "Buy one bagel, get one coffee free.",
+        headline: "Buy a bagel and get a free coffee",
+        offer: "The free coffee is included after the qualifying bagel purchase.",
         cta: "Claim deal",
       },
       contextFor(bagelCoffeeInput),

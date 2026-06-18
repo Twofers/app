@@ -1,4 +1,10 @@
-import type { DealOfferContract } from "../../../lib/deal-offer-contract.ts";
+import {
+  AI_COPY_GENERATOR_VERSION,
+  DEAL_COPY_LIMITS,
+  buildDeterministicDealChannelCopy,
+  normalizeDealFactsFromContract,
+  type DealOfferContract,
+} from "../../../lib/deal-offer-contract.ts";
 
 export type BusinessContext = {
   category?: string;
@@ -41,7 +47,7 @@ export type DealCopyPromptParams = {
   validationFeedback?: string;
 };
 
-export const AD_COPY_PROMPT_VERSION = "v3";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V2";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -56,12 +62,13 @@ export const AD_COPY_JSON_SCHEMA = {
         items: {
           type: "object",
           properties: {
-            headline: { type: "string" },
-            short_description: { type: "string" },
-            push_notification: { type: "string" },
-            social_caption: { type: "string" },
+            headlineAlternative: { type: "string" },
+            description: { type: "string" },
+            pushTitle: { type: "string" },
+            pushBody: { type: "string" },
+            socialCaption: { type: "string" },
           },
-          required: ["headline", "short_description", "push_notification", "social_caption"],
+          required: ["headlineAlternative", "description", "pushTitle", "pushBody", "socialCaption"],
           additionalProperties: false,
         },
       },
@@ -71,42 +78,68 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const COPY_VOICE_RULES = [
-  "Write for a local coffee shop, cafe, bakery, or small food business, not a chain restaurant and not a generic image caption.",
-  "The job is to write a live, time-limited Twofer deal ad for a mobile app.",
-  "Use the validated offer contract as ground truth. Owner notes, photo context, research context, and generic cafe assumptions can add flavor but must never change deal terms.",
-  "Clearly mention the actual product or deal item when one is provided.",
-  "Do not include street addresses, city/state/ZIP, availability dates, exact times, or inventory counts in the generated ad copy. The app shows those as separate metadata.",
-  "Make the offer feel immediate and live, but do not use fake urgency.",
-  "Keep all copy short enough for a mobile app.",
-  "Avoid generic marketing language and vague restaurant-promo copy.",
-  "Do not invent missing products, prices, neighborhoods, ingredients, preparation methods, awards, discounts, times, or business facts.",
-  "Do not over-promise quality, freshness, popularity, health benefits, speed, or availability beyond the facts provided.",
-  "No hashtags, emojis, excessive hype, social media-style captions, or exclamation marks.",
+export const AI_COPY_PROMPT_V2 = [
+  `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
+  "Write customer-facing promotional deal copy for Twofer, a mobile app for local coffee shops, cafes, bakeries, and small food businesses, not a generic image caption.",
+  "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
+  "",
+  "VOICE:",
+  "- Write like a helpful employee explaining the deal to a customer.",
+  "- Use clear, everyday American English unless a different output language is requested.",
+  "- Prefer active constructions beginning with words such as Buy, Get, Order, Save, or Claim.",
+  "- Use sentence case.",
+  "- No emojis, all caps, hashtags, markdown, labels, quotation marks, or multiple exclamation marks.",
+  "- Do not use exaggerated advertising language.",
+  "",
+  "FACT SAFETY:",
+  "- Preserve every product, quantity, restriction, discount, and supplied price exactly.",
+  "- Never invent sizes, prices, ingredients, eligibility, availability, business facts, neighborhoods, popularity, quality claims, or urgency.",
+  '- Do not add words such as "delicious", "fresh", "best", or "artisan" unless supplied by the merchant.',
+  '- Avoid fragments such as "{item} with free {item}".',
+  '- Avoid awkward phrases such as "one coffee free" when "a free coffee" is more natural.',
+  "- Do not repeat the merchant name unnecessarily.",
+  "- Do not repeat the canonical headline word-for-word in the description.",
+  "- Do not include street addresses, city/state/ZIP, raw availability dates, exact times, or inventory counts in generated ad fields unless the channel rule explicitly says that fact was supplied.",
+  "- Terms, location, schedule, and quantity are app metadata unless the field rule says to use a supplied fact.",
+  "- Do not invent missing products.",
+  "- Avoid generic marketing language.",
   "",
   "BANNED PHRASES:",
-  '  - "Don\'t miss out"',
-  '  - "Amazing deal"',
-  '  - "Delicious treat"',
-  '  - "Limited time only" unless paired with the actual time',
-  '  - "Come enjoy our special offer"',
-  '  - "Treat yourself", "indulge", "best", "ultimate", "perfect", "incredible"',
+  '- "Don\'t miss out"',
+  '- "Amazing deal"',
+  '- "Delicious treat"',
+  '- "Come enjoy our special offer"',
   "",
-  "OUTPUT FIELD RULES:",
-  "  - headline: 4 to 8 words, plain-English offer title, mention the product or moment, no generic hype.",
-  '  - Never write "Same-Item" or "BOGO" in generated user-visible fields.',
-  '  - For same-item buy-one-get-one offers, prefer "Buy one [item], get one free."',
-  "  - short_description: 1 sentence. Mention the product and exact deal value only.",
-  "  - push_notification: under 85 characters, direct and specific, makes sense on a phone lock screen.",
-  "  - social_caption: under 220 characters, plain and shareable.",
+  "FIELD RULES:",
+  `- headlineAlternative: complete offer statement, no trailing period, max ${DEAL_COPY_LIMITS.headline} characters. The app normally uses the deterministic canonical headline instead.`,
+  `- description: one short supporting sentence, max ${DEAL_COPY_LIMITS.description} characters. Clarify the offer without adding new terms.`,
+  `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
+  `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
+  `- socialCaption: plain share caption, max ${DEAL_COPY_LIMITS.socialCaption} characters.`,
   "",
   "EXAMPLES:",
-  '  Bad: "Enjoy a delicious treat today with this amazing offer from our business."',
-  '  Bad: "Buy one bagel and get one coffee free at 9460 N MacArthur Blvd. Available 6/16/2026 to 6/23/2026. 50 available."',
-  '  Good: "Buy any bagel, get one coffee free."',
-  '  Good: "Buy one turkey croissant and get one drip coffee free."',
-  '  Good: "Buy one cold brew and get one cold brew free."',
+  "Different-item BOGO:",
+  "  Facts: buyQuantity=1, buyItem=egg sandwich, rewardQuantity=1, rewardItem=coffee, rewardType=free.",
+  "  Good headlineAlternative: Buy an egg sandwich and get a free coffee",
+  "  Bad headlineAlternative: Egg sandwich with free coffee",
+  "Same-item BOGO:",
+  "  Facts: buyQuantity=1, buyItem=latte, rewardQuantity=1, rewardItem=latte.",
+  "  Good headlineAlternative: Buy one latte and get one free",
+  "Plural qualifying quantity:",
+  "  Facts: buyQuantity=2, buyItem=muffin, rewardQuantity=1, rewardItem=drip coffee.",
+  "  Good headlineAlternative: Buy two muffins and get a free drip coffee",
+  "Vowel sound:",
+  "  Facts: buyQuantity=1, buyItem=apple turnover, rewardQuantity=1, rewardItem=espresso.",
+  "  Good headlineAlternative: Buy an apple turnover and get a free espresso",
+  "Long product name:",
+  "  Keep the full product name. Do not cut a word or replace it with a vague item.",
+  "Restricted variant:",
+  "  If facts say 12 oz latte only, keep 12 oz latte only. Do not expand to any latte.",
+  "Missing optional information:",
+  "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
+
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V2;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";
@@ -164,9 +197,9 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       `- Do NOT rewrite this as "Buy ${required.itemName} and ${reward.itemName}, get one free."`,
       "",
       "Good examples:",
-      `- "Buy a ${required.itemName}, get a ${reward.itemName} free."`,
-      `- "Grab a ${required.itemName} and enjoy a free ${reward.itemName}."`,
-      `- "Your ${required.itemName} comes with a free ${reward.itemName}."`,
+      `- "Buy a ${required.itemName} and get a free ${reward.itemName}"`,
+      `- "Order a ${required.itemName} and get a free ${reward.itemName}"`,
+      `- "Claim a free ${reward.itemName} with a qualifying ${required.itemName} purchase"`,
       "",
       "Bad examples:",
       `- "Buy a ${required.itemName} and ${reward.itemName}, get one free."`,
@@ -189,7 +222,7 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       "",
       "This is a true same-item buy-one-get-one free deal.",
       "Use plain English such as:",
-      `- "Buy one ${required.itemName}, get one free."`,
+      `- "Buy one ${required.itemName} and get one free"`,
       `- "Get a second ${required.itemName} free."`,
       "",
       "Do not use:",
@@ -260,6 +293,15 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   if (cleanResearchDescription) facts.push(`Product description context: ${cleanResearchDescription}`);
   if (cleanImageDescription) facts.push(`Uploaded image description: ${cleanImageDescription}`);
   if (offerContract) facts.push("Offer contract above overrides owner notes, photo context, and research context.");
+  if (offerContract) {
+    const normalizedFacts = normalizeDealFactsFromContract(offerContract);
+    const deterministic = buildDeterministicDealChannelCopy(offerContract);
+    facts.push(`Normalized deal facts JSON: ${JSON.stringify(normalizedFacts)}`);
+    facts.push(`Deterministic canonical headline: ${deterministic.headline}`);
+    facts.push(`Deterministic safe description: ${deterministic.description}`);
+    facts.push(`Deterministic push title: ${deterministic.pushTitle}`);
+    facts.push(`Deterministic push body: ${deterministic.pushBody}`);
+  }
 
   const revisionBlock: string[] = [];
   if (previousAd) {
@@ -292,7 +334,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",
     "",
     "Return this exact JSON shape:",
-    '{ "variants": [{ "headline": "string, max 55 characters", "short_description": "string, max 180 characters", "push_notification": "string, max 85 characters", "social_caption": "string, max 220 characters" }] }',
+    '{ "variants": [{ "headlineAlternative": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string" }] }',
   ].join("\n");
 
   return {
