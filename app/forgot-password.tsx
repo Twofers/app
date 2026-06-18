@@ -85,8 +85,7 @@ export default function ForgotPasswordScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollBottom }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>{t("passwordRecovery.forgotTitle")}</Text>
-        <Text style={{ marginTop: Spacing.sm, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
+        <Text style={{ opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
           {t("passwordRecovery.forgotSubtitle")}
         </Text>
 
@@ -137,8 +136,8 @@ export default function ForgotPasswordScreen() {
               onPress={() => void onSubmit()}
               disabled={busy || cooldownRemaining > 0}
             />
-            <Pressable onPress={() => router.back()} disabled={busy} style={{ paddingVertical: Spacing.sm }}>
-              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center", color: theme.text }}>{t("commonUi.goBack")}</Text>
+            <Pressable onPress={() => router.replace("/auth-landing")} disabled={busy} style={{ paddingVertical: Spacing.sm }}>
+              <Text style={{ fontWeight: "600", opacity: 0.65, textAlign: "center", color: theme.text }}>{t("passwordRecovery.backToSignIn")}</Text>
             </Pressable>
             <View style={{ marginTop: Spacing.xl, gap: Spacing.sm }}>
               <Text style={{ fontSize: 13, lineHeight: 18, opacity: 0.68, color: theme.text }}>{t("legal.sectionTitle")}</Text>

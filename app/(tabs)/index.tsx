@@ -3,7 +3,6 @@ import {
   FlatList,
   Platform,
   RefreshControl,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -17,7 +16,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
-import { Colors, PrimaryTint, Radii, Shadows } from "@/constants/theme";
+import { Colors, Radii, Shadows } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { claimDeal } from "@/lib/functions";
 import { syncConsumerDealNotifications, getAlertsEnabled, setAlertsEnabled, scheduleClaimExpiryReminder } from "@/lib/notifications";
@@ -59,7 +58,6 @@ import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
 import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
-import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
@@ -129,7 +127,22 @@ type BusinessRow = {
   location: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
+  is_demo?: boolean | null;
 };
+
+async function filterCustomerBusinessRows(rows: BusinessRow[]): Promise<BusinessRow[]> {
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id,is_demo")
+    .in("id", ids);
+  if (error || !Array.isArray(data)) return rows.filter((row) => row.is_demo !== true);
+  const demoFlags = new Map((data as { id: string; is_demo?: boolean | null }[]).map((row) => [row.id, row.is_demo === true]));
+  return rows
+    .map((row) => ({ ...row, is_demo: demoFlags.get(row.id) ?? row.is_demo ?? null }))
+    .filter((row) => row.is_demo !== true);
+}
 
 function dealStatusForUser(
   dealId: string,
@@ -374,7 +387,7 @@ export default function HomeScreen() {
         }
         rows = (data ?? []) as unknown as Deal[];
       }
-      const filtered = rows.filter((deal) => isDealActiveNow(deal));
+      const filtered = rows.filter((deal) => isDealActiveNow(deal) && !isDemoOffer(deal));
       setDeals(filtered);
       await loadUserClaims(filtered.map((d) => d.id));
     } catch (error) {
@@ -412,11 +425,10 @@ export default function HomeScreen() {
           p_favorite_ids: favoriteIdsRef.current,
         });
         if (!error && Array.isArray(data)) {
-          setBusinesses(
-            (data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]).map(
-              (r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude }),
-            ) as BusinessRow[],
-          );
+          const rows = (data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null; is_demo?: boolean | null }[]).map(
+            (r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude, is_demo: r.is_demo }),
+          ) as BusinessRow[];
+          setBusinesses(await filterCustomerBusinessRows(rows));
           setLoadingBiz(false);
           return;
         }
@@ -424,11 +436,11 @@ export default function HomeScreen() {
       const rows = await collectBusinessesPageByPage(async ({ from, to }) => {
         return await supabase
           .from("businesses")
-          .select("id,name,location,latitude,longitude")
+          .select("id,name,location,latitude,longitude,is_demo")
           .order("name", { ascending: true })
           .range(from, to);
       });
-      setBusinesses(rows as BusinessRow[]);
+      setBusinesses(await filterCustomerBusinessRows(rows as BusinessRow[]));
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown businesses load error" };
       logPostgrestError("home screen businesses", err);
@@ -788,8 +800,8 @@ export default function HomeScreen() {
     }
   }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]);
 
-  const heroCardHeight = Math.min(520, Math.max(340, Math.round(windowHeight * 0.5)));
-  const heroImageHeight = Math.round(heroCardHeight * 0.57);
+  const heroCardHeight = Math.min(460, Math.max(300, Math.round(windowHeight * 0.42)));
+  const heroImageHeight = Math.round(heroCardHeight * 0.48);
 
   const formatTimeLeft = useCallback(
     (endTimeIso: string) => {
@@ -832,7 +844,6 @@ export default function HomeScreen() {
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
       const businessLocation = item.businesses?.location?.trim() || null;
       const isFavorite = favoriteBusinessIds.includes(item.business_id);
-      const itemIsDemo = isDemoOffer(item);
       const isLive = st === "live";
       const statusLabel =
         st === "live"
@@ -843,9 +854,7 @@ export default function HomeScreen() {
               ? t("dealStatus.redeemed")
               : t("dealStatus.expired");
       const claimButtonTitle =
-        itemIsDemo
-          ? t("demoOffer.label", { defaultValue: "Demo offer" })
-          : claimingDealId === item.id
+        claimingDealId === item.id
           ? t("dealsBrowse.statusClaiming")
           : st === "claimed"
             ? t("dealStatus.claimed")
@@ -855,19 +864,17 @@ export default function HomeScreen() {
                 ? t("dealStatus.expired")
                 : t("dealDetail.claimButton");
       const statusColor =
-        st === "live"
-          ? { background: PrimaryTint.surfaceStrong, border: PrimaryTint.border, text: theme.accentText }
-          : st === "claimed"
-            ? {
-                background: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.14)",
-                border: colorScheme === "dark" ? "rgba(255,180,84,0.36)" : "rgba(180,83,9,0.22)",
-                text: theme.accentText,
-              }
-            : {
-                background: theme.surfaceMuted,
-                border: theme.border,
-                text: theme.mutedText,
-              };
+        st === "claimed"
+          ? {
+              background: colorScheme === "dark" ? "rgba(255,159,28,0.18)" : "rgba(255,159,28,0.14)",
+              border: colorScheme === "dark" ? "rgba(255,180,84,0.36)" : "rgba(180,83,9,0.22)",
+              text: theme.accentText,
+            }
+          : {
+              background: theme.surfaceMuted,
+              border: theme.border,
+              text: theme.mutedText,
+            };
       const businessInitial = businessName.trim().charAt(0).toUpperCase() || "T";
       return (
         <View
@@ -928,9 +935,29 @@ export default function HomeScreen() {
           </Pressable>
           <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
-              <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
-                {businessName}
-              </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 22, lineHeight: 29, fontWeight: "900", color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+                  {offerText}
+                </Text>
+                <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
+                  <Text style={{ color: theme.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                    {businessName}
+                  </Text>
+                  {distanceLabel ? (
+                    <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 13 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                      {distanceLabel}
+                    </Text>
+                  ) : null}
+                  {businessLocation ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0, maxWidth: "100%" }}>
+                      <MaterialIcons name="place" size={15} color={theme.mutedText} />
+                      <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 13, flexShrink: 1 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                        {businessLocation}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
               <Pressable
                 onPress={() => void toggleFavorite(item.business_id)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -961,9 +988,10 @@ export default function HomeScreen() {
                 />
               </Pressable>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
+            {!isLive ? (
               <View
                 style={{
+                  alignSelf: "flex-start",
                   borderRadius: Radii.pill,
                   paddingHorizontal: Spacing.md,
                   paddingVertical: 5,
@@ -983,24 +1011,7 @@ export default function HomeScreen() {
                   {statusLabel}
                 </Text>
               </View>
-              {distanceLabel ? (
-                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 13 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-                  {distanceLabel}
-                </Text>
-              ) : null}
-              {businessLocation ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0, maxWidth: "100%" }}>
-                  <MaterialIcons name="place" size={15} color={theme.mutedText} />
-                  <Text style={{ color: theme.mutedText, fontWeight: "600", fontSize: 13, flexShrink: 1 }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-                    {businessLocation}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            {itemIsDemo ? <DemoOfferNotice compact /> : null}
-            <Text style={{ fontSize: 22, lineHeight: 30, fontWeight: "900", color: theme.text }} numberOfLines={2} maxFontSizeMultiplier={1.15}>
-              {offerText}
-            </Text>
+            ) : null}
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }} maxFontSizeMultiplier={1.15}>
               {localizedDealDescription(item, i18n.language) || t("consumerHome.tagline")}
             </Text>
@@ -1024,7 +1035,7 @@ export default function HomeScreen() {
               <PrimaryButton
                 title={claimButtonTitle}
                 onPress={() => void doClaim(item.id)}
-                disabled={itemIsDemo || claimingDealId === item.id || st !== "live"}
+                disabled={claimingDealId === item.id || st !== "live"}
               />
             </View>
             <Pressable
@@ -1157,7 +1168,9 @@ export default function HomeScreen() {
                   ? // Shops is intentionally metro-wide (not radius-filtered), so don't
                     // imply the 5 mi radius applies here — only Deals are radius-filtered.
                     t("consumerHome.shopsLocationChipMetro")
-                  : t("consumerHome.locationChipWithRadius", { miles: radiusMiles })}
+                  : showAllLiveDeals
+                    ? t("consumerHome.locationChipAllDeals")
+                    : t("consumerHome.locationChipWithRadius", { miles: radiusMiles })}
             </Text>
           </Pressable>
         </View>
@@ -1310,9 +1323,6 @@ export default function HomeScreen() {
                 <Text style={{ opacity: 0.72, lineHeight: 22, textAlign: "center", color: theme.text }}>
                   {t("consumerHome.emptyNearbyBodySub")}
                 </Text>
-                <Text style={{ fontSize: 13, color: theme.accentText, opacity: 0.95, lineHeight: 20, textAlign: "center" }}>
-                  {t("consumerHome.emptyNearbyPenguinHint")}
-                </Text>
                 <PrimaryButton
                   title={t("consumerHome.ctaWidenRadius")}
                   onPress={() => router.push("/(tabs)/settings")}
@@ -1323,9 +1333,6 @@ export default function HomeScreen() {
                   onPress={() => setShowAllLiveDeals(true)}
                   style={{ alignSelf: "stretch" }}
                 />
-                <Text style={{ fontSize: 13, opacity: 0.6, lineHeight: 20, color: theme.text }}>
-                  {t("consumerHome.ctaFavoriteHint")}
-                </Text>
               </View>
             ) : showDealsSkeleton ? (
               <LoadingSkeleton rows={2} />
@@ -1337,51 +1344,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {favoriteBusinessIds.length > 0 ? (
-          <View
-            style={{
-              marginBottom: Spacing.lg,
-              ...(favoritesOnly
-                ? {
-                    backgroundColor: colorScheme === "dark" ? "rgba(236,72,153,0.12)" : "#fffafa",
-                    borderRadius: Radii.lg,
-                    padding: Spacing.md,
-                    borderWidth: 1,
-                    borderColor: colorScheme === "dark" ? "rgba(244,114,182,0.32)" : "#fce7f3",
-                  }
-                : {}),
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", marginBottom: Spacing.sm, color: theme.mutedText }}>
-              {t("consumerHome.favoritesStripTitle")}
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm }}>
-              {favoriteBusinessIds.map((fid) => {
-                const b = businesses.find((x) => x.id === fid);
-                if (!b) return null;
-                return (
-                  <Pressable
-                    key={fid}
-                    onPress={() => router.push(businessDetailHref(fid))}
-                    style={{
-                      paddingVertical: Spacing.sm,
-                      paddingHorizontal: Spacing.md,
-                      borderRadius: Radii.pill,
-                      backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      maxWidth: 160,
-                    }}
-                  >
-                    <Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-                      {b.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : null}
       </View>
     ),
     [
@@ -1390,12 +1352,11 @@ export default function HomeScreen() {
       router,
       userGeo,
       radiusMiles,
+      showAllLiveDeals,
       favoritesOnly,
       emptyNearbyLive,
       showDealsSkeleton,
       feedSegment,
-      favoriteBusinessIds,
-      businesses,
       colorScheme,
       theme,
     ],

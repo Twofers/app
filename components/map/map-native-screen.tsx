@@ -35,7 +35,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type AppTheme = typeof Colors.light;
 
@@ -91,6 +90,18 @@ type MapDataPayload = {
 
 type MarkerWithLive = MappableBusiness & { live: boolean };
 
+async function hydrateMappableBusinessDemoFlags(businesses: MappableBusiness[]): Promise<MappableBusiness[]> {
+  const ids = businesses.map((business) => business.id).filter(Boolean);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id,is_demo")
+    .in("id", ids);
+  if (error || !Array.isArray(data)) return businesses;
+  const demoFlags = new Map((data as { id: string; is_demo?: boolean | null }[]).map((row) => [row.id, row.is_demo === true]));
+  return businesses.map((business) => ({ ...business, is_demo: demoFlags.get(business.id) ?? business.is_demo ?? null }));
+}
+
 async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataPayload> {
   const prefs = await getConsumerPreferences();
   const coords = await resolveConsumerCoordinates(prefs);
@@ -142,6 +153,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
       }[];
     }, 400);
   }
+  businesses = (await hydrateMappableBusinessDemoFlags(businesses)).filter((business) => business.is_demo !== true);
 
   const deals: DealLite[] = [];
   let dealsFetchFailed = false;
@@ -163,7 +175,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
       break;
     }
     const page = (dz ?? []) as DealLite[];
-    deals.push(...page);
+    deals.push(...page.filter((deal) => deal.is_demo !== true));
     if (page.length < dealPageSize) break;
     dealOffset += dealPageSize;
   }
@@ -171,6 +183,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   if (dealsFetchFailed) {
     devWarn("[map] deals fetch failed; preserving previous deals", t("consumerMap.dataError"));
   }
+  const visibleBusinessIds = new Set(businesses.map((business) => business.id));
 
   return {
     radiusMiles: prefs.radiusMiles,
@@ -178,7 +191,7 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
     showDeviceBlueDot,
     usingDefaultArea: !coords,
     businesses,
-    deals,
+    deals: deals.filter((deal) => visibleBusinessIds.has(deal.business_id)),
     dealsFetchFailed,
   };
 }
@@ -400,14 +413,11 @@ function renderMapCanvas({
               <View style={{ width: "100%", height: 120, backgroundColor: theme.surfaceMuted }} />
             )}
             <View style={{ padding: Spacing.lg }}>
-              {previewDeal?.is_demo ? (
-                <View style={{ marginBottom: Spacing.sm }}>
-                  <DemoOfferNotice compact />
-                </View>
+              {previewDeal ? (
+                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText, textTransform: "uppercase" }}>
+                  {selectedBusiness.name}
+                </Text>
               ) : null}
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.mutedText, textTransform: "uppercase" }}>
-                {selectedBusiness.name}
-              </Text>
               <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24, color: theme.text }}>
                 {previewDeal ? localizedDealTitle(previewDeal, language) || selectedBusiness.name : selectedBusiness.name}
               </Text>
@@ -507,23 +517,6 @@ function renderBusinessMarker({
       }}
     >
       <View style={{ alignItems: "center" }}>
-        {marker.is_demo ? (
-          <View
-            style={{
-              marginBottom: 3,
-              borderRadius: 4,
-              paddingHorizontal: 4,
-              paddingVertical: 1,
-              backgroundColor: theme.surface,
-              borderWidth: 1,
-              borderColor: markerBorderColor,
-            }}
-          >
-            <Text style={{ fontSize: 8, fontWeight: "900", color: theme.accentText, letterSpacing: 0 }}>
-              DEMO
-            </Text>
-          </View>
-        ) : null}
         <View
           style={{
             minWidth: 28,
@@ -612,13 +605,6 @@ function MapBusinessList({
                   <View style={{ borderRadius: 4, backgroundColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2 }}>
                     <Text style={{ fontSize: 10, fontWeight: "900", color: theme.primaryText, letterSpacing: 0 }}>
                       {t("dealStatus.live", { defaultValue: "Live" })}
-                    </Text>
-                  </View>
-                ) : null}
-                {item.is_demo ? (
-                  <View style={{ borderRadius: 4, borderWidth: 1, borderColor: theme.primary, paddingHorizontal: 6, paddingVertical: 2 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "900", color: theme.accentText, letterSpacing: 0 }}>
-                      {t("demoOffer.shortLabel", { defaultValue: "DEMO" })}
                     </Text>
                   </View>
                 ) : null}

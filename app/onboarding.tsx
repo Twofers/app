@@ -39,6 +39,58 @@ import { trackAppAnalyticsEvent, type AppAnalyticsEventName } from "@/lib/app-an
 // match real business.category values. Labels reuse businessSetup.cat.*.
 const CONSUMER_CATEGORY_KEYS = ["restaurant", "cafe", "bakery", "retail", "salon", "gym", "services"] as const;
 
+type NearbyShop = {
+  id: string;
+  name: string;
+  location: string | null;
+  address?: string | null;
+  is_demo?: boolean | null;
+};
+
+function stateAbbrevFromAddressPart(part: string): string | null {
+  const trimmed = part.trim();
+  const state = trimmed.match(/^([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+  if (state?.[1]) return state[1].toUpperCase();
+  if (/^Texas(?:\s+\d{5}(?:-\d{4})?)?$/i.test(trimmed)) return "TX";
+  return null;
+}
+
+function formatShopLocationSummary(shop: Pick<NearbyShop, "address" | "location">): string | null {
+  const value = (shop.address ?? shop.location ?? "").trim();
+  if (!value) return null;
+  const parts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  for (let index = parts.length - 1; index >= 1; index -= 1) {
+    const state = stateAbbrevFromAddressPart(parts[index]);
+    if (state && parts[index - 1]) return `${parts[index - 1]}, ${state}`;
+  }
+  const compact = value.match(/^(.+?)\s+([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+  if (compact?.[1] && compact[2]) return `${compact[1].trim()}, ${compact[2].toUpperCase()}`;
+  if (/^[A-Za-z][A-Za-z .'-]+$/.test(value)) return `${value}, TX`;
+  return value;
+}
+
+async function hydrateNearbyShopAddresses(shops: NearbyShop[]): Promise<NearbyShop[]> {
+  const ids = shops.map((shop) => shop.id).filter(Boolean);
+  if (ids.length === 0) return shops;
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id,address,location,is_demo")
+    .in("id", ids);
+  if (error || !Array.isArray(data)) return shops;
+  const detailsById = new Map(
+    (data as { id: string; address?: string | null; location?: string | null; is_demo?: boolean | null }[]).map((row) => [row.id, row]),
+  );
+  return shops.map((shop) => {
+    const details = detailsById.get(shop.id);
+    return {
+      ...shop,
+      address: details?.address ?? shop.address ?? null,
+      location: shop.location ?? details?.location ?? null,
+      is_demo: details?.is_demo ?? shop.is_demo ?? null,
+    };
+  });
+}
+
 export default function OnboardingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -56,7 +108,7 @@ export default function OnboardingScreen() {
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [step, setStep] = useState<"setup" | "shops">("setup");
-  const [nearbyShops, setNearbyShops] = useState<{ id: string; name: string; location: string | null }[]>([]);
+  const [nearbyShops, setNearbyShops] = useState<NearbyShop[]>([]);
   const [selectedShopIds, setSelectedShopIds] = useState<string[]>([]);
   const [loadingShops, setLoadingShops] = useState(false);
   const [lastShopCoords, setLastShopCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -89,7 +141,7 @@ export default function OnboardingScreen() {
     setShopLoadAttempt((value) => value + 1);
     setLoadingShops(true);
     try {
-      let shops: { id: string; name: string; location: string | null }[] = [];
+      let shops: NearbyShop[] = [];
       const { data, error } = await supabase.rpc("nearby_businesses", {
         p_lat: coords.lat,
         p_lng: coords.lng,
@@ -99,21 +151,24 @@ export default function OnboardingScreen() {
         p_favorite_ids: [],
       });
       if (!error && Array.isArray(data) && data.length > 0) {
-        shops = (data as { id: string; name: string; location: string | null }[]).map((r) => ({
+        shops = (data as NearbyShop[]).map((r) => ({
           id: r.id,
           name: r.name,
           location: r.location,
+          address: r.address ?? null,
+          is_demo: r.is_demo ?? null,
         }));
       } else {
         // Fallback if the RPC isn't deployed yet: first page of shops.
         const { data: biz } = await supabase
           .from("businesses")
-          .select("id,name,location")
+          .select("id,name,location,address,is_demo")
           .order("name", { ascending: true })
           .limit(12);
-        shops = (biz ?? []) as { id: string; name: string; location: string | null }[];
+        shops = (biz ?? []) as NearbyShop[];
       }
-      setNearbyShops(shops);
+      const hydrated = await hydrateNearbyShopAddresses(shops);
+      setNearbyShops(hydrated.filter((shop) => shop.is_demo !== true));
     } catch {
       setNearbyShops([]);
     } finally {
@@ -246,7 +301,7 @@ export default function OnboardingScreen() {
         {/* Location mode toggle */}
         <View>
           <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>
-            {t("onboarding.locationChoice", { defaultValue: "Choose your location method" })}
+            {t("onboarding.locationChoice", { defaultValue: "Your location" })}
           </Text>
           <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText, marginBottom: Spacing.sm }}>
             {t("onboarding.locationBody")}
@@ -414,6 +469,7 @@ export default function OnboardingScreen() {
         ) : (
           nearbyShops.map((shop) => {
             const selected = selectedShopIds.includes(shop.id);
+            const locationSummary = formatShopLocationSummary(shop);
             return (
               <Pressable
                 key={shop.id}
@@ -429,8 +485,8 @@ export default function OnboardingScreen() {
               >
                 <View style={{ flex: 1, paddingRight: Spacing.sm }}>
                   <Text style={{ fontWeight: "700", color: C.text }} numberOfLines={1}>{shop.name}</Text>
-                  {shop.location ? (
-                    <Text style={{ fontSize: 13, color: C.mutedText }} numberOfLines={1}>{shop.location}</Text>
+                  {locationSummary ? (
+                    <Text style={{ fontSize: 13, color: C.mutedText }} numberOfLines={1}>{locationSummary}</Text>
                   ) : null}
                 </View>
                 <Text style={{ fontSize: 20, fontWeight: "800", color: selected ? C.accentText : C.mutedText }}>

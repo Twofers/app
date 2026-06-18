@@ -420,7 +420,7 @@ export default function AuthLandingScreen() {
   const inputBorder = theme.border;
   const inputBg = busy ? theme.surfaceMuted : theme.surface;
   const consumerSubtitle = t("authLanding.subtitleConsumerPolished", {
-    defaultValue: "Claim high-value local deals nearby.",
+    defaultValue: "Find local deals from shops nearby.",
   });
   const businessSubtitle = t("authLanding.subtitleBusinessPolished", {
     defaultValue: "Create simple buy-one-get-one offers and redeem customer tickets.",
@@ -944,20 +944,21 @@ export default function AuthLandingScreen() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            gap: 2,
-            minHeight: 36,
+            gap: 6,
+            minHeight: 44,
             paddingVertical: 4,
-            paddingLeft: 8,
-            paddingRight: 4,
+            paddingLeft: 10,
+            paddingRight: 8,
             borderRadius: Radii.md,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
           }}
         >
-          <View style={{ borderRadius: 3, overflow: "hidden" }}>
-            <LocaleFlag locale={currentLocale} width={26} />
-          </View>
+          <MaterialIcons name="language" size={19} color={theme.text} />
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 13 }}>
+            {currentLocale.toUpperCase()}
+          </Text>
           <MaterialIcons
             name={langPickerOpen ? "arrow-drop-up" : "arrow-drop-down"}
             size={20}
