@@ -892,7 +892,7 @@ export default function WalletScreen() {
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
             <Text style={{ fontSize: 13, opacity: 0.65, color: theme.text }}>{t("consumerWallet.qrExpired")}</Text>
             <PrimaryButton
-              title={rowIsDemo ? t("demoOffer.label", { defaultValue: "Demo offer" }) : claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
+              title={rowIsDemo ? t("demoOffer.label", { defaultValue: "Offer unavailable" }) : claimingRefreshId === row.id ? t("consumerWallet.refreshingQr") : t("consumerWallet.getNewQr")}
               onPress={() => void refreshClaimFromRow(row)}
               disabled={rowIsDemo || claimingRefreshId !== null}
             />

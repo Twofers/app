@@ -1831,7 +1831,7 @@ export default function AiDealScreen() {
     }
     if (blockIneligibleOffer("publish")) {
       setPublishStatus("error");
-      setPublishStatusMessage(eligibilityResult.message ?? t("dealEligibility.invalidTitle", { defaultValue: "Not eligible yet" }));
+      setPublishStatusMessage(eligibilityResult.message ?? t("dealEligibility.invalidTitle", { defaultValue: "Add the item this discount applies to." }));
       return;
     }
 

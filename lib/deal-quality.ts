@@ -35,13 +35,13 @@ export type DealQualityResult = {
 /** Any stated percentage discount must be at least this to qualify (MVP). */
 export const DEAL_QUALITY_MIN_PERCENT = 40;
 
-/** Default bar — high-value offer types. */
+/** Default bar — strong offer types. */
 export const DEAL_QUALITY_BLOCK_MESSAGE =
-  "Twofer only allows high-value deals. Try 40%+ off, buy one, get one free, or a stronger bundle.";
+  "Twofer only allows strong offers. Try 40%+ off, buy one, get one free, or a stronger bundle.";
 
 /** More than one distinct % when no clear structural primary offer (BOGO / 2-for-1 / etc.). */
 export const DEAL_QUALITY_MULTIPLE_PERCENT_MESSAGE =
-  "This deal lists more than one discount percentage and the main offer isn’t clear. Simplify to one headline (40%+ off, buy one, get one free, or buy-2-get-1), or trim extra % lines from the fine print when your main offer is already one of those.";
+  "This deal lists more than one discount percentage and the main offer isn’t clear. Simplify to one headline (40%+ off, buy one, get one free, or buy-2-get-1), or trim extra percentage lines from the details when your main offer is already one of those.";
 
 /** Unclear bundle / free wording — how to fix. */
 export const DEAL_QUALITY_CLARIFY_VALUE_MESSAGE =

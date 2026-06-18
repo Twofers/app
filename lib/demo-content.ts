@@ -1,7 +1,7 @@
-export const DEMO_OFFER_LABEL = "Demo offer";
-export const DEMO_OFFER_SHORT_EXPLANATION = "This is sample content for testing only. Not a real offer.";
+export const DEMO_OFFER_LABEL = "Offer unavailable";
+export const DEMO_OFFER_SHORT_EXPLANATION = "This offer is no longer available.";
 export const DEMO_OFFER_DETAIL_EXPLANATION =
-  "This deal is included so testers can try the app. It is not a real business offer and cannot be redeemed.";
+  "This offer is no longer available and cannot be claimed or redeemed.";
 
 type DemoTaggedBusiness = {
   is_demo?: boolean | null;

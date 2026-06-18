@@ -271,7 +271,7 @@ export function DealCardPoster({
         <PrimaryButton
           title={
             isDemoOffer
-              ? t("demoOffer.label", { defaultValue: "Demo offer" })
+              ? t("demoOffer.label", { defaultValue: "Offer unavailable" })
               : claiming
               ? t("dealDetail.claiming")
               : dealStatus === "claimed"

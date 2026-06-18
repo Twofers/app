@@ -590,7 +590,7 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
     return [
       `Buy one ${item}, get one ${item} free.`,
       `Buy one ${item}, get one free.`,
-      `BOGO ${item}.`,
+      `Get a free ${item} when you buy one.`,
     ];
   }
 
@@ -617,9 +617,9 @@ export function buildHeadlineCandidates(contract: DealOfferContract): string[] {
   if (contract.dealType === "BUY_ONE_GET_ONE_FREE") {
     const item = contract.requiredPurchase?.itemName ?? contract.freeReward?.itemName ?? "item";
     return [
-      `BOGO ${item}`,
       `Buy one ${item}, get one free`,
-      `${capitalizeFirst(item)} two-for-one`,
+      `Free ${item} when you buy one`,
+      `${capitalizeFirst(item)} buy-one-get-one offer`,
     ];
   }
 

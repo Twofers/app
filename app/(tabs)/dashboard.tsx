@@ -1488,7 +1488,8 @@ export default function BusinessDashboard() {
             </View>
             <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600", color: theme.text }}>
               {t("offersDashboard.dataCoverageBody", {
-                defaultValue: "Twofer shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
+                defaultValue:
+                  "Twofer shows live offers, claims, redemptions, and offer views. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
               })}
             </Text>
           </CardShell>
@@ -1810,7 +1811,8 @@ export default function BusinessDashboard() {
                     </Text>
                     <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, fontWeight: "600", color: theme.mutedText }}>
                       {t("offersDashboard.emptyFirstDealBody", {
-                        defaultValue: "Create one strong 2-for-1 offer. After customers claim or redeem it, this dashboard will show the real activity.",
+                        defaultValue:
+                          "Create one strong buy-one-get-one or free-item offer. After customers claim or redeem it, this dashboard will show the activity.",
                       })}
                     </Text>
                     <View style={{ marginTop: Spacing.md, gap: Spacing.xs }}>
@@ -1819,7 +1821,7 @@ export default function BusinessDashboard() {
                       </Text>
                       <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
                         {t("offersDashboard.emptyMetricsNote", {
-                          defaultValue: "Claims, redemptions, and engagement will stay blank until there is customer activity.",
+                          defaultValue: "Claims, redemptions, and offer views will stay blank until there is customer activity.",
                         })}
                       </Text>
                     </View>
