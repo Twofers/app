@@ -1,4 +1,5 @@
 import { Text, TextInput, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Gray, Radii } from "@/constants/theme";
@@ -35,6 +36,10 @@ type Props = {
   colorScheme: "light" | "dark";
   inputAccessoryViewID?: string;
   result?: DealEligibilityResult;
+  primaryItemValue?: string;
+  showValidation?: boolean;
+  showSuccess?: boolean;
+  onInteracted?: () => void;
 };
 
 const OFFER_TYPES: { id: DealEligibilityDealType; label: string; helper: string }[] = [
@@ -72,13 +77,22 @@ export function DealEligibilityForm({
   colorScheme,
   inputAccessoryViewID,
   result,
+  primaryItemValue,
+  showValidation = true,
+  showSuccess = true,
+  onInteracted,
 }: Props) {
   const eligibility = result ?? validateDealEligibility(dealEligibilityFormToInput(value));
   const activeType = OFFER_TYPES.find((opt) => opt.id === value.dealType) ?? OFFER_TYPES[0]!;
   const textOnMuted = colorScheme === "dark" ? theme.text : Gray[800];
+  const hasPrimaryItem = primaryItemValue != null;
 
   function set<K extends keyof DealEligibilityFormState>(key: K, nextValue: DealEligibilityFormState[K]) {
     onChange({ ...value, [key]: nextValue });
+  }
+
+  function touch() {
+    onInteracted?.();
   }
 
   function renderCurrencyField(
@@ -95,6 +109,7 @@ export function DealEligibilityForm({
         <TextInput
           value={value[stateKey]}
           onChangeText={(text) => set(stateKey, sanitizeDecimalInput(text))}
+          onBlur={touch}
           keyboardType="decimal-pad"
           inputAccessoryViewID={inputAccessoryViewID}
           returnKeyType="done"
@@ -128,6 +143,7 @@ export function DealEligibilityForm({
         <TextInput
           value={value[stateKey]}
           onChangeText={(text) => set(stateKey, text)}
+          onBlur={touch}
           placeholder={placeholder}
           placeholderTextColor={theme.mutedText}
           style={{
@@ -160,6 +176,7 @@ export function DealEligibilityForm({
       });
     }
     return t("dealEligibility.validBody", {
+      percent: eligibility.customerValuePercent,
       defaultValue: `Customer value is about ${eligibility.customerValuePercent}%.`,
     });
   }
@@ -188,27 +205,59 @@ export function DealEligibilityForm({
         </Text>
       </View>
 
-      <View style={{ gap: 8 }}>
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: Radii.md,
+          backgroundColor: theme.surface,
+          overflow: "hidden",
+        }}
+      >
         {OFFER_TYPES.map((opt) => {
           const selected = value.dealType === opt.id;
           return (
             <Pressable
               key={opt.id}
-              onPress={() => set("dealType", opt.id)}
+              onPress={() => {
+                set("dealType", opt.id);
+                touch();
+              }}
               style={{
                 padding: 12,
-                borderRadius: Radii.md,
-                borderWidth: selected ? 2 : 1,
-                borderColor: selected ? theme.primary : theme.border,
-                backgroundColor: selected ? theme.surface : theme.surface,
+                borderTopWidth: opt.id === OFFER_TYPES[0]?.id ? 0 : 1,
+                borderTopColor: theme.border,
+                borderLeftWidth: selected ? 3 : 0,
+                borderLeftColor: selected ? theme.primary : "transparent",
+                backgroundColor: selected ? theme.surfaceMuted : theme.surface,
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 10,
               }}
             >
-              <Text style={{ fontWeight: "800", color: selected ? theme.accentText : theme.text }}>
-                {t(`dealEligibility.type.${opt.id}`, { defaultValue: opt.label })}
-              </Text>
-              <Text style={{ marginTop: 3, color: theme.mutedText, fontSize: 12 }}>
-                {t(`dealEligibility.type.${opt.id}.helper`, { defaultValue: opt.helper })}
-              </Text>
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  borderWidth: selected ? 0 : 1.5,
+                  borderColor: selected ? theme.primary : theme.border,
+                  backgroundColor: selected ? theme.primary : theme.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: 1,
+                }}
+              >
+                {selected ? <MaterialIcons name="check" size={16} color={theme.primaryText} /> : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontWeight: "800", color: selected ? theme.accentText : theme.text, lineHeight: 20 }}>
+                  {t(`dealEligibility.type.${opt.id}`, { defaultValue: opt.label })}
+                </Text>
+                <Text style={{ marginTop: 3, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+                  {t(`dealEligibility.typeHelper.${opt.id}`, { defaultValue: opt.helper })}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
@@ -216,19 +265,22 @@ export function DealEligibilityForm({
 
       {activeType.id === "PERCENT_OFF_SINGLE_ITEM" ? (
         <View style={{ gap: 10 }}>
-          {renderTextField(
-            t("dealEligibility.itemLabel", { defaultValue: "Single item" }),
-            "itemDescription",
-            t("dealEligibility.itemPlaceholder", { defaultValue: "Croissant" }),
-          )}
+          {hasPrimaryItem
+            ? null
+            : renderTextField(
+                t("dealEligibility.itemLabel", { defaultValue: "Item" }),
+                "itemDescription",
+                t("dealEligibility.itemPlaceholder", { defaultValue: "Oat milk latte" }),
+              )}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             <View style={{ flex: 1, minWidth: 140 }}>
               <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>
-                {t("dealEligibility.discountLabel", { defaultValue: "Discount percent" })}
+                {t("dealEligibility.discountLabel", { defaultValue: "Percent off" })}
               </Text>
               <TextInput
                 value={value.discountPercent}
                 onChangeText={(text) => set("discountPercent", sanitizeDecimalInput(text))}
+                onBlur={touch}
                 keyboardType="decimal-pad"
                 inputAccessoryViewID={inputAccessoryViewID}
                 returnKeyType="done"
@@ -246,18 +298,20 @@ export function DealEligibilityForm({
               />
             </View>
             {renderCurrencyField(
-              t("dealEligibility.itemValueLabel", { defaultValue: "Retail value (optional)" }),
+              t("dealEligibility.itemValueLabel", { defaultValue: "Regular price (optional)" }),
               "itemRetailValue",
             )}
           </View>
         </View>
       ) : (
         <View style={{ gap: 10 }}>
-          {renderTextField(
-            t("dealEligibility.requiredItemLabel", { defaultValue: "Customer buys" }),
-            "requiredItemDescription",
-            t("dealEligibility.requiredItemPlaceholder", { defaultValue: "Latte" }),
-          )}
+          {hasPrimaryItem
+            ? null
+            : renderTextField(
+                t("dealEligibility.requiredItemLabel", { defaultValue: "Item" }),
+                "requiredItemDescription",
+                t("dealEligibility.requiredItemPlaceholder", { defaultValue: "Oat milk latte" }),
+              )}
           {activeType.id === "BUY_ONE_GET_SOMETHING_FREE"
             ? renderTextField(
                 t("dealEligibility.freeItemLabel", { defaultValue: "Customer gets free" }),
@@ -267,41 +321,48 @@ export function DealEligibilityForm({
             : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {renderCurrencyField(
-              t("dealEligibility.requiredValueLabel", { defaultValue: "Buy item value (optional)" }),
+              t("dealEligibility.requiredValueLabel", { defaultValue: "Regular price (optional)" }),
               "requiredItemRetailValue",
             )}
-            {renderCurrencyField(
-              t("dealEligibility.freeValueLabel", { defaultValue: "Free item value (optional)" }),
-              "freeItemRetailValue",
-            )}
+            {activeType.id === "BUY_ONE_GET_SOMETHING_FREE"
+              ? renderCurrencyField(
+                  t("dealEligibility.freeValueLabel", { defaultValue: "Free item regular price (optional)" }),
+                  "freeItemRetailValue",
+                )
+              : null}
           </View>
         </View>
       )}
 
-      <View
-        style={{
-          borderRadius: Radii.md,
-          borderWidth: 1,
-          borderColor: eligibility.eligible ? theme.success : theme.danger,
-          backgroundColor: theme.surface,
-          padding: 12,
-        }}
-      >
-        <Text style={{ color: eligibility.eligible ? theme.success : theme.danger, fontWeight: "900" }}>
-          {eligibility.eligible
-            ? t("dealEligibility.validTitle", { defaultValue: "Eligible offer" })
-            : t("dealEligibility.invalidTitle", { defaultValue: "Not eligible yet" })}
-        </Text>
-        <Text style={{ marginTop: 4, color: textOnMuted, lineHeight: 18, fontSize: 12 }}>
-          {eligibility.eligible
-            ? eligibleMessage()
+      {eligibility.eligible && showSuccess ? (
+        <View
+          style={{
+            borderRadius: Radii.md,
+            borderWidth: 1,
+            borderColor: theme.success,
+            backgroundColor: theme.surface,
+            padding: 12,
+          }}
+        >
+          <Text style={{ color: theme.success, fontWeight: "900" }}>
+            {t("dealEligibility.validTitle", { defaultValue: "Offer type ready" })}
+          </Text>
+          <Text style={{ marginTop: 4, color: textOnMuted, lineHeight: 18, fontSize: 12 }}>
+            {eligibleMessage()}
+          </Text>
+        </View>
+      ) : null}
+
+      {!eligibility.eligible && showValidation ? (
+        <Text style={{ color: theme.danger, fontWeight: "700", fontSize: 13, lineHeight: 18 }}>
+          {eligibility.reasonCode === "MISSING_REQUIRED_ITEM"
+            ? t("dealEligibility.missingItem", { defaultValue: "Add the item this discount applies to." })
             : eligibility.message ??
               t("dealEligibility.invalidBody", {
-                defaultValue:
-                  "Twofer deals must be free-item offers or at least 40% off one single item.",
+                defaultValue: "Twofer offers must be a free item or at least 40% off one item.",
               })}
         </Text>
-      </View>
+      ) : null}
     </View>
   );
 }

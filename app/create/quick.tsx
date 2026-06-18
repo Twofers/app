@@ -2,7 +2,7 @@
  * Express deal flow: photo / menu item -> AI offer draft -> review -> publish.
  *
  * Deliberately lean. The full editor (app/create/ai.tsx) stays one tap away via
- * the AI Ads builder for scheduling, pricing, recurring windows, multi-location, etc.
+ * the full offer builder for scheduling, pricing, recurring windows, multi-location, etc.
  *
  * The strong-deal guard is NOT weakened here: this screen runs the same client
  * mirror (validateStrongDealOnly) as the full editor, and every insert still hits
@@ -50,7 +50,7 @@ import {
   type DealEligibilityFormState,
 } from "@/lib/deal-eligibility-form";
 
-// Express defaults; owners who need to tune these use the full AI Ads builder.
+// Express defaults; owners who need to tune these use the full offer builder.
 const EXPRESS_DURATION_DAYS = 7;
 const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
@@ -75,6 +75,24 @@ function isMissingDealEligibilityColumn(error: { code?: string; message?: string
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
   const { location_id: _locationId, ...rest } = row;
   return rest;
+}
+
+function applyPrimaryItemToEligibilityForm(
+  form: DealEligibilityFormState,
+  primaryItem: string,
+): DealEligibilityFormState {
+  const item = primaryItem.trim();
+  if (form.dealType === "PERCENT_OFF_SINGLE_ITEM") {
+    return { ...form, itemDescription: item };
+  }
+  if (form.dealType === "BUY_ONE_GET_ONE_FREE") {
+    return {
+      ...form,
+      requiredItemDescription: item,
+      freeItemDescription: item,
+    };
+  }
+  return { ...form, requiredItemDescription: item };
 }
 
 export default function QuickDealExpress() {
@@ -102,14 +120,19 @@ export default function QuickDealExpress() {
   const [publishedDealId, setPublishedDealId] = useState<string | null>(null);
   const [publishedDealTitle, setPublishedDealTitle] = useState("");
   const [openingFullEditor, setOpeningFullEditor] = useState(false);
+  const [showEligibilityValidation, setShowEligibilityValidation] = useState(false);
 
   const posterUri = draft?.poster_storage_path
     ? buildPublicDealPhotoUrl(draft.poster_storage_path)
     : photoUri;
   const previewEndTime = new Date(Date.now() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const quickEligibilityForm = useMemo(
+    () => applyPrimaryItemToEligibilityForm(eligibilityForm, hint),
+    [eligibilityForm, hint],
+  );
   const eligibilityInput = useMemo(
-    () => dealEligibilityFormToInput(eligibilityForm),
-    [eligibilityForm],
+    () => dealEligibilityFormToInput(quickEligibilityForm),
+    [quickEligibilityForm],
   );
   const eligibilityResult = useMemo(
     () => validateDealEligibility(eligibilityInput),
@@ -130,6 +153,7 @@ export default function QuickDealExpress() {
     setBanner(null);
     setPublishedDealId(null);
     setPublishedDealTitle("");
+    setShowEligibilityValidation(false);
     setEligibilityForm(createDefaultDealEligibilityFormState());
     resetDraft();
   }
@@ -137,14 +161,8 @@ export default function QuickDealExpress() {
   function blockIneligibleOffer(attemptedAction: string): boolean {
     void attemptedAction;
     if (eligibilityResult.eligible) return false;
-    setBanner({
-      message:
-        eligibilityResult.message ??
-        t("dealEligibility.invalidBody", {
-          defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
-        }),
-      tone: "error",
-    });
+    setShowEligibilityValidation(true);
+    setBanner(null);
     return true;
   }
 
@@ -198,8 +216,9 @@ export default function QuickDealExpress() {
       setBanner({ message: t("createAi.errCreateBusinessFirst"), tone: "error" });
       return;
     }
-    if (!hint.trim() && !photoUri) {
-      setBanner({ message: t("createQuick.needInput"), tone: "info" });
+    setShowEligibilityValidation(true);
+    if (!hint.trim()) {
+      setBanner(null);
       return;
     }
     if (blockIneligibleOffer("generate_ad")) return;
@@ -303,7 +322,7 @@ export default function QuickDealExpress() {
         description: listingDescription,
         source_locale: dealOutputLang,
       });
-      const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
+      const eligibilityColumns = dealEligibilityFormToDealColumns(quickEligibilityForm, eligibilityResult, "LIVE");
 
       const row = {
         business_id: businessId,
@@ -375,7 +394,7 @@ export default function QuickDealExpress() {
         offerLine,
         cta: draft?.cta ?? null,
         posterPath: nextPhotoPath,
-        dealEligibility: JSON.stringify(eligibilityForm),
+        dealEligibility: JSON.stringify(quickEligibilityForm),
       }),
     } as Href);
   }
@@ -501,10 +520,7 @@ export default function QuickDealExpress() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: top, paddingHorizontal: horizontal, paddingBottom: scrollBottom }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "800", letterSpacing: -0.3, color: theme.text }}>
-          {t("createQuick.heading")}
-        </Text>
-        <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: theme.mutedText }}>
+        <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedText }}>
           {t("createQuick.intro")}
         </Text>
 
@@ -523,6 +539,7 @@ export default function QuickDealExpress() {
             <TextInput
               value={hint}
               onChangeText={setHint}
+              onBlur={() => setShowEligibilityValidation(true)}
               placeholder={t("createQuick.itemPlaceholder")}
               placeholderTextColor={theme.mutedText}
               style={{
@@ -539,11 +556,15 @@ export default function QuickDealExpress() {
             />
 
             <DealEligibilityForm
-              value={eligibilityForm}
+              value={quickEligibilityForm}
               onChange={setEligibilityForm}
               t={t}
               theme={theme}
               colorScheme={colorScheme}
+              primaryItemValue={hint}
+              showValidation={showEligibilityValidation}
+              showSuccess={false}
+              onInteracted={() => setShowEligibilityValidation(true)}
               result={eligibilityResult}
             />
 
@@ -574,7 +595,7 @@ export default function QuickDealExpress() {
               <PrimaryButton
                 title={generating ? t("createQuick.drafting") : t("createQuick.draftWithAi")}
                 onPress={() => void onGenerate()}
-                disabled={generating || (!hint.trim() && !photoUri)}
+                disabled={generating}
               />
             </View>
 
@@ -582,13 +603,13 @@ export default function QuickDealExpress() {
               onPress={() => void goToFullEditor()}
               disabled={openingFullEditor}
               accessibilityRole="button"
-              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open AI Ads builder" })}
+              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open full offer builder" })}
               style={{ marginTop: Spacing.lg, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 4, opacity: openingFullEditor ? 0.6 : 1 }}
             >
               <Text style={{ color: theme.accentText, fontSize: 14, fontWeight: "800" }}>
                 {openingFullEditor
                   ? t("createQuick.openingFullBuilder", { defaultValue: "Opening builder..." })
-                  : t("createQuick.fullBuilder", { defaultValue: "Use AI Ads builder" })}
+                  : t("createQuick.fullBuilder", { defaultValue: "Use full offer builder" })}
               </Text>
               <MaterialIcons name="chevron-right" size={20} color={theme.accentText} />
             </Pressable>
@@ -706,13 +727,13 @@ export default function QuickDealExpress() {
               onPress={() => void goToFullEditor()}
               disabled={openingFullEditor}
               accessibilityRole="button"
-              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open AI Ads builder" })}
+              accessibilityLabel={t("createQuick.fullBuilderA11y", { defaultValue: "Open full offer builder" })}
               style={{ marginTop: Spacing.md, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 4, opacity: openingFullEditor ? 0.6 : 1 }}
             >
               <Text style={{ color: theme.accentText, fontSize: 14, fontWeight: "800" }}>
                 {openingFullEditor
                   ? t("createQuick.openingFullBuilder", { defaultValue: "Opening builder..." })
-                  : t("createQuick.fullBuilder", { defaultValue: "Use AI Ads builder" })}
+                  : t("createQuick.fullBuilder", { defaultValue: "Use full offer builder" })}
               </Text>
               <MaterialIcons name="chevron-right" size={20} color={theme.accentText} />
             </Pressable>

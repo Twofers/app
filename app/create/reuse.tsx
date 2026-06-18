@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -16,12 +16,15 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Gray } from "@/constants/theme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { formatAppDate } from "@/lib/i18n/format-datetime";
+import { buildReuseHistoryRows } from "@/lib/reuse-history";
 
 type TemplateRow = {
   id: string;
   title: string | null;
   description: string | null;
   price: number | null;
+  created_at: string | null;
   poster_url: string | null;
 };
 
@@ -52,7 +55,7 @@ type DealRow = {
 };
 
 const REUSE_DEALS_BASE_SELECT =
-  "id,title,description,source_locale,price,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,price,created_at,poster_url,poster_storage_path,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,max_claims,claim_cutoff_buffer_minutes";
 const REUSE_DEALS_ENRICHED_SELECT =
   `${REUSE_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
 const OPTIONAL_REUSE_DEAL_COLUMNS = [
@@ -93,7 +96,7 @@ async function fetchReusableDeals(businessId: string) {
 
 export default function ReuseDealScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -103,6 +106,10 @@ export default function ReuseDealScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const { confirm, confirmModal } = useBrandedConfirm();
+  const historyRows = useMemo(
+    () => buildReuseHistoryRows(deals, { untitled: t("reuseHub.untitled") }),
+    [deals, t],
+  );
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -182,10 +189,6 @@ export default function ReuseDealScreen() {
 
   function templateTitle(row: TemplateRow): string {
     return getDealDisplayTitle({ title: row.title }, row.title) || t("reuseHub.untitled");
-  }
-
-  function dealTitle(row: DealRow): string {
-    return getDealDisplayTitle(row, row.title) || t("reuseHub.untitled");
   }
 
   return (
@@ -282,20 +285,24 @@ export default function ReuseDealScreen() {
 
           <View>
             <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: Spacing.sm }}>{t("reuseHub.pastDealsSection")}</Text>
-            {deals.length === 0 ? (
+            {historyRows.length === 0 ? (
               <Text style={{ opacity: 0.65 }}>{t("reuseHub.dealsEmpty")}</Text>
             ) : (
-              deals.map((row) => {
+              historyRows.map(({ deal: row, title: rowTitle, lastUsedAt, regularPrice }) => {
                 const dealPoster = resolveDealPosterDisplayUri(row.poster_url, row.poster_storage_path);
+                const lastUsedDate = lastUsedAt ? formatAppDate(lastUsedAt, i18n.language) : "";
                 return (
                 <Pressable
                   key={row.id}
                   onPress={() => repeatDeal(row)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("reuseHub.useThisOffer", { defaultValue: "Use this offer" })}
                   style={{
                     flexDirection: "row",
+                    alignItems: "center",
                     gap: Spacing.md,
                     padding: Spacing.md,
-                    borderRadius: 16,
+                    borderRadius: 12,
                     backgroundColor: theme.surface,
                     borderWidth: 1,
                     borderColor: theme.border,
@@ -313,15 +320,20 @@ export default function ReuseDealScreen() {
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontWeight: "700", fontSize: 16 }} numberOfLines={2}>
-                      {dealTitle(row)}
+                      {rowTitle}
                     </Text>
-                    {row.price != null ? (
-                      <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>${Number(row.price).toFixed(2)}</Text>
+                    {lastUsedDate ? (
+                      <Text style={{ marginTop: 4, fontSize: 13, opacity: 0.62 }}>
+                        {t("reuseHub.lastUsed", { date: lastUsedDate, defaultValue: "Last used {{date}}" })}
+                      </Text>
                     ) : null}
-                    <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.primary }}>
-                      {t("reuseHub.repeatCta")}
-                    </Text>
+                    {regularPrice ? (
+                      <Text style={{ marginTop: 4, fontSize: 14, opacity: 0.72 }}>
+                        {t("reuseHub.regularPrice", { price: regularPrice, defaultValue: "Regular price {{price}}" })}
+                      </Text>
+                    ) : null}
                   </View>
+                  <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
                 </Pressable>
               );
               })
