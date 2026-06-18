@@ -40,6 +40,7 @@ import { isShareDealEnabled } from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 import { clearWalletClaimToken, getWalletClaimToken } from "@/lib/wallet-claim-token-cache";
+import { getDealDetailActionState } from "@/lib/deal-action-state";
 
 type ClaimRow = {
   id: string;
@@ -571,6 +572,17 @@ export default function WalletScreen() {
               ? ("released" as const)
               : ("expired" as const);
     const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
+    const walletActionState = getDealDetailActionState({
+      hasActiveClaim: bucket === "active" && !redeemed && !tokenDead,
+      isClaiming: isRedeeming || useDealBusy,
+      unavailableLabel: bucket === "expired" || tokenDead ? t("dealDetail.dealEnded", { defaultValue: "Deal ended" }) : null,
+    });
+    const walletPrimaryLabel =
+      walletActionState.kind === "active_claimed"
+        ? t("dealDetail.viewYourDeal", { defaultValue: "View your deal" })
+        : walletActionState.kind === "unavailable"
+          ? walletActionState.statusLabel
+          : t("dealDetail.viewYourDeal", { defaultValue: "View your deal" });
 
     return (
       <View
@@ -666,7 +678,10 @@ export default function WalletScreen() {
             })()}
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.xs }}>
-                <DealStatusPill status={pillStatus} />
+                <DealStatusPill
+                  status={pillStatus}
+                  labelOverride={bucket === "expired" ? t("dealDetail.dealEnded", { defaultValue: "Deal ended" }) : undefined}
+                />
               </View>
               {rowIsDemo ? (
                 <View style={{ marginBottom: Spacing.sm }}>
@@ -731,7 +746,7 @@ export default function WalletScreen() {
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
               accessibilityRole="button"
-              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
+              accessibilityLabel={walletPrimaryLabel}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => ({
@@ -781,18 +796,35 @@ export default function WalletScreen() {
               </View>
             </NativePressable>
             <PrimaryButton
-              title={
-                rowIsDemo
-                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
-                  : useDealBusy
-                    ? t("redeem.redeeming")
-                    : isRedeeming
-                      ? t("consumerWallet.continueUseDeal")
-                      : t("consumerWallet.useDealCta")
-              }
+              title={walletPrimaryLabel}
+              onPress={() => openVerifyForClaim(row)}
+              disabled={verifyDisabled}
+            />
+            <NativePressable
               onPress={() => void startUseDealFlow(row)}
               disabled={rowIsDemo || useDealBusy}
-            />
+              accessibilityRole="button"
+              accessibilityLabel={t("consumerWallet.useDealCta")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                minHeight: 50,
+                borderRadius: Radii.lg,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+                backgroundColor: pressed ? theme.surfaceMuted : theme.surface,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: rowIsDemo || useDealBusy ? 0.45 : 1,
+              })}
+            >
+              <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>
+                {useDealBusy
+                  ? t("redeem.redeeming")
+                  : isRedeeming
+                    ? t("consumerWallet.continueUseDeal")
+                    : t("consumerWallet.useDealCta")}
+              </Text>
+            </NativePressable>
             {shareDealEnabled ? (
               <NativePressable
                 onPress={() => void shareWalletDeal(row)}
@@ -839,27 +871,6 @@ export default function WalletScreen() {
                 {releasingClaimId === row.id
                   ? t("consumerWallet.releasingDeal", { defaultValue: "Releasing..." })
                   : t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
-              </Text>
-            </NativePressable>
-            <NativePressable
-              onPress={() => openVerifyForClaim(row)}
-              disabled={verifyDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => ({
-                minHeight: 50,
-                borderRadius: Radii.lg,
-                borderWidth: 1.5,
-                borderColor: theme.primary,
-                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: verifyDisabled ? 0.45 : 1,
-              })}
-            >
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
-                {t("consumerWallet.qrFallbackLabel")}
               </Text>
             </NativePressable>
             {hasDirectionsTarget(row.deals?.businesses) ? (

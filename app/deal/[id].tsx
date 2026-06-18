@@ -17,7 +17,8 @@ import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
 import { Colors, Radii } from "../../constants/theme";
-import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
+import { getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
+import { formatAppDateTimeRange } from "@/lib/i18n/format-datetime";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
@@ -510,7 +511,7 @@ export default function DealDetail() {
       : scheduleBlockReason
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
-  const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
+  const heroHeight = Math.round(Math.min(220, Math.max(150, winH * 0.22)));
   const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
   const displayDescription = localizedDealDescription(deal, i18n.language);
   const actionState = getDealDetailActionState({
@@ -536,35 +537,37 @@ export default function DealDetail() {
   const biz = deal.businesses;
   const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
   const directionsAvailable = hasDirectionsTarget(biz);
+  const availableRange = formatAppDateTimeRange(deal.start_time, deal.end_time, i18n.language);
+  const detailRows = [
+    availableRange
+      ? { label: t("dealDetail.detailAvailable", { defaultValue: "Available" }), value: availableRange }
+      : null,
+    {
+      label: t("dealDetail.detailClaimsClose", { defaultValue: "Claims close" }),
+      value:
+        deal.claim_cutoff_buffer_minutes > 0
+          ? t("dealDetail.claimingClosesBeforeEndShort", {
+              count: deal.claim_cutoff_buffer_minutes,
+              defaultValue: "{{count}} minutes before the deal ends",
+            })
+          : t("dealDetail.claimingOpenUntilEndShort", { defaultValue: "When the deal ends" }),
+    },
+    claimsCountReliable && deal.max_claims > 0
+      ? {
+          label: t("dealDetail.detailLimit", { defaultValue: "Limit" }),
+          value: t("dealDetail.claimsLeft", { count: remaining, defaultValue: "{{count}} left" }),
+        }
+      : null,
+    displayDescription
+      ? { label: t("dealDetail.detailRestrictions", { defaultValue: "Restrictions" }), value: displayDescription }
+      : null,
+  ].filter((row): row is { label: string; value: string } => Boolean(row?.value));
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md, marginBottom: Spacing.md }}>
         {renderBackAction()}
         <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-          <Pressable
-            onPress={toggleFavorite}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel={isFavorite ? t("dealDetail.removeSavedDeal", { defaultValue: "Remove saved deal" }) : t("dealDetail.saveDeal", { defaultValue: "Save deal" })}
-            accessibilityState={{ selected: isFavorite }}
-            style={{
-              minHeight: 44,
-              minWidth: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: Radii.lg,
-              backgroundColor: isFavorite ? theme.surface : theme.surfaceMuted,
-              borderWidth: 1,
-              borderColor: isFavorite ? theme.favorite : theme.border,
-            }}
-          >
-            <MaterialIcons
-              name={isFavorite ? "favorite" : "favorite-border"}
-              size={23}
-              color={isFavorite ? theme.favorite : theme.text}
-            />
-          </Pressable>
           {shareDealEnabled ? (
             <Pressable
               onPress={handleShare}
@@ -587,6 +590,33 @@ export default function DealDetail() {
               <MaterialIcons name="ios-share" size={22} color={theme.text} />
             </Pressable>
           ) : null}
+          <Pressable
+            onPress={toggleFavorite}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isFavorite
+                ? t("dealDetail.removeFromFavorites", { defaultValue: "Remove from favorites" })
+                : t("dealDetail.addToFavorites", { defaultValue: "Add to favorites" })
+            }
+            accessibilityState={{ selected: isFavorite }}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: Radii.lg,
+              backgroundColor: isFavorite ? theme.surface : theme.surfaceMuted,
+              borderWidth: 1,
+              borderColor: isFavorite ? theme.favorite : theme.border,
+            }}
+          >
+            <MaterialIcons
+              name={isFavorite ? "favorite" : "favorite-border"}
+              size={23}
+              color={isFavorite ? theme.favorite : theme.text}
+            />
+          </Pressable>
         </View>
       </View>
       {banner ? <Banner message={banner} tone="error" /> : null}
@@ -595,7 +625,7 @@ export default function DealDetail() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: scrollBottom + stickyBarHeight + stickyBottom }}
       >
-        <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+        <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} numberOfLines={3} maxFontSizeMultiplier={1.15}>
           {displayTitle}
         </Text>
         {(() => {
@@ -635,23 +665,22 @@ export default function DealDetail() {
               {deal.businesses?.name ?? t("dealDetail.localBusiness")}
             </Text>
           </Pressable>
-          {addressLine ? (
-            <Text style={{ color: theme.mutedText, fontSize: 14, marginTop: Spacing.xs }} numberOfLines={1}>
-              {addressLine}
-            </Text>
-          ) : null}
-          {directionsAvailable ? (
+          {addressLine && directionsAvailable ? (
             <Pressable
               onPress={() => void handleDirections()}
               accessibilityRole="button"
+              accessibilityLabel={addressLine}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ marginTop: Spacing.sm, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: Spacing.xs }}
+              style={{ marginTop: Spacing.xs, alignSelf: "flex-start", maxWidth: "100%" }}
             >
-              <MaterialIcons name="directions" size={18} color={theme.accentText} />
-              <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 15 }}>
-                {t("dealDetail.getDirections", { defaultValue: "Get directions" })}
+              <Text style={{ color: theme.mutedText, fontSize: 14, textDecorationLine: "underline" }} numberOfLines={1}>
+                {addressLine}
               </Text>
             </Pressable>
+          ) : addressLine ? (
+            <Text style={{ color: theme.mutedText, fontSize: 14, marginTop: Spacing.xs }} numberOfLines={1}>
+              {addressLine}
+            </Text>
           ) : null}
         </View>
         {dealIsDemo ? (
@@ -668,25 +697,26 @@ export default function DealDetail() {
           <Text style={{ fontWeight: "800", marginBottom: Spacing.sm, fontSize: 18, color: theme.text }}>
             {t("dealDetail.dealDetails", { defaultValue: "Deal details" })}
           </Text>
-          {displayDescription ? (
-            <Text style={{ fontSize: 16, lineHeight: 24, color: theme.text }}>{displayDescription}</Text>
-          ) : null}
-          <Text style={{ opacity: 0.78, marginTop: displayDescription ? Spacing.sm : 0, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {t("dealDetail.claimsAvailable", { count: remaining })}
-          </Text>
-          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {formatValiditySummary(deal, {
-              lang: i18n.language,
-              endsVerb: t("commonUi.dealEndsVerb"),
-              t,
-              showTimeZone: false,
-            })}
-          </Text>
-          <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {deal.claim_cutoff_buffer_minutes > 0
-              ? t("dealDetail.claimingClosesBeforeEnd", { count: deal.claim_cutoff_buffer_minutes })
-              : t("dealDetail.claimingOpenUntilEnd")}
-          </Text>
+          <View style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
+            {detailRows.map((row, index) => (
+              <View
+                key={row.label}
+                style={{
+                  paddingVertical: Spacing.sm,
+                  borderBottomWidth: index === detailRows.length - 1 ? 0 : 1,
+                  borderBottomColor: theme.border,
+                  gap: 3,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.mutedText }} maxFontSizeMultiplier={1.15}>
+                  {row.label}
+                </Text>
+                <Text style={{ fontSize: 15, lineHeight: 21, color: theme.text }} maxFontSizeMultiplier={1.2}>
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <Pressable

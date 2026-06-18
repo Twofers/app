@@ -23,9 +23,10 @@ const styles: Record<
 
 type DealStatusPillProps = {
   status: ConsumerDealStatusKey;
+  labelOverride?: string;
 };
 
-export function DealStatusPill({ status }: DealStatusPillProps) {
+export function DealStatusPill({ status, labelOverride }: DealStatusPillProps) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -41,7 +42,7 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
           released: { background: theme.surfaceMuted, text: theme.mutedText },
         }[status]
       : styles[status];
-  const label =
+  const label = labelOverride ?? (
     status === "live"
       ? t("dealStatus.live")
       : status === "claimed"
@@ -54,7 +55,8 @@ export function DealStatusPill({ status }: DealStatusPillProps) {
             ? t("dealStatus.canceled")
             : status === "released"
               ? t("dealStatus.released", { defaultValue: "Released" })
-              : t("dealStatus.expired");
+              : t("dealStatus.expired")
+  );
 
   return (
     <View
