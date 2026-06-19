@@ -28,8 +28,13 @@ import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { supabase } from "@/lib/supabase";
-import { aiGenerateAd, notifyDealPublished, translateDealCopy } from "@/lib/functions";
-import { adToDealDraft, normalizeGeneratedAdDisplayCopy, type GeneratedAd } from "@/lib/ad-variants";
+import { aiGenerateAd, getErrorCode, notifyDealPublished, translateDealCopy } from "@/lib/functions";
+import {
+  adToDealDraft,
+  buildOfferDefinitionFallbackAd,
+  normalizeGeneratedAdDisplayCopy,
+  type GeneratedAd,
+} from "@/lib/ad-variants";
 import { resolveDealFlowLanguage, translateDealQualityBlock } from "@/lib/translate-deal-quality";
 import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
@@ -49,11 +54,13 @@ import {
   omitDealEligibilityColumns,
   type DealEligibilityFormState,
 } from "@/lib/deal-eligibility-form";
+import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "@/lib/offer-definition";
 
 // Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
 const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
+const EXPRESS_REDEMPTION_LIMIT = `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`;
 
 type BannerState = { message: string; tone: "error" | "success" | "info" | "warning" };
 
@@ -75,6 +82,14 @@ function isMissingDealEligibilityColumn(error: { code?: string; message?: string
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
   const { location_id: _locationId, ...rest } = row;
   return rest;
+}
+
+function localTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }
 
 export default function QuickDealExpress() {
@@ -115,6 +130,34 @@ export default function QuickDealExpress() {
     () => validateDealEligibility(eligibilityInput),
     [eligibilityInput],
   );
+
+  function buildExpressOfferDefinition(
+    startsAt: Date,
+    endsAt: Date,
+    scheduleSummary: string,
+    sourcePhotoPath: string | null,
+  ): OfferDefinitionV1 | null {
+    if (!businessId) return null;
+    return buildOfferDefinitionV1({
+      businessId,
+      businessName: businessName || "this business",
+      locationId: businessId,
+      locationName: businessContextForAi.address || businessContextForAi.location || businessName || "this location",
+      dealEligibility: eligibilityInput,
+      eligibilityResult,
+      activeWindowHumanReadable: scheduleSummary,
+      quantityLimit: EXPRESS_MAX_CLAIMS,
+      redemptionLimit: EXPRESS_REDEMPTION_LIMIT,
+      schedule: {
+        mode: "one_time",
+        summary: scheduleSummary,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        timeZone: localTimeZone(),
+      },
+      sourceAssetIds: sourcePhotoPath ? [sourcePhotoPath] : [],
+    });
+  }
 
   function resetDraft() {
     setDraft(null);
@@ -205,6 +248,7 @@ export default function QuickDealExpress() {
     if (blockIneligibleOffer("generate_ad")) return;
     setGenerating(true);
     setBanner(null);
+    let offerDefinition: OfferDefinitionV1 | null = null;
     try {
       let path = photoPath;
       if (photoUri && !path) {
@@ -213,15 +257,17 @@ export default function QuickDealExpress() {
       }
       const startsAt = new Date();
       const endsAt = new Date(startsAt.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+      const scheduleSummary = `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`;
+      offerDefinition = buildExpressOfferDefinition(startsAt, endsAt, scheduleSummary, path);
       const { ad } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hint.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
         deal_eligibility: eligibilityInput,
-        offer_schedule_summary: `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`,
+        offer_schedule_summary: scheduleSummary,
         quantity_limit: EXPRESS_MAX_CLAIMS,
-        redemption_limit: `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`,
+        redemption_limit: EXPRESS_REDEMPTION_LIMIT,
         ...(path ? { photo_path: path } : {}),
       });
       const displayAd = normalizeGeneratedAdDisplayCopy(ad);
@@ -230,6 +276,31 @@ export default function QuickDealExpress() {
       setTitle(d.title);
       setOfferLine(d.promo_line || d.offer_details);
     } catch (err) {
+      if (offerDefinition && shouldUseOfferDefinitionFallback(err)) {
+        const fallbackAd = normalizeGeneratedAdDisplayCopy(
+          buildOfferDefinitionFallbackAd(offerDefinition, { ctaText: "Claim deal" }),
+        );
+        const d = adToDealDraft(fallbackAd, hint);
+        setDraft(fallbackAd);
+        setTitle(d.title);
+        setOfferLine(d.promo_line || d.offer_details);
+        setBanner({
+          message: t("createQuick.fallbackTemplateReady", {
+            defaultValue: "AI had trouble, so we prepared a safe draft from your locked offer facts.",
+          }),
+          tone: "info",
+        });
+        trackAppAnalyticsEvent({
+          event_name: "quick_deal_offer_definition_fallback_used",
+          business_id: businessId ?? null,
+          context: {
+            error_code: getErrorCode(err) ?? null,
+            offer_type: offerDefinition.offerType,
+            has_photo: Boolean(photoUri || offerDefinition.sourceAssetIds.length > 0),
+          },
+        });
+        return;
+      }
       setBanner({ message: friendlyGenerateError(err, t), tone: "error" });
     } finally {
       setGenerating(false);
@@ -736,6 +807,23 @@ export default function QuickDealExpress() {
       ) : null}
     </KeyboardScreen>
   );
+}
+
+function shouldUseOfferDefinitionFallback(err: unknown): boolean {
+  const code = getErrorCode(err);
+  if (
+    code === "OPENAI_KEY_MISSING" ||
+    code === "MONTHLY_LIMIT" ||
+    code === "COOLDOWN_ACTIVE" ||
+    code === "COPY_FAILED"
+  ) {
+    return true;
+  }
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+  if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) return true;
+  if (lower.includes("monthly limit") || lower.includes("openai") || lower.includes("copy")) return true;
+  return false;
 }
 
 function friendlyGenerateError(err: unknown, t: (k: string, o?: Record<string, unknown>) => string): string {

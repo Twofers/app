@@ -50,6 +50,7 @@ import {
 } from "../../lib/functions";
 import {
   adToDealDraft,
+  buildOfferDefinitionFallbackAd,
   buildFallbackTemplateAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
@@ -92,6 +93,7 @@ import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
+import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -600,6 +602,10 @@ export default function AiDealScreen() {
     () => validateDealEligibility(eligibilityInput),
     [eligibilityInput],
   );
+  const redemptionLimitSummary = useMemo(
+    () => buildRedemptionLimitSummary(Number(cutoffMins)),
+    [cutoffMins],
+  );
   const offerContract = useMemo(() => {
     if (!businessId) return null;
     const maxClaimsNum = Number(maxClaims);
@@ -623,6 +629,35 @@ export default function AiDealScreen() {
     maxClaims,
     offerScheduleSummary,
     publishLocationIds,
+  ]);
+  const offerDefinition = useMemo(() => {
+    if (!offerContract) return null;
+    return buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput,
+      redemptionLimit: redemptionLimitSummary,
+      schedule: {
+        mode: validityMode === "one-time" ? "one_time" : "recurring",
+        summary: offerScheduleSummary,
+        startsAt: validityMode === "one-time" ? startTime.toISOString() : null,
+        endsAt: validityMode === "one-time" ? endTime.toISOString() : null,
+        timeZone: timezone,
+        daysOfWeek: validityMode === "recurring" ? daysOfWeek : null,
+        windowStartMinutes: validityMode === "recurring" ? minutesFromDate(windowStart) : null,
+        windowEndMinutes: validityMode === "recurring" ? minutesFromDate(windowEnd) : null,
+      },
+    });
+  }, [
+    daysOfWeek,
+    eligibilityInput,
+    endTime,
+    offerContract,
+    offerScheduleSummary,
+    redemptionLimitSummary,
+    startTime,
+    timezone,
+    validityMode,
+    windowEnd,
+    windowStart,
   ]);
 
   const canPublish = useMemo(() => {
@@ -1599,7 +1634,6 @@ export default function AiDealScreen() {
       // even if the user changes the selector mid-flight.
       const sentTreatment = path ? photoTreatment : null;
       const maxClaimsNum = Number(maxClaims);
-      const cutoffNum = Number(cutoffMins);
 
       const { ad, quota: nextQuota } = await aiGenerateAd({
         business_id: businessId,
@@ -1610,7 +1644,7 @@ export default function AiDealScreen() {
         ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
-        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
+        redemption_limit: redemptionLimitSummary,
       });
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1665,7 +1699,6 @@ export default function AiDealScreen() {
     const treatmentForRevision =
       lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
     const maxClaimsNum = Number(maxClaims);
-    const cutoffNum = Number(cutoffMins);
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
         business_id: businessId,
@@ -1681,7 +1714,7 @@ export default function AiDealScreen() {
         ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
-        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
+        redemption_limit: redemptionLimitSummary,
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1724,18 +1757,20 @@ export default function AiDealScreen() {
 
   function useFallbackTemplateAd() {
     const maxClaimsNum = Number(maxClaims);
-    const fallbackAd = buildFallbackTemplateAd({
-      businessName,
-      title,
-      promoLine,
-      ctaText,
-      description,
-      ownerOfferHint: hintText,
-      lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
-      lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
-      scheduleSummary: displayScheduleSummary,
-      quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
-    });
+    const fallbackAd = offerDefinition
+      ? buildOfferDefinitionFallbackAd(offerDefinition, { ctaText })
+      : buildFallbackTemplateAd({
+          businessName,
+          title,
+          promoLine,
+          ctaText,
+          description,
+          ownerOfferHint: hintText,
+          lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
+          lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
+          scheduleSummary: displayScheduleSummary,
+          quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
+        });
     setGeneratedAd(fallbackAd);
     applyAdToDraft(fallbackAd);
     setAdAccepted(true);

@@ -15,7 +15,8 @@ export type AppAnalyticsEventName =
   | "claim_expired"
   | "claim_blocked"
   | "quick_deal_preview_blocked"
-  | "quick_deal_release_blocked";
+  | "quick_deal_release_blocked"
+  | "quick_deal_offer_definition_fallback_used";
 
 type Payload = {
   event_name: AppAnalyticsEventName;
