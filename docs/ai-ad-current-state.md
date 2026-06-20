@@ -306,6 +306,8 @@ Not measured in this audit:
 
 Reason: no live Supabase service-role analytics access was used, and this repo has no local Supabase. The code has the raw ledger needed for these measurements, but the audit cannot verify production rows.
 
+Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-only service-role runner for these metrics. See `docs/ai-ad-baseline-metrics.md` for the access probe result, exact command, and remaining instrumentation gaps.
+
 Recommended baseline queries once Dan grants live read access:
 
 - p50/p95 copy latency from `ai_generation_logs.response_payload->copy->latency_ms`.
