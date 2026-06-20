@@ -24,6 +24,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
+import { DancingPenguinProgressCard } from "@/components/dancing-penguin-progress-card";
 import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -709,11 +710,21 @@ export default function QuickDealExpress() {
             </Text>
 
             <View style={{ marginTop: Spacing.lg }}>
-              <PrimaryButton
-                title={generating ? t("createQuick.drafting") : t("createQuick.draftWithAi")}
-                onPress={() => void onGenerate()}
-                disabled={generating || (!hint.trim() && !photoUri)}
-              />
+              {generating ? (
+                <DancingPenguinProgressCard
+                  title={t("createQuick.drafting")}
+                  message={photoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+                  hint={t("createAi.generatingHint")}
+                  theme={theme}
+                  testID="quick-draft-penguin-progress"
+                />
+              ) : (
+                <PrimaryButton
+                  title={t("createQuick.draftWithAi")}
+                  onPress={() => void onGenerate()}
+                  disabled={!hint.trim() && !photoUri}
+                />
+              )}
             </View>
 
             <Pressable

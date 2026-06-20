@@ -37,6 +37,7 @@ import {
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
+import { DancingPenguinProgressCard } from "@/components/dancing-penguin-progress-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -2856,29 +2857,23 @@ export default function AiDealScreen() {
                   {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
                 </Text>
               ) : null}
-              <PrimaryButton
-                title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
-                onPress={() => void generateAd()}
-                disabled={generating || revising}
-              />
               {generating ? (
-                <View style={{ marginTop: 4 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <ActivityIndicator color={theme.primary} />
-                    <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
-                      {selectedPhotoUri
-                        ? t("createAi.generatingWithPhoto")
-                        : t("createAi.generatingNoPhoto")}
-                    </Text>
-                  </View>
-                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17, color: theme.text }}>
-                    {t("createAi.generatingHint")}
-                  </Text>
-                  <View style={{ marginTop: 10 }}>
-                    <SecondaryButton title={t("createAi.cancel")} onPress={cancelGeneration} />
-                  </View>
-                </View>
-              ) : null}
+                <DancingPenguinProgressCard
+                  title={t("createAi.generateWorking")}
+                  message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+                  hint={t("createAi.generatingHint")}
+                  cancelLabel={t("createAi.cancel")}
+                  onCancel={cancelGeneration}
+                  theme={theme}
+                  testID="ai-draft-penguin-progress"
+                />
+              ) : (
+                <PrimaryButton
+                  title={t("createAi.generateCta")}
+                  onPress={() => void generateAd()}
+                  disabled={revising}
+                />
+              )}
               {!generating && !generatedAd && !showDraftEditor ? (
                 <SecondaryButton
                   title={t("createAi.showDraftFields")}
