@@ -55,12 +55,14 @@ import {
   type DealEligibilityFormState,
 } from "@/lib/deal-eligibility-form";
 import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "@/lib/offer-definition";
+import { isOfferDefinitionFallbackEnabled } from "@/lib/runtime-env";
 
 // Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
 const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
 const EXPRESS_REDEMPTION_LIMIT = `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`;
+const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
 
 type BannerState = { message: string; tone: "error" | "success" | "info" | "warning" };
 
@@ -258,7 +260,9 @@ export default function QuickDealExpress() {
       const startsAt = new Date();
       const endsAt = new Date(startsAt.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
       const scheduleSummary = `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`;
-      offerDefinition = buildExpressOfferDefinition(startsAt, endsAt, scheduleSummary, path);
+      offerDefinition = OFFER_DEFINITION_FALLBACK_ENABLED
+        ? buildExpressOfferDefinition(startsAt, endsAt, scheduleSummary, path)
+        : null;
       const { ad } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hint.trim(),
@@ -276,7 +280,7 @@ export default function QuickDealExpress() {
       setTitle(d.title);
       setOfferLine(d.promo_line || d.offer_details);
     } catch (err) {
-      if (offerDefinition && shouldUseOfferDefinitionFallback(err)) {
+      if (OFFER_DEFINITION_FALLBACK_ENABLED && offerDefinition && shouldUseOfferDefinitionFallback(err)) {
         const fallbackAd = normalizeGeneratedAdDisplayCopy(
           buildOfferDefinitionFallbackAd(offerDefinition, { ctaText: "Claim deal" }),
         );

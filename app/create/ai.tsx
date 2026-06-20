@@ -108,6 +108,7 @@ import {
   fetchAiComposeQuota,
   type AiComposeQuota,
 } from "../../lib/ai-compose-offer";
+import { isOfferDefinitionFallbackEnabled } from "../../lib/runtime-env";
 
 type TemplateRow = {
   id: string;
@@ -128,6 +129,7 @@ type TemplateRow = {
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
+const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
 
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
@@ -631,6 +633,7 @@ export default function AiDealScreen() {
     publishLocationIds,
   ]);
   const offerDefinition = useMemo(() => {
+    if (!OFFER_DEFINITION_FALLBACK_ENABLED) return null;
     if (!offerContract) return null;
     return buildOfferDefinitionV1FromContract(offerContract, {
       dealEligibility: eligibilityInput,
