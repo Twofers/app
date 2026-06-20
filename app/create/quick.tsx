@@ -8,7 +8,7 @@
  * mirror (validateStrongDealOnly) as the full editor, and every insert still hits
  * the server-side SQL trigger that hard-rejects weak deals.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -55,7 +55,12 @@ import {
   type DealEligibilityFormState,
 } from "@/lib/deal-eligibility-form";
 import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "@/lib/offer-definition";
-import { isOfferDefinitionFallbackEnabled } from "@/lib/runtime-env";
+import {
+  buildOfferVersionPublishAdSpec,
+  createPublishIdempotencyKey,
+  publishOfferVersionedDeal,
+} from "@/lib/offer-version-publish";
+import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "@/lib/runtime-env";
 
 // Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
@@ -63,6 +68,7 @@ const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
 const EXPRESS_REDEMPTION_LIMIT = `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`;
 const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
+const OFFER_VERSION_PUBLISH_ENABLED = isOfferVersionPublishEnabled();
 
 type BannerState = { message: string; tone: "error" | "success" | "info" | "warning" };
 
@@ -119,6 +125,7 @@ export default function QuickDealExpress() {
   const [publishedDealId, setPublishedDealId] = useState<string | null>(null);
   const [publishedDealTitle, setPublishedDealTitle] = useState("");
   const [openingFullEditor, setOpeningFullEditor] = useState(false);
+  const publishIdempotencyKeyRef = useRef<string | null>(null);
 
   const posterUri = draft?.poster_storage_path
     ? buildPublicDealPhotoUrl(draft.poster_storage_path)
@@ -175,6 +182,7 @@ export default function QuickDealExpress() {
     setBanner(null);
     setPublishedDealId(null);
     setPublishedDealTitle("");
+    publishIdempotencyKeyRef.current = null;
     setEligibilityForm(createDefaultDealEligibilityFormState());
     resetDraft();
   }
@@ -372,6 +380,10 @@ export default function QuickDealExpress() {
       const posterPublic = posterPath ? buildPublicDealPhotoUrl(posterPath) : null;
       const now = new Date();
       const end = new Date(now.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+      const scheduleSummary = `One-time: ${now.toLocaleString()} to ${end.toLocaleString()}`;
+      const offerDefinitionForPublish = OFFER_VERSION_PUBLISH_ENABLED
+        ? buildExpressOfferDefinition(now, end, scheduleSummary, posterPath)
+        : null;
       const translations = await translateDealCopy({
         business_id: businessId,
         title: cleanTitle,
@@ -409,14 +421,31 @@ export default function QuickDealExpress() {
         ...eligibilityColumns,
       };
 
-      const insertResult = await insertDealWithCompatibility(row);
-      const { data, error } = insertResult;
-      if (error) throw error;
-
-      const id = data?.[0]?.id as string | undefined;
+      let id: string | undefined;
+      let shouldNotify = true;
+      if (OFFER_VERSION_PUBLISH_ENABLED && offerDefinitionForPublish) {
+        const versionedResult = await publishOfferVersionedDeal({
+          business_id: businessId,
+          offer_definition: offerDefinitionForPublish,
+          deal_rows: [row],
+          idempotency_key:
+            publishIdempotencyKeyRef.current ??
+            (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_quick")),
+          ad_spec: buildOfferVersionPublishAdSpec("create_quick", offerDefinitionForPublish, draft),
+        });
+        const published = versionedResult.deals[0];
+        id = published?.deal_id;
+        shouldNotify = published?.idempotency_replayed !== true;
+      } else {
+        const insertResult = await insertDealWithCompatibility(row);
+        const { data, error } = insertResult;
+        if (error) throw error;
+        id = data?.[0]?.id as string | undefined;
+      }
       if (!id) throw new Error("Missing published deal id.");
-      void notifyDealPublished(id);
+      if (shouldNotify) void notifyDealPublished(id);
       await markRecentPublish(cleanTitle);
+      publishIdempotencyKeyRef.current = null;
       setPublishedDealId(id);
       setPublishedDealTitle(cleanTitle);
       setPreviewVisible(false);

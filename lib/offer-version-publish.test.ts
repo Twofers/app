@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  AD_SPEC_RENDERER_VERSION,
+  AD_SPEC_TEMPLATE_VERSION,
+} from "./ad-spec";
+import { buildOfferDefinitionV1 } from "./offer-definition";
+import {
+  buildOfferVersionPublishAdSpec,
+  createPublishIdempotencyKey,
+} from "./offer-version-publish";
+
+function buildDefinition() {
+  const definition = buildOfferDefinitionV1({
+    businessId: "11111111-1111-4111-8111-111111111111",
+    businessName: "Cedar Bean",
+    locationId: "22222222-2222-4222-8222-222222222222",
+    locationName: "Main Street",
+    dealEligibility: {
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredPurchaseQuantity: 1,
+      freeItemQuantity: 1,
+      requiredItemDescription: "latte",
+      freeItemDescription: "latte",
+    },
+    eligibilityResult: { eligible: true, eligibilityStatus: "VALID", customerValuePercent: 50 },
+    activeWindowHumanReadable: "Today, 11:30 AM-1:00 PM",
+    quantityLimit: 20,
+  });
+  if (!definition) throw new Error("Expected valid definition");
+  return definition;
+}
+
+describe("offer version publish client helpers", () => {
+  it("creates scoped idempotency keys", () => {
+    expect(createPublishIdempotencyKey("create_ai")).toMatch(/^create_ai:.{12,}/);
+    expect(createPublishIdempotencyKey("create_quick")).toMatch(/^create_quick:.{12,}/);
+  });
+
+  it("builds a native-renderer ad spec for publish audit and OfferVersion binding", () => {
+    const definition = buildDefinition();
+    const spec = buildOfferVersionPublishAdSpec("create_quick", definition, {
+      headline: "BOGO lattes",
+      subheadline: "Bring a friend",
+      short_description: "Buy one latte, get one free.",
+      cta: "Claim deal",
+      poster_storage_path: "biz/poster.png",
+      photo_source: "fallback_template",
+      locked_offer_line: "Buy one latte, get one free",
+      locked_terms_line: "Limit one claim.",
+      push_notification: "BOGO now",
+      social_caption: "Coffee run",
+      terms_summary: "Limit one claim.",
+      item_research: { item_name: "latte", description: "", is_familiar: true },
+    });
+
+    expect(spec.adSpecVersion).toBe(1);
+    expect(spec.rendererVersion).toBe(AD_SPEC_RENDERER_VERSION);
+    expect(spec.templateVersion).toBe(AD_SPEC_TEMPLATE_VERSION);
+    expect(spec.source).toBe("create_quick");
+    expect(spec.offer.canonicalOfferSentence).toBe(definition.canonicalOfferSentence);
+    expect(spec.channels.feed.canonicalOfferSentence).toBe(definition.canonicalOfferSentence);
+    expect(spec.channels.feed.visual.posterStoragePath).toBe("biz/poster.png");
+    expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
+  });
+});

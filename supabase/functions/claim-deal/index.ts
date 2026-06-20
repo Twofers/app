@@ -23,9 +23,13 @@ const NEW_CLAIM_COLUMN_NAMES = [
   "business_id",
   "location_id",
   "qr_token_hash",
+  "offer_definition_id",
+  "offer_version_id",
 ] as const;
 const NEW_DEAL_SELECT_COLUMN_NAMES = [
   "location_id",
+  "offer_definition_id",
+  "offer_version_id",
   "deal_status",
   "eligibility_status",
   "repeat_claim_policy_type",
@@ -94,6 +98,11 @@ function isMissingNewDealSelectColumn(error: { code?: string; message?: string }
     (error?.code === "PGRST200" || error?.code === "PGRST204" || error?.code === "42703") &&
     NEW_DEAL_SELECT_COLUMN_NAMES.some((name) => message.includes(name))
   );
+}
+
+function isClaimLimitReachedError(error: { code?: string; message?: string; details?: string } | null | undefined) {
+  const detail = `${error?.message ?? ""} ${error?.details ?? ""}`;
+  return error?.code === "P0001" && /MAX_CLAIMS_REACHED|CLAIM_LIMIT_REACHED/.test(detail);
 }
 
 function omitNewClaimColumns<T extends Record<string, unknown>>(row: T) {
@@ -249,7 +258,7 @@ serve(async (req) => {
 
     // 🔍 Fetch and validate deal (before rate limit, so invalid IDs don't exhaust quotas)
     const dealSelectNew =
-      "id, business_id, location_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone, deal_status, eligibility_status, businesses(repeat_claim_policy_type, repeat_claim_cooldown_days)";
+      "id, business_id, location_id, offer_definition_id, offer_version_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone, deal_status, eligibility_status, businesses(repeat_claim_policy_type, repeat_claim_cooldown_days)";
     const dealSelectLegacy =
       "id, business_id, start_time, end_time, claim_cutoff_buffer_minutes, max_claims, is_active, is_demo, is_recurring, days_of_week, window_start_minutes, window_end_minutes, timezone";
     let dealResult = await supabase
@@ -698,6 +707,8 @@ serve(async (req) => {
           user_id: user.id,
           business_id: businessId,
           location_id: (deal as { location_id?: string | null }).location_id ?? null,
+          offer_definition_id: (deal as { offer_definition_id?: string | null }).offer_definition_id ?? null,
+          offer_version_id: (deal as { offer_version_id?: string | null }).offer_version_id ?? null,
           token: null,
           qr_token_hash: qrTokenHash,
           expires_at: expiresAt,
@@ -745,6 +756,15 @@ serve(async (req) => {
 
     if (insertError || !short_code || !newClaimId) {
       console.error("Insert error:", insertError);
+      if (isClaimLimitReachedError(insertError)) {
+        return new Response(
+          JSON.stringify({ error: "This deal has reached its claim limit." }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       if (insertError?.code === "23505") {
         return new Response(
           JSON.stringify({ error: "You already have an active claim for this deal" }),

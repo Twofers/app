@@ -108,7 +108,12 @@ import {
   fetchAiComposeQuota,
   type AiComposeQuota,
 } from "../../lib/ai-compose-offer";
-import { isOfferDefinitionFallbackEnabled } from "../../lib/runtime-env";
+import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "../../lib/runtime-env";
+import {
+  buildOfferVersionPublishAdSpec,
+  createPublishIdempotencyKey,
+  publishOfferVersionedDeal,
+} from "../../lib/offer-version-publish";
 
 type TemplateRow = {
   id: string;
@@ -130,6 +135,7 @@ type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
 const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
+const OFFER_VERSION_PUBLISH_ENABLED = isOfferVersionPublishEnabled();
 
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
@@ -491,6 +497,7 @@ export default function AiDealScreen() {
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [publishStatusMessage, setPublishStatusMessage] = useState<string | null>(null);
   const publishInFlightRef = useRef(false);
+  const publishIdempotencyKeyRef = useRef<string | null>(null);
   const [allowPostPublishNavigation, setAllowPostPublishNavigation] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -633,7 +640,7 @@ export default function AiDealScreen() {
     publishLocationIds,
   ]);
   const offerDefinition = useMemo(() => {
-    if (!OFFER_DEFINITION_FALLBACK_ENABLED) return null;
+    if (!OFFER_DEFINITION_FALLBACK_ENABLED && !OFFER_VERSION_PUBLISH_ENABLED) return null;
     if (!offerContract) return null;
     return buildOfferDefinitionV1FromContract(offerContract, {
       dealEligibility: eligibilityInput,
@@ -2001,11 +2008,32 @@ export default function AiDealScreen() {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        const insertResult = await insertDealsWithCompatibility(rows);
-        const { data: dealsOut, error } = insertResult;
-        if (error) throw error;
-        for (const row of dealsOut ?? []) {
-          if (row?.id) {
+        const canUseVersionedPublish = OFFER_VERSION_PUBLISH_ENABLED && offerDefinition !== null;
+        let dealsOut: { id: string; shouldNotify: boolean }[] = [];
+        if (canUseVersionedPublish) {
+          const versionedResult = await publishOfferVersionedDeal({
+            business_id: businessId,
+            offer_definition: offerDefinition,
+            deal_rows: rows,
+            idempotency_key:
+              publishIdempotencyKeyRef.current ??
+              (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
+            ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, generatedAd),
+          });
+          dealsOut = versionedResult.deals.map((row) => ({
+            id: row.deal_id,
+            shouldNotify: row.idempotency_replayed !== true,
+          }));
+        } else {
+          const insertResult = await insertDealsWithCompatibility(rows);
+          const { data, error } = insertResult;
+          if (error) throw error;
+          dealsOut = (data ?? [])
+            .filter((row): row is { id: string } => typeof row?.id === "string")
+            .map((row) => ({ id: row.id, shouldNotify: true }));
+        }
+        for (const row of dealsOut) {
+          if (row.id && row.shouldNotify) {
             void notifyDealPublished(row.id);
           }
         }
@@ -2036,6 +2064,7 @@ export default function AiDealScreen() {
         : t("createAi.publishSuccessBody");
       setPublishing(false);
       setPublishStatus("success");
+      publishIdempotencyKeyRef.current = null;
       setPublishStatusMessage(successMessage);
       setBanner({ message: successMessage, tone: "success" });
       if (editingDealId) {

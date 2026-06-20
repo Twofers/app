@@ -86,6 +86,8 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
     EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK:
       process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH:
+      process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -102,6 +104,10 @@ export function isShareDealEnabled(): boolean {
 
 export function isOfferDefinitionFallbackEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK === "true";
+}
+
+export function isOfferVersionPublishEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

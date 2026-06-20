@@ -10,6 +10,8 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 const NEW_REDEEM_SELECT_COLUMN_NAMES = [
   "location_id",
   "qr_token_hash",
+  "offer_definition_id",
+  "offer_version_id",
 ] as const;
 const NEW_REDEEM_UPDATE_COLUMN_NAMES = [
   "redeemed_by_business_user_id",
@@ -501,7 +503,11 @@ serve(async (req) => {
         business_id: deal.business_id ?? null,
         deal_id: deal.id ?? null,
         claim_id: claimId,
-        context: { method: redeemMethod },
+        context: {
+          method: redeemMethod,
+          offer_definition_id: (claim.offer_definition_id as string | null | undefined) ?? null,
+          offer_version_id: (claim.offer_version_id as string | null | undefined) ?? null,
+        },
       });
     } catch (err) {
       console.error("[redeem-token] analytics insert failed", err);
