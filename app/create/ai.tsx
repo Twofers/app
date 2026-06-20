@@ -37,7 +37,10 @@ import {
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
-import { DancingPenguinProgressCard } from "@/components/dancing-penguin-progress-card";
+import {
+  DancingPenguinProgressCard,
+  DancingPenguinProgressOverlay,
+} from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -3142,6 +3145,16 @@ export default function AiDealScreen() {
           </>
         )}
       </ScrollView>
+      <DancingPenguinProgressOverlay
+        visible={generating}
+        title={t("createAi.generateWorking")}
+        message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+        hint={t("createAi.generatingHint")}
+        cancelLabel={t("createAi.cancel")}
+        onCancel={cancelGeneration}
+        theme={theme}
+        testID="ai-draft-penguin-progress-overlay"
+      />
       <IosDoneInputAccessory />
       <Modal
         visible={Platform.OS === "ios" && iosSchedulePicker !== null}

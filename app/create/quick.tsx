@@ -24,7 +24,10 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
-import { DancingPenguinProgressCard } from "@/components/dancing-penguin-progress-card";
+import {
+  DancingPenguinProgressCard,
+  DancingPenguinProgressOverlay,
+} from "@/components/dancing-penguin-progress-card";
 import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -868,6 +871,14 @@ export default function QuickDealExpress() {
           </>
         )}
       </ScrollView>
+      <DancingPenguinProgressOverlay
+        visible={generating}
+        title={t("createQuick.drafting")}
+        message={photoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+        hint={t("createAi.generatingHint")}
+        theme={theme}
+        testID="quick-draft-penguin-progress-overlay"
+      />
       {draft ? (
         <DealPreviewModal
           visible={previewVisible}

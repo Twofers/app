@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Text, View, type ViewStyle } from "react-native";
+import { Modal, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import Animated, {
   Easing,
@@ -33,7 +33,7 @@ type DancingPenguinProgressCardProps = {
   cancelLabel?: string;
   onCancel?: () => void;
   theme: ProgressTheme;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 };
 
@@ -50,29 +50,60 @@ export function DancingPenguinProgressCard({
   const reducedMotion = useReducedMotion();
   const bounce = useSharedValue(0);
   const sway = useSharedValue(0);
+  const step = useSharedValue(0);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     if (reducedMotion) {
       cancelAnimation(bounce);
       cancelAnimation(sway);
+      cancelAnimation(step);
+      cancelAnimation(scale);
       bounce.value = 0;
       sway.value = 0;
+      step.value = 0;
+      scale.value = 1;
       return;
     }
 
     bounce.value = withRepeat(
       withSequence(
-        withTiming(-7, { duration: 260, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 280, easing: Easing.in(Easing.quad) }),
+        withTiming(-12, { duration: 180, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 190, easing: Easing.in(Easing.quad) }),
+        withTiming(-7, { duration: 160, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 170, easing: Easing.in(Easing.quad) }),
       ),
       -1,
       false,
     );
     sway.value = withRepeat(
       withSequence(
-        withTiming(-5, { duration: 320, easing: Easing.inOut(Easing.sin) }),
-        withTiming(5, { duration: 420, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 320, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-12, { duration: 180, easing: Easing.inOut(Easing.sin) }),
+        withTiming(10, { duration: 210, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-8, { duration: 170, easing: Easing.inOut(Easing.sin) }),
+        withTiming(8, { duration: 190, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 160, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      false,
+    );
+    step.value = withRepeat(
+      withSequence(
+        withTiming(-9, { duration: 190, easing: Easing.inOut(Easing.sin) }),
+        withTiming(9, { duration: 220, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-5, { duration: 180, easing: Easing.inOut(Easing.sin) }),
+        withTiming(5, { duration: 190, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 160, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      false,
+    );
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.06, { duration: 180, easing: Easing.out(Easing.quad) }),
+        withTiming(0.98, { duration: 190, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1.04, { duration: 160, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 170, easing: Easing.inOut(Easing.quad) }),
       ),
       -1,
       false,
@@ -81,11 +112,18 @@ export function DancingPenguinProgressCard({
     return () => {
       cancelAnimation(bounce);
       cancelAnimation(sway);
+      cancelAnimation(step);
+      cancelAnimation(scale);
     };
-  }, [bounce, reducedMotion, sway]);
+  }, [bounce, reducedMotion, scale, step, sway]);
 
   const penguinStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: bounce.value }, { rotate: `${sway.value}deg` }],
+    transform: [
+      { translateX: step.value },
+      { translateY: bounce.value },
+      { rotate: `${sway.value}deg` },
+      { scale: scale.value },
+    ],
   }));
 
   const accessibilityLabel = hint ? `${title}. ${message} ${hint}` : `${title}. ${message}`;
@@ -99,7 +137,7 @@ export function DancingPenguinProgressCard({
       style={[
         {
           marginTop: Spacing.sm,
-          padding: 14,
+          padding: 16,
           borderRadius: 18,
           borderWidth: 1,
           borderColor: theme.border,
@@ -112,19 +150,19 @@ export function DancingPenguinProgressCard({
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View
           style={{
-            width: 76,
-            height: 76,
-            borderRadius: 38,
+            width: 108,
+            height: 108,
+            borderRadius: 54,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: theme.surfaceMuted,
             borderWidth: 1,
             borderColor: theme.border,
-            overflow: "hidden",
+            overflow: "visible",
           }}
         >
           <Animated.View style={penguinStyle}>
-            <Image source={PENGUIN_SOURCE} style={{ width: 66, height: 66 }} contentFit="contain" />
+            <Image source={PENGUIN_SOURCE} style={{ width: 94, height: 94 }} contentFit="contain" />
           </Animated.View>
         </View>
 
@@ -148,5 +186,44 @@ export function DancingPenguinProgressCard({
         <SecondaryButton title={cancelLabel} onPress={onCancel} />
       ) : null}
     </View>
+  );
+}
+
+export function DancingPenguinProgressOverlay(props: DancingPenguinProgressCardProps & { visible: boolean }) {
+  const { visible, style, testID, ...cardProps } = props;
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={cardProps.onCancel}
+    >
+      <View
+        testID={testID ? `${testID}-overlay` : undefined}
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          paddingHorizontal: 24,
+          backgroundColor: "rgba(0, 0, 0, 0.42)",
+        }}
+      >
+        <DancingPenguinProgressCard
+          {...cardProps}
+          testID={testID}
+          style={[
+            {
+              marginTop: 0,
+              shadowColor: "#000",
+              shadowOpacity: 0.2,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 8,
+            },
+            style,
+          ]}
+        />
+      </View>
+    </Modal>
   );
 }

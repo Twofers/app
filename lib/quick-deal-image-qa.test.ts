@@ -16,6 +16,7 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/prominent/i);
     expect(prompt).toMatch(/readable text/i);
     expect(prompt).toMatch(/QR codes/i);
+    expect(prompt).toMatch(/mascots/i);
   });
 
   it("normalizes missing and non-prominent items as missing", () => {
@@ -30,6 +31,7 @@ describe("quick deal image QA", () => {
         has_readable_text: false,
         has_forbidden_logo_or_brand: false,
         has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
         forbidden_elements: [],
         notes: "Coffee is too small.",
       },
@@ -49,6 +51,7 @@ describe("quick deal image QA", () => {
         has_readable_text: true,
         has_forbidden_logo_or_brand: true,
         has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
         forbidden_elements: ["50% off one iced latte", "Twofer"],
         notes: "Offer text is visible.",
       },
@@ -65,6 +68,27 @@ describe("quick deal image QA", () => {
     ]);
   });
 
+  it("treats unrelated mascots or animals as QA failures", () => {
+    const result = normalizeQuickDealImageQaResult(
+      {
+        all_required_items_present: true,
+        items: [{ item: "iced latte", present: true, prominent: true }],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: true,
+        forbidden_elements: ["dancing penguin mascot"],
+        notes: "A mascot is beside the latte.",
+      },
+      ["iced latte"],
+    );
+
+    expect(result.all_required_items_present).toBe(false);
+    expect(result.has_unrelated_mascot_or_animal).toBe(true);
+    expect(result.missing_items).toEqual(["unrelated mascot or animal", "dancing penguin mascot"]);
+  });
+
   it("builds a stronger regeneration prompt around missing items", () => {
     const prompt = buildQuickDealImageRegenerationPrompt({
       basePrompt: "Natural morning light. No text.",
@@ -76,5 +100,6 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/bagel, coffee/i);
     expect(prompt).toMatch(/Natural morning light/i);
     expect(prompt).toMatch(/Remove all readable text/i);
+    expect(prompt).toMatch(/mascots/i);
   });
 });

@@ -68,17 +68,16 @@ describe("buildGeminiAdImagePrompt", () => {
       paidItem: "latte",
       freeItem: "croissant",
       dealType: "SAME_ITEM_BOGO",
-      visualNotes: "with a dancing penguin mascot",
       stylePreset: "playful-twofer",
       aspectRatio: "1:1",
       imageSize: "1K",
     });
 
     expect(prompt).toContain("Required visible items: latte, croissant.");
-    expect(prompt).toContain("Owner visual note to depict visually, never as words: with a dancing penguin mascot.");
     expect(prompt).toContain("Do not add readable text.");
     expect(prompt).toContain("generated image must be text-free");
     expect(prompt).toContain("Do not add fake business names.");
+    expect(prompt).toContain("Do not add app mascots, characters, animals, penguins");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 });

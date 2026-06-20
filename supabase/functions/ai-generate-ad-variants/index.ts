@@ -641,32 +641,6 @@ function requiredOfferItems(contract: DealOfferContract): { paidItem?: string; f
   };
 }
 
-function requestedVisualMotifs(itemHint: string): string[] {
-  const cleanHint = itemHint.trim().replace(/\s+/g, " ");
-  if (!cleanHint) return [];
-  const motifs: string[] = [];
-  const pattern = /\b(?:with|featuring|feature|including|include|show|add)\s+(?:an?\s+|the\s+)?([^.,;]+)/gi;
-  for (const match of cleanHint.matchAll(pattern)) {
-    const phrase = (match[1] ?? "")
-      .replace(/\b(in|for|on)\s+the\s+(visual|image|ad|advertisement|poster)\b.*$/i, "")
-      .replace(/^(obvious|visible|clear|clearly|prominent|playful)\s+/i, "")
-      .trim();
-    if (!phrase || phrase.length < 3) continue;
-    if (/\b(text|headline|copy|price|discount|percent|off|coupon|code)\b|%/i.test(phrase)) continue;
-    motifs.push(phrase.slice(0, 80));
-  }
-  return motifs.filter((value, index, list) => list.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
-    .slice(0, 2);
-}
-
-function qaRequiredVisualItems(contract: DealOfferContract, itemHint: string): string[] {
-  return [...buildRequiredVisualItems(contract), ...requestedVisualMotifs(itemHint)]
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .filter((value, index, list) => list.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
-    .slice(0, 4);
-}
-
 function safeImageMime(mimeType: string | null | undefined): string {
   const mime = (mimeType ?? "").toLowerCase();
   if (mime === "image/jpeg" || mime === "image/jpg" || mime === "image/webp" || mime === "image/png") return mime;
@@ -943,7 +917,7 @@ async function produceImageOpenAiOnly(params: {
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
-  const requiredVisualItems = qaRequiredVisualItems(offerContract, itemHint);
+  const requiredVisualItems = buildRequiredVisualItems(offerContract);
   const itemName = requiredVisualItems.length > 0
     ? requiredVisualItems.join(" and ")
     : research.item_name || itemHint || "menu item";
@@ -957,7 +931,7 @@ async function produceImageOpenAiOnly(params: {
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
   let png = imageGeneration.bytes;
   const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 1,
+    checked: requiredVisualItems.length > 0,
     attempts: 0,
     missingItems: [],
     regenerated: false,
@@ -1007,7 +981,7 @@ async function produceImageOpenAiOnly(params: {
         if (!retryQa) {
           qa.unavailable = true;
           png = retryPng;
-        } else if (retryQa.all_required_items_present || retryQa.missing_items.length <= firstQa.missing_items.length) {
+        } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           qa.missingItems = retryQa.missing_items;
           png = retryPng;
         }
@@ -1101,7 +1075,7 @@ async function produceImage(params: {
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
 }): Promise<ProducedImage> {
-  const requiredVisualItems = qaRequiredVisualItems(params.offerContract, params.itemHint);
+  const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
   const originalUploadedPhoto = (): ProducedImage => ({
     posterStoragePath: params.photoPath,
     source: "uploaded_original",
@@ -1172,7 +1146,6 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
-    visualNotes: params.itemHint,
     stylePreset,
     aspectRatio: "1:1",
     imageSize: "1K",
@@ -1225,7 +1198,6 @@ async function produceImage(params: {
       paidItem: offerItems.paidItem,
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
-      visualNotes: params.itemHint,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
       stylePreset,
       aspectRatio: "1:1",

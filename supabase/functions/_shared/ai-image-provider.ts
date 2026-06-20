@@ -29,7 +29,6 @@ export type GenerateAdImageInput = {
   paidItem?: string;
   freeItem?: string;
   dealType?: string;
-  visualNotes?: string;
   ownerPhotoUrl?: string | null;
   referenceImages?: AiImageReference[];
   stylePreset: AiImageStylePreset;
@@ -85,7 +84,7 @@ const STYLE_PRESET_TEXT: Record<AiImageStylePreset, string> = {
   "premium-cafe":
     "Style: premium independent cafe marketing photo, warm light, shallow depth of field, high-end but still realistic, not corporate stock-photo looking.",
   "playful-twofer":
-    "Style: playful local deal image, realistic food or drink, subtle cheerful energy. If the owner explicitly asks for a mascot or prop, include it as a visual element, not as text or a logo.",
+    "Style: playful local deal image, realistic food or drink, subtle cheerful energy. Do not add app mascots, characters, animals, or unrelated decorative props.",
 };
 
 function edgeEnv(): EnvReader {
@@ -166,7 +165,6 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const businessCategory = cleanText(input.businessCategory, 80) || "local cafe";
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
-  const visualNotes = cleanText(input.visualNotes, 300);
   const visualItems = [...new Set([paid, free].filter(Boolean))];
   const referenceInstruction =
     input.referenceImages && input.referenceImages.length > 0
@@ -181,7 +179,6 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     `Offer mechanics: ${offerMechanics(input)}`,
     "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
-    visualNotes ? `Owner visual note to depict visually, never as words: ${visualNotes}.` : "",
     referenceInstruction,
     "",
     "Image requirements:",
@@ -198,12 +195,13 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "- Do not add prices.",
     "- Do not add fake logos.",
     "- Do not add fake business names.",
+    "- Do not add app mascots, characters, animals, penguins, or unrelated decorative props unless they are the actual product being sold or visible in the owner reference photo.",
     "- Do not add distorted hands, extra fingers, warped cups, impossible packaging, or strange food shapes.",
     "- Do not misrepresent the offer.",
     STYLE_PRESET_TEXT[input.stylePreset],
     "",
     "Avoid:",
-    "AI-looking plastic food, readable or unreadable fake text, misspelled signs, extra cups, incorrect item counts, distorted hands, fake QR codes, fake logos, fake brand marks, random menu boards, uncanny people, strange reflections, watermark-like marks, unrealistic packaging, and any text inside the generated image.",
+    "AI-looking plastic food, readable or unreadable fake text, misspelled signs, extra cups, incorrect item counts, app mascots, unrelated characters, distorted hands, fake QR codes, fake logos, fake brand marks, random menu boards, uncanny people, strange reflections, watermark-like marks, unrealistic packaging, and any text inside the generated image.",
     "",
     "The final headline, business name, CTA, quantity, expiration, and offer terms will be rendered by the app outside this image. Do not render those words inside the image.",
   ]
