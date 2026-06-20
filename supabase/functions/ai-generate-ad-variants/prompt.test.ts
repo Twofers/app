@@ -55,18 +55,20 @@ const basePrompt = buildAdCopyPrompt({
 
 describe("buildAdCopyPrompt", () => {
   it("includes anti-generic instructions and banned vague phrases", () => {
-    expect(basePrompt.system).toContain("not a generic image caption");
+    expect(basePrompt.system).toContain("generic image caption");
+    expect(basePrompt.system).toContain("This is an ad, not a legal deal description");
     expect(basePrompt.system).toContain("Avoid generic marketing language");
-    expect(basePrompt.system).toContain("Don't miss out");
-    expect(basePrompt.system).toContain("Amazing deal");
-    expect(basePrompt.system).toContain("Delicious treat");
-    expect(basePrompt.system).toContain("Come enjoy our special offer");
+    expect(basePrompt.system).toContain("don't miss out");
+    expect(basePrompt.system).toContain("qualifying purchase");
+    expect(basePrompt.system).toContain("included after");
+    expect(basePrompt.system).toContain("amazing deal");
   });
 
   it("includes good and bad examples", () => {
     expect(basePrompt.system).toContain("Bad headlineAlternative");
     expect(basePrompt.system).toContain("Egg sandwich with free coffee");
-    expect(basePrompt.system).toContain("Buy an egg sandwich and get a free coffee");
+    expect(basePrompt.system).toContain("Egg sandwich + free coffee");
+    expect(basePrompt.system).toContain("The free coffee is included after the qualifying egg sandwich purchase");
     expect(basePrompt.system).toContain("Buy two muffins and get a free drip coffee");
     expect(basePrompt.system).toContain("Buy one latte and get one free");
   });
@@ -104,6 +106,8 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain("The customer does NOT have to buy the free reward item.");
     expect(basePrompt.userText).toContain("Normalized deal facts JSON");
     expect(basePrompt.userText).toContain("Deterministic canonical headline: Buy a coffee and get a free bagel");
+    expect(basePrompt.userText).toContain("Buy coffee, bagel is on us");
+    expect(basePrompt.userText).toContain("Claim a free bagel with a qualifying coffee purchase");
   });
 
   it("requires plain English for same-item buy-one-get-one offers", () => {

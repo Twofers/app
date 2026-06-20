@@ -102,7 +102,7 @@ export type ValidatedDealCopy = AiDealCopyVariant & {
   generator_version: string;
 };
 
-export const AI_COPY_GENERATOR_VERSION = "ai-copy-v2";
+export const AI_COPY_GENERATOR_VERSION = "ai-copy-v3";
 
 export const DEAL_COPY_LIMITS = {
   headline: 96,
@@ -435,7 +435,7 @@ export function buildCanonicalHeadlineFromFacts(facts: NormalizedDealFacts): str
   if (facts.rewardType === "free") {
     const buyItem = cleanText(facts.buyItem);
     const rewardItem = cleanText(facts.rewardItem);
-    if (!buyItem || !rewardItem) return "Limited-time local offer";
+    if (!buyItem || !rewardItem) return "Review offer details";
     const buyQuantity = Math.max(1, Math.floor(facts.buyQuantity ?? 1));
     const rewardQuantity = Math.max(1, Math.floor(facts.rewardQuantity ?? 1));
     if (sameOfferItem(buyItem, rewardItem)) {
@@ -450,7 +450,7 @@ export function buildCanonicalHeadlineFromFacts(facts: NormalizedDealFacts): str
   if (item && typeof value === "number" && Number.isFinite(value)) {
     return `Get ${Math.round(value)}% off one ${lowerFirst(stripLeadingArticle(item))}`;
   }
-  return "Limited-time local offer";
+  return "Review offer details";
 }
 
 export function normalizeDealFactsFromContract(contract: DealOfferContract): NormalizedDealFacts {
@@ -485,7 +485,7 @@ function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
     const item = cleanText(facts.buyItem);
     const value = facts.rewardValue;
     if (item && typeof value === "number" && Number.isFinite(value)) {
-      return `The ${Math.round(value)}% discount applies to one ${lowerFirst(stripLeadingArticle(item))}.`;
+      return `Save ${Math.round(value)}% on one ${lowerFirst(stripLeadingArticle(item))}.`;
     }
     return "Review the offer details before publishing.";
   }
@@ -494,9 +494,14 @@ function deterministicDescriptionForFacts(facts: NormalizedDealFacts): string {
   const rewardItem = cleanText(facts.rewardItem);
   if (!buyItem || !rewardItem) return "Review the offer details before publishing.";
   if (sameOfferItem(buyItem, rewardItem)) {
-    return `Buy the first ${lowerFirst(stripLeadingArticle(buyItem))}; the next one is free.`;
+    return `Buy ${formatPurchasePhrase(Math.max(1, Math.floor(facts.buyQuantity ?? 1)), buyItem)} and the next one is on us.`;
   }
-  return `The free ${lowerFirst(stripLeadingArticle(rewardItem))} is included after the qualifying ${lowerFirst(stripLeadingArticle(buyItem))} purchase.`;
+  const buyPhrase = formatPurchasePhrase(Math.max(1, Math.floor(facts.buyQuantity ?? 1)), buyItem);
+  const rewardQuantity = Math.max(1, Math.floor(facts.rewardQuantity ?? 1));
+  const rewardPhrase = rewardQuantity === 1
+    ? `the ${lowerFirst(stripLeadingArticle(rewardItem))} is on us`
+    : `${numberWord(rewardQuantity)} ${pluralizeItemPhrase(rewardItem)} are on us`;
+  return `Buy ${buyPhrase} and ${rewardPhrase}.`;
 }
 
 export function buildDeterministicDealChannelCopy(contract: DealOfferContract): DeterministicDealChannelCopy {
@@ -799,6 +804,35 @@ function containsUnsupportedPrice(text: string): boolean {
   return /\$\s*\d|\b\d+(?:\.\d{2})?\s+dollars?\b|\b\d+(?:\.\d{2})?\s+bucks?\b/i.test(text);
 }
 
+const FORBIDDEN_AI_COPY_PATTERNS = [
+  /\bqualifying\s+purchase\b/i,
+  /\bqualifying\b.{0,48}\bpurchase\b/i,
+  /\bincluded\s+after\b/i,
+  /\bunlock\s+savings\b/i,
+  /\belevate\s+your\s+experience\b/i,
+  /\btreat\s+yourself\s+to\b/i,
+  /\bindulge\s+in\b/i,
+  /\blimited[- ]time\s+local\s+offer\b/i,
+  /\bdon'?t\s+miss\s+out\b/i,
+  /\bact\s+now\b/i,
+  /\bexclusive\s+deal\b/i,
+  /\bsavor\s+the\s+flavo?r\b/i,
+  /\bperfectly\s+paired\b/i,
+  /\bAI-generated\b/i,
+  /\bthis\s+offer\s+allows\s+you\s+to\b/i,
+  /\bcustomers\s+can\s+enjoy\b/i,
+  /\bpromotion\s+applies\s+to\b/i,
+  /\bterms\s+and\s+conditions\s+apply\b/i,
+];
+
+function containsForbiddenAiPhrase(text: string): boolean {
+  return FORBIDDEN_AI_COPY_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function hasAdLikeHeadlineHook(headline: string): boolean {
+  return /\b(?:free|on us|save|off)\b/i.test(headline) || /\+\s*free\b/i.test(headline);
+}
+
 function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]): void {
   const headline = cleanText(copy.headline);
   const description = cleanText(copy.short_description);
@@ -808,7 +842,10 @@ function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCode
 
   if (headline && /[.!?]$/.test(headline)) reasonCodes.push("HEADLINE_TRAILING_PUNCTUATION");
   if (headline && /\bwith\s+(?:a\s+|an\s+|one\s+)?free\b/i.test(headline)) reasonCodes.push("HEADLINE_WITH_FREE_FRAGMENT");
-  if (headline && !/^(?:buy|get|order|save|claim)\b/i.test(headline)) reasonCodes.push("HEADLINE_DOES_NOT_START_WITH_ACTION");
+  if (headline && !/^(?:buy|get|order|save|claim)\b/i.test(headline) && !hasAdLikeHeadlineHook(headline)) {
+    reasonCodes.push("HEADLINE_DOES_NOT_START_WITH_ACTION");
+  }
+  if (containsForbiddenAiPhrase(text)) reasonCodes.push("FORBIDDEN_AI_PHRASE");
   if (containsCopySyntaxLeak(text)) reasonCodes.push("COPY_SYNTAX_LEAK");
   if (containsUnsupportedPrice(text)) reasonCodes.push("UNSUPPORTED_PRICE");
   if (/\b(?:delicious|fresh|best|artisan|amazing|incredible|ultimate|perfect)\b/i.test(text)) {
@@ -884,11 +921,25 @@ function validateBuyOneGetOneFree(
   ];
   const freeBeforeItemMatches = [
     ...normalized.matchAll(
-      /\bget\s+(?!(?:one|1)\s+free\b)(?:a|one|1|the)?\s*free\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?=\s+(?:with|after|at|when|for|from|while|before|during|today|this|check|claim|purchase|qualifying)\b|$)/g,
+      /\bget\s+(?!(?:one|1)\s+free\b)(?:a|one|1|the)?\s*free\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?=\s+(?:with|after|at|when|for|from|while|before|during|today|this|check|claim|buy|order|purchase|qualifying)\b|$)/g,
     ),
   ];
   for (const match of [...itemBeforeFreeMatches, ...freeBeforeItemMatches]) {
     const candidate = match[1]?.trim() ?? "";
+    if (candidate && !containsItem(candidate, item)) {
+      reasonCodes.push("CHANGES_FREE_ITEM");
+      break;
+    }
+  }
+  const onUsMatches = [
+    ...normalized.matchAll(/\b(?:the|a|an|one)?\s*([a-z0-9][a-z0-9\s-]{0,40}?)\s+(?:is|are)\s+on\s+us\b/g),
+  ];
+  for (const match of onUsMatches) {
+    const rawCandidate = match[1]?.trim() ?? "";
+    const candidate = /^(?:buy|get|order|claim)\b/.test(rawCandidate)
+      ? rawCandidate.replace(/^.*\b(?:and|with)\s+(?:the|a|an|one)?\s+/, "").trim()
+      : rawCandidate;
+    if (/^(?:next|second|2nd)(?:\s+(?:one|item))?$/.test(candidate)) continue;
     if (candidate && !containsItem(candidate, item)) {
       reasonCodes.push("CHANGES_FREE_ITEM");
       break;
@@ -956,7 +1007,7 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
     return [
       sentence(deterministic.headline),
       deterministic.description,
-      `The ${free} is free with the qualifying ${required} purchase.`,
+      `Buy ${formatPurchasePhrase(contract.requiredPurchase?.quantity ?? 1, required)} and the ${lowerFirst(stripLeadingArticle(free))} is on us.`,
     ];
   }
 
@@ -965,7 +1016,7 @@ export function buildOfferCopyCandidates(contract: DealOfferContract): string[] 
     return [
       sentence(deterministic.headline),
       deterministic.description,
-      `The second ${item} is free with the qualifying purchase.`,
+      `Buy ${formatPurchasePhrase(contract.requiredPurchase?.quantity ?? 1, item)} and the next one is on us.`,
     ];
   }
 

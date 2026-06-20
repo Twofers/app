@@ -34,11 +34,41 @@ describe("ad copy style gate", () => {
         }),
         expect.objectContaining({
           field: "supportingLine",
-          reasons: expect.arrayContaining(["GENERIC_MARKETING_PHRASE", "AI_TONE_PHRASE"]),
+          reasons: expect.arrayContaining(["FORBIDDEN_AI_PHRASE", "GENERIC_MARKETING_PHRASE", "AI_TONE_PHRASE"]),
         }),
         expect.objectContaining({
           field: "cta",
-          reasons: expect.arrayContaining(["GENERIC_MARKETING_PHRASE", "TOO_MANY_EXCLAMATIONS"]),
+          reasons: expect.arrayContaining(["FORBIDDEN_AI_PHRASE", "GENERIC_MARKETING_PHRASE", "TOO_MANY_EXCLAMATIONS"]),
+        }),
+      ]),
+    );
+  });
+
+  it("blocks the addendum forbidden phrases in AI-originated copy", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Coffee is included after a qualifying purchase",
+        supportingLine: "This offer allows you to unlock savings today.",
+        socialCaption: "Promotion applies to this exclusive deal.",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["coffee"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "displayHook",
+          reasons: expect.arrayContaining(["FORBIDDEN_AI_PHRASE"]),
+        }),
+        expect.objectContaining({
+          field: "supportingLine",
+          reasons: expect.arrayContaining(["FORBIDDEN_AI_PHRASE"]),
+        }),
+        expect.objectContaining({
+          field: "socialCaption",
+          reasons: expect.arrayContaining(["FORBIDDEN_AI_PHRASE"]),
         }),
       ]),
     );

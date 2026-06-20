@@ -125,7 +125,7 @@ describe("AdSpec V3 creative contract", () => {
     expect(spec.textProvenance.displayHook).toBe("ai_generated");
     expect(spec.textProvenance.offerLine).toBe("deterministic");
     expect(spec.visual.sourceBadge).toBe("Your photo");
-    expect(spec.provenance.copyPromptVersion).toBe("AI_COPY_PROMPT_V2");
+    expect(spec.provenance.copyPromptVersion).toBe("AI_COPY_PROMPT_V3");
   });
 
   it("records owner-edited fields without changing locked terms", () => {

@@ -6,7 +6,7 @@ export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
 export const AD_SPEC_TEMPLATE_VERSION = "twofer-safe-templates-v1";
 export const AD_SPEC_V3_RENDERER_VERSION = "twofer-native-ad-renderer-v3";
 export const AD_SPEC_V3_MEDIA_SELECTION_VERSION = "twofer-media-selection-v1";
-export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V2";
+export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V3";
 
 export type AdSpecSource = "create_ai" | "create_quick";
 

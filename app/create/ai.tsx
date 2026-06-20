@@ -38,6 +38,7 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import { DancingPenguinProgressCard } from "@/components/dancing-penguin-progress-card";
+import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -317,14 +318,17 @@ type RevisionTarget = "copy" | "image" | "both";
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 
 const COPY_PRESET_KEYS = [
+  "createAi.revisePresetPunchier",
+  "createAi.revisePresetSimpler",
+  "createAi.revisePresetPremium",
+  "createAi.revisePresetFunnier",
   "createAi.revisePresetShorter",
-  "createAi.revisePresetCasual",
-  "createAi.revisePresetProfessional",
   "createAi.revisePresetSavings",
   "createAi.revisePresetItem",
 ];
 
 const IMAGE_PRESET_KEYS_GENERATED = [
+  "createAi.revisePresetTryAnotherImage",
   "createAi.revisePresetGenAngle",
   "createAi.revisePresetGenBrighter",
   "createAi.revisePresetGenMoodier",
@@ -2910,105 +2914,31 @@ export default function AiDealScreen() {
               </View>
             ) : null}
 
-            {/* Single ad preview — text rendered ABOVE image, not baked in */}
+            {/* Single ad preview — text rendered natively over the image, not baked in */}
             {generatedAd ? (
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                {/* Ad card: text above, image below */}
-                <View
-                  style={{
-                    borderRadius: 24,
-                    backgroundColor: theme.surface,
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                  }}
-                >
-                  {/* Top — meta line */}
-                  <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4 }}>
-                    {businessName ? (
-                      <Text style={{ fontSize: 12, color: theme.mutedText, fontWeight: "600", letterSpacing: 0.3 }}>
-                        {businessName.toUpperCase()}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {(generatedAd.locked_offer_line || offerContract?.canonicalOfferLine) ? (
-                    <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                        {t("createAi.lockedOfferLabel", { defaultValue: "Offer" })}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 17, fontWeight: "800", color: theme.text, lineHeight: 23 }}>
-                        {generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Headline + subline */}
-                  <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
-                    <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                      {t("createAi.generatedCopyLabel", { defaultValue: "Generated ad copy" })}
-                    </Text>
-                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: theme.primary, lineHeight: 28 }}>
-                      {generatedAd.headline}
-                    </Text>
-                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: theme.text, lineHeight: 22 }}>
-                      {generatedAd.subheadline}
-                    </Text>
-                  </View>
-
-                  {/* Image */}
-                  {adImageUri ? (
-                    <Image
-                      source={{ uri: adImageUri }}
-                      style={{ height: 320, width: "100%" }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={{ height: 200, backgroundColor: theme.surfaceMuted, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ opacity: 0.5, color: theme.text }}>{t("createAi.noImage")}</Text>
-                    </View>
-                  )}
-
-                  {/* CTA + meta */}
-                  <View style={{ paddingHorizontal: 18, paddingVertical: 16, gap: 10 }}>
-                    <View
-                      style={{
-                        backgroundColor: theme.primary,
-                        paddingVertical: 12,
-                        paddingHorizontal: 20,
-                        borderRadius: 14,
-                        alignSelf: "flex-start",
-                      }}
-                    >
-                      <Text style={{ fontSize: 15, fontWeight: "800", color: theme.primaryText, letterSpacing: 0.2 }}>
-                        {generatedAd.cta}
-                      </Text>
-                    </View>
-                    {businessProfile?.address || businessProfile?.location ? (
-                      <Text style={{ fontSize: 13, color: theme.mutedText }}>
-                        {businessProfile.address ?? businessProfile.location}
-                      </Text>
-                    ) : null}
-                    <Text style={{ fontSize: 12, color: theme.mutedText }}>{displayScheduleSummary}</Text>
-                    {(generatedAd.locked_terms_line || offerContract?.canonicalShortTerms) ? (
-                      <View style={{ paddingTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                          {t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                        </Text>
-                        <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: theme.text }}>
-                          {generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                        </Text>
-                        <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
-                          {t("createAi.lockedTermsHelper", {
-                            defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                          })}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+                <GeneratedAdPreviewCard
+                  imageUri={adImageUri}
+                  businessName={businessName}
+                  headline={generatedAd.headline}
+                  body={generatedAd.subheadline}
+                  offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
+                  termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
+                  cta={generatedAd.cta}
+                  scheduleSummary={displayScheduleSummary}
+                  maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                  maxClaimsValue={maxClaims}
+                  termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                  termsHelper={t("createAi.lockedTermsHelper", {
+                    defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                  })}
+                  noImageLabel={t("createAi.noImage")}
+                  addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                  theme={theme}
+                  darkMode={colorScheme === "dark"}
+                />
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
                   <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>
