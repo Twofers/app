@@ -1766,8 +1766,19 @@ export default function AiDealScreen() {
   }
 
   function useFallbackTemplateAd() {
+    const fallbackPosterPath = generatedAd?.poster_storage_path ?? photoPath ?? null;
+    const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
+    if (!hasImageSource) {
+      setBanner({
+        message: t("createAi.errImageRequired", {
+          defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+        }),
+        tone: "error",
+      });
+      return;
+    }
     const maxClaimsNum = Number(maxClaims);
-    const fallbackAd = offerDefinition
+    const fallbackBaseAd = offerDefinition
       ? buildOfferDefinitionFallbackAd(offerDefinition, { ctaText })
       : buildFallbackTemplateAd({
           businessName,
@@ -1781,6 +1792,15 @@ export default function AiDealScreen() {
           scheduleSummary: displayScheduleSummary,
           quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
         });
+    const fallbackAd = fallbackPosterPath
+      ? {
+          ...fallbackBaseAd,
+          poster_storage_path: fallbackPosterPath,
+          photo_source: generatedAd?.poster_storage_path ? generatedAd.photo_source ?? "generated" : ("uploaded_original" as const),
+          photo_treatment: generatedAd?.poster_storage_path ? generatedAd.photo_treatment ?? null : null,
+        }
+      : fallbackBaseAd;
+    if (!fallbackPosterPath) setUsePhotoAsFinal(true);
     setGeneratedAd(fallbackAd);
     applyAdToDraft(fallbackAd);
     setAdAccepted(true);
@@ -1964,6 +1984,13 @@ export default function AiDealScreen() {
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
+      const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
+      if (!posterForPublish) {
+        showPublishError(t("createAi.errImageRequired", {
+          defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+        }));
+        return;
+      }
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const translations = await translateDealCopy({
@@ -1990,7 +2017,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: finalPublicPoster ?? explicitPhotoPoster,
+        poster_url: posterForPublish,
         poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,

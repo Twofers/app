@@ -40,6 +40,7 @@ import { buildPublicDealPhotoUrl } from "@/lib/deal-poster-url";
 import { uploadDealPhoto } from "@/lib/upload-deal-photo";
 import { markRecentPublish } from "@/lib/recent-publish";
 import { buildQuickDealFullBuilderParams } from "@/lib/quick-deal-full-builder";
+import { shouldUseQuickDealOfferDefinitionFallback } from "@/lib/quick-deal-ai-policy";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { validateDealEligibility } from "@/lib/deal-eligibility";
 import {
@@ -175,6 +176,12 @@ export default function QuickDealExpress() {
     setPreviewVisible(false);
   }
 
+  function imageRequiredMessage() {
+    return t("createQuick.errImageRequired", {
+      defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+    });
+  }
+
   function resetForAnotherDeal() {
     setHint("");
     setPhotoUri(null);
@@ -259,17 +266,17 @@ export default function QuickDealExpress() {
     setGenerating(true);
     setBanner(null);
     let offerDefinition: OfferDefinitionV1 | null = null;
+    let generationPhotoPath = photoPath;
     try {
-      let path = photoPath;
-      if (photoUri && !path) {
-        path = await uploadDealPhoto(businessId, photoUri);
-        setPhotoPath(path);
+      if (photoUri && !generationPhotoPath) {
+        generationPhotoPath = await uploadDealPhoto(businessId, photoUri);
+        setPhotoPath(generationPhotoPath);
       }
       const startsAt = new Date();
       const endsAt = new Date(startsAt.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
       const scheduleSummary = `One-time: ${startsAt.toLocaleString()} to ${endsAt.toLocaleString()}`;
       offerDefinition = OFFER_DEFINITION_FALLBACK_ENABLED
-        ? buildExpressOfferDefinition(startsAt, endsAt, scheduleSummary, path)
+        ? buildExpressOfferDefinition(startsAt, endsAt, scheduleSummary, generationPhotoPath)
         : null;
       const { ad } = await aiGenerateAd({
         business_id: businessId,
@@ -281,18 +288,30 @@ export default function QuickDealExpress() {
         offer_schedule_summary: scheduleSummary,
         quantity_limit: EXPRESS_MAX_CLAIMS,
         redemption_limit: EXPRESS_REDEMPTION_LIMIT,
-        ...(path ? { photo_path: path } : {}),
+        ...(generationPhotoPath ? { photo_path: generationPhotoPath } : {}),
       });
       const displayAd = normalizeGeneratedAdDisplayCopy(ad);
+      if (!displayAd.poster_storage_path && !generationPhotoPath) {
+        setBanner({ message: imageRequiredMessage(), tone: "error" });
+        return;
+      }
       const d = adToDealDraft(displayAd, hint);
       setDraft(displayAd);
       setTitle(d.title);
       setOfferLine(d.promo_line || d.offer_details);
     } catch (err) {
-      if (OFFER_DEFINITION_FALLBACK_ENABLED && offerDefinition && shouldUseOfferDefinitionFallback(err)) {
-        const fallbackAd = normalizeGeneratedAdDisplayCopy(
-          buildOfferDefinitionFallbackAd(offerDefinition, { ctaText: "Claim deal" }),
-        );
+      const errorCode = getErrorCode(err);
+      if (
+        OFFER_DEFINITION_FALLBACK_ENABLED &&
+        offerDefinition &&
+        shouldUseQuickDealOfferDefinitionFallback(err, errorCode, Boolean(generationPhotoPath))
+      ) {
+        const fallbackAd = normalizeGeneratedAdDisplayCopy({
+          ...buildOfferDefinitionFallbackAd(offerDefinition, { ctaText: "Claim deal" }),
+          ...(generationPhotoPath
+            ? { poster_storage_path: generationPhotoPath, photo_source: "uploaded_original" as const }
+            : {}),
+        });
         const d = adToDealDraft(fallbackAd, hint);
         setDraft(fallbackAd);
         setTitle(d.title);
@@ -307,7 +326,7 @@ export default function QuickDealExpress() {
           event_name: "quick_deal_offer_definition_fallback_used",
           business_id: businessId ?? null,
           context: {
-            error_code: getErrorCode(err) ?? null,
+            error_code: errorCode ?? null,
             offer_type: offerDefinition.offerType,
             has_photo: Boolean(photoUri || offerDefinition.sourceAssetIds.length > 0),
           },
@@ -341,6 +360,20 @@ export default function QuickDealExpress() {
     const cleanTitle = title.trim();
     const cleanOffer = offerLine.trim();
     const listingDescription = cleanOffer;
+    if (!draft.poster_storage_path && !photoPath) {
+      trackAppAnalyticsEvent({
+        event_name: action === "preview" ? "quick_deal_preview_blocked" : "quick_deal_release_blocked",
+        business_id: businessId ?? null,
+        context: {
+          action,
+          rule_id: "IMAGE_REQUIRED",
+          field: "poster_storage_path",
+          source_reason: "MISSING_DEAL_IMAGE",
+        },
+      });
+      setBanner({ message: imageRequiredMessage(), tone: "error" });
+      return null;
+    }
     if (!quickDealValidation?.ok || !quickDealValidation.quality) {
       const firstError = quickDealValidation?.blockingErrors[0] ?? null;
       trackQuickDealBlocked(action, firstError);
@@ -841,23 +874,6 @@ export default function QuickDealExpress() {
       ) : null}
     </KeyboardScreen>
   );
-}
-
-function shouldUseOfferDefinitionFallback(err: unknown): boolean {
-  const code = getErrorCode(err);
-  if (
-    code === "OPENAI_KEY_MISSING" ||
-    code === "MONTHLY_LIMIT" ||
-    code === "COOLDOWN_ACTIVE" ||
-    code === "COPY_FAILED"
-  ) {
-    return true;
-  }
-  const raw = err instanceof Error ? err.message : String(err);
-  const lower = raw.toLowerCase();
-  if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) return true;
-  if (lower.includes("monthly limit") || lower.includes("openai") || lower.includes("copy")) return true;
-  return false;
 }
 
 function friendlyGenerateError(err: unknown, t: (k: string, o?: Record<string, unknown>) => string): string {
