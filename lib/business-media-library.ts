@@ -67,6 +67,38 @@ export type AdGenerationJobStatus = "queued" | "running" | "ready" | "failed" | 
 
 export type AdCreativeConceptLabel = "recommended" | "alternative_a" | "alternative_b" | "revision";
 
+export const BUSINESS_MEDIA_IMPORT_JOB_STATUSES = [
+  "queued",
+  "fetching",
+  "analyzing",
+  "awaiting_approval",
+  "importing",
+  "completed",
+  "failed",
+] as const;
+
+export type BusinessMediaImportSourceType = "website" | "instagram" | "facebook";
+
+export type BusinessMediaImportJobStatus = (typeof BUSINESS_MEDIA_IMPORT_JOB_STATUSES)[number];
+
+export type BusinessMediaImportJobSummary = {
+  id: string;
+  business_id: string;
+  source_type: BusinessMediaImportSourceType;
+  requested_url?: string | null;
+  social_connection_id?: string | null;
+  normalized_origin?: string | null;
+  status: BusinessMediaImportJobStatus;
+  pages_scanned: number;
+  candidate_count: number;
+  approved_count: number;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
 export function mediaSourceBadge(sourceType: BusinessMediaSourceType): BusinessMediaSourceBadge {
   if (sourceType === "website_import") return "Website";
   if (sourceType === "instagram_import") return "Instagram";
@@ -113,4 +145,16 @@ export function canMediaAssetBeAutoUsedForBusiness(
   if (!cleanBusinessId || !isAutoUseEligibleMediaAsset(asset)) return false;
   if (asset.source_type === "twofer_stock") return true;
   return asset.business_id === cleanBusinessId;
+}
+
+export function isTerminalBusinessMediaImportJobStatus(status: BusinessMediaImportJobStatus): boolean {
+  return status === "completed" || status === "failed";
+}
+
+export function shouldPollBusinessMediaImportJob(status: BusinessMediaImportJobStatus): boolean {
+  return !isTerminalBusinessMediaImportJobStatus(status);
+}
+
+export function canRetryBusinessMediaImportJob(job: BusinessMediaImportJobSummary): boolean {
+  return job.status === "failed";
 }

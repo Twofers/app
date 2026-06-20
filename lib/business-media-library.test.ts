@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   canMediaAssetBeAutoUsedForBusiness,
+  canRetryBusinessMediaImportJob,
   isAutoUseEligibleMediaAsset,
   isLicensedTwoferStockAsset,
   mediaSourceBadge,
+  shouldPollBusinessMediaImportJob,
   type BusinessMediaAssetSummary,
+  type BusinessMediaImportJobStatus,
+  type BusinessMediaImportJobSummary,
 } from "./business-media-library";
 
 const approvedOwnerAsset: BusinessMediaAssetSummary = {
@@ -57,5 +61,32 @@ describe("business media library contract", () => {
     expect(canMediaAssetBeAutoUsedForBusiness(stock, "biz-1")).toBe(true);
     expect(isLicensedTwoferStockAsset({ ...stock, license_version: "" })).toBe(false);
     expect(isAutoUseEligibleMediaAsset({ ...stock, commercial_ad_use_allowed: false })).toBe(false);
+  });
+
+  it("polls active media import jobs and allows retry only after failure", () => {
+    const activeStatuses: BusinessMediaImportJobStatus[] = [
+      "queued",
+      "fetching",
+      "analyzing",
+      "awaiting_approval",
+      "importing",
+    ];
+    for (const status of activeStatuses) {
+      expect(shouldPollBusinessMediaImportJob(status)).toBe(true);
+    }
+    expect(shouldPollBusinessMediaImportJob("completed")).toBe(false);
+    expect(shouldPollBusinessMediaImportJob("failed")).toBe(false);
+
+    const failedJob: BusinessMediaImportJobSummary = {
+      id: "job-1",
+      business_id: "biz-1",
+      source_type: "website",
+      status: "failed",
+      pages_scanned: 2,
+      candidate_count: 4,
+      approved_count: 0,
+    };
+    expect(canRetryBusinessMediaImportJob(failedJob)).toBe(true);
+    expect(canRetryBusinessMediaImportJob({ ...failedJob, status: "completed" })).toBe(false);
   });
 });
