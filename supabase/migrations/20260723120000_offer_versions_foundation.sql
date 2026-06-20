@@ -321,11 +321,19 @@ WHERE d.id = dc.deal_id
 
 UPDATE public.redemptions r
 SET
-  offer_definition_id = COALESCE(dc.offer_definition_id, d.offer_definition_id),
-  offer_version_id = COALESCE(dc.offer_version_id, d.offer_version_id)
+  offer_definition_id = COALESCE(r.offer_definition_id, dc.offer_definition_id, d.offer_definition_id),
+  offer_version_id = COALESCE(r.offer_version_id, dc.offer_version_id, d.offer_version_id)
+FROM public.deal_claims dc
+LEFT JOIN public.deals d
+  ON d.id = dc.deal_id
+WHERE dc.id = r.claim_id
+  AND (r.offer_definition_id IS NULL OR r.offer_version_id IS NULL);
+
+UPDATE public.redemptions r
+SET
+  offer_definition_id = COALESCE(r.offer_definition_id, d.offer_definition_id),
+  offer_version_id = COALESCE(r.offer_version_id, d.offer_version_id)
 FROM public.deals d
-LEFT JOIN public.deal_claims dc
-  ON dc.id = r.claim_id
 WHERE d.id = r.deal_id
   AND (r.offer_definition_id IS NULL OR r.offer_version_id IS NULL);
 
