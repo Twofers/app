@@ -1990,7 +1990,9 @@ export default function AiDealScreen() {
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
-      if (!posterForPublish) {
+      const allowTextOnlyPoster =
+        generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
+      if (!posterForPublish && !allowTextOnlyPoster) {
         showPublishError(t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
         }));
@@ -2022,7 +2024,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: posterForPublish,
+        poster_url: posterForPublish ?? null,
         poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
@@ -2271,7 +2273,10 @@ export default function AiDealScreen() {
       : revisionsLeft === 1
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
-  const imagePresetKeys = generatedAd?.photo_source === "generated" || generatedAd?.photo_source === "copy_only"
+  const imagePresetKeys =
+    generatedAd?.photo_source === "generated" ||
+    generatedAd?.photo_source === "stock" ||
+    generatedAd?.photo_source === "copy_only"
     ? IMAGE_PRESET_KEYS_GENERATED
     : IMAGE_PRESET_KEYS_PHOTO;
   const presetKeysForTarget =

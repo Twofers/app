@@ -38,7 +38,7 @@ export type GeneratedAd = {
   /** Web-research context the AI used to write the copy. Empty when research returned nothing. */
   item_research?: ItemResearch;
   /** How the image was produced. */
-  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "copy_only" | "fallback_template";
+  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "stock" | "copy_only" | "fallback_template";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment?: PhotoTreatment | null;
 };
