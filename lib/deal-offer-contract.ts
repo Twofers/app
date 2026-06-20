@@ -244,6 +244,10 @@ export function canonicalizeOfferItem(
   return { original: clean, canonical: clean, confidence: "low", source: "unchanged" };
 }
 
+function stripRewardPrefix(value: string): string {
+  return cleanText(value).replace(/^(?:a\s+|an\s+|the\s+)?(?:free|complimentary)\s+/i, "").trim();
+}
+
 function numeric(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string") {
@@ -574,10 +578,11 @@ export function buildDealOfferContract(
 
   if (dealType === "BUY_ONE_GET_ONE_FREE" || dealType === "BUY_ONE_GET_SOMETHING_FREE") {
     const requiredItem = canonicalizeOfferItem(cleanText(params.dealEligibility.requiredItemDescription)).canonical;
+    const rawFreeItem = stripRewardPrefix(cleanText(params.dealEligibility.freeItemDescription));
     const freeItem =
       dealType === "BUY_ONE_GET_ONE_FREE"
-        ? canonicalizeOfferItem(cleanText(params.dealEligibility.freeItemDescription)).canonical || requiredItem
-        : canonicalizeOfferItem(cleanText(params.dealEligibility.freeItemDescription)).canonical;
+        ? canonicalizeOfferItem(rawFreeItem).canonical || requiredItem
+        : canonicalizeOfferItem(rawFreeItem).canonical;
     if (!requiredItem || !freeItem) return null;
 
     const requiredQuantity = positiveQuantity(params.dealEligibility.requiredPurchaseQuantity);
@@ -874,8 +879,15 @@ function validateBuyOneGetOneFree(
   if (/\b(second|2nd)\s+(?:item\s+)?(?:50|[1-9]\d)\s*%\s*off\b|\bhalf\s+off\b/.test(normalized)) {
     reasonCodes.push("SECOND_ITEM_DISCOUNTED_NOT_FREE");
   }
-  const freeRewardMatches = [...normalized.matchAll(/\bget\s+(?:a|one|1|the)?\s*([a-z0-9][a-z0-9\s-]{1,40}?)\s+free\b/g)];
-  for (const match of freeRewardMatches) {
+  const itemBeforeFreeMatches = [
+    ...normalized.matchAll(/\bget\s+(?!(?:one|1)\s+free\b)(?:a|one|1|the)?\s*([a-z0-9][a-z0-9\s-]{1,40}?)\s+free\b/g),
+  ];
+  const freeBeforeItemMatches = [
+    ...normalized.matchAll(
+      /\bget\s+(?!(?:one|1)\s+free\b)(?:a|one|1|the)?\s*free\s+([a-z0-9][a-z0-9\s-]{1,40}?)(?=\s+(?:with|after|at|when|for|from|while|before|during|today|this|check|claim|purchase|qualifying)\b|$)/g,
+    ),
+  ];
+  for (const match of [...itemBeforeFreeMatches, ...freeBeforeItemMatches]) {
     const candidate = match[1]?.trim() ?? "";
     if (candidate && !containsItem(candidate, item)) {
       reasonCodes.push("CHANGES_FREE_ITEM");

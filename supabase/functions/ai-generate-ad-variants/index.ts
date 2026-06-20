@@ -1038,8 +1038,6 @@ serve(async (req) => {
 
     const photoPath = typeof body.photo_path === "string" ? body.photo_path.trim() : "";
     const hintText = typeof body.hint_text === "string" ? body.hint_text.trim() : "";
-    const imageMode = typeof body.image_mode === "string" ? body.image_mode.trim().toLowerCase() : "";
-
     const photoTreatmentRaw = typeof body.photo_treatment === "string"
       ? body.photo_treatment.trim().toLowerCase()
       : "";
@@ -1098,8 +1096,6 @@ serve(async (req) => {
     const previousAdIsObject =
       !!previousAdRaw && typeof previousAdRaw === "object" && !Array.isArray(previousAdRaw);
     const isRevision: boolean = revisionTarget !== null && previousAdIsObject;
-    const copyOnlyImageMode = !isRevision && !photoPath && imageMode === "copy_only";
-
     if (!quotaStatusOnly && !isRevision && !photoPath && !hintText) {
       return new Response(
         JSON.stringify({ error: "Provide at least a photo or a description of the offer." }),
@@ -1350,19 +1346,12 @@ serve(async (req) => {
     }
 
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
-    if (copyOnlyImageMode) {
-      imageResult = {
-        posterStoragePath: null,
-        source: "copy_only",
-        treatment: null,
-        prompt: null,
-        qa: skippedImageQaTelemetry(),
-      };
-    } else if (isRevision && previousAd && revisionTarget === "copy") {
-      // Copy-only revision: keep image
+    if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
+      // Copy-only revision: keep the existing image. If there is no existing image,
+      // fall through to image generation because every deal must have an image.
       imageResult = {
         posterStoragePath: previousAd.poster_storage_path ?? null,
-        source: previousAd.photo_source,
+        source: previousAd.photo_source === "copy_only" ? "generated" : previousAd.photo_source,
         treatment: previousAd.photo_treatment,
         prompt: null,
         qa: skippedImageQaTelemetry(),
@@ -1405,10 +1394,9 @@ serve(async (req) => {
 
     /**
      * Mark accidental image failures as no-quota failures. If image generation fails and no
-     * poster is saved, it should not burn quota. Copy-only quick drafts are intentional
-     * no-image successes, so those should still count as successful drafts.
+     * poster is saved, it should not burn quota and must not return an image-less ad.
      */
-    const imageProductionFailed = imageResult.posterStoragePath === null && imageResult.source !== "copy_only";
+    const imageProductionFailed = imageResult.posterStoragePath === null;
     const productionSuccess = !imageProductionFailed;
 
     await admin.from("ai_generation_logs").insert({
@@ -1437,6 +1425,17 @@ serve(async (req) => {
       limit: startingQuota.limit,
       remaining: Math.max(0, startingQuota.limit - updatedUsed),
     };
+
+    if (imageProductionFailed) {
+      return new Response(
+        JSON.stringify({
+          error: "AI image generation failed. Try again.",
+          error_code: "IMAGE_REQUIRED",
+          quota,
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(JSON.stringify({ ad, ads: [ad], quota }), {
       status: 200,

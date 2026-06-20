@@ -2266,7 +2266,7 @@ export default function AiDealScreen() {
       : revisionsLeft === 1
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
-  const imagePresetKeys = generatedAd?.photo_source === "generated"
+  const imagePresetKeys = generatedAd?.photo_source === "generated" || generatedAd?.photo_source === "copy_only"
     ? IMAGE_PRESET_KEYS_GENERATED
     : IMAGE_PRESET_KEYS_PHOTO;
   const presetKeysForTarget =

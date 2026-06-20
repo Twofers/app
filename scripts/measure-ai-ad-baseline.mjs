@@ -173,7 +173,7 @@ const validationFailedLogs = logs.filter((row) => {
 const imageFailureLogs = logs.filter((row) => {
   const source = jsonPath(row.response_payload, ["image_generation", "source"]);
   const produced = jsonPath(row.response_payload, ["image_generation", "produced_image"]);
-  return source && source !== "copy_only" && produced === false;
+  return source && produced === false;
 });
 
 const costByRequestGroup = new Map();

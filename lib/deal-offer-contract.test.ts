@@ -206,6 +206,41 @@ describe("buildDealOfferContract", () => {
     expect(validateAiCopyAgainstOffer(fallback, quickDealBuyBagelGetCoffeeFreeFixture).valid).toBe(true);
   });
 
+  it("normalizes a free-item field that repeats the word free", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Bacon and egg sandwich",
+      freeItemQuantity: 1,
+      freeItemDescription: "Free coffee",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.canonicalOfferLine).toBe("Buy a bacon and egg sandwich and get a free coffee");
+    expect(contract.freeReward?.itemName).toBe("coffee");
+    expect(buildRequiredVisualItems(contract)).toEqual(["Bacon and egg sandwich", "coffee"]);
+
+    const fallback = deterministicFallbackCopy(contract);
+    expect(fallback.short_description).not.toMatch(/free free/i);
+    expect(validateAiCopyAgainstOffer(fallback, contract).valid).toBe(true);
+  });
+
+  it("does not strip free from required item names", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Free range egg sandwich",
+      freeItemQuantity: 1,
+      freeItemDescription: "a free coffee",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.requiredPurchase?.itemName).toBe("Free range egg sandwich");
+    expect(contract.freeReward?.itemName).toBe("coffee");
+  });
+
   it("builds canonical copy for PERCENT_OFF_SINGLE_ITEM", () => {
     const contract = contractFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
@@ -306,6 +341,13 @@ describe("validateAiCopyAgainstOffer", () => {
       headline: "Buy one coffee and get one free",
       short_description: "The next coffee is free with the qualifying purchase.",
       push_notification: "Buy one coffee and get one free",
+      social_caption: "Buy one coffee and get one free at Merit Coffee.",
+    }), contract).valid).toBe(true);
+    expect(validateAiCopyAgainstOffer(copy({
+      headline: "Buy one coffee and get a free coffee",
+      short_description: "The next coffee is free with the qualifying purchase.",
+      push_notification: "Buy one coffee and get a free coffee",
+      social_caption: "Buy one coffee and get a free coffee at Merit Coffee.",
     }), contract).valid).toBe(true);
     expect(validateAiCopyAgainstOffer(copyText("Buy one coffee and get a free bagel"), contract).valid).toBe(false);
     expect(validateAiCopyAgainstOffer(copyText("Buy two coffees and get one free"), contract).valid).toBe(false);
@@ -407,6 +449,18 @@ describe("generateValidatedDealCopy", () => {
     expect(result.short_description).toContain("free bagel");
     expect(result.fallback_reason).toBeTruthy();
     expect(validateAiCopyAgainstOffer(deterministicFallbackCopy(coffeeBagelContract), coffeeBagelContract).valid).toBe(true);
+    const latteContract = contractFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "12 oz hot latte",
+      requiredItemRetailValueCents: 525,
+      freeItemQuantity: 1,
+      freeItemDescription: "12 oz hot latte",
+      freeItemRetailValueCents: 525,
+      freeItemDiscountPercent: 100,
+    });
+    expect(validateAiCopyAgainstOffer(deterministicFallbackCopy(latteContract), latteContract).valid).toBe(true);
   });
 
   it("falls back when the model times out or throws", async () => {

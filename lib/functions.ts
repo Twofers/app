@@ -689,8 +689,8 @@ export type AiGenerateAdRequest = {
   hint_text: string;
   business_context: BusinessContextPayload;
   output_language: string;
+  image_mode?: "generate";
   deal_eligibility?: DealEligibilityInput;
-  image_mode?: "generate" | "copy_only";
   photo_path?: string;
   photo_treatment?: PhotoTreatment | null;
   offer_schedule_summary?: string;
@@ -741,8 +741,8 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     hint_text: body.hint_text,
     business_context: body.business_context,
     output_language: body.output_language,
-    ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.image_mode ? { image_mode: body.image_mode } : {}),
+    ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),

@@ -281,9 +281,9 @@ export default function QuickDealExpress() {
       const { ad } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hint.trim(),
-        image_mode: "generate",
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        image_mode: "generate",
         deal_eligibility: eligibilityInput,
         offer_schedule_summary: scheduleSummary,
         quantity_limit: EXPRESS_MAX_CLAIMS,
@@ -878,12 +878,28 @@ export default function QuickDealExpress() {
 
 function friendlyGenerateError(err: unknown, t: (k: string, o?: Record<string, unknown>) => string): string {
   const raw = err instanceof Error ? err.message : String(err);
-  const code = (err as { code?: string } | null)?.code;
+  const code = getErrorCode(err);
   const lower = raw.toLowerCase();
+  if (code === "OPENAI_KEY_MISSING") return t("createAi.friendlyOpenaiConfig");
   if (code === "MONTHLY_LIMIT" || lower.includes("monthly limit")) return t("createAi.friendlyMonthlyLimit");
   if (code === "COOLDOWN_ACTIVE") return raw; // server message is specific ("Please wait 12s…")
+  if (code === "COPY_FAILED") return t("createAi.friendlyCopyFailed");
+  if (code === "DEAL_NOT_ELIGIBLE_FOR_AI") {
+    return t("dealEligibility.invalidBody", {
+      defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
+    });
+  }
   if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("abort")) {
     return t("createAi.friendlyTimeout");
+  }
+  if (lower.includes("do not own") || lower.includes("don't own")) {
+    return t("createAi.friendlyOwnership");
+  }
+  if (lower.includes("unauthorized") || lower.includes("log in")) {
+    return t("createAi.friendlySession");
+  }
+  if (lower.includes("photo") || lower.includes("storage") || lower.includes("upload")) {
+    return t("createAi.friendlyPhoto");
   }
   return t("createQuick.errGenerate");
 }
