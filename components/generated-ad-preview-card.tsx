@@ -1,0 +1,309 @@
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet, Text, View } from "react-native";
+
+type GeneratedAdPreviewCardTheme = {
+  surface: string;
+  surfaceMuted: string;
+  border: string;
+  text: string;
+  mutedText: string;
+  primary: string;
+  primaryText: string;
+  accentText: string;
+};
+
+export type GeneratedAdPreviewCardProps = {
+  imageUri: string | null;
+  businessName?: string | null;
+  headline: string;
+  body: string;
+  offerLine?: string | null;
+  termsLine?: string | null;
+  cta: string;
+  scheduleSummary: string;
+  maxClaimsLabel: string;
+  maxClaimsValue: number | string;
+  termsLabel: string;
+  termsHelper: string;
+  noImageLabel: string;
+  addressLine?: string | null;
+  theme: GeneratedAdPreviewCardTheme;
+  darkMode: boolean;
+};
+
+function clean(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function GeneratedAdPreviewCard({
+  imageUri,
+  businessName,
+  headline,
+  body,
+  offerLine,
+  termsLine,
+  cta,
+  scheduleSummary,
+  maxClaimsLabel,
+  maxClaimsValue,
+  termsLabel,
+  termsHelper,
+  noImageLabel,
+  addressLine,
+  theme,
+  darkMode,
+}: GeneratedAdPreviewCardProps) {
+  const cleanBusiness = clean(businessName);
+  const cleanOffer = clean(offerLine);
+  const cleanTerms = clean(termsLine);
+  const cleanBody = clean(body);
+  const cleanAddress = clean(addressLine);
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowOpacity: darkMode ? 0 : 0.12,
+        },
+      ]}
+    >
+      <View style={styles.hero}>
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            accessibilityLabel={headline}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.noImage, { backgroundColor: theme.surfaceMuted }]}>
+            <Text style={{ color: theme.mutedText }}>{noImageLabel}</Text>
+          </View>
+        )}
+
+        <LinearGradient
+          colors={darkMode
+            ? ["rgba(0,0,0,0.08)", "rgba(0,0,0,0.78)"]
+            : ["rgba(0,0,0,0.02)", "rgba(0,0,0,0.68)"]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.heroTopRow}>
+          <View style={[styles.brandBadge, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.brandBadgeText, { color: theme.primaryText }]}>Twofer</Text>
+          </View>
+          {cleanBusiness ? (
+            <View style={styles.businessBadge}>
+              <Text numberOfLines={1} style={styles.businessBadgeText}>
+                {cleanBusiness}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.heroCopy}>
+          {cleanOffer ? (
+            <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
+              <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
+                {cleanOffer}
+              </Text>
+            </View>
+          ) : null}
+          <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.headline}>
+            {headline}
+          </Text>
+          {cleanBody ? (
+            <Text numberOfLines={3} style={styles.body}>
+              {cleanBody}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={styles.footer}>
+        <View style={styles.chipRow}>
+          <View style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+            <Text numberOfLines={1} style={[styles.chipText, { color: theme.text }]}>
+              {scheduleSummary}
+            </Text>
+          </View>
+          <View style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+            <Text numberOfLines={1} style={[styles.chipText, { color: theme.text }]}>
+              {maxClaimsLabel} {maxClaimsValue}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.ctaRow}>
+          <View style={[styles.cta, { backgroundColor: theme.primary }]}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86} style={[styles.ctaText, { color: theme.primaryText }]}>
+              {cta}
+            </Text>
+          </View>
+          {cleanAddress ? (
+            <Text numberOfLines={2} style={[styles.address, { color: theme.mutedText }]}>
+              {cleanAddress}
+            </Text>
+          ) : null}
+        </View>
+
+        {cleanTerms ? (
+          <View style={[styles.terms, { borderTopColor: theme.border }]}>
+            <Text style={[styles.termsLabel, { color: theme.mutedText }]}>{termsLabel}</Text>
+            <Text style={[styles.termsLine, { color: theme.text }]}>{cleanTerms}</Text>
+            <Text style={[styles.termsHelper, { color: theme.mutedText }]}>{termsHelper}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 24,
+    elevation: 3,
+  },
+  hero: {
+    height: 360,
+    justifyContent: "space-between",
+    overflow: "hidden",
+  },
+  noImage: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  brandBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  brandBadgeText: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  businessBadge: {
+    flex: 1,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  businessBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+  heroCopy: {
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingBottom: 20,
+  },
+  offerBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    maxWidth: "100%",
+  },
+  offerBadgeText: {
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 17,
+    letterSpacing: 0,
+  },
+  headline: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: "900",
+    lineHeight: 37,
+    letterSpacing: 0,
+  },
+  body: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 22,
+    letterSpacing: 0,
+  },
+  footer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 13,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    maxWidth: "100%",
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+  ctaRow: {
+    gap: 8,
+  },
+  cta: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    maxWidth: "100%",
+  },
+  ctaText: {
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  address: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  terms: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+  },
+  termsLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  termsLine: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  termsHelper: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+});

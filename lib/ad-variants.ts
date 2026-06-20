@@ -5,6 +5,11 @@
 
 import { getDealDisplayTitle } from "./deal-display-copy";
 import { DEAL_COPY_LIMITS } from "./deal-offer-contract";
+import {
+  buildOfferDisclosureLine,
+  canonicalOfferSentence,
+  type OfferDefinitionV1,
+} from "./offer-definition";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -33,7 +38,7 @@ export type GeneratedAd = {
   /** Web-research context the AI used to write the copy. Empty when research returned nothing. */
   item_research?: ItemResearch;
   /** How the image was produced. */
-  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "fallback_template";
+  photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "stock" | "copy_only" | "fallback_template";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment?: PhotoTreatment | null;
 };
@@ -155,4 +160,23 @@ export function buildFallbackTemplateAd(params: {
     photo_source: "fallback_template",
     photo_treatment: null,
   };
+}
+
+export function buildOfferDefinitionFallbackAd(
+  definition: OfferDefinitionV1,
+  params: {
+    ctaText?: string | null;
+  } = {},
+): GeneratedAd {
+  const offerSentence = canonicalOfferSentence(definition);
+  const disclosureLine = buildOfferDisclosureLine(definition);
+  return buildFallbackTemplateAd({
+    businessName: definition.merchantName,
+    title: definition.canonicalOfferLine,
+    promoLine: offerSentence,
+    ctaText: params.ctaText,
+    ownerOfferHint: offerSentence,
+    lockedOfferLine: definition.canonicalOfferLine,
+    lockedTermsLine: disclosureLine,
+  });
 }

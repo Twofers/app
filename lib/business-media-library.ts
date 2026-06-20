@@ -1,0 +1,171 @@
+export const BUSINESS_MEDIA_SOURCE_TYPES = [
+  "owner_upload",
+  "website_import",
+  "instagram_import",
+  "facebook_import",
+  "prior_approved_creative",
+  "twofer_stock",
+  "generated",
+] as const;
+
+export type BusinessMediaSourceType = (typeof BUSINESS_MEDIA_SOURCE_TYPES)[number];
+
+export type BusinessMediaApprovalStatus = "pending" | "approved" | "rejected" | "disabled";
+
+export type BusinessMediaModerationStatus = "pending" | "approved" | "rejected" | "failed";
+
+export type BusinessMediaSourceBadge =
+  | "Your photo"
+  | "Website"
+  | "Instagram"
+  | "Facebook"
+  | "Previously approved"
+  | "Twofer stock"
+  | "Generated";
+
+export type BusinessMediaAssetSummary = {
+  id: string;
+  business_id: string | null;
+  source_type: BusinessMediaSourceType;
+  storage_path: string;
+  owner_approved: boolean;
+  rights_confirmed: boolean;
+  auto_use_eligible: boolean;
+  approval_status: BusinessMediaApprovalStatus;
+  moderation_status: BusinessMediaModerationStatus;
+  source_revoked_at?: string | null;
+  commercial_ad_use_allowed?: boolean | null;
+  license_provider?: string | null;
+  license_asset_id?: string | null;
+  license_version?: string | null;
+  quality_score?: number | null;
+  ad_usefulness_score?: number | null;
+  visual_relevance_floor?: number | null;
+  crop_suitability_score?: number | null;
+  brand_fit_score?: number | null;
+  tags?: string[] | null;
+  detected_items?: string[] | null;
+  contains_text?: boolean | null;
+  contains_logo?: boolean | null;
+  last_used_at?: string | null;
+  usage_count?: number | null;
+};
+
+export type BusinessBrandProfileSummary = {
+  id: string;
+  business_id: string;
+  website_url?: string | null;
+  logo_asset_id?: string | null;
+  voice_attributes: string[];
+  avoid_phrases: string[];
+  preferred_phrases: string[];
+  owner_approved_at?: string | null;
+};
+
+export type AdGenerationJobStage =
+  | "queued"
+  | "reading_deal"
+  | "finding_photo"
+  | "creating_visual"
+  | "writing_ad"
+  | "building_design"
+  | "final_review"
+  | "ready"
+  | "failed"
+  | "canceled";
+
+export type AdGenerationJobStatus = "queued" | "running" | "ready" | "failed" | "canceled";
+
+export type AdCreativeConceptLabel = "recommended" | "alternative_a" | "alternative_b" | "revision";
+
+export const BUSINESS_MEDIA_IMPORT_JOB_STATUSES = [
+  "queued",
+  "fetching",
+  "analyzing",
+  "awaiting_approval",
+  "importing",
+  "completed",
+  "failed",
+] as const;
+
+export type BusinessMediaImportSourceType = "website" | "instagram" | "facebook";
+
+export type BusinessMediaImportJobStatus = (typeof BUSINESS_MEDIA_IMPORT_JOB_STATUSES)[number];
+
+export type BusinessMediaImportJobSummary = {
+  id: string;
+  business_id: string;
+  source_type: BusinessMediaImportSourceType;
+  requested_url?: string | null;
+  social_connection_id?: string | null;
+  normalized_origin?: string | null;
+  status: BusinessMediaImportJobStatus;
+  pages_scanned: number;
+  candidate_count: number;
+  approved_count: number;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
+export function mediaSourceBadge(sourceType: BusinessMediaSourceType): BusinessMediaSourceBadge {
+  if (sourceType === "website_import") return "Website";
+  if (sourceType === "instagram_import") return "Instagram";
+  if (sourceType === "facebook_import") return "Facebook";
+  if (sourceType === "prior_approved_creative") return "Previously approved";
+  if (sourceType === "twofer_stock") return "Twofer stock";
+  if (sourceType === "generated") return "Generated";
+  return "Your photo";
+}
+
+export function isLicensedTwoferStockAsset(asset: BusinessMediaAssetSummary): boolean {
+  return (
+    asset.source_type === "twofer_stock" &&
+    asset.business_id === null &&
+    asset.commercial_ad_use_allowed === true &&
+    Boolean(asset.license_provider?.trim()) &&
+    Boolean(asset.license_asset_id?.trim()) &&
+    Boolean(asset.license_version?.trim())
+  );
+}
+
+export function isApprovedBusinessMediaAsset(asset: BusinessMediaAssetSummary): boolean {
+  if (asset.source_type === "twofer_stock") return isLicensedTwoferStockAsset(asset);
+  return Boolean(asset.business_id);
+}
+
+export function isAutoUseEligibleMediaAsset(asset: BusinessMediaAssetSummary): boolean {
+  return (
+    isApprovedBusinessMediaAsset(asset) &&
+    asset.auto_use_eligible === true &&
+    asset.owner_approved === true &&
+    asset.rights_confirmed === true &&
+    asset.approval_status === "approved" &&
+    asset.moderation_status === "approved" &&
+    !asset.source_revoked_at
+  );
+}
+
+export function canMediaAssetBeAutoUsedForBusiness(
+  asset: BusinessMediaAssetSummary,
+  businessId: string,
+): boolean {
+  const cleanBusinessId = businessId.trim();
+  if (!cleanBusinessId || !isAutoUseEligibleMediaAsset(asset)) return false;
+  if (asset.source_type === "twofer_stock") return true;
+  return asset.business_id === cleanBusinessId;
+}
+
+export function isTerminalBusinessMediaImportJobStatus(status: BusinessMediaImportJobStatus): boolean {
+  return status === "completed" || status === "failed";
+}
+
+export function shouldPollBusinessMediaImportJob(status: BusinessMediaImportJobStatus): boolean {
+  return !isTerminalBusinessMediaImportJobStatus(status);
+}
+
+export function canRetryBusinessMediaImportJob(job: BusinessMediaImportJobSummary): boolean {
+  return job.status === "failed";
+}

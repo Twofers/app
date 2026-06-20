@@ -37,6 +37,11 @@ import {
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
+import {
+  DancingPenguinProgressCard,
+  DancingPenguinProgressOverlay,
+} from "@/components/dancing-penguin-progress-card";
+import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -50,6 +55,7 @@ import {
 } from "../../lib/functions";
 import {
   adToDealDraft,
+  buildOfferDefinitionFallbackAd,
   buildFallbackTemplateAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
@@ -92,6 +98,7 @@ import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
+import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -106,6 +113,12 @@ import {
   fetchAiComposeQuota,
   type AiComposeQuota,
 } from "../../lib/ai-compose-offer";
+import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "../../lib/runtime-env";
+import {
+  buildOfferVersionPublishAdSpec,
+  createPublishIdempotencyKey,
+  publishOfferVersionedDeal,
+} from "../../lib/offer-version-publish";
 
 type TemplateRow = {
   id: string;
@@ -126,6 +139,8 @@ type TemplateRow = {
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
+const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
+const OFFER_VERSION_PUBLISH_ENABLED = isOfferVersionPublishEnabled();
 
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
@@ -306,14 +321,17 @@ type RevisionTarget = "copy" | "image" | "both";
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 
 const COPY_PRESET_KEYS = [
+  "createAi.revisePresetPunchier",
+  "createAi.revisePresetSimpler",
+  "createAi.revisePresetPremium",
+  "createAi.revisePresetFunnier",
   "createAi.revisePresetShorter",
-  "createAi.revisePresetCasual",
-  "createAi.revisePresetProfessional",
   "createAi.revisePresetSavings",
   "createAi.revisePresetItem",
 ];
 
 const IMAGE_PRESET_KEYS_GENERATED = [
+  "createAi.revisePresetTryAnotherImage",
   "createAi.revisePresetGenAngle",
   "createAi.revisePresetGenBrighter",
   "createAi.revisePresetGenMoodier",
@@ -487,6 +505,7 @@ export default function AiDealScreen() {
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [publishStatusMessage, setPublishStatusMessage] = useState<string | null>(null);
   const publishInFlightRef = useRef(false);
+  const publishIdempotencyKeyRef = useRef<string | null>(null);
   const [allowPostPublishNavigation, setAllowPostPublishNavigation] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -600,6 +619,10 @@ export default function AiDealScreen() {
     () => validateDealEligibility(eligibilityInput),
     [eligibilityInput],
   );
+  const redemptionLimitSummary = useMemo(
+    () => buildRedemptionLimitSummary(Number(cutoffMins)),
+    [cutoffMins],
+  );
   const offerContract = useMemo(() => {
     if (!businessId) return null;
     const maxClaimsNum = Number(maxClaims);
@@ -623,6 +646,36 @@ export default function AiDealScreen() {
     maxClaims,
     offerScheduleSummary,
     publishLocationIds,
+  ]);
+  const offerDefinition = useMemo(() => {
+    if (!OFFER_DEFINITION_FALLBACK_ENABLED && !OFFER_VERSION_PUBLISH_ENABLED) return null;
+    if (!offerContract) return null;
+    return buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput,
+      redemptionLimit: redemptionLimitSummary,
+      schedule: {
+        mode: validityMode === "one-time" ? "one_time" : "recurring",
+        summary: offerScheduleSummary,
+        startsAt: validityMode === "one-time" ? startTime.toISOString() : null,
+        endsAt: validityMode === "one-time" ? endTime.toISOString() : null,
+        timeZone: timezone,
+        daysOfWeek: validityMode === "recurring" ? daysOfWeek : null,
+        windowStartMinutes: validityMode === "recurring" ? minutesFromDate(windowStart) : null,
+        windowEndMinutes: validityMode === "recurring" ? minutesFromDate(windowEnd) : null,
+      },
+    });
+  }, [
+    daysOfWeek,
+    eligibilityInput,
+    endTime,
+    offerContract,
+    offerScheduleSummary,
+    redemptionLimitSummary,
+    startTime,
+    timezone,
+    validityMode,
+    windowEnd,
+    windowStart,
   ]);
 
   const canPublish = useMemo(() => {
@@ -1599,7 +1652,6 @@ export default function AiDealScreen() {
       // even if the user changes the selector mid-flight.
       const sentTreatment = path ? photoTreatment : null;
       const maxClaimsNum = Number(maxClaims);
-      const cutoffNum = Number(cutoffMins);
 
       const { ad, quota: nextQuota } = await aiGenerateAd({
         business_id: businessId,
@@ -1610,7 +1662,7 @@ export default function AiDealScreen() {
         ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
-        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
+        redemption_limit: redemptionLimitSummary,
       });
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1665,7 +1717,6 @@ export default function AiDealScreen() {
     const treatmentForRevision =
       lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
     const maxClaimsNum = Number(maxClaims);
-    const cutoffNum = Number(cutoffMins);
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
         business_id: businessId,
@@ -1681,7 +1732,7 @@ export default function AiDealScreen() {
         ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
-        redemption_limit: buildRedemptionLimitSummary(cutoffNum),
+        redemption_limit: redemptionLimitSummary,
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
@@ -1723,19 +1774,41 @@ export default function AiDealScreen() {
   }
 
   function useFallbackTemplateAd() {
+    const fallbackPosterPath = generatedAd?.poster_storage_path ?? photoPath ?? null;
+    const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
+    if (!hasImageSource) {
+      setBanner({
+        message: t("createAi.errImageRequired", {
+          defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+        }),
+        tone: "error",
+      });
+      return;
+    }
     const maxClaimsNum = Number(maxClaims);
-    const fallbackAd = buildFallbackTemplateAd({
-      businessName,
-      title,
-      promoLine,
-      ctaText,
-      description,
-      ownerOfferHint: hintText,
-      lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
-      lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
-      scheduleSummary: displayScheduleSummary,
-      quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
-    });
+    const fallbackBaseAd = offerDefinition
+      ? buildOfferDefinitionFallbackAd(offerDefinition, { ctaText })
+      : buildFallbackTemplateAd({
+          businessName,
+          title,
+          promoLine,
+          ctaText,
+          description,
+          ownerOfferHint: hintText,
+          lockedOfferLine: offerContract?.canonicalOfferLine ?? null,
+          lockedTermsLine: offerContract?.canonicalShortTerms ?? null,
+          scheduleSummary: displayScheduleSummary,
+          quantityLimit: Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? maxClaimsNum : null,
+        });
+    const fallbackAd = fallbackPosterPath
+      ? {
+          ...fallbackBaseAd,
+          poster_storage_path: fallbackPosterPath,
+          photo_source: generatedAd?.poster_storage_path ? generatedAd.photo_source ?? "generated" : ("uploaded_original" as const),
+          photo_treatment: generatedAd?.poster_storage_path ? generatedAd.photo_treatment ?? null : null,
+        }
+      : fallbackBaseAd;
+    if (!fallbackPosterPath) setUsePhotoAsFinal(true);
     setGeneratedAd(fallbackAd);
     applyAdToDraft(fallbackAd);
     setAdAccepted(true);
@@ -1919,6 +1992,15 @@ export default function AiDealScreen() {
       });
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
+      const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
+      const allowTextOnlyPoster =
+        generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
+      if (!posterForPublish && !allowTextOnlyPoster) {
+        showPublishError(t("createAi.errImageRequired", {
+          defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
+        }));
+        return;
+      }
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const translations = await translateDealCopy({
@@ -1945,7 +2027,7 @@ export default function AiDealScreen() {
         claim_cutoff_buffer_minutes: cutoffNum,
         max_claims: maxClaimsNum,
         is_active: true,
-        poster_url: finalPublicPoster ?? explicitPhotoPoster,
+        poster_url: posterForPublish ?? null,
         poster_storage_path: finalStoragePath ?? null,
         is_recurring: isRecurring,
         days_of_week: isRecurring ? daysOfWeek : null,
@@ -1963,11 +2045,32 @@ export default function AiDealScreen() {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        const insertResult = await insertDealsWithCompatibility(rows);
-        const { data: dealsOut, error } = insertResult;
-        if (error) throw error;
-        for (const row of dealsOut ?? []) {
-          if (row?.id) {
+        const canUseVersionedPublish = OFFER_VERSION_PUBLISH_ENABLED && offerDefinition !== null;
+        let dealsOut: { id: string; shouldNotify: boolean }[] = [];
+        if (canUseVersionedPublish) {
+          const versionedResult = await publishOfferVersionedDeal({
+            business_id: businessId,
+            offer_definition: offerDefinition,
+            deal_rows: rows,
+            idempotency_key:
+              publishIdempotencyKeyRef.current ??
+              (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
+            ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, generatedAd),
+          });
+          dealsOut = versionedResult.deals.map((row) => ({
+            id: row.deal_id,
+            shouldNotify: row.idempotency_replayed !== true,
+          }));
+        } else {
+          const insertResult = await insertDealsWithCompatibility(rows);
+          const { data, error } = insertResult;
+          if (error) throw error;
+          dealsOut = (data ?? [])
+            .filter((row): row is { id: string } => typeof row?.id === "string")
+            .map((row) => ({ id: row.id, shouldNotify: true }));
+        }
+        for (const row of dealsOut) {
+          if (row.id && row.shouldNotify) {
             void notifyDealPublished(row.id);
           }
         }
@@ -1998,6 +2101,7 @@ export default function AiDealScreen() {
         : t("createAi.publishSuccessBody");
       setPublishing(false);
       setPublishStatus("success");
+      publishIdempotencyKeyRef.current = null;
       setPublishStatusMessage(successMessage);
       setBanner({ message: successMessage, tone: "success" });
       if (editingDealId) {
@@ -2172,7 +2276,10 @@ export default function AiDealScreen() {
       : revisionsLeft === 1
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
-  const imagePresetKeys = generatedAd?.photo_source === "generated"
+  const imagePresetKeys =
+    generatedAd?.photo_source === "generated" ||
+    generatedAd?.photo_source === "stock" ||
+    generatedAd?.photo_source === "copy_only"
     ? IMAGE_PRESET_KEYS_GENERATED
     : IMAGE_PRESET_KEYS_PHOTO;
   const presetKeysForTarget =
@@ -2762,29 +2869,23 @@ export default function AiDealScreen() {
                   {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
                 </Text>
               ) : null}
-              <PrimaryButton
-                title={generating ? t("createAi.generateWorking") : t("createAi.generateCta")}
-                onPress={() => void generateAd()}
-                disabled={generating || revising}
-              />
               {generating ? (
-                <View style={{ marginTop: 4 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <ActivityIndicator color={theme.primary} />
-                    <Text style={{ opacity: 0.75, flex: 1, color: theme.text }}>
-                      {selectedPhotoUri
-                        ? t("createAi.generatingWithPhoto")
-                        : t("createAi.generatingNoPhoto")}
-                    </Text>
-                  </View>
-                  <Text style={{ marginTop: 6, opacity: 0.55, fontSize: 12, lineHeight: 17, color: theme.text }}>
-                    {t("createAi.generatingHint")}
-                  </Text>
-                  <View style={{ marginTop: 10 }}>
-                    <SecondaryButton title={t("createAi.cancel")} onPress={cancelGeneration} />
-                  </View>
-                </View>
-              ) : null}
+                <DancingPenguinProgressCard
+                  title={t("createAi.generateWorking")}
+                  message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+                  hint={t("createAi.generatingHint")}
+                  cancelLabel={t("createAi.cancel")}
+                  onCancel={cancelGeneration}
+                  theme={theme}
+                  testID="ai-draft-penguin-progress"
+                />
+              ) : (
+                <PrimaryButton
+                  title={t("createAi.generateCta")}
+                  onPress={() => void generateAd()}
+                  disabled={revising}
+                />
+              )}
               {!generating && !generatedAd && !showDraftEditor ? (
                 <SecondaryButton
                   title={t("createAi.showDraftFields")}
@@ -2821,105 +2922,31 @@ export default function AiDealScreen() {
               </View>
             ) : null}
 
-            {/* Single ad preview — text rendered ABOVE image, not baked in */}
+            {/* Single ad preview — text rendered natively over the image, not baked in */}
             {generatedAd ? (
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                {/* Ad card: text above, image below */}
-                <View
-                  style={{
-                    borderRadius: 24,
-                    backgroundColor: theme.surface,
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                  }}
-                >
-                  {/* Top — meta line */}
-                  <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4 }}>
-                    {businessName ? (
-                      <Text style={{ fontSize: 12, color: theme.mutedText, fontWeight: "600", letterSpacing: 0.3 }}>
-                        {businessName.toUpperCase()}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {(generatedAd.locked_offer_line || offerContract?.canonicalOfferLine) ? (
-                    <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                        {t("createAi.lockedOfferLabel", { defaultValue: "Offer" })}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 17, fontWeight: "800", color: theme.text, lineHeight: 23 }}>
-                        {generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Headline + subline */}
-                  <View style={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 14 }}>
-                    <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                      {t("createAi.generatedCopyLabel", { defaultValue: "Generated ad copy" })}
-                    </Text>
-                    <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.4, color: theme.primary, lineHeight: 28 }}>
-                      {generatedAd.headline}
-                    </Text>
-                    <Text style={{ marginTop: 8, fontSize: 16, fontWeight: "500", color: theme.text, lineHeight: 22 }}>
-                      {generatedAd.subheadline}
-                    </Text>
-                  </View>
-
-                  {/* Image */}
-                  {adImageUri ? (
-                    <Image
-                      source={{ uri: adImageUri }}
-                      style={{ height: 320, width: "100%" }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={{ height: 200, backgroundColor: theme.surfaceMuted, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ opacity: 0.5, color: theme.text }}>{t("createAi.noImage")}</Text>
-                    </View>
-                  )}
-
-                  {/* CTA + meta */}
-                  <View style={{ paddingHorizontal: 18, paddingVertical: 16, gap: 10 }}>
-                    <View
-                      style={{
-                        backgroundColor: theme.primary,
-                        paddingVertical: 12,
-                        paddingHorizontal: 20,
-                        borderRadius: 14,
-                        alignSelf: "flex-start",
-                      }}
-                    >
-                      <Text style={{ fontSize: 15, fontWeight: "800", color: theme.primaryText, letterSpacing: 0.2 }}>
-                        {generatedAd.cta}
-                      </Text>
-                    </View>
-                    {businessProfile?.address || businessProfile?.location ? (
-                      <Text style={{ fontSize: 13, color: theme.mutedText }}>
-                        {businessProfile.address ?? businessProfile.location}
-                      </Text>
-                    ) : null}
-                    <Text style={{ fontSize: 12, color: theme.mutedText }}>{displayScheduleSummary}</Text>
-                    {(generatedAd.locked_terms_line || offerContract?.canonicalShortTerms) ? (
-                      <View style={{ paddingTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText, letterSpacing: 0 }}>
-                          {t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                        </Text>
-                        <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: theme.text }}>
-                          {generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                        </Text>
-                        <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
-                          {t("createAi.lockedTermsHelper", {
-                            defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                          })}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+                <GeneratedAdPreviewCard
+                  imageUri={adImageUri}
+                  businessName={businessName}
+                  headline={generatedAd.headline}
+                  body={generatedAd.subheadline}
+                  offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
+                  termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
+                  cta={generatedAd.cta}
+                  scheduleSummary={displayScheduleSummary}
+                  maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                  maxClaimsValue={maxClaims}
+                  termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                  termsHelper={t("createAi.lockedTermsHelper", {
+                    defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                  })}
+                  noImageLabel={t("createAi.noImage")}
+                  addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                  theme={theme}
+                  darkMode={colorScheme === "dark"}
+                />
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
                   <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>
@@ -3118,6 +3145,16 @@ export default function AiDealScreen() {
           </>
         )}
       </ScrollView>
+      <DancingPenguinProgressOverlay
+        visible={generating}
+        title={t("createAi.generateWorking")}
+        message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
+        hint={t("createAi.generatingHint")}
+        cancelLabel={t("createAi.cancel")}
+        onCancel={cancelGeneration}
+        theme={theme}
+        testID="ai-draft-penguin-progress-overlay"
+      />
       <IosDoneInputAccessory />
       <Modal
         visible={Platform.OS === "ios" && iosSchedulePicker !== null}

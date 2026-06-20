@@ -31,7 +31,7 @@ describe("validateQuickDealAd", () => {
     const result = validateQuickDealAd(
       {
         headline: "Buy a bagel and get a free coffee",
-        offer: "The free coffee is included after the qualifying bagel purchase.",
+        offer: "Buy a bagel and the coffee is on us.",
         cta: "Claim deal",
       },
       contextFor(bagelCoffeeInput),

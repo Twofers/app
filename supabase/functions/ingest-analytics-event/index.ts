@@ -29,6 +29,9 @@ const ALLOWED = new Set([
   "claim_blocked",
   "quick_deal_preview_blocked",
   "quick_deal_release_blocked",
+  "quick_deal_offer_definition_fallback_used",
+  "ai_ad_quality_gate_failed",
+  "ai_ad_versioned_publish",
   "app_error",
 ]);
 

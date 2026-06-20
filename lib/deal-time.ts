@@ -24,8 +24,14 @@ const dayMap: Record<string, number> = {
   Sun: 7,
 };
 
+const DEFAULT_DEAL_TIME_ZONE = "America/Chicago";
+
 /** Jan 1, 2024 is Monday — aligns with `days_of_week` 1=Mon … 7=Sun. */
 const BASE_MONDAY = new Date(2024, 0, 1);
+
+function dealTimeZone(deal: RecurringInfo) {
+  return deal.timezone?.trim() || DEFAULT_DEAL_TIME_ZONE;
+}
 
 function dayNumberToDate(dayNum: number): Date {
   return addDays(BASE_MONDAY, dayNum - 1);
@@ -61,6 +67,24 @@ function formatDaysLocalized(days: number[], locale: Locale, t?: TFunction) {
     .join(", ");
 }
 
+function formatDateTimeInTimeZone(date: Date, timeZone: string, lang?: string) {
+  if (!isValid(date)) return "";
+  const formatOptions: Intl.DateTimeFormatOptions = {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  };
+  try {
+    return new Intl.DateTimeFormat(lang || "en", formatOptions).format(date);
+  } catch (e) {
+    devWarn("[deal-time] formatDateTimeInTimeZone failed (bad timezone?)", e);
+    return new Intl.DateTimeFormat(lang || "en", {
+      ...formatOptions,
+      timeZone: DEFAULT_DEAL_TIME_ZONE,
+    }).format(date);
+  }
+}
+
 export function isDealActiveNow(deal: RecurringInfo, now = new Date()) {
   if (!deal) return false;
   try {
@@ -75,7 +99,7 @@ export function isDealActiveNow(deal: RecurringInfo, now = new Date()) {
     const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
     const windowStart = deal.window_start_minutes;
     const windowEnd = deal.window_end_minutes;
-    const tz = deal.timezone || "America/Chicago";
+    const tz = dealTimeZone(deal);
 
     if (!days.length || windowStart == null || windowEnd == null) return false;
     const { day, minutes } = getLocalParts(now, tz);
@@ -131,7 +155,7 @@ export function getDealClaimScheduleBlock(
     const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
     const windowStart = deal.window_start_minutes;
     const windowEnd = deal.window_end_minutes;
-    const tz = deal.timezone || "America/Chicago";
+    const tz = dealTimeZone(deal);
 
     if (!days.length || windowStart == null || windowEnd == null) return "misconfigured";
 
@@ -189,14 +213,13 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
   const endsVerb = options?.endsVerb ?? "Ends";
   const t = options?.t;
   const loc = dateFnsLocaleFor(lang);
-  const fmt = (d: Date) => (isValid(d) ? format(d, "PPp", { locale: loc }) : "");
 
   if (!deal) return t?.("dealValidity.unavailable") ?? "Validity unavailable";
   if (deal.is_recurring) {
     const days = Array.isArray(deal.days_of_week) ? deal.days_of_week : [];
     const windowStart = deal.window_start_minutes;
     const windowEnd = deal.window_end_minutes;
-    const tz = deal.timezone || "America/Chicago";
+    const tz = dealTimeZone(deal);
     if (!days.length || windowStart == null || windowEnd == null) {
       return t?.("dealValidity.recurringWindow") ?? "Recurring window";
     }
@@ -205,9 +228,10 @@ export function formatValiditySummary(deal: RecurringInfo, options?: FormatValid
   }
   const start = deal.start_time ? new Date(deal.start_time) : null;
   const end = deal.end_time ? new Date(deal.end_time) : null;
+  const tz = dealTimeZone(deal);
   if (start && end) {
-    return `${fmt(start)} → ${fmt(end)}`;
+    return `${formatDateTimeInTimeZone(start, tz, lang)} → ${formatDateTimeInTimeZone(end, tz, lang)}`;
   }
-  if (end) return `${endsVerb} ${fmt(end)}`.trim();
+  if (end) return `${endsVerb} ${formatDateTimeInTimeZone(end, tz, lang)}`.trim();
   return t?.("dealValidity.oneTime") ?? "One-time deal";
 }

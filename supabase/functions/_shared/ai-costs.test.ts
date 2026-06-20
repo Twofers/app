@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateAiCost, normalizeAiUsage } from "./ai-costs.ts";
+import { calculateAiCost, logAiCost, normalizeAiUsage } from "./ai-costs.ts";
 
 describe("calculateAiCost", () => {
   it("calculates text-only ad cost", () => {
@@ -116,5 +116,38 @@ describe("calculateAiCost", () => {
 
     expect(usage.input_tokens).toBe(1000);
     expect(usage.cached_input_tokens).toBe(250);
+  });
+
+  it("logs explicit Gemini image cost estimates without usage warnings", async () => {
+    const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
+    const admin = {
+      from(table: string) {
+        return {
+          async insert(row: Record<string, unknown>) {
+            inserts.push({ table, row });
+            return { error: null };
+          },
+        };
+      },
+    };
+
+    await logAiCost(admin, {
+      businessId: "business-1",
+      ownerUserId: "owner-1",
+      requestGroupId: "11111111-1111-4111-8111-111111111111",
+      feature: "image_generation",
+      provider: "gemini",
+      model: "gemini-3.1-flash-image",
+      endpoint: "models.generateContent",
+      estimatedCostUsd: 0.067,
+      success: true,
+    });
+
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.table).toBe("ai_generation_costs");
+    expect(inserts[0]?.row.provider).toBe("gemini");
+    expect(inserts[0]?.row.model).toBe("gemini-3.1-flash-image");
+    expect(inserts[0]?.row.estimated_cost_usd).toBe(0.067);
+    expect(inserts[0]?.row.error_message).toBeNull();
   });
 });

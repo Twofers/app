@@ -51,6 +51,7 @@ export type AiCostLogInput = {
   usage?: AiUsageInput | null;
   audioSeconds?: number;
   webSearchCalls?: number;
+  estimatedCostUsd?: number;
   openaiRequestId?: string | null;
   responseId?: string | null;
   success?: boolean;
@@ -206,13 +207,24 @@ export function openAiRequestIdFromHeaders(headers: Headers): string | null {
 }
 
 export async function logAiCost(admin: any, input: AiCostLogInput): Promise<void> {
-  const calculated = calculateAiCost({
-    model: input.model,
-    endpoint: input.endpoint,
-    usage: input.usage,
-    audioSeconds: input.audioSeconds,
-    webSearchCalls: input.webSearchCalls,
-  });
+  const calculated =
+    typeof input.estimatedCostUsd === "number" && Number.isFinite(input.estimatedCostUsd)
+      ? {
+          ...normalizeAiUsage({
+            usage: input.usage,
+            audioSeconds: input.audioSeconds,
+            webSearchCalls: input.webSearchCalls,
+          }),
+          estimated_cost_usd: roundUsd(Math.max(0, input.estimatedCostUsd)),
+          warnings: [] as string[],
+        }
+      : calculateAiCost({
+          model: input.model,
+          endpoint: input.endpoint,
+          usage: input.usage,
+          audioSeconds: input.audioSeconds,
+          webSearchCalls: input.webSearchCalls,
+        });
   const warningText = calculated.warnings.length > 0 ? calculated.warnings.join(";") : null;
   const errorMessage = [input.errorMessage ?? "", warningText ?? ""].filter(Boolean).join(" | ") || null;
 

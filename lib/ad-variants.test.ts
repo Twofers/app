@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { adToDealDraft, buildFallbackTemplateAd, normalizeGeneratedAdDisplayCopy, type GeneratedAd } from "./ad-variants";
+import {
+  adToDealDraft,
+  buildFallbackTemplateAd,
+  buildOfferDefinitionFallbackAd,
+  normalizeGeneratedAdDisplayCopy,
+  type GeneratedAd,
+} from "./ad-variants";
+import { validateDealEligibility } from "./deal-eligibility";
+import { buildOfferDefinitionV1 } from "./offer-definition";
 
 describe("adToDealDraft", () => {
   it("uses structured short description and terms summary when present", () => {
@@ -82,5 +90,40 @@ describe("buildFallbackTemplateAd", () => {
     expect(ad.push_notification).toBe("Buy one lunch and get one free");
     expect(ad.subheadline).toBe("Buy one sandwich, get one free.");
     expect(ad.cta).toBe("Grab it");
+  });
+
+  it("builds a safe fallback ad from OfferDefinitionV1", () => {
+    const dealEligibility = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "bagel",
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemDiscountPercent: 100,
+    };
+    const definition = buildOfferDefinitionV1({
+      businessId: "biz_123",
+      businessName: "Cedar Bean",
+      locationId: "loc_123",
+      locationName: "Cedar Bean - Main",
+      dealEligibility,
+      eligibilityResult: validateDealEligibility(dealEligibility),
+      activeWindowHumanReadable: "Today 11:00 AM to 1:00 PM",
+      quantityLimit: 12,
+      redemptionLimit: "Claims close 15 minutes before the deal ends.",
+      schedule: { mode: "summary_only", summary: "Today 11:00 AM to 1:00 PM" },
+    });
+
+    if (!definition) throw new Error("expected valid definition");
+    const ad = buildOfferDefinitionFallbackAd(definition, { ctaText: "Claim deal" });
+
+    expect(ad.copy_source).toBe("DETERMINISTIC_FALLBACK");
+    expect(ad.photo_source).toBe("fallback_template");
+    expect(ad.locked_offer_line).toBe("Buy a bagel and get a free coffee");
+    expect(ad.locked_terms_line).toContain("Redeem only at Cedar Bean - Main.");
+    expect(ad.locked_terms_line).toContain("Limited to 12 available.");
+    expect(ad.locked_terms_line).toContain("Claims close 15 minutes before the deal ends.");
+    expect(ad.poster_storage_path).toBeNull();
   });
 });

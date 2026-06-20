@@ -47,7 +47,7 @@ export type DealCopyPromptParams = {
   validationFeedback?: string;
 };
 
-export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V2";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V3";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -78,15 +78,15 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const AI_COPY_PROMPT_V2 = [
+export const AI_COPY_PROMPT_V3 = [
   `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
-  "Write customer-facing promotional deal copy for Twofer, a mobile app for local coffee shops, cafes, bakeries, and small food businesses, not a generic image caption.",
+  "Write a polished mobile advertisement for Twofer, a mobile app for local coffee shops, cafes, bakeries, and small food businesses. This is an ad, not a legal deal description or generic image caption.",
   "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
   "",
   "VOICE:",
-  "- Write like a helpful employee explaining the deal to a customer.",
+  "- Write like a sharp local cafe ad: specific, warm, and easy to scan.",
   "- Use clear, everyday American English unless a different output language is requested.",
-  "- Prefer active constructions beginning with words such as Buy, Get, Order, Save, or Claim.",
+  "- Prefer short headlines that either name the exact offer or start with Buy, Get, Order, Save, or Claim.",
   "- Use sentence case.",
   "- No emojis, all caps, hashtags, markdown, labels, quotation marks, or multiple exclamation marks.",
   "- Do not use exaggerated advertising language.",
@@ -105,14 +105,28 @@ export const AI_COPY_PROMPT_V2 = [
   "- Avoid generic marketing language.",
   "",
   "BANNED PHRASES:",
-  '- "Don\'t miss out"',
-  '- "Amazing deal"',
-  '- "Delicious treat"',
-  '- "Come enjoy our special offer"',
+  '- "qualifying purchase"',
+  '- "included after"',
+  '- "unlock savings"',
+  '- "elevate your experience"',
+  '- "treat yourself to"',
+  '- "indulge in"',
+  '- "limited-time local offer"',
+  '- "don\'t miss out"',
+  '- "act now"',
+  '- "exclusive deal"',
+  '- "savor the flavor"',
+  '- "perfectly paired"',
+  '- "AI-generated"',
+  '- "this offer allows you to"',
+  '- "customers can enjoy"',
+  '- "promotion applies to"',
+  '- "terms and conditions apply"',
+  '- Also avoid "amazing deal", "delicious treat", and "come enjoy our special offer".',
   "",
   "FIELD RULES:",
-  `- headlineAlternative: complete offer statement, no trailing period, max ${DEAL_COPY_LIMITS.headline} characters. The app normally uses the deterministic canonical headline instead.`,
-  `- description: one short supporting sentence, max ${DEAL_COPY_LIMITS.description} characters. Clarify the offer without adding new terms.`,
+  "- headlineAlternative: short ad headline, target 4-9 words, max 55 characters when exact product names allow it, no trailing period.",
+  "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
   `- socialCaption: plain share caption, max ${DEAL_COPY_LIMITS.socialCaption} characters.`,
@@ -120,8 +134,10 @@ export const AI_COPY_PROMPT_V2 = [
   "EXAMPLES:",
   "Different-item BOGO:",
   "  Facts: buyQuantity=1, buyItem=egg sandwich, rewardQuantity=1, rewardItem=coffee, rewardType=free.",
-  "  Good headlineAlternative: Buy an egg sandwich and get a free coffee",
+  "  Good headlineAlternative: Egg sandwich + free coffee",
+  "  Good description: Grab the sandwich you wanted and the coffee is on us.",
   "  Bad headlineAlternative: Egg sandwich with free coffee",
+  "  Bad description: The free coffee is included after the qualifying egg sandwich purchase.",
   "Same-item BOGO:",
   "  Facts: buyQuantity=1, buyItem=latte, rewardQuantity=1, rewardItem=latte.",
   "  Good headlineAlternative: Buy one latte and get one free",
@@ -139,7 +155,7 @@ export const AI_COPY_PROMPT_V2 = [
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
 
-export const COPY_VOICE_RULES = AI_COPY_PROMPT_V2;
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V3;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";
@@ -198,13 +214,14 @@ function dealSpecificPrompt(contract: DealOfferContract): string[] {
       "",
       "Good examples:",
       `- "Buy a ${required.itemName} and get a free ${reward.itemName}"`,
-      `- "Order a ${required.itemName} and get a free ${reward.itemName}"`,
-      `- "Claim a free ${reward.itemName} with a qualifying ${required.itemName} purchase"`,
+      `- "${required.itemName} + free ${reward.itemName}"`,
+      `- "Buy ${required.itemName}, ${reward.itemName} is on us"`,
       "",
       "Bad examples:",
       `- "Buy a ${required.itemName} and ${reward.itemName}, get one free."`,
       `- "BOGO ${required.itemName} and ${reward.itemName}s."`,
       `- "Buy ${required.itemName} + ${reward.itemName} and get one free."`,
+      `- "Claim a free ${reward.itemName} with a qualifying ${required.itemName} purchase."`,
       "- \"Buy both and get one free.\"",
       "",
       "Do not include business name, address, availability, or quantity in the generated output fields.",

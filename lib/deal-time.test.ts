@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDealClaimScheduleBlock } from "./deal-time";
+import { formatValiditySummary, getDealClaimScheduleBlock } from "./deal-time";
 
 const baseRecurringDeal = {
   is_recurring: true,
@@ -35,5 +35,47 @@ describe("getDealClaimScheduleBlock", () => {
     const result = getDealClaimScheduleBlock(baseRecurringDeal, new Date("2024-01-01T10:00:00.000Z"));
 
     expect(result).toBeNull();
+  });
+});
+
+describe("formatValiditySummary", () => {
+  it("formats one-time deal ranges in the deal timezone", () => {
+    const result = formatValiditySummary(
+      {
+        is_recurring: false,
+        timezone: "America/Chicago",
+        start_time: "2026-06-18T02:00:00.000Z",
+        end_time: "2026-06-25T02:00:00.000Z",
+      },
+      { lang: "en-US" },
+    );
+
+    expect(result).toBe("Jun 17, 2026, 9:00 PM → Jun 24, 2026, 9:00 PM");
+  });
+
+  it("formats end-only one-time deals in the deal timezone", () => {
+    const result = formatValiditySummary(
+      {
+        is_recurring: false,
+        timezone: "America/Chicago",
+        end_time: "2026-06-25T02:00:00.000Z",
+      },
+      { endsVerb: "Ends", lang: "en-US" },
+    );
+
+    expect(result).toBe("Ends Jun 24, 2026, 9:00 PM");
+  });
+
+  it("uses the timezone on the deal instead of the host timezone", () => {
+    const result = formatValiditySummary(
+      {
+        is_recurring: false,
+        timezone: "UTC",
+        end_time: "2026-06-25T02:00:00.000Z",
+      },
+      { endsVerb: "Ends", lang: "en-US" },
+    );
+
+    expect(result).toBe("Ends Jun 25, 2026, 2:00 AM");
   });
 });

@@ -15,6 +15,7 @@
 *.mobileprovision
 GoogleService-Info.plist
 google-services.json
+!/google-services.json
 eas-credentials.json
 expo-credentials.json
 service-account*.json
