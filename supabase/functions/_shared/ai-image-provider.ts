@@ -29,6 +29,7 @@ export type GenerateAdImageInput = {
   paidItem?: string;
   freeItem?: string;
   dealType?: string;
+  visualNotes?: string;
   ownerPhotoUrl?: string | null;
   referenceImages?: AiImageReference[];
   stylePreset: AiImageStylePreset;
@@ -84,7 +85,7 @@ const STYLE_PRESET_TEXT: Record<AiImageStylePreset, string> = {
   "premium-cafe":
     "Style: premium independent cafe marketing photo, warm light, shallow depth of field, high-end but still realistic, not corporate stock-photo looking.",
   "playful-twofer":
-    "Style: playful local deal advertisement background, realistic food or drink, subtle cheerful energy. Do not create a different mascot unless the approved Twofer penguin asset is supplied as a reference.",
+    "Style: playful local deal image, realistic food or drink, subtle cheerful energy. If the owner explicitly asks for a mascot or prop, include it as a visual element, not as text or a logo.",
 };
 
 function edgeEnv(): EnvReader {
@@ -165,6 +166,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const businessCategory = cleanText(input.businessCategory, 80) || "local cafe";
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
+  const visualNotes = cleanText(input.visualNotes, 300);
   const visualItems = [...new Set([paid, free].filter(Boolean))];
   const referenceInstruction =
     input.referenceImages && input.referenceImages.length > 0
@@ -174,11 +176,12 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   return [
     "Create a realistic, professional local business advertising image for a mobile deal app.",
     "",
-    `Business name: ${businessName}`,
-    `Business type: ${businessCategory}`,
+    `Business context for styling only, never render as text: ${businessName}`,
+    `Business type for styling only: ${businessCategory}`,
     `Offer mechanics: ${offerMechanics(input)}`,
-    `Ad context: The image will be used inside a Twofer mobile BOGO deal card.`,
+    "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
+    visualNotes ? `Owner visual note to depict visually, never as words: ${visualNotes}.` : "",
     referenceInstruction,
     "",
     "Image requirements:",
@@ -186,8 +189,9 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "- Make the food or drink look real, appetizing, and professionally photographed.",
     "- Use natural lighting and a local business marketing style.",
     "- Avoid the glossy, fake, over-rendered AI look.",
-    "- Leave clean visual space near the top or bottom for the app to overlay the exact offer text.",
+    "- Leave clean visual space near the top or bottom for the app to overlay the exact offer text later.",
     "- Use a composition that works as a square mobile feed image.",
+    "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
     "- Do not add readable text.",
     "- Do not add coupons.",
     "- Do not add QR codes.",
@@ -199,9 +203,9 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     STYLE_PRESET_TEXT[input.stylePreset],
     "",
     "Avoid:",
-    "AI-looking plastic food, unreadable fake text, misspelled signs, extra cups, incorrect item counts, distorted hands, fake QR codes, fake logos, fake brand marks, random menu boards, uncanny people, strange reflections, watermark-like marks, unrealistic packaging, and any text inside the generated image.",
+    "AI-looking plastic food, readable or unreadable fake text, misspelled signs, extra cups, incorrect item counts, distorted hands, fake QR codes, fake logos, fake brand marks, random menu boards, uncanny people, strange reflections, watermark-like marks, unrealistic packaging, and any text inside the generated image.",
     "",
-    "The final headline, business name, CTA, quantity, expiration, and offer terms will be rendered by Twofer outside this image. Do not render those words inside the image.",
+    "The final headline, business name, CTA, quantity, expiration, and offer terms will be rendered by the app outside this image. Do not render those words inside the image.",
   ]
     .filter(Boolean)
     .join("\n")
@@ -227,6 +231,46 @@ function base64ToBytes(value: string): Uint8Array {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+async function normalizeGeminiImageToPng(
+  bytes: Uint8Array,
+  mimeType: string | null,
+): Promise<{ bytes: Uint8Array; mimeType: "image/png"; converted: boolean }> {
+  const normalizedMime = (mimeType ?? "image/png").toLowerCase();
+  if (normalizedMime === "image/png") {
+    return { bytes, mimeType: "image/png", converted: false };
+  }
+  if (normalizedMime !== "image/jpeg" && normalizedMime !== "image/jpg") {
+    throw new Error(`Unsupported Gemini image MIME type: ${normalizedMime || "(missing)"}`);
+  }
+
+  const jpegSpecifier = "jpeg-js";
+  const pngSpecifier = "pngjs";
+  const jpegModule = await import(jpegSpecifier);
+  const pngModule = await import(pngSpecifier);
+  const decode = (jpegModule as { default?: { decode?: unknown }; decode?: unknown }).default?.decode ??
+    (jpegModule as { decode?: unknown }).decode;
+  const PngCtor = (pngModule as { PNG?: unknown; default?: { PNG?: unknown } }).PNG ??
+    (pngModule as { default?: { PNG?: unknown } }).default?.PNG;
+  if (typeof decode !== "function" || typeof PngCtor !== "function") {
+    throw new Error("PNG conversion dependencies are unavailable.");
+  }
+
+  const decoded = decode(bytes, { useTArray: true }) as { width?: number; height?: number; data?: Uint8Array };
+  if (!decoded.width || !decoded.height || !decoded.data) {
+    throw new Error("Gemini JPEG decode returned no pixel data.");
+  }
+  const png = new (PngCtor as new (options: { width: number; height: number }) => { data: Uint8Array })({
+    width: decoded.width,
+    height: decoded.height,
+  });
+  png.data.set(decoded.data);
+  const sync = (PngCtor as unknown as { sync?: { write?: (png: unknown) => Uint8Array } }).sync;
+  if (typeof sync?.write !== "function") {
+    throw new Error("PNG encoder is unavailable.");
+  }
+  return { bytes: new Uint8Array(sync.write(png)), mimeType: "image/png", converted: true };
 }
 
 function normalizeGeminiErrorCode(status: number): string {
@@ -313,7 +357,7 @@ async function attemptGeminiImageGeneration(params: {
     parts.push({ text: params.prompt });
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(params.model)}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(params.model)}:generateContent`,
       {
         method: "POST",
         headers: {
@@ -324,11 +368,9 @@ async function attemptGeminiImageGeneration(params: {
           contents: [{ parts }],
           generationConfig: {
             responseModalities: ["TEXT", "IMAGE"],
-            responseFormat: {
-              image: {
-                aspectRatio: params.aspectRatio,
-                imageSize: params.imageSize,
-              },
+            imageConfig: {
+              aspectRatio: params.aspectRatio,
+              imageSize: params.imageSize,
             },
           },
         }),
@@ -365,15 +407,30 @@ async function attemptGeminiImageGeneration(params: {
       };
     }
 
-    const bytes = base64ToBytes(imagePart.data);
+    const imageMimeType = imagePart.mimeType ?? "image/png";
+    let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
+    try {
+      normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(imagePart.data), imageMimeType);
+    } catch (error) {
+      return {
+        bytes: null,
+        mimeType: null,
+        attempt: {
+          ...attemptBase,
+          latencyMs: Date.now() - startedAt,
+          errorCode: "PNG_CONVERSION_FAILED",
+          errorMessage: String(error).slice(0, 500),
+        },
+      };
+    }
     return {
-      bytes,
-      mimeType: imagePart.mimeType ?? "image/png",
+      bytes: normalizedImage.bytes,
+      mimeType: normalizedImage.mimeType,
       attempt: {
         ...attemptBase,
         success: true,
         latencyMs: Date.now() - startedAt,
-        mimeType: imagePart.mimeType ?? "image/png",
+        mimeType: normalizedImage.mimeType,
       },
     };
   } catch (error) {

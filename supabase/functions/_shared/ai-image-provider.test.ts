@@ -68,13 +68,16 @@ describe("buildGeminiAdImagePrompt", () => {
       paidItem: "latte",
       freeItem: "croissant",
       dealType: "SAME_ITEM_BOGO",
+      visualNotes: "with a dancing penguin mascot",
       stylePreset: "playful-twofer",
       aspectRatio: "1:1",
       imageSize: "1K",
     });
 
     expect(prompt).toContain("Required visible items: latte, croissant.");
+    expect(prompt).toContain("Owner visual note to depict visually, never as words: with a dancing penguin mascot.");
     expect(prompt).toContain("Do not add readable text.");
+    expect(prompt).toContain("generated image must be text-free");
     expect(prompt).toContain("Do not add fake business names.");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
@@ -126,11 +129,12 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     expect(result.mimeType).toBe("image/png");
     expect(result.estimatedCostUsd).toBe(0.067);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/v1/models/gemini-3.1-flash-image:generateContent");
+    expect(String(url)).toContain("/v1beta/models/gemini-3.1-flash-image:generateContent");
     const request = init as RequestInit;
     expect((request.headers as Record<string, string>)["x-goog-api-key"]).toBe("test-gemini-key");
     const body = JSON.parse(String(request.body));
     expect(body.generationConfig.responseModalities).toEqual(["TEXT", "IMAGE"]);
-    expect(body.generationConfig.responseFormat.image).toEqual({ aspectRatio: "1:1", imageSize: "1K" });
+    expect(body.generationConfig.imageConfig).toEqual({ aspectRatio: "1:1", imageSize: "1K" });
+    expect(body.generationConfig.responseFormat).toBeUndefined();
   });
 });

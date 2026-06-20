@@ -13,7 +13,6 @@
  * includes `ads: [ad]` so existing UI that expects an array does not crash.
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
@@ -66,6 +65,11 @@ import {
   normalizeQuickDealImageQaResult,
   type QuickDealImageQaResult,
 } from "../../../lib/quick-deal-image-qa.ts";
+
+// Static anchors so Supabase's remote bundler includes the npm packages that
+// `_shared/ai-image-provider.ts` imports lazily when Gemini returns JPEG bytes.
+import "jpeg-js";
+import "pngjs";
 
 const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
@@ -489,6 +493,7 @@ async function logAdCost(
   ctx: AiCostContext | null,
   input: {
     feature: string;
+    provider?: string;
     model: string;
     endpoint: string;
     usage?: AiUsageInput | null;
@@ -634,6 +639,32 @@ function requiredOfferItems(contract: DealOfferContract): { paidItem?: string; f
     paidItem: contract.requiredPurchase?.itemName,
     freeItem: contract.freeReward?.itemName,
   };
+}
+
+function requestedVisualMotifs(itemHint: string): string[] {
+  const cleanHint = itemHint.trim().replace(/\s+/g, " ");
+  if (!cleanHint) return [];
+  const motifs: string[] = [];
+  const pattern = /\b(?:with|featuring|feature|including|include|show|add)\s+(?:an?\s+|the\s+)?([^.,;]+)/gi;
+  for (const match of cleanHint.matchAll(pattern)) {
+    const phrase = (match[1] ?? "")
+      .replace(/\b(in|for|on)\s+the\s+(visual|image|ad|advertisement|poster)\b.*$/i, "")
+      .replace(/^(obvious|visible|clear|clearly|prominent|playful)\s+/i, "")
+      .trim();
+    if (!phrase || phrase.length < 3) continue;
+    if (/\b(text|headline|copy|price|discount|percent|off|coupon|code)\b|%/i.test(phrase)) continue;
+    motifs.push(phrase.slice(0, 80));
+  }
+  return motifs.filter((value, index, list) => list.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 2);
+}
+
+function qaRequiredVisualItems(contract: DealOfferContract, itemHint: string): string[] {
+  return [...buildRequiredVisualItems(contract), ...requestedVisualMotifs(itemHint)]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((value, index, list) => list.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 4);
 }
 
 function safeImageMime(mimeType: string | null | undefined): string {
@@ -912,7 +943,7 @@ async function produceImageOpenAiOnly(params: {
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
-  const requiredVisualItems = buildRequiredVisualItems(offerContract);
+  const requiredVisualItems = qaRequiredVisualItems(offerContract, itemHint);
   const itemName = requiredVisualItems.length > 0
     ? requiredVisualItems.join(" and ")
     : research.item_name || itemHint || "menu item";
@@ -936,7 +967,7 @@ async function produceImageOpenAiOnly(params: {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
 
-  if (requiredVisualItems.length > 1) {
+  if (requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey,
       imageBytes: png,
@@ -982,6 +1013,9 @@ async function produceImageOpenAiOnly(params: {
         }
       }
     }
+  }
+  if (qa.missingItems.length > 0 && !qa.unavailable) {
+    return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
   const { error: upErr } = await admin.storage
@@ -1067,7 +1101,7 @@ async function produceImage(params: {
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
 }): Promise<ProducedImage> {
-  const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
+  const requiredVisualItems = qaRequiredVisualItems(params.offerContract, params.itemHint);
   const originalUploadedPhoto = (): ProducedImage => ({
     posterStoragePath: params.photoPath,
     source: "uploaded_original",
@@ -1138,6 +1172,7 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
+    visualNotes: params.itemHint,
     stylePreset,
     aspectRatio: "1:1",
     imageSize: "1K",
@@ -1190,6 +1225,7 @@ async function produceImage(params: {
       paidItem: offerItems.paidItem,
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
+      visualNotes: params.itemHint,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
       stylePreset,
       aspectRatio: "1:1",
@@ -1248,14 +1284,14 @@ async function produceImage(params: {
   let imagePrompt = gemini.prompt;
   let estimatedCostUsd = gemini.estimatedCostUsd;
   const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 1,
+    checked: requiredVisualItems.length > 0,
     attempts: 0,
     missingItems: [],
     regenerated: gemini.attempts.some((attempt) => attempt.retry && attempt.success),
     unavailable: false,
   };
 
-  if (imageBytes && requiredVisualItems.length > 1) {
+  if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey: params.openAiKey,
       imageBytes,
@@ -1305,7 +1341,7 @@ async function produceImage(params: {
           imageMimeType = retryGeneration.mimeType;
           imagePrompt = retryGeneration.prompt;
           estimatedCostUsd += retryGeneration.estimatedCostUsd;
-        } else if (retryQa.all_required_items_present || retryQa.missing_items.length <= firstQa.missing_items.length) {
+        } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
           qa.missingItems = retryQa.missing_items;
           imageBytes = retryGeneration.bytes;
           imageMimeType = retryGeneration.mimeType;
@@ -1314,6 +1350,10 @@ async function produceImage(params: {
         }
       }
     }
+  }
+  if (qa.missingItems.length > 0 && !qa.unavailable) {
+    imageBytes = null;
+    imageMimeType = null;
   }
 
   if (imageBytes) {
@@ -1476,7 +1516,7 @@ function buildGenerationTelemetry(params: {
 
 // ─── HTTP handler ──────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
