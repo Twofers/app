@@ -95,7 +95,7 @@ type SingleAd = {
   /** Research the AI used to write the copy. Empty when it skipped/failed research. */
   item_research: ItemResearch;
   /** How the image was produced. */
-  photo_source: "uploaded_original" | "uploaded_enhanced" | "generated";
+  photo_source: "uploaded_original" | "uploaded_enhanced" | "generated" | "copy_only";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment: PhotoTreatment | null;
   /** Storage path in deal-photos bucket; null if image production failed. */
@@ -1038,6 +1038,7 @@ serve(async (req) => {
 
     const photoPath = typeof body.photo_path === "string" ? body.photo_path.trim() : "";
     const hintText = typeof body.hint_text === "string" ? body.hint_text.trim() : "";
+    const imageMode = typeof body.image_mode === "string" ? body.image_mode.trim().toLowerCase() : "";
 
     const photoTreatmentRaw = typeof body.photo_treatment === "string"
       ? body.photo_treatment.trim().toLowerCase()
@@ -1055,7 +1056,6 @@ serve(async (req) => {
     const offerScheduleSummary = typeof body.offer_schedule_summary === "string"
       ? body.offer_schedule_summary.trim().slice(0, 500)
       : "";
-
     const rawQuantityLimit = typeof body.quantity_limit === "number"
       ? body.quantity_limit
       : typeof body.quantity_limit === "string"
@@ -1098,6 +1098,7 @@ serve(async (req) => {
     const previousAdIsObject =
       !!previousAdRaw && typeof previousAdRaw === "object" && !Array.isArray(previousAdRaw);
     const isRevision: boolean = revisionTarget !== null && previousAdIsObject;
+    const copyOnlyImageMode = !isRevision && !photoPath && imageMode === "copy_only";
 
     if (!quotaStatusOnly && !isRevision && !photoPath && !hintText) {
       return new Response(
@@ -1349,7 +1350,15 @@ serve(async (req) => {
     }
 
     let imageResult: Awaited<ReturnType<typeof produceImage>>;
-    if (isRevision && previousAd && revisionTarget === "copy") {
+    if (copyOnlyImageMode) {
+      imageResult = {
+        posterStoragePath: null,
+        source: "copy_only",
+        treatment: null,
+        prompt: null,
+        qa: skippedImageQaTelemetry(),
+      };
+    } else if (isRevision && previousAd && revisionTarget === "copy") {
       // Copy-only revision: keep image
       imageResult = {
         posterStoragePath: previousAd.poster_storage_path ?? null,
@@ -1395,11 +1404,11 @@ serve(async (req) => {
     };
 
     /**
-     * Mark log as failure (no quota tick, no rate-limit clock) when image production failed
-     * AND there was no uploaded photo to fall back on. The user got a textless ad — they
-     * shouldn't burn quota for it.
+     * Mark accidental image failures as no-quota failures. If image generation fails and no
+     * poster is saved, it should not burn quota. Copy-only quick drafts are intentional
+     * no-image successes, so those should still count as successful drafts.
      */
-    const imageProductionFailed = imageResult.posterStoragePath === null;
+    const imageProductionFailed = imageResult.posterStoragePath === null && imageResult.source !== "copy_only";
     const productionSuccess = !imageProductionFailed;
 
     await admin.from("ai_generation_logs").insert({
@@ -1446,7 +1455,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
   const research = (raw.item_research ?? {}) as Partial<ItemResearch>;
   const photoSourceRaw = typeof raw.photo_source === "string" ? raw.photo_source : "generated";
   const photoSource: SingleAd["photo_source"] =
-    photoSourceRaw === "uploaded_original" || photoSourceRaw === "uploaded_enhanced"
+    photoSourceRaw === "uploaded_original" || photoSourceRaw === "uploaded_enhanced" || photoSourceRaw === "copy_only"
       ? photoSourceRaw
       : "generated";
   const photoTreatmentRaw = typeof raw.photo_treatment === "string" ? raw.photo_treatment : "";

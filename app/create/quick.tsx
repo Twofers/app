@@ -274,6 +274,7 @@ export default function QuickDealExpress() {
       const { ad } = await aiGenerateAd({
         business_id: businessId,
         hint_text: hint.trim(),
+        image_mode: "generate",
         business_context: businessContextForAi,
         output_language: dealOutputLang,
         deal_eligibility: eligibilityInput,
