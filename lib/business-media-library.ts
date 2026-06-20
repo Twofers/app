@@ -38,6 +38,17 @@ export type BusinessMediaAssetSummary = {
   license_provider?: string | null;
   license_asset_id?: string | null;
   license_version?: string | null;
+  quality_score?: number | null;
+  ad_usefulness_score?: number | null;
+  visual_relevance_floor?: number | null;
+  crop_suitability_score?: number | null;
+  brand_fit_score?: number | null;
+  tags?: string[] | null;
+  detected_items?: string[] | null;
+  contains_text?: boolean | null;
+  contains_logo?: boolean | null;
+  last_used_at?: string | null;
+  usage_count?: number | null;
 };
 
 export type BusinessBrandProfileSummary = {
