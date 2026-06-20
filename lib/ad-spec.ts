@@ -4,6 +4,9 @@ import type { OfferDefinitionV1 } from "./offer-definition";
 
 export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
 export const AD_SPEC_TEMPLATE_VERSION = "twofer-safe-templates-v1";
+export const AD_SPEC_V3_RENDERER_VERSION = "twofer-native-ad-renderer-v3";
+export const AD_SPEC_V3_MEDIA_SELECTION_VERSION = "twofer-media-selection-v1";
+export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V2";
 
 export type AdSpecSource = "create_ai" | "create_quick";
 
@@ -91,6 +94,105 @@ export type AdSpecValidationResult = {
   reasonCodes: string[];
 };
 
+export type AdSpecV3TextField =
+  | "displayHook"
+  | "offerLine"
+  | "supportingLine"
+  | "cta"
+  | "pushTitle"
+  | "pushBody"
+  | "socialCaption";
+
+export type AdSpecV3TextProvenance =
+  | "ai_generated"
+  | "deterministic"
+  | "merchant_typed"
+  | "merchant_edited";
+
+export type AdSpecV3MediaSourceType =
+  | "owner_upload"
+  | "website_import"
+  | "instagram_import"
+  | "facebook_import"
+  | "prior_approved_creative"
+  | "twofer_stock"
+  | "generated";
+
+export type AdSpecV3CropSpec = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type AdSpecV3Visual = {
+  mediaAssetId: string | null;
+  posterStoragePath: string | null;
+  sourceType: AdSpecV3MediaSourceType;
+  sourceBadge:
+    | "Your photo"
+    | "Website"
+    | "Instagram"
+    | "Facebook"
+    | "Previously approved"
+    | "Twofer stock"
+    | "Generated";
+  crop: AdSpecV3CropSpec | null;
+  treatment: GeneratedAd["photo_treatment"] | null;
+  templateId: "feed-photo-balanced-v3";
+  generationAuthorizedReason: "NO_ELIGIBLE_MEDIA" | null;
+};
+
+export type AdSpecV3 = {
+  version: "3";
+  source: AdSpecSource;
+  offerDefinitionVersion: 1;
+  offerDefinitionId: string;
+  businessId: string;
+  creative: Record<AdSpecV3TextField, string>;
+  terms: {
+    lockedOfferLine: string;
+    summary: string;
+    scheduleSummary: string | null;
+    scarcitySummary: string | null;
+  };
+  textProvenance: Record<AdSpecV3TextField, AdSpecV3TextProvenance>;
+  visual: AdSpecV3Visual;
+  quality: {
+    factual: number;
+    clarity: number;
+    naturalness: number;
+    brandFit: number;
+    visualRelevance: number;
+    overall: number;
+    reasonCodes: string[];
+  };
+  provenance: {
+    copyModel: string | null;
+    copyPromptVersion: typeof AD_SPEC_V3_COPY_PROMPT_VERSION;
+    imageModel: string | null;
+    mediaSelectionVersion: typeof AD_SPEC_V3_MEDIA_SELECTION_VERSION;
+    rendererVersion: typeof AD_SPEC_V3_RENDERER_VERSION;
+    copySource: GeneratedAd["copy_source"] | "DETERMINISTIC_FALLBACK";
+  };
+};
+
+export type BuildAdSpecV3Params = {
+  source: AdSpecSource;
+  offerDefinition: OfferDefinitionV1;
+  generatedAd?: GeneratedAd | null;
+  visual: {
+    mediaAssetId?: string | null;
+    posterStoragePath?: string | null;
+    sourceType: AdSpecV3MediaSourceType;
+    crop?: AdSpecV3CropSpec | null;
+    generationAuthorizedReason?: "NO_ELIGIBLE_MEDIA" | null;
+  };
+  copyModel?: string | null;
+  imageModel?: string | null;
+  textProvenanceOverrides?: Partial<Record<AdSpecV3TextField, AdSpecV3TextProvenance>>;
+};
+
 const CHANNELS: AdSpecChannel[] = ["feed", "map", "detail", "claim", "push", "share"];
 
 function cleanText(value: unknown): string {
@@ -114,6 +216,51 @@ function clip(value: string, max: number): string {
     return clipped.slice(0, lastSpace).trimEnd();
   }
   return clean.slice(0, max).trimEnd();
+}
+
+function boundedScore(value: unknown, fallback = 1): number {
+  const n = typeof value === "number" ? value : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+function offerDefinitionStableId(definition: OfferDefinitionV1): string {
+  return [
+    definition.merchantId,
+    definition.locationId,
+    definition.offerType,
+    definition.canonicalOfferLine,
+  ].join(":");
+}
+
+function sourceBadgeFor(sourceType: AdSpecV3MediaSourceType): AdSpecV3Visual["sourceBadge"] {
+  if (sourceType === "website_import") return "Website";
+  if (sourceType === "instagram_import") return "Instagram";
+  if (sourceType === "facebook_import") return "Facebook";
+  if (sourceType === "prior_approved_creative") return "Previously approved";
+  if (sourceType === "twofer_stock") return "Twofer stock";
+  if (sourceType === "generated") return "Generated";
+  return "Your photo";
+}
+
+function generatedAdCopyProvenance(generatedAd?: GeneratedAd | null): AdSpecV3TextProvenance {
+  if (!generatedAd) return "deterministic";
+  return generatedAd.copy_source === "DETERMINISTIC_FALLBACK" ? "deterministic" : "ai_generated";
+}
+
+function completeTextProvenance(
+  base: AdSpecV3TextProvenance,
+  overrides?: Partial<Record<AdSpecV3TextField, AdSpecV3TextProvenance>>,
+): Record<AdSpecV3TextField, AdSpecV3TextProvenance> {
+  return {
+    displayHook: overrides?.displayHook ?? base,
+    offerLine: overrides?.offerLine ?? "deterministic",
+    supportingLine: overrides?.supportingLine ?? base,
+    cta: overrides?.cta ?? base,
+    pushTitle: overrides?.pushTitle ?? base,
+    pushBody: overrides?.pushBody ?? base,
+    socialCaption: overrides?.socialCaption ?? base,
+  };
 }
 
 function templateFor(channel: AdSpecChannel, visual: AdSpecVisual): AdSpecTemplateId {
@@ -296,6 +443,161 @@ export function validateAdSpecV1(value: unknown): AdSpecValidationResult {
       if (slot.accessibility?.criticalTextRenderedNatively !== true) {
         reasonCodes.push(`CRITICAL_TEXT_NOT_NATIVE_${channel.toUpperCase()}`);
       }
+    }
+  }
+  return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
+}
+
+export function buildAdSpecV3(params: BuildAdSpecV3Params): AdSpecV3 {
+  const { offerDefinition, generatedAd } = params;
+  const baseProvenance = generatedAdCopyProvenance(generatedAd);
+  const displayHook = clip(
+    firstText([generatedAd?.headline, offerDefinition.canonicalOfferLine], offerDefinition.canonicalOfferLine),
+    DEAL_COPY_LIMITS.headline,
+  );
+  const supportingLine = clip(
+    firstText(
+      [generatedAd?.short_description, generatedAd?.subheadline, offerDefinition.canonicalOfferSentence],
+      offerDefinition.canonicalOfferSentence,
+    ),
+    DEAL_COPY_LIMITS.description,
+  );
+  const pushBody = clip(
+    firstText([generatedAd?.push_notification, supportingLine], supportingLine),
+    DEAL_COPY_LIMITS.pushBody,
+  );
+  const socialCaption = clip(
+    firstText([generatedAd?.social_caption, supportingLine], supportingLine),
+    DEAL_COPY_LIMITS.socialCaption,
+  );
+  const posterStoragePath =
+    cleanText(params.visual.posterStoragePath) || cleanText(generatedAd?.poster_storage_path) || null;
+  const visualRelevance = params.visual.sourceType === "generated" ? 0.7 : 1;
+
+  return {
+    version: "3",
+    source: params.source,
+    offerDefinitionVersion: 1,
+    offerDefinitionId: offerDefinitionStableId(offerDefinition),
+    businessId: offerDefinition.merchantId,
+    creative: {
+      displayHook,
+      offerLine: offerDefinition.canonicalOfferLine,
+      supportingLine,
+      cta: clip(firstText([generatedAd?.cta], "Claim deal"), 26),
+      pushTitle: clip(displayHook, DEAL_COPY_LIMITS.pushTitle),
+      pushBody,
+      socialCaption,
+    },
+    terms: {
+      lockedOfferLine: offerDefinition.canonicalOfferLine,
+      summary: offerDefinition.disclosureLine,
+      scheduleSummary: offerDefinition.schedule.summary,
+      scarcitySummary:
+        offerDefinition.totalClaimLimit == null ? null : `${offerDefinition.totalClaimLimit} available`,
+    },
+    textProvenance: completeTextProvenance(baseProvenance, params.textProvenanceOverrides),
+    visual: {
+      mediaAssetId: cleanText(params.visual.mediaAssetId) || null,
+      posterStoragePath,
+      sourceType: params.visual.sourceType,
+      sourceBadge: sourceBadgeFor(params.visual.sourceType),
+      crop: params.visual.crop ?? null,
+      treatment: generatedAd?.photo_treatment ?? null,
+      templateId: "feed-photo-balanced-v3",
+      generationAuthorizedReason: params.visual.generationAuthorizedReason ?? null,
+    },
+    quality: {
+      factual: 1,
+      clarity: 1,
+      naturalness: 1,
+      brandFit: 1,
+      visualRelevance,
+      overall: boundedScore(visualRelevance),
+      reasonCodes: generatedAd?.validation_reason_codes ?? [],
+    },
+    provenance: {
+      copyModel: cleanText(params.copyModel) || null,
+      copyPromptVersion: AD_SPEC_V3_COPY_PROMPT_VERSION,
+      imageModel: cleanText(params.imageModel) || null,
+      mediaSelectionVersion: AD_SPEC_V3_MEDIA_SELECTION_VERSION,
+      rendererVersion: AD_SPEC_V3_RENDERER_VERSION,
+      copySource: generatedAd?.copy_source ?? "DETERMINISTIC_FALLBACK",
+    },
+  };
+}
+
+export function validateAdSpecV3(value: unknown): AdSpecValidationResult {
+  const reasonCodes: string[] = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { valid: false, reasonCodes: ["NOT_OBJECT"] };
+  }
+  const spec = value as Partial<AdSpecV3>;
+  if (spec.version !== "3") reasonCodes.push("INVALID_SCHEMA_VERSION");
+  if (!cleanText(spec.businessId)) reasonCodes.push("MISSING_BUSINESS_ID");
+  if (!cleanText(spec.offerDefinitionId)) reasonCodes.push("MISSING_OFFER_DEFINITION_ID");
+  if (!spec.creative || typeof spec.creative !== "object") {
+    reasonCodes.push("MISSING_CREATIVE");
+  } else {
+    for (const field of [
+      "displayHook",
+      "offerLine",
+      "supportingLine",
+      "cta",
+      "pushTitle",
+      "pushBody",
+      "socialCaption",
+    ] as const) {
+      if (!cleanText(spec.creative[field])) reasonCodes.push(`MISSING_${field.toUpperCase()}`);
+    }
+  }
+  if (!spec.terms || typeof spec.terms !== "object") {
+    reasonCodes.push("MISSING_TERMS");
+  } else {
+    if (!cleanText(spec.terms.lockedOfferLine)) reasonCodes.push("MISSING_LOCKED_OFFER_LINE");
+    if (!cleanText(spec.terms.summary)) reasonCodes.push("MISSING_TERMS_SUMMARY");
+    if (spec.creative?.offerLine !== spec.terms.lockedOfferLine) {
+      reasonCodes.push("OFFER_LINE_NOT_LOCKED");
+    }
+  }
+  if (!spec.textProvenance || typeof spec.textProvenance !== "object") {
+    reasonCodes.push("MISSING_TEXT_PROVENANCE");
+  } else {
+    for (const field of [
+      "displayHook",
+      "offerLine",
+      "supportingLine",
+      "cta",
+      "pushTitle",
+      "pushBody",
+      "socialCaption",
+    ] as const) {
+      if (!spec.textProvenance[field]) reasonCodes.push(`MISSING_${field.toUpperCase()}_PROVENANCE`);
+    }
+  }
+  if (!spec.visual || typeof spec.visual !== "object") {
+    reasonCodes.push("MISSING_VISUAL");
+  } else {
+    const hasVisualAsset = Boolean(cleanText(spec.visual.mediaAssetId) || cleanText(spec.visual.posterStoragePath));
+    if (!hasVisualAsset) reasonCodes.push("MISSING_VISUAL_ASSET");
+    if (
+      spec.visual.sourceType === "generated" &&
+      spec.visual.generationAuthorizedReason !== "NO_ELIGIBLE_MEDIA"
+    ) {
+      reasonCodes.push("GENERATED_WITHOUT_EMPTY_POOL_AUTHORIZATION");
+    }
+  }
+  if (!spec.provenance || typeof spec.provenance !== "object") {
+    reasonCodes.push("MISSING_PROVENANCE");
+  } else {
+    if (spec.provenance.copyPromptVersion !== AD_SPEC_V3_COPY_PROMPT_VERSION) {
+      reasonCodes.push("INVALID_COPY_PROMPT_VERSION");
+    }
+    if (spec.provenance.mediaSelectionVersion !== AD_SPEC_V3_MEDIA_SELECTION_VERSION) {
+      reasonCodes.push("INVALID_MEDIA_SELECTION_VERSION");
+    }
+    if (spec.provenance.rendererVersion !== AD_SPEC_V3_RENDERER_VERSION) {
+      reasonCodes.push("INVALID_RENDERER_VERSION");
     }
   }
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };

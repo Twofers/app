@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAdSpecV1, validateAdSpecV1 } from "./ad-spec";
+import { buildAdSpecV1, buildAdSpecV3, validateAdSpecV1, validateAdSpecV3 } from "./ad-spec";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 
 function buildDefinition() {
@@ -91,5 +91,109 @@ describe("AdSpec V1 deterministic renderer contract", () => {
       valid: false,
       reasonCodes: ["FACT_MISMATCH_FEED"],
     });
+  });
+});
+
+describe("AdSpec V3 creative contract", () => {
+  it("keeps locked offer facts deterministic while carrying AI copy provenance", () => {
+    const definition = buildDefinition();
+    const spec = buildAdSpecV3({
+      source: "create_ai",
+      offerDefinition: definition,
+      generatedAd: {
+        headline: "Your coffee break just doubled",
+        subheadline: "A smooth latte offer for the lunch lull.",
+        short_description: "Bring a friend for a latte before the window closes.",
+        push_notification: "Latte BOGO live now.",
+        social_caption: "Coffee break for two at Cedar Bean.",
+        locked_offer_line: "Buy two lattes and get one free",
+        cta: "Claim BOGO",
+        poster_storage_path: "business/poster.png",
+        photo_source: "uploaded_original",
+        copy_source: "AI_VALIDATED",
+      },
+      visual: {
+        sourceType: "owner_upload",
+        posterStoragePath: "business/poster.png",
+      },
+      copyModel: "gpt-5-mini",
+    });
+
+    expect(validateAdSpecV3(spec)).toEqual({ valid: true, reasonCodes: [] });
+    expect(spec.creative.offerLine).toBe(definition.canonicalOfferLine);
+    expect(spec.terms.lockedOfferLine).toBe(definition.canonicalOfferLine);
+    expect(spec.textProvenance.displayHook).toBe("ai_generated");
+    expect(spec.textProvenance.offerLine).toBe("deterministic");
+    expect(spec.visual.sourceBadge).toBe("Your photo");
+    expect(spec.provenance.copyPromptVersion).toBe("AI_COPY_PROMPT_V2");
+  });
+
+  it("records owner-edited fields without changing locked terms", () => {
+    const definition = buildDefinition();
+    const spec = buildAdSpecV3({
+      source: "create_quick",
+      offerDefinition: definition,
+      generatedAd: {
+        headline: "Latte BOGO for the regulars",
+        subheadline: "Buy one latte and get one free.",
+        short_description: "Buy one latte and get one free.",
+        push_notification: "Buy one latte and get one free.",
+        social_caption: "Buy one latte and get one free.",
+        cta: "Claim deal",
+        poster_storage_path: "business/poster.png",
+        photo_source: "uploaded_original",
+        copy_source: "AI_VALIDATED",
+      },
+      visual: {
+        sourceType: "owner_upload",
+        posterStoragePath: "business/poster.png",
+      },
+      textProvenanceOverrides: {
+        displayHook: "merchant_edited",
+        supportingLine: "merchant_typed",
+      },
+    });
+
+    expect(validateAdSpecV3(spec).valid).toBe(true);
+    expect(spec.textProvenance.displayHook).toBe("merchant_edited");
+    expect(spec.textProvenance.supportingLine).toBe("merchant_typed");
+    expect(spec.creative.offerLine).toBe(definition.canonicalOfferLine);
+  });
+
+  it("requires generated media to be explicitly authorized by an empty eligible pool", () => {
+    const definition = buildDefinition();
+    const spec = buildAdSpecV3({
+      source: "create_ai",
+      offerDefinition: definition,
+      generatedAd: {
+        headline: "Latte BOGO",
+        subheadline: "Buy one latte and get one free.",
+        short_description: "Buy one latte and get one free.",
+        push_notification: "Buy one latte and get one free.",
+        social_caption: "Buy one latte and get one free.",
+        cta: "Claim deal",
+        poster_storage_path: "business/generated.png",
+        photo_source: "generated",
+        copy_source: "AI_VALIDATED",
+      },
+      visual: {
+        sourceType: "generated",
+        posterStoragePath: "business/generated.png",
+      },
+    });
+
+    expect(validateAdSpecV3(spec)).toEqual({
+      valid: false,
+      reasonCodes: ["GENERATED_WITHOUT_EMPTY_POOL_AUTHORIZATION"],
+    });
+
+    const authorized = {
+      ...spec,
+      visual: {
+        ...spec.visual,
+        generationAuthorizedReason: "NO_ELIGIBLE_MEDIA" as const,
+      },
+    };
+    expect(validateAdSpecV3(authorized)).toEqual({ valid: true, reasonCodes: [] });
   });
 });
