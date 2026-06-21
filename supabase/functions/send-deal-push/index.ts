@@ -3,6 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import {
+  getSuspendedLocation,
+  getSuspendedPrimaryBusinessLocation,
+  suspendedLocationResponseBody,
+} from "../_shared/billing-suspension.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
   buildDealOfferContract,
@@ -13,11 +18,12 @@ import {
   type DealEligibilityInput,
 } from "../../../lib/deal-eligibility.ts";
 
-const BASE_DEAL_SELECT = "id,title,business_id,businesses(name,owner_id)";
+const BASE_DEAL_SELECT = "id,title,business_id,location_id,businesses(name,owner_id)";
 const STRUCTURED_DEAL_SELECT = [
   "id",
   "title",
   "business_id",
+  "location_id",
   "start_time",
   "end_time",
   "max_claims",
@@ -180,6 +186,13 @@ serve(async (req) => {
 
     if (!biz || biz.owner_id !== user.id) {
       return jsonResponse({ error: "Not your deal" }, 403);
+    }
+
+    const suspendedLocation =
+      await getSuspendedLocation(admin as any, typeof deal.location_id === "string" ? deal.location_id : null) ??
+        await getSuspendedPrimaryBusinessLocation(admin as any, deal.business_id);
+    if (suspendedLocation) {
+      return jsonResponse(suspendedLocationResponseBody("send deal notifications"), 403);
     }
 
     const businessName = biz.name ?? "a local business";

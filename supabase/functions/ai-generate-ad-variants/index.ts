@@ -43,6 +43,10 @@ import {
   reserveChargeableImageRevisionCredit,
   type ChargeableImageRevisionReservation,
 } from "../_shared/deal-credit-enforcement.ts";
+import {
+  getSuspendedPrimaryBusinessLocation,
+  suspendedLocationResponseBody,
+} from "../_shared/billing-suspension.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
   AD_COPY_PROMPT_VERSION,
@@ -1658,6 +1662,14 @@ Deno.serve(async (req) => {
       const quota = await fetchAdQuota(admin, businessId);
       return new Response(JSON.stringify({ ok: true, quota }), {
         status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const suspendedLocation = await getSuspendedPrimaryBusinessLocation(admin as any, businessId);
+    if (suspendedLocation) {
+      return new Response(JSON.stringify(suspendedLocationResponseBody("generate or revise deals")), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

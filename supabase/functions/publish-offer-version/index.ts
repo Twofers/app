@@ -2,6 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
+import {
+  getSuspendedLocationFromDealRows,
+  suspendedLocationResponseBody,
+} from "../_shared/billing-suspension.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -180,6 +184,11 @@ serve(async (req) => {
       .maybeSingle();
     if (businessError || !business || business.owner_id !== user.id) {
       return jsonResponse(req, { error: "Business not found for owner" }, 403);
+    }
+
+    const suspendedLocation = await getSuspendedLocationFromDealRows(admin as any, businessId, dealRows);
+    if (suspendedLocation) {
+      return jsonResponse(req, suspendedLocationResponseBody("publish or schedule deals"), 403);
     }
 
     const adSpec =

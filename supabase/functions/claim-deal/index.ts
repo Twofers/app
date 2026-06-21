@@ -3,6 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { sendExpoPushBatch } from "../_shared/expo-push.ts";
 import {
+  getSuspendedLocation,
+  getSuspendedPrimaryBusinessLocation,
+  suspendedLocationResponseBody,
+} from "../_shared/billing-suspension.ts";
+import {
   buildOwnerClaimPushMessage,
   decideOwnerClaimPush,
   resolveOwnerPushLocale,
@@ -581,6 +586,22 @@ serve(async (req) => {
           },
         );
       }
+    }
+
+    const suspendedLocation =
+      await getSuspendedLocation(
+        supabaseAdmin as any,
+        (deal as { location_id?: string | null }).location_id ?? null,
+      ) ??
+        await getSuspendedPrimaryBusinessLocation(supabaseAdmin as any, businessId);
+    if (suspendedLocation) {
+      return new Response(
+        JSON.stringify(suspendedLocationResponseBody("claim new deals")),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Repeat limits are business-level and count only successful redemptions.

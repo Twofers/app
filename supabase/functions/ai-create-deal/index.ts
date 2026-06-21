@@ -6,6 +6,10 @@ import { sendExpoPushBatch, haversineMiles } from "../_shared/expo-push.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import {
+  getSuspendedPrimaryBusinessLocation,
+  suspendedLocationResponseBody,
+} from "../_shared/billing-suspension.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
   buildDealOfferContract,
@@ -226,6 +230,17 @@ serve(async (req) => {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    const suspendedLocation = await getSuspendedPrimaryBusinessLocation(supabase as any, business_id);
+    if (suspendedLocation) {
+      return new Response(
+        JSON.stringify(suspendedLocationResponseBody("create deals")),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 

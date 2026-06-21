@@ -59,4 +59,18 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/subscription_status/);
     expect(source).not.toMatch(/subscription_tier/);
   });
+
+  it("blocks suspended locations in server-owned deal action functions", () => {
+    for (const name of [
+      "ai-create-deal",
+      "ai-generate-ad-variants",
+      "claim-deal",
+      "publish-offer-version",
+      "send-deal-push",
+    ]) {
+      const source = readFunction(name);
+      expect(source).toMatch(/billing-suspension/);
+      expect(source).toMatch(/suspendedLocationResponseBody/);
+    }
+  });
 });
