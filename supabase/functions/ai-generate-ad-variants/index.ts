@@ -36,6 +36,13 @@ import {
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  INCLUDED_IMAGE_REVISIONS,
+  commitChargeableImageRevisionCredit,
+  releaseChargeableImageRevisionCredit,
+  reserveChargeableImageRevisionCredit,
+  type ChargeableImageRevisionReservation,
+} from "../_shared/deal-credit-enforcement.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
   AD_COPY_PROMPT_VERSION,
@@ -76,8 +83,8 @@ const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
 
-/** Hard cap to bound abuse. The client enforces a matching soft cap (2) for UX. */
-const MAX_REVISION_COUNT = 2;
+/** Included revision allowance. Extra image-affecting revisions must reserve a deal credit. */
+const MAX_REVISION_COUNT = INCLUDED_IMAGE_REVISIONS;
 
 const VALID_PHOTO_TREATMENTS: ReadonlySet<PhotoTreatment> = new Set([
   "touchup",
@@ -1490,6 +1497,25 @@ function buildGenerationTelemetry(params: {
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
+  let adminForCreditRelease: SupabaseClient | null = null;
+  let chargeableRevisionCredit: ChargeableImageRevisionReservation | null = null;
+
+  async function releaseReservedChargeableRevision(reason: string) {
+    if (!adminForCreditRelease || !chargeableRevisionCredit) return;
+    const reservation = chargeableRevisionCredit;
+    chargeableRevisionCredit = null;
+    try {
+      await releaseChargeableImageRevisionCredit(adminForCreditRelease as any, reservation, reason);
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "deal_credit_release_failed",
+          err: String(e).slice(0, 200),
+        }),
+      );
+    }
+  }
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1512,6 +1538,7 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
     const admin = createClient(supabaseUrl, supabaseServiceKey);
+    adminForCreditRelease = admin;
 
     const {
       data: { user },
@@ -1742,13 +1769,23 @@ Deno.serve(async (req) => {
         .gte("created_at", sinceIso);
       derivedRevisionCount = refineCount ?? 0;
       if (derivedRevisionCount >= MAX_REVISION_COUNT) {
-        return new Response(
-          JSON.stringify({
-            error: "You've revised this ad enough times. Start fresh with a new offer.",
-            error_code: "REVISION_LIMIT",
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        const creditDecision = await reserveChargeableImageRevisionCredit(admin as any, {
+          businessId,
+          isRevision,
+          revisionTarget,
+          revisionNumber: derivedRevisionCount + 1,
+          requestGroupId,
+        });
+        if (!creditDecision.ok) {
+          return new Response(
+            JSON.stringify({
+              error: creditDecision.errorMessage,
+              error_code: creditDecision.errorCode,
+            }),
+            { status: creditDecision.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        chargeableRevisionCredit = creditDecision.reservation;
       }
     }
 
@@ -1848,6 +1885,7 @@ Deno.serve(async (req) => {
             structured_offer: offerTelemetry(offerContract),
           },
         });
+        await releaseReservedChargeableRevision("copy_failed");
         return new Response(
           JSON.stringify({ error: "AI copy generation failed. Tap try again.", error_code: "COPY_FAILED" }),
           { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -1945,6 +1983,7 @@ Deno.serve(async (req) => {
     };
 
     if (imageProductionFailed) {
+      await releaseReservedChargeableRevision("image_failed");
       return new Response(
         JSON.stringify({
           error: "AI image generation failed. Try again.",
@@ -1955,11 +1994,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (chargeableRevisionCredit) {
+      const reservation = chargeableRevisionCredit;
+      await commitChargeableImageRevisionCredit(admin as any, reservation);
+      chargeableRevisionCredit = null;
+    }
+
     return new Response(JSON.stringify({ ad, ads: [ad], quota }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    await releaseReservedChargeableRevision("server_error");
     console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", err: String(e).slice(0, 400) }));
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,

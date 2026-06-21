@@ -689,6 +689,7 @@ export type AiGenerateAdRequest = {
   hint_text: string;
   business_context: BusinessContextPayload;
   output_language: string;
+  request_group_id?: string;
   image_mode?: "generate";
   deal_eligibility?: DealEligibilityInput;
   photo_path?: string;
@@ -741,6 +742,7 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     hint_text: body.hint_text,
     business_context: body.business_context,
     output_language: body.output_language,
+    ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
     ...(body.image_mode ? { image_mode: body.image_mode } : {}),
     ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
@@ -758,6 +760,7 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     hint_text: body.hint_text,
     business_context: body.business_context,
     output_language: body.output_language,
+    ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
     previous_ad: body.previous_ad,
     revision_target: body.revision_target,
     revision_count: body.revision_count,

@@ -289,6 +289,13 @@ const QUOTA_FOCUS_MIN_MS = 30_000;
 const SOFT_REVISION_CAP = 2;
 const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
+function createAiRequestGroupId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID === "function") return randomUUID.call(globalThis.crypto);
+  const part = () => Math.floor((1 + Math.random()) * 0x100000000).toString(16).slice(1);
+  return `${part()}${part()}-${part()}-${part()}-${part()}-${part()}${part()}${part()}`;
+}
+
 function parseOptionalPriceInput(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
@@ -485,6 +492,7 @@ export default function AiDealScreen() {
    * generate again before a revise resolves, we bump this counter and discard stale results.
    */
   const generationRequestIdRef = useRef(0);
+  const aiRequestGroupIdRef = useRef(createAiRequestGroupId());
 
   const aiDraftBaselineRef = useRef<{
     title: string;
@@ -1383,6 +1391,7 @@ export default function AiDealScreen() {
     setActivePreset(null);
     aiDraftBaselineRef.current = null;
     lastSentPhotoTreatmentRef.current = null;
+    aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
   }
 
@@ -1658,6 +1667,7 @@ export default function AiDealScreen() {
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
         ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
@@ -1723,6 +1733,7 @@ export default function AiDealScreen() {
         hint_text: hintText.trim(),
         business_context: businessContextForAi,
         output_language: dealOutputLang,
+        request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
         previous_ad: generatedAd,
         revision_target: revisionTarget,
