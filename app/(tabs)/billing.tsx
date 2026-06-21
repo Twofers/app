@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, AppState, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -60,6 +60,7 @@ export default function BusinessBillingScreen() {
 
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
+  const [trialAcknowledged, setTrialAcknowledged] = useState(false);
 
   const remainingTime = useMemo(() => {
     const hours = hoursUntil(summary.trialEndsAt);
@@ -75,9 +76,17 @@ export default function BusinessBillingScreen() {
   });
 
   const isSuspended = isSuspendedBillingStatus(summary.status);
-  const canStartTrial = summary.status === "trial_eligible";
-  const canSubscribe = summary.purchaseSurface === "in_app_link";
-  const showPortal = canSubscribe && (summary.status === "paid_active" || summary.status === "paid_canceling");
+  const canStartTrial = summary.status === "trial_eligible" && summary.purchaseSurface === "in_app_link";
+  const showPortal = summary.purchaseSurface === "in_app_link" && (
+    summary.status === "pro_active" ||
+    summary.status === "pro_canceling" ||
+    summary.status === "paid_active" ||
+    summary.status === "paid_canceling"
+  );
+  const disclosureTrialEndDate = useMemo(
+    () => new Date(Date.now() + 30 * 86400000).toLocaleDateString(i18n.resolvedLanguage ?? i18n.language),
+    [i18n.language, i18n.resolvedLanguage],
+  );
 
   useEffect(() => {
     if (!PAID_BILLING_ENABLED) return;
@@ -118,28 +127,14 @@ export default function BusinessBillingScreen() {
     };
   }, [checkout, refresh, t]);
 
-  const startTrial = useCallback(async () => {
-    if (!locationId || busy) return;
-    setBusy(true);
-    setBanner(null);
-    try {
-      const { error } = await supabase.rpc("start_location_trial", {
-        p_business_location_id: locationId,
-      });
-      if (error) throw error;
-      await refresh();
-      setBanner({ message: t("billing.trialStarted"), tone: "success" });
-    } catch {
-      setBanner({ message: t("billing.errStartTrial"), tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, locationId, refresh, t]);
-
-  const subscribe = useCallback(async () => {
+  const startTrialCheckout = useCallback(async () => {
     if (!locationId || busy) return;
     if (summary.purchaseSurface !== "in_app_link") {
       setBanner({ message: t("billing.purchaseUnavailable"), tone: "info" });
+      return;
+    }
+    if (!trialAcknowledged) {
+      setBanner({ message: t("billing.trialConsentRequired"), tone: "warning" });
       return;
     }
     setBusy(true);
@@ -149,6 +144,7 @@ export default function BusinessBillingScreen() {
         body: {
           location_id: locationId,
           locale: stripeCheckoutLocale(i18n.resolvedLanguage ?? i18n.language),
+          trial_acknowledged: true,
         },
         timeout: EDGE_FUNCTION_TIMEOUT_MS,
       });
@@ -161,7 +157,7 @@ export default function BusinessBillingScreen() {
     } finally {
       setBusy(false);
     }
-  }, [busy, i18n.language, i18n.resolvedLanguage, locationId, summary.purchaseSurface, t]);
+  }, [busy, i18n.language, i18n.resolvedLanguage, locationId, summary.purchaseSurface, t, trialAcknowledged]);
 
   if (!PAID_BILLING_ENABLED) {
     return <Redirect href="/(tabs)/account" />;
@@ -264,11 +260,43 @@ export default function BusinessBillingScreen() {
 
             <View style={{ marginTop: 16, gap: 10 }}>
               {canStartTrial ? (
-                <PrimaryButton
-                  title={t("billing.startTrial")}
-                  onPress={() => void startTrial()}
-                  disabled={busy || !locationId}
-                />
+                <View
+                  style={{
+                    borderRadius: Radii.lg,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    backgroundColor: Colors.light.surface,
+                    padding: 14,
+                    gap: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: "900", color: Colors.light.text }}>
+                    {t("billing.trialDisclosureTitle")}
+                  </Text>
+                  <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "700", color: Colors.light.mutedText }}>
+                    {t("billing.trialDisclosureBody", { date: disclosureTrialEndDate })}
+                  </Text>
+                  <Pressable
+                    onPress={() => setTrialAcknowledged((value) => !value)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: trialAcknowledged }}
+                    style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}
+                  >
+                    <MaterialIcons
+                      name={trialAcknowledged ? "check-box" : "check-box-outline-blank"}
+                      size={24}
+                      color={trialAcknowledged ? Colors.light.primary : Colors.light.mutedText}
+                    />
+                    <Text style={{ flex: 1, fontSize: 14, lineHeight: 20, fontWeight: "800", color: Colors.light.text }}>
+                      {t("billing.trialConsentLabel", { date: disclosureTrialEndDate })}
+                    </Text>
+                  </Pressable>
+                  <PrimaryButton
+                    title={t("billing.startTrial")}
+                    onPress={() => void startTrialCheckout()}
+                    disabled={busy || !locationId || !trialAcknowledged}
+                  />
+                </View>
               ) : null}
 
               {summary.purchaseSurface === "disabled" ? (
@@ -277,21 +305,6 @@ export default function BusinessBillingScreen() {
 
               {summary.purchaseSurface === "web_only" ? (
                 <Banner message={t("billing.webOnlyStatus")} tone="info" />
-              ) : null}
-
-              {canSubscribe ? (
-                <>
-                  <Text style={{ fontSize: 13, lineHeight: 19, color: Colors.light.mutedText, fontWeight: "700" }}>
-                    {t("billing.subscribeChargedImmediately")}
-                  </Text>
-                  <PrimaryButton
-                    title={t("billing.subscribe")}
-                    onPress={() => void subscribe()}
-                    disabled={busy || !locationId}
-                    accessibilityLabel={t("billing.a11ySubscribeBusinessLabel")}
-                    accessibilityHint={t("billing.a11ySubscribeBusinessHint")}
-                  />
-                </>
               ) : null}
 
               {showPortal ? (

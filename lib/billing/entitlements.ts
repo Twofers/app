@@ -3,15 +3,23 @@ export type PurchaseSurface = (typeof PURCHASE_SURFACES)[number];
 
 export const BILLING_STATUSES = [
   "trial_eligible",
+  "trial_checkout_pending",
   "trial_active",
+  "trial_canceling",
+  "trial_canceled",
   "trial_credit_limit_reached",
+  "trial_expired_payment_failed_suspended",
   "trial_expired_suspended",
   "checkout_pending",
+  "pro_active",
+  "pro_canceling",
   "paid_active",
   "paid_canceling",
   "payment_failed_suspended",
   "canceled_suspended",
   "refunded_suspended",
+  "admin_trial_active",
+  "admin_trial_expired_suspended",
 ] as const;
 export type BillingStatus = (typeof BILLING_STATUSES)[number];
 
@@ -118,10 +126,12 @@ export function parseLocationBillingSummary(
 
 export function isSuspendedBillingStatus(status: BillingStatus): boolean {
   return (
+    status === "trial_expired_payment_failed_suspended" ||
     status === "trial_expired_suspended" ||
     status === "payment_failed_suspended" ||
     status === "canceled_suspended" ||
-    status === "refunded_suspended"
+    status === "refunded_suspended" ||
+    status === "admin_trial_expired_suspended"
   );
 }
 

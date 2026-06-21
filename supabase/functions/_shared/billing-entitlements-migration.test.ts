@@ -22,13 +22,17 @@ describe("location billing entitlement migration", () => {
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.deal_credit_reservations/i);
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.deal_credit_ledger/i);
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.billing_provider_events/i);
+    expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.business_location_identity/i);
+    expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.trial_checkout_intents/i);
   });
 
-  it("starts trials only through the server RPC and grants configured credits", () => {
-    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.start_location_trial/i);
-    expect(migration).toMatch(/TRIAL_ALREADY_USED/i);
+  it("does not expose owner-callable no-card trial start and keeps admin override service-only", () => {
+    expect(migration).not.toMatch(/CREATE OR REPLACE FUNCTION public\.start_location_trial/i);
+    expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS public\.admin_no_card_trial_grants/i);
+    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.admin_grant_location_trial/i);
+    expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_grant_location_trial\(uuid, uuid, text, boolean\) TO service_role/i);
+    expect(migration).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_grant_location_trial\(uuid, uuid, text, boolean\) TO authenticated/i);
     expect(migration).toMatch(/COALESCE\(v_config\.trial_deal_credit_allowance, 30\)/i);
-    expect(migration).toMatch(/'trial_grant:' \|\| p_business_location_id::text/i);
   });
 
   it("exposes only the safe billing summary RPC to authenticated owners", () => {

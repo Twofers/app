@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { loadRuntimeBillingConfig, safeGetString } from "../_shared/billing-runtime.ts";
+import { loadRuntimeBillingConfig, safeGetString, type RuntimeBillingConfig } from "../_shared/billing-runtime.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 type Metadata = Record<string, string>;
@@ -30,13 +30,39 @@ function metadataFrom(value: unknown): Metadata {
 }
 
 function eventEnvironment(event: Stripe.Event, metadata: Metadata): string {
-  return safeGetString(metadata.environment) ?? (event.livemode ? "production" : "development");
+  return safeGetString(metadata.environment) ?? (event.livemode ? "production" : "test");
 }
 
 function enforceLivemode(event: Stripe.Event): boolean {
   const expected = Deno.env.get("STRIPE_EXPECTED_LIVEMODE");
   if (expected !== "true" && expected !== "false") return true;
   return event.livemode === (expected === "true");
+}
+
+function firstSubscriptionPriceId(subscription: any): string | null {
+  return safeGetString(subscription?.items?.data?.[0]?.price?.id);
+}
+
+function expectedPriceId(config: RuntimeBillingConfig): string | null {
+  return config.billingEnvironment === "production"
+    ? config.twoferBusinessMonthlyPriceIdLive
+    : config.twoferBusinessMonthlyPriceIdTest;
+}
+
+function assertExpectedPrice(config: RuntimeBillingConfig, subscription: any) {
+  const expected = expectedPriceId(config);
+  if (!expected) return;
+  const actual = firstSubscriptionPriceId(subscription);
+  if (actual !== expected) {
+    throw new Error("Unexpected Stripe price for Twofer Business subscription.");
+  }
+}
+
+function isRealPaidSubscriptionCycleInvoice(invoice: any): boolean {
+  const amountPaid = typeof invoice?.amount_paid === "number" ? invoice.amount_paid : 0;
+  const billingReason = safeGetString(invoice?.billing_reason);
+  const currency = safeGetString(invoice?.currency)?.toLowerCase();
+  return amountPaid > 0 && billingReason === "subscription_cycle" && currency === "usd";
 }
 
 async function fetchSubscriptionForEvent(stripe: Stripe, eventType: string, obj: any): Promise<any | null> {
@@ -89,7 +115,8 @@ async function grantPaidPeriod(params: {
   invoice: any;
 }) {
   const { supabase, locationId, billingAccountId, subscription, invoice } = params;
-  const config = await loadRuntimeBillingConfig(supabase);
+  const config = await loadRuntimeBillingConfig(supabase as any);
+  assertExpectedPrice(config, subscription);
   const startedAt =
     unixSecondsToIso(subscription?.current_period_start) ??
     unixSecondsToIso(invoice?.period_start) ??
@@ -100,7 +127,16 @@ async function grantPaidPeriod(params: {
     new Date(Date.now() + 30 * 86400000).toISOString();
   const invoiceId = safeGetString(invoice?.id) ?? safeGetString(invoice?.latest_invoice) ?? crypto.randomUUID();
   const subscriptionId = safeGetString(subscription?.id);
-  const priceId = safeGetString(subscription?.items?.data?.[0]?.price?.id);
+  if (!subscriptionId) throw new Error("Missing Stripe subscription for paid invoice.");
+  if (!isRealPaidSubscriptionCycleInvoice(invoice)) return;
+  if (safeGetString(subscription?.status) !== "active") return;
+  const priceId = firstSubscriptionPriceId(subscription);
+  const externalReference = `paid_subscription:${subscriptionId}:${startedAt}`;
+  const { data: existingPeriod } = await supabase
+    .from("deal_credit_periods")
+    .select("id")
+    .eq("external_reference", externalReference)
+    .maybeSingle();
 
   await supabase
     .from("location_entitlements")
@@ -108,12 +144,14 @@ async function grantPaidPeriod(params: {
       {
         business_location_id: locationId,
         billing_account_id: billingAccountId,
-        status: "paid_active",
+        status: "pro_active",
         entitlement_provider: "stripe",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "business_location_id" },
     );
+
+  if (existingPeriod?.id) return;
 
   await supabase
     .from("deal_credit_periods")
@@ -134,9 +172,10 @@ async function grantPaidPeriod(params: {
         paid_deal_credit_allowance: config.paidDealCreditAllowance,
         credit_reservation_ttl_minutes: config.creditReservationTtlMinutes,
         invoice_id: invoiceId,
+        provider_subscription_id: subscriptionId,
         granted_at: new Date().toISOString(),
       },
-      external_reference: `stripe_invoice:${invoiceId}`,
+      external_reference: externalReference,
     })
     .select("id")
     .single();
@@ -156,8 +195,8 @@ async function grantPaidPeriod(params: {
         event_type: "grant",
         purpose: "admin_adjustment",
         amount: config.paidDealCreditAllowance,
-        idempotency_key: `paid_grant:${invoiceId}`,
-        metadata: { provider: "stripe", invoice_id: invoiceId },
+        idempotency_key: externalReference,
+        metadata: { provider: "stripe", invoice_id: invoiceId, subscription_id: subscriptionId },
       });
     if (ledgerError) {
       const detail = `${ledgerError.code ?? ""} ${ledgerError.message ?? ""}`;
@@ -169,7 +208,7 @@ async function grantPaidPeriod(params: {
     .from("location_entitlements")
     .update({
       billing_account_id: billingAccountId,
-      status: "paid_active",
+      status: "pro_active",
       entitlement_provider: "stripe",
       trial_ends_at: null,
       current_period_started_at: startedAt,
@@ -190,7 +229,7 @@ async function grantPaidPeriod(params: {
     .from("location_entitlements")
     .update({
       billing_account_id: billingAccountId,
-      status: "paid_active",
+      status: "pro_active",
       entitlement_provider: "stripe",
       trial_ends_at: null,
       current_period_started_at: startedAt,
@@ -205,6 +244,155 @@ async function grantPaidPeriod(params: {
     .eq("business_location_id", locationId);
 }
 
+async function activateTrialFromCheckout(params: {
+  supabase: any;
+  locationId: string;
+  billingAccountId: string;
+  ownerUserId: string;
+  subscription: any;
+  checkoutSession: any;
+  metadata: Metadata;
+}) {
+  const { supabase, locationId, billingAccountId, ownerUserId, subscription, checkoutSession, metadata } = params;
+  const config = await loadRuntimeBillingConfig(supabase as any);
+  assertExpectedPrice(config, subscription);
+
+  if (safeGetString(metadata.checkout_purpose) !== "trial_start") return;
+  if (safeGetString(subscription?.status) !== "trialing") {
+    throw new Error("Checkout session did not create a trialing subscription.");
+  }
+
+  const subscriptionId = safeGetString(subscription?.id);
+  const trialStartedAt = unixSecondsToIso(subscription?.trial_start) ?? new Date().toISOString();
+  const trialEndsAt = unixSecondsToIso(subscription?.trial_end);
+  const priceId = firstSubscriptionPriceId(subscription);
+  if (!subscriptionId || !trialEndsAt) {
+    throw new Error("Stripe trial subscription is missing trial metadata.");
+  }
+
+  const intentId = safeGetString(metadata.trial_checkout_intent_id);
+  if (intentId) {
+    await supabase
+      .from("trial_checkout_intents")
+      .update({ checkout_session_id: safeGetString(checkoutSession?.id) })
+      .eq("id", intentId)
+      .eq("business_location_id", locationId);
+  }
+
+  await supabase
+    .from("business_location_identity")
+    .upsert(
+      {
+        business_location_id: locationId,
+        trial_used_at: trialStartedAt,
+        trial_started_by_user_id: ownerUserId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "business_location_id" },
+    );
+
+  const externalReference = `trial:${locationId}:${subscriptionId}`;
+  const { data: existingPeriod } = await supabase
+    .from("deal_credit_periods")
+    .select("id")
+    .eq("external_reference", externalReference)
+    .maybeSingle();
+  if (existingPeriod?.id) {
+    await supabase
+      .from("location_entitlements")
+      .upsert(
+        {
+          business_location_id: locationId,
+          billing_account_id: billingAccountId,
+          status: "trial_active",
+          entitlement_provider: "stripe",
+          trial_started_at: trialStartedAt,
+          trial_ends_at: trialEndsAt,
+          current_period_started_at: trialStartedAt,
+          current_period_ends_at: trialEndsAt,
+          cancel_at_period_end: Boolean(subscription?.cancel_at_period_end),
+          suspended_at: null,
+          suspension_reason: null,
+          provider_subscription_id: subscriptionId,
+          provider_price_id: priceId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "business_location_id" },
+      );
+    return;
+  }
+
+  const { data: period, error: periodError } = await supabase
+    .from("deal_credit_periods")
+    .insert({
+      business_location_id: locationId,
+      source: "trial",
+      status: "active",
+      starts_at: trialStartedAt,
+      ends_at: trialEndsAt,
+      credits_granted: config.trialDealCreditAllowance,
+      configuration_snapshot: {
+        trial_deal_credit_allowance: config.trialDealCreditAllowance,
+        credit_reservation_ttl_minutes: config.creditReservationTtlMinutes,
+        provider_subscription_id: subscriptionId,
+        checkout_session_id: safeGetString(checkoutSession?.id),
+        granted_at: new Date().toISOString(),
+      },
+      external_reference: externalReference,
+    })
+    .select("id")
+    .single();
+
+  if (periodError) {
+    const detail = `${periodError.code ?? ""} ${periodError.message ?? ""}`;
+    if (!/23505|duplicate/i.test(detail)) throw periodError;
+  }
+
+  if (period?.id) {
+    const { error: ledgerError } = await supabase
+      .from("deal_credit_ledger")
+      .insert({
+        business_location_id: locationId,
+        credit_period_id: period.id,
+        event_type: "grant",
+        purpose: "admin_adjustment",
+        amount: config.trialDealCreditAllowance,
+        idempotency_key: externalReference,
+        metadata: {
+          provider: "stripe",
+          subscription_id: subscriptionId,
+          checkout_session_id: safeGetString(checkoutSession?.id),
+        },
+      });
+    if (ledgerError) {
+      const detail = `${ledgerError.code ?? ""} ${ledgerError.message ?? ""}`;
+      if (!/23505|duplicate/i.test(detail)) throw ledgerError;
+    }
+  }
+
+  await supabase
+    .from("location_entitlements")
+    .upsert(
+      {
+        business_location_id: locationId,
+        billing_account_id: billingAccountId,
+        status: "trial_active",
+        entitlement_provider: "stripe",
+        trial_started_at: trialStartedAt,
+        trial_ends_at: trialEndsAt,
+        current_period_started_at: trialStartedAt,
+        current_period_ends_at: trialEndsAt,
+        cancel_at_period_end: Boolean(subscription?.cancel_at_period_end),
+        suspended_at: null,
+        suspension_reason: null,
+        provider_subscription_id: subscriptionId,
+        provider_price_id: priceId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "business_location_id" },
+    );
+}
+
 async function syncSubscriptionState(params: {
   supabase: any;
   locationId: string;
@@ -214,19 +402,33 @@ async function syncSubscriptionState(params: {
   const { supabase, locationId, billingAccountId, subscription } = params;
   const status = String(subscription?.status ?? "");
   const subscriptionId = safeGetString(subscription?.id);
-  const priceId = safeGetString(subscription?.items?.data?.[0]?.price?.id);
+  const priceId = firstSubscriptionPriceId(subscription);
   const periodEndsAt = unixSecondsToIso(subscription?.current_period_end);
+  const periodStartsAt = unixSecondsToIso(subscription?.current_period_start);
+  const trialEndsAt = unixSecondsToIso(subscription?.trial_end);
   const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
+  const { data: existing } = await supabase
+    .from("location_entitlements")
+    .select("first_paid_at,status")
+    .eq("business_location_id", locationId)
+    .maybeSingle();
+  const hasFirstPaid = Boolean(existing?.first_paid_at);
   const nextStatus =
     status === "canceled"
       ? "canceled_suspended"
+      : status === "trialing" && cancelAtPeriodEnd
+        ? "trial_canceling"
+      : status === "trialing"
+        ? "trial_active"
+      : status === "active" && cancelAtPeriodEnd && hasFirstPaid
+        ? "pro_canceling"
+      : status === "active" && hasFirstPaid
+        ? "pro_active"
       : cancelAtPeriodEnd
-        ? "paid_canceling"
+        ? "checkout_pending"
         : status === "past_due" || status === "unpaid"
           ? "payment_failed_suspended"
-          : status === "active"
-            ? "paid_active"
-            : "checkout_pending";
+          : "checkout_pending";
 
   await supabase
     .from("location_entitlements")
@@ -234,6 +436,8 @@ async function syncSubscriptionState(params: {
       billing_account_id: billingAccountId,
       status: nextStatus,
       entitlement_provider: "stripe",
+      trial_ends_at: trialEndsAt,
+      current_period_started_at: periodStartsAt,
       current_period_ends_at: periodEndsAt,
       cancel_at_period_end: cancelAtPeriodEnd,
       suspended_at: nextStatus.endsWith("_suspended") ? new Date().toISOString() : null,
@@ -288,6 +492,7 @@ serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const config = await loadRuntimeBillingConfig(supabase as any);
   const obj: any = event.data.object;
   const subscription = await fetchSubscriptionForEvent(stripe, event.type, obj);
   const mergedMetadata: Metadata = {
@@ -295,6 +500,9 @@ serve(async (req) => {
     ...metadataFrom(obj),
   };
   const environment = eventEnvironment(event, mergedMetadata);
+  if (environment !== config.billingEnvironment) {
+    return jsonResponse(req, { error: "Stripe event environment is not accepted." }, 400);
+  }
   const providerEvent = await insertProviderEvent(supabase, event, environment);
   if (providerEvent.duplicate) {
     return jsonResponse(req, { received: true, duplicate: true });
@@ -320,27 +528,34 @@ serve(async (req) => {
         .eq("id", billingAccountId);
     }
 
-    if (
-      event.type === "checkout.session.completed"
-    ) {
-      await supabase
-        .from("location_entitlements")
-        .update({
-          billing_account_id: billingAccountId,
-          status: "checkout_pending",
-          entitlement_provider: "stripe",
-          provider_subscription_id: safeGetString(obj?.subscription),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("business_location_id", locationId);
-    } else if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
+    if (event.type === "checkout.session.completed") {
+      const ownerUserId = safeGetString(mergedMetadata.owner_user_id);
+      if (!ownerUserId) throw new Error("Missing owner metadata for trial checkout.");
+      await activateTrialFromCheckout({
+        supabase,
+        locationId,
+        billingAccountId,
+        ownerUserId,
+        subscription,
+        checkoutSession: obj,
+        metadata: mergedMetadata,
+      });
+    } else if (event.type === "invoice.paid") {
       await grantPaidPeriod({ supabase, locationId, billingAccountId, subscription, invoice: obj });
     } else if (event.type === "invoice.payment_failed") {
+      const { data: existing } = await supabase
+        .from("location_entitlements")
+        .select("first_paid_at")
+        .eq("business_location_id", locationId)
+        .maybeSingle();
+      const failedStatus = existing?.first_paid_at
+        ? "payment_failed_suspended"
+        : "trial_expired_payment_failed_suspended";
       await supabase
         .from("location_entitlements")
         .update({
           billing_account_id: billingAccountId,
-          status: "payment_failed_suspended",
+          status: failedStatus,
           entitlement_provider: "stripe",
           suspended_at: new Date().toISOString(),
           suspension_reason: "payment_failed",
@@ -350,10 +565,29 @@ serve(async (req) => {
         .eq("business_location_id", locationId);
     } else if (
       event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
+      event.type === "customer.subscription.updated"
     ) {
       await syncSubscriptionState({ supabase, locationId, billingAccountId, subscription });
+    } else if (event.type === "customer.subscription.deleted") {
+      const { data: existing } = await supabase
+        .from("location_entitlements")
+        .select("first_paid_at")
+        .eq("business_location_id", locationId)
+        .maybeSingle();
+      await supabase
+        .from("location_entitlements")
+        .update({
+          billing_account_id: billingAccountId,
+          status: existing?.first_paid_at ? "canceled_suspended" : "trial_canceled",
+          entitlement_provider: "stripe",
+          current_period_ends_at: unixSecondsToIso(subscription?.current_period_end),
+          cancel_at_period_end: false,
+          suspended_at: existing?.first_paid_at ? new Date().toISOString() : null,
+          suspension_reason: existing?.first_paid_at ? "subscription_deleted" : null,
+          provider_subscription_id: safeGetString(subscription?.id),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("business_location_id", locationId);
     } else if (event.type === "charge.refunded" || event.type === "refund.created") {
       await supabase
         .from("location_entitlements")

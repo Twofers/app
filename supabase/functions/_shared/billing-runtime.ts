@@ -5,6 +5,11 @@ export type RuntimeBillingConfig = {
   trialDealCreditAllowance: number;
   paidDealCreditAllowance: number;
   creditReservationTtlMinutes: number;
+  billingEnvironment: "test" | "production";
+  entitlementVersion: string;
+  automaticTaxEnabled: boolean;
+  twoferBusinessMonthlyPriceIdTest: string | null;
+  twoferBusinessMonthlyPriceIdLive: string | null;
 };
 
 type SupabaseLike = {
@@ -29,12 +34,16 @@ function nonNegativeInt(value: unknown, fallback: number): number {
   return Math.max(0, Math.trunc(n));
 }
 
+function normalizeBillingEnvironment(value: unknown): "test" | "production" {
+  return value === "production" ? "production" : "test";
+}
+
 export async function loadRuntimeBillingConfig(
   supabase: SupabaseLike,
 ): Promise<RuntimeBillingConfig> {
   const { data, error } = await supabase
     .from("app_runtime_config")
-    .select("purchase_surface,trial_deal_credit_allowance,paid_deal_credit_allowance,credit_reservation_ttl_minutes")
+    .select("purchase_surface,trial_deal_credit_allowance,paid_deal_credit_allowance,credit_reservation_ttl_minutes,billing_environment,entitlement_version,automatic_tax_enabled,twofer_business_monthly_price_id_test,twofer_business_monthly_price_id_live")
     .eq("id", 1)
     .maybeSingle();
 
@@ -44,6 +53,11 @@ export async function loadRuntimeBillingConfig(
       trialDealCreditAllowance: 30,
       paidDealCreditAllowance: 60,
       creditReservationTtlMinutes: 15,
+      billingEnvironment: "test",
+      entitlementVersion: "location-credit-v1",
+      automaticTaxEnabled: false,
+      twoferBusinessMonthlyPriceIdTest: null,
+      twoferBusinessMonthlyPriceIdLive: null,
     };
   }
 
@@ -52,6 +66,11 @@ export async function loadRuntimeBillingConfig(
     trialDealCreditAllowance: nonNegativeInt(data.trial_deal_credit_allowance, 30),
     paidDealCreditAllowance: nonNegativeInt(data.paid_deal_credit_allowance, 60),
     creditReservationTtlMinutes: nonNegativeInt(data.credit_reservation_ttl_minutes, 15),
+    billingEnvironment: normalizeBillingEnvironment(data.billing_environment),
+    entitlementVersion: safeGetString(data.entitlement_version) ?? "location-credit-v1",
+    automaticTaxEnabled: data.automatic_tax_enabled === true,
+    twoferBusinessMonthlyPriceIdTest: safeGetString(data.twofer_business_monthly_price_id_test),
+    twoferBusinessMonthlyPriceIdLive: safeGetString(data.twofer_business_monthly_price_id_live),
   };
 }
 

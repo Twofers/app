@@ -17,8 +17,14 @@ CREATE TABLE IF NOT EXISTS public.app_runtime_config (
   credit_reservation_ttl_minutes integer NOT NULL DEFAULT 15
     CHECK (credit_reservation_ttl_minutes > 0),
   trial_conversion_prompt_days integer[] NOT NULL DEFAULT ARRAY[21,25,28,29],
-  intro_refund_max_credits_used integer NULL
-    CHECK (intro_refund_max_credits_used IS NULL OR intro_refund_max_credits_used >= 0),
+  refund_max_paid_credits_used integer NULL
+    CHECK (refund_max_paid_credits_used IS NULL OR refund_max_paid_credits_used >= 0),
+  twofer_business_monthly_price_id_test text NULL,
+  twofer_business_monthly_price_id_live text NULL,
+  billing_environment text NOT NULL DEFAULT 'test'
+    CHECK (billing_environment IN ('test', 'production')),
+  entitlement_version text NOT NULL DEFAULT 'location-credit-v1',
+  automatic_tax_enabled boolean NOT NULL DEFAULT false,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -91,15 +97,23 @@ CREATE TABLE IF NOT EXISTS public.location_entitlements (
   status text NOT NULL DEFAULT 'trial_eligible'
     CHECK (status IN (
       'trial_eligible',
+      'trial_checkout_pending',
       'trial_active',
+      'trial_canceling',
+      'trial_canceled',
       'trial_credit_limit_reached',
+      'trial_expired_payment_failed_suspended',
       'trial_expired_suspended',
       'checkout_pending',
+      'pro_active',
+      'pro_canceling',
       'paid_active',
       'paid_canceling',
       'payment_failed_suspended',
       'canceled_suspended',
-      'refunded_suspended'
+      'refunded_suspended',
+      'admin_trial_active',
+      'admin_trial_expired_suspended'
     )),
   entitlement_provider text NULL,
   trial_started_at timestamptz NULL,
@@ -124,7 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_location_entitlements_billing_account_id
 CREATE TABLE IF NOT EXISTS public.deal_credit_periods (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   business_location_id uuid NOT NULL REFERENCES public.business_locations(id) ON DELETE CASCADE,
-  source text NOT NULL CHECK (source IN ('trial', 'paid_subscription', 'admin_adjustment')),
+  source text NOT NULL CHECK (source IN ('trial', 'paid_subscription', 'admin_adjustment', 'admin_trial')),
   status text NOT NULL CHECK (status IN ('active', 'replaced', 'expired', 'canceled')),
   starts_at timestamptz NOT NULL,
   ends_at timestamptz NOT NULL,
@@ -159,7 +173,8 @@ CREATE TABLE IF NOT EXISTS public.deal_credit_reservations (
     'duplicate_deal',
     'recurring_occurrence',
     'extra_image_revision',
-    'admin_adjustment'
+    'admin_adjustment',
+    'admin_trial'
   )),
   amount integer NOT NULL CHECK (amount > 0),
   status text NOT NULL CHECK (status IN ('reserved', 'committed', 'released')),
@@ -190,7 +205,8 @@ CREATE TABLE IF NOT EXISTS public.deal_credit_ledger (
     'duplicate_deal',
     'recurring_occurrence',
     'extra_image_revision',
-    'admin_adjustment'
+    'admin_adjustment',
+    'admin_trial'
   )),
   amount integer NOT NULL CHECK (amount > 0),
   idempotency_key text NOT NULL UNIQUE,
@@ -215,7 +231,70 @@ CREATE TABLE IF NOT EXISTS public.billing_provider_events (
   received_at timestamptz NOT NULL DEFAULT now(),
   processed_at timestamptz NULL,
   error_message text NULL,
-  UNIQUE (provider, provider_event_id, environment)
+  UNIQUE (provider, provider_event_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.business_location_identity (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_location_id uuid NOT NULL UNIQUE REFERENCES public.business_locations(id) ON DELETE CASCADE,
+  google_place_id text NULL,
+  normalized_business_name text NULL,
+  normalized_address text NULL,
+  normalized_phone text NULL,
+  website_domain text NULL,
+  business_email_domain text NULL,
+  tax_id_hash text NULL,
+  trial_used_at timestamptz NULL,
+  trial_started_by_user_id uuid NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+  verification_status text NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified', 'pending_review', 'verified', 'rejected')),
+  risk_score numeric NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_location_identity_google_place
+  ON public.business_location_identity (google_place_id)
+  WHERE google_place_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_business_location_identity_address_phone
+  ON public.business_location_identity (normalized_address, normalized_phone)
+  WHERE normalized_address IS NOT NULL AND normalized_phone IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.trial_checkout_intents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  business_location_id uuid NOT NULL REFERENCES public.business_locations(id) ON DELETE CASCADE,
+  disclosure_version text NOT NULL,
+  locale text NOT NULL,
+  displayed_price text NOT NULL,
+  displayed_trial_end_date timestamptz NOT NULL,
+  displayed_billing_interval text NOT NULL,
+  displayed_tax_language text NOT NULL,
+  purchase_surface text NOT NULL CHECK (purchase_surface IN ('in_app_link', 'web_only', 'disabled')),
+  checkout_session_id text NULL UNIQUE,
+  provider text NOT NULL DEFAULT 'stripe',
+  consented_at timestamptz NOT NULL DEFAULT now(),
+  ip_address inet NULL,
+  user_agent text NULL,
+  app_version text NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trial_checkout_intents_location_created
+  ON public.trial_checkout_intents (business_location_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.admin_no_card_trial_grants (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  business_location_id uuid NOT NULL REFERENCES public.business_locations(id) ON DELETE CASCADE,
+  reason text NOT NULL CHECK (char_length(trim(reason)) >= 12),
+  override_trial_reuse boolean NOT NULL DEFAULT false,
+  trial_started_at timestamptz NOT NULL,
+  trial_ends_at timestamptz NOT NULL,
+  credits_granted integer NOT NULL CHECK (credits_granted >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (trial_ends_at > trial_started_at)
 );
 
 CREATE OR REPLACE FUNCTION public.user_owns_business_location(
@@ -278,7 +357,12 @@ RETURNS TABLE (
   paid_deal_credit_allowance integer,
   credit_reservation_ttl_minutes integer,
   trial_conversion_prompt_days integer[],
-  intro_refund_max_credits_used integer
+  refund_max_paid_credits_used integer,
+  twofer_business_monthly_price_id_test text,
+  twofer_business_monthly_price_id_live text,
+  billing_environment text,
+  entitlement_version text,
+  automatic_tax_enabled boolean
 )
 LANGUAGE sql
 STABLE
@@ -296,11 +380,16 @@ AS $$
     COALESCE(arc.paid_deal_credit_allowance, 60) AS paid_deal_credit_allowance,
     COALESCE(arc.credit_reservation_ttl_minutes, 15) AS credit_reservation_ttl_minutes,
     COALESCE(arc.trial_conversion_prompt_days, ARRAY[21,25,28,29]) AS trial_conversion_prompt_days,
-    arc.intro_refund_max_credits_used
+    arc.refund_max_paid_credits_used,
+    arc.twofer_business_monthly_price_id_test,
+    arc.twofer_business_monthly_price_id_live,
+    COALESCE(arc.billing_environment, 'test') AS billing_environment,
+    COALESCE(NULLIF(arc.entitlement_version, ''), 'location-credit-v1') AS entitlement_version,
+    COALESCE(arc.automatic_tax_enabled, false) AS automatic_tax_enabled
   FROM public.app_runtime_config arc
   WHERE arc.id = 1
   UNION ALL
-  SELECT 'disabled', 30, 60, 15, ARRAY[21,25,28,29], NULL
+  SELECT 'disabled', 30, 60, 15, ARRAY[21,25,28,29], NULL, NULL, NULL, 'test', 'location-credit-v1', false
   WHERE NOT EXISTS (SELECT 1 FROM public.app_runtime_config WHERE id = 1)
   LIMIT 1;
 $$;
@@ -363,7 +452,7 @@ BEGIN
       0
     ) AS credits_remaining,
     (
-      le.status = 'paid_active'
+      le.status IN ('pro_active', 'paid_active')
       AND le.first_paid_at IS NOT NULL
       AND le.introductory_refund_used_at IS NULL
       AND now() < le.first_paid_at + interval '7 days'
@@ -385,27 +474,13 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.start_location_trial(
-  p_business_location_id uuid
+CREATE OR REPLACE FUNCTION public.admin_grant_location_trial(
+  p_business_location_id uuid,
+  p_admin_user_id uuid,
+  p_reason text,
+  p_override_trial_reuse boolean DEFAULT false
 )
-RETURNS TABLE (
-  business_location_id uuid,
-  status text,
-  trial_started_at timestamptz,
-  trial_ends_at timestamptz,
-  current_period_started_at timestamptz,
-  current_period_ends_at timestamptz,
-  cancel_at_period_end boolean,
-  suspension_reason text,
-  credits_granted integer,
-  credits_used integer,
-  credits_reserved integer,
-  credits_remaining integer,
-  refund_eligible boolean,
-  purchase_surface text,
-  configured_trial_allowance integer,
-  configured_paid_allowance integer
-)
+RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -415,11 +490,19 @@ DECLARE
   v_owner_id uuid;
   v_billing_account_id uuid;
   v_config record;
-  v_entitlement public.location_entitlements%ROWTYPE;
   v_period_id uuid;
+  v_grant_id uuid;
   v_started_at timestamptz := now();
   v_ends_at timestamptz := now() + interval '30 days';
 BEGIN
+  IF p_admin_user_id IS NULL THEN
+    RAISE EXCEPTION 'ADMIN_USER_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_reason IS NULL OR char_length(trim(p_reason)) < 12 THEN
+    RAISE EXCEPTION 'ADMIN_REASON_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+
   SELECT COALESCE(b.owner_id, bp.user_id, bp.owner_id)
     INTO v_owner_id
   FROM public.business_locations bl
@@ -430,15 +513,15 @@ BEGIN
   WHERE bl.id = p_business_location_id
   LIMIT 1;
 
-  IF v_owner_id IS NULL OR v_owner_id <> auth.uid() THEN
+  IF v_owner_id IS NULL THEN
     RAISE EXCEPTION 'LOCATION_NOT_FOUND' USING ERRCODE = 'P0001';
   END IF;
 
-  IF EXISTS (
+  IF NOT p_override_trial_reuse AND EXISTS (
     SELECT 1
     FROM public.deal_credit_periods
     WHERE business_location_id = p_business_location_id
-      AND source = 'trial'
+      AND source IN ('trial', 'admin_trial')
   ) THEN
     RAISE EXCEPTION 'TRIAL_ALREADY_USED' USING ERRCODE = 'P0001';
   END IF;
@@ -447,25 +530,31 @@ BEGIN
   FROM public.get_runtime_billing_config()
   LIMIT 1;
 
-  INSERT INTO public.billing_accounts (owner_user_id)
-  VALUES (v_owner_id)
+  INSERT INTO public.billing_accounts (owner_user_id, provider)
+  VALUES (v_owner_id, 'admin_grant')
   ON CONFLICT (owner_user_id)
   DO UPDATE SET updated_at = now()
   RETURNING id INTO v_billing_account_id;
 
-  INSERT INTO public.location_entitlements (business_location_id, billing_account_id, status)
-  VALUES (p_business_location_id, v_billing_account_id, 'trial_eligible')
-  ON CONFLICT (business_location_id) DO NOTHING;
-
-  SELECT *
-    INTO v_entitlement
-  FROM public.location_entitlements
-  WHERE business_location_id = p_business_location_id
-  FOR UPDATE;
-
-  IF v_entitlement.status <> 'trial_eligible' THEN
-    RAISE EXCEPTION 'TRIAL_NOT_ELIGIBLE' USING ERRCODE = 'P0001';
-  END IF;
+  INSERT INTO public.admin_no_card_trial_grants (
+    admin_user_id,
+    business_location_id,
+    reason,
+    override_trial_reuse,
+    trial_started_at,
+    trial_ends_at,
+    credits_granted
+  )
+  VALUES (
+    p_admin_user_id,
+    p_business_location_id,
+    trim(p_reason),
+    p_override_trial_reuse,
+    v_started_at,
+    v_ends_at,
+    COALESCE(v_config.trial_deal_credit_allowance, 30)
+  )
+  RETURNING id INTO v_grant_id;
 
   UPDATE public.deal_credit_periods
   SET status = 'replaced',
@@ -485,7 +574,7 @@ BEGIN
   )
   VALUES (
     p_business_location_id,
-    'trial',
+    'admin_trial',
     'active',
     v_started_at,
     v_ends_at,
@@ -493,9 +582,11 @@ BEGIN
     jsonb_build_object(
       'trial_deal_credit_allowance', COALESCE(v_config.trial_deal_credit_allowance, 30),
       'credit_reservation_ttl_minutes', COALESCE(v_config.credit_reservation_ttl_minutes, 15),
+      'admin_user_id', p_admin_user_id,
+      'grant_id', v_grant_id,
       'granted_at', v_started_at
     ),
-    'trial:' || p_business_location_id::text
+    'admin_trial:' || p_business_location_id::text || ':' || v_grant_id::text
   )
   RETURNING id INTO v_period_id;
 
@@ -512,16 +603,64 @@ BEGIN
     p_business_location_id,
     v_period_id,
     'grant',
-    'admin_adjustment',
+    'admin_trial',
     COALESCE(v_config.trial_deal_credit_allowance, 30),
-    'trial_grant:' || p_business_location_id::text,
-    jsonb_build_object('source', 'start_location_trial')
+    'admin_trial:' || p_business_location_id::text || ':' || v_grant_id::text,
+    jsonb_build_object('admin_user_id', p_admin_user_id, 'reason', trim(p_reason))
   );
 
-  UPDATE public.location_entitlements
-  SET billing_account_id = v_billing_account_id,
-      status = 'trial_active',
-      entitlement_provider = 'trial',
+  INSERT INTO public.business_location_identity (
+    business_location_id,
+    trial_used_at,
+    trial_started_by_user_id,
+    verification_status,
+    updated_at
+  )
+  VALUES (
+    p_business_location_id,
+    v_started_at,
+    v_owner_id,
+    'pending_review',
+    now()
+  )
+  ON CONFLICT (business_location_id)
+  DO UPDATE SET
+    trial_used_at = COALESCE(public.business_location_identity.trial_used_at, EXCLUDED.trial_used_at),
+    trial_started_by_user_id = COALESCE(public.business_location_identity.trial_started_by_user_id, EXCLUDED.trial_started_by_user_id),
+    updated_at = now();
+
+  INSERT INTO public.location_entitlements (
+    business_location_id,
+    billing_account_id,
+    status,
+    entitlement_provider,
+    trial_started_at,
+    trial_ends_at,
+    current_period_started_at,
+    current_period_ends_at,
+    cancel_at_period_end,
+    suspended_at,
+    suspension_reason,
+    updated_at
+  )
+  VALUES (
+    p_business_location_id,
+    v_billing_account_id,
+    'admin_trial_active',
+    'admin_grant',
+    v_started_at,
+    v_ends_at,
+    v_started_at,
+    v_ends_at,
+    false,
+    NULL,
+    NULL,
+    now()
+  )
+  ON CONFLICT (business_location_id) DO UPDATE
+  SET billing_account_id = EXCLUDED.billing_account_id,
+      status = 'admin_trial_active',
+      entitlement_provider = 'admin_grant',
       trial_started_at = v_started_at,
       trial_ends_at = v_ends_at,
       current_period_started_at = v_started_at,
@@ -529,12 +668,9 @@ BEGIN
       cancel_at_period_end = false,
       suspended_at = NULL,
       suspension_reason = NULL,
-      updated_at = now()
-  WHERE business_location_id = p_business_location_id;
+      updated_at = now();
 
-  RETURN QUERY
-  SELECT *
-  FROM public.get_location_billing_summary(p_business_location_id);
+  RETURN v_grant_id;
 END;
 $$;
 
@@ -572,6 +708,9 @@ ALTER TABLE public.deal_credit_periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deal_credit_reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deal_credit_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.billing_provider_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.business_location_identity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trial_checkout_intents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_no_card_trial_grants ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE public.app_runtime_config FROM anon, authenticated;
 REVOKE ALL ON TABLE public.app_runtime_config_audit FROM anon, authenticated;
@@ -581,19 +720,32 @@ REVOKE ALL ON TABLE public.deal_credit_periods FROM anon, authenticated;
 REVOKE ALL ON TABLE public.deal_credit_reservations FROM anon, authenticated;
 REVOKE ALL ON TABLE public.deal_credit_ledger FROM anon, authenticated;
 REVOKE ALL ON TABLE public.billing_provider_events FROM anon, authenticated;
+REVOKE ALL ON TABLE public.business_location_identity FROM anon, authenticated;
+REVOKE ALL ON TABLE public.trial_checkout_intents FROM anon, authenticated;
+REVOKE ALL ON TABLE public.admin_no_card_trial_grants FROM anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE ON TABLE public.billing_accounts TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.location_entitlements TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.deal_credit_periods TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.deal_credit_reservations TO service_role;
+GRANT SELECT, INSERT ON TABLE public.deal_credit_ledger TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.billing_provider_events TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.business_location_identity TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.trial_checkout_intents TO service_role;
+GRANT SELECT, INSERT ON TABLE public.admin_no_card_trial_grants TO service_role;
 
 REVOKE ALL ON FUNCTION public.audit_app_runtime_config() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.ensure_location_entitlement() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.user_owns_business_location(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_runtime_billing_config() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_location_billing_summary(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.start_location_trial(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_grant_location_trial(uuid, uuid, text, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.deal_claim_visible_to_business_owner(uuid) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.user_owns_business_location(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_runtime_billing_config() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_location_billing_summary(uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.start_location_trial(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_grant_location_trial(uuid, uuid, text, boolean) TO service_role;
 GRANT EXECUTE ON FUNCTION public.deal_claim_visible_to_business_owner(uuid) TO anon, authenticated, service_role;
 
 COMMENT ON TABLE public.app_runtime_config
@@ -610,5 +762,11 @@ COMMENT ON TABLE public.deal_credit_reservations
 
 COMMENT ON TABLE public.deal_credit_ledger
   IS 'Append-only credit ledger for grants, reservations, commits, releases, expirations, and adjustments.';
+
+COMMENT ON TABLE public.trial_checkout_intents
+  IS 'Server-owned record of express owner consent before card-required Stripe trial Checkout.';
+
+COMMENT ON TABLE public.admin_no_card_trial_grants
+  IS 'Audited admin-only no-card trial override grants. Not reachable from normal owner UI.';
 
 COMMIT;

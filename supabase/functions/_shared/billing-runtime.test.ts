@@ -29,6 +29,11 @@ describe("billing runtime config", () => {
       trialDealCreditAllowance: 30,
       paidDealCreditAllowance: 60,
       creditReservationTtlMinutes: 15,
+      billingEnvironment: "test",
+      entitlementVersion: "location-credit-v1",
+      automaticTaxEnabled: false,
+      twoferBusinessMonthlyPriceIdTest: null,
+      twoferBusinessMonthlyPriceIdLive: null,
     });
   });
 
