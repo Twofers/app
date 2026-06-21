@@ -411,7 +411,6 @@ export default function BusinessSetupScreen() {
       }
 
       const addr = trimmed.address;
-      const trialEndsIso = new Date(Date.now() + 30 * 86400000).toISOString();
 
       // Not an upsert on owner_id anymore: `ON CONFLICT (owner_id) DO UPDATE`
       // reads excluded.owner_id, which needs SELECT privilege on that column —
@@ -457,35 +456,12 @@ export default function BusinessSetupScreen() {
         }
       }
 
-      const selectCols =
-        "id,user_id,owner_id,subscription_status,subscription_tier,trial_ends_at,current_period_ends_at";
-      const { data: profileByUser } = await supabase
-        .from("business_profiles")
-        .select(selectCols)
-        .eq("user_id", uid)
-        .maybeSingle();
-      const { data: profileByOwner } = await supabase
-        .from("business_profiles")
-        .select(selectCols)
-        .eq("owner_id", uid)
-        .maybeSingle();
-
-      const existingProfile = profileByUser ?? profileByOwner ?? null;
-      const billingDefaults: Record<string, unknown> = {};
-      if (!existingProfile?.subscription_status) billingDefaults.subscription_status = "trial";
-      if (!existingProfile?.subscription_tier) billingDefaults.subscription_tier = "pro";
-      if (!existingProfile?.trial_ends_at) billingDefaults.trial_ends_at = trialEndsIso;
-      if (!existingProfile?.current_period_ends_at) {
-        billingDefaults.current_period_ends_at = String(existingProfile?.trial_ends_at ?? trialEndsIso);
-      }
-
       const profilePayloadByUser = {
         user_id: uid,
         name: trimmed.businessName,
         address: addr,
         category: resolvedCategory || trimmed.businessName || null,
         setup_completed: true,
-        ...billingDefaults,
       };
       const upsertByUser = await supabase
         .from("business_profiles")
@@ -497,7 +473,6 @@ export default function BusinessSetupScreen() {
           address: addr,
           category: resolvedCategory || trimmed.businessName || null,
           setup_completed: true,
-          ...billingDefaults,
         };
         const upsertByOwner = await supabase
           .from("business_profiles")

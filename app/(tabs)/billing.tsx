@@ -1,353 +1,173 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, AppState, ScrollView, Text, View } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { MaterialIcons } from "@expo/vector-icons";
 import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser";
 
-import { FunctionsFetchError, FunctionsHttpError } from "@supabase/supabase-js";
-
-import { useBusiness } from "@/hooks/use-business";
-import { supabase } from "@/lib/supabase";
-import { Colors, PrimaryTint, Radii } from "@/constants/theme";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { EDGE_FUNCTION_TIMEOUT_MS, parseFunctionError } from "@/lib/functions";
-import type { SubscriptionPricing } from "@/lib/billing/subscription-pricing";
-import { devError, devLog } from "@/lib/dev-log";
-import { PAID_BILLING_ENABLED, PILOT_DISABLE_BILLING_GATE, isTrialExpired } from "@/lib/billing/access";
+import { Colors, PrimaryTint, Radii } from "@/constants/theme";
+import { useBusiness } from "@/hooks/use-business";
+import { useBusinessLocations } from "@/hooks/use-business-locations";
+import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
+import { isSuspendedBillingStatus } from "@/lib/billing/entitlements";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { useScreenInsets } from "@/lib/screen-layout";
+import { supabase } from "@/lib/supabase";
 
-function daysBetween(nowMs: number, targetIso: string | null): number | null {
+type BillingCheckout = "success" | "cancel";
+
+function hoursUntil(targetIso: string | null): number | null {
   if (!targetIso) return null;
   const ms = new Date(targetIso).getTime();
   if (!Number.isFinite(ms)) return null;
-  const rawDays = (ms - nowMs) / 86400000; // ms/day
-  return Math.max(0, Math.ceil(rawDays));
+  return Math.max(0, Math.ceil((ms - Date.now()) / 3600000));
+}
+
+function stripeCheckoutLocale(language: string | undefined): "en" | "es-419" | "ko" {
+  const base = String(language ?? "").toLowerCase();
+  if (base.startsWith("es")) return "es-419";
+  if (base.startsWith("ko")) return "ko";
+  return "en";
 }
 
 export default function BusinessBillingScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { checkout, reason } = useLocalSearchParams<{ checkout?: string; reason?: string }>();
+  const { checkout, reason } = useLocalSearchParams<{ checkout?: BillingCheckout; reason?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const {
-    userId,
-    subscriptionStatus,
-    trialEndsAt,
+    businessId,
     subscriptionTier,
     loading: bizLoading,
-    refresh,
   } = useBusiness();
+  const {
+    visibleLocations,
+    loading: locationsLoading,
+    error: locationsError,
+  } = useBusinessLocations(businessId, subscriptionTier);
+  const primaryLocation = visibleLocations[0] ?? null;
+  const locationId = primaryLocation?.id ?? null;
+  const {
+    summary,
+    loading: summaryLoading,
+    error: summaryError,
+    refresh,
+  } = useLocationBillingSummary(locationId);
 
-  const nowMs = Date.now();
-  const trialDaysRemaining = useMemo(() => daysBetween(nowMs, trialEndsAt), [nowMs, trialEndsAt]);
-
-  const [pricing, setPricing] = useState<SubscriptionPricing | null>(null);
-  const [pricingLoading, setPricingLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [syncingCheckout, setSyncingCheckout] = useState(false);
-  const [lastSyncMessage, setLastSyncMessage] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
 
-  const trialExpired = useMemo(() => {
-    return isTrialExpired(trialEndsAt);
-  }, [trialEndsAt]);
-
-  const warningExpiredOrPastDue = useMemo(() => {
-    if (subscriptionStatus === "active") return false;
-    if (subscriptionStatus === "trial") return trialExpired;
-    return subscriptionStatus === "past_due" || subscriptionStatus === "canceled";
-  }, [subscriptionStatus, trialExpired]);
-
-  useEffect(() => {
-    if (!PAID_BILLING_ENABLED) {
-      setPricing(null);
-      setPricingLoading(false);
-      return;
+  const remainingTime = useMemo(() => {
+    const hours = hoursUntil(summary.trialEndsAt);
+    if (hours === null) return null;
+    if (hours < 24) {
+      return t("billing.hoursRemaining", { hours });
     }
+    return t("billing.daysRemaining", { days: Math.ceil(hours / 24) });
+  }, [summary.trialEndsAt, t]);
 
-    let cancelled = false;
-    (async () => {
-      setPricingLoading(true);
-      setPricing(null);
-      const fnName = "billing-pricing";
-      const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-      const fnUrl = baseUrl ? `${baseUrl.replace(/\/$/, "")}/functions/v1/${fnName}` : "(unset EXPO_PUBLIC_SUPABASE_URL)";
-      try {
-        if (__DEV__) {
-          devLog("[billing-pricing] invoke start", {
-            fnUrl,
-            hasExpoPublicSupabaseUrl: Boolean(baseUrl),
-            hasExpoPublicSupabaseAnonKey: Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim()),
-          });
-        }
+  const statusLabel = t(`billing.status.${summary.status}`, {
+    defaultValue: summary.status.replace(/_/g, " "),
+  });
 
-        const { data, error } = await supabase.functions.invoke(fnName, {
-          body: {},
-          timeout: EDGE_FUNCTION_TIMEOUT_MS,
-        });
-
-        if (__DEV__) {
-          if (error instanceof FunctionsHttpError) {
-            const res = error.context as Response;
-            let bodyText = "";
-            try {
-              bodyText = await res.clone().text();
-            } catch (e) {
-              bodyText = `(could not read body: ${e instanceof Error ? e.message : String(e)})`;
-            }
-            devLog("[billing-pricing] non-2xx from edge function", {
-              status: res.status,
-              statusText: res.statusText,
-              url: res.url,
-              body: bodyText,
-            });
-          } else if (error instanceof FunctionsFetchError) {
-            devLog("[billing-pricing] fetch error context", error.context);
-          } else if (error) {
-            devLog("[billing-pricing] invoke error", {
-              name: error.name,
-              message: error.message,
-              context: (error as { context?: unknown }).context,
-            });
-          }
-          if (data != null) {
-            devLog("[billing-pricing] response data", typeof data === "object" ? JSON.stringify(data) : String(data));
-          }
-        }
-
-        if (error) throw error;
-        if (data && typeof data === "object" && "error" in data && typeof (data as { error?: unknown }).error === "string") {
-          throw new Error((data as { error: string }).error);
-        }
-        if (!data) throw new Error("Missing pricing payload.");
-        if (cancelled) return;
-        setPricing({
-          proMonthlyPrice: Number(data.proMonthlyPrice),
-          premiumMonthlyPrice: Number(data.premiumMonthlyPrice),
-          extraLocationPrice: Number(data.extraLocationPrice),
-        });
-      } catch (e) {
-        if (__DEV__) {
-          devError("[billing-pricing] caught error:", e);
-          devError("[billing-pricing] parseFunctionError:", parseFunctionError(e));
-        }
-        if (cancelled) return;
-        // Show fallback pricing so the screen is still usable, with an error banner.
-        // In dev mode the banner is suppressed for convenience.
-        setPricing({
-          proMonthlyPrice: 30,
-          premiumMonthlyPrice: 79,
-          extraLocationPrice: 15,
-        });
-        if (!__DEV__) {
-          setBanner({
-            message: t("billing.errLoadPricing"),
-            tone: "error",
-          });
-        }
-      } finally {
-        if (!cancelled) setPricingLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t, retryKey]);
+  const isSuspended = isSuspendedBillingStatus(summary.status);
+  const canStartTrial = summary.status === "trial_eligible";
+  const canSubscribe = summary.purchaseSurface === "in_app_link";
+  const showPortal = canSubscribe && (summary.status === "paid_active" || summary.status === "paid_canceling");
 
   useEffect(() => {
     if (!PAID_BILLING_ENABLED) return;
-
     const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active") {
-        void refresh();
-      }
+      if (next === "active") void refresh();
     });
     return () => sub.remove();
   }, [refresh]);
 
   useEffect(() => {
     if (!PAID_BILLING_ENABLED) return;
-    if (!checkout) return;
-    if (checkout === "cancel") {
-      setBanner({
-        message: t("billing.checkoutCanceled"),
-        tone: "info",
-      });
-      return;
-    }
-    if (checkout !== "success") return;
-
-    let cancelled = false;
-    void (async () => {
-      if (!userId) return;
-      setSyncingCheckout(true);
-      setLastSyncMessage(null);
-      setBanner({
-        message: t("billing.checkoutSyncing"),
-        tone: "info",
-      });
-      if (__DEV__) devLog("[billing] checkout=success, starting sync refresh loop");
-
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        if (cancelled) return;
-        await refresh();
-        const { data: profile } = await supabase
-          .from("business_profiles")
-          .select("subscription_status")
-          .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
-          .maybeSingle();
-        const latest = String(profile?.subscription_status ?? "");
-        if (__DEV__) devLog("[billing] sync attempt", attempt + 1, "status=", latest);
-        if (latest === "active") {
-          setSyncingCheckout(false);
-          setBanner({
-            message: t("billing.checkoutSuccess"),
-            tone: "success",
-          });
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-      }
-
-      if (!cancelled) {
-        setSyncingCheckout(false);
-        setLastSyncMessage(
-          t("billing.checkoutSyncDelayed"),
-        );
-        setBanner({
-          message: t("billing.checkoutSyncDelayed"),
-          tone: "warning",
-        });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [checkout, refresh, t, userId]);
-
-  useEffect(() => {
-    if (!PAID_BILLING_ENABLED) return;
     if (reason === "reactivate") {
-      setBanner({
-        message: t("billing.paywallExpiredMessage"),
-        tone: "warning",
-      });
+      setBanner({ message: t("billing.locationSuspended"), tone: "warning" });
     }
   }, [reason, t]);
 
-  const proPrice = pricing?.proMonthlyPrice;
-  const premiumPrice = pricing?.premiumMonthlyPrice;
+  useEffect(() => {
+    if (!PAID_BILLING_ENABLED) return;
+    if (checkout === "cancel") {
+      setBanner({ message: t("billing.checkoutCanceled"), tone: "info" });
+      return;
+    }
+    if (checkout !== "success") return;
+    setBanner({ message: t("billing.confirmingSubscription"), tone: "info" });
+    let cancelled = false;
+    void (async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (cancelled) return;
+        await refresh();
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+      if (!cancelled) {
+        setBanner({ message: t("billing.checkoutSyncDelayed"), tone: "warning" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkout, refresh, t]);
 
-  // Pilot scope: 10 single-location cafes. Premium tier (3 locations, $79)
-  // adds noise without value. Hide it unless the user is already on Premium
-  // (so existing subscribers can still see and manage their plan).
-  const showPremiumTier = subscriptionTier === "premium";
-
-  const subscribe = async (tier: "pro" | "premium") => {
-    if (busy) return;
+  const startTrial = useCallback(async () => {
+    if (!locationId || busy) return;
     setBusy(true);
     setBanner(null);
     try {
-      setBanner({
-        message: t("billing.checkoutLaunching"),
-        tone: "info",
+      const { error } = await supabase.rpc("start_location_trial", {
+        p_business_location_id: locationId,
       });
+      if (error) throw error;
+      await refresh();
+      setBanner({ message: t("billing.trialStarted"), tone: "success" });
+    } catch {
+      setBanner({ message: t("billing.errStartTrial"), tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, locationId, refresh, t]);
+
+  const subscribe = useCallback(async () => {
+    if (!locationId || busy) return;
+    if (summary.purchaseSurface !== "in_app_link") {
+      setBanner({ message: t("billing.purchaseUnavailable"), tone: "info" });
+      return;
+    }
+    setBusy(true);
+    setBanner({ message: t("billing.checkoutLaunching"), tone: "info" });
+    try {
       const { data, error } = await supabase.functions.invoke("stripe-create-checkout-session", {
-        body: { tier },
+        body: {
+          location_id: locationId,
+          locale: stripeCheckoutLocale(i18n.resolvedLanguage ?? i18n.language),
+        },
         timeout: EDGE_FUNCTION_TIMEOUT_MS,
       });
       if (error) throw error;
       const url = data?.checkout_url as string | undefined;
-      if (!url) {
-        throw new Error(t("billing.errSubscribe"));
-      }
+      if (!url) throw new Error("Missing checkout URL.");
       await openBrowserAsync(url, { presentationStyle: WebBrowserPresentationStyle.AUTOMATIC });
     } catch {
-      setBanner({
-        message: t("billing.errSubscribe"),
-        tone: "error",
-      });
+      setBanner({ message: t("billing.errSubscribe"), tone: "error" });
     } finally {
       setBusy(false);
     }
-  };
-
-  /** Show simulate buttons only in dev builds. */
-  const simulateVisible = __DEV__;
-
-  const resetTrial = async () => {
-    if (busy) return;
-    setBusy(true);
-    setBanner(null);
-    try {
-      const trialEnd = new Date(Date.now() + 30 * 86400000).toISOString();
-      const { error } = await supabase
-        .from("business_profiles")
-        .update({
-          subscription_status: "trial",
-          subscription_tier: "pro",
-          trial_ends_at: trialEnd,
-          current_period_ends_at: trialEnd,
-        })
-        .or(`user_id.eq.${userId},owner_id.eq.${userId}`);
-      if (error) throw error;
-      await refresh();
-      setBanner({ message: "Trial reset to 30 days.", tone: "success" });
-    } catch {
-      setBanner({ message: "Unable to reset trial.", tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const simulateSubscribe = async () => {
-    if (busy) return;
-    setBusy(true);
-    setBanner(null);
-    try {
-      const { error } = await supabase.functions.invoke("simulate-subscribe", {
-        body: {},
-        timeout: EDGE_FUNCTION_TIMEOUT_MS,
-      });
-      if (error) throw error;
-      await refresh();
-      setBanner({
-        message: t("billing.simulateSubscribeOk"),
-        tone: "success",
-      });
-    } catch {
-      setBanner({
-        message: t("billing.errSimulateSubscribe"),
-        tone: "error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const trialLine = useMemo(() => {
-    if (trialDaysRemaining === null) return null;
-    if (trialDaysRemaining === 0) {
-      return t("billing.trialExpired");
-    }
-    return t("billing.trialEndsIn", { days: trialDaysRemaining });
-  }, [t, trialDaysRemaining]);
-
-  const cardShadow = {
-    backgroundColor: Colors.light.surface,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  };
+  }, [busy, i18n.language, i18n.resolvedLanguage, locationId, summary.purchaseSurface, t]);
 
   if (!PAID_BILLING_ENABLED) {
     return <Redirect href="/(tabs)/account" />;
   }
+
+  const loading = bizLoading || locationsLoading || summaryLoading;
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -355,166 +175,126 @@ export default function BusinessBillingScreen() {
         contentContainerStyle={{ paddingTop: top, paddingHorizontal: horizontal, paddingBottom: scrollBottom }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.6, color: Colors.light.text }}>
+        <Text style={{ fontSize: 28, fontWeight: "900", color: Colors.light.text }}>
           {t("tabs.billing")}
         </Text>
 
-        {bizLoading || pricingLoading ? (
+        {loading ? (
           <View style={{ paddingTop: 24 }}>
             <ActivityIndicator color={Colors.light.primary} />
           </View>
-        ) : !pricing ? (
-          <View style={{ paddingTop: 16 }}>
-            {banner ? <Banner message={banner.message} tone={banner.tone} onRetry={banner.tone === "error" ? () => { setBanner(null); setRetryKey((k) => k + 1); } : undefined} /> : null}
-            <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700" }}>
-              {t("billing.currentStatus")}: {subscriptionStatus} ({subscriptionTier})
-            </Text>
-            <View style={{ marginTop: 16 }}>
-              <PrimaryButton
-                title={t("billing.retryLoadPricing")}
-                onPress={() => { setBanner(null); setRetryKey((k) => k + 1); }}
-              />
-            </View>
-          </View>
         ) : (
           <>
-            {trialLine ? (
-              <Text style={{ marginTop: 12, fontSize: 15, opacity: 0.72, fontWeight: "700", lineHeight: 22 }}>
-                {trialLine}
+            {locationsError ? <Banner message={locationsError} tone="error" /> : null}
+            {summaryError ? <Banner message={t("billing.purchaseUnavailable")} tone="info" /> : null}
+            {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+
+            <View
+              style={{
+                marginTop: 16,
+                backgroundColor: Colors.light.surface,
+                borderRadius: Radii.lg,
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                padding: 16,
+              }}
+            >
+              <Text style={{ fontSize: 22, fontWeight: "900", color: Colors.light.text }}>
+                {t("billing.planName")}
               </Text>
-            ) : null}
-
-            {syncingCheckout ? (
-              <Text style={{ marginTop: 8, color: Colors.light.accentText, fontWeight: "800", fontSize: 13 }}>
-                {t("billing.syncingStatus")}
+              <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
+                {t("billing.monthlyPrice")}
               </Text>
-            ) : null}
+              <Text style={{ marginTop: 4, fontSize: 14, fontWeight: "700", color: Colors.light.mutedText }}>
+                {t("billing.perLocation")} • {t("billing.plusTaxes")}
+              </Text>
 
-            {warningExpiredOrPastDue ? (
-              <Banner
-                tone="warning"
-                message={t("billing.trialExpiredBanner")}
-              />
-            ) : null}
-
-            {banner ? <Banner message={banner.message} tone={banner.tone} onRetry={banner.tone === "error" ? () => { setBanner(null); setRetryKey((k) => k + 1); } : undefined} /> : null}
-            {lastSyncMessage ? <Banner message={lastSyncMessage} tone="warning" /> : null}
-
-            <View style={{ marginTop: 16, gap: 16 }}>
-              <View style={[cardShadow, { padding: 16 }]}>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>Twofer Pro</Text>
-                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
-                  ${proPrice}/mo
-                </Text>
-                <View style={{ marginTop: 10, gap: 8 }}>
-                  {[
-                    t("billing.proFeatureUnlimitedDeals"),
-                    t("billing.proFeatureLocationLimit"),
-                    t("billing.proFeatureBasicAi"),
-                    t("billing.proFeatureAnalytics"),
-                  ].map((feat) => (
-                    <View key={feat} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <MaterialIcons name="check-circle" size={18} color={Colors.light.primary} />
-                      <Text style={{ fontSize: 14, opacity: 0.78, fontWeight: "700" }}>{feat}</Text>
-                    </View>
-                  ))}
-                </View>
-                <View style={{ marginTop: 14 }}>
-                  {subscriptionTier === "premium" ? (
-                    <View style={{ borderRadius: 14, backgroundColor: Colors.light.surfaceMuted, borderWidth: 1, borderColor: Colors.light.border, padding: 12 }}>
-                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
-                        {t("billing.includedInPremium")}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
-                        {t("billing.includedInPremiumBody")}
-                      </Text>
-                    </View>
-                  ) : subscriptionStatus === "active" && subscriptionTier === "pro" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: PrimaryTint.surface, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.accentText }}>
-                        {t("billing.currentPlan")}
-                      </Text>
-                    </View>
-                  ) : PILOT_DISABLE_BILLING_GATE ? (
-                    /* Pilot: subscriptions launch in v1.1. Don't show a
-                       Subscribe button that would dead-end at an unset
-                       Stripe account. Trial is extended through pilot. */
-                    <View style={{ borderRadius: 14, backgroundColor: "rgba(255,159,28,0.10)", borderWidth: 1, borderColor: "rgba(255,159,28,0.32)", padding: 12 }}>
-                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
-                        {t("billing.pilotTrialBanner")}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
-                        {t("billing.pilotTrialBody")}
-                      </Text>
-                    </View>
-                  ) : (
-                    <PrimaryButton
-                      title={t("billing.subscribeNow")}
-                      disabled={busy}
-                      onPress={() => void subscribe("pro")}
-                      accessibilityLabel={t("billing.a11ySubscribeProLabel")}
-                      accessibilityHint={t("billing.a11ySubscribeProHint")}
-                    />
-                  )}
-                </View>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                {[
+                  t("billing.paidCredits", { count: summary.configuredPaidAllowance }),
+                  t("billing.trialCredits", { count: summary.configuredTrialAllowance }),
+                  t("billing.noRollover"),
+                  t("billing.additionalImageRevisionCredit"),
+                ].map((text) => (
+                  <View key={text} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                    <MaterialIcons name="check-circle" size={18} color={Colors.light.primary} />
+                    <Text style={{ flex: 1, fontSize: 14, lineHeight: 20, color: Colors.light.text, opacity: 0.78, fontWeight: "700" }}>
+                      {text}
+                    </Text>
+                  </View>
+                ))}
               </View>
+            </View>
 
-              {showPremiumTier ? (
-              <View style={[cardShadow, { padding: 16, borderColor: subscriptionTier === "premium" ? Colors.light.primary : Colors.light.border }]}>
-                <Text style={{ fontSize: 20, fontWeight: "900", color: Colors.light.text }}>Twofer Premium</Text>
-                <Text style={{ marginTop: 6, fontSize: 28, fontWeight: "900", color: Colors.light.primary }}>
-                  ${premiumPrice}/mo
+            <View
+              style={{
+                marginTop: 16,
+                backgroundColor: Colors.light.surface,
+                borderRadius: Radii.lg,
+                borderWidth: 1,
+                borderColor: Colors.light.border,
+                padding: 16,
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: "900", color: Colors.light.text }}>
+                {t("billing.currentStatus")}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "900", color: isSuspended ? Colors.light.danger : Colors.light.primary }}>
+                {statusLabel}
+              </Text>
+              {remainingTime ? (
+                <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, fontWeight: "700", color: Colors.light.text }}>
+                  {remainingTime}
                 </Text>
-                <View style={{ marginTop: 10, gap: 8 }}>
-                  {[
-                    t("billing.premiumFeatureUnlimitedDeals"),
-                    t("billing.premiumFeatureLocationLimit"),
-                    t("billing.premiumFeatureAdvancedAi"),
-                    t("billing.premiumFeatureAnalytics"),
-                  ].map((feat) => (
-                    <View key={feat} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <MaterialIcons name="check-circle" size={18} color={Colors.light.primary} />
-                      <Text style={{ fontSize: 14, opacity: 0.78, fontWeight: "700" }}>{feat}</Text>
-                    </View>
-                  ))}
-                </View>
-                <View style={{ marginTop: 14 }}>
-                  {subscriptionStatus === "active" && subscriptionTier === "premium" ? (
-                    <View style={{ height: 62, borderRadius: 22, backgroundColor: PrimaryTint.surface, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 16, color: Colors.light.accentText }}>
-                        {t("billing.currentPlan")}
-                      </Text>
-                    </View>
-                  ) : PILOT_DISABLE_BILLING_GATE ? (
-                    /* Same pilot gate as the Pro tier above — Apple rejects
-                       any "subscribe" button that links to non-IAP checkout
-                       for in-app digital subscriptions (Guideline 3.1.1).
-                       Trial is extended through the pilot; subscriptions
-                       launch in v1.1. */
-                    <View style={{ borderRadius: 14, backgroundColor: "rgba(255,159,28,0.10)", borderWidth: 1, borderColor: "rgba(255,159,28,0.32)", padding: 12 }}>
-                      <Text style={{ fontWeight: "800", fontSize: 14, color: Colors.light.text }}>
-                        {t("billing.pilotTrialBanner")}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, opacity: 0.78, color: Colors.light.text }}>
-                        {t("billing.pilotTrialBody")}
-                      </Text>
-                    </View>
-                  ) : (
-                    <PrimaryButton
-                      title={t("billing.subscribeNow")}
-                      disabled={busy}
-                      onPress={() => void subscribe("premium")}
-                      accessibilityLabel={t("billing.a11ySubscribePremiumLabel")}
-                      accessibilityHint={t("billing.a11ySubscribePremiumHint")}
-                    />
-                  )}
-                </View>
+              ) : null}
+              <View style={{ marginTop: 12, borderRadius: Radii.md, backgroundColor: PrimaryTint.surface, padding: 12 }}>
+                <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: "800", color: Colors.light.accentText }}>
+                  {t("billing.creditsRemaining", {
+                    remaining: summary.creditsRemaining,
+                    granted: summary.creditsGranted,
+                  })}
+                </Text>
               </View>
+              {isSuspended ? (
+                <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 19, color: Colors.light.mutedText, fontWeight: "700" }}>
+                  {t("billing.claimsRemainRedeemable")}
+                </Text>
               ) : null}
             </View>
 
-            {PILOT_DISABLE_BILLING_GATE && subscriptionStatus !== "active" ? null : (
-              <View style={{ marginTop: 16, gap: 12 }}>
+            <View style={{ marginTop: 16, gap: 10 }}>
+              {canStartTrial ? (
+                <PrimaryButton
+                  title={t("billing.startTrial")}
+                  onPress={() => void startTrial()}
+                  disabled={busy || !locationId}
+                />
+              ) : null}
+
+              {summary.purchaseSurface === "disabled" ? (
+                <Banner message={t("billing.purchaseUnavailable")} tone="info" />
+              ) : null}
+
+              {summary.purchaseSurface === "web_only" ? (
+                <Banner message={t("billing.webOnlyStatus")} tone="info" />
+              ) : null}
+
+              {canSubscribe ? (
+                <>
+                  <Text style={{ fontSize: 13, lineHeight: 19, color: Colors.light.mutedText, fontWeight: "700" }}>
+                    {t("billing.subscribeChargedImmediately")}
+                  </Text>
+                  <PrimaryButton
+                    title={t("billing.subscribe")}
+                    onPress={() => void subscribe()}
+                    disabled={busy || !locationId}
+                    accessibilityLabel={t("billing.a11ySubscribeBusinessLabel")}
+                    accessibilityHint={t("billing.a11ySubscribeBusinessHint")}
+                  />
+                </>
+              ) : null}
+
+              {showPortal ? (
                 <SecondaryButton
                   title={t("billing.manageSubscription")}
                   onPress={() => router.push("/(tabs)/billing/manage")}
@@ -522,46 +302,11 @@ export default function BusinessBillingScreen() {
                   accessibilityLabel={t("billing.a11yManageSubscriptionLabel")}
                   accessibilityHint={t("billing.a11yManageSubscriptionHint")}
                 />
-              </View>
-            )}
-
-            {simulateVisible ? (
-              <View
-                style={{
-                  marginTop: 18,
-                  padding: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,159,28,0.4)",
-                  backgroundColor: "rgba(255,159,28,0.08)",
-                }}
-              >
-                <Text style={{ fontWeight: "800", color: Colors.light.text, marginBottom: 8 }}>
-                  DEV: Billing tools
-                </Text>
-                <Text style={{ opacity: 0.72, marginBottom: 10 }}>
-                  Current status: {subscriptionStatus} ({subscriptionTier})
-                </Text>
-                <View style={{ gap: 8 }}>
-                  <SecondaryButton
-                    title={t("billing.simulateSubscribe")}
-                    onPress={() => void simulateSubscribe()}
-                    disabled={busy}
-                  />
-                  <SecondaryButton
-                    title="Reset Trial (30 days)"
-                    onPress={() => void resetTrial()}
-                    disabled={busy}
-                  />
-                </View>
-              </View>
-            ) : null}
-
-            {/* Hidden dev-only button is implemented by gating on env flag; it only renders when enabled. */}
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
     </View>
   );
 }
-

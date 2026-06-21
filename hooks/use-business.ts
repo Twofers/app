@@ -84,8 +84,6 @@ export function useBusiness() {
   const [businessOwnershipAmbiguous, setBusinessOwnershipAmbiguous] = useState(false);
   const [loading, setLoading] = useState(true);
   const hasEverFetchedRef = useRef(false);
-  /** Prevents concurrent billing-init writes from racing on trial_ends_at. */
-  const billingInitInFlightRef = useRef(false);
 
   const businessContextForAi = useMemo(() => businessRowToAiContext(business), [business]);
 
@@ -153,8 +151,9 @@ export function useBusiness() {
         : null,
     );
 
-    // Billing v4: subscription is canonical on `business_profiles`.
-    // Backward-safe fallback: if the row/columns aren't ready yet, use `businesses.subscription_tier`.
+    // Legacy billing fields may still exist on `business_profiles`, but the
+    // location-level entitlement RPC is the source of truth for the new trial
+    // and billing flow. This hook must not create, reset, or extend a trial.
     const billingSelect = "subscription_status,subscription_tier,trial_ends_at,current_period_ends_at,stripe_customer_id,stripe_subscription_id";
     let bpRow: BusinessProfileBilling | null = null;
 
@@ -176,73 +175,6 @@ export function useBusiness() {
         .eq("owner_id", uid)
         .maybeSingle();
       if (!byOwnerErr) bpRow = byOwnerRow as BusinessProfileBilling | null;
-    }
-
-    const isActiveSubscription = bpRow?.subscription_status === "active";
-    const needsBillingInit =
-      !bpRow ||
-      !bpRow.subscription_status ||
-      !bpRow.subscription_tier ||
-      (!isActiveSubscription && !bpRow.trial_ends_at) ||
-      (!isActiveSubscription && !bpRow.current_period_ends_at);
-
-    if (needsBillingInit && !billingInitInFlightRef.current) {
-      billingInitInFlightRef.current = true;
-      // Only compute a new trial end date when we truly need to write one for the
-      // first time.  Previously this was calculated on every refresh, which silently
-      // extended trials each time the hook ran.
-      const newTrialEndsIso = !bpRow?.trial_ends_at
-        ? new Date(Date.now() + 30 * 86400000).toISOString()
-        : null;
-
-      const repair: Record<string, unknown> = {};
-      if (!bpRow?.subscription_status) repair.subscription_status = "trial";
-      if (!bpRow?.subscription_tier) repair.subscription_tier = "pro";
-      if (newTrialEndsIso) repair.trial_ends_at = newTrialEndsIso;
-      if (!bpRow?.current_period_ends_at) {
-        repair.current_period_ends_at = String(bpRow?.trial_ends_at ?? newTrialEndsIso);
-      }
-
-      try {
-        if (bpRow) {
-          // Only repair fields that are still NULL to avoid overwriting
-          // values set concurrently by Stripe webhooks or other devices.
-          await supabase
-            .from("business_profiles")
-            .update(repair)
-            .or(`user_id.eq.${uid},owner_id.eq.${uid}`)
-            .is("subscription_status", null);
-          bpRow = { ...bpRow, ...repair };
-        } else if (data) {
-          const profileSeed = {
-            user_id: uid,
-            name: data.name ?? null,
-            address: data.address ?? null,
-            category: data.category ?? null,
-            ...repair,
-          };
-          const seedByUser = await supabase
-            .from("business_profiles")
-            .upsert(profileSeed, { onConflict: "user_id" });
-          if (seedByUser.error) {
-            await supabase
-              .from("business_profiles")
-              .upsert({ ...profileSeed, owner_id: uid }, { onConflict: "owner_id" });
-          }
-          bpRow = {
-            subscription_status: String(repair.subscription_status ?? "trial"),
-            subscription_tier: String(repair.subscription_tier ?? "pro"),
-            trial_ends_at: String(repair.trial_ends_at ?? newTrialEndsIso),
-            current_period_ends_at: String(repair.current_period_ends_at ?? newTrialEndsIso),
-            stripe_customer_id: null,
-            stripe_subscription_id: null,
-          };
-        }
-      } catch (err) {
-        if (__DEV__) console.warn("[useBusiness] billing init error:", err);
-      } finally {
-        billingInitInFlightRef.current = false;
-      }
     }
 
     const rawStatus = (bpRow?.subscription_status ?? null) || null;
