@@ -661,8 +661,6 @@ Full validation:
 
 Revert this commit. No migration rollback is required.
 
----
-
 ## PR 4f - Disable legacy compose-offer poster generation
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -1314,8 +1312,6 @@ Live secret names changed: none.
 
 Revert this commit. No migration rollback is required.
 
----
-
 ## PR 4q - Route AI insights helper through shared text provider
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -1821,6 +1817,70 @@ Live secret names changed: none.
 
 - `ai-extract-menu` still uses a direct OpenAI Responses vision path because the shared structured text router is not a menu OCR/vision extraction router.
 - The synthetic sample menu flag must remain disabled in hosted production.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4v - Sanitize image provider failure telemetry
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `e06c4381`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/_shared/dalle-image.ts`
+- `supabase/functions/_shared/dalle-image.test.ts`
+- `supabase/functions/_shared/ai-image-provider.ts`
+- `supabase/functions/_shared/ai-image-provider.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed raw OpenAI image generation/edit response-body reads from failure telemetry paths.
+- Replaced OpenAI image failure console logs and cost-attempt messages with status-derived error codes and generic messages.
+- Replaced Gemini image generation HTTP failure attempt messages with sanitized status/error-code messages instead of upstream response text.
+- Added source guards covering OpenAI and Gemini image provider failure telemetry so raw provider response bodies are not logged or stored in `ai_generation_costs`.
+- Documented the image-provider telemetry behavior in the AI current-state, Edge Function checklist, and deployment notes.
+
+## Acceptance criteria map
+
+37. Generated images receive QA: Preserved.
+38. AI-edited merchant photos receive identity-preservation QA: Preserved.
+41. Generated and AI-edited images do not pass open when QA is unavailable: Preserved.
+45. OpenAI fallback image prompts match stronger restrictions: Preserved.
+51. No generation path bypasses provider/quality controls: Improved for image generation/edit observability; failure telemetry no longer stores raw upstream provider bodies while preserving provider, model, endpoint, status-derived code, request id, and fallback behavior.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/_shared/dalle-image.ts supabase/functions/_shared/ai-image-provider.ts`: passed.
+- `npx vitest run supabase/functions/_shared/dalle-image.test.ts supabase/functions/_shared/ai-image-provider.test.ts`: passed, 2 files / 10 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 127 Edge Function files. A first parallel run left a stale checker process and timed out; rerunning the full check by itself passed.
+- `npm run test -- --run`: passed, 135 files / 741 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4v" --clear`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- OpenAI image fallback and Gemini image generation still use provider-specific image helper modules rather than a single provider-neutral image router abstraction.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
 
 ## Rollback

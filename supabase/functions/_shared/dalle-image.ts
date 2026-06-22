@@ -55,13 +55,6 @@ function requestIdFromHeaders(headers: Headers): string | null {
   return headers.get("x-request-id") ?? headers.get("openai-request-id");
 }
 
-function errorCodeFromJson(value: unknown): string | null {
-  const err = value && typeof value === "object" ? (value as { error?: unknown }).error : null;
-  if (!err || typeof err !== "object") return null;
-  const code = (err as { code?: unknown; type?: unknown }).code ?? (err as { type?: unknown }).type;
-  return typeof code === "string" ? code.slice(0, 80) : null;
-}
-
 function imageResponseMetadata(json: unknown): {
   usage: Record<string, unknown> | null;
   responseId: string | null;
@@ -251,28 +244,22 @@ async function attemptImageGeneration(
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
-      const errBody = await res.text();
-      let errJson: unknown = null;
-      try {
-        errJson = JSON.parse(errBody);
-      } catch {
-        /* response was not JSON */
-      }
+      const errorCode = `HTTP_${res.status}`;
       console.log(
         JSON.stringify({
           tag: logTag,
           event: "image_gen_http",
           model,
           status: res.status,
-          body: errBody.slice(0, 800),
+          errorCode,
         }),
       );
       return {
         bytes: null,
         attempts: [{
           ...attemptBase,
-          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
-          errorMessage: errBody.slice(0, 500),
+          errorCode,
+          errorMessage: `OpenAI image generation failed with ${errorCode}.`,
         }],
       };
     }
@@ -494,28 +481,22 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
-      const errBody = await res.text();
-      let errJson: unknown = null;
-      try {
-        errJson = JSON.parse(errBody);
-      } catch {
-        /* response was not JSON */
-      }
+      const errorCode = `HTTP_${res.status}`;
       console.log(
         JSON.stringify({
           tag: logTag,
           event: "enhance_http",
           treatment,
           status: res.status,
-          body: errBody.slice(0, 800),
+          errorCode,
         }),
       );
       return {
         bytes: null,
         attempts: [{
           ...attemptBase,
-          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
-          errorMessage: errBody.slice(0, 500),
+          errorCode,
+          errorMessage: `OpenAI image edit failed with ${errorCode}.`,
         }],
       };
     }

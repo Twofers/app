@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "dalle-image.ts"), "utf8");
 
 describe("buildPhotoAdImagePrompt", () => {
   it("allows the hosted generate model secret to select gpt-image-2", async () => {
@@ -37,5 +41,17 @@ describe("buildPhotoAdImagePrompt", () => {
     expect(prompt).toMatch(/Do not show only one item/i);
     expect(prompt).toMatch(/no text/i);
     expect(prompt).toMatch(/logos/i);
+  });
+});
+
+describe("OpenAI image provider failure telemetry source guard", () => {
+  it("does not log or store raw upstream response bodies", () => {
+    expect(source).toMatch(/event:\s*"image_gen_http"/);
+    expect(source).toMatch(/event:\s*"enhance_http"/);
+    expect(source).toMatch(/OpenAI image generation failed with/);
+    expect(source).toMatch(/OpenAI image edit failed with/);
+    expect(source).not.toMatch(/body:\s*errBody/);
+    expect(source).not.toMatch(/errorMessage:\s*errBody\.slice/);
+    expect(source).not.toMatch(/await res\.text\(\)/);
   });
 });

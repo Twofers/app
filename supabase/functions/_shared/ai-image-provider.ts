@@ -377,15 +377,15 @@ async function attemptGeminiImageGeneration(params: {
     );
 
     if (!res.ok) {
-      const errorText = await res.text();
+      const errorCode = normalizeGeminiErrorCode(res.status);
       return {
         bytes: null,
         mimeType: null,
         attempt: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
-          errorCode: normalizeGeminiErrorCode(res.status),
-          errorMessage: errorText.slice(0, 500),
+          errorCode,
+          errorMessage: `Gemini image generation failed with ${errorCode}.`,
         },
       };
     }

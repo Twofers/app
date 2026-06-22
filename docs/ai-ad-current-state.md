@@ -188,7 +188,7 @@ Model and provider controls:
 - Allowlist: `gpt-4o-mini`, `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4`.
 - Default: `gpt-5.5`.
 - Unsupported configured models throw `AI_TEXT_CONFIG_INVALID` instead of silently downgrading.
-- Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`.
+- Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`; OpenAI/Gemini image generation and edit HTTP failures log sanitized status/error codes rather than raw upstream response bodies.
 - OpenAI API keys are read from Edge secrets only.
 
 Stages:

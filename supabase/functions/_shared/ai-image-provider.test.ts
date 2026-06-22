@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,6 +16,8 @@ function env(values: Record<string, string | undefined>) {
     },
   };
 }
+
+const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "ai-image-provider.ts"), "utf8");
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -135,5 +139,22 @@ describe("generateGeminiAdImageWithTelemetry", () => {
     expect(body.generationConfig.responseModalities).toEqual(["TEXT", "IMAGE"]);
     expect(body.generationConfig.imageConfig).toEqual({ aspectRatio: "1:1", imageSize: "1K" });
     expect(body.generationConfig.responseFormat).toBeUndefined();
+  });
+});
+
+describe("Gemini image provider failure telemetry source guard", () => {
+  it("does not retain raw upstream response bodies on HTTP failures", () => {
+    const failureIndex = source.indexOf("if (!res.ok)");
+    const parseIndex = source.indexOf("const json = await res.json()", failureIndex);
+
+    expect(failureIndex).toBeGreaterThan(-1);
+    expect(parseIndex).toBeGreaterThan(failureIndex);
+
+    const failureBlock = source.slice(failureIndex, parseIndex);
+    expect(failureBlock).toMatch(/normalizeGeminiErrorCode\(res\.status\)/);
+    expect(failureBlock).toMatch(/Gemini image generation failed with/);
+    expect(failureBlock).not.toMatch(/await res\.text\(\)/);
+    expect(failureBlock).not.toMatch(/errorText/);
+    expect(failureBlock).not.toMatch(/slice\(0,\s*500\)/);
   });
 });
