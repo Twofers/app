@@ -893,7 +893,7 @@ Live secret names changed: none.
 
 ## Unresolved risks
 
-- `ai-translate-deal` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
+- `ai-translate-deal` was routed through the shared text provider in PR 4r; broader provider-router migration remains pending for other helper routes.
 - Direct callers now receive an unavailable error when `OPENAI_API_KEY` is missing. The fire-and-forget `translateDeal` caller already treats translation errors as nonfatal.
 - The phrase-table fallback still exists for empty-input skip handling and for filling missing fields in malformed/incomplete AI responses.
 
@@ -1370,7 +1370,69 @@ Live secret names changed: none.
 ## Unresolved risks
 
 - `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
-- `ai-translate-deal` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4r - Route translation helper through shared text provider
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a95ece2a`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-translate-deal/index.ts`
+- `supabase/functions/_shared/ai-translate-deal-source.test.ts`
+- `supabase/functions/_shared/ai-text-provider.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the translation helper's direct OpenAI chat-completions call with the shared structured text provider router.
+- Added a provider operation label for translation telemetry.
+- Preserved the existing fail-closed `OPENAI_NOT_CONFIGURED` behavior when `OPENAI_API_KEY` is missing and no configured Gemini route can continue.
+- Allowed translations to use Gemini text generation only when the provider router is enabled and `GEMINI_API_KEY` is configured.
+- Logged provider attempts through `ai_generation_costs` with provider/model/cost metadata and sanitized error classes.
+- Kept client-facing upstream generation failures generic with `error_code: "AI_GENERATION_FAILED"`.
+- Kept the existing owner check, monthly limit, empty-text skip, direct-mode response shape, and save behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved; missing provider configuration still cannot return or save deterministic phrase-table translations as AI output.
+51. No generation path bypasses provider/quality controls: Improved for `ai-translate-deal`; it now shares the provider router and sanitized attempt telemetry used by the main ad-copy path.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/ai-translate-deal/index.ts`: passed.
+- `deno check supabase/functions/_shared/ai-text-provider.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-translate-deal-source.test.ts`: passed, 1 file / 3 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 126 Edge Function files.
+- `npm run test -- --run`: passed, 134 files / 733 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4r" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
 
 ## Rollback

@@ -167,11 +167,11 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
 
-`ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. `ai-generate-deal-copy` and `ai-deal-suggestions` can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured.
+`ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. These helpers can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured.
 
 `ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when `OPENAI_API_KEY` is missing, including the voice transcription-only path.
 
-Provider failure bodies are not returned to clients. `ai-generate-deal-copy` and `ai-deal-suggestions` return only `error_code: AI_GENERATION_FAILED` for upstream generation failures.
+Provider failure bodies are not returned to clients. `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream generation failures.
 
 **Setting Edge secrets:**
 

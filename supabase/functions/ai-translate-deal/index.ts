@@ -1,9 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import { logAiCost } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 
 type AppLocale = "en" | "es" | "ko";
 type TransPhrase = { rx: RegExp; es: string; ko: string };
@@ -17,6 +21,26 @@ type TranslationResult = {
   description_es: string;
   description_ko: string;
 };
+
+const PROMPT_VERSION = "deal_translation_provider_router_v1";
+
+const DEAL_TRANSLATIONS_SCHEMA = {
+  name: "deal_translations",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      title_en: { type: "string" },
+      title_es: { type: "string" },
+      title_ko: { type: "string" },
+      description_en: { type: "string" },
+      description_es: { type: "string" },
+      description_ko: { type: "string" },
+    },
+    required: ["title_en", "title_es", "title_ko", "description_en", "description_es", "description_ko"],
+    additionalProperties: false,
+  },
+} as const;
 
 const TITLE_TRANS: TransPhrase[] = [
   { rx: /2-for-1 oat milk latte/i, es: "2x1 en lattes de leche de avena", ko: "\uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC 1+1" },
@@ -89,16 +113,17 @@ function fallbackResult(title: string, description: string, sourceLocale: AppLoc
   return result;
 }
 
-function normalizeAiResult(raw: Record<string, unknown>, title: string, description: string, sourceLocale: AppLocale): TranslationResult {
+function normalizeAiResult(raw: unknown, title: string, description: string, sourceLocale: AppLocale): TranslationResult {
+  const record = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   const fallback = fallbackResult(title, description, sourceLocale);
   const result: TranslationResult = {
     source_locale: sourceLocale,
-    title_en: textField(raw.title_en) || fallback.title_en,
-    title_es: textField(raw.title_es) || fallback.title_es,
-    title_ko: textField(raw.title_ko) || fallback.title_ko,
-    description_en: textField(raw.description_en) || fallback.description_en,
-    description_es: textField(raw.description_es) || fallback.description_es,
-    description_ko: textField(raw.description_ko) || fallback.description_ko,
+    title_en: textField(record.title_en) || fallback.title_en,
+    title_es: textField(record.title_es) || fallback.title_es,
+    title_ko: textField(record.title_ko) || fallback.title_ko,
+    description_en: textField(record.description_en) || fallback.description_en,
+    description_es: textField(record.description_es) || fallback.description_es,
+    description_ko: textField(record.description_ko) || fallback.description_ko,
   };
   if (sourceLocale === "en") {
     result.title_en = title;
@@ -141,6 +166,43 @@ async function logTranslation(
   });
 }
 
+async function logTranslationProviderAttempts(
+  admin: any,
+  input: {
+    businessId: string;
+    dealId: string | null;
+    userId: string;
+    requestGroupId: string;
+    attempts: readonly ProviderAttempt[];
+  },
+) {
+  for (const attempt of input.attempts) {
+    await logAiCost(admin, {
+      businessId: input.businessId,
+      dealId: input.dealId,
+      ownerUserId: input.userId,
+      requestGroupId: input.requestGroupId,
+      feature: "deal_translation",
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      estimatedCostUsd: attempt.estimatedCostUsd,
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? null,
+      errorMessage: attempt.errorClass ?? null,
+    });
+  }
+}
+
+function providerAttemptsCalledOpenAi(attempts: readonly ProviderAttempt[]): boolean {
+  return attempts.some((attempt) => attempt.provider === "openai");
+}
+
+function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
+  return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -155,6 +217,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
@@ -254,7 +317,43 @@ serve(async (req) => {
       );
     }
 
-    if (!openAiKey) {
+    let providerConfig;
+    try {
+      providerConfig = resolveAiTextProviderConfig();
+    } catch (err) {
+      console.log(JSON.stringify({
+        tag: "ai_translate_deal",
+        event: "text_provider_config_error",
+        err: String(err).slice(0, 200),
+      }));
+      await logTranslation(admin, {
+        businessId,
+        userId: user.id,
+        requestHash,
+        model: null,
+        success: false,
+        openaiCalled: false,
+        failureReason: "AI_TEXT_CONFIG_INVALID",
+      });
+      return jsonResponse(
+        {
+          error: "AI translation is temporarily unavailable. Please try again later.",
+          error_code: "AI_TEXT_CONFIG_INVALID",
+        },
+        503,
+        corsHeaders,
+      );
+    }
+
+    const routerCanUseGemini =
+      providerConfig.routerEnabled &&
+      Boolean(geminiApiKey?.trim()) &&
+      (
+        providerConfig.primaryProvider === "gemini" ||
+        (providerConfig.fallbackEnabled && providerConfig.fallbackProvider === "gemini")
+      );
+
+    if (!openAiKey && !routerCanUseGemini) {
       console.log(JSON.stringify({ tag: "ai_translate_deal", event: "openai_not_configured" }));
       await logTranslation(admin, {
         businessId,
@@ -275,7 +374,6 @@ serve(async (req) => {
       );
     }
 
-    const chatModel = resolveOpenAiChatModel();
     const systemPrompt = [
       "You translate short promotional deal copy for a local business mobile app.",
       "Supported output locales are English (en), Spanish (es), and Korean (ko).",
@@ -287,109 +385,66 @@ serve(async (req) => {
       "If a field is empty, return an empty string for each language version of that field.",
     ].join(" ");
 
-    const aiBody = {
-      model: chatModel,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "deal_translations",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              title_en: { type: "string" },
-              title_es: { type: "string" },
-              title_ko: { type: "string" },
-              description_en: { type: "string" },
-              description_es: { type: "string" },
-              description_ko: { type: "string" },
-            },
-            required: ["title_en", "title_es", "title_ko", "description_en", "description_es", "description_ko"],
-            additionalProperties: false,
-          },
-        },
-      },
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`,
-        },
-      ],
-      ...chatCompletionTuning(chatModel, { maxTokens: 1400 }),
-    };
+    const userPrompt = `Source locale: ${sourceLocale}\nTitle: ${title}\nDescription: ${description}`;
 
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(aiBody),
-    });
-
-    if (!aiRes.ok) {
-      console.log(JSON.stringify({ tag: "ai_translate_deal", event: "openai_error", status: aiRes.status }));
-      await logAiCost(admin, {
+    let generation;
+    try {
+      generation = await generateStructuredText<typeof DEAL_TRANSLATIONS_SCHEMA, TranslationResult>({
+        operation: "translation",
+        systemPrompt,
+        userPrompt,
+        jsonSchema: DEAL_TRANSLATIONS_SCHEMA,
+        maxOutputTokens: 1400,
+        timeoutMs: 12_000,
+        generationRunId: requestGroupId,
+        promptVersion: PROMPT_VERSION,
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: openAiKey,
+        geminiApiKey,
+        admin,
+        config: providerConfig,
+      });
+      await logTranslationProviderAttempts(admin, {
         businessId,
         dealId: dealId || null,
-        ownerUserId: user.id,
+        userId: user.id,
         requestGroupId,
-        feature: "deal_translation",
-        model: chatModel,
-        endpoint: "chat.completions",
-        openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
-        success: false,
-        errorCode: `HTTP_${aiRes.status}`,
-        errorMessage: `Translation call failed with HTTP ${aiRes.status}.`,
+        attempts: generation.attempts,
       });
+    } catch (err) {
+      const attempts = (err as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+      await logTranslationProviderAttempts(admin, {
+        businessId,
+        dealId: dealId || null,
+        userId: user.id,
+        requestGroupId,
+        attempts,
+      });
+      const usageAttempt = representativeAttempt(attempts);
       await logTranslation(admin, {
         businessId,
         userId: user.id,
         requestHash,
-        model: chatModel,
+        model: usageAttempt?.model ?? providerConfig.openAiModel,
         success: false,
-        openaiCalled: true,
-        failureReason: `OPENAI_HTTP_${aiRes.status}`,
+        openaiCalled: providerAttemptsCalledOpenAi(attempts),
+        failureReason:
+          (err as { errorCode?: string; errorClass?: string })?.errorCode ??
+          (err as { errorClass?: string })?.errorClass ??
+          "AI_GENERATION_FAILED",
+        promptTokens: usageAttempt?.inputTokens ?? null,
+        completionTokens: usageAttempt?.outputTokens ?? null,
       });
-      return jsonResponse({ error: "Translation failed." }, 502, corsHeaders);
+      return jsonResponse(
+        { error: "Translation failed.", error_code: "AI_GENERATION_FAILED" },
+        502,
+        corsHeaders,
+      );
     }
 
-    const aiJson = await aiRes.json();
-    const usage = aiJson?.usage;
-    const content = aiJson?.choices?.[0]?.message?.content ?? "";
-    await logAiCost(admin, {
-      businessId,
-      dealId: dealId || null,
-      ownerUserId: user.id,
-      requestGroupId,
-      feature: "deal_translation",
-      model: chatModel,
-      endpoint: "chat.completions",
-      usage: usage ?? null,
-      openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
-      responseId: typeof aiJson?.id === "string" ? aiJson.id : null,
-      success: true,
-    });
-
-    let result: TranslationResult;
-    try {
-      const parsed = JSON.parse(content);
-      result = normalizeAiResult(parsed, title, description, sourceLocale);
-    } catch {
-      await logTranslation(admin, {
-        businessId,
-        userId: user.id,
-        requestHash: `translate:parse_error:${dealId || crypto.randomUUID()}`,
-        model: chatModel,
-        success: false,
-        openaiCalled: true,
-        failureReason: "PARSE_ERROR",
-        promptTokens: usage?.prompt_tokens ?? null,
-        completionTokens: usage?.completion_tokens ?? null,
-      });
-      return jsonResponse({ error: "Translation response was invalid." }, 500, corsHeaders);
-    }
+    const usageAttempt = representativeAttempt(generation.attempts);
+    const result = normalizeAiResult(generation.value, title, description, sourceLocale);
 
     if (!directMode) {
       const { error: updateErr } = await admin.from("deals").update(result).eq("id", dealId);
@@ -402,11 +457,11 @@ serve(async (req) => {
       businessId,
       userId: user.id,
       requestHash,
-      model: chatModel,
+      model: generation.model,
       success: true,
-      openaiCalled: true,
-      promptTokens: usage?.prompt_tokens ?? null,
-      completionTokens: usage?.completion_tokens ?? null,
+      openaiCalled: providerAttemptsCalledOpenAi(generation.attempts),
+      promptTokens: usageAttempt?.inputTokens ?? null,
+      completionTokens: usageAttempt?.outputTokens ?? null,
     });
 
     return jsonResponse({ ok: true, ...result }, 200, corsHeaders);

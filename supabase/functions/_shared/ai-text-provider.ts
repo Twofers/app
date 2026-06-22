@@ -25,7 +25,8 @@ export type AiOperation =
   | "copy_revision"
   | "candidate_judge"
   | "image_qa"
-  | "merchant_context";
+  | "merchant_context"
+  | "translation";
 
 export type AiReasoningLevel = "none" | "low" | "medium" | "high";
 
