@@ -20,6 +20,11 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/TRIAL_LOCATION_REVIEW_REQUIRED/);
     expect(source).toMatch(/trial_period_days: TRIAL_DAYS/);
     expect(source).toMatch(/payment_method_collection: "always"/);
+    expect(source).toMatch(/entitlementError/);
+    expect(source).toMatch(/trialHistoryError/);
+    expect(source).toMatch(/customerUpdateError/);
+    expect(source).toMatch(/intentUpdateError/);
+    expect(source).toMatch(/pendingEntitlementError/);
     expect(source).not.toMatch(/payment_method_collection: "if_required"/);
     expect(source).not.toMatch(/subscription_tier/);
   });

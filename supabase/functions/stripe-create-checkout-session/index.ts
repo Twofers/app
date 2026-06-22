@@ -116,22 +116,24 @@ serve(async (req) => {
     }
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-    const { data: entitlement } = await supabaseAdmin
+    const { data: entitlement, error: entitlementError } = await supabaseAdmin
       .from("location_entitlements")
       .select("status")
       .eq("business_location_id", locationId)
       .maybeSingle();
+    if (entitlementError) throw entitlementError;
     const status = safeGetString(entitlement?.status) ?? "trial_eligible";
     if (status !== "trial_eligible") {
       return jsonResponse(req, { error: "This location is not eligible for a new trial." }, 409);
     }
 
-    const { data: trialHistory } = await supabaseAdmin
+    const { data: trialHistory, error: trialHistoryError } = await supabaseAdmin
       .from("deal_credit_periods")
       .select("id")
       .eq("business_location_id", locationId)
       .in("source", ["trial", "admin_trial"])
       .limit(1);
+    if (trialHistoryError) throw trialHistoryError;
     if ((trialHistory ?? []).length > 0) {
       return jsonResponse(req, { error: "This location has already used its trial." }, 409);
     }
@@ -191,7 +193,7 @@ serve(async (req) => {
         },
       });
       stripeCustomerId = customer.id;
-      await supabaseAdmin
+      const { error: customerUpdateError } = await supabaseAdmin
         .from("billing_accounts")
         .update({
           provider: "stripe",
@@ -199,6 +201,9 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", account.id);
+      if (customerUpdateError) {
+        return jsonResponse(req, { error: "Unable to save Stripe customer." }, 500);
+      }
     }
 
     const baseSupabaseUrl = supabaseUrl.replace(/\/$/, "");
@@ -264,12 +269,15 @@ serve(async (req) => {
       return jsonResponse(req, { error: "Stripe did not return a checkout session URL." }, 500);
     }
 
-    await supabaseAdmin
+    const { error: intentUpdateError } = await supabaseAdmin
       .from("trial_checkout_intents")
       .update({ checkout_session_id: session.id })
       .eq("id", intent.id);
+    if (intentUpdateError) {
+      return jsonResponse(req, { error: "Unable to record checkout session." }, 500);
+    }
 
-    await supabaseAdmin
+    const { error: pendingEntitlementError } = await supabaseAdmin
       .from("location_entitlements")
       .upsert(
         {
@@ -281,6 +289,9 @@ serve(async (req) => {
         },
         { onConflict: "business_location_id" },
       );
+    if (pendingEntitlementError) {
+      return jsonResponse(req, { error: "Unable to mark checkout pending." }, 500);
+    }
 
     return jsonResponse(req, { checkout_url: session.url });
   } catch (err) {
