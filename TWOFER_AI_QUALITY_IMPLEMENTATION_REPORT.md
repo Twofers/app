@@ -832,7 +832,7 @@ Live secret names changed: none.
 
 ## Unresolved risks
 
-- `ai-deal-suggestions` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
+- `ai-deal-suggestions` was routed through the shared text provider in PR 4q; broader provider-router migration remains pending for other helper routes.
 - This slice changes the missing-key UX from successful suggestions to an error state in `AiInsightsCard`.
 - Other adjacent AI routes still need separate audit or routing work.
 
@@ -1017,7 +1017,7 @@ Live secret names changed: none.
 
 ## Unresolved risks
 
-- `ai-deal-suggestions` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending. `ai-generate-deal-copy` was routed through the shared text provider in PR 4p.
+- `ai-generate-deal-copy` was routed through the shared text provider in PR 4p, and `ai-deal-suggestions` was routed through it in PR 4q. Broader provider-router migration remains pending for other legacy helper routes.
 - The legacy gated `ai-create-deal` route still combines generation and insert if deliberately re-enabled; its raw-provider error response was cleaned up in PR 4l.
 
 ## Rollback
@@ -1309,8 +1309,68 @@ Live secret names changed: none.
 
 ## Unresolved risks
 
-- `ai-deal-suggestions` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
 - `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4q - Route AI insights helper through shared text provider
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `7bd64838`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-deal-suggestions/index.ts`
+- `supabase/functions/_shared/ai-deal-suggestions-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the AI insights helper's direct OpenAI chat-completions call with the shared structured text provider router.
+- Preserved the existing fail-closed `OPENAI_NOT_CONFIGURED` behavior when `OPENAI_API_KEY` is missing and no configured Gemini route can continue.
+- Allowed AI insights to use Gemini text generation only when the provider router is enabled and `GEMINI_API_KEY` is configured.
+- Logged provider attempts through `ai_generation_costs` with provider/model/cost metadata and sanitized error classes.
+- Kept client-facing upstream generation failures generic with `error_code: "AI_GENERATION_FAILED"`.
+- Added source guards so canned insight cards, direct OpenAI fetches, and raw provider details are not reintroduced silently.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved; no canned insight fallback path added.
+51. No generation path bypasses provider/quality controls: Improved for `ai-deal-suggestions`; it now shares the provider router and sanitized attempt telemetry used by the main ad-copy path.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/ai-deal-suggestions/index.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-deal-suggestions-source.test.ts`: passed, 1 file / 3 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 126 Edge Function files.
+- `npm run test -- --run`: passed, 134 files / 731 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4q" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
+- `ai-translate-deal` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
 
 ## Rollback

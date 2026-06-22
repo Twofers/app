@@ -7,33 +7,41 @@ const source = readFileSync(
   "utf8",
 );
 
-describe("ai-deal-suggestions legacy fallback source guard", () => {
-  it("does not return canned insight suggestions when OpenAI is unavailable", () => {
+describe("ai-deal-suggestions source guards", () => {
+  it("does not return canned insight suggestions when provider configuration is unavailable", () => {
     expect(source).toMatch(/OPENAI_NOT_CONFIGURED/);
     expect(source).toMatch(/status:\s*503/);
+    expect(source).toMatch(/routerCanUseGemini/);
     expect(source).not.toMatch(/fallbackSuggestions/);
     expect(source).not.toMatch(/Expand your lineup/);
     expect(source).not.toMatch(/Weekend pastry pairing/);
     expect(source).not.toMatch(/Tell your origin story/);
 
-    const keyMissingIndex = source.indexOf("if (!openAiKey)");
-    const modelIndex = source.indexOf("resolveOpenAiChatModel()");
+    const keyMissingIndex = source.indexOf("if (!openAiKey && !routerCanUseGemini)");
+    const generationIndex = source.indexOf("generation = await generateStructuredText");
     expect(keyMissingIndex).toBeGreaterThan(-1);
-    expect(modelIndex).toBeGreaterThan(keyMissingIndex);
+    expect(generationIndex).toBeGreaterThan(keyMissingIndex);
   });
 
-  it("does not return raw OpenAI error details to the client", () => {
-    const errorTextIndex = source.indexOf("const text = await aiRes.text()");
-    const parseIndex = source.indexOf("const aiJson = await aiRes.json()");
+  it("routes insight generation through the shared provider router", () => {
+    expect(source).toMatch(/generateStructuredText/);
+    expect(source).toMatch(/resolveAiTextProviderConfig/);
+    expect(source).toMatch(/logDealSuggestionProviderAttempts/);
+    expect(source).not.toMatch(/fetch\("https:\/\/api\.openai\.com\/v1\/chat\/completions"/);
+    expect(source).not.toMatch(/resolveOpenAiChatModel/);
+  });
 
-    expect(errorTextIndex).toBeGreaterThan(-1);
-    expect(parseIndex).toBeGreaterThan(errorTextIndex);
+  it("does not return raw provider error details to the client", () => {
+    expect(source).not.toMatch(/const text = await aiRes\.text\(\)/);
+    expect(source).not.toMatch(/details:\s*text/);
+    expect(source).not.toMatch(/errorMessage:\s*text\.slice/);
 
-    const openAiErrorBlock = source.slice(errorTextIndex, parseIndex);
-    expect(openAiErrorBlock).toMatch(/errorCode:\s*`HTTP_\$\{aiRes\.status\}`/);
-    expect(openAiErrorBlock).toMatch(/errorMessage:\s*text\.slice\(0,\s*500\)/);
-    expect(openAiErrorBlock).toMatch(/AI_GENERATION_FAILED/);
-    expect(openAiErrorBlock).toMatch(/status:\s*502/);
-    expect(openAiErrorBlock).not.toMatch(/details:\s*text/);
+    const providerFailureIndex = source.indexOf("AI_GENERATION_FAILED");
+    expect(providerFailureIndex).toBeGreaterThan(-1);
+    const providerFailureBlock = source.slice(providerFailureIndex - 1200, providerFailureIndex + 600);
+    expect(providerFailureBlock).toMatch(/const attempts = \(err as \{ attempts\?: ProviderAttempt\[\] \}\)\?\.attempts \?\? \[\]/);
+    expect(providerFailureBlock).toMatch(/logDealSuggestionProviderAttempts/);
+    expect(providerFailureBlock).toMatch(/status:\s*502/);
+    expect(providerFailureBlock).toMatch(/error_code:\s*"AI_GENERATION_FAILED"/);
   });
 });
