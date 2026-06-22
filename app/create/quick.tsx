@@ -61,6 +61,7 @@ import {
 } from "@/lib/deal-eligibility-form";
 import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "@/lib/offer-definition";
 import {
+  buildAuthoritativeDealDisplayCopy,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
@@ -419,21 +420,25 @@ export default function QuickDealExpress() {
       const now = new Date();
       const end = new Date(now.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
       const scheduleSummary = `One-time: ${now.toLocaleString()} to ${end.toLocaleString()}`;
-      const offerDefinitionForPublish = OFFER_VERSION_PUBLISH_ENABLED
+      const offerDefinitionForPublish = OFFER_DEFINITION_FALLBACK_ENABLED || OFFER_VERSION_PUBLISH_ENABLED
         ? buildExpressOfferDefinition(now, end, scheduleSummary, posterPath)
         : null;
-      const translations = await translateDealCopy({
-        business_id: businessId,
+      const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinitionForPublish, {
         title: cleanTitle,
         description: listingDescription,
+      });
+      const translations = await translateDealCopy({
+        business_id: businessId,
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: dealOutputLang,
       });
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
 
       const row = {
         business_id: businessId,
-        title: cleanTitle,
-        description: listingDescription,
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: translations.source_locale,
         title_en: translations.title_en,
         title_es: translations.title_es,
@@ -485,10 +490,10 @@ export default function QuickDealExpress() {
       }
       if (!id) throw new Error("Missing published deal id.");
       if (shouldNotify) void notifyDealPublished(id);
-      await markRecentPublish(cleanTitle);
+      await markRecentPublish(displayCopy.title);
       publishIdempotencyKeyRef.current = null;
       setPublishedDealId(id);
-      setPublishedDealTitle(cleanTitle);
+      setPublishedDealTitle(displayCopy.title);
       setPreviewVisible(false);
     } catch (err) {
       setPreviewVisible(false);

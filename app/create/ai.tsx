@@ -115,6 +115,7 @@ import {
 } from "../../lib/ai-compose-offer";
 import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "../../lib/runtime-env";
 import {
+  buildAuthoritativeDealDisplayCopy,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
@@ -2147,17 +2148,21 @@ export default function AiDealScreen() {
       }
       const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
-      const translations = await translateDealCopy({
-        business_id: businessId,
+      const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinition, {
         title: title.trim(),
         description: listingDescription.trim(),
+      });
+      const translations = await translateDealCopy({
+        business_id: businessId,
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: sourceLocaleForPublish,
       });
 
       const baseRow = {
         business_id: businessId,
-        title: title.trim(),
-        description: listingDescription.trim(),
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: translations.source_locale,
         title_en: translations.title_en,
         title_es: translations.title_es,

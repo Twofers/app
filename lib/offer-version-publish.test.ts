@@ -6,6 +6,7 @@ import {
 } from "./ad-spec";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 import {
+  buildAuthoritativeDealDisplayCopy,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
@@ -36,6 +37,33 @@ describe("offer version publish client helpers", () => {
   it("creates scoped idempotency keys", () => {
     expect(createPublishIdempotencyKey("create_ai")).toMatch(/^create_ai:.{12,}/);
     expect(createPublishIdempotencyKey("create_quick")).toMatch(/^create_quick:.{12,}/);
+  });
+
+  it("uses authoritative offer definition lines for customer-visible deal copy", () => {
+    const definition = buildDefinition();
+
+    expect(
+      buildAuthoritativeDealDisplayCopy(definition, {
+        title: "AI coffee hook",
+        description: "Persuasive generated body.",
+      }),
+    ).toEqual({
+      title: "Buy one latte and get one free",
+      description:
+        "Purchase 1 latte to receive 1 latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
+    });
+  });
+
+  it("falls back to cleaned AI copy when no offer definition is available", () => {
+    expect(
+      buildAuthoritativeDealDisplayCopy(null, {
+        title: "  Cozy   lunch deal ",
+        description: " Fresh pastries   today. ",
+      }),
+    ).toEqual({
+      title: "Cozy lunch deal",
+      description: "Fresh pastries today.",
+    });
   });
 
   it("builds a native-renderer ad spec for publish audit and OfferVersion binding", () => {

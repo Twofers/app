@@ -31,7 +31,36 @@ export type PublishOfferVersionedDealResult = {
   }>;
 };
 
+export type AuthoritativeDealDisplayCopy = {
+  title: string;
+  description: string;
+};
+
 type ErrorWithCode = Error & { code?: string };
+
+function cleanDisplayText(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+export function buildAuthoritativeDealDisplayCopy(
+  offerDefinition: OfferDefinitionV1 | null | undefined,
+  fallback: AuthoritativeDealDisplayCopy,
+): AuthoritativeDealDisplayCopy {
+  const fallbackTitle = cleanDisplayText(fallback.title);
+  const fallbackDescription = cleanDisplayText(fallback.description);
+  if (!offerDefinition) return { title: fallbackTitle, description: fallbackDescription };
+
+  const title =
+    cleanDisplayText(offerDefinition.canonicalOfferLine) ||
+    cleanDisplayText(offerDefinition.canonicalOfferSentence) ||
+    fallbackTitle;
+  const description =
+    cleanDisplayText(offerDefinition.disclosureLine) ||
+    cleanDisplayText(offerDefinition.canonicalTermsLine) ||
+    fallbackDescription;
+
+  return { title, description };
+}
 
 function throwInvokeError(message: string, code?: string): never {
   const err = new Error(message) as ErrorWithCode;
