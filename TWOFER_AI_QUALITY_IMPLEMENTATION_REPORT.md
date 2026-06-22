@@ -1018,7 +1018,66 @@ Live secret names changed: none.
 ## Unresolved risks
 
 - `ai-generate-deal-copy` and `ai-deal-suggestions` still use direct OpenAI chat-completions calls when configured; broader provider-router migration remains pending.
-- The legacy gated `ai-create-deal` route still has its own raw-provider cleanup risk if it is ever deliberately re-enabled.
+- The legacy gated `ai-create-deal` route still combines generation and insert if deliberately re-enabled; its raw-provider error response was cleaned up in PR 4l.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4l - Remove raw provider errors from legacy create-deal route
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `d468e06c`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-create-deal/index.ts`
+- `supabase/functions/_shared/ai-create-deal-source.test.ts`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed client-facing `details: text` provider bodies from OpenAI HTTP failure responses in the default-closed `ai-create-deal` legacy endpoint.
+- Preserved server-side diagnostics by continuing to log the raw provider body, truncated, in `ai_generation_costs.error_message`.
+- Added `error_code: "AI_GENERATION_FAILED"` and HTTP 502 for those upstream provider failures.
+- Expanded the existing default-closed source guard so raw provider bodies cannot be reintroduced if the endpoint is ever deliberately re-enabled.
+- Updated current-state and checklist docs to call out the non-raw client behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved from prior PR4 slices; no canned output added.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for a default-closed legacy route's failure handling; the route remains gated off by default and still should not be a pilot happy path.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-create-deal-source.test.ts`: passed, 1 file / 2 tests.
+- `deno check supabase/functions/ai-create-deal/index.ts`: passed.
+- Raw provider detail scan: `details: text` no longer appears in `ai-create-deal`.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 125 Edge Function files.
+- `npm run test -- --run`: passed, 133 files / 725 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4l" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-create-deal` still combines generation and live insert if deliberately re-enabled with `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it should remain disabled for the pilot.
+- The broader provider-router migration for remaining adjacent helper routes remains pending.
 
 ## Rollback
 

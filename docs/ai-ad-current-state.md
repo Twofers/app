@@ -130,7 +130,7 @@ Current gaps:
 
 - `ai-compose-offer`: composes an offer from text/image/voice. Legacy poster image generation is now disabled; when `generate_poster_image` is requested the function returns compose copy with `poster_image_unavailable` and `poster_disabled_reason: "native_text_rendering_required"` instead of using `buildPosterImagePrompt`. Voice audio is processed ephemerally per the spec; transcript is logged. Missing OpenAI/Whisper configuration returns `OPENAI_KEY_MISSING` instead of canned compose output or a canned transcript.
 - `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It uses server-side OpenAI and JSON schema but is not the main AI ad generator. Upstream OpenAI HTTP failure bodies are logged server-side and not returned to clients.
-- `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`.
+- `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`. If re-enabled, upstream OpenAI HTTP failure bodies are logged server-side and not returned to clients.
 - `ai-deal-suggestions`: owner dashboard insights helper. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of canned suggestion cards, and upstream OpenAI HTTP failure bodies are not returned to clients.
 - `ai-translate-deal`: localization helper used after deal creation and by direct callers. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of saving deterministic phrase-table translations.
 - `ai-extract-menu`: menu photo extraction path, relevant to catalog setup.
@@ -231,7 +231,7 @@ Function: `supabase/functions/ai-create-deal/index.ts`
 - Uses a photo signed URL and hint to generate copy.
 - Applies deterministic deal copy safeguards after model output.
 - Inserts a live `deals` row.
-- This is the closest remaining anti-goal path because model generation and publish live in the same request, even though safeguards have been added.
+- This is the closest remaining anti-goal path because model generation and publish live in the same request, even though safeguards have been added. It is default-closed and no current app code calls it.
 
 ## Image Storage and Asset Handling
 

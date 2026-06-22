@@ -387,9 +387,9 @@ serve(async (req) => {
         errorMessage: text.slice(0, 500),
       });
       return new Response(
-        JSON.stringify({ error: "AI generation failed.", details: text }),
+        JSON.stringify({ error: "AI generation failed.", error_code: "AI_GENERATION_FAILED" }),
         {
-          status: 500,
+          status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );

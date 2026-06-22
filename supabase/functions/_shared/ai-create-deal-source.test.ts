@@ -17,5 +17,19 @@ describe("ai-create-deal legacy endpoint source guard", () => {
     expect(envIndex).toBeGreaterThan(gateIndex);
     expect(insertIndex).toBeGreaterThan(gateIndex);
   });
-});
 
+  it("does not return raw OpenAI error details when explicitly re-enabled", () => {
+    const errorTextIndex = source.indexOf("const text = await aiRes.text()");
+    const parseIndex = source.indexOf("const aiJson = await aiRes.json()");
+
+    expect(errorTextIndex).toBeGreaterThan(-1);
+    expect(parseIndex).toBeGreaterThan(errorTextIndex);
+
+    const openAiErrorBlock = source.slice(errorTextIndex, parseIndex);
+    expect(openAiErrorBlock).toMatch(/errorCode:\s*`HTTP_\$\{aiRes\.status\}`/);
+    expect(openAiErrorBlock).toMatch(/errorMessage:\s*text\.slice\(0,\s*500\)/);
+    expect(openAiErrorBlock).toMatch(/AI_GENERATION_FAILED/);
+    expect(openAiErrorBlock).toMatch(/status:\s*502/);
+    expect(openAiErrorBlock).not.toMatch(/details:\s*text/);
+  });
+});
