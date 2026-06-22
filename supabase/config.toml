@@ -487,6 +487,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/weekly-deal-digest/index.ts"
 
+# Cron-triggered; authorizes via x-cron-secret (env CRON_SECRET or Vault), not JWT.
+[functions.send-trial-ending-reminders]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-trial-ending-reminders/index.ts"
+
 [functions.begin-visual-redeem]
 enabled = true
 verify_jwt = false
