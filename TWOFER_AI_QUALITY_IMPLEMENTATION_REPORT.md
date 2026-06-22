@@ -954,6 +954,8 @@ Live secret names changed: none.
 
 Revert this commit. No migration rollback is required.
 
+---
+
 ## PR 4g - AI quality/cost dashboard metrics export
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -1012,8 +1014,6 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
-
----
 
 ## PR 4h - Remove canned AI insights fallback
 
@@ -2236,6 +2236,66 @@ Live secret names changed: none.
 ## Unresolved risks
 
 - Provider-specific text adapters still parse upstream error JSON locally so classification can distinguish quota, billing, auth, and model failures; this parsed message is not returned, logged, or attached to provider attempts.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4z - Remove remaining craft-biased AI helper prompts
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a480e3b8`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-deal-suggestions/index.ts`
+- `supabase/functions/ai-generate-deal-copy/index.ts`
+- `supabase/functions/ai-translate-deal/index.ts`
+- `supabase/functions/_shared/ai-deal-suggestions-source.test.ts`
+- `supabase/functions/_shared/ai-generate-deal-copy-source.test.ts`
+- `supabase/functions/_shared/ai-translate-deal-source.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced stale cafe/specialty-food-biased deal-copy and insight prompts with neutral, fact-bound local-business guidance.
+- Added explicit prompt rules against inventing freshness, ingredient, craft, health, popularity, availability, schedule, or discount claims.
+- Removed the old deterministic translation phrase tables that could fabricate craft/freshness claims when provider output omitted a target locale field.
+- Changed translation fallback behavior to preserve only the original source-locale text instead of inventing untranslated target-locale copy.
+- Added source guards for the deal-copy, insight, and translation helpers so stale phrase-table and craft-biased prompt language cannot be silently reintroduced.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved; translation no longer has deterministic promotional phrase tables, and helper prompts no longer carry stale specialty-food examples or claims.
+51. No generation path bypasses provider/quality controls: Improved; incomplete provider translation output falls back only to source-locale text rather than fabricated target-locale claims.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase/functions/_shared/ai-translate-deal-source.test.ts supabase/functions/_shared/ai-deal-suggestions-source.test.ts supabase/functions/_shared/ai-generate-deal-copy-source.test.ts`: passed, 3 files / 14 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint`: passed, using the explicit npm CLI path because the sandboxed `npm` shim pointed at a missing Roaming npm install.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 136 files / 760 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4z-20260622-1810`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: attempted, but this shell cannot find `deno`; the harness failed before checking code with `'deno' is not recognized as an internal or external command`.
+- Whole-repo stale-phrase scan passed for runtime code; remaining matches are source-test guard assertions only.
+
+## Unresolved risks
+
+- Edge Function typecheck still needs a shell with Deno available to complete this validation gate.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
 
 ## Rollback

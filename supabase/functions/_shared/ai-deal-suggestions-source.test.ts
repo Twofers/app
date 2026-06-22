@@ -31,6 +31,16 @@ describe("ai-deal-suggestions source guards", () => {
     expect(source).not.toMatch(/resolveOpenAiChatModel/);
   });
 
+  it("does not bias insight prompts with unsupported craft or freshness claims", () => {
+    expect(source).toMatch(/practical local-business advisor/);
+    expect(source).toMatch(/verified strengths from the supplied business and deal data/);
+    expect(source).toMatch(/Do not invent ingredients, sourcing, freshness, craft, health, popularity, or availability claims/);
+    expect(source).not.toMatch(/craft-focused/);
+    expect(source).not.toMatch(/independent caf/);
+    expect(source).not.toMatch(/quality and craft/);
+    expect(source).not.toMatch(/ingredient highlights/);
+  });
+
   it("does not return raw provider error details to the client", () => {
     expect(source).not.toMatch(/const text = await aiRes\.text\(\)/);
     expect(source).not.toMatch(/details:\s*text/);

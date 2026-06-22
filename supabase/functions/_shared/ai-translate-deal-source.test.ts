@@ -34,6 +34,20 @@ describe("ai-translate-deal source guards", () => {
     expect(source).not.toMatch(/resolveOpenAiChatModel/);
   });
 
+  it("does not keep deterministic craft-biased translation phrase fallbacks", () => {
+    expect(source).toMatch(/function fallbackResult/);
+    expect(source).toMatch(/title_en:\s*sourceLocale === "en" \? title : ""/);
+    expect(source).toMatch(/title_es:\s*sourceLocale === "es" \? title : ""/);
+    expect(source).toMatch(/title_ko:\s*sourceLocale === "ko" \? title : ""/);
+    expect(source).not.toMatch(/TITLE_TRANS/);
+    expect(source).not.toMatch(/DESC_TRANS/);
+    expect(source).not.toMatch(/translateEnglishField/);
+    expect(source).not.toMatch(/calidad artesanal/);
+    expect(source).not.toMatch(/ingredientes de primera/);
+    expect(source).not.toMatch(/single-origin/);
+    expect(source).not.toMatch(/made fresh/);
+  });
+
   it("does not return raw provider error details to the client", () => {
     expect(source).not.toMatch(/const text = await aiRes\.text\(\)/);
     expect(source).not.toMatch(/details:\s*text/);

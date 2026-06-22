@@ -17,6 +17,17 @@ describe("ai-generate-deal-copy source guards", () => {
     expect(source).not.toMatch(/fetch\("https:\/\/api\.openai\.com\/v1\/chat\/completions"/);
   });
 
+  it("does not bias deal-copy prompts with unsupported specialty-food claims", () => {
+    expect(source).toMatch(/clear promotional copy for independent local businesses/);
+    expect(source).toMatch(/Do not invent freshness, quality, ingredient, craft, health, popularity, discount, schedule, or availability claims/);
+    expect(source).not.toMatch(/specialty coffee/);
+    expect(source).not.toMatch(/hand-pulled/);
+    expect(source).not.toMatch(/stone-ground/);
+    expect(source).not.toMatch(/freshly baked/);
+    expect(source).not.toMatch(/small-batch/);
+    expect(source).not.toMatch(/real ingredients, real care/);
+  });
+
   it("does not return raw provider error details to the client", () => {
     expect(source).not.toMatch(/const text = await aiRes\.text\(\)/);
     expect(source).not.toMatch(/details:\s*text/);

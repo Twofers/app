@@ -10,7 +10,6 @@ import {
 } from "../_shared/ai-text-provider.ts";
 
 type AppLocale = "en" | "es" | "ko";
-type TransPhrase = { rx: RegExp; es: string; ko: string };
 
 type TranslationResult = {
   source_locale: AppLocale;
@@ -42,29 +41,6 @@ const DEAL_TRANSLATIONS_SCHEMA = {
   },
 } as const;
 
-const TITLE_TRANS: TransPhrase[] = [
-  { rx: /2-for-1 oat milk latte/i, es: "2x1 en lattes de leche de avena", ko: "\uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC 1+1" },
-  { rx: /oat milk latte/i, es: "Latte de leche de avena artesanal", ko: "\uC815\uC131 \uB2F4\uC740 \uADC0\uB9AC \uC6B0\uC720 \uB77C\uB5BC" },
-  { rx: /morning pastry pair/i, es: "Combo matutino de reposter\u00EDa", ko: "\uBAA8\uB2DD \uD398\uC774\uC2A4\uD2B8\uB9AC \uD398\uC5B4" },
-  { rx: /iced latte happy hour/i, es: "Happy hour de latte helado", ko: "\uC544\uC774\uC2A4 \uB77C\uB5BC \uD574\uD53C\uC544\uC6CC" },
-  { rx: /cold brew/i, es: "Cold brew de origen \u00FAnico 2x1", ko: "\uC2F1\uAE00 \uC624\uB9AC\uC9C4 \uCF5C\uB4DC\uBE0C\uB8E8 1+1" },
-  { rx: /bakery box bogo/i, es: "Caja de panader\u00EDa 2x1", ko: "\uBCA0\uC774\uCEE4\uB9AC \uBC15\uC2A4 1+1" },
-  { rx: /cortado/i, es: "Cortado artesanal, por partida doble", ko: "\uBC14\uB2D0\uB77C \uCF54\uB974\uD0C0\uB3C4 1+1" },
-  { rx: /matcha/i, es: "Matcha ceremonial, dos por uno", ko: "\uB9D0\uCC28 \uB77C\uB5BC 1+1" },
-  { rx: /croissant/i, es: "Croissant reci\u00E9n horneado, dos por uno", ko: "\uAC13 \uAD6C\uC6B4 \uD06C\uB85C\uC640\uC0C1 1+1" },
-  { rx: /muffin/i, es: "Muffin de ar\u00E1ndanos, dos por uno", ko: "\uBE14\uB8E8\uBCA0\uB9AC \uBA38\uD540 1+1" },
-  { rx: /handcrafted|crafted with care/i, es: "Hecho a mano con cuidado, por partida doble", ko: "\uC815\uC131 \uB2F4\uC544 \uB9CC\uB4E0, \uB450 \uBC30\uC758 \uAE30\uC068" },
-  { rx: /2-for-1|two for one|bogo|buy one.+get one/i, es: "2x1 - calidad artesanal", ko: "1+1 - \uC7A5\uC778\uC758 \uD488\uC9C8" },
-];
-
-const DESC_TRANS: TransPhrase[] = [
-  { rx: /buy one.+get one free/i, es: "Compra uno y lleva otro gratis - hecho con ingredientes de primera", ko: "\uD558\uB098 \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC - \uCD5C\uC0C1\uC758 \uC7AC\uB8CC\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4" },
-  { rx: /two for the price of one/i, es: "Dos por el precio de uno - elaborado con esmero", ko: "\uD558\uB098 \uAC00\uACA9\uC5D0 \uB458 - \uC815\uC131\uC744 \uB2F4\uC544" },
-  { rx: /walk.?ins? welcome/i, es: "Sin reserva necesaria - bienvenidos siempre", ko: "\uC608\uC57D \uC5C6\uC774 \uBC29\uBB38 \uAC00\uB2A5" },
-  { rx: /made fresh|single-origin|hand/i, es: "Preparado fresco con ingredientes reales. Ven y pruebalo.", ko: "\uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uC815\uC131\uC2A4\uB7FD\uAC8C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4. \uC9C1\uC811 \uB9DB\uBCF4\uC138\uC694." },
-  { rx: /no catch|no shortcuts/i, es: "Sin trampas, sin atajos - solo calidad real", ko: "\uC870\uAC74 \uC5C6\uC774, \uD0C0\uD611 \uC5C6\uC774 - \uC9C4\uC9DC \uD488\uC9C8\uB9CC" },
-];
-
 function jsonResponse(body: Record<string, unknown>, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -82,35 +58,16 @@ function textField(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function translateEnglishField(text: string, phrases: TransPhrase[], lang: "es" | "ko"): string {
-  if (!text.trim()) return "";
-  for (const p of phrases) {
-    if (p.rx.test(text)) return p[lang];
-  }
-  return lang === "es"
-    ? `${text} - calidad artesanal, hecho con cuidado`
-    : `${text} - \uC7A5\uC778\uC758 \uC815\uC131\uC73C\uB85C \uB9CC\uB4E4\uC5C8\uC2B5\uB2C8\uB2E4`;
-}
-
 function fallbackResult(title: string, description: string, sourceLocale: AppLocale): TranslationResult {
-  const result: TranslationResult = {
+  return {
     source_locale: sourceLocale,
-    title_en: sourceLocale === "en" ? title : title,
-    title_es: sourceLocale === "en" ? translateEnglishField(title, TITLE_TRANS, "es") : title,
-    title_ko: sourceLocale === "en" ? translateEnglishField(title, TITLE_TRANS, "ko") : title,
-    description_en: sourceLocale === "en" ? description : description,
-    description_es: sourceLocale === "en" ? translateEnglishField(description, DESC_TRANS, "es") : description,
-    description_ko: sourceLocale === "en" ? translateEnglishField(description, DESC_TRANS, "ko") : description,
+    title_en: sourceLocale === "en" ? title : "",
+    title_es: sourceLocale === "es" ? title : "",
+    title_ko: sourceLocale === "ko" ? title : "",
+    description_en: sourceLocale === "en" ? description : "",
+    description_es: sourceLocale === "es" ? description : "",
+    description_ko: sourceLocale === "ko" ? description : "",
   };
-  if (sourceLocale === "es") {
-    result.title_es = title;
-    result.description_es = description;
-  }
-  if (sourceLocale === "ko") {
-    result.title_ko = title;
-    result.description_ko = description;
-  }
-  return result;
 }
 
 function normalizeAiResult(raw: unknown, title: string, description: string, sourceLocale: AppLocale): TranslationResult {
