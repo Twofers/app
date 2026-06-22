@@ -101,6 +101,21 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/metadata: mergedMetadata/);
   });
 
+  it("records refund webhook details before requiring billing account metadata", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/isRefundWebhookEvent/);
+    expect(source).toMatch(/recordRefundWebhookDetails/);
+    expect(source).toMatch(/billing_refund_requests/);
+    expect(source).toMatch(/provider_refund_id/);
+    expect(source).toMatch(/provider_charge_id/);
+    expect(source).toMatch(/provider_payment_intent_id/);
+    expect(source).toMatch(/refundMetadataFromCharge/);
+    expect(source).toMatch(/refund_purpose/);
+    expect(source).toMatch(/introductory_refund/);
+    expect(source).toMatch(/introductory_refund_used_at/);
+    expect(source).toMatch(/const metadataLocationId = safeGetString\(mergedMetadata\.business_location_id\)/);
+  });
+
   it("disables the old simulate subscribe helper", () => {
     const source = readFunction("simulate-subscribe");
     expect(source).toMatch(/status: 410/);

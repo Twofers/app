@@ -29,6 +29,21 @@ function metadataFrom(value: unknown): Metadata {
   return out;
 }
 
+function stripeReferenceId(value: unknown): string | null {
+  if (typeof value === "string") return safeGetString(value);
+  return safeGetString((value as { id?: unknown } | null)?.id);
+}
+
+function latestRefundFromCharge(charge: any): any | null {
+  const refunds = Array.isArray(charge?.refunds?.data) ? charge.refunds.data : [];
+  if (!refunds.length) return null;
+  return refunds.find((refund: any) => safeGetString(metadataFrom(refund).refund_purpose)) ?? refunds[0];
+}
+
+function refundMetadataFromCharge(charge: any): Metadata {
+  return metadataFrom(latestRefundFromCharge(charge));
+}
+
 function eventEnvironment(event: Stripe.Event, metadata: Metadata): string {
   return safeGetString(metadata.environment) ?? (event.livemode ? "production" : "test");
 }
@@ -71,6 +86,119 @@ function shouldDeferTrialSubscriptionSync(metadata: Metadata, existingStatus: st
     existingStatus === "trial_checkout_pending" &&
     stripeStatus === "trialing"
   );
+}
+
+function isRefundWebhookEvent(eventType: string): boolean {
+  return eventType === "charge.refunded" || eventType === "refund.created";
+}
+
+function compactRecord(values: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== null && value !== undefined && value !== "") out[key] = value;
+  }
+  return out;
+}
+
+function refundWebhookDetails(eventType: string, obj: any, metadata: Metadata) {
+  const refund = eventType === "refund.created" ? obj : latestRefundFromCharge(obj);
+  const charge = eventType === "charge.refunded" ? obj : null;
+  return {
+    refundId: stripeReferenceId(refund?.id),
+    chargeId: stripeReferenceId(refund?.charge) ?? stripeReferenceId(charge?.id),
+    paymentIntentId: stripeReferenceId(refund?.payment_intent) ?? stripeReferenceId(charge?.payment_intent),
+    firstPaidInvoiceId: safeGetString(metadata.first_paid_invoice_id),
+    amount: typeof refund?.amount === "number"
+      ? refund.amount
+      : typeof charge?.amount_refunded === "number"
+        ? charge.amount_refunded
+        : null,
+    currency: safeGetString(refund?.currency) ?? safeGetString(charge?.currency),
+    status: safeGetString(refund?.status) ?? (eventType === "charge.refunded" ? "succeeded" : null),
+    reason: safeGetString(refund?.reason),
+  };
+}
+
+async function findRefundRequest(supabase: any, details: ReturnType<typeof refundWebhookDetails>) {
+  const filters = [
+    ["provider_refund_id", details.refundId],
+    ["provider_charge_id", details.chargeId],
+    ["provider_payment_intent_id", details.paymentIntentId],
+    ["first_paid_invoice_id", details.firstPaidInvoiceId],
+  ] as const;
+
+  for (const [column, value] of filters) {
+    if (!value) continue;
+    const { data, error } = await supabase
+      .from("billing_refund_requests")
+      .select("id,business_location_id,request_status")
+      .eq(column, value)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.id) return data;
+  }
+
+  return null;
+}
+
+async function billingAccountForLocation(supabase: any, locationId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("location_entitlements")
+    .select("billing_account_id")
+    .eq("business_location_id", locationId)
+    .maybeSingle();
+  if (error) throw error;
+  return safeGetString(data?.billing_account_id);
+}
+
+async function recordRefundWebhookDetails(params: {
+  supabase: any;
+  eventType: string;
+  providerEventId: string;
+  obj: any;
+  metadata: Metadata;
+  locationId: string | null;
+  billingAccountId: string | null;
+}): Promise<{ locationId: string | null; billingAccountId: string | null; details: ReturnType<typeof refundWebhookDetails> }> {
+  const { supabase, eventType, providerEventId, obj, metadata } = params;
+  const details = refundWebhookDetails(eventType, obj, metadata);
+  const refundRequest = await findRefundRequest(supabase, details);
+  const locationId = params.locationId ?? safeGetString(refundRequest?.business_location_id);
+  const billingAccountId = params.billingAccountId ?? (locationId ? await billingAccountForLocation(supabase, locationId) : null);
+
+  if (refundRequest?.id) {
+    const now = new Date().toISOString();
+    const refundStatus = details.status ?? "recorded";
+    const update: Record<string, unknown> = {
+      request_status: refundStatus === "failed" ? "failed" : "approved",
+      reason_code: refundStatus === "failed" ? "provider_refund_failed" : "provider_refund_recorded",
+      resolved_at: now,
+      updated_at: now,
+      metadata: compactRecord({
+        refund_purpose: safeGetString(metadata.refund_purpose),
+        refund_event_type: eventType,
+        provider_event_id: providerEventId,
+        provider_refund_status: refundStatus,
+        provider_refund_amount: details.amount,
+        provider_refund_currency: details.currency,
+        provider_refund_reason: details.reason,
+        first_paid_invoice_id: details.firstPaidInvoiceId,
+      }),
+    };
+    if (details.refundId) update.provider_refund_id = details.refundId;
+    if (details.chargeId) update.provider_charge_id = details.chargeId;
+    if (details.paymentIntentId) update.provider_payment_intent_id = details.paymentIntentId;
+
+    const { error } = await supabase
+      .from("billing_refund_requests")
+      .update(update)
+      .eq("id", refundRequest.id);
+    if (error) throw error;
+  }
+
+  return { locationId, billingAccountId, details };
 }
 
 async function fetchSubscriptionForEvent(stripe: Stripe, eventType: string, obj: any): Promise<any | null> {
@@ -545,6 +673,7 @@ serve(async (req) => {
   const mergedMetadata: Metadata = {
     ...metadataFrom(subscription),
     ...metadataFrom(obj),
+    ...(event.type === "charge.refunded" ? refundMetadataFromCharge(obj) : {}),
   };
   const environment = eventEnvironment(event, mergedMetadata);
   if (environment !== config.billingEnvironment) {
@@ -556,8 +685,56 @@ serve(async (req) => {
   }
 
   try {
-    const locationId = safeGetString(mergedMetadata.business_location_id);
-    const billingAccountId = safeGetString(mergedMetadata.billing_account_id);
+    const metadataLocationId = safeGetString(mergedMetadata.business_location_id);
+    const metadataBillingAccountId = safeGetString(mergedMetadata.billing_account_id);
+    if (isRefundWebhookEvent(event.type)) {
+      const refundContext = await recordRefundWebhookDetails({
+        supabase,
+        eventType: event.type,
+        providerEventId: event.id,
+        obj,
+        metadata: mergedMetadata,
+        locationId: metadataLocationId,
+        billingAccountId: metadataBillingAccountId,
+      });
+      if (!refundContext.locationId) {
+        await markProviderEvent(supabase, providerEvent.id, "processed");
+        return jsonResponse(req, { received: true, skipped: true });
+      }
+
+      const customerId = safeGetString(obj?.customer) ?? safeGetString(subscription?.customer);
+      if (customerId && refundContext.billingAccountId) {
+        await supabase
+          .from("billing_accounts")
+          .update({
+            provider: "stripe",
+            provider_customer_id: customerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", refundContext.billingAccountId);
+      }
+
+      const now = new Date().toISOString();
+      const isIntroductoryRefund =
+        safeGetString(mergedMetadata.refund_purpose) === "introductory_first_paid_invoice";
+      await supabase
+        .from("location_entitlements")
+        .update({
+          ...(refundContext.billingAccountId ? { billing_account_id: refundContext.billingAccountId } : {}),
+          status: "refunded_suspended",
+          suspended_at: now,
+          suspension_reason: isIntroductoryRefund ? "introductory_refund" : "refunded",
+          ...(isIntroductoryRefund ? { introductory_refund_used_at: now } : {}),
+          updated_at: now,
+        })
+        .eq("business_location_id", refundContext.locationId);
+
+      await markProviderEvent(supabase, providerEvent.id, "processed");
+      return jsonResponse(req, { received: true });
+    }
+
+    const locationId = metadataLocationId;
+    const billingAccountId = metadataBillingAccountId;
     if (!locationId || !billingAccountId) {
       await markProviderEvent(supabase, providerEvent.id, "processed");
       return jsonResponse(req, { received: true, skipped: true });
@@ -632,16 +809,6 @@ serve(async (req) => {
           suspended_at: existing?.first_paid_at ? new Date().toISOString() : null,
           suspension_reason: existing?.first_paid_at ? "subscription_deleted" : null,
           provider_subscription_id: safeGetString(subscription?.id),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("business_location_id", locationId);
-    } else if (event.type === "charge.refunded" || event.type === "refund.created") {
-      await supabase
-        .from("location_entitlements")
-        .update({
-          status: "refunded_suspended",
-          suspended_at: new Date().toISOString(),
-          suspension_reason: "refunded",
           updated_at: new Date().toISOString(),
         })
         .eq("business_location_id", locationId);
