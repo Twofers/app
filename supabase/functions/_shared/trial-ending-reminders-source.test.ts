@@ -10,6 +10,10 @@ const migration = readFileSync(
   join(process.cwd(), "supabase", "migrations", "20260726130000_trial_ending_reminder_events.sql"),
   "utf8",
 );
+const scheduleMigration = readFileSync(
+  join(process.cwd(), "supabase", "migrations", "20260726135000_trial_ending_reminder_cron_schedule.sql"),
+  "utf8",
+);
 const config = readFileSync(join(process.cwd(), "supabase", "config.toml"), "utf8");
 
 describe("send-trial-ending-reminders function source", () => {
@@ -50,6 +54,31 @@ describe("trial ending reminder migration", () => {
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.verify_billing_reminder_secret/i);
     expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.verify_billing_reminder_secret\(text\) TO service_role/i);
     expect(migration).not.toMatch(/TO authenticated/i);
+  });
+});
+
+describe("trial ending reminder cron schedule migration", () => {
+  it("schedules the reminder function through pg_cron and pg_net", () => {
+    expect(scheduleMigration).toMatch(/CREATE EXTENSION IF NOT EXISTS pg_cron/i);
+    expect(scheduleMigration).toMatch(/CREATE EXTENSION IF NOT EXISTS pg_net/i);
+    expect(scheduleMigration).toMatch(/cron\.schedule\(\s*'send-trial-ending-reminders'/i);
+    expect(scheduleMigration).toMatch(/\*\/30 \* \* \* \*/);
+    expect(scheduleMigration).toMatch(/functions\/v1\/send-trial-ending-reminders/i);
+    expect(scheduleMigration).toMatch(/net\.http_post/i);
+  });
+
+  it("passes the billing reminder secret from Vault without exposing it", () => {
+    expect(scheduleMigration).toMatch(/billing_reminder_cron_secret/i);
+    expect(scheduleMigration).toMatch(/vault\.decrypted_secrets/i);
+    expect(scheduleMigration).toMatch(/'x-cron-secret'/i);
+    expect(scheduleMigration).not.toMatch(/decrypted_secret\s*:=/i);
+  });
+
+  it("adds a service-only status helper for verification", () => {
+    expect(scheduleMigration).toMatch(/CREATE OR REPLACE FUNCTION public\.billing_trial_reminder_cron_status/i);
+    expect(scheduleMigration).toMatch(/WHERE jobname = 'send-trial-ending-reminders'/i);
+    expect(scheduleMigration).toMatch(/GRANT EXECUTE ON FUNCTION public\.billing_trial_reminder_cron_status\(\) TO service_role/i);
+    expect(scheduleMigration).not.toMatch(/TO authenticated/i);
   });
 });
 
