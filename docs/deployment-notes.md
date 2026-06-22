@@ -166,13 +166,13 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
-Upstream menu extraction provider failures return `OPENAI_ERROR` with sanitized status telemetry rather than raw provider response bodies.
+Upstream menu extraction provider failures return `OPENAI_ERROR` with sanitized status telemetry rather than raw provider response bodies. Outer menu extraction failures log a fixed `SERVER_ERROR` code rather than free-form exception text.
 
 `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. These helpers can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured.
 
 `ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when required provider configuration is missing. Text/photo compose can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured; the voice transcription-only path still requires OpenAI/Whisper.
 
-Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-create-deal`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures. Shared OpenAI/Gemini text-provider exceptions keep classification codes but use generic provider/code messages. `ai-generate-ad-variants` research, copy, image QA, image generation, and image edit failure paths log fixed stage/error codes instead of raw upstream response bodies or free-form exception text.
+Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-create-deal`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures. Shared OpenAI/Gemini text-provider exceptions keep classification codes but use generic provider/code messages, and router/circuit-breaker maintenance failures log fixed error codes. `ai-generate-ad-variants` research, copy, image QA, image generation, and image edit failure paths log fixed stage/error codes instead of raw upstream response bodies or free-form exception text.
 
 **Setting Edge secrets:**
 

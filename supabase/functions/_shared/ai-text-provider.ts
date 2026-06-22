@@ -282,7 +282,7 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
             provider,
             model,
             errorClass: "unknown",
-            message: String(error),
+            message: `${provider} ${capability} request failed before a typed provider error was returned.`,
           });
       const startedAt = new Date().toISOString();
       attempts.push(
@@ -329,7 +329,7 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
               provider: primaryProvider,
               model: primaryModel,
               errorClass: "unknown",
-              message: String(error),
+              message: `${primaryProvider} ${capability} request failed before a typed provider error was returned.`,
             });
         if (
           attemptIndex + 1 < maxAttempts &&
@@ -371,7 +371,7 @@ export async function generateStructuredText<TSchema, TValue = unknown>(
       provider: primaryProvider,
       model: primaryModel,
       errorClass: "unknown",
-      message: String(error),
+      message: "AI provider router failed before a typed provider error was returned.",
     }), attempts);
   }
 }

@@ -78,6 +78,16 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/chatCompletionTuning/);
   });
 
+  it("does not log raw text-provider config exceptions", () => {
+    const configErrorIndex = source.indexOf('event: "text_provider_config_error"');
+    expect(configErrorIndex).toBeGreaterThan(-1);
+
+    const configErrorBlock = source.slice(configErrorIndex - 220, configErrorIndex + 260);
+    expect(configErrorBlock).toMatch(/errorCode:\s*"AI_TEXT_CONFIG_INVALID"/);
+    expect(configErrorBlock).not.toMatch(/String\(err\)/);
+    expect(configErrorBlock).not.toMatch(/err:\s*String/);
+  });
+
   it("does not log raw OpenAI compose provider bodies on live compose failures", () => {
     const providerFailureIndex = source.indexOf("AI_GENERATION_FAILED");
     expect(providerFailureIndex).toBeGreaterThan(-1);
@@ -89,6 +99,17 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(liveFailureBlock).not.toMatch(/await openAiRes\.text\(\)/);
     expect(liveFailureBlock).not.toMatch(/errText/);
     expect(liveFailureBlock).not.toMatch(/details:/);
+  });
+
+  it("does not log raw unhandled exception text from the outer compose handler", () => {
+    const unhandledIndex = source.indexOf('event: "unhandled_error"');
+    expect(unhandledIndex).toBeGreaterThan(-1);
+
+    const unhandledBlock = source.slice(unhandledIndex - 300, unhandledIndex + 300);
+    expect(unhandledBlock).toMatch(/errorCode:\s*"INTERNAL"/);
+    expect(unhandledBlock).not.toMatch(/e instanceof Error \? e\.message/);
+    expect(unhandledBlock).not.toMatch(/err:\s*msg/);
+    expect(unhandledBlock).not.toMatch(/String\(e\)/);
   });
 
   it("does not generate legacy poster images with baked-in offer text", () => {

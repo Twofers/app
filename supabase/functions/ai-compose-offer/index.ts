@@ -450,11 +450,11 @@ serve(async (req) => {
     let providerConfig;
     try {
       providerConfig = resolveAiTextProviderConfig();
-    } catch (err) {
+    } catch {
       console.log(JSON.stringify({
         tag: "ai_compose",
         event: "text_provider_config_error",
-        err: String(err).slice(0, 200),
+        errorCode: "AI_TEXT_CONFIG_INVALID",
       }));
       return new Response(
         JSON.stringify({
@@ -830,9 +830,8 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", err: msg }));
+  } catch {
+    console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", errorCode: "INTERNAL" }));
     return new Response(
       JSON.stringify({
         error: "We couldn't compose that offer right now. Please try again.",

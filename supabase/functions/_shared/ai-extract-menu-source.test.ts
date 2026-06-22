@@ -44,4 +44,13 @@ describe("ai-extract-menu source guards", () => {
     expect(failureBlock).not.toMatch(/errText/);
     expect(failureBlock).not.toMatch(/details:/);
   });
+
+  it("does not log raw exception text from the outer menu extraction handler", () => {
+    const outerErrorIndex = source.indexOf('event: "error"');
+    expect(outerErrorIndex).toBeGreaterThan(-1);
+
+    const outerErrorBlock = source.slice(outerErrorIndex - 220, outerErrorIndex + 220);
+    expect(outerErrorBlock).toMatch(/errorCode:\s*"SERVER_ERROR"/);
+    expect(outerErrorBlock).not.toMatch(/err:\s*String\(e\)/);
+  });
 });

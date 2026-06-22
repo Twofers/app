@@ -101,6 +101,10 @@ const geminiProviderSource = readFileSync(
   join(process.cwd(), "supabase", "functions", "_shared", "gemini-text-provider.ts"),
   "utf8",
 );
+const routerSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "ai-text-provider.ts"),
+  "utf8",
+);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -371,5 +375,8 @@ describe("text provider source guards", () => {
     expect(geminiProviderSource).toMatch(/Gemini structured generation failed before a usable response was returned/);
     expect(openAiProviderSource).not.toMatch(/message:\s*String\(error\)\.slice/);
     expect(geminiProviderSource).not.toMatch(/message:\s*String\(error\)\.slice/);
+    expect(routerSource).toMatch(/request failed before a typed provider error was returned/);
+    expect(routerSource).toMatch(/AI provider router failed before a typed provider error was returned/);
+    expect(routerSource).not.toMatch(/message:\s*String\(error\)/);
   });
 });

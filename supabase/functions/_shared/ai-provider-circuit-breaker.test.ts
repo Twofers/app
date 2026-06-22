@@ -12,6 +12,10 @@ const migration = readFileSync(
   join(process.cwd(), "supabase", "migrations", "20260727120000_ai_provider_circuit_breakers.sql"),
   "utf8",
 );
+const source = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "ai-provider-circuit-breaker.ts"),
+  "utf8",
+);
 
 function adminWithRows(rows: Record<string, any>) {
   const fakeAdmin = {
@@ -49,6 +53,13 @@ describe("ai_provider_circuit_breakers migration", () => {
 });
 
 describe("ai provider circuit breaker helper", () => {
+  it("does not log raw circuit-breaker storage exception text", () => {
+    expect(source).toMatch(/CIRCUIT_BREAKER_DECISION_FAILED/);
+    expect(source).toMatch(/CIRCUIT_BREAKER_SUCCESS_RECORD_FAILED/);
+    expect(source).toMatch(/CIRCUIT_BREAKER_FAILURE_RECORD_FAILED/);
+    expect(source).not.toMatch(/err:\s*String\(error\)\.slice/);
+  });
+
   it("opens for quota failures and blocks until disabled_until", async () => {
     const rows: Record<string, any> = {};
     const fakeAdmin = adminWithRows(rows);

@@ -118,7 +118,7 @@ export async function getCircuitBreakerDecision(params: {
         event: "decision_failed",
         provider: params.provider,
         capability: params.capability,
-        err: String(error).slice(0, 200),
+        errorCode: "CIRCUIT_BREAKER_DECISION_FAILED",
       }),
     );
     return { allowed: true, probe: false, state: "closed", disabledUntil: null, failureCount: 0 };
@@ -151,7 +151,7 @@ export async function recordCircuitBreakerSuccess(params: {
         event: "success_record_failed",
         provider: params.provider,
         capability: params.capability,
-        err: String(error).slice(0, 200),
+        errorCode: "CIRCUIT_BREAKER_SUCCESS_RECORD_FAILED",
       }),
     );
   }
@@ -188,9 +188,8 @@ export async function recordCircuitBreakerFailure(params: {
         provider: params.provider,
         capability: params.capability,
         errorClass: params.errorClass,
-        err: String(error).slice(0, 200),
+        errorCode: "CIRCUIT_BREAKER_FAILURE_RECORD_FAILED",
       }),
     );
   }
 }
-

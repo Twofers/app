@@ -449,8 +449,8 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_extract_menu", event: "error", err: String(e) }));
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_extract_menu", event: "error", errorCode: "SERVER_ERROR" }));
     return new Response(JSON.stringify({ error: "Server error.", error_code: "SERVER" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
