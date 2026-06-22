@@ -36,5 +36,6 @@ This checklist tracks the Edge Functions used by the app and highlights launch r
 - `ai-business-lookup` throws to callers when lookup fails (`lib/functions.ts`), so UI shows error banners instead of hardcoded Irving data.
 - `ai-generate-deal-copy` throws in `lib/functions.ts`, and the Edge function returns `OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing, preventing fake AI copy.
 - `ai-deal-suggestions` returns `OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing, preventing canned insight cards from appearing as live AI recommendations.
+- `ai-translate-deal` returns `OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing, preventing deterministic phrase-table translations from being saved as AI translations.
 - `app/create/ad-refine.tsx` now exists as a safe placeholder route that directs users to `/create/ai`.
 - `simulate-subscribe` should remain restricted to non-production operations.

@@ -255,19 +255,24 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      const result = fallbackResult(title, description, sourceLocale);
-      if (!directMode) {
-        await admin.from("deals").update(result).eq("id", dealId);
-      }
+      console.log(JSON.stringify({ tag: "ai_translate_deal", event: "openai_not_configured" }));
       await logTranslation(admin, {
         businessId,
         userId: user.id,
         requestHash,
         model: null,
-        success: true,
+        success: false,
         openaiCalled: false,
+        failureReason: "OPENAI_NOT_CONFIGURED",
       });
-      return jsonResponse({ ok: true, ...result }, 200, corsHeaders);
+      return jsonResponse(
+        {
+          error: "AI translation is temporarily unavailable. Please try again later.",
+          error_code: "OPENAI_NOT_CONFIGURED",
+        },
+        503,
+        corsHeaders,
+      );
     }
 
     const chatModel = resolveOpenAiChatModel();

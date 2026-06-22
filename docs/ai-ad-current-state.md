@@ -132,6 +132,7 @@ Current gaps:
 - `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It uses server-side OpenAI and JSON schema but is not the main AI ad generator.
 - `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`.
 - `ai-deal-suggestions`: owner dashboard insights helper. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of canned suggestion cards.
+- `ai-translate-deal`: localization helper used after deal creation and by direct callers. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of saving deterministic phrase-table translations.
 - `ai-extract-menu`: menu photo extraction path, relevant to catalog setup.
 
 ## Current Data Model

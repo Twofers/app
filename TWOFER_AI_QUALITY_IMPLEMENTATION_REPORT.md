@@ -842,6 +842,67 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4i - Fail closed for missing AI translation provider
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a1e515f4`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-translate-deal/index.ts`
+- `supabase/functions/_shared/ai-translate-deal-source.test.ts`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the missing-`OPENAI_API_KEY` success path that returned deterministic phrase-table translations from `ai-translate-deal`.
+- Missing provider configuration now returns HTTP 503 with `error_code: "OPENAI_NOT_CONFIGURED"` and logs a failed unavailable translation with `openai_called=false`.
+- The missing-provider path no longer writes deterministic translations back to `deals`.
+- Added a source guard so this fail-closed behavior cannot regress silently.
+- Updated deployment/checklist/current-state docs to call out the translation provider failure behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved for `ai-translate-deal`; missing OpenAI config no longer returns or saves deterministic translations as AI output.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for one adjacent localization route; the live provider path is unchanged.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-translate-deal-source.test.ts`: passed, 1 file / 1 test.
+- `deno check supabase/functions/ai-translate-deal/index.ts`: passed.
+- Missing-provider source scan: fallback phrase generation and `deals` updates are absent from the `if (!openAiKey)` block.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 124 Edge Function files.
+- `npm run test -- --run`: passed, 132 files / 721 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4i" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-translate-deal` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
+- Direct callers now receive an unavailable error when `OPENAI_API_KEY` is missing. The fire-and-forget `translateDeal` caller already treats translation errors as nonfatal.
+- The phrase-table fallback still exists for empty-input skip handling and for filling missing fields in malformed/incomplete AI responses.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
