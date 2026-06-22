@@ -564,6 +564,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-customer-portal-session/index.ts"
 
+[functions.stripe-expire-pending-checkout]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-expire-pending-checkout/index.ts"
+
 [functions.stripe-cancel-trial-subscription]
 enabled = true
 verify_jwt = false

@@ -63,6 +63,26 @@ export default function BusinessBillingScreen() {
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
   const [trialAcknowledged, setTrialAcknowledged] = useState(false);
 
+  const expirePendingCheckout = useCallback(async () => {
+    if (
+      !locationId ||
+      summary.status !== "trial_checkout_pending" ||
+      summary.purchaseSurface !== "in_app_link"
+    ) {
+      return;
+    }
+
+    try {
+      await supabase.functions.invoke("stripe-expire-pending-checkout", {
+        body: { location_id: locationId },
+        timeout: EDGE_FUNCTION_TIMEOUT_MS,
+      });
+      await refresh();
+    } catch {
+      // Best effort: the owner still sees the canceled-checkout banner and can refresh.
+    }
+  }, [locationId, refresh, summary.purchaseSurface, summary.status]);
+
   const remainingTime = useMemo(() => {
     const hours = hoursUntil(summary.trialEndsAt);
     if (hours === null) return null;
@@ -113,6 +133,7 @@ export default function BusinessBillingScreen() {
     if (!PAID_BILLING_ENABLED) return;
     if (checkout === "cancel") {
       setBanner({ message: t("billing.checkoutCanceled"), tone: "info" });
+      void expirePendingCheckout();
       return;
     }
     if (checkout !== "success") return;
@@ -131,7 +152,7 @@ export default function BusinessBillingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [checkout, refresh, t]);
+  }, [checkout, expirePendingCheckout, refresh, t]);
 
   const startTrialCheckout = useCallback(async () => {
     if (!locationId || busy) return;

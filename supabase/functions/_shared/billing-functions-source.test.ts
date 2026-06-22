@@ -35,6 +35,20 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/config\.billingEnvironment !== "production"/);
   });
 
+  it("expires canceled pending checkout sessions without starting trials", () => {
+    const source = readFunction("stripe-expire-pending-checkout");
+    expect(source).toMatch(/auth\.getUser/);
+    expect(source).toMatch(/isRedeemerUser/);
+    expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
+    expect(source).toMatch(/user_owns_business_location/);
+    expect(source).toMatch(/trial_checkout_pending/);
+    expect(source).toMatch(/trial_checkout_intents/);
+    expect(source).toMatch(/stripe\.checkout\.sessions\.expire/);
+    expect(source).toMatch(/status: "trial_eligible"/);
+    expect(source).toMatch(/stripeSecretKey\.startsWith\("sk_live_"\)/);
+    expect(source).not.toMatch(/deal_credit_periods"\)\s*\.insert/);
+  });
+
   it("makes verified webhook invoice events the paid activation path", () => {
     const source = readFunction("stripe-webhook");
     expect(source).toMatch(/constructEventAsync/);

@@ -25,5 +25,6 @@ describe("billing trial start ownership", () => {
     const source = readRepoFile("app/(tabs)/billing.tsx");
     expect(source).not.toMatch(/start_location_trial/);
     expect(source).toMatch(/trial_acknowledged/);
+    expect(source).toMatch(/stripe-expire-pending-checkout/);
   });
 });
