@@ -430,6 +430,14 @@ function generatedAdForPublishSpec(params: {
 
 type RevisionTarget = "copy" | "image" | "both";
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
+type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
+
+type ImageVersionEntry = {
+  id: string;
+  kind: ImageVersionKind;
+  ad: GeneratedAd;
+  createdAt: string;
+};
 
 const COPY_PRESET_KEYS = [
   "createAi.revisePresetPunchier",
@@ -453,6 +461,47 @@ const IMAGE_PRESET_KEYS_PHOTO = [
   "createAi.revisePresetPhotoCrop",
   "createAi.revisePresetPhotoBg",
 ];
+
+function imageVersionStoragePath(ad: GeneratedAd | null): string | null {
+  return ad?.poster_storage_path ?? ad?.image_selection?.selectedStoragePath ?? null;
+}
+
+function imageVersionId(ad: GeneratedAd): string | null {
+  const storagePath = imageVersionStoragePath(ad);
+  if (!storagePath) return null;
+  const source = ad.photo_source ?? "generated";
+  const treatment = ad.photo_treatment ?? "none";
+  const editMode = ad.image_selection?.editMode ?? "none";
+  return [storagePath, source, treatment, editMode].join("|");
+}
+
+function buildImageVersionEntry(ad: GeneratedAd, kind: ImageVersionKind): ImageVersionEntry | null {
+  const id = imageVersionId(ad);
+  if (!id) return null;
+  return {
+    id,
+    kind,
+    ad: normalizeGeneratedAdDisplayCopy(ad),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function buildOriginalPhotoVersionAd(ad: GeneratedAd, originalStoragePath: string | null): GeneratedAd | null {
+  if (!originalStoragePath) return null;
+  return normalizeGeneratedAdDisplayCopy({
+    ...ad,
+    poster_storage_path: originalStoragePath,
+    photo_source: "uploaded_original",
+    photo_treatment: null,
+    image_selection: buildAdImageSelection({
+      photoSource: "uploaded_original",
+      editMode: "none",
+      sourcePhotoPath: originalStoragePath,
+      selectedStoragePath: originalStoragePath,
+      qa: originalPhotoSelectionQa(true),
+    }),
+  });
+}
 
 export default function AiDealScreen() {
   const router = useRouter();
@@ -577,6 +626,7 @@ export default function AiDealScreen() {
   // Generation state — single ad, with revise loop
   const [generating, setGenerating] = useState(false);
   const [generatedAd, setGeneratedAd] = useState<GeneratedAd | null>(null);
+  const [imageVersions, setImageVersions] = useState<ImageVersionEntry[]>([]);
   const [adAccepted, setAdAccepted] = useState(false);
   /**
    * Tracks the treatment that produced the *current* generatedAd.poster_storage_path.
@@ -862,6 +912,39 @@ export default function AiDealScreen() {
     description.trim().length > 0 ||
     manualDraftUnlocked;
 
+  const rememberImageVersion = useCallback((ad: GeneratedAd, kind: ImageVersionKind) => {
+    const entry = buildImageVersionEntry(ad, kind);
+    if (!entry) return;
+    setImageVersions((current) => {
+      const withoutDuplicate = current.filter((item) => item.id !== entry.id);
+      return [...withoutDuplicate, entry].slice(-6);
+    });
+  }, []);
+
+  function restoreImageVersion(entry: ImageVersionEntry) {
+    const restored = normalizeGeneratedAdDisplayCopy(entry.ad);
+    const restoredPath = imageVersionStoragePath(restored);
+    setGeneratedAd(restored);
+    setUsePhotoAsFinal(restored.photo_source === "uploaded_original");
+    if (restored.photo_treatment) setPhotoTreatment(restored.photo_treatment);
+    if (restored.photo_source === "uploaded_original" && restoredPath) {
+      setPhotoPath((current) => current ?? restoredPath);
+      setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(restoredPath));
+    }
+    lastSentPhotoTreatmentRef.current = restored.photo_treatment ?? null;
+    setAdAccepted(false);
+    setManualDraftUnlocked(true);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    aiDraftBaselineRef.current = null;
+    setBanner({
+      message: t("createAi.imageRestoredBanner", {
+        defaultValue: "Image restored. Review and approve the ad before publishing.",
+      }),
+      tone: "info",
+    });
+  }
+
   const currentDealFormSnapshot = useMemo(
     () =>
       buildDealFormDirtySnapshot({
@@ -1044,6 +1127,11 @@ export default function AiDealScreen() {
     setTimezone(draft.timezone);
     setPublishLocationIds(draft.publishLocationIds);
     setGeneratedAd(draft.generatedAd);
+    setImageVersions(() => {
+      if (!draft.generatedAd) return [];
+      const entry = buildImageVersionEntry(draft.generatedAd, "generated");
+      return entry ? [entry] : [];
+    });
     setAdAccepted(draft.adAccepted);
     setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
     setLastGenerationError(null);
@@ -1254,6 +1342,7 @@ export default function AiDealScreen() {
         setEligibilityForm(loadedEligibilityForm);
         setManualDraftUnlocked(true);
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
         setLastGenerationError(null);
@@ -1344,6 +1433,7 @@ export default function AiDealScreen() {
         }
         setTemplateLoaded(true);
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
@@ -1489,6 +1579,7 @@ export default function AiDealScreen() {
    */
   function resetGenerationState() {
     setGeneratedAd(null);
+    setImageVersions([]);
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
@@ -1788,7 +1879,9 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
-      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
+      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      setGeneratedAd(normalizedAd);
+      rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
@@ -1871,7 +1964,9 @@ export default function AiDealScreen() {
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
-      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
+      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      setGeneratedAd(normalizedAd);
+      rememberImageVersion(normalizedAd, "revision");
       if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");
@@ -1945,6 +2040,7 @@ export default function AiDealScreen() {
       : fallbackBaseAd;
     if (!fallbackPosterPath) setUsePhotoAsFinal(true);
     setGeneratedAd(fallbackAd);
+    rememberImageVersion(fallbackAd, "fallback");
     applyAdToDraft(fallbackAd);
     setAdAccepted(true);
     setManualDraftUnlocked(true);
@@ -2261,6 +2357,7 @@ export default function AiDealScreen() {
         setPosterUrl(savedPosterUrl);
         setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
         aiDraftBaselineRef.current = null;
         setEditDirtyBaseline(
@@ -2418,6 +2515,35 @@ export default function AiDealScreen() {
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
     : usePhotoAsFinal ? selectedPhotoUri : null;
+  const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
+  const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
+  const currentAdStoragePath = imageVersionStoragePath(generatedAd);
+  const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
+  const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
+  const canCompareImages = Boolean(
+    selectedPhotoUri &&
+      adImageUri &&
+      originalImageVersion &&
+      originalStoragePath &&
+      currentAdStoragePath &&
+      originalStoragePath !== currentAdStoragePath,
+  );
+  const restorableImageVersions = imageVersions.filter((entry) => entry.id !== currentImageVersionId);
+  const imageVersionLabel = (entry: ImageVersionEntry, index: number) => {
+    if (entry.kind === "original") {
+      return t("createAi.imageCompareOriginal", { defaultValue: "Original photo" });
+    }
+    if (entry.kind === "revision") {
+      return t("createAi.imageVersionRevision", {
+        number: index + 1,
+        defaultValue: `Revision ${index + 1}`,
+      });
+    }
+    if (entry.kind === "fallback") {
+      return t("createAi.imageVersionFallback", { defaultValue: "Fallback image" });
+    }
+    return t("createAi.imageVersionGenerated", { defaultValue: "Generated image" });
+  };
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -3096,6 +3222,88 @@ export default function AiDealScreen() {
                   theme={theme}
                   darkMode={colorScheme === "dark"}
                 />
+
+                {canCompareImages && originalImageVersion ? (
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.imageCompareTitle", { defaultValue: "Compare images" })}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Image source={{ uri: selectedPhotoUri! }} style={{ height: 140, width: "100%", borderRadius: 10 }} contentFit="cover" />
+                        <Text style={{ marginTop: 6, fontSize: 12, fontWeight: "700", color: theme.mutedText }} numberOfLines={1}>
+                          {t("createAi.imageCompareOriginal", { defaultValue: "Original photo" })}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Image source={{ uri: adImageUri! }} style={{ height: 140, width: "100%", borderRadius: 10 }} contentFit="cover" />
+                        <Text style={{ marginTop: 6, fontSize: 12, fontWeight: "700", color: theme.mutedText }} numberOfLines={1}>
+                          {t("createAi.imageCompareCurrent", { defaultValue: "Current ad image" })}
+                        </Text>
+                      </View>
+                    </View>
+                    <SecondaryButton
+                      title={t("createAi.imageRestoreOriginal", { defaultValue: "Restore original photo" })}
+                      onPress={() => restoreImageVersion(originalImageVersion)}
+                    />
+                  </View>
+                ) : null}
+
+                {restorableImageVersions.length > 0 ? (
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.imageVersionsTitle", { defaultValue: "Earlier image versions" })}
+                    </Text>
+                    {restorableImageVersions.map((entry, index) => {
+                      const storagePath = imageVersionStoragePath(entry.ad);
+                      if (!storagePath) return null;
+                      const versionUri = buildPublicDealPhotoUrl(storagePath);
+                      if (!versionUri) return null;
+                      return (
+                        <View
+                          key={entry.id}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                            paddingVertical: 8,
+                            borderTopWidth: index === 0 ? 0 : 1,
+                            borderTopColor: theme.border,
+                          }}
+                        >
+                          <Image source={{ uri: versionUri }} style={{ width: 72, height: 72, borderRadius: 10 }} contentFit="cover" />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontWeight: "700", color: theme.text }} numberOfLines={1}>
+                              {imageVersionLabel(entry, index)}
+                            </Text>
+                            <Text style={{ marginTop: 2, fontSize: 12, color: theme.mutedText }} numberOfLines={1}>
+                              {entry.kind === "original"
+                                ? t("createAi.imageCompareOriginal", { defaultValue: "Original photo" })
+                                : entry.ad.photo_source === "uploaded_enhanced"
+                                  ? t("createAi.imageVersionEdited", { defaultValue: "AI-edited photo" })
+                                  : t("createAi.imageVersionGenerated", { defaultValue: "Generated image" })}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => restoreImageVersion(entry)}
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 10,
+                              borderRadius: 999,
+                              backgroundColor: theme.surface,
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                            }}
+                          >
+                            <Text style={{ fontWeight: "800", fontSize: 12, color: theme.text }} numberOfLines={1}>
+                              {t("createAi.imageRestoreVersion", { defaultValue: "Restore" })}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
                   <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>

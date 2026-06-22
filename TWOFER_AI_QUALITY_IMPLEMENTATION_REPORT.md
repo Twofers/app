@@ -661,8 +661,6 @@ Full validation:
 
 Revert this commit. No migration rollback is required.
 
----
-
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -2297,6 +2295,64 @@ Live secret names changed: none.
 
 - Edge Function typecheck still needs a shell with Deno available to complete this validation gate.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4aa - Add image compare and restore controls
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `3ba1a996`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/create-ai-image-restore-source.test.ts`
+- `lib/i18n/locales/en.json`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added local image-version history to the AI create flow for successful initial generations, image/copy revisions, and fallback-image drafts.
+- Added an original-versus-current image comparison panel when an uploaded merchant photo produced a different current ad image.
+- Added restore controls for the original photo and earlier generated/revised images before publish.
+- Restoring an image updates the `generatedAd` image metadata used by versioned publish, clears prior ad acceptance, resets publish status, and keeps the owner in review mode.
+- Added a source guard so the compare/restore UI and approval invalidation cannot be silently removed.
+
+## Acceptance criteria map
+
+27. Merchant can upload images and choose the final source: Improved; the create flow now exposes a restore path back to the uploaded original after AI image generation.
+30. Original uploads are immutable and edited results are stored as derivatives: Preserved; no storage mutation or migration was added.
+31. Merchant can compare original/edited and restore earlier version: Implemented locally in the AI create flow before publish.
+35. Any image change invalidates prior approval: Improved; restoring an image clears `adAccepted` and publish success/error state.
+36. Publish references exact selected image asset: Preserved; restore updates the `generatedAd` path and image-selection metadata consumed by versioned publish.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/create-ai-image-restore-source.test.ts lib/merchant-image-selection.test.ts lib/ad-media-selection.test.ts`: passed, 3 files / 11 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint`: passed, using the explicit npm CLI path because the sandboxed `npm` shim pointed at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 762 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4aa-20260622-1824`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- Image version history is client-side for the active create session and recovered current draft only; there is still no dedicated persisted image-lineage table.
+- Hosted production still requires a normal app release path before this local UI change reaches users.
 
 ## Rollback
 
