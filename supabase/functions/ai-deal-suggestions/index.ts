@@ -92,17 +92,12 @@ serve(async (req) => {
     }
 
     if (!openAiKey) {
-      const ms2 = 500 + Math.floor(Math.random() * 400);
-      await new Promise((r) => setTimeout(r, ms2));
-      const biz2 = typeof business_name === "string" && business_name.trim() ? business_name.trim() : "your business";
-      const titles2 = Array.isArray(top_deal_titles) ? (top_deal_titles as string[]) : [];
-      const fallbackSuggestions: Suggestion[] = [
-        { icon: "\u2615", title: "Expand your lineup", body: `Your top deal${titles2[0] ? ` ("${titles2[0]}")` : ""} is driving claims at ${biz2}. Consider adding a variant to capture a wider audience.` },
-        { icon: "\uD83D\uDCC8", title: "Weekend pastry pairing", body: `Try a Saturday morning pastry + drink bundle to capture weekend brunch traffic at ${biz2}.` },
-        { icon: "\uD83C\uDF1F", title: "Tell your origin story", body: `Customers at ${biz2} connect with craft. Add a line about your sourcing or process \u2014 it builds trust and repeat visits.` },
-      ];
-      return new Response(JSON.stringify({ suggestions: fallbackSuggestions }), {
-        status: 200,
+      console.log(JSON.stringify({ tag: "ai_deal_suggestions", event: "openai_not_configured" }));
+      return new Response(JSON.stringify({
+        error: "AI insights are temporarily unavailable. Please try again later.",
+        error_code: "OPENAI_NOT_CONFIGURED",
+      }), {
+        status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

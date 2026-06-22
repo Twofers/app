@@ -782,6 +782,66 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4h - Remove canned AI insights fallback
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `101b6091`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-deal-suggestions/index.ts`
+- `supabase/functions/_shared/ai-deal-suggestions-source.test.ts`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the generated-looking canned suggestion cards from `ai-deal-suggestions` when `OPENAI_API_KEY` is missing.
+- Missing provider configuration now returns HTTP 503 with `error_code: "OPENAI_NOT_CONFIGURED"` instead of a successful `{ suggestions }` response.
+- Added a source guard so canned insight phrases and `fallbackSuggestions` cannot be reintroduced silently.
+- Updated deployment/checklist/current-state docs to call out the fail-closed behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved for `ai-deal-suggestions`; missing OpenAI config no longer returns canned insights.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for one adjacent AI insights route; the live provider path is unchanged.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-deal-suggestions-source.test.ts`: passed, 1 file / 1 test.
+- `deno check supabase/functions/ai-deal-suggestions/index.ts`: passed.
+- Canned phrase scan for `fallbackSuggestions`, `Expand your lineup`, `Weekend pastry pairing`, and `Tell your origin story`: no matches in `ai-deal-suggestions`, docs, components, or lib.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 123 Edge Function files.
+- `npm run test -- --run`: passed, 131 files / 720 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4h" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-deal-suggestions` still uses a direct OpenAI chat-completions call when configured; broader provider-router migration remains pending.
+- This slice changes the missing-key UX from successful suggestions to an error state in `AiInsightsCard`.
+- Other adjacent AI routes still need separate audit or routing work.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
