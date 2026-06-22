@@ -185,8 +185,9 @@ Function: `supabase/functions/ai-generate-ad-variants/index.ts`
 Model and provider controls:
 
 - Chat model is resolved from Edge secret `OPENAI_MODEL` through `resolveOpenAiChatModel()`.
-- Allowlist: `gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4`.
-- Default: `gpt-4o-mini`.
+- Allowlist: `gpt-4o-mini`, `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4`.
+- Default: `gpt-5.5`.
+- Unsupported configured models throw `AI_TEXT_CONFIG_INVALID` instead of silently downgrading.
 - Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`.
 - OpenAI API keys are read from Edge secrets only.
 

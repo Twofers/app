@@ -1209,6 +1209,55 @@ Revert this commit, or leave `AI_VISION_FALLBACK_ENABLED=false` in hosted config
 
 ---
 
+## PR 4o - Correct current-state model resolver docs
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a5cf36f7`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Corrected the current-state audit's model resolver note to match code: `gpt-5.5` is allowlisted and is now the default production text model.
+- Documented that unsupported configured OpenAI models throw `AI_TEXT_CONFIG_INVALID` instead of silently downgrading.
+
+## Acceptance criteria map
+
+1. Live primary creative model resolves to `gpt-5.5`: Documentation now matches the implemented resolver behavior.
+2. Unsupported model configuration fails closed: Documentation now matches the implemented resolver behavior.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 126 Edge Function files.
+- `npm run test -- --run`: passed, 134 files / 729 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4o" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- Hosted production still requires Dan-controlled deployment/configuration verification; no live secret or deployed Edge Function state was queried from this workspace.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
