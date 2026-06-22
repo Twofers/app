@@ -59,6 +59,46 @@ export default function ManageSubscriptionScreen() {
     }
   };
 
+  const cancelTrialSubscription = async () => {
+    if (busy || !locationId || summary.status !== "trial_active") return;
+    if (summary.purchaseSurface !== "in_app_link") {
+      setBanner({ message: t("billing.purchaseUnavailable"), tone: "info" });
+      return;
+    }
+
+    setBusy(true);
+    setBanner({ message: t("billingManage.cancelTrialRequesting"), tone: "info" });
+    try {
+      const { error } = await supabase.functions.invoke("stripe-cancel-trial-subscription", {
+        body: { location_id: locationId },
+        timeout: EDGE_FUNCTION_TIMEOUT_MS,
+      });
+      if (error) throw error;
+      setBanner({ message: t("billingManage.cancelTrialConfirmed"), tone: "success" });
+      await refresh();
+    } catch {
+      setBanner({ message: t("billingManage.errCancelTrial"), tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmTrialCancellation = () => {
+    if (busy || summary.status !== "trial_active") return;
+    Alert.alert(
+      t("billingManage.cancelTrialConfirmTitle"),
+      t("billingManage.cancelTrialConfirmBody"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("billingManage.cancelTrial"),
+          style: "destructive",
+          onPress: () => void cancelTrialSubscription(),
+        },
+      ],
+    );
+  };
+
   const requestIntroductoryRefund = async () => {
     if (busy || !locationId || !summary.refundEligible) return;
     if (summary.purchaseSurface !== "in_app_link") {
@@ -107,6 +147,7 @@ export default function ManageSubscriptionScreen() {
   const statusLabel = t(`billing.status.${summary.status}`, {
     defaultValue: summary.status.replace(/_/g, " "),
   });
+  const canCancelTrial = summary.status === "trial_active";
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -151,6 +192,10 @@ export default function ManageSubscriptionScreen() {
               <Banner message={t("billing.refundEligibility")} tone="info" />
             ) : null}
 
+            {summary.status === "trial_canceling" ? (
+              <Banner message={t("billingManage.trialCanceling")} tone="success" />
+            ) : null}
+
             <Text style={{ fontSize: 13, opacity: 0.7, fontWeight: "700" }}>
               {t("billingManage.actionsTitle")}
             </Text>
@@ -161,8 +206,8 @@ export default function ManageSubscriptionScreen() {
             />
 
             <SecondaryButton
-              title={t("billingManage.cancelSubscription")}
-              onPress={() => void openCustomerPortal("cancel")}
+              title={canCancelTrial ? t("billingManage.cancelTrial") : t("billingManage.cancelSubscription")}
+              onPress={canCancelTrial ? confirmTrialCancellation : () => void openCustomerPortal("cancel")}
               disabled={busy || summary.purchaseSurface !== "in_app_link"}
             />
 
