@@ -31,6 +31,7 @@ export type GenerateAdImageInput = {
   dealType?: string;
   ownerPhotoUrl?: string | null;
   referenceImages?: AiImageReference[];
+  customEditInstruction?: string;
   stylePreset: AiImageStylePreset;
   aspectRatio: AiImageAspectRatio;
   imageSize: AiImageSize;
@@ -160,6 +161,18 @@ function offerMechanics(input: GenerateAdImageInput): string {
   return cleanText(input.offerDescription, 180) || cleanText(input.offerTitle, 180) || "Twofer local BOGO deal.";
 }
 
+function customEditInstruction(input: GenerateAdImageInput): string {
+  const instruction = cleanText(input.customEditInstruction, 400);
+  if (!instruction) return "";
+  return [
+    "Merchant bounded custom edit instruction:",
+    instruction,
+    "Apply this only as styling, composition, lighting, crop, cleanup, or background guidance.",
+    "Do not add text, prices, discounts, coupons, QR codes, logos, fake brands, people, characters, or extra offer items.",
+    "Do not remove, replace, or materially change the paid item, free item, item count, product identity, or offer meaning.",
+  ].join(" ");
+}
+
 export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const businessName = cleanText(input.businessName, 120) || "local business";
   const businessCategory = cleanText(input.businessCategory, 80) || "local cafe";
@@ -170,6 +183,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     input.referenceImages && input.referenceImages.length > 0
       ? "Use the supplied owner photo as visual reference. Preserve the real product identity and improve only composition, lighting, crop, and background."
       : "Create the product-focused visual from the offer facts only.";
+  const customInstruction = customEditInstruction(input);
 
   return [
     "Create a realistic, professional local business advertising image for a mobile deal app.",
@@ -180,6 +194,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
     referenceInstruction,
+    customInstruction,
     "",
     "Image requirements:",
     "- Show the actual paid item and free item clearly if they are visually distinct.",

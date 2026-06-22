@@ -55,4 +55,13 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     expect(source).not.toMatch(/failure_reason:\s*String\(e\)/);
     expect(source).not.toMatch(/errorMessage:\s*String\(e\)\.slice/);
   });
+
+  it("requires and forwards bounded custom image edit instructions", () => {
+    expect(source).toMatch(/IMAGE_EDIT_INSTRUCTION_REQUIRED/);
+    expect(source).toMatch(/const customImageEditInstruction =/);
+    expect(source).toMatch(/customImageEditInstruction,/);
+    expect(source).toMatch(/customEditInstruction: params\.imageEditMode === "custom"/);
+    expect(source).toMatch(/customEditInstruction\.instruction/);
+    expect(source).toMatch(/imageEditMode === "custom"\s*\?\s*"studiopolish"/);
+  });
 });

@@ -59,3 +59,13 @@ describe("OpenAI image provider failure telemetry source guard", () => {
     expect(source).not.toMatch(/await res\.text\(\)/);
   });
 });
+
+describe("OpenAI image edit custom instruction source guard", () => {
+  it("appends bounded custom edit instructions without dropping preset guardrails", () => {
+    expect(source).toMatch(/function treatmentPrompt\(treatment: PhotoTreatment, customEditInstruction\?: string\)/);
+    expect(source).toMatch(/Merchant bounded custom edit instruction/);
+    expect(source).toMatch(/Do not add text, prices, discounts, coupons, QR codes, logos/);
+    expect(source).toMatch(/Do not remove, replace, or materially change the paid item/);
+    expect(source).toMatch(/form\.append\("prompt", treatmentPrompt\(treatment, params\.customEditInstruction\)\)/);
+  });
+});

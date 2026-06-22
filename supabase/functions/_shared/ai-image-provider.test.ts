@@ -84,6 +84,28 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("Do not add app mascots, characters, animals, penguins");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
+
+  it("includes bounded merchant custom edit instructions without relaxing image rules", () => {
+    const prompt = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "Mango Cafe",
+      businessCategory: "coffee shop",
+      offerTitle: "Buy one latte, get one croissant free",
+      paidItem: "latte",
+      freeItem: "croissant",
+      referenceImages: [{ mimeType: "image/png", base64: "abc" }],
+      customEditInstruction: "Make the counter brighter and remove crumbs.",
+      stylePreset: "premium-cafe",
+      aspectRatio: "1:1",
+      imageSize: "1K",
+    });
+
+    expect(prompt).toContain("Merchant bounded custom edit instruction");
+    expect(prompt).toContain("Make the counter brighter and remove crumbs.");
+    expect(prompt).toContain("Do not remove, replace, or materially change the paid item");
+    expect(prompt).toContain("Do not add readable text.");
+    expect(prompt).toContain("Do not add QR codes.");
+  });
 });
 
 describe("generateGeminiAdImageWithTelemetry", () => {

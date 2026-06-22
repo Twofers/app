@@ -323,6 +323,10 @@ function sanitizeIntegerInput(raw: string): string {
   return raw.replace(/\D/g, "");
 }
 
+function cleanCustomImageEditInstruction(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").slice(0, 400);
+}
+
 type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
 
 const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
@@ -584,6 +588,8 @@ export default function AiDealScreen() {
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+  const [useCustomImageEdit, setUseCustomImageEdit] = useState(false);
+  const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
 
   const [hintText, setHintText] = useState("");
@@ -1108,6 +1114,8 @@ export default function AiDealScreen() {
     setPhotoPath(draft.photoPath);
     setPosterUrl(draft.posterUrl ?? (draft.photoPath ? buildPublicDealPhotoUrl(draft.photoPath) : null));
     setPhotoTreatment(draft.photoTreatment);
+    setCustomImageEditInstruction(draft.customImageEditInstruction);
+    setUseCustomImageEdit(Boolean(draft.customImageEditInstruction.trim()));
     setUsePhotoAsFinal(draft.usePhotoAsFinal);
     setHintText(draft.hintText);
     setPrice(draft.price);
@@ -1182,6 +1190,7 @@ export default function AiDealScreen() {
       photoPath,
       posterUrl,
       photoTreatment,
+      customImageEditInstruction,
       usePhotoAsFinal,
       hintText,
       price,
@@ -1227,6 +1236,7 @@ export default function AiDealScreen() {
     photoPath,
     posterUrl,
     photoTreatment,
+    customImageEditInstruction,
     usePhotoAsFinal,
     hintText,
     price,
@@ -1828,6 +1838,11 @@ export default function AiDealScreen() {
       return;
     }
     if (blockIneligibleOffer("generate_ad")) return;
+    const customEditText = cleanCustomImageEditInstruction(customImageEditInstruction);
+    if (selectedPhotoUri && !usePhotoAsFinal && useCustomImageEdit && !customEditText) {
+      setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
+      return;
+    }
 
     trackEvent(AiAdsEvents.GENERATE_TAPPED, { screen: "create_ai" });
     setGenerating(true);
@@ -1856,9 +1871,13 @@ export default function AiDealScreen() {
       // even if the user changes the selector mid-flight.
       const sentSourceMode = imageSourceModeForPhotoChoice(path, usePhotoAsFinal);
       const sentEditMode = sentSourceMode === "merchant_ai_edit"
-        ? imageEditModeForTreatment(photoTreatment)
+        ? useCustomImageEdit
+          ? "custom"
+          : imageEditModeForTreatment(photoTreatment)
         : "none";
-      const sentTreatment = sentSourceMode === "merchant_ai_edit" ? photoTreatment : null;
+      const sentTreatment = sentSourceMode === "merchant_ai_edit"
+        ? useCustomImageEdit ? "studiopolish" : photoTreatment
+        : null;
       const maxClaimsNum = Number(maxClaims);
 
       const { ad, quota: nextQuota } = await aiGenerateAd({
@@ -1870,6 +1889,7 @@ export default function AiDealScreen() {
         deal_eligibility: eligibilityInput,
         image_source_mode: sentSourceMode,
         image_edit_mode: sentEditMode,
+        ...(sentEditMode === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
         ...(path ? { photo_path: path } : {}),
         ...(sentTreatment ? { photo_treatment: sentTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
@@ -1920,9 +1940,6 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
       return;
     }
-    setRevising(true);
-    setBanner(null);
-    const requestId = ++generationRequestIdRef.current;
     /**
      * Send the treatment that produced the *previous* ad image, not the current UI selection.
      * This way the server's image-only revision applies enhancement consistent with what the
@@ -1940,6 +1957,16 @@ export default function AiDealScreen() {
       sourceModeForRevision === "merchant_ai_edit"
         ? lastSentPhotoTreatmentRef.current ?? photoTreatment
         : null;
+    const customEditText = sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom"
+      ? cleanCustomImageEditInstruction(customImageEditInstruction || revisionFeedback)
+      : "";
+    if (sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom" && !customEditText) {
+      setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
+      return;
+    }
+    setRevising(true);
+    setBanner(null);
+    const requestId = ++generationRequestIdRef.current;
     const maxClaimsNum = Number(maxClaims);
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
@@ -1956,6 +1983,7 @@ export default function AiDealScreen() {
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
         image_source_mode: sourceModeForRevision,
         image_edit_mode: editModeForRevision,
+        ...(editModeForRevision === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
         ...(photoPath ? { photo_path: photoPath } : {}),
         ...(treatmentForRevision ? { photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
@@ -2742,6 +2770,7 @@ export default function AiDealScreen() {
                       const nextUseAsFinal = !usePhotoAsFinal;
                       setUsePhotoAsFinal(nextUseAsFinal);
                       if (nextUseAsFinal) {
+                        setUseCustomImageEdit(false);
                         if (generatedAd) resetGenerationState();
                         setManualDraftUnlocked(true);
                       }
@@ -2752,7 +2781,7 @@ export default function AiDealScreen() {
                 <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>
                   {t("createAi.photoPolishHelp")}
                 </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {PHOTO_TREATMENT_OPTIONS.map((opt) => {
                     const selected = photoTreatment === opt.key;
                     return (
@@ -2760,13 +2789,16 @@ export default function AiDealScreen() {
                         key={opt.key}
                         onPress={() => {
                           if (opt.key === photoTreatment) return;
+                          setUseCustomImageEdit(false);
                           setPhotoTreatment(opt.key);
                           // Stale-ad guard: changing the treatment after generating means the
                           // displayed ad no longer reflects the chosen polish.
                           if (generatedAd) resetGenerationState();
                         }}
                         style={{
-                          flex: 1,
+                          flexGrow: 1,
+                          flexBasis: "47%",
+                          minWidth: 130,
                           paddingVertical: 10,
                           paddingHorizontal: 8,
                           borderRadius: 12,
@@ -2784,7 +2816,56 @@ export default function AiDealScreen() {
                       </Pressable>
                     );
                   })}
+                  <Pressable
+                    onPress={() => {
+                      if (useCustomImageEdit) return;
+                      setUseCustomImageEdit(true);
+                      if (generatedAd) resetGenerationState();
+                    }}
+                    style={{
+                      flexGrow: 1,
+                      flexBasis: "47%",
+                      minWidth: 130,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      borderRadius: 12,
+                      backgroundColor: useCustomImageEdit ? theme.primary : theme.surfaceMuted,
+                      borderWidth: useCustomImageEdit ? 0 : 1,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700", fontSize: 13, color: useCustomImageEdit ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], textAlign: "center" }}>
+                      {t("createAi.treatmentCustomLabel")}
+                    </Text>
+                    <Text style={{ marginTop: 2, fontSize: 11, color: useCustomImageEdit ? theme.primaryText : theme.mutedText, textAlign: "center" }}>
+                      {t("createAi.treatmentCustomHelper")}
+                    </Text>
+                  </Pressable>
                 </View>
+                {useCustomImageEdit && !usePhotoAsFinal ? (
+                  <TextInput
+                    value={customImageEditInstruction}
+                    onChangeText={(text) => {
+                      setCustomImageEditInstruction(text);
+                      if (generatedAd) resetGenerationState();
+                    }}
+                    placeholder={t("createAi.customImageEditPlaceholder")}
+                    placeholderTextColor={theme.mutedText}
+                    maxLength={400}
+                    multiline
+                    style={{
+                      marginTop: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 12,
+                      padding: 12,
+                      minHeight: 54,
+                      backgroundColor: theme.surface,
+                      color: theme.text,
+                      fontSize: 13,
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
 

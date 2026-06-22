@@ -11,6 +11,7 @@ export type AiDealRecoveryDraft = {
   photoPath: string | null;
   posterUrl: string | null;
   photoTreatment: PhotoTreatment;
+  customImageEditInstruction: string;
   usePhotoAsFinal: boolean;
   hintText: string;
   price: string;
@@ -94,6 +95,7 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
   return Boolean(
     draft.photoPath ||
       draft.posterUrl ||
+      draft.customImageEditInstruction.trim() ||
       draft.hintText.trim() ||
       draft.price.trim() ||
       draft.title.trim() ||
@@ -118,6 +120,10 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     photoPath: cleanNullableString(input.photoPath),
     posterUrl: cleanNullableString(input.posterUrl),
     photoTreatment: cleanPhotoTreatment(input.photoTreatment),
+    customImageEditInstruction: cleanString(input.customImageEditInstruction)
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 400),
     usePhotoAsFinal: input.usePhotoAsFinal === true,
     hintText: cleanString(input.hintText),
     price: cleanString(input.price),
@@ -154,6 +160,7 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       photoPath: parsed.photoPath ?? null,
       posterUrl: parsed.posterUrl ?? null,
       photoTreatment: parsed.photoTreatment ?? "studiopolish",
+      customImageEditInstruction: parsed.customImageEditInstruction ?? "",
       usePhotoAsFinal: parsed.usePhotoAsFinal === true,
       hintText: parsed.hintText ?? "",
       price: parsed.price ?? "",

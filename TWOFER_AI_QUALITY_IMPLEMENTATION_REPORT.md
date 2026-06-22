@@ -2357,3 +2357,73 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ab - Wire bounded custom image edit controls
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `6f072f9b`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/ai-deal-draft-recovery.ts`
+- `lib/ai-deal-draft-recovery.test.ts`
+- `lib/create-ai-image-restore-source.test.ts`
+- `lib/i18n/locales/en.json`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`
+- `supabase/functions/_shared/ai-image-provider.ts`
+- `supabase/functions/_shared/ai-image-provider.test.ts`
+- `supabase/functions/_shared/dalle-image.ts`
+- `supabase/functions/_shared/dalle-image.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a custom photo-edit option beside the existing touch-up, clean-background, and studio-polish controls.
+- Added client-side required-text handling for custom edits and persisted the custom instruction in AI draft recovery.
+- Required non-empty, policy-valid custom edit text server-side when `image_edit_mode="custom"` is used for a merchant AI edit.
+- Passed the sanitized custom edit instruction into both Gemini image prompts and the OpenAI image-edit fallback prompts.
+- Kept custom edits bounded to styling, composition, lighting, crop, cleanup, and background changes, while preserving the existing no-text/no-logo/no-QR/no-offer-fact-change guardrails.
+- Added source and prompt tests so future changes cannot validate custom text while dropping it before image generation.
+
+## Acceptance criteria map
+
+29. Touch-up, background cleanup, studio polish, and bounded custom edits are available: Implemented locally; custom now has UI, client/server required-text handling, validation, and provider prompt wiring.
+30. Original uploads are immutable and edited results are stored as derivatives: Preserved; no storage mutation or migration was added.
+32. Twofer never silently replaces merchant-selected uploads: Preserved; custom edits only run when the selected source mode is merchant AI edit.
+34. Hard blockers cannot be overridden: Preserved; invalid custom instructions return `IMAGE_EDIT_INSTRUCTION_REJECTED`.
+35. Any image change invalidates prior approval: Preserved; changing the custom edit selection/text resets generated state before publish.
+38. AI-edited merchant photos receive identity-preservation QA: Preserved; custom edits continue through existing merchant AI edit QA.
+45. OpenAI fallback image prompts match stronger Gemini restrictions: Improved; custom instructions are now appended with the same bounded guardrails in both providers.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase/functions/_shared/ai-image-provider.test.ts supabase/functions/_shared/dalle-image.test.ts supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts lib/ai-deal-draft-recovery.test.ts lib/create-ai-image-restore-source.test.ts`: passed, 5 files / 25 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 766 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ab-20260622-1838`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production uses the new server behavior.
+- The custom edit UI is available in English strings in this slice; non-English locale coverage remains a later localization pass.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

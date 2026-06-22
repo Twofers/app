@@ -374,6 +374,24 @@ const TREATMENT_PROMPTS: Record<PhotoTreatment, string> = {
     "Backdrop: clean cafe surface (light wood, marble, or matte ceramic). Photoreal textures. No text, logos, watermarks, or people.",
 };
 
+function cleanCustomEditInstruction(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 400) : "";
+}
+
+function treatmentPrompt(treatment: PhotoTreatment, customEditInstruction?: string): string {
+  const custom = cleanCustomEditInstruction(customEditInstruction);
+  if (!custom) return TREATMENT_PROMPTS[treatment];
+  return [
+    TREATMENT_PROMPTS[treatment],
+    "",
+    "Merchant bounded custom edit instruction:",
+    custom,
+    "Apply this only as styling, composition, lighting, crop, cleanup, or background guidance.",
+    "Do not add text, prices, discounts, coupons, QR codes, logos, fake brands, people, characters, hands, or extra offer items.",
+    "Do not remove, replace, or materially change the paid item, free item, item count, product identity, or offer meaning.",
+  ].join("\n");
+}
+
 function normalizeEditMime(mime: string): string {
   return mime.toLowerCase().split(";")[0].trim();
 }
@@ -421,6 +439,7 @@ export async function enhanceUploadedPhoto(params: {
   imageBytes: Uint8Array;
   imageMime: string;
   treatment: PhotoTreatment;
+  customEditInstruction?: string;
   logTag?: string;
 }): Promise<Uint8Array | null> {
   const result = await enhanceUploadedPhotoWithTelemetry(params);
@@ -432,6 +451,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
   imageBytes: Uint8Array;
   imageMime: string;
   treatment: PhotoTreatment;
+  customEditInstruction?: string;
   logTag?: string;
 }): Promise<OpenAiImageResult> {
   const { openAiKey, imageBytes, imageMime, treatment, logTag = "ai_ads_v2_enhance" } = params;
@@ -462,7 +482,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     const model = RESOLVED_IMAGE_EDIT_MODEL;
     const form = new FormData();
     form.append("model", model);
-    form.append("prompt", TREATMENT_PROMPTS[treatment]);
+    form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
     form.append("size", "1024x1024");
     form.append("quality", "high");
     form.append("output_format", "png");

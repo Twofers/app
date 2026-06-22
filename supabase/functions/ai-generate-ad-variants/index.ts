@@ -1603,6 +1603,7 @@ async function produceImageOpenAiOnly(params: {
   businessName: string;
   offerContract: DealOfferContract;
   imageEditMode: MerchantImageEditMode;
+  customImageEditInstruction?: string;
   merchantOverrideAcknowledged: boolean;
   costContext: AiCostContext;
 }): Promise<OpenAiProducedImage> {
@@ -1673,6 +1674,7 @@ async function produceImageOpenAiOnly(params: {
       imageBytes,
       imageMime,
       treatment: photoTreatment,
+      customEditInstruction: params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
     });
     await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
     const enhanced = enhancedResult.bytes;
@@ -1943,6 +1945,7 @@ async function produceImage(params: {
   offerContract: DealOfferContract;
   imageSourceMode: MerchantImageSourceMode;
   imageEditMode: MerchantImageEditMode;
+  customImageEditInstruction?: string;
   merchantOverrideAcknowledged: boolean;
   revisionPreset?: string;
   revisionFeedback?: string;
@@ -2122,6 +2125,7 @@ async function produceImage(params: {
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      customEditInstruction: params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
       stylePreset,
       aspectRatio: "1:1",
       imageSize: "1K",
@@ -2650,7 +2654,16 @@ Deno.serve(async (req) => {
       imageEditModeFromPhotoTreatment(photoTreatment),
     );
     const customEditInstruction = validateMerchantImageEditInstruction(body.custom_image_edit_instruction);
-    if (imageEditMode === "custom" && !customEditInstruction.ok) {
+    if (imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom" && !customEditInstruction.instruction) {
+      return new Response(
+        JSON.stringify({
+          error: "Describe the custom image edit you want, or choose a preset polish option.",
+          error_code: "IMAGE_EDIT_INSTRUCTION_REQUIRED",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom" && !customEditInstruction.ok) {
       return new Response(
         JSON.stringify({
           error: "Custom image edit instructions cannot change offer facts, add text/logos/QR codes, or introduce unrelated elements.",
@@ -2668,8 +2681,14 @@ Deno.serve(async (req) => {
         : "";
     const effectivePhotoTreatment =
       imageSourceMode === "merchant_ai_edit"
-        ? photoTreatmentFromImageEditMode(imageEditMode) ?? photoTreatment
+        ? imageEditMode === "custom"
+          ? "studiopolish"
+          : photoTreatmentFromImageEditMode(imageEditMode) ?? photoTreatment
         : null;
+    const customImageEditInstruction =
+      imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom"
+        ? customEditInstruction.instruction
+        : undefined;
 
     const businessContext: BusinessContext =
       body.business_context && typeof body.business_context === "object" && !Array.isArray(body.business_context)
@@ -3028,6 +3047,7 @@ Deno.serve(async (req) => {
         photoTreatment: effectivePhotoTreatment,
         imageSourceMode,
         imageEditMode,
+        customImageEditInstruction,
         merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
         research,
         itemHint: sourceHint,

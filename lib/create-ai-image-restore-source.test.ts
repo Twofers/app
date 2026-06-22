@@ -30,4 +30,14 @@ describe("AI create image compare and restore source guards", () => {
     expect(restoreBlock).toMatch(/setPublishStatus\("idle"\)/);
     expect(restoreBlock).toMatch(/aiDraftBaselineRef\.current = null/);
   });
+
+  it("exposes bounded custom image edit input and sends it to ad generation", () => {
+    expect(source).toMatch(/const \[useCustomImageEdit, setUseCustomImageEdit\]/);
+    expect(source).toMatch(/const \[customImageEditInstruction, setCustomImageEditInstruction\]/);
+    expect(source).toMatch(/createAi\.treatmentCustomLabel/);
+    expect(source).toMatch(/createAi\.customImageEditPlaceholder/);
+    expect(source).toMatch(/createAi\.errCustomImageEditRequired/);
+    expect(source).toMatch(/sentEditMode === "custom"/);
+    expect(source).toMatch(/custom_image_edit_instruction: customEditText/);
+  });
 });
