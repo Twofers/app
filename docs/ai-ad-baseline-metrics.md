@@ -42,8 +42,13 @@ The runner records:
 - quota-blocked and duplicate-blocked counts;
 - p50 / p95 copy latency from `response_payload.copy.latency_ms`;
 - deterministic fallback rate from `response_payload.copy.source`, `deterministic_fallback_used`, and fallback events;
+- provider fallback rate and fallback reasons from `response_payload.copy.provider_fallback_*`;
+- copy provider attempt counts, provider/model breakdowns, error classes, and p50 / p95 attempt latency;
+- independent judge enabled/used/pass rows, skipped reasons, hard-failure rows, attempt counts, and p50 / p95 judge attempt latency;
 - validation-failure and repair-attempt rates;
 - image source counts and image failure rate;
+- selected image source mode and edit mode counts;
+- image QA decisions, source types, unavailable rate, hard-fail rows, warning rows, missing-item rows, and merchant warning override acknowledgement rate;
 - total AI cost, average cost per request group, and p50 / p95 cost per request group;
 - provider call counts by feature, endpoint, and model;
 - failed/retried provider call rate.

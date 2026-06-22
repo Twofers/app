@@ -307,7 +307,7 @@ Not measured in this audit:
 
 Reason: no live Supabase service-role analytics access was used, and this repo has no local Supabase. The code has the raw ledger needed for these measurements, but the audit cannot verify production rows.
 
-Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-only service-role runner for these metrics. See `docs/ai-ad-baseline-metrics.md` for the access probe result, exact command, and remaining instrumentation gaps.
+Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-only service-role runner and local dashboard-style Markdown export for these metrics, including provider fallback, judge usage, image QA, and merchant image-warning overrides. See `docs/ai-ad-baseline-metrics.md` for the access probe result, exact command, and remaining instrumentation gaps.
 
 Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents the Gemini text fallback, independent judge, image generation/edit data flow, sensitive data exclusions, and the public privacy/subprocessor activation gate. Text fallback must remain hosted with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
 
@@ -460,7 +460,7 @@ Missing:
 - Persisted hard-gate pipeline results.
 - Soft scoring service.
 - CI-blocking full eval suite for prompt/model/template changes.
-- Dashboards and alerts for p95 latency, cost anomalies, complaint spikes, hard-gate failure spikes, and provider health.
+- Hosted dashboards and alerts for p95 latency, cost anomalies, complaint spikes, hard-gate failure spikes, and provider health. A local read-only dashboard export exists through `scripts/measure-ai-ad-baseline.mjs`.
 - Merchant edits as structured learning data.
 - Prompt/model canary support.
 

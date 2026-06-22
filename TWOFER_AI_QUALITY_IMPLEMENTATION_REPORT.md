@@ -721,6 +721,67 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4g - AI quality/cost dashboard metrics export
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `12338018`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `scripts/measure-ai-ad-baseline.mjs`
+- `lib/ai-ad-baseline-runner-source.test.ts`
+- `docs/ai-ad-baseline-metrics.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Extended the read-only AI ad baseline runner into a local dashboard-style metrics export without requiring new live telemetry fields.
+- Added provider fallback rate/reasons, provider attempt breakdowns, candidate judge usage/skips/latency, image QA decisions, image source/edit mode counts, and merchant image-warning override acknowledgement metrics.
+- Expanded the Markdown export so Dan can review operational quality/cost health from one generated artifact after providing service-role access locally.
+- Added a source guard test to keep the provider, judge, and image-QA dashboard sections from disappearing in later edits.
+
+## Acceptance criteria map
+
+7. Per-stage provider, model, latency, token, cache, and cost telemetry is stored: Visibility improved by aggregating stored provider attempt and cost ledger rows.
+44. Merchant override and image QA outcomes are visible: Improved through image QA decision, warning, hard-fail, unavailable, and override acknowledgement metrics.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Visibility improved; this slice does not change runtime controls.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `node --check scripts/measure-ai-ad-baseline.mjs`: passed.
+- `node scripts/measure-ai-ad-baseline.mjs --help`: passed.
+- `npx vitest run lib/ai-ad-baseline-runner-source.test.ts`: passed, 1 file / 1 test.
+- `npm run gate:ai-ad`: passed.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 122 Edge Function files.
+- `npm run test -- --run`: passed, 130 files / 719 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4g" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- No live Supabase service-role analytics pull was run in this workspace, so production values are still not recorded here.
+- The dashboard is a local Markdown/JSON export, not a hosted dashboard or alerting system.
+- Publish conversion, no-edit publish rate, and end-to-end generation-to-redemption funnel remain limited until a durable generation/ad id is written through publish, claim, and redemption.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
