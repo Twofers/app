@@ -15,6 +15,9 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/STRIPE_TWOFER_BUSINESS_PRICE_ID/);
     expect(source).toMatch(/trial_acknowledged/);
     expect(source).toMatch(/trial_checkout_intents/);
+    expect(source).toMatch(/check_business_location_trial_reuse/);
+    expect(source).toMatch(/TRIAL_LOCATION_ALREADY_USED/);
+    expect(source).toMatch(/TRIAL_LOCATION_REVIEW_REQUIRED/);
     expect(source).toMatch(/trial_period_days: TRIAL_DAYS/);
     expect(source).toMatch(/payment_method_collection: "always"/);
     expect(source).not.toMatch(/payment_method_collection: "if_required"/);

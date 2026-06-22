@@ -136,6 +136,35 @@ serve(async (req) => {
       return jsonResponse(req, { error: "This location has already used its trial." }, 409);
     }
 
+    const { data: trialReuse, error: trialReuseError } = await supabaseAdmin.rpc(
+      "check_business_location_trial_reuse",
+      { p_business_location_id: locationId },
+    );
+    if (trialReuseError) throw trialReuseError;
+    const trialReuseDecision = (trialReuse ?? []).find((row: Record<string, unknown>) =>
+      row.decision === "block" || row.decision === "review"
+    );
+    if (trialReuseDecision?.decision === "block") {
+      return jsonResponse(
+        req,
+        {
+          error: "This physical location has already used a Twofer trial.",
+          error_code: "TRIAL_LOCATION_ALREADY_USED",
+        },
+        409,
+      );
+    }
+    if (trialReuseDecision?.decision === "review") {
+      return jsonResponse(
+        req,
+        {
+          error: "This location needs manual review before starting a trial.",
+          error_code: "TRIAL_LOCATION_REVIEW_REQUIRED",
+        },
+        409,
+      );
+    }
+
     const { data: account, error: accountError } = await supabaseAdmin
       .from("billing_accounts")
       .upsert(
