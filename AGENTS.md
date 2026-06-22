@@ -4,7 +4,7 @@ Save this file at the repo root. Claude Code reads CLAUDE.md automatically each 
 
 ## What you are working from
 
-The single source of truth is `twofer-developer-handoff-spec.md` at the repo root. Read it before doing anything, especially sections 1 through 5: locked decisions, current build and submission state, reference identifiers, open items needing confirmation, and the working rules. Sections 6 through 29 are the full product spec, organized by area.
+The single source of truth is `twofer-developer-handoff-spec.md` at the repo root. Read it before doing anything, especially sections 1 through 5: locked decisions, current build and submission state, reference identifiers, confirmed former open items, and the working rules. Sections 6 through 29 are the full product spec, organized by area.
 
 If anything in the spec conflicts with the actual code, the code wins. Report the conflict instead of silently following the doc.
 
@@ -26,12 +26,12 @@ These are settled. Do not reopen, redesign around, or ask about them.
 
 ## Former open items — all decided by Dan on 2026-06-10 (spec section 4)
 
-These are settled; full detail is in spec section 4. Do not reopen them. Items 2 and 4 are decided but NOT YET IMPLEMENTED — the code still reflects the old behavior until that work lands.
+These are settled; full detail is in spec section 4. Do not reopen them. Items 2 and 4 are now implemented in code, but still have remaining Supabase-side deploy or migration steps called out below.
 
 1. The public support email is `support@twoferapp.com` everywhere. The live privacy policy still shows `twoferadmin@gmail.com`; fixing that is a website-repo task, not a mobile-repo task.
-2. Hard Shopper/Business role split per account, enforced app-level only: the role is picked once at signup, login shows no picker and routes by the stored role, and existing accounts derive their permanent role from data (owns a `businesses` row → Business, otherwise Customer). The demo account and all demo code paths are to be deleted. Pending implementation — the code still has the soft switchable `profiles.app_tab_mode`.
+2. Hard Shopper/Business role split per account, enforced app-level only: the role is picked once at signup, stored in `profiles.role`, login shows no picker and routes by the stored role, and existing accounts derive their permanent role from data (owns a `businesses` row -> Business, otherwise Customer). The soft switchable `profiles.app_tab_mode`, Settings role switch, and demo code paths are gone. Migration `20260711120000_profiles_role.sql` is written but not applied, the affected edge functions still need a redeploy, and the Supabase demo account teardown remains hard-gated.
 3. The Share Deal feature flag is `EXPO_PUBLIC_ENABLE_SHARE_DEAL`, set in `eas.json` and read only in `lib/runtime-env.ts`.
-4. AI usage limits: 30 generations per month per AI feature, and 2 regenerations per deal creation. Pending implementation — deal-copy is still 60/month and the regeneration caps are still 5 (client) / 10 (server).
+4. AI usage limits: 30 generations per month per AI feature, and 2 regenerations per deal creation. This is implemented in code (`ai-generate-deal-copy`, shared AI limits, client soft cap, and ad-variant server cap), but the changed edge functions have not been redeployed yet, so production still serves the old caps until that deploy happens.
 5. AI Compose voice audio is processed ephemerally and never stored; only the text transcript is retained in `ai_generation_logs`.
 6. Email confirmation stays on. Supabase auth email was verified on 2026-06-13: custom SMTP is enabled through Resend (`smtp.resend.com`) from `support@twoferapp.com`, Confirm email is on, the app redirect allow-list is set, and the auth email send rate limit is 30/hour. Do not expose SMTP credentials. App code handles confirmed, unconfirmed, and existing-account signup paths.
 
@@ -61,6 +61,7 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 1. Work on a dedicated branch off a named safety checkpoint, as the spec directs. Creating local branches is fine; pushing, merging, tagging, or resetting is a hard gate above. Keep the working tree clean at each checkpoint.
 2. Do not delete the untracked local QA and docs artifacts, or anything in `outdated/`, without asking.
 3. Do not claim the app is production or store ready.
+4. After applying any migration that touches RLS policies or policy helper functions, immediately run `node scripts/probe-rls-smoke.mjs`. SQL-editor checks bypass RLS, so they cannot catch signed-in user lockouts.
 
 ## AI promotional-copy rules
 
@@ -76,7 +77,8 @@ These are settled; full detail is in spec section 4. Do not reopen them. Items 2
 - This is a Windows machine. You cannot build or sign an iOS app locally here. All iOS builds run on EAS cloud, and all iOS device testing runs through TestFlight on a real iPhone.
 - The stack is Expo SDK 54, React Native, TypeScript, and Expo Router, with Supabase (Postgres and row level security, Deno edge functions, Storage).
 - There is no local Supabase. Do not start one or assume one exists.
-- When Dan explicitly requests local Android emulator QA, agents may start an Android emulator and use local debug/dev-client Android commands such as `expo run:android` for testing and screenshots. Do not use `subst` or junction workarounds. Preserve the single remaining EAS cloud credit.
+- When Dan explicitly requests local Android emulator QA, agents may start an Android emulator and use local debug/dev-client Android commands such as `expo run:android` for testing and screenshots. Do not use `subst` or junction workarounds.
+- Preserve the single remaining EAS cloud credit. Prefer local Android builds where possible.
 
 ## Out of scope for you
 
@@ -84,6 +86,6 @@ You cannot do these. Draft what you can, then hand them to Dan:
 
 - Apple Developer Program enrollment.
 - App Store Connect and Play Console forms. Draft the exact text; Dan pastes it.
-- Screenshots from a real device or simulator.
+- Store screenshots from a real device or iOS simulator. Local Android emulator QA screenshots are allowed only when Dan explicitly requests local Android QA.
 - TestFlight install and on-device testing.
 - Approving builds and submissions.
