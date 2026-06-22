@@ -171,6 +171,8 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 `ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when `OPENAI_API_KEY` is missing, including the voice transcription-only path.
 
+OpenAI HTTP failure bodies are kept in server-side cost/error logs for diagnostics, but `ai-generate-deal-copy` and `ai-deal-suggestions` return only `error_code: AI_GENERATION_FAILED` to clients.
+
 **Setting Edge secrets:**
 
 ```bash

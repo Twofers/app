@@ -963,6 +963,69 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4k - Remove raw provider error bodies from adjacent text helpers
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `c990560a`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-generate-deal-copy/index.ts`
+- `supabase/functions/ai-deal-suggestions/index.ts`
+- `supabase/functions/_shared/ai-generate-deal-copy-source.test.ts`
+- `supabase/functions/_shared/ai-deal-suggestions-source.test.ts`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed client-facing `details: text` provider bodies from OpenAI HTTP failure responses in `ai-generate-deal-copy` and `ai-deal-suggestions`.
+- Preserved server-side diagnostics by continuing to log the raw provider body, truncated, in `ai_generation_costs.error_message`.
+- Added `error_code: "AI_GENERATION_FAILED"` and HTTP 502 for those upstream provider failures.
+- Added source guards for both helper routes so raw provider bodies cannot be reintroduced silently.
+- Updated deployment/checklist/current-state docs to call out the non-raw client behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved from prior PR4 slices; no canned output added.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for adjacent text helper failure handling; raw provider responses no longer reach clients, but the live provider paths are unchanged.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-generate-deal-copy-source.test.ts supabase/functions/_shared/ai-deal-suggestions-source.test.ts`: passed, 2 files / 3 tests.
+- `deno check supabase/functions/ai-generate-deal-copy/index.ts`: passed.
+- `deno check supabase/functions/ai-deal-suggestions/index.ts`: passed.
+- Raw provider detail scan: `details: text` no longer appears in either helper route.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 125 Edge Function files.
+- `npm run test -- --run`: passed, 133 files / 724 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4k" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-generate-deal-copy` and `ai-deal-suggestions` still use direct OpenAI chat-completions calls when configured; broader provider-router migration remains pending.
+- The legacy gated `ai-create-deal` route still has its own raw-provider cleanup risk if it is ever deliberately re-enabled.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

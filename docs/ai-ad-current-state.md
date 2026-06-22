@@ -129,9 +129,9 @@ Current gaps:
 ### Legacy and Adjacent AI Paths
 
 - `ai-compose-offer`: composes an offer from text/image/voice. Legacy poster image generation is now disabled; when `generate_poster_image` is requested the function returns compose copy with `poster_image_unavailable` and `poster_disabled_reason: "native_text_rendering_required"` instead of using `buildPosterImagePrompt`. Voice audio is processed ephemerally per the spec; transcript is logged. Missing OpenAI/Whisper configuration returns `OPENAI_KEY_MISSING` instead of canned compose output or a canned transcript.
-- `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It uses server-side OpenAI and JSON schema but is not the main AI ad generator.
+- `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It uses server-side OpenAI and JSON schema but is not the main AI ad generator. Upstream OpenAI HTTP failure bodies are logged server-side and not returned to clients.
 - `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`.
-- `ai-deal-suggestions`: owner dashboard insights helper. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of canned suggestion cards.
+- `ai-deal-suggestions`: owner dashboard insights helper. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of canned suggestion cards, and upstream OpenAI HTTP failure bodies are not returned to clients.
 - `ai-translate-deal`: localization helper used after deal creation and by direct callers. It still uses direct OpenAI chat completions, but missing provider configuration now returns `OPENAI_NOT_CONFIGURED` instead of saving deterministic phrase-table translations.
 - `ai-extract-menu`: menu photo extraction path, relevant to catalog setup.
 
@@ -221,6 +221,7 @@ Function: `supabase/functions/ai-generate-deal-copy/index.ts`
 
 - Uses `chat.completions` with strict JSON schema for title, promo line, and description.
 - Monthly limit defaults to 30 via `AI_COPY_MONTHLY_LIMIT`.
+- Upstream OpenAI HTTP failure bodies are logged to server-side cost/error telemetry and not returned to clients.
 - Used by Account profile AI description and onboarding suggestions.
 
 ### Legacy One-Shot Insert
