@@ -7,9 +7,14 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
 import {
+  getPrimaryBusinessLocationId,
   getSuspendedPrimaryBusinessLocation,
   suspendedLocationResponseBody,
 } from "../_shared/billing-suspension.ts";
+import {
+  businessVerificationRequiredResponseBody,
+  isBusinessLocationPublishVerified,
+} from "../_shared/business-verification.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
   buildDealOfferContract,
@@ -237,6 +242,18 @@ serve(async (req) => {
     if (suspendedLocation) {
       return new Response(
         JSON.stringify(suspendedLocationResponseBody("create deals")),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const primaryLocationId = await getPrimaryBusinessLocationId(supabase as any, business_id);
+    const publishVerified = await isBusinessLocationPublishVerified(supabase as any, primaryLocationId);
+    if (!publishVerified) {
+      return new Response(
+        JSON.stringify(businessVerificationRequiredResponseBody("create live deals")),
         {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -6,6 +6,10 @@ import {
   getSuspendedLocationFromDealRows,
   suspendedLocationResponseBody,
 } from "../_shared/billing-suspension.ts";
+import {
+  businessVerificationRequiredResponseBody,
+  getUnverifiedLocationFromDealRows,
+} from "../_shared/business-verification.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -189,6 +193,11 @@ serve(async (req) => {
     const suspendedLocation = await getSuspendedLocationFromDealRows(admin as any, businessId, dealRows);
     if (suspendedLocation) {
       return jsonResponse(req, suspendedLocationResponseBody("publish or schedule deals"), 403);
+    }
+
+    const unverifiedLocation = await getUnverifiedLocationFromDealRows(admin as any, businessId, dealRows);
+    if (unverifiedLocation) {
+      return jsonResponse(req, businessVerificationRequiredResponseBody("publish or schedule deals"), 403);
     }
 
     const adSpec =

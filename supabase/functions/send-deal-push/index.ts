@@ -5,9 +5,14 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import {
   getSuspendedLocation,
+  getPrimaryBusinessLocationId,
   getSuspendedPrimaryBusinessLocation,
   suspendedLocationResponseBody,
 } from "../_shared/billing-suspension.ts";
+import {
+  businessVerificationRequiredResponseBody,
+  isBusinessLocationPublishVerified,
+} from "../_shared/business-verification.ts";
 import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
 import {
   buildDealOfferContract,
@@ -193,6 +198,15 @@ serve(async (req) => {
         await getSuspendedPrimaryBusinessLocation(admin as any, deal.business_id);
     if (suspendedLocation) {
       return jsonResponse(suspendedLocationResponseBody("send deal notifications"), 403);
+    }
+
+    const publishLocationId =
+      typeof deal.location_id === "string" && deal.location_id.trim()
+        ? deal.location_id.trim()
+        : await getPrimaryBusinessLocationId(admin as any, deal.business_id);
+    const publishVerified = await isBusinessLocationPublishVerified(admin as any, publishLocationId);
+    if (!publishVerified) {
+      return jsonResponse(businessVerificationRequiredResponseBody("send deal notifications"), 403);
     }
 
     const businessName = biz.name ?? "a local business";

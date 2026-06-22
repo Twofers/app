@@ -76,4 +76,12 @@ describe("billing edge function safety", () => {
       expect(source).toMatch(/suspendedLocationResponseBody/);
     }
   });
+
+  it("checks business verification before live publish-style actions when the server gate is enabled", () => {
+    for (const name of ["ai-create-deal", "publish-offer-version", "send-deal-push"]) {
+      const source = readFunction(name);
+      expect(source).toMatch(/business-verification/);
+      expect(source).toMatch(/businessVerificationRequiredResponseBody/);
+    }
+  });
 });
