@@ -2103,6 +2103,10 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errEndAfterStart"));
       return;
     }
+    if (!editingDealId && OFFER_VERSION_PUBLISH_ENABLED && !offerDefinition) {
+      showPublishError(t("createAi.errPublishFailed"));
+      return;
+    }
 
     publishInFlightRef.current = true;
     setPublishing(true);
@@ -2185,9 +2189,9 @@ export default function AiDealScreen() {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        const canUseVersionedPublish = OFFER_VERSION_PUBLISH_ENABLED && offerDefinition !== null;
         let dealsOut: { id: string; shouldNotify: boolean }[] = [];
-        if (canUseVersionedPublish) {
+        if (OFFER_VERSION_PUBLISH_ENABLED) {
+          if (!offerDefinition) throw new Error("Missing offer definition for versioned publish.");
           const versionedResult = await publishOfferVersionedDeal({
             business_id: businessId,
             offer_definition: offerDefinition,

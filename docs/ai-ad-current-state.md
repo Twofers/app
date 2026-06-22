@@ -31,6 +31,7 @@ The current app is not a naive one-prompt image generator. The main AI ad path a
 - Cost logging exists in `ai_generation_costs`; generation audit logging exists in `ai_generation_logs`.
 - Claim, QR, visual redemption, and release are server-side Edge Function flows.
 - Database migrations include atomic max-claims enforcement and active-claim uniqueness guards, but live deployment state is not verified here.
+- AI Create and Quick create now fail closed when `EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH=true` but the offer definition cannot be built. Direct `deals` insert compatibility remains only for explicitly flag-disabled builds and edit/update compatibility.
 
 The biggest plan gap is architectural persistence. The current source of truth is still mutable `deals` plus `deal_claims`. There is no persisted `OfferDefinitionV1`, no immutable `offer_versions`, no durable `AdSpecV1`, and no `ad_generations` / `ad_variants` tables. The strongest contract today, `DealOfferContract`, is built transiently inside code and then flattened into the `deals` row at publish time.
 

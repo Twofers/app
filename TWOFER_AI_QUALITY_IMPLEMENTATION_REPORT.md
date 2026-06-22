@@ -794,3 +794,69 @@ Full validation:
 ## Rollback
 
 Set hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true` to temporarily restore the legacy endpoint after deployment, or revert this commit. No migration rollback is required.
+
+---
+
+## PR 4e - Versioned publish fail-closed client guard
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `740b1f36`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/offer-version-publish-source.test.ts`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `app/create/quick.tsx`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Full AI Create now fails closed when `EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH=true` but no offer definition is available for a new deal publish.
+- Quick Create now fails closed under the same condition instead of falling through to direct `deals` insert.
+- Direct insert compatibility remains available only when versioned publish is explicitly disabled, and existing deal edit/update compatibility is unchanged.
+- Added source guard coverage to keep the versioned-publish branch from silently bypassing the offer definition.
+
+## Tests added and results
+
+Focused validation:
+
+- `npx vitest run lib/offer-version-publish-source.test.ts`: passed, 1 file and 2 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+
+Full validation:
+
+- `npm run typecheck:functions -- --pretty false`: passed, 122 Edge Function files checked.
+- `npm run test -- --run`: passed, 129 files and 717 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 valid fixtures and 0 invalid fixtures.
+- Android Metro probe, `npx expo export --platform android --output-dir <temp>`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes, but did not fail the bundle.
+
+## Acceptance criteria map
+
+47. Exact offer lines and terms come from structured fields: Preserved from PR 4b.
+48. Consumer feed and detail surfaces share authoritative helpers: Preserved from PR 4b.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for flagged AI Create and Quick publish builds; missing offer definitions no longer silently direct-insert new deals when versioned publish is enabled.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Unresolved risks
+
+- Direct `deals` insert compatibility still exists for builds where `EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH=false`.
+- Existing-deal edit/update still writes directly to `deals`; versioned edit semantics remain a future data-model task.
+- The versioned publish Edge Function and RPC still need Supabase-side deployment/migration state to be verified by Dan before production activation.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

@@ -461,7 +461,10 @@ export default function QuickDealExpress() {
 
       let id: string | undefined;
       let shouldNotify = true;
-      if (OFFER_VERSION_PUBLISH_ENABLED && offerDefinitionForPublish) {
+      if (OFFER_VERSION_PUBLISH_ENABLED) {
+        if (!offerDefinitionForPublish) {
+          throw new Error("Missing offer definition for versioned publish.");
+        }
         const versionedResult = await publishOfferVersionedDeal({
           business_id: businessId,
           offer_definition: offerDefinitionForPublish,
