@@ -17,6 +17,11 @@ import { getConsumerPreferences, milesToKm, DEFAULT_RADIUS_MILES } from "@/lib/c
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
@@ -39,7 +44,7 @@ import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type AppTheme = typeof Colors.light;
 
-type DealLite = {
+type DealLite = DealStructuredDisplayFields & {
   id: string;
   title: string | null;
   is_demo?: boolean | null;
@@ -61,6 +66,10 @@ type DealLite = {
   window_end_minutes: number | null;
   timezone: string | null;
 };
+
+const MAP_DEALS_BASE_SELECT =
+  "id,title,is_demo,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+const MAP_DEALS_SELECT = `${MAP_DEALS_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number, longitudeDelta: number): Region {
   const lat = Math.min(90, Math.max(-90, center.lat));
@@ -143,14 +152,24 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   const dealPageSize = 200;
   let dealOffset = 0;
   while (true) {
-    const { data: dz, error: ed } = await supabase
+    const enrichedDealResult = await supabase
       .from("deals")
-      .select(
-        "id,title,is_demo,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-      )
+      .select(MAP_DEALS_SELECT)
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .range(dealOffset, dealOffset + dealPageSize - 1);
+    let dz: unknown = enrichedDealResult.data;
+    let ed = enrichedDealResult.error;
+    if (isMissingStructuredDisplayColumnError(enrichedDealResult.error)) {
+      const baseDealResult = await supabase
+        .from("deals")
+        .select(MAP_DEALS_BASE_SELECT)
+        .eq("is_active", true)
+        .gte("end_time", new Date().toISOString())
+        .range(dealOffset, dealOffset + dealPageSize - 1);
+      dz = baseDealResult.data;
+      ed = baseDealResult.error;
+    }
     if (ed) {
       logPostgrestError("map screen deals", ed);
       // Keep existing deals on transient failures.

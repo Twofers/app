@@ -44,4 +44,17 @@ describe("deal localization", () => {
     expect(localizedDealDescription(spanishSourceDeal, "en")).toBe("");
     expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Buy one cafe helado and get one free");
   });
+
+  it("prefers authoritative locked lines over localized AI fields", () => {
+    const lockedDeal = {
+      ...deal,
+      title_es: "Oferta creativa",
+      description_es: "Texto promocional generado.",
+      locked_offer_line: "Buy two muffins and get one free",
+      locked_terms_line: "Limit one claim per customer.",
+    };
+
+    expect(localizedDealTitle(lockedDeal, "es-MX")).toBe("Buy two muffins and get one free");
+    expect(localizedDealDescription(lockedDeal, "es-MX")).toBe("Limit one claim per customer.");
+  });
 });

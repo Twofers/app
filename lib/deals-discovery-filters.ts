@@ -13,6 +13,11 @@ export type DealForDiscovery = {
   description_en?: string | null;
   description_es?: string | null;
   description_ko?: string | null;
+  deal_type?: string | null;
+  item_description?: string | null;
+  required_item_description?: string | null;
+  free_item_description?: string | null;
+  applies_to?: string | null;
   businesses?: {
     name: string | null;
     category: string | null;
@@ -32,6 +37,11 @@ export function dealMatchesSearch(deal: DealForDiscovery, queryRaw: string): boo
     deal.description_en,
     deal.description_es,
     deal.description_ko,
+    deal.deal_type,
+    deal.item_description,
+    deal.required_item_description,
+    deal.free_item_description,
+    deal.applies_to,
     deal.businesses?.name,
     deal.businesses?.category,
     deal.businesses?.location,

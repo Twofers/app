@@ -578,3 +578,85 @@ Full validation:
 ## Rollback
 
 Revert this commit or redeploy the PR 3 version of `ai-compose-offer`. No migration rollback is required.
+
+---
+
+## PR 4b - Authoritative consumer deal rendering helpers
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `bd0c7210`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/deal-feed-schema.test.ts`
+
+## Files changed
+
+- `lib/deal-display-copy.ts`
+- `lib/deal-display-copy.test.ts`
+- `lib/deal-feed-schema.ts`
+- `lib/deal-localization.test.ts`
+- `lib/deals-discovery-filters.ts`
+- `lib/deals-discovery-filters.test.ts`
+- `app/(tabs)/index.tsx`
+- `app/(tabs)/wallet.tsx`
+- `app/business/[id].tsx`
+- `app/deal/[id].tsx`
+- `components/map/map-native-screen.tsx`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- `getDealDisplayTitle` now prefers locked offer lines when present, then renders from structured deal facts before falling back to legacy title cleanup.
+- `getDealDisplayDescription` now prefers locked terms/disclosure lines when present.
+- Same-item, reward-item, percent-off, quantity, and size/modifier display cases now render deterministically from structured fields.
+- Consumer home feed, deal detail, wallet, business profile deal list, and map deal preview now try structured display columns first and fall back to the previous base select if staged columns are missing.
+- Consumer search now includes structured item fields so exact required/reward items are searchable even when old title prose is vague.
+- Added unit coverage for locked lines, structured quantity rendering, select fallback detection, localization override behavior, and structured search fields.
+
+## Tests added and results
+
+Focused validation:
+
+- `npx vitest run lib/deal-display-copy.test.ts lib/deal-localization.test.ts lib/deals-discovery-filters.test.ts lib/deal-feed-schema.test.ts`: passed, 4 files and 38 tests.
+- `deno check supabase/functions/ai-create-deal/index.ts`: passed.
+- `deno check supabase/functions/deal-link/index.ts`: passed.
+- `deno check supabase/functions/send-deal-push/index.ts`: passed.
+
+Full validation:
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: timed out twice locally, once after 2 minutes and once after 5 minutes, with no failure output. Targeted Deno checks for the Edge Functions that import `lib/deal-display-copy.ts` passed.
+- `npm run test -- --run`: passed, 126 files and 712 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 valid fixtures and 0 invalid fixtures.
+- Android Metro probe, `npx expo export --platform android --output-dir <temp>`: passed. Existing `country-flag-icons` package export warnings appeared.
+
+## Acceptance criteria map
+
+47. Exact offer lines and terms come from structured fields: Implemented for locked/ad-spec fields when supplied and for deal structured columns on consumer surfaces.
+48. Consumer feed and detail surfaces share authoritative helpers: Implemented through `localizedDealTitle`/`localizedDealDescription` backed by `getDealDisplayTitle`/`getDealDisplayDescription`; home feed and detail now fetch structured display fields with safe fallback.
+49. Legacy canned output cannot appear as live AI: Already improved in PR 4a; no additional change in PR 4b.
+50. Google data flow is documented before activation: Not implemented in PR 4b.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Partially improved on consumer rendering only; broader generation/publish bypass audit remains pending.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Unresolved risks
+
+- Full `npm run typecheck:functions` did not complete locally; targeted Deno checks passed for the affected Edge Function importers.
+- Structured consumer rendering still depends on the staged structured deal columns being present in Supabase. The app falls back to legacy base selects if those columns are missing.
+- Terms rendering is improved where locked terms are available; older legacy deals without structured/locked terms still rely on legacy descriptions plus the existing schedule/cutoff lines.
+- Privacy/subprocessor documentation, internal quality/cost dashboards, and broader generation/publish bypass cleanup remain pending PR4 work.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

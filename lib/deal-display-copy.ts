@@ -1,4 +1,16 @@
 export type DealDisplayTitleFields = {
+  locked_offer_line?: string | null;
+  lockedOfferLine?: string | null;
+  locked_terms_line?: string | null;
+  lockedTermsLine?: string | null;
+  canonical_offer_sentence?: string | null;
+  canonicalOfferSentence?: string | null;
+  disclosure_line?: string | null;
+  disclosureLine?: string | null;
+  ad_spec?: unknown;
+  adSpec?: unknown;
+  offer_version?: DealDisplayOfferVersionFields | DealDisplayOfferVersionFields[] | null;
+  offer_versions?: DealDisplayOfferVersionFields | DealDisplayOfferVersionFields[] | null;
   title?: string | null;
   title_en?: string | null;
   headline?: string | null;
@@ -14,6 +26,10 @@ export type DealDisplayTitleFields = {
   freeItemDescription?: string | null;
   item_description?: string | null;
   itemDescription?: string | null;
+  required_purchase_quantity?: number | string | null;
+  requiredPurchaseQuantity?: number | string | null;
+  free_item_quantity?: number | string | null;
+  freeItemQuantity?: number | string | null;
   discount_percent?: number | string | null;
   discountPercent?: number | string | null;
   percent_off?: number | string | null;
@@ -25,6 +41,15 @@ export type DealDisplayTitleFields = {
   deal_type?: string | null;
   offer_type?: string | null;
   type?: string | null;
+};
+
+type DealDisplayOfferVersionFields = {
+  canonical_offer_sentence?: string | null;
+  canonicalOfferSentence?: string | null;
+  disclosure_line?: string | null;
+  disclosureLine?: string | null;
+  ad_spec?: unknown;
+  adSpec?: unknown;
 };
 
 const FALLBACK_SAME_ITEM = "Buy one item and get one free";
@@ -98,6 +123,65 @@ function firstPresent(values: Array<string | null | undefined>): string {
     if (normalized) return normalized;
   }
   return "";
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function textAtPath(value: unknown, path: string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    const currentRecord = record(current);
+    if (!currentRecord) return null;
+    current = currentRecord[key];
+  }
+  return typeof current === "string" ? present(current) : null;
+}
+
+function firstOfferVersion(source: DealDisplayTitleFields): DealDisplayOfferVersionFields | null {
+  const value = source.offer_version ?? source.offer_versions;
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && typeof candidate === "object" ? candidate : null;
+}
+
+function adSpecFromDeal(source: DealDisplayTitleFields): unknown {
+  return source.ad_spec ?? source.adSpec ?? firstOfferVersion(source)?.ad_spec ?? firstOfferVersion(source)?.adSpec ?? null;
+}
+
+function lockedOfferLineFromDeal(source: DealDisplayTitleFields): string | null {
+  const version = firstOfferVersion(source);
+  const adSpec = adSpecFromDeal(source);
+  return present(
+    firstPresent([
+      source.locked_offer_line,
+      source.lockedOfferLine,
+      source.canonical_offer_sentence,
+      source.canonicalOfferSentence,
+      version?.canonical_offer_sentence,
+      version?.canonicalOfferSentence,
+      textAtPath(adSpec, ["terms", "lockedOfferLine"]),
+      textAtPath(adSpec, ["creative", "offerLine"]),
+      textAtPath(adSpec, ["offer", "canonicalOfferSentence"]),
+    ]),
+  );
+}
+
+function lockedTermsLineFromDeal(source: DealDisplayTitleFields): string | null {
+  const version = firstOfferVersion(source);
+  const adSpec = adSpecFromDeal(source);
+  return present(
+    firstPresent([
+      source.locked_terms_line,
+      source.lockedTermsLine,
+      source.disclosure_line,
+      source.disclosureLine,
+      version?.disclosure_line,
+      version?.disclosureLine,
+      textAtPath(adSpec, ["terms", "summary"]),
+      textAtPath(adSpec, ["offer", "disclosureLine"]),
+    ]),
+  );
 }
 
 function containsInternalDealLanguage(value: string): boolean {
@@ -249,6 +333,178 @@ function numericPercent(value: unknown): number | null {
   return null;
 }
 
+function positiveQuantity(value: unknown): number {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.replace(/[$,%\s]/g, ""))
+        : NaN;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+}
+
+const SMALL_NUMBER_WORDS: Record<number, string> = {
+  1: "one",
+  2: "two",
+  3: "three",
+  4: "four",
+  5: "five",
+  6: "six",
+  7: "seven",
+  8: "eight",
+  9: "nine",
+  10: "ten",
+};
+
+const QUANTITY_PREFIXES = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "single",
+  "double",
+  "triple",
+  "half-dozen",
+  "half dozen",
+  "dozen",
+];
+
+function numberWord(value: number): string {
+  return SMALL_NUMBER_WORDS[value] ?? String(value);
+}
+
+function stripLeadingArticle(value: string): string {
+  return normalizeWhitespace(value).replace(/^(?:a|an|the)\s+/i, "");
+}
+
+function lowerFirst(value: string): string {
+  const clean = normalizeWhitespace(value);
+  if (!clean) return "";
+  if (/^[A-Z]{2,}\b/.test(clean)) return clean;
+  if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+/.test(clean)) return clean;
+  return `${clean.charAt(0).toLowerCase()}${clean.slice(1)}`;
+}
+
+function startsWithArticle(value: string): boolean {
+  return /^(?:a|an|the)\s+/i.test(normalizeWhitespace(value));
+}
+
+function startsWithQuantityPhrase(value: string): boolean {
+  const clean = normalizeWhitespace(value).toLowerCase();
+  if (!clean) return false;
+  if (/^\d+\s*[-]?\s*(?:pack|ct|count|piece|pc|dozen)\b/.test(clean)) return true;
+  return QUANTITY_PREFIXES.some((prefix) => clean === prefix || clean.startsWith(`${prefix} `) || clean.startsWith(`${prefix}-`));
+}
+
+function pluralizeWord(word: string): string {
+  if (!word) return word;
+  if (/[^A-Za-z]$/.test(word)) return word;
+  if (/(?:s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/fe$/i.test(word)) return `${word.slice(0, -2)}ves`;
+  if (/f$/i.test(word)) return `${word.slice(0, -1)}ves`;
+  return `${word}s`;
+}
+
+function pluralizeItemPhrase(itemName: string): string {
+  const clean = stripLeadingArticle(itemName);
+  const match = clean.match(/([A-Za-z][A-Za-z'-]*)([^A-Za-z]*)$/);
+  if (!match) return clean;
+  const [full, word, suffix] = match;
+  if (/s$/i.test(word) && !/(?:ss|us)$/i.test(word)) return clean;
+  return `${clean.slice(0, clean.length - full.length)}${pluralizeWord(word)}${suffix}`;
+}
+
+function singularizeWord(word: string): string {
+  if (/ies$/i.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(?:ches|shes|xes|zes|ses)$/i.test(word)) return word.slice(0, -2);
+  if (/s$/i.test(word) && !/(?:ss|us)$/i.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+function singularizeItemPhrase(itemName: string): string {
+  const clean = stripLeadingArticle(itemName);
+  const match = clean.match(/([A-Za-z][A-Za-z'-]*)([^A-Za-z]*)$/);
+  if (!match) return clean;
+  const [full, word, suffix] = match;
+  return `${clean.slice(0, clean.length - full.length)}${singularizeWord(word)}${suffix}`;
+}
+
+function looksPluralLike(itemName: string): boolean {
+  const clean = stripLeadingArticle(itemName).toLowerCase();
+  const lastWord = clean.match(/[a-z][a-z'-]*$/)?.[0] ?? "";
+  return Boolean(lastWord && /s$/.test(lastWord) && !/(?:ss|us)$/.test(lastWord));
+}
+
+function formatPurchasePhrase(quantity: number, itemName: string): string {
+  const item = normalizeNounPhrase(stripMechanicalOfferWords(itemName));
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+    return `${articleFor(item)} ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
+}
+
+function formatCountedItem(quantity: number, itemName: string): string {
+  const item = normalizeNounPhrase(stripMechanicalOfferWords(stripLeadingArticle(itemName)));
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithQuantityPhrase(item)) return lowerFirst(item);
+    return `one ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
+}
+
+function formatFreeRewardPhrase(quantity: number, itemName: string): string {
+  const item = normalizeNounPhrase(stripMechanicalOfferWords(itemName));
+  if (!item) return "";
+  if (quantity === 1) {
+    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
+    if (looksPluralLike(item)) return `free ${lowerFirst(stripLeadingArticle(item))}`;
+    return `a free ${lowerFirst(item)}`;
+  }
+  return `${numberWord(quantity)} free ${pluralizeItemPhrase(item)}`;
+}
+
+function structuredOfferTitle(source: DealDisplayTitleFields): string | null {
+  const typeText = firstPresent([source.deal_type, source.offer_type, source.type]);
+  const item = buildItemWithModifier(itemNameFromDeal(source), itemModifierFromDeal(source));
+  const freeItem = freeItemNameFromDeal(source);
+  const discountPercent = discountPercentFromDeal(source, "");
+
+  if (/percent|discount|off[-_\s]?single/i.test(typeText) && discountPercent != null && item) {
+    return `Get ${discountPercent}% off one ${lowerFirst(singularizeItemPhrase(normalizeNounPhrase(item)))}`;
+  }
+
+  const isDifferentItem = /something[-_\s]?free|different[-_\s]?item|buy[-_\s]?one[-_\s]?get[-_\s]?something/i.test(typeText);
+  const isSameItem = /bogo|same[-_\s]?item|buy[-_\s]?one[-_\s]?get[-_\s]?one|2[-_\s]?for[-_\s]?1/i.test(typeText);
+  if (!item || (!isSameItem && !isDifferentItem)) return null;
+
+  const requiredQuantity = positiveQuantity(firstPresent([
+    source.required_purchase_quantity != null ? String(source.required_purchase_quantity) : null,
+    source.requiredPurchaseQuantity != null ? String(source.requiredPurchaseQuantity) : null,
+  ]));
+  const rewardQuantity = positiveQuantity(firstPresent([
+    source.free_item_quantity != null ? String(source.free_item_quantity) : null,
+    source.freeItemQuantity != null ? String(source.freeItemQuantity) : null,
+  ]));
+  const rewardItem = isDifferentItem && freeItem ? freeItem : item;
+
+  if (normalizeForComparison(item) === normalizeForComparison(rewardItem)) {
+    const rewardPhrase = rewardQuantity === 1 ? "one free" : `${numberWord(rewardQuantity)} free`;
+    return `Buy ${formatCountedItem(requiredQuantity, item)} and get ${rewardPhrase}`;
+  }
+
+  return `Buy ${formatPurchasePhrase(requiredQuantity, item)} and get ${formatFreeRewardPhrase(rewardQuantity, rewardItem)}`;
+}
+
 function discountPercentFromDeal(deal: DealDisplayTitleFields, rawTitle: string): number | null {
   const explicit = numericPercent(
     firstPresent([
@@ -278,7 +534,11 @@ function knownDiscountOffer(deal: DealDisplayTitleFields, rawTitle: string): boo
 }
 
 function articleFor(nounPhrase: string): "a" | "an" {
-  return /^[aeiou]/i.test(nounPhrase.trim()) ? "an" : "a";
+  const clean = stripLeadingArticle(nounPhrase).trim();
+  if (!clean) return "a";
+  if (/^(?:honest|hour|heir|herb)\b/i.test(clean)) return "an";
+  if (/^(?:uni([^nmd]|$)|user|useful|utensil|u[bcfhjkqrst][a-z])/i.test(clean)) return "a";
+  return /^[aeiou]/i.test(clean) ? "an" : "a";
 }
 
 function normalizeForComparison(value: string): string {
@@ -294,6 +554,10 @@ function normalizeForComparison(value: string): string {
 
 export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefined, preferredTitle?: string | null): string {
   const source = deal ?? {};
+  const lockedOfferLine = lockedOfferLineFromDeal(source);
+  if (lockedOfferLine) return lockedOfferLine;
+  const structuredTitle = structuredOfferTitle(source);
+  if (structuredTitle) return structuredTitle;
   const rawTitle = firstPresent([
     preferredTitle,
     source.customer_title,
@@ -353,12 +617,19 @@ export function getDealDisplayDescription(
   preferredDescription?: string | null,
   preferredTitle?: string | null,
 ): string {
-  const description = present(preferredDescription);
+  const source = deal ?? {};
+  const lockedTermsLine = present(lockedTermsLineFromDeal(source));
+  const description = lockedTermsLine ?? present(preferredDescription);
   if (!description) return "";
 
-  const title = getDealDisplayTitle(deal, preferredTitle);
+  const title = getDealDisplayTitle(source, preferredTitle);
   const normalizedTitle = normalizeForComparison(title);
   const normalizedDescription = normalizeForComparison(description);
+
+  if (lockedTermsLine) {
+    return normalizedDescription && normalizedDescription !== normalizedTitle ? description : "";
+  }
+
   const normalizedDescriptionAsTitle = normalizeForComparison(getDealDisplayTitle({ ...(deal ?? {}), title: description }, description));
 
   if (!normalizedDescription) return "";

@@ -42,6 +42,22 @@ describe("dealMatchesSearch", () => {
     ).toBe(true);
   });
 
+  it("matches structured item fields even when the title is generic", () => {
+    expect(
+      dealMatchesSearch(
+        {
+          title: "Weekend special",
+          description: "Limited time.",
+          deal_type: "BUY_ONE_GET_SOMETHING_FREE",
+          required_item_description: "Breakfast sandwich",
+          free_item_description: "Drip coffee",
+          businesses: { name: "Demo Cafe", category: "Coffee shop", location: "Austin TX" },
+        },
+        "drip coffee",
+      ),
+    ).toBe(true);
+  });
+
   it("empty query passes all", () => {
     expect(dealMatchesSearch(deal, "")).toBe(true);
     expect(dealMatchesSearch(deal, "   ")).toBe(true);

@@ -21,6 +21,11 @@ import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimSchedul
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
@@ -30,7 +35,7 @@ import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
 import { getDealDetailActionState } from "@/lib/deal-action-state";
 
-type Deal = {
+type Deal = DealStructuredDisplayFields & {
   id: string;
   title: string | null;
   description: string | null;
@@ -64,6 +69,10 @@ type Deal = {
   window_end_minutes?: number | null;
   timezone?: string | null;
 };
+
+const DEAL_DETAIL_BASE_SELECT =
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)";
+const DEAL_DETAIL_SELECT = `${DEAL_DETAIL_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 type ActiveClaim = {
   id?: string;
@@ -244,20 +253,29 @@ export default function DealDetail() {
     }
     setLoadStatus("loading");
     setBanner(null);
-    const { data, error } = await supabase
+    const enrichedResult = await supabase
       .from("deals")
-      .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)",
-      )
+      .select(DEAL_DETAIL_SELECT)
       .eq("id", id)
       .single();
-    if (error) {
+    let dealDataResult: unknown = enrichedResult.data;
+    let dealError = enrichedResult.error;
+    if (isMissingStructuredDisplayColumnError(enrichedResult.error)) {
+      const baseResult = await supabase
+        .from("deals")
+        .select(DEAL_DETAIL_BASE_SELECT)
+        .eq("id", id)
+        .single();
+      dealDataResult = baseResult.data;
+      dealError = baseResult.error;
+    }
+    if (dealError) {
       setDeal(null);
-      setBanner(translateKnownApiMessage(error.message, t));
+      setBanner(translateKnownApiMessage(dealError.message, t));
       setLoadStatus("failed");
       return;
     }
-    const dealData = data as unknown as Deal;
+    const dealData = dealDataResult as Deal;
     setDeal(dealData);
     setLoadStatus("ready");
     await loadClaimCount(dealData.id);

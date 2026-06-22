@@ -18,6 +18,11 @@ import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 
 type BizRow = {
@@ -34,7 +39,7 @@ type BizRow = {
   is_demo?: boolean | null;
 };
 
-type DealRow = {
+type DealRow = DealStructuredDisplayFields & {
   id: string;
   title: string | null;
   description: string | null;
@@ -57,6 +62,10 @@ type DealRow = {
   timezone: string | null;
   is_demo?: boolean | null;
 };
+
+const BUSINESS_DEALS_BASE_SELECT =
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+const BUSINESS_DEALS_SELECT = `${BUSINESS_DEALS_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 export default function BusinessProfileScreen() {
   const { t, i18n } = useTranslation();
@@ -101,18 +110,28 @@ export default function BusinessProfileScreen() {
     }
     setBiz(b as BizRow);
 
-    const { data: deals } = await supabase
+    const enrichedDealsResult = await supabase
       .from("deals")
-      .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-      )
+      .select(BUSINESS_DEALS_SELECT)
       .eq("business_id", id)
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .order("end_time", { ascending: true })
       .limit(12);
+    let dealsData: unknown = enrichedDealsResult.data;
+    if (isMissingStructuredDisplayColumnError(enrichedDealsResult.error)) {
+      const baseDealsResult = await supabase
+        .from("deals")
+        .select(BUSINESS_DEALS_BASE_SELECT)
+        .eq("business_id", id)
+        .eq("is_active", true)
+        .gte("end_time", new Date().toISOString())
+        .order("end_time", { ascending: true })
+        .limit(12);
+      dealsData = baseDealsResult.data;
+    }
 
-    const raw = (deals ?? []) as DealRow[];
+    const raw = (dealsData ?? []) as DealRow[];
     setDeals(raw.filter((d) => isDealActiveNow(d)));
 
     if (userId) {

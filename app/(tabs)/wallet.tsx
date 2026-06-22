@@ -33,6 +33,11 @@ import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { isShareDealEnabled } from "@/lib/runtime-env";
@@ -51,7 +56,7 @@ type ClaimRow = {
   claim_status: string | null;
   redeem_method: string | null;
   grace_period_minutes: number | null;
-  deals: {
+  deals: (DealStructuredDisplayFields & {
     id: string;
     business_id: string;
     title: string | null;
@@ -73,8 +78,13 @@ type ClaimRow = {
       longitude: number | string | null;
       is_demo?: boolean | null;
     } | null;
-  } | null;
+  }) | null;
 };
+
+const WALLET_CLAIMS_BASE_SELECT =
+  "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))";
+const WALLET_CLAIMS_SELECT =
+  `id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,${DEAL_STRUCTURED_DISPLAY_COLUMNS},businesses(name,address,location,latitude,longitude,is_demo))`;
 
 type BeginPayload = {
   server_now: string;
@@ -152,22 +162,32 @@ export default function WalletScreen() {
     setLoadFailed(false);
     try {
       await finalizeStaleRedeems();
-      const { data, error } = await supabase
+      const enrichedClaimsResult = await supabase
         .from("deal_claims")
-        .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))",
-        )
+        .select(WALLET_CLAIMS_SELECT)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(120);
+      let claimsData: unknown = enrichedClaimsResult.data;
+      let claimsError = enrichedClaimsResult.error;
+      if (isMissingStructuredDisplayColumnError(enrichedClaimsResult.error)) {
+        const baseClaimsResult = await supabase
+          .from("deal_claims")
+          .select(WALLET_CLAIMS_BASE_SELECT)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(120);
+        claimsData = baseClaimsResult.data;
+        claimsError = baseClaimsResult.error;
+      }
 
-      if (error) {
-        logPostgrestError("wallet deal_claims", error);
+      if (claimsError) {
+        logPostgrestError("wallet deal_claims", claimsError);
         setLoadFailed(true);
         setClaims([]);
         return;
       }
-      const rows = (data ?? []) as unknown as ClaimRow[];
+      const rows = (claimsData ?? []) as ClaimRow[];
       const rowsWithCachedTokens = await Promise.all(
         rows.map(async (row) => {
           const ended =
