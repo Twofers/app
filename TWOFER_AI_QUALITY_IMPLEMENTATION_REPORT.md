@@ -515,3 +515,66 @@ Existing `country-flag-icons` package export warnings appeared, matching prior p
 ## Rollback
 
 Redeploy the PR 2 `ai-generate-ad-variants` Edge Function and mobile build if image-selection metadata causes issues. No migration rollback is required for PR 3.
+
+---
+
+## PR 4a - Legacy compose-offer canned-output cleanup
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `bb91ec7c`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+
+## Files changed
+
+- `supabase/functions/ai-compose-offer/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the legacy generated-looking canned response from `ai-compose-offer` when `OPENAI_API_KEY` is missing.
+- The missing-key path now logs a failed `compose_offer` generation with `failure_reason: "OPENAI_KEY_MISSING"` and `result_source: "unavailable"`.
+- The function now returns a controlled `503` response with `error_code: "OPENAI_KEY_MISSING"` and quota metadata instead of `ok: true` ad variants.
+- Added a source guard test to prevent the old canned copy strings or a demo-generation flag from returning.
+
+## Tests added and results
+
+Focused validation:
+
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`: passed, 1 file and 1 test.
+- `npm run typecheck:functions -- --pretty false`: passed, 120 Edge Function files checked.
+
+Full validation:
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run test -- --run`: passed, 125 files and 702 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 valid fixtures and 0 invalid fixtures.
+- Android Metro probe, `npx expo export --platform android --output-dir <temp>`: passed. Existing `country-flag-icons` package export warnings appeared.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Implemented for the `OPENAI_API_KEY` missing path in `ai-compose-offer`.
+51. No generation path bypasses provider/quality controls: Partially improved; this slice removes the pass-open canned fallback, but `ai-compose-offer` still uses its legacy direct OpenAI call for the live path.
+47-48, 50, 52. Broader deterministic rendering, privacy documentation, and final cleanup criteria: Not implemented in PR 4a.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses a legacy direct OpenAI chat-completions call for normal live generation.
+- Privacy/subprocessor documentation for Gemini text fallback remains a release-gated documentation task.
+- Authoritative consumer rendering helpers and internal quality/cost dashboards remain pending PR4 work.
+
+## Rollback
+
+Revert this commit or redeploy the PR 3 version of `ai-compose-offer`. No migration rollback is required.
