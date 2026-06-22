@@ -6,6 +6,10 @@ const migration = readFileSync(
   join(process.cwd(), "supabase", "migrations", "20260726120000_location_billing_entitlements.sql"),
   "utf8",
 );
+const adminTrialIdentityGuardMigration = readFileSync(
+  join(process.cwd(), "supabase", "migrations", "20260726136000_admin_trial_identity_reuse_guard.sql"),
+  "utf8",
+);
 
 describe("location billing entitlement migration", () => {
   it("adds server-owned runtime purchase config with disabled as the safe default", () => {
@@ -33,6 +37,16 @@ describe("location billing entitlement migration", () => {
     expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_grant_location_trial\(uuid, uuid, text, boolean\) TO service_role/i);
     expect(migration).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_grant_location_trial\(uuid, uuid, text, boolean\) TO authenticated/i);
     expect(migration).toMatch(/COALESCE\(v_config\.trial_deal_credit_allowance, 30\)/i);
+  });
+
+  it("keeps admin no-card trial grants behind physical-location reuse controls", () => {
+    expect(adminTrialIdentityGuardMigration).toMatch(/CREATE OR REPLACE FUNCTION public\.admin_grant_location_trial/i);
+    expect(adminTrialIdentityGuardMigration).toMatch(/check_business_location_trial_reuse\(p_business_location_id\)/i);
+    expect(adminTrialIdentityGuardMigration).toMatch(/reuse\.decision IN \('block', 'review'\)/i);
+    expect(adminTrialIdentityGuardMigration).toMatch(/NOT p_override_trial_reuse/i);
+    expect(adminTrialIdentityGuardMigration).toMatch(/TRIAL_LOCATION_ALREADY_USED/i);
+    expect(adminTrialIdentityGuardMigration).toMatch(/GRANT EXECUTE ON FUNCTION public\.admin_grant_location_trial\(uuid, uuid, text, boolean\) TO service_role/i);
+    expect(adminTrialIdentityGuardMigration).not.toMatch(/TO authenticated/i);
   });
 
   it("exposes only the safe billing summary RPC to authenticated owners", () => {
