@@ -318,7 +318,7 @@ serve(async (req) => {
         });
         return new Response(
           JSON.stringify({
-            error: e instanceof Error ? e.message : "Voice transcription failed.",
+            error: "Voice transcription failed.",
             error_code: "TRANSCRIPTION_FAILED",
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },

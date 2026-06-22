@@ -37,6 +37,22 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/freshly pulled/);
   });
 
+  it("does not return raw Whisper provider errors to voice callers", () => {
+    const whisperErrorIndex = source.indexOf('event: "whisper_error"');
+    const responseIndex = source.indexOf("return new Response(", whisperErrorIndex);
+    const blockEnd = source.indexOf("    let promptText", responseIndex);
+
+    expect(whisperErrorIndex).toBeGreaterThan(-1);
+    expect(responseIndex).toBeGreaterThan(whisperErrorIndex);
+    expect(blockEnd).toBeGreaterThan(responseIndex);
+
+    const whisperFailureBlock = source.slice(whisperErrorIndex, blockEnd);
+    expect(whisperFailureBlock).toMatch(/errorMessage:\s*String\(e\)\.slice\(0,\s*500\)/);
+    expect(whisperFailureBlock).toMatch(/error:\s*"Voice transcription failed\."/);
+    expect(whisperFailureBlock).toMatch(/error_code:\s*"TRANSCRIPTION_FAILED"/);
+    expect(whisperFailureBlock).not.toMatch(/e instanceof Error \? e\.message/);
+  });
+
   it("does not generate legacy poster images with baked-in offer text", () => {
     expect(source).toMatch(/poster_disabled_reason/);
     expect(source).toMatch(/native_text_rendering_required/);

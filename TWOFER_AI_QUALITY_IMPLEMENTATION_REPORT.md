@@ -1085,6 +1085,64 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4m - Remove raw Whisper transcription errors from compose
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `00997f67`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-compose-offer/index.ts`
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed client-facing raw Whisper/provider exception text from `ai-compose-offer` voice transcription failures.
+- Preserved server-side diagnostics through the existing `whisper_error` console log and `ai_generation_costs.error_message` entry.
+- Added a source guard that keeps voice transcription failures returning a generic `TRANSCRIPTION_FAILED` response.
+- Updated current-state and checklist docs to call out non-raw transcription failure behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved from prior PR4 slices; no canned output added.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for `ai-compose-offer` voice failure handling; the configured Whisper path still remains a direct provider call pending broader provider-router work.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`: passed, 1 file / 4 tests.
+- `deno check supabase/functions/ai-compose-offer/index.ts`: passed.
+- Voice transcription response scan: the failure response returns `Voice transcription failed.` / `TRANSCRIPTION_FAILED` and no longer returns `e.message`.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 125 Edge Function files.
+- `npm run test -- --run`: passed, 133 files / 726 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4m" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
+- Raw provider bodies are still intentionally stored in server-side cost diagnostics for operator debugging.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
