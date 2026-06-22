@@ -157,4 +157,10 @@ describe("Gemini image provider failure telemetry source guard", () => {
     expect(failureBlock).not.toMatch(/errorText/);
     expect(failureBlock).not.toMatch(/slice\(0,\s*500\)/);
   });
+
+  it("does not store raw exception text for image fetch or conversion failures", () => {
+    expect(source).toMatch(/Gemini image output could not be converted to PNG/);
+    expect(source).toMatch(/Gemini image generation failed before a usable response was returned/);
+    expect(source).not.toMatch(/errorMessage:\s*String\(error\)\.slice/);
+  });
 });

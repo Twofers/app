@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -90,6 +92,15 @@ const baseEnv = {
   AI_TRANSIENT_RETRY_MAX: "1",
   AI_RETRY_AFTER_FULL_TIMEOUT: "false",
 };
+
+const openAiProviderSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "openai-text-provider.ts"),
+  "utf8",
+);
+const geminiProviderSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "gemini-text-provider.ts"),
+  "utf8",
+);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -349,5 +360,16 @@ describe("generateStructuredText", () => {
       { text: "Offer facts from a photo." },
       { inlineData: { mimeType: "image/png", data: "AQID" } },
     ]);
+  });
+});
+
+describe("text provider source guards", () => {
+  it("does not surface raw thrown exception text in provider errors", () => {
+    expect(openAiProviderSource).toMatch(/OPENAI_FETCH_FAILED/);
+    expect(openAiProviderSource).toMatch(/OpenAI structured generation failed before a usable response was returned/);
+    expect(geminiProviderSource).toMatch(/GEMINI_FETCH_FAILED/);
+    expect(geminiProviderSource).toMatch(/Gemini structured generation failed before a usable response was returned/);
+    expect(openAiProviderSource).not.toMatch(/message:\s*String\(error\)\.slice/);
+    expect(geminiProviderSource).not.toMatch(/message:\s*String\(error\)\.slice/);
   });
 });

@@ -50,7 +50,11 @@ describe("OpenAI image provider failure telemetry source guard", () => {
     expect(source).toMatch(/event:\s*"enhance_http"/);
     expect(source).toMatch(/OpenAI image generation failed with/);
     expect(source).toMatch(/OpenAI image edit failed with/);
+    expect(source).toMatch(/OpenAI image generation failed before a usable response was returned/);
+    expect(source).toMatch(/OpenAI image edit failed before a usable response was returned/);
     expect(source).not.toMatch(/body:\s*errBody/);
+    expect(source).not.toMatch(/err:\s*String\(e\)/);
+    expect(source).not.toMatch(/errorMessage:\s*String\(e\)\.slice/);
     expect(source).not.toMatch(/errorMessage:\s*errBody\.slice/);
     expect(source).not.toMatch(/await res\.text\(\)/);
   });

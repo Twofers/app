@@ -275,14 +275,14 @@ async function attemptImageGeneration(
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch (e) {
-    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, err: String(e) }));
+  } catch {
+    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, errorCode: "FETCH_ERROR" }));
     return {
       bytes: null,
       attempts: [{
         ...attemptBase,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(e).slice(0, 500),
+        errorMessage: "OpenAI image generation failed before a usable response was returned.",
       }],
     };
   }
@@ -512,16 +512,16 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch (e) {
+  } catch {
     console.log(
-      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, err: String(e) }),
+      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, errorCode: "FETCH_ERROR" }),
     );
     return {
       bytes: null,
       attempts: [{
         ...attemptBase,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(e).slice(0, 500),
+        errorMessage: "OpenAI image edit failed before a usable response was returned.",
       }],
     };
   }

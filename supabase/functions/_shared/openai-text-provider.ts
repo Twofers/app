@@ -181,12 +181,13 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
     };
   } catch (error) {
     if (error instanceof AiProviderError) throw error;
+    const errorClass = classifyThrownProviderError(error);
     throw new AiProviderError({
       provider: "openai",
       model: params.model,
-      errorClass: classifyThrownProviderError(error),
+      errorClass,
       errorCode: "OPENAI_FETCH_FAILED",
-      message: String(error).slice(0, 500),
+      message: `OpenAI structured generation failed before a usable response was returned (${errorClass}).`,
     });
   }
 }

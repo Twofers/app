@@ -350,14 +350,14 @@ async function callResearchModel(params: {
       description: clip(typeof parsed.description === "string" ? parsed.description : "", 280),
       is_familiar: parsed.is_familiar === true,
     };
-  } catch (e) {
+  } catch {
     console.log(
       JSON.stringify({
         tag: "ai_ads_v2",
         event: "research_error",
         model,
         isWebSearch,
-        err: String(e).slice(0, 200),
+        errorCode: "FETCH_ERROR",
       }),
     );
     await logAdCost(costContext ?? null, {
@@ -367,7 +367,7 @@ async function callResearchModel(params: {
       webSearchCalls: isWebSearch ? 1 : 0,
       success: false,
       errorCode: "FETCH_ERROR",
-      errorMessage: String(e).slice(0, 500),
+      errorMessage: "Ad research failed before a usable response was returned.",
     });
     return null;
   }
@@ -525,13 +525,13 @@ async function generateCopy(params: {
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
         return prepared.variants;
-      } catch (e) {
+      } catch {
         console.log(
           JSON.stringify({
             tag: "ai_ads_v2",
             event: "copy_parse_error",
             attemptNumber,
-            err: String(e).slice(0, 200),
+            errorCode: "COPY_PREPARATION_FAILED",
           }),
         );
         return [];
@@ -968,7 +968,7 @@ async function prepareCopyCandidates(params: {
     const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
     await logTextProviderAttempts(params.costContext, "candidate_judge", attempts);
     telemetry.judge.skipped_reason = "judge_unavailable";
-    telemetry.judge.feedback = [String(e).slice(0, 180)];
+    telemetry.judge.feedback = ["Candidate judge unavailable."];
     return { variants: ranked, telemetry, judgeAttempts: attempts };
   }
 }
@@ -1355,8 +1355,8 @@ async function inspectGeneratedImageForOffer(params: {
     const text = extractResponseOutputText(json);
     if (!text) return await geminiFallback();
     return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
-  } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", err: String(e).slice(0, 200) }));
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", errorCode: "FETCH_ERROR" }));
     await logAdCost(params.costContext, {
       feature: "image_qa",
       provider: "openai",
@@ -1364,7 +1364,7 @@ async function inspectGeneratedImageForOffer(params: {
       endpoint: "responses",
       success: false,
       errorCode: "FETCH_ERROR",
-      errorMessage: String(e).slice(0, 500),
+      errorMessage: "OpenAI image QA failed before a usable response was returned.",
     });
     return await geminiFallback();
   }
@@ -1382,8 +1382,12 @@ async function inspectGeneratedImageForOfferWithGemini(params: {
   let model = "gemini";
   try {
     model = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
-  } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_config_error", err: String(e).slice(0, 200) }));
+  } catch {
+    console.log(JSON.stringify({
+      tag: "ai_ads_v2",
+      event: "gemini_image_qa_config_error",
+      errorCode: "AI_TEXT_CONFIG_INVALID",
+    }));
     await logAdCost(params.costContext, {
       feature: "image_qa",
       provider: "gemini",
@@ -1391,7 +1395,7 @@ async function inspectGeneratedImageForOfferWithGemini(params: {
       endpoint: "models.generateContent",
       success: false,
       errorCode: "AI_TEXT_CONFIG_INVALID",
-      errorMessage: String(e).slice(0, 500),
+      errorMessage: "Gemini image QA configuration is invalid.",
     });
     return null;
   }
@@ -1509,8 +1513,8 @@ async function inspectGeneratedImageForOfferWithGemini(params: {
       });
       return null;
     }
-  } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_error", err: String(e).slice(0, 200) }));
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_error", errorCode: "FETCH_ERROR" }));
     await logAdCost(params.costContext, {
       feature: "image_qa",
       provider: "gemini",
@@ -1518,7 +1522,7 @@ async function inspectGeneratedImageForOfferWithGemini(params: {
       endpoint: "models.generateContent",
       success: false,
       errorCode: "FETCH_ERROR",
-      errorMessage: String(e).slice(0, 500),
+      errorMessage: "Gemini image QA failed before a usable response was returned.",
     });
     return null;
   }
@@ -2554,12 +2558,13 @@ Deno.serve(async (req) => {
     chargeableRevisionCredit = null;
     try {
       await releaseChargeableImageRevisionCredit(adminForCreditRelease as any, reservation, reason);
-    } catch (e) {
+    } catch {
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
           event: "deal_credit_release_failed",
-          err: String(e).slice(0, 200),
+          reason,
+          errorCode: "DEAL_CREDIT_RELEASE_FAILED",
         }),
       );
     }
@@ -2961,9 +2966,9 @@ Deno.serve(async (req) => {
           previousAd: previousAd ?? undefined,
           costContext,
         });
-      } catch (e) {
+      } catch {
         console.log(
-          JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", err: String(e).slice(0, 300) }),
+          JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", errorCode: "COPY_FAILED" }),
         );
         await admin.from("ai_generation_logs").insert({
           business_id: businessId,
@@ -2974,7 +2979,7 @@ Deno.serve(async (req) => {
           prompt_version: AD_COPY_PROMPT_VERSION,
           model: CHAT_MODEL,
           success: false,
-          failure_reason: String(e).slice(0, 100),
+          failure_reason: "COPY_FAILED",
           openai_called: true,
           response_payload: {
             events: ["quick_deal_ai_generation_failed"],
@@ -3116,9 +3121,9 @@ Deno.serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch {
     await releaseReservedChargeableRevision("server_error");
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", err: String(e).slice(0, 400) }));
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", errorCode: "SERVER_ERROR" }));
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -43,4 +43,16 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     expect(helperBlock).toMatch(/endpoint:\s*"models\.generateContent"/);
     expect(helperBlock).not.toMatch(/await res\.text\(\)/);
   });
+
+  it("does not store raw exception text in ad-variant AI failure telemetry", () => {
+    expect(source).toMatch(/Ad research failed before a usable response was returned/);
+    expect(source).toMatch(/Candidate judge unavailable/);
+    expect(source).toMatch(/OpenAI image QA failed before a usable response was returned/);
+    expect(source).toMatch(/Gemini image QA failed before a usable response was returned/);
+    expect(source).toMatch(/failure_reason:\s*"COPY_FAILED"/);
+    expect(source).not.toMatch(/String\(e\)\.slice/);
+    expect(source).not.toMatch(/err:\s*String\(e\)/);
+    expect(source).not.toMatch(/failure_reason:\s*String\(e\)/);
+    expect(source).not.toMatch(/errorMessage:\s*String\(e\)\.slice/);
+  });
 });

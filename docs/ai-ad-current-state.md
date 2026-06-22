@@ -188,7 +188,7 @@ Model and provider controls:
 - Allowlist: `gpt-4o-mini`, `gpt-5.5`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4`.
 - Default: `gpt-5.5`.
 - Unsupported configured models throw `AI_TEXT_CONFIG_INVALID` instead of silently downgrading.
-- Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`; OpenAI/Gemini image generation and edit HTTP failures log sanitized status/error codes rather than raw upstream response bodies.
+- Image models are resolved from Edge secrets through an allowlist in `_shared/dalle-image.ts`; OpenAI/Gemini image generation and edit HTTP failures and catch-path exceptions log sanitized status/error codes rather than raw upstream response bodies or free-form exception text.
 - OpenAI API keys are read from Edge secrets only.
 
 Stages:
@@ -223,7 +223,7 @@ Function: `supabase/functions/ai-generate-deal-copy/index.ts`
 
 - Uses the shared OpenAI/Gemini structured text provider router with strict JSON schema for title, promo line, and description.
 - Monthly limit defaults to 30 via `AI_COPY_MONTHLY_LIMIT`.
-- Provider attempts are logged to server-side cost/error telemetry with sanitized error classes; raw provider bodies are not returned to clients, and shared text-provider exceptions use generic provider/code messages after local classification.
+- Provider attempts are logged to server-side cost/error telemetry with sanitized error classes; raw provider bodies are not returned to clients, and shared text-provider HTTP and fetch/parse exceptions use generic provider/code messages after local classification.
 - Used by Account profile AI description and onboarding suggestions.
 
 ### Legacy One-Shot Insert

@@ -409,7 +409,7 @@ async function attemptGeminiImageGeneration(params: {
     let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
     try {
       normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(imagePart.data), imageMimeType);
-    } catch (error) {
+    } catch {
       return {
         bytes: null,
         mimeType: null,
@@ -417,7 +417,7 @@ async function attemptGeminiImageGeneration(params: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
           errorCode: "PNG_CONVERSION_FAILED",
-          errorMessage: String(error).slice(0, 500),
+          errorMessage: "Gemini image output could not be converted to PNG.",
         },
       };
     }
@@ -431,7 +431,7 @@ async function attemptGeminiImageGeneration(params: {
         mimeType: normalizedImage.mimeType,
       },
     };
-  } catch (error) {
+  } catch {
     return {
       bytes: null,
       mimeType: null,
@@ -439,7 +439,7 @@ async function attemptGeminiImageGeneration(params: {
         ...attemptBase,
         latencyMs: Date.now() - startedAt,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(error).slice(0, 500),
+        errorMessage: "Gemini image generation failed before a usable response was returned.",
       },
     };
   }
