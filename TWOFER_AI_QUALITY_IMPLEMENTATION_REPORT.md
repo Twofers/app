@@ -1638,3 +1638,62 @@ Full validation:
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4s - Sanitize compose provider failure telemetry
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `802a9f80`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-compose-offer/index.ts`
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Stopped reading raw Whisper provider response bodies on failed transcription requests.
+- Replaced Whisper failure telemetry with a generic `TRANSCRIPTION_FAILED` error message instead of logging the caught provider exception text.
+- Replaced live compose OpenAI HTTP failure cost telemetry with sanitized HTTP status details instead of raw provider response text.
+- Added compose source guards to keep raw Whisper/live compose provider bodies and exception text out of telemetry paths.
+- Updated AI current-state and Edge Function checklist docs to reflect sanitized compose provider failure handling.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved; no canned output added.
+51. No generation path bypasses provider/quality controls: Improved for `ai-compose-offer` failure handling; the live compose generation and Whisper transcription calls remain direct provider calls pending broader router/media-input work.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/ai-compose-offer/index.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`: passed, 1 file / 5 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 126 Edge Function files.
+- `npm run test -- --run`: passed, 134 files / 734 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4s" --clear`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses direct OpenAI chat-completions for live offer composition because the shared text provider accepts `imageInputs` in its type but the OpenAI/Gemini adapters do not yet send those image parts.
+- `ai-compose-offer` still uses direct Whisper transcription because the current shared provider router is structured text-only.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

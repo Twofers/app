@@ -41,16 +41,40 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     const whisperErrorIndex = source.indexOf('event: "whisper_error"');
     const responseIndex = source.indexOf("return new Response(", whisperErrorIndex);
     const blockEnd = source.indexOf("    let promptText", responseIndex);
+    const whisperProviderFailureIndex = source.indexOf("if (!res.ok)");
+    const whisperProviderSuccessIndex = source.indexOf("const j = await res.json()", whisperProviderFailureIndex);
 
     expect(whisperErrorIndex).toBeGreaterThan(-1);
     expect(responseIndex).toBeGreaterThan(whisperErrorIndex);
     expect(blockEnd).toBeGreaterThan(responseIndex);
+    expect(whisperProviderFailureIndex).toBeGreaterThan(-1);
+    expect(whisperProviderSuccessIndex).toBeGreaterThan(whisperProviderFailureIndex);
 
     const whisperFailureBlock = source.slice(whisperErrorIndex, blockEnd);
-    expect(whisperFailureBlock).toMatch(/errorMessage:\s*String\(e\)\.slice\(0,\s*500\)/);
+    const whisperProviderFailureBlock = source.slice(whisperProviderFailureIndex, whisperProviderSuccessIndex);
+    expect(whisperProviderFailureBlock).not.toMatch(/await res\.text\(\)/);
+    expect(whisperProviderFailureBlock).not.toMatch(/Whisper failed:/);
+    expect(whisperFailureBlock).toMatch(/errorMessage:\s*"Whisper provider request failed\."/);
     expect(whisperFailureBlock).toMatch(/error:\s*"Voice transcription failed\."/);
     expect(whisperFailureBlock).toMatch(/error_code:\s*"TRANSCRIPTION_FAILED"/);
     expect(whisperFailureBlock).not.toMatch(/e instanceof Error \? e\.message/);
+    expect(whisperFailureBlock).not.toMatch(/err:\s*String\(e\)/);
+  });
+
+  it("does not log raw OpenAI compose provider bodies on live compose failures", () => {
+    const openAiFailureIndex = source.indexOf("if (!openAiRes.ok)");
+    const successParseIndex = source.indexOf("const completion = await openAiRes.json()", openAiFailureIndex);
+
+    expect(openAiFailureIndex).toBeGreaterThan(-1);
+    expect(successParseIndex).toBeGreaterThan(openAiFailureIndex);
+
+    const liveFailureBlock = source.slice(openAiFailureIndex, successParseIndex);
+    expect(liveFailureBlock).toMatch(/event:\s*"openai_error"/);
+    expect(liveFailureBlock).toMatch(/errorMessage:\s*`Compose provider request failed with \${composeErrorCode}\.`/);
+    expect(liveFailureBlock).toMatch(/error_code:\s*"OPENAI_ERROR"/);
+    expect(liveFailureBlock).not.toMatch(/await openAiRes\.text\(\)/);
+    expect(liveFailureBlock).not.toMatch(/errText/);
+    expect(liveFailureBlock).not.toMatch(/details:/);
   });
 
   it("does not generate legacy poster images with baked-in offer text", () => {

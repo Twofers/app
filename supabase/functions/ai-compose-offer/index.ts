@@ -102,8 +102,7 @@ async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<
     body: form,
   });
   if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Whisper failed: ${t.slice(0, 200)}`);
+    throw new Error(`Whisper provider request failed with HTTP_${res.status}.`);
   }
   const j = await res.json();
   return {
@@ -306,7 +305,7 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       } catch (e) {
-        console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error", err: String(e) }));
+        console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error" }));
         await logComposeCost(costContext, {
           feature: "voice_transcription",
           model: WHISPER_MODEL,
@@ -314,7 +313,7 @@ serve(async (req) => {
           audioSeconds,
           success: false,
           errorCode: "TRANSCRIPTION_FAILED",
-          errorMessage: String(e).slice(0, 500),
+          errorMessage: "Whisper provider request failed.",
         });
         return new Response(
           JSON.stringify({
@@ -603,15 +602,16 @@ serve(async (req) => {
     });
 
     if (!openAiRes.ok) {
-      const errText = await openAiRes.text();
+      const composeErrorCode = `HTTP_${openAiRes.status}`;
+      console.log(JSON.stringify({ tag: "ai_compose", event: "openai_error", status: openAiRes.status }));
       await logComposeCost(costContext, {
         feature: "compose_offer",
         model: MODEL,
         endpoint: "chat.completions",
         openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
         success: false,
-        errorCode: `HTTP_${openAiRes.status}`,
-        errorMessage: errText.slice(0, 500),
+        errorCode: composeErrorCode,
+        errorMessage: `Compose provider request failed with ${composeErrorCode}.`,
       });
       await admin.from("ai_generation_logs").insert({
         business_id,
