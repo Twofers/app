@@ -661,6 +661,243 @@ Full validation:
 
 Revert this commit. No migration rollback is required.
 
+---
+
+## PR 4y - PR4 expansion, cleanup, and calibration closeout
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `873b5e03` (last prior reported PR4 commit).
+
+Commits covered:
+
+- `9c9cd71c` Sanitize AI catch-path telemetry
+- `74485148` Sanitize AI router outer errors
+- `34a9b512` Sanitize AI helper exception logs
+- `7b3f5c1c` Store authoritative deal display copy
+- `e1bcefe6` Expand AI category playbooks
+- `ea84f87f` Remove legacy compose prompt language
+- `6109bdf9` Retire obsolete AI rollout flags
+- `8732de53` Add AI baseline calibration watchlist
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `app/create/quick.tsx`
+- `lib/offer-version-publish.ts`
+- `lib/offer-version-publish.test.ts`
+- `lib/category-ad-playbooks.ts`
+- `lib/category-ad-playbooks.test.ts`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `lib/ai-ad-baseline-runner-source.test.ts`
+- `scripts/measure-ai-ad-baseline.mjs`
+- `README.md`
+- `docs/MIGRATIONS_AND_DEPLOY.md`
+- `docs/ai-ad-baseline-metrics.md`
+- `docs/ai-ad-current-state.md`
+- `docs/ai-ad-validation/SCORECARD.md`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `docs/production-deploy-checklist.md`
+- `docs/twofer-ai-ad-mvp.md`
+- `supabase/functions/ai-business-lookup/index.ts`
+- `supabase/functions/ai-compose-offer/index.ts`
+- `supabase/functions/ai-deal-suggestions/index.ts`
+- `supabase/functions/ai-extract-menu/index.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/ai-generate-deal-copy/index.ts`
+- `supabase/functions/ai-translate-deal/index.ts`
+- `supabase/functions/_shared/ai-business-lookup-source.test.ts`
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `supabase/functions/_shared/ai-costs.ts`
+- `supabase/functions/_shared/ai-costs.test.ts`
+- `supabase/functions/_shared/ai-deal-suggestions-source.test.ts`
+- `supabase/functions/_shared/ai-extract-menu-source.test.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`
+- `supabase/functions/_shared/ai-generate-deal-copy-source.test.ts`
+- `supabase/functions/_shared/ai-image-provider.ts`
+- `supabase/functions/_shared/ai-image-provider.test.ts`
+- `supabase/functions/_shared/ai-provider-circuit-breaker.ts`
+- `supabase/functions/_shared/ai-provider-circuit-breaker.test.ts`
+- `supabase/functions/_shared/ai-text-provider.ts`
+- `supabase/functions/_shared/ai-text-provider.test.ts`
+- `supabase/functions/_shared/ai-translate-deal-source.test.ts`
+- `supabase/functions/_shared/dalle-image.ts`
+- `supabase/functions/_shared/dalle-image.test.ts`
+- `supabase/functions/_shared/gemini-text-provider.ts`
+- `supabase/functions/_shared/openai-text-provider.ts`
+
+## What landed
+
+- Sanitized remaining AI helper catch-path, router outer, provider, circuit-breaker, cost-ledger, image-provider, business-lookup, menu-extraction, compose, translation, deal-copy, insights, and ad-variant failure telemetry so raw upstream provider bodies or free-form exception text are not logged or returned.
+- Added `buildAuthoritativeDealDisplayCopy()` and used it in Quick Deal and full AI Create publish paths so stored display title/description prefer `OfferDefinitionV1.canonicalOfferLine` and `disclosureLine` with safe fallback.
+- Expanded category playbooks from the earlier narrow set into broader local-business taxonomy coverage, including beverage/smoothie, bar, spa, beauty, pet, auto, home, cleaning/laundry, professional service, florist/gift, and events/entertainment categories.
+- Removed legacy cafe/craft-specific compose prompt examples and guarded the source against those old canned phrases returning.
+- Removed unused Expo-side AI rollout flag helpers and diagnostics entries for obsolete client flags. Active offer-definition and versioned-publish flags remain because publish compatibility still uses them.
+- Updated stale docs from `OPENAI_AD_MODEL`/`gpt-4o-mini` wording to the current shared `OPENAI_MODEL` resolver and `gpt-5.5` default.
+- Added a calibration watchlist to `scripts/measure-ai-ad-baseline.mjs` for latency, fallback, judge, image-QA, retry, cost, diversity-warning, and image-aesthetic warning metrics.
+
+## Provider routing behavior
+
+Primary structured text provider remains OpenAI through `generateStructuredText()`.
+
+Fallback structured text provider remains Gemini when hosted flags and `GEMINI_API_KEY` enable it.
+
+Routed through the shared text provider locally:
+
+- main ad-variant copy generation/repair;
+- `ai-generate-deal-copy`;
+- `ai-deal-suggestions`;
+- `ai-translate-deal`;
+- text/photo `ai-compose-offer`.
+
+Known direct provider paths that remain by design or pending future media routers:
+
+- `ai-compose-offer` voice transcription uses OpenAI Whisper directly;
+- `ai-extract-menu` uses a direct OpenAI Responses vision/OCR path, with synthetic output gated to explicit local/preview flag only;
+- image generation/edit uses the image-provider abstraction, which is not the structured text router;
+- image QA has OpenAI primary plus Gemini fallback for the ad-variant QA path.
+
+## Cost and timeout controls
+
+- Existing structured text timeout controls, fallback timeout controls, cost-budget projection, circuit-breaker support, and per-call cost logging are preserved.
+- Baseline dashboard export now shows cost, retry/failure, fallback, judge, image-QA, and calibration watchlist metrics.
+- Live numeric calibration was not run from this workspace because service-role access is not available and must not be exposed.
+
+## Feature flags
+
+Preserved active or hosted flags:
+
+- `AI_V3_PROVIDER_ROUTER_ENABLED`
+- `AI_TEXT_FALLBACK_ENABLED`
+- `AI_TEXT_FALLBACK_PROVIDER`
+- `AI_V3_COST_BUDGET_ENABLED`
+- `AI_CIRCUIT_BREAKER_ENABLED`
+- `AI_V3_INDEPENDENT_JUDGE_ENABLED`
+- `AI_VISION_FALLBACK_ENABLED`
+- `AI_IMAGE_GEMINI_ENABLED`
+- `AI_IMAGE_PROVIDER`
+- `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`
+- `EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK`
+- `EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH`
+
+Retired unused Expo-side diagnostics/helpers:
+
+- `EXPO_PUBLIC_AI_AD_PIPELINE_V3`
+- `EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY`
+- `EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT`
+- `EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT`
+- `EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT`
+- `EXPO_PUBLIC_TWOFER_STOCK_LIBRARY`
+- `EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE`
+- `EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS`
+- `EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES`
+- `EXPO_PUBLIC_PENGUIN_DEAL_LOADER`
+- `EXPO_PUBLIC_AD_JOB_ASYNC_STATUS`
+- `EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT`
+
+## Observed latency/cost/fallback metrics
+
+No live metrics were recorded in this workspace. The runner now provides the dashboard and calibration export, but production/staging values require Dan to run it with `SUPABASE_SERVICE_ROLE_KEY` locally and representative non-publishing outputs.
+
+## Acceptance criteria snapshot after PR4 closeout
+
+1. Live primary creative model resolves to `gpt-5.5`: Implemented.
+2. Unsupported model names do not silently downgrade: Implemented.
+3. Gemini 3.5 Flash is configured as OpenAI availability/credit fallback: Implemented locally, production activation blocked until public privacy/subprocessor update and hosted flags.
+4. OpenAI credit/quota failure falls back immediately: Implemented behind hosted fallback flags.
+5. Full timeout does not cause a second full OpenAI wait: Implemented.
+6. Persistent circuit breaker works across Edge Function instances: Partially implemented; helper and migration exist, but applying the migration is hard-gated.
+7. Per-stage provider, model, latency, token, cache, and cost telemetry is stored: Partially implemented; provider/cost telemetry is broad, total end-to-end latency remains a known instrumentation gap.
+8. Configurable cost ceilings limit optional calls: Implemented locally behind cost-budget flag.
+9. Merchant receives preview or deterministic fallback, never blank state: Implemented for the main ad path.
+10. Merchant Creative Profile is available and versioned: Implemented.
+11. Unverified merchant claims are excluded from prompts: Implemented.
+12. GPT-5.5 returns one positive creative brief and five candidates in one call: Implemented for the main ad path.
+13. Five required creative lanes are present: Implemented.
+14. Hard duplicate checks are active: Implemented.
+15. Similarity heuristics are logged for calibration: Implemented.
+16. Gemini judges GPT-5.5 candidates blindly: Implemented behind hosted judge flag.
+17. Gemini-generated fallback copy does not receive fake independent judgment: Implemented.
+18. Selected candidate is merchant-specific when verified context exists: Implemented.
+19. Valid but forgettable candidate can be rejected: Implemented through judge/style/quality controls.
+20. Existing style-gate logic is active in production path: Implemented.
+21. Customer-facing shorthand is consistently blocked: Implemented.
+22. Immutable offer facts remain unchanged: Implemented.
+23. Revisions pass the same validation and judgment path: Implemented.
+24. Category playbooks are active: Implemented and expanded in PR4 closeout.
+25. Deterministic fallback usage and reason are logged: Implemented.
+26. Approval remains tied to the exact final version: Implemented for versioned publish path.
+27. Merchant can upload images and choose the final source: Implemented.
+28. `Use original` performs no generative modification: Implemented.
+29. Touch-up, background cleanup, studio polish, and bounded custom edits are available: Partially implemented; preset flows exist, full custom-edit text UI remains limited.
+30. Original uploads are immutable and edited results are stored as derivatives: Partially implemented through response/ad-spec metadata; no dedicated lineage table.
+31. Merchant can compare original/edited and restore earlier version: Not implemented.
+32. Twofer never silently replaces a merchant-selected upload with generated/stock image: Implemented for the controlled ad-variant path.
+33. Aesthetic warnings on eligible originals may be overridden: Implemented.
+34. Hard safety/auth/technical/misleading blockers cannot be overridden: Implemented.
+35. Any image change invalidates prior approval: Implemented for exact approval binding.
+36. Publish references exact selected image asset: Implemented in versioned publish/ad spec.
+37. Generated images receive QA: Implemented.
+38. AI-edited merchant photos receive identity-preservation QA: Implemented in source-aware QA.
+39. Original merchant photos receive source-appropriate QA: Implemented.
+40. Stock fallbacks receive applicable QA: Partially implemented; approved stock remains distinct, but stock workflows remain limited.
+41. Generated and AI-edited images do not pass open when QA is unavailable: Implemented.
+42. Moderated unmodified original may use manual acknowledgement during QA outage: Implemented in source-aware warning/override path.
+43. OpenAI image QA can fall back to Gemini: Implemented for ad-variant image QA.
+44. Crop and overlay safety are checked: Implemented.
+45. OpenAI fallback image prompts match stronger Gemini restrictions: Implemented.
+46. Deterministic visual fallback is polished and usable: Implemented.
+47. Exact offer lines and terms come from structured fields: Implemented; latest publish storage now uses authoritative deal display copy.
+48. Consumer feed and detail surfaces share authoritative helpers: Implemented.
+49. Legacy canned output cannot appear as live AI: Implemented for known canned AI copy/transcript/insight/compose paths; synthetic menu sample remains explicit preview/dev-only.
+50. Google data flow is documented before activation: Implemented internally; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Partially implemented. Main ad copy, adjacent text helpers, translation, and compose text/photo now use the router; versioned publish is fail-closed under its flag. Remaining direct media-specific paths are Whisper transcription, menu OCR, and image provider/QA surfaces, and legacy direct publish compatibility still exists only for flag-disabled or edit/update compatibility.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Implemented.
+
+## Validation
+
+Focused checks passed:
+
+- `npx vitest run lib/offer-version-publish.test.ts lib/deal-localization.test.ts lib/deal-display-copy.test.ts`
+- `npx vitest run lib/category-ad-playbooks.test.ts lib/merchant-creative-profile.test.ts supabase/functions/ai-generate-ad-variants/prompt.test.ts`
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `npx vitest run lib/runtime-env.test.ts supabase/functions/_shared/ai-google-data-flow-docs.test.ts`
+- `npx vitest run lib/ai-ad-baseline-runner-source.test.ts`
+- `node scripts/measure-ai-ad-baseline.mjs --help`
+- `npm run gate:ai-ad`
+
+Full checks passed after each closeout slice:
+
+- `npx tsc --noEmit --pretty false`
+- `npm run lint`
+- `npm run copy:evaluate` (30 fixtures valid / 0 invalid)
+- `npm run typecheck:functions -- --pretty false` (128 Edge Function files)
+- `npm run test -- --run` (latest run: 136 files / 757 tests; expected Expo push negative-path stderr appeared)
+- Android Metro export probes succeeded through `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4af"`; known `country-flag-icons` package export warnings and Metro cache fallback appeared, but the bundle exported.
+
+## Unresolved risks
+
+- Hosted production still requires Dan-controlled Edge Function redeploys for local Edge Function changes to take effect.
+- Public website privacy/subprocessor update remains required before production can enable Google/Gemini text fallback.
+- Live threshold calibration remains blocked until Dan runs representative non-publishing outputs and the service-role baseline dashboard locally.
+- The role-split migration and AI limit deploy reminders from the repo spec remain separate hard-gated Supabase work.
+- `ai-create-deal` remains default-closed; if deliberately re-enabled it still combines generation and insert and should not be a pilot happy path.
+- Voice transcription and menu OCR remain direct media-specific provider calls pending future provider-neutral media routers.
+
+## Rollback
+
+Revert the covered commits. No migration rollback is required for this closeout section.
+
 ## PR 4f - Disable legacy compose-offer poster generation
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
