@@ -204,3 +204,191 @@ OPENAI_MODEL=gpt-5.4-mini
 ```
 
 Do not roll back immutable offer validation, deterministic fallback copy, or exact-version merchant approval.
+
+---
+
+## PR 2 - Creative ceiling and copy quality
+
+Status: Implemented locally on branch `codex/ai-quality-pr2-creative-ceiling`.
+
+Safety checkpoint: `c19b13f3`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none. PR 2 uses a derived runtime Merchant Creative Profile from existing business context and offer facts. No Supabase migration was applied or created in this slice.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/ad-language-policy.ts`
+- `lib/category-ad-playbooks.ts`
+- `lib/merchant-creative-profile.ts`
+- `lib/ad-candidate-diversity.ts`
+- `lib/candidate-judge.ts`
+- `lib/category-ad-playbooks.test.ts`
+- `lib/merchant-creative-profile.test.ts`
+- `lib/ad-candidate-diversity.test.ts`
+- `lib/candidate-judge.test.ts`
+
+## Files changed
+
+- `tsconfig.json`
+- `lib/ad-copy-style-gate.ts`
+- `lib/deal-offer-contract.ts`
+- `lib/deal-offer-contract.test.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.test.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a centralized ad language policy for banned AI phrases, generic marketing phrases, hype patterns, vague local cliches, and BOGO/2-for-1 shorthand variants.
+- Reused that policy in the prompt builder, offer-contract validation, style gate, and candidate judge helpers.
+- Added category playbooks for coffee/cafe, bakery/dessert, restaurant/food, fitness/wellness, beauty/salon, local service, retail, and a conservative general-local fallback.
+- Added a runtime Merchant Creative Profile helper derived only from existing merchant context, offer/research item context, broad location, and conservative category playbook facts.
+- Unsafe claims such as best/rated/awards/certifications/health/dietary/guarantees/pricing are excluded from verified differentiators and prompt facts.
+- Replaced the ad-copy schema with one `creativeBrief` plus exactly five strategy lanes:
+  - `value_clarity`
+  - `social_or_occasion`
+  - `product_desire`
+  - `local_discovery`
+  - `merchant_specific`
+- Increased copy generation output cap from 650 to 1400 tokens for the brief plus five candidates.
+- Added candidate diversity hard checks for missing/duplicate lanes, unknown strategy IDs, identical normalized headlines, duplicate first-four-meaningful-word headline openings, and obvious paraphrases.
+- Added warning-only Jaccard metrics for headline/body similarity.
+- Wired the existing style gate into the `ai-generate-ad-variants` production copy path before final copy selection.
+- Added deterministic preliminary scoring and candidate ranking.
+- Added Gemini independent candidate judging behind `AI_V3_INDEPENDENT_JUDGE_ENABLED`.
+- The judge receives immutable offer facts, category playbook, merchant profile, creative brief, and the strongest three valid candidates. It does not receive provider identity, deterministic score, or generation order.
+- If Gemini generated the candidates, judging is skipped with `same_provider_fallback`.
+- If the judge is disabled, unavailable, missing a Gemini key, or has too few valid candidates, deterministic ranking continues and the reason is logged.
+- Added telemetry for creative brief, style-gate rejections, diversity hard failures/warnings, preliminary scores, judge decision, judge attempts, and judge fallback/skip reason.
+- Preserved deterministic copy fallback, immutable offer validation, corrective retry behavior, and app-rendered locked offer/terms.
+
+## Feature flags
+
+- `AI_V3_INDEPENDENT_JUDGE_ENABLED`
+- Rollback flags already available from PR 1:
+  - `AI_V3_PROVIDER_ROUTER_ENABLED`
+  - `AI_TEXT_FALLBACK_ENABLED`
+
+The five-lane prompt and runtime Merchant Creative Profile are active in this local code path. The optional extra Gemini judge call is gated.
+
+## Provider routing behavior
+
+Creative generation and copy revisions continue through the PR 1 provider router.
+
+Normal intended text generation path:
+
+- Primary: OpenAI `gpt-5.5`, medium reasoning.
+- Fallback: Gemini `gemini-3.5-flash` when PR 1 router/fallback flags are enabled.
+
+Independent judge path:
+
+- Provider: Gemini only.
+- Model: `GEMINI_JUDGE_MODEL` resolved separately from `GEMINI_TEXT_MODEL`, defaulting to `gemini-3.5-flash`.
+- Fallback: none; deterministic scoring is used when judging cannot run.
+
+Image provider routing: not changed in PR 2.
+
+## Cost and timeout controls
+
+- Creative brief plus five candidates: `maxOutputTokens=1400`, `timeoutMs=12000`.
+- Candidate judge: `maxOutputTokens=560`, `AI_JUDGE_TIMEOUT_MS` or 9000 ms.
+- Judge attempts are logged to `ai_generation_costs` with feature `candidate_judge`.
+- Provider attempts and estimated cost continue through the PR 1 text-router/cost path.
+
+## Prompt versions
+
+- `AD_COPY_PROMPT_VERSION`: `AI_COPY_PROMPT_V4`.
+- `AI_COPY_GENERATOR_VERSION`: `ai-copy-v4`.
+- `CANDIDATE_JUDGE_PROMPT_VERSION`: `candidate-judge-v1`.
+
+## Tests added and results
+
+Focused test run:
+
+```text
+npx vitest run lib/category-ad-playbooks.test.ts lib/merchant-creative-profile.test.ts lib/ad-candidate-diversity.test.ts lib/candidate-judge.test.ts lib/ad-copy-style-gate.test.ts lib/deal-offer-contract.test.ts supabase/functions/ai-generate-ad-variants/prompt.test.ts
+```
+
+Result: 7 files passed, 47 tests passed.
+
+Current validation run:
+
+```text
+npx tsc --noEmit
+npm run typecheck:functions
+```
+
+Results:
+
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: passed, 119 Edge Function files checked.
+
+Full validation:
+
+- `npm run typecheck`: passed.
+- `npm run typecheck:functions`: passed, 119 Edge Function files checked.
+- `npm run test`: passed, 122 test files and 692 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid, 0 invalid, no changed facts.
+- Android Metro bundle probe passed:
+
+```text
+npx expo export --platform android --output-dir "%TEMP%\twofer-metro-probe-codex-ai-pr2" --clear
+```
+
+Existing `country-flag-icons` package export warnings appeared, matching the prior PR 1 probe, but did not fail the bundle.
+
+## Acceptance criteria map
+
+10. Merchant Creative Profile available and versioned: Implemented as a runtime derived profile, not persisted.
+11. Unverified merchant claims excluded from prompts: Implemented for runtime profile facts/differentiators.
+12. GPT-5.5 returns one positive creative brief and five candidates in one call: Implemented in schema/prompt; live provider behavior not run locally.
+13. Five required creative lanes are present: Implemented by schema and diversity checks.
+14. Hard duplicate checks active: Implemented.
+15. Similarity heuristics logged for calibration: Implemented in copy quality telemetry.
+16. Gemini judges GPT-5.5 candidates blindly: Implemented behind `AI_V3_INDEPENDENT_JUDGE_ENABLED`.
+17. Gemini-generated fallback copy does not receive same-provider judgment: Implemented.
+18. Selected candidate is specific to merchant when verified context exists: Partially implemented through prompt/profile/scoring; requires live non-publishing review.
+19. Valid but forgettable candidate can be rejected even when facts are correct: Partially implemented through judge/scoring; requires live calibration.
+20. Existing style-gate logic active in production path: Implemented for `ai-generate-ad-variants`.
+21. Customer-facing BOGO/2-for-1 shorthand blocked: Implemented in centralized policy and offer validation.
+22. Immutable offer facts remain unchanged: Preserved.
+23. Revisions pass same validation and judgment path: Implemented for copy revisions in this path.
+24. Category playbooks active: Implemented for copy prompt/judge context.
+25. Deterministic fallback usage and reason logged: Preserved.
+26. Approval tied to exact final version: Preserved, not changed in PR 2.
+27-46. Merchant image control and image quality criteria: Not implemented; PR 3.
+47. Exact offer lines and terms from structured fields: Preserved.
+48. Consumer feed/detail share authoritative helpers: Not implemented; PR 4.
+49. Legacy canned output cannot appear as live AI: Not implemented in PR 2.
+50. Google data flow documented before activation: Not implemented; activation should remain gated.
+51. No generation/publish path bypasses router, offer contract, image selection, approval controls: Partially implemented; PR 2 strengthens ad-variant copy only.
+52. No GPT-5.4-mini versus GPT-5.5 comparison performed: Implemented.
+
+## Unresolved risks
+
+- Merchant Creative Profile is derived at runtime rather than persisted. A future data model can store confirmed profile facts, but no migration was applied in this PR.
+- Targeted repair currently uses the existing whole-copy corrective retry path rather than regenerating only failed lanes.
+- Independent judging is gated and has not been exercised against live Gemini in this local run.
+- Generated copy quality still needs representative non-publishing merchant preview review before production enablement.
+- Other legacy AI generation routes remain out of PR 2 scope.
+
+## Rollback
+
+Set:
+
+```text
+AI_V3_INDEPENDENT_JUDGE_ENABLED=false
+AI_TEXT_FALLBACK_ENABLED=false
+AI_V3_PROVIDER_ROUTER_ENABLED=false
+OPENAI_MODEL=gpt-5.4-mini
+```
+
+If the five-lane prompt must be rolled back before PR 4 cleanup, redeploy the prior Edge Function version from PR 1. Do not roll back immutable offer validation, deterministic fallback copy, or exact-version merchant approval.

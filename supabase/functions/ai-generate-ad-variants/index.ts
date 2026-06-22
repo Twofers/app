@@ -39,6 +39,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import { resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -66,9 +67,27 @@ import {
   buildRequiredVisualItems,
   generateValidatedDealCopy,
   parseAiDealCopyVariants,
+  validateAiCopyAgainstOffer,
+  type AiDealCopyVariant,
   type AiDealCopySource,
   type DealOfferContract,
 } from "../../../lib/deal-offer-contract.ts";
+import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
+import {
+  CANDIDATE_JUDGE_PROMPT_VERSION,
+  applyJudgeScoresToCandidates,
+  buildCandidateJudgePrompt,
+  normalizeCandidateJudgeResult,
+  rankCandidatesDeterministically,
+  type CandidateJudgeResult,
+} from "../../../lib/candidate-judge.ts";
+import { buildCategoryAdPlaybookPromptBlock } from "../../../lib/category-ad-playbooks.ts";
+import {
+  buildMerchantCreativeProfile,
+  buildMerchantCreativeProfilePromptBlock,
+  type MerchantCreativeProfile,
+} from "../../../lib/merchant-creative-profile.ts";
 import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
@@ -361,6 +380,10 @@ async function generateCopy(params: {
   model?: string;
   provider_fallback_used?: boolean;
   provider_fallback_reason?: string;
+  copy_quality?: CopyQualityTelemetry[];
+  judge_attempts?: ProviderAttempt[];
+  judge_provider?: string;
+  judge_model?: string;
 }> {
   const {
     openAiKey,
@@ -385,10 +408,25 @@ async function generateCopy(params: {
 
   const copyStartedAt = Date.now();
   const providerAttempts: ProviderAttempt[] = [];
+  const copyQuality: CopyQualityTelemetry[] = [];
+  const judgeAttempts: ProviderAttempt[] = [];
   let copyProvider: string | undefined;
   let copyModel: string | undefined;
+  let judgeProvider: string | undefined;
+  let judgeModel: string | undefined;
   let providerFallbackUsed = false;
   let providerFallbackReason: string | undefined;
+  const merchantProfile = buildMerchantCreativeProfile({
+    businessId: offerContract.businessId,
+    businessName,
+    category: businessContext.category,
+    tone: businessContext.tone,
+    location: businessContext.location,
+    address: businessContext.address,
+    description: businessContext.description,
+    itemHint,
+    research,
+  });
   const selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
@@ -406,6 +444,7 @@ async function generateCopy(params: {
         previousAd,
         offerContract,
         validationFeedback,
+        merchantCreativeProfile: merchantProfile,
       });
 
       let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
@@ -415,7 +454,7 @@ async function generateCopy(params: {
           systemPrompt: system,
           userPrompt: userText,
           jsonSchema,
-          maxOutputTokens: 650,
+          maxOutputTokens: 1400,
           timeoutMs: 12_000,
           generationRunId: costContext.requestGroupId,
           promptVersion: AD_COPY_PROMPT_VERSION,
@@ -445,7 +484,27 @@ async function generateCopy(params: {
       providerFallbackReason = result.fallbackReason ?? providerFallbackReason;
       const content = JSON.stringify(result.value);
       try {
-        return parseAiDealCopyVariants(content);
+        const variants = parseAiDealCopyVariants(content);
+        const creativeBrief = result.value && typeof result.value === "object"
+          ? (result.value as { creativeBrief?: unknown }).creativeBrief
+          : null;
+        const prepared = await prepareCopyCandidates({
+          variants,
+          creativeBrief,
+          attemptNumber,
+          generationProvider: result.provider,
+          openAiKey,
+          geminiApiKey,
+          businessContext,
+          merchantProfile,
+          offerContract,
+          costContext,
+        });
+        copyQuality.push(prepared.telemetry);
+        judgeAttempts.push(...prepared.judgeAttempts);
+        judgeProvider = prepared.judgeProvider ?? judgeProvider;
+        judgeModel = prepared.judgeModel ?? judgeModel;
+        return prepared.variants;
       } catch (e) {
         console.log(
           JSON.stringify({
@@ -496,6 +555,10 @@ async function generateCopy(params: {
     model: copyModel,
     provider_fallback_used: providerFallbackUsed,
     provider_fallback_reason: providerFallbackReason,
+    copy_quality: copyQuality,
+    judge_attempts: judgeAttempts,
+    judge_provider: judgeProvider,
+    judge_model: judgeModel,
     cta: defaultCta(outputLanguage),
   };
 }
@@ -508,6 +571,38 @@ function defaultCta(lang: OutputLanguage): string {
 
 // ─── Stage 3: image ────────────────────────────────────────────────────────
 
+type CopyQualityTelemetry = {
+  attempt_number: 1 | 2;
+  creative_brief?: unknown;
+  style_gate_rejected: Array<{
+    candidate_id: string;
+    reasons: string[];
+  }>;
+  diversity: {
+    checked: boolean;
+    ok: boolean;
+    hard_failures: Array<{ code: string; candidate_ids: string[]; score?: number }>;
+    warnings: Array<{ code: string; candidate_ids: string[]; score?: number }>;
+  };
+  preliminary_scores: Array<{
+    candidate_id: string;
+    strategy_id: string | null;
+    score: number;
+  }>;
+  judge: {
+    enabled: boolean;
+    used: boolean;
+    skipped_reason: string | null;
+    provider: string | null;
+    model: string | null;
+    pass: boolean | null;
+    winner_candidate_id: string | null;
+    ranked_candidate_ids: string[];
+    hard_failures: Array<{ candidate_id: string; code: string }>;
+    feedback: string[];
+  };
+};
+
 type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
 type AdQuota = { used: number; limit: number; remaining: number };
 
@@ -517,6 +612,81 @@ type AiCostContext = {
   ownerUserId: string;
   requestGroupId: string;
 };
+
+function envFlag(name: string, fallback = false): boolean {
+  const raw = Deno.env.get(name);
+  if (raw == null || raw === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(raw.trim());
+}
+
+function envNumber(name: string, fallback: number): number {
+  const raw = Number(Deno.env.get(name));
+  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+}
+
+function candidateId(candidate: AiDealCopyVariant, index: number): string {
+  return candidate.candidate_id || `candidate_${index + 1}`;
+}
+
+function styleGateCopy(candidate: AiDealCopyVariant) {
+  return {
+    displayHook: candidate.headline,
+    supportingLine: candidate.short_description,
+    cta: candidate.cta ?? "Claim deal",
+    pushTitle: candidate.push_title ?? candidate.headline,
+    pushBody: candidate.push_body ?? candidate.push_notification,
+    socialCaption: candidate.social_caption ?? "",
+  };
+}
+
+function offerFactsForJudge(contract: DealOfferContract): string {
+  return [
+    `Deal type: ${contract.dealType}`,
+    `Locked offer line: ${contract.canonicalOfferLine}`,
+    contract.requiredPurchase
+      ? `Customer buys ${contract.requiredPurchase.quantity} ${contract.requiredPurchase.itemName}.`
+      : "",
+    contract.freeReward
+      ? `Customer gets ${contract.freeReward.quantity} ${contract.freeReward.itemName} free.`
+      : "",
+    contract.singleItemDiscount
+      ? `Customer gets ${contract.singleItemDiscount.discountPercent}% off one ${contract.singleItemDiscount.itemName}.`
+      : "",
+    `Terms are app-rendered metadata: ${contract.canonicalShortTerms}`,
+  ].filter(Boolean).join("\n");
+}
+
+function seededShuffle<T>(items: readonly T[], seed: string): T[] {
+  let hash = 2166136261;
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return [...items]
+    .map((item, index) => {
+      hash ^= index + 0x9e3779b9;
+      hash = Math.imul(hash, 16777619);
+      return { item, sort: hash >>> 0 };
+    })
+    .sort((left, right) => left.sort - right.sort)
+    .map(({ item }) => item);
+}
+
+function makeJudgeConfig() {
+  const base = resolveAiTextProviderConfig();
+  return {
+    ...base,
+    routerEnabled: true,
+    primaryProvider: "gemini" as const,
+    fallbackEnabled: false,
+    fallbackProvider: "openai" as const,
+    geminiTextModel: resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL"),
+    primaryTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+    fallbackTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+    transientRetryMax: 0,
+    retryAfterFullTimeout: false,
+  };
+}
 
 async function logAdCost(
   ctx: AiCostContext | null,
@@ -601,6 +771,185 @@ async function logTextProviderAttempts(
       openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
       responseId: null,
     });
+  }
+}
+
+async function prepareCopyCandidates(params: {
+  variants: AiDealCopyVariant[];
+  creativeBrief: unknown;
+  attemptNumber: 1 | 2;
+  generationProvider?: string;
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  businessContext: BusinessContext;
+  merchantProfile: MerchantCreativeProfile;
+  offerContract: DealOfferContract;
+  costContext: AiCostContext;
+}): Promise<{
+  variants: AiDealCopyVariant[];
+  telemetry: CopyQualityTelemetry;
+  judgeAttempts: ProviderAttempt[];
+  judgeProvider?: string;
+  judgeModel?: string;
+}> {
+  const telemetry: CopyQualityTelemetry = {
+    attempt_number: params.attemptNumber,
+    creative_brief: params.creativeBrief,
+    style_gate_rejected: [],
+    diversity: {
+      checked: false,
+      ok: true,
+      hard_failures: [],
+      warnings: [],
+    },
+    preliminary_scores: [],
+    judge: {
+      enabled: envFlag("AI_V3_INDEPENDENT_JUDGE_ENABLED", false),
+      used: false,
+      skipped_reason: null,
+      provider: null,
+      model: null,
+      pass: null,
+      winner_candidate_id: null,
+      ranked_candidate_ids: [],
+      hard_failures: [],
+      feedback: [],
+    },
+  };
+
+  const styleSafe = params.variants.filter((variant, index) => {
+    const gate = evaluateAdCopyStyleGate({
+      copy: styleGateCopy(variant),
+      provenance: {
+        displayHook: "ai_generated",
+        supportingLine: "ai_generated",
+        cta: "ai_generated",
+        pushTitle: "ai_generated",
+        pushBody: "ai_generated",
+        socialCaption: "ai_generated",
+      },
+      requiredSpecificTerms: params.offerContract.aiRules.mustUseExactItemNames,
+    });
+    if (gate.ok) return true;
+    telemetry.style_gate_rejected.push({
+      candidate_id: candidateId(variant, index),
+      reasons: [...new Set(gate.failures.flatMap((failure) => failure.reasons))],
+    });
+    return false;
+  });
+
+  const hasStrategyMetadata = styleSafe.some((variant) => variant.strategy_id);
+  if (hasStrategyMetadata) {
+    const diversity = checkAdCandidateDiversity(styleSafe);
+    telemetry.diversity = {
+      checked: true,
+      ok: diversity.ok,
+      hard_failures: diversity.hardFailures.map((issue) => ({
+        code: issue.code,
+        candidate_ids: issue.candidateIds,
+        ...(typeof issue.score === "number" ? { score: issue.score } : {}),
+      })),
+      warnings: diversity.warnings.map((issue) => ({
+        code: issue.code,
+        candidate_ids: issue.candidateIds,
+        ...(typeof issue.score === "number" ? { score: issue.score } : {}),
+      })),
+    };
+    if (!diversity.ok) {
+      return { variants: [], telemetry, judgeAttempts: [] };
+    }
+  }
+
+  const ranked = rankCandidatesDeterministically(styleSafe, params.offerContract, params.merchantProfile);
+  telemetry.preliminary_scores = ranked.map((variant, index) => ({
+    candidate_id: candidateId(variant, index),
+    strategy_id: variant.strategy_id ?? null,
+    score: variant.preliminary_score ?? 0,
+  }));
+
+  if (!telemetry.judge.enabled) {
+    telemetry.judge.skipped_reason = "feature_flag_disabled";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+  if (params.generationProvider === "gemini") {
+    telemetry.judge.skipped_reason = "same_provider_fallback";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+  if (!params.geminiApiKey) {
+    telemetry.judge.skipped_reason = "gemini_api_key_missing";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+
+  const judgeCandidates = ranked
+    .filter((variant) => validateAiCopyAgainstOffer(variant, params.offerContract).valid)
+    .slice(0, 3);
+  if (judgeCandidates.length < 2) {
+    telemetry.judge.skipped_reason = "fewer_than_two_valid_candidates";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+
+  const shuffled = seededShuffle(judgeCandidates, `${params.costContext.requestGroupId}:${params.attemptNumber}`);
+  const { system, userText, jsonSchema } = buildCandidateJudgePrompt({
+    offerFacts: offerFactsForJudge(params.offerContract),
+    categoryPlaybookBlock: buildCategoryAdPlaybookPromptBlock(params.businessContext.category),
+    merchantProfileBlock: buildMerchantCreativeProfilePromptBlock(params.merchantProfile),
+    creativeBrief: params.creativeBrief,
+    candidates: shuffled,
+  });
+
+  try {
+    const result = await generateStructuredText<typeof jsonSchema, CandidateJudgeResult>({
+      operation: "candidate_judge",
+      systemPrompt: system,
+      userPrompt: userText,
+      jsonSchema,
+      maxOutputTokens: 560,
+      timeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+      generationRunId: params.costContext.requestGroupId,
+      promptVersion: CANDIDATE_JUDGE_PROMPT_VERSION,
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
+      admin: params.costContext.admin,
+      config: makeJudgeConfig(),
+    });
+    await logTextProviderAttempts(params.costContext, "candidate_judge", result.attempts);
+    const judge = normalizeCandidateJudgeResult(result.value);
+    telemetry.judge.used = judge !== null;
+    telemetry.judge.provider = result.provider;
+    telemetry.judge.model = result.model;
+    telemetry.judge.pass = judge?.pass ?? false;
+    telemetry.judge.winner_candidate_id = judge?.winnerCandidateId ?? null;
+    telemetry.judge.ranked_candidate_ids = judge?.rankedCandidateIds ?? [];
+    telemetry.judge.hard_failures = judge?.hardFailReasons.map((reason) => ({
+      candidate_id: reason.candidateId,
+      code: reason.code,
+    })) ?? [];
+    telemetry.judge.feedback = judge?.conciseFeedback ?? [];
+    if (!judge) {
+      telemetry.judge.skipped_reason = "judge_output_invalid";
+      return {
+        variants: ranked,
+        telemetry,
+        judgeAttempts: result.attempts,
+        judgeProvider: result.provider,
+        judgeModel: result.model,
+      };
+    }
+    return {
+      variants: applyJudgeScoresToCandidates(ranked, judge),
+      telemetry,
+      judgeAttempts: result.attempts,
+      judgeProvider: result.provider,
+      judgeModel: result.model,
+    };
+  } catch (e) {
+    const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+    await logTextProviderAttempts(params.costContext, "candidate_judge", attempts);
+    telemetry.judge.skipped_reason = "judge_unavailable";
+    telemetry.judge.feedback = [String(e).slice(0, 180)];
+    return { variants: ranked, telemetry, judgeAttempts: attempts };
   }
 }
 
@@ -1493,6 +1842,10 @@ function buildGenerationTelemetry(params: {
     model?: string;
     provider_fallback_used?: boolean;
     provider_fallback_reason?: string;
+    copy_quality?: CopyQualityTelemetry[];
+    judge_attempts?: ProviderAttempt[];
+    judge_provider?: string;
+    judge_model?: string;
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
@@ -1540,6 +1893,25 @@ function buildGenerationTelemetry(params: {
       model: copy.model ?? null,
       provider_fallback_used: copy.provider_fallback_used ?? false,
       provider_fallback_reason: copy.provider_fallback_reason ?? null,
+      quality: copy.copy_quality ?? [],
+      judge: {
+        provider: copy.judge_provider ?? null,
+        model: copy.judge_model ?? null,
+        attempts: (copy.judge_attempts ?? []).map((attempt) => ({
+          provider: attempt.provider,
+          model: attempt.model,
+          operation: attempt.operation,
+          success: attempt.success,
+          latency_ms: attempt.latencyMs,
+          error_class: attempt.errorClass ?? null,
+          error_code: attempt.errorCode ?? null,
+          input_tokens: attempt.inputTokens ?? null,
+          cached_input_tokens: attempt.cachedInputTokens ?? null,
+          reasoning_tokens: attempt.reasoningTokens ?? null,
+          output_tokens: attempt.outputTokens ?? null,
+          estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+        })),
+      },
       provider_attempts: (copy.provider_attempts ?? []).map((attempt) => ({
         provider: attempt.provider,
         model: attempt.model,

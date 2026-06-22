@@ -5,6 +5,14 @@ import {
   normalizeDealFactsFromContract,
   type DealOfferContract,
 } from "../../../lib/deal-offer-contract.ts";
+import { AD_COPY_BANNED_PHRASES } from "../../../lib/ad-language-policy.ts";
+import { AD_COPY_STRATEGY_IDS } from "../../../lib/ad-candidate-diversity.ts";
+import { buildCategoryAdPlaybookPromptBlock } from "../../../lib/category-ad-playbooks.ts";
+import {
+  buildMerchantCreativeProfile,
+  buildMerchantCreativeProfilePromptBlock,
+  type MerchantCreativeProfile,
+} from "../../../lib/merchant-creative-profile.ts";
 
 export type BusinessContext = {
   category?: string;
@@ -30,6 +38,17 @@ export type PreviousAdCopy = {
   terms_summary?: string;
 };
 
+export type CreativeBrief = {
+  targetCustomerMoment: string;
+  exactCustomerHook: string;
+  merchantTruthUsed: string[];
+  offerTruthUsed: string[];
+  desiredFeeling: string;
+  naturalLanguageDirection: string;
+  visualStory: string;
+  factsNotToInvent: string[];
+};
+
 export type DealCopyPromptParams = {
   itemHint: string;
   research: ItemResearch;
@@ -45,9 +64,10 @@ export type DealCopyPromptParams = {
   previousAd?: PreviousAdCopy;
   offerContract?: DealOfferContract;
   validationFeedback?: string;
+  merchantCreativeProfile?: MerchantCreativeProfile;
 };
 
-export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V3";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V4";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -57,23 +77,74 @@ export const AD_COPY_JSON_SCHEMA = {
     properties: {
       variants: {
         type: "array",
-        minItems: 1,
-        maxItems: 3,
+        minItems: 5,
+        maxItems: 5,
         items: {
           type: "object",
           properties: {
+            candidateId: { type: "string" },
+            strategyId: { type: "string", enum: [...AD_COPY_STRATEGY_IDS] },
+            strategyReason: { type: "string" },
             headlineAlternative: { type: "string" },
             description: { type: "string" },
             pushTitle: { type: "string" },
             pushBody: { type: "string" },
             socialCaption: { type: "string" },
+            cta: { type: "string" },
+            imageBrief: { type: "string" },
+            merchantSpecificContextLimited: { type: "boolean" },
           },
-          required: ["headlineAlternative", "description", "pushTitle", "pushBody", "socialCaption"],
+          required: [
+            "candidateId",
+            "strategyId",
+            "strategyReason",
+            "headlineAlternative",
+            "description",
+            "pushTitle",
+            "pushBody",
+            "socialCaption",
+            "cta",
+            "imageBrief",
+            "merchantSpecificContextLimited",
+          ],
           additionalProperties: false,
         },
       },
+      creativeBrief: {
+        type: "object",
+        properties: {
+          targetCustomerMoment: { type: "string" },
+          exactCustomerHook: { type: "string" },
+          merchantTruthUsed: {
+            type: "array",
+            items: { type: "string" },
+          },
+          offerTruthUsed: {
+            type: "array",
+            items: { type: "string" },
+          },
+          desiredFeeling: { type: "string" },
+          naturalLanguageDirection: { type: "string" },
+          visualStory: { type: "string" },
+          factsNotToInvent: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: [
+          "targetCustomerMoment",
+          "exactCustomerHook",
+          "merchantTruthUsed",
+          "offerTruthUsed",
+          "desiredFeeling",
+          "naturalLanguageDirection",
+          "visualStory",
+          "factsNotToInvent",
+        ],
+        additionalProperties: false,
+      },
     },
-    required: ["variants"],
+    required: ["creativeBrief", "variants"],
     additionalProperties: false,
   },
 };
@@ -105,24 +176,7 @@ export const AI_COPY_PROMPT_V3 = [
   "- Avoid generic marketing language.",
   "",
   "BANNED PHRASES:",
-  '- "qualifying purchase"',
-  '- "included after"',
-  '- "unlock savings"',
-  '- "elevate your experience"',
-  '- "treat yourself to"',
-  '- "indulge in"',
-  '- "limited-time local offer"',
-  '- "don\'t miss out"',
-  '- "act now"',
-  '- "exclusive deal"',
-  '- "savor the flavor"',
-  '- "perfectly paired"',
-  '- "AI-generated"',
-  '- "this offer allows you to"',
-  '- "customers can enjoy"',
-  '- "promotion applies to"',
-  '- "terms and conditions apply"',
-  '- Also avoid "amazing deal", "delicious treat", and "come enjoy our special offer".',
+  ...AD_COPY_BANNED_PHRASES.map((phrase) => `- "${phrase}"`),
   "",
   "FIELD RULES:",
   "- headlineAlternative: short ad headline, target 4-9 words, max 55 characters when exact product names allow it, no trailing period.",
@@ -130,6 +184,16 @@ export const AI_COPY_PROMPT_V3 = [
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
   `- socialCaption: plain share caption, max ${DEAL_COPY_LIMITS.socialCaption} characters.`,
+  "- cta: short verb-first action label, max 26 characters.",
+  "- imageBrief: short visual idea using only verified offer and merchant facts; no text in image.",
+  "- merchantSpecificContextLimited: true only for the merchant_specific lane when verified merchant context is sparse.",
+  "",
+  "CREATIVE STRATEGIES:",
+  "- value_clarity: make the exact exchange and benefit understandable immediately.",
+  "- social_or_occasion: connect the offer to a natural customer moment, companion, routine, or daypart without inventing facts.",
+  "- product_desire: create concrete desire for the real item or service using category-appropriate specificity.",
+  "- local_discovery: frame the offer as a reason to discover or revisit a local business using verified place/context facts.",
+  "- merchant_specific: use an actual signature item, customer habit, personality, neighborhood truth, or verified differentiator from the Merchant Creative Profile. If that context is limited, stay conservative and set merchantSpecificContextLimited true.",
   "",
   "EXAMPLES:",
   "Different-item BOGO:",
@@ -286,6 +350,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   const {
     itemHint,
     research,
+    businessName,
     businessContext,
     uploadedImageDescription,
     outputLanguage,
@@ -294,6 +359,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     previousAd,
     offerContract,
     validationFeedback,
+    merchantCreativeProfile,
   } = params;
 
   const facts: string[] = [];
@@ -301,6 +367,19 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   const cleanResearchName = nonEmpty(research.item_name);
   const cleanResearchDescription = nonEmpty(research.description);
   const cleanImageDescription = nonEmpty(uploadedImageDescription);
+  const profile = merchantCreativeProfile ?? buildMerchantCreativeProfile({
+    businessId: offerContract?.businessId,
+    businessName,
+    category: businessContext.category,
+    tone: businessContext.tone,
+    location: businessContext.location,
+    address: businessContext.address,
+    description: businessContext.description,
+    itemHint,
+    research,
+  });
+  const categoryPlaybookBlock = buildCategoryAdPlaybookPromptBlock(businessContext.category);
+  const merchantProfileBlock = buildMerchantCreativeProfilePromptBlock(profile);
 
   if (businessContext.category) facts.push(`Business category: ${businessContext.category.trim()}`);
   if (businessContext.description) facts.push(`Business description: ${businessContext.description.trim()}`);
@@ -334,9 +413,13 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   }
 
   const system = [
-    `Write up to three mobile Twofer deal copy variants. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
+    `Write one positive creative brief and exactly five mobile Twofer deal copy candidates. Output JSON only. Write all output fields in ${languageName(outputLanguage)}.`,
     "",
     ...COPY_VOICE_RULES,
+    "",
+    categoryPlaybookBlock,
+    "",
+    merchantProfileBlock,
     ...(offerContract ? contractSystemRules(offerContract) : []),
   ].join("\n");
 
@@ -348,10 +431,14 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     ...facts.map((fact) => `  - ${fact}`),
     ...revisionBlock,
     "",
+    "Create exactly one candidate for each strategy ID: value_clarity, social_or_occasion, product_desire, local_discovery, merchant_specific.",
+    "The creativeBrief must explain the customer moment, exact hook, verified merchant truth used, offer truth used, desired feeling, natural language direction, visual story, and facts not to invent.",
+    "Each candidate must have a different opening idea and a different strategy reason. Avoid paraphrasing the same headline five ways.",
+    "",
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",
     "",
     "Return this exact JSON shape:",
-    '{ "variants": [{ "headlineAlternative": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string" }] }',
+    '{ "creativeBrief": { "targetCustomerMoment": "string", "exactCustomerHook": "string", "merchantTruthUsed": ["string"], "offerTruthUsed": ["string"], "desiredFeeling": "string", "naturalLanguageDirection": "string", "visualStory": "string", "factsNotToInvent": ["string"] }, "variants": [{ "candidateId": "string", "strategyId": "value_clarity", "strategyReason": "string", "headlineAlternative": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string", "cta": "string", "imageBrief": "string", "merchantSpecificContextLimited": false }] }',
   ].join("\n");
 
   return {

@@ -1,3 +1,10 @@
+import {
+  AD_COPY_BOGO_SHORTHAND_PATTERNS,
+  AD_COPY_FORBIDDEN_PATTERNS,
+  AD_COPY_HYPE_WORD_PATTERN,
+  matchesAdCopyPattern,
+} from "./ad-language-policy.ts";
+
 type DealEligibilityDealType =
   | "BUY_ONE_GET_ONE_FREE"
   | "BUY_ONE_GET_SOMETHING_FREE"
@@ -70,6 +77,9 @@ export type DealOfferContract = {
 };
 
 export type AiDealCopyVariant = {
+  candidate_id?: string;
+  strategy_id?: string;
+  strategy_reason?: string;
   headline: string;
   short_description: string;
   push_notification: string;
@@ -77,6 +87,12 @@ export type AiDealCopyVariant = {
   headline_alternative?: string;
   push_title?: string;
   push_body?: string;
+  cta?: string;
+  image_brief?: string;
+  merchant_specific_context_limited?: boolean;
+  preliminary_score?: number;
+  judge_score?: number;
+  judge_reason?: string;
 };
 
 export type AiDealCopyValidationResult = {
@@ -102,7 +118,7 @@ export type ValidatedDealCopy = AiDealCopyVariant & {
   generator_version: string;
 };
 
-export const AI_COPY_GENERATOR_VERSION = "ai-copy-v3";
+export const AI_COPY_GENERATOR_VERSION = "ai-copy-v4";
 
 export const DEAL_COPY_LIMITS = {
   headline: 96,
@@ -804,29 +820,8 @@ function containsUnsupportedPrice(text: string): boolean {
   return /\$\s*\d|\b\d+(?:\.\d{2})?\s+dollars?\b|\b\d+(?:\.\d{2})?\s+bucks?\b/i.test(text);
 }
 
-const FORBIDDEN_AI_COPY_PATTERNS = [
-  /\bqualifying\s+purchase\b/i,
-  /\bqualifying\b.{0,48}\bpurchase\b/i,
-  /\bincluded\s+after\b/i,
-  /\bunlock\s+savings\b/i,
-  /\belevate\s+your\s+experience\b/i,
-  /\btreat\s+yourself\s+to\b/i,
-  /\bindulge\s+in\b/i,
-  /\blimited[- ]time\s+local\s+offer\b/i,
-  /\bdon'?t\s+miss\s+out\b/i,
-  /\bact\s+now\b/i,
-  /\bexclusive\s+deal\b/i,
-  /\bsavor\s+the\s+flavo?r\b/i,
-  /\bperfectly\s+paired\b/i,
-  /\bAI-generated\b/i,
-  /\bthis\s+offer\s+allows\s+you\s+to\b/i,
-  /\bcustomers\s+can\s+enjoy\b/i,
-  /\bpromotion\s+applies\s+to\b/i,
-  /\bterms\s+and\s+conditions\s+apply\b/i,
-];
-
 function containsForbiddenAiPhrase(text: string): boolean {
-  return FORBIDDEN_AI_COPY_PATTERNS.some((pattern) => pattern.test(text));
+  return matchesAdCopyPattern(text, AD_COPY_FORBIDDEN_PATTERNS);
 }
 
 function hasAdLikeHeadlineHook(headline: string): boolean {
@@ -848,7 +843,7 @@ function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCode
   if (containsForbiddenAiPhrase(text)) reasonCodes.push("FORBIDDEN_AI_PHRASE");
   if (containsCopySyntaxLeak(text)) reasonCodes.push("COPY_SYNTAX_LEAK");
   if (containsUnsupportedPrice(text)) reasonCodes.push("UNSUPPORTED_PRICE");
-  if (/\b(?:delicious|fresh|best|artisan|amazing|incredible|ultimate|perfect)\b/i.test(text)) {
+  if (AD_COPY_HYPE_WORD_PATTERN.test(text) || /\b(?:fresh|artisan|perfect)\b/i.test(text)) {
     reasonCodes.push("UNSUPPORTED_PROMO_CLAIM");
   }
 
@@ -874,7 +869,7 @@ function validateBuyOneGetSomethingFree(
   const requiredPattern = escapeRegex(normalizeForSearch(required));
   const freePattern = escapeRegex(normalizeForSearch(free));
 
-  if (/\bbogo\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b|\b2\s*x\s*1\b/.test(normalized)) {
+  if (matchesAdCopyPattern(normalized, AD_COPY_BOGO_SHORTHAND_PATTERNS)) {
     reasonCodes.push("GENERIC_BOGO_NOT_ALLOWED");
   }
   if (/\bbuy\s+one\s*,?\s*get\s+one\b|\bbuy\s+1\s*,?\s*get\s+1\b/.test(normalized)) {
@@ -1067,11 +1062,19 @@ export function buildRequiredVisualItems(contract: DealOfferContract): string[] 
 
 function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
   const raw = copy as Partial<AiDealCopyVariant> & {
+    candidateId?: unknown;
+    strategyId?: unknown;
+    strategyReason?: unknown;
     headlineAlternative?: unknown;
     description?: unknown;
     pushTitle?: unknown;
     pushBody?: unknown;
     socialCaption?: unknown;
+    imageBrief?: unknown;
+    merchantSpecificContextLimited?: unknown;
+    preliminaryScore?: unknown;
+    judgeScore?: unknown;
+    judgeReason?: unknown;
   };
   const headlineAlternative =
     typeof raw.headlineAlternative === "string" ? raw.headlineAlternative : copy.headline_alternative;
@@ -1085,7 +1088,17 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     typeof raw.socialCaption === "string"
       ? raw.socialCaption
       : copy.social_caption;
+  const candidateId = typeof raw.candidateId === "string" ? raw.candidateId : copy.candidate_id;
+  const strategyId = typeof raw.strategyId === "string" ? raw.strategyId : copy.strategy_id;
+  const strategyReason = typeof raw.strategyReason === "string" ? raw.strategyReason : copy.strategy_reason;
+  const imageBrief = typeof raw.imageBrief === "string" ? raw.imageBrief : copy.image_brief;
+  const preliminaryScore = typeof raw.preliminaryScore === "number" ? raw.preliminaryScore : copy.preliminary_score;
+  const judgeScore = typeof raw.judgeScore === "number" ? raw.judgeScore : copy.judge_score;
+  const judgeReason = typeof raw.judgeReason === "string" ? raw.judgeReason : copy.judge_reason;
   return {
+    ...(isNonEmptyString(candidateId) ? { candidate_id: compactText(candidateId, 64) } : {}),
+    ...(isNonEmptyString(strategyId) ? { strategy_id: compactText(strategyId, 64) } : {}),
+    ...(isNonEmptyString(strategyReason) ? { strategy_reason: compactText(strategyReason, 220) } : {}),
     headline: compactText(cleanText(headlineAlternative ?? copy.headline), DEAL_COPY_LIMITS.headline),
     short_description: compactText(cleanText(description), DEAL_COPY_LIMITS.description),
     push_notification: compactText(cleanText(pushBody), DEAL_COPY_LIMITS.pushBody),
@@ -1093,6 +1106,16 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     ...(isNonEmptyString(pushTitle) ? { push_title: compactText(pushTitle, DEAL_COPY_LIMITS.pushTitle) } : {}),
     ...(isNonEmptyString(pushBody) ? { push_body: compactText(pushBody, DEAL_COPY_LIMITS.pushBody) } : {}),
     ...(isNonEmptyString(socialCaption) ? { social_caption: compactText(socialCaption, DEAL_COPY_LIMITS.socialCaption) } : {}),
+    ...(isNonEmptyString(copy.cta) ? { cta: compactText(copy.cta, 32) } : {}),
+    ...(isNonEmptyString(imageBrief) ? { image_brief: compactText(imageBrief, 260) } : {}),
+    ...(typeof raw.merchantSpecificContextLimited === "boolean"
+      ? { merchant_specific_context_limited: raw.merchantSpecificContextLimited }
+      : typeof copy.merchant_specific_context_limited === "boolean"
+      ? { merchant_specific_context_limited: copy.merchant_specific_context_limited }
+      : {}),
+    ...(typeof preliminaryScore === "number" && Number.isFinite(preliminaryScore) ? { preliminary_score: preliminaryScore } : {}),
+    ...(typeof judgeScore === "number" && Number.isFinite(judgeScore) ? { judge_score: judgeScore } : {}),
+    ...(isNonEmptyString(judgeReason) ? { judge_reason: compactText(judgeReason, 120) } : {}),
   };
 }
 
@@ -1106,7 +1129,7 @@ export function parseAiDealCopyVariants(content: string): AiDealCopyVariant[] {
     .filter((candidate): candidate is Partial<AiDealCopyVariant> => !!candidate && typeof candidate === "object")
     .map(cleanVariant)
     .filter((variant) => variant.headline || variant.short_description || variant.push_notification)
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract): number {
@@ -1127,6 +1150,12 @@ function scoreCopy(copy: AiDealCopyVariant, contract: DealOfferContract): number
   if (/\blimited\b|\bonly\s+\d+\b|\bavailable\b/.test(text)) score += 1;
   if (/\bamazing\b|\bdelicious treat\b|\bdont miss out\b|\bspecial offer\b/.test(text)) score -= 2;
   if (copy.headline && copy.short_description.toLowerCase().startsWith(copy.headline.toLowerCase())) score -= 1;
+  if (typeof copy.preliminary_score === "number" && Number.isFinite(copy.preliminary_score)) {
+    score += Math.round(copy.preliminary_score / 20);
+  }
+  if (typeof copy.judge_score === "number" && Number.isFinite(copy.judge_score)) {
+    score += Math.round(copy.judge_score / 10);
+  }
   return score;
 }
 

@@ -64,6 +64,18 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("amazing deal");
   });
 
+  it("includes the category playbook, merchant profile, creative brief, and five lane instructions", () => {
+    expect(basePrompt.system).toContain("Write one positive creative brief and exactly five");
+    expect(basePrompt.system).toContain("CATEGORY PLAYBOOK");
+    expect(basePrompt.system).toContain("coffee_cafe");
+    expect(basePrompt.system).toContain("MERCHANT CREATIVE PROFILE");
+    expect(basePrompt.system).toContain("Merchant-specific context limited: false");
+    expect(basePrompt.system).toContain("value_clarity");
+    expect(basePrompt.system).toContain("merchant_specific");
+    expect(basePrompt.userText).toContain("Create exactly one candidate for each strategy ID");
+    expect(basePrompt.userText).toContain("The creativeBrief must explain");
+  });
+
   it("includes good and bad examples", () => {
     expect(basePrompt.system).toContain("Bad headlineAlternative");
     expect(basePrompt.system).toContain("Egg sandwich with free coffee");
@@ -88,10 +100,25 @@ describe("buildAdCopyPrompt", () => {
 
   it("requires the structured output schema", () => {
     const schema = basePrompt.jsonSchema.schema;
-    expect(schema.required).toEqual(["variants"]);
-    expect(Object.keys(schema.properties)).toEqual(["variants"]);
+    expect(schema.required).toEqual(["creativeBrief", "variants"]);
+    expect(Object.keys(schema.properties)).toEqual(["variants", "creativeBrief"]);
+    expect(schema.properties.variants.minItems).toBe(5);
+    expect(schema.properties.variants.maxItems).toBe(5);
     const item = schema.properties.variants.items;
-    expect(item.required).toEqual(["headlineAlternative", "description", "pushTitle", "pushBody", "socialCaption"]);
+    expect(item.required).toEqual([
+      "candidateId",
+      "strategyId",
+      "strategyReason",
+      "headlineAlternative",
+      "description",
+      "pushTitle",
+      "pushBody",
+      "socialCaption",
+      "cta",
+      "imageBrief",
+      "merchantSpecificContextLimited",
+    ]);
+    expect(schema.properties.creativeBrief.required).toContain("targetCustomerMoment");
   });
 
   it("tells the model not to invent missing facts", () => {
