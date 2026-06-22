@@ -39,7 +39,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
-import { resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
+import { geminiResponseSchema, resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -1117,6 +1117,41 @@ function extractResponseOutputText(data: unknown): string | null {
   return null;
 }
 
+function extractGeminiOutputText(data: unknown): string | null {
+  const candidates = (data as { candidates?: unknown[] } | null)?.candidates;
+  if (!Array.isArray(candidates)) return null;
+  for (const candidate of candidates) {
+    const parts = (candidate as { content?: { parts?: unknown[] } } | null)?.content?.parts;
+    if (!Array.isArray(parts)) continue;
+    const text = parts
+      .map((part) => {
+        const record = part as Record<string, unknown>;
+        return typeof record.text === "string" && record.thought !== true ? record.text : "";
+      })
+      .filter(Boolean)
+      .join("");
+    if (text.trim()) return text.trim();
+  }
+  return null;
+}
+
+function geminiUsageAsAiUsage(data: unknown): AiUsageInput | null {
+  const usage = (data as { usageMetadata?: Record<string, unknown> } | null)?.usageMetadata;
+  if (!usage || typeof usage !== "object") return null;
+  const numberValue = (name: string) => {
+    const value = usage[name];
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+  };
+  return {
+    input_tokens: numberValue("promptTokenCount"),
+    output_tokens: numberValue("candidatesTokenCount"),
+    total_tokens: numberValue("totalTokenCount"),
+    output_tokens_details: {
+      reasoning_tokens: numberValue("thoughtsTokenCount"),
+    },
+  };
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -1125,6 +1160,12 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+function geminiVisionQaFallbackEnabled(): boolean {
+  if (!envFlag("AI_VISION_FALLBACK_ENABLED", false)) return false;
+  const provider = (Deno.env.get("AI_VISION_FALLBACK_PROVIDER") ?? "gemini").trim().toLowerCase();
+  return provider === "gemini";
 }
 
 function imageStylePresetFromRevision(params: {
@@ -1230,6 +1271,7 @@ async function findStockImageFallback(params: {
 
 async function inspectGeneratedImageForOffer(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   imageBytes: Uint8Array;
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
@@ -1237,6 +1279,14 @@ async function inspectGeneratedImageForOffer(params: {
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   if (requiredVisualItems.length === 0) return null;
+  const geminiFallback = () =>
+    inspectGeneratedImageForOfferWithGemini({
+      geminiApiKey: params.geminiApiKey,
+      imageBytes: params.imageBytes,
+      requiredVisualItems,
+      costContext: params.costContext,
+      sourceType: params.sourceType ?? "ai_generated",
+    });
 
   try {
     const imageUrl = `data:image/png;base64,${bytesToBase64(params.imageBytes)}`;
@@ -1281,6 +1331,7 @@ async function inspectGeneratedImageForOffer(params: {
       console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_http", status: res.status }));
       await logAdCost(params.costContext, {
         feature: "image_qa",
+        provider: "openai",
         model: CHAT_MODEL,
         endpoint: "responses",
         openaiRequestId: openAiRequestIdFromHeaders(res.headers),
@@ -1288,11 +1339,12 @@ async function inspectGeneratedImageForOffer(params: {
         errorCode: `HTTP_${res.status}`,
         errorMessage: `Image QA failed with HTTP ${res.status}.`,
       });
-      return null;
+      return await geminiFallback();
     }
     const json = await res.json();
     await logAdCost(params.costContext, {
       feature: "image_qa",
+      provider: "openai",
       model: CHAT_MODEL,
       endpoint: "responses",
       usage: json?.usage ?? null,
@@ -1301,14 +1353,169 @@ async function inspectGeneratedImageForOffer(params: {
       success: true,
     });
     const text = extractResponseOutputText(json);
-    if (!text) return null;
+    if (!text) return await geminiFallback();
     return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
   } catch (e) {
     console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", err: String(e).slice(0, 200) }));
     await logAdCost(params.costContext, {
       feature: "image_qa",
+      provider: "openai",
       model: CHAT_MODEL,
       endpoint: "responses",
+      success: false,
+      errorCode: "FETCH_ERROR",
+      errorMessage: String(e).slice(0, 500),
+    });
+    return await geminiFallback();
+  }
+}
+
+async function inspectGeneratedImageForOfferWithGemini(params: {
+  geminiApiKey?: string | null;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+  sourceType: AdImageQaSourceType;
+}): Promise<QuickDealImageQaResult | null> {
+  if (!geminiVisionQaFallbackEnabled()) return null;
+
+  let model = "gemini";
+  try {
+    model = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
+  } catch (e) {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_config_error", err: String(e).slice(0, 200) }));
+    await logAdCost(params.costContext, {
+      feature: "image_qa",
+      provider: "gemini",
+      model,
+      endpoint: "models.generateContent",
+      success: false,
+      errorCode: "AI_TEXT_CONFIG_INVALID",
+      errorMessage: String(e).slice(0, 500),
+    });
+    return null;
+  }
+
+  const apiKey = (params.geminiApiKey ?? "").trim();
+  if (!apiKey) {
+    await logAdCost(params.costContext, {
+      feature: "image_qa",
+      provider: "gemini",
+      model,
+      endpoint: "models.generateContent",
+      success: false,
+      errorCode: "GEMINI_API_KEY_MISSING",
+      errorMessage: "Gemini API key is not configured.",
+    });
+    return null;
+  }
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: "You are Twofer's image quality inspector. Return JSON only." }],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: buildAdImageQaPrompt({
+                    sourceType: params.sourceType,
+                    requiredVisualItems: params.requiredVisualItems,
+                  }),
+                },
+                {
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: bytesToBase64(params.imageBytes),
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: geminiResponseSchema(QUICK_DEAL_IMAGE_QA_SCHEMA),
+            maxOutputTokens: 900,
+            thinkingConfig: {
+              thinkingLevel: "medium",
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(envNumber("AI_VISION_FALLBACK_TIMEOUT_MS", 14_000)),
+      },
+    );
+
+    if (!res.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_http", status: res.status }));
+      await logAdCost(params.costContext, {
+        feature: "image_qa",
+        provider: "gemini",
+        model,
+        endpoint: "models.generateContent",
+        success: false,
+        errorCode: `HTTP_${res.status}`,
+        errorMessage: `Gemini image QA failed with HTTP ${res.status}.`,
+      });
+      return null;
+    }
+
+    const json = await res.json();
+    const text = extractGeminiOutputText(json);
+    if (!text) {
+      await logAdCost(params.costContext, {
+        feature: "image_qa",
+        provider: "gemini",
+        model,
+        endpoint: "models.generateContent",
+        usage: geminiUsageAsAiUsage(json),
+        success: false,
+        errorCode: "GEMINI_EMPTY_CONTENT",
+        errorMessage: "Gemini returned no image QA content.",
+      });
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      await logAdCost(params.costContext, {
+        feature: "image_qa",
+        provider: "gemini",
+        model,
+        endpoint: "models.generateContent",
+        usage: geminiUsageAsAiUsage(json),
+        success: true,
+      });
+      return normalizeQuickDealImageQaResult(parsed, params.requiredVisualItems);
+    } catch {
+      await logAdCost(params.costContext, {
+        feature: "image_qa",
+        provider: "gemini",
+        model,
+        endpoint: "models.generateContent",
+        usage: geminiUsageAsAiUsage(json),
+        success: false,
+        errorCode: "GEMINI_JSON_PARSE_FAILED",
+        errorMessage: "Gemini returned invalid image QA JSON.",
+      });
+      return null;
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_error", err: String(e).slice(0, 200) }));
+    await logAdCost(params.costContext, {
+      feature: "image_qa",
+      provider: "gemini",
+      model,
+      endpoint: "models.generateContent",
       success: false,
       errorCode: "FETCH_ERROR",
       errorMessage: String(e).slice(0, 500),
@@ -1319,6 +1526,7 @@ async function inspectGeneratedImageForOffer(params: {
 
 async function sourceAwareQaForImageBytes(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   imageBytes: Uint8Array;
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
@@ -1346,6 +1554,7 @@ async function sourceAwareQaForImageBytes(params: {
   }
   const raw = await inspectGeneratedImageForOffer({
     openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
     imageBytes: params.imageBytes,
     requiredVisualItems,
     costContext: params.costContext,
@@ -1379,6 +1588,7 @@ type ProducedImage = ProducedImageBase & {
 
 async function produceImageOpenAiOnly(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   admin: SupabaseClient;
   userClient: SupabaseClient;
   businessId: string;
@@ -1394,6 +1604,7 @@ async function produceImageOpenAiOnly(params: {
 }): Promise<OpenAiProducedImage> {
   const {
     openAiKey,
+    geminiApiKey,
     admin,
     userClient,
     businessId,
@@ -1469,6 +1680,7 @@ async function produceImageOpenAiOnly(params: {
 
     const editQa = await sourceAwareQaForImageBytes({
       openAiKey,
+      geminiApiKey,
       imageBytes: enhanced,
       requiredVisualItems,
       costContext,
@@ -1533,6 +1745,7 @@ async function produceImageOpenAiOnly(params: {
   if (requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey,
+      geminiApiKey,
       imageBytes: png,
       requiredVisualItems,
       costContext,
@@ -1581,6 +1794,7 @@ async function produceImageOpenAiOnly(params: {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey,
+          geminiApiKey,
           imageBytes: retryPng,
           requiredVisualItems,
           costContext,
@@ -1925,6 +2139,7 @@ async function produceImage(params: {
 
     const editQa = await sourceAwareQaForImageBytes({
       openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       imageBytes: gemini.bytes,
       requiredVisualItems,
       costContext: params.costContext,
@@ -2001,6 +2216,7 @@ async function produceImage(params: {
   if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       imageBytes,
       requiredVisualItems,
       costContext: params.costContext,
@@ -2056,6 +2272,7 @@ async function produceImage(params: {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey: params.openAiKey,
+          geminiApiKey: params.geminiApiKey,
           imageBytes: retryGeneration.bytes,
           requiredVisualItems,
           costContext: params.costContext,

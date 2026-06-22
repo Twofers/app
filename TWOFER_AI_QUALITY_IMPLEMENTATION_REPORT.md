@@ -1143,6 +1143,72 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4n - Add Gemini fallback for image QA
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `dccc9efd`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`
+
+## Files changed
+
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a Gemini multimodal fallback for `ai-generate-ad-variants` image QA when OpenAI vision QA is unavailable.
+- Kept the fallback hosted-flag gated through `AI_VISION_FALLBACK_ENABLED=true` and `AI_VISION_FALLBACK_PROVIDER=gemini`.
+- Reused the existing image QA prompt and canonical `QUICK_DEAL_IMAGE_QA_SCHEMA` for the Gemini fallback request.
+- Logged Gemini image QA attempts privately in `ai_generation_costs` with `provider: "gemini"` and controlled error messages.
+- Preserved existing fail-closed behavior: if OpenAI and Gemini QA are both unavailable, generated/AI-edited/stock paths still reject, fall back, or return safe copy-only/original behavior rather than passing unchecked imagery.
+- Added a source guard for fallback flagging, schema reuse, image-byte inclusion, private telemetry, and OpenAI-to-Gemini fallback calls.
+
+## Acceptance criteria map
+
+35. Generated/AI-edited fail closed on hard QA failures: Preserved.
+36. Generated/AI-edited fail closed on QA outage: Preserved when both QA providers are unavailable.
+37. Required visual items checked for generated/edited images: Preserved with a second QA provider available behind flag.
+38. Forbidden visual elements checked: Preserved through the shared image QA prompt/schema.
+43. Gemini vision QA fallback: Implemented locally for the ad-variant image QA path.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for image QA resilience without pass-open behavior.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`: passed, 1 file / 3 tests.
+- `deno check supabase/functions/ai-generate-ad-variants/index.ts`: passed.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 126 Edge Function files.
+- `npm run test -- --run`: passed, 134 files / 729 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4n" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- No live provider call was made from this workspace; hosted behavior still depends on deployed function code, `GEMINI_API_KEY`, and `AI_VISION_FALLBACK_ENABLED=true`.
+- Image QA fallback is implemented in the ad-variant function path, not yet extracted into a shared vision-provider abstraction for other future vision features.
+
+## Rollback
+
+Revert this commit, or leave `AI_VISION_FALLBACK_ENABLED=false` in hosted configuration. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
