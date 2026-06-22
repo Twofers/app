@@ -26,6 +26,7 @@ export type AiOperation =
   | "candidate_judge"
   | "image_qa"
   | "merchant_context"
+  | "compose_offer"
   | "translation";
 
 export type AiReasoningLevel = "none" | "low" | "medium" | "high";

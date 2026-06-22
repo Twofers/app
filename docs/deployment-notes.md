@@ -109,7 +109,7 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 
 | Function | Purpose |
 |----------|---------|
-| `ai-compose-offer` | Voice / text → ad-copy compose (uses Whisper for voice) |
+| `ai-compose-offer` | Voice / text/photo -> ad-copy compose (uses Whisper for voice and the shared text provider router for compose) |
 | `ai-generate-ad-variants` | Single-ad pipeline (research → copy → GPT image generate or photo edit) |
 | `ai-generate-deal-copy` | Quick-Deal "Suggest title" |
 | `ai-create-deal` | Legacy one-shot deal insert (dev tool) |
@@ -169,9 +169,9 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. These helpers can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured.
 
-`ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when `OPENAI_API_KEY` is missing, including the voice transcription-only path.
+`ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when required provider configuration is missing. Text/photo compose can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured; the voice transcription-only path still requires OpenAI/Whisper.
 
-Provider failure bodies are not returned to clients. `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream generation failures.
+Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures.
 
 **Setting Edge secrets:**
 

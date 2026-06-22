@@ -57,6 +57,27 @@ function geminiSuccess(value = { variants: [{ headlineAlternative: "Buy a latte,
   );
 }
 
+function openAiSuccess(value = { variants: [{ headlineAlternative: "Buy a latte, get one free" }] }) {
+  return new Response(
+    JSON.stringify({
+      id: "chatcmpl_test",
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(value),
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 40,
+        total_tokens: 140,
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", "x-request-id": "req_success" } },
+  );
+}
+
 const baseEnv = {
   AI_V3_PROVIDER_ROUTER_ENABLED: "true",
   AI_TEXT_PRIMARY_PROVIDER: "openai",
@@ -163,5 +184,71 @@ describe("generateStructuredText", () => {
     expect(result.fallbackReason).toBe("timeout");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
-});
 
+  it("sends image inputs as OpenAI multimodal content parts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
+
+    const result = await generateStructuredText({
+      operation: "creative_candidates",
+      systemPrompt: "System rules.",
+      userPrompt: "Offer facts from a photo.",
+      imageInputs: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" }],
+      jsonSchema: schema,
+      maxOutputTokens: 650,
+      timeoutMs: 12000,
+      generationRunId: "11111111-1111-4111-8111-111111111111",
+      promptVersion: "test",
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: env(baseEnv),
+      config: resolveAiTextProviderConfig(env(baseEnv)),
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.messages[1].content).toEqual([
+      { type: "text", text: "Offer facts from a photo." },
+      { type: "image_url", image_url: { url: "data:image/jpeg;base64,AQID" } },
+    ]);
+  });
+
+  it("sends image inputs as Gemini inline data parts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiSuccess());
+    const geminiEnv = env({
+      ...baseEnv,
+      AI_TEXT_PRIMARY_PROVIDER: "gemini",
+      AI_TEXT_FALLBACK_ENABLED: "false",
+    });
+
+    const result = await generateStructuredText({
+      operation: "creative_candidates",
+      systemPrompt: "System rules.",
+      userPrompt: "Offer facts from a photo.",
+      imageInputs: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: "image/png" }],
+      jsonSchema: schema,
+      maxOutputTokens: 650,
+      timeoutMs: 12000,
+      generationRunId: "11111111-1111-4111-8111-111111111111",
+      promptVersion: "test",
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: geminiEnv,
+      config: resolveAiTextProviderConfig(geminiEnv),
+    });
+
+    expect(result.provider).toBe("gemini");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.contents[0].parts).toEqual([
+      { text: "Offer facts from a photo." },
+      { inlineData: { mimeType: "image/png", data: "AQID" } },
+    ]);
+  });
+});

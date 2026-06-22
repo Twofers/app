@@ -61,17 +61,31 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(whisperFailureBlock).not.toMatch(/err:\s*String\(e\)/);
   });
 
+  it("routes live compose generation through the shared text provider", () => {
+    const missingKeyIndex = source.indexOf("if (!openAiKey && !routerCanUseGemini)");
+    const generationIndex = source.indexOf("generation = await generateStructuredText");
+
+    expect(source).toMatch(/generateStructuredText/);
+    expect(source).toMatch(/resolveAiTextProviderConfig/);
+    expect(source).toMatch(/logComposeProviderAttempts/);
+    expect(source).toMatch(/routerCanUseGemini/);
+    expect(source).toMatch(/operation:\s*"compose_offer"/);
+    expect(source).toMatch(/imageInputs:\s*imageInput \? \[imageInput\] : undefined/);
+    expect(missingKeyIndex).toBeGreaterThan(-1);
+    expect(generationIndex).toBeGreaterThan(missingKeyIndex);
+    expect(source).not.toMatch(/fetch\("https:\/\/api\.openai\.com\/v1\/chat\/completions"/);
+    expect(source).not.toMatch(/resolveOpenAiChatModel/);
+    expect(source).not.toMatch(/chatCompletionTuning/);
+  });
+
   it("does not log raw OpenAI compose provider bodies on live compose failures", () => {
-    const openAiFailureIndex = source.indexOf("if (!openAiRes.ok)");
-    const successParseIndex = source.indexOf("const completion = await openAiRes.json()", openAiFailureIndex);
+    const providerFailureIndex = source.indexOf("AI_GENERATION_FAILED");
+    expect(providerFailureIndex).toBeGreaterThan(-1);
 
-    expect(openAiFailureIndex).toBeGreaterThan(-1);
-    expect(successParseIndex).toBeGreaterThan(openAiFailureIndex);
-
-    const liveFailureBlock = source.slice(openAiFailureIndex, successParseIndex);
-    expect(liveFailureBlock).toMatch(/event:\s*"openai_error"/);
-    expect(liveFailureBlock).toMatch(/errorMessage:\s*`Compose provider request failed with \${composeErrorCode}\.`/);
-    expect(liveFailureBlock).toMatch(/error_code:\s*"OPENAI_ERROR"/);
+    const liveFailureBlock = source.slice(providerFailureIndex - 1200, providerFailureIndex + 600);
+    expect(liveFailureBlock).toMatch(/const attempts = \(err as \{ attempts\?: ProviderAttempt\[\] \}\)\?\.attempts \?\? \[\]/);
+    expect(liveFailureBlock).toMatch(/logComposeProviderAttempts/);
+    expect(liveFailureBlock).toMatch(/error_code:\s*"AI_GENERATION_FAILED"/);
     expect(liveFailureBlock).not.toMatch(/await openAiRes\.text\(\)/);
     expect(liveFailureBlock).not.toMatch(/errText/);
     expect(liveFailureBlock).not.toMatch(/details:/);

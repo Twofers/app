@@ -99,6 +99,31 @@ function extractGeminiText(json: unknown): string {
   return "";
 }
 
+function base64FromBytes(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.slice(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function geminiUserParts(request: StructuredGenerationRequest<unknown>): unknown[] {
+  const parts: unknown[] = [{ text: request.userPrompt }];
+  for (const image of request.imageInputs ?? []) {
+    const mimeType = image.mimeType.trim();
+    if (!mimeType || image.bytes.length === 0) continue;
+    parts.push({
+      inlineData: {
+        mimeType,
+        data: base64FromBytes(image.bytes),
+      },
+    });
+  }
+  return parts;
+}
+
 function geminiUsage(json: unknown): {
   inputTokens: number;
   cachedInputTokens: number;
@@ -159,7 +184,7 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
           contents: [
             {
               role: "user",
-              parts: [{ text: params.request.userPrompt }],
+              parts: geminiUserParts(params.request),
             },
           ],
           generationConfig: {

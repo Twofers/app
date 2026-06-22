@@ -35,6 +35,30 @@ function openAiJsonSchema(jsonSchema: unknown): Record<string, unknown> {
   };
 }
 
+function base64FromBytes(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.slice(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function openAiUserContent(request: StructuredGenerationRequest<unknown>): unknown {
+  const images = (request.imageInputs ?? []).filter((image) => image.bytes.length > 0 && image.mimeType.trim());
+  if (images.length === 0) return request.userPrompt;
+  return [
+    { type: "text", text: request.userPrompt },
+    ...images.map((image) => ({
+      type: "image_url",
+      image_url: {
+        url: `data:${image.mimeType.trim()};base64,${base64FromBytes(image.bytes)}`,
+      },
+    })),
+  ];
+}
+
 export async function generateOpenAiStructuredJson<TSchema>(params: {
   apiKey?: string | null;
   model: string;
@@ -74,7 +98,7 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
         },
         messages: [
           { role: "system", content: params.request.systemPrompt },
-          { role: "user", content: params.request.userPrompt },
+          { role: "user", content: openAiUserContent(params.request) },
         ],
         ...chatCompletionTuning(params.model, {
           maxTokens: params.request.maxOutputTokens,
