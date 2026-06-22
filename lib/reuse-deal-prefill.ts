@@ -118,7 +118,14 @@ function splitStoredDescription(description: string): { promoLine: string; detai
   };
 }
 
-export function buildReuseDealPrefillParams(deal: ReusableDeal): Record<string, string> {
+export type ReuseDealPrefillOptions = {
+  resetSchedule?: boolean;
+};
+
+export function buildReuseDealPrefillParams(
+  deal: ReusableDeal,
+  options: ReuseDealPrefillOptions = {},
+): Record<string, string> {
   const params: Record<string, string> = { fromReuse: "1" };
   const title = clean(getDealDisplayTitle(deal, deal.title));
   const description = clean(deal.description);
@@ -146,11 +153,15 @@ export function buildReuseDealPrefillParams(deal: ReusableDeal): Record<string, 
     params.prefillPosterUrl = posterUrl;
   }
 
-  if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
-  if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");
-  if (deal.window_start_minutes != null) params.prefillWindowStartMin = String(deal.window_start_minutes);
-  if (deal.window_end_minutes != null) params.prefillWindowEndMin = String(deal.window_end_minutes);
-  if (clean(deal.timezone)) params.prefillTimezone = clean(deal.timezone);
+  if (options.resetSchedule) {
+    params.prefillIsRecurring = "0";
+  } else {
+    if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
+    if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");
+    if (deal.window_start_minutes != null) params.prefillWindowStartMin = String(deal.window_start_minutes);
+    if (deal.window_end_minutes != null) params.prefillWindowEndMin = String(deal.window_end_minutes);
+    if (clean(deal.timezone)) params.prefillTimezone = clean(deal.timezone);
+  }
   if (deal.max_claims != null) params.prefillMaxClaims = String(deal.max_claims);
   if (deal.claim_cutoff_buffer_minutes != null) params.prefillCutoffMins = String(deal.claim_cutoff_buffer_minutes);
 

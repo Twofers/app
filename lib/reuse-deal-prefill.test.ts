@@ -45,6 +45,38 @@ describe("reuse deal prefill params", () => {
     });
   });
 
+  it("can reset schedule metadata for duplicated deal drafts", () => {
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "BOGO latte",
+        description: "Buy one iced latte, get one free.",
+        price: 5,
+        poster_storage_path: "biz-1/latte.jpg",
+        is_recurring: true,
+        days_of_week: [1, 5],
+        window_start_minutes: 540,
+        window_end_minutes: 660,
+        timezone: "America/Chicago",
+        max_claims: 25,
+        claim_cutoff_buffer_minutes: 10,
+      },
+      { resetSchedule: true },
+    );
+
+    expect(params).toMatchObject({
+      fromReuse: "1",
+      prefillTitle: "Buy one latte and get one free",
+      prefillPosterPath: "biz-1/latte.jpg",
+      prefillIsRecurring: "0",
+      prefillMaxClaims: "25",
+      prefillCutoffMins: "10",
+    });
+    expect(params).not.toHaveProperty("prefillDaysOfWeek");
+    expect(params).not.toHaveProperty("prefillWindowStartMin");
+    expect(params).not.toHaveProperty("prefillWindowEndMin");
+    expect(params).not.toHaveProperty("prefillTimezone");
+  });
+
   it("splits stored listing body back into promo and details fields", () => {
     expect(
       buildReuseDealPrefillParams({

@@ -869,7 +869,7 @@ export default function BusinessDashboard() {
     setDealManageFor(null);
     router.push({
       pathname: "/create/ai",
-      params: buildReuseDealPrefillParams(deal),
+      params: buildReuseDealPrefillParams(deal, { resetSchedule: true }),
     });
   }
 
