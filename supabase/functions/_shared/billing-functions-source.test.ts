@@ -30,6 +30,9 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
     expect(source).toMatch(/user_owns_business_location/);
     expect(source).toMatch(/location_id/);
+    expect(source).toMatch(/STRIPE_SECRET_KEY/);
+    expect(source).toMatch(/stripeSecretKey\.startsWith\("sk_live_"\)/);
+    expect(source).toMatch(/config\.billingEnvironment !== "production"/);
   });
 
   it("makes verified webhook invoice events the paid activation path", () => {

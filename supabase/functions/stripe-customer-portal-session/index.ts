@@ -98,6 +98,9 @@ serve(async (req) => {
     if (!stripeSecretKey) {
       return jsonResponse(req, { error: "Stripe is not configured." }, 500);
     }
+    if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
+      return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);
+    }
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
     const baseSupabaseUrl = supabaseUrl.replace(/\/$/, "");
