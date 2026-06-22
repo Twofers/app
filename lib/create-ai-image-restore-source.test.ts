@@ -40,4 +40,14 @@ describe("AI create image compare and restore source guards", () => {
     expect(source).toMatch(/sentEditMode === "custom"/);
     expect(source).toMatch(/custom_image_edit_instruction: customEditText/);
   });
+
+  it("requires explicit acknowledgement before publishing an original merchant photo", () => {
+    expect(source).toMatch(/const \[merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged\]/);
+    expect(source).toMatch(/accessibilityRole="checkbox"/);
+    expect(source).toMatch(/createAi\.originalPhotoAckLabel/);
+    expect(source).toMatch(/createAi\.errOriginalPhotoAckRequired/);
+    expect(source).toMatch(/usePhotoAsFinal && !merchantOriginalWarningAcknowledged/);
+    expect(source).toMatch(/originalPhotoSelectionQa\(params\.merchantOriginalWarningAcknowledged\)/);
+    expect(source).toMatch(/originalPhotoSelectionQa\(false\)/);
+  });
 });

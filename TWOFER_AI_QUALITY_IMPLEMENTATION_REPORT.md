@@ -2475,3 +2475,63 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ad - Require original photo warning acknowledgement
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `6c1c87fb`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/ai-deal-draft-recovery.ts`
+- `lib/ai-deal-draft-recovery.test.ts`
+- `lib/create-ai-image-restore-source.test.ts`
+- `lib/i18n/locales/en.json`
+- `lib/i18n/locales/es.json`
+- `lib/i18n/locales/ko.json`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added an explicit checkbox-style acknowledgement when a merchant chooses the original uploaded photo as the final ad image.
+- Blocked publish until that acknowledgement is checked for original-photo final images.
+- Preserved the acknowledgement in AI draft recovery and reset it when the selected photo/source changes, when restoring the original image, and after edit-save refreshes.
+- Changed restored original image versions to start unacknowledged, so restore also requires review before publish.
+- Bound the exact publish image-selection QA metadata to the explicit acknowledgement rather than auto-acknowledging original photos.
+
+## Acceptance criteria map
+
+31. Merchant can compare original/edited and restore earlier version: Improved; restoring the original photo now requires explicit acknowledgement before publish.
+33. Aesthetic warnings on eligible original uploads may be overridden with explicit acknowledgement: Implemented locally in the AI create flow.
+34. Hard blockers cannot be overridden: Preserved; this only acknowledges merchant-original warning/unavailable paths already marked overrideable.
+35. Any image change invalidates prior approval: Preserved; source changes and original restore clear acknowledgement and acceptance.
+36. Publish references exact selected image asset: Improved; selected-image QA metadata now records the explicit original-photo acknowledgement state.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/create-ai-image-restore-source.test.ts lib/ai-deal-draft-recovery.test.ts lib/merchant-image-selection.test.ts`: passed, 3 files / 11 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 767 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ad-20260622-1849`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- This acknowledgement is implemented in the AI create flow; any older non-versioned compatibility publish path outside this screen should continue to be treated as legacy until it is retired.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

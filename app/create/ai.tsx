@@ -394,6 +394,7 @@ function generatedAdForPublishSpec(params: {
   finalStoragePath: string | null;
   uploadedPhotoStoragePath: string | null;
   usePhotoAsFinal: boolean;
+  merchantOriginalWarningAcknowledged: boolean;
 }): GeneratedAd | null {
   if (!params.ad) return null;
   const selectedStoragePath = params.finalStoragePath ?? params.ad.poster_storage_path ?? null;
@@ -409,7 +410,7 @@ function generatedAdForPublishSpec(params: {
     ? "none"
     : params.ad.image_selection?.editMode ?? imageEditModeForTreatment(photoTreatment);
   const qa = usingUploadedPhoto
-    ? originalPhotoSelectionQa(true)
+    ? originalPhotoSelectionQa(params.merchantOriginalWarningAcknowledged)
     : params.ad.image_selection?.qa ?? defaultSelectionQaForSource(sourceModeForGeneratedPhotoSource(photoSource));
 
   return {
@@ -502,7 +503,7 @@ function buildOriginalPhotoVersionAd(ad: GeneratedAd, originalStoragePath: strin
       editMode: "none",
       sourcePhotoPath: originalStoragePath,
       selectedStoragePath: originalStoragePath,
-      qa: originalPhotoSelectionQa(true),
+      qa: originalPhotoSelectionQa(false),
     }),
   });
 }
@@ -591,6 +592,7 @@ export default function AiDealScreen() {
   const [useCustomImageEdit, setUseCustomImageEdit] = useState(false);
   const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
+  const [merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged] = useState(false);
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -932,6 +934,7 @@ export default function AiDealScreen() {
     const restoredPath = imageVersionStoragePath(restored);
     setGeneratedAd(restored);
     setUsePhotoAsFinal(restored.photo_source === "uploaded_original");
+    setMerchantOriginalWarningAcknowledged(false);
     if (restored.photo_treatment) setPhotoTreatment(restored.photo_treatment);
     if (restored.photo_source === "uploaded_original" && restoredPath) {
       setPhotoPath((current) => current ?? restoredPath);
@@ -1117,6 +1120,7 @@ export default function AiDealScreen() {
     setCustomImageEditInstruction(draft.customImageEditInstruction);
     setUseCustomImageEdit(Boolean(draft.customImageEditInstruction.trim()));
     setUsePhotoAsFinal(draft.usePhotoAsFinal);
+    setMerchantOriginalWarningAcknowledged(draft.merchantOriginalWarningAcknowledged);
     setHintText(draft.hintText);
     setPrice(draft.price);
     setTitle(draft.title);
@@ -1192,6 +1196,7 @@ export default function AiDealScreen() {
       photoTreatment,
       customImageEditInstruction,
       usePhotoAsFinal,
+      merchantOriginalWarningAcknowledged,
       hintText,
       price,
       title,
@@ -1238,6 +1243,7 @@ export default function AiDealScreen() {
     photoTreatment,
     customImageEditInstruction,
     usePhotoAsFinal,
+    merchantOriginalWarningAcknowledged,
     hintText,
     price,
     title,
@@ -1339,6 +1345,7 @@ export default function AiDealScreen() {
         setPhotoPath(loadedPhotoPath);
         setPosterUrl(loadedPosterUrl);
         setUsePhotoAsFinal(Boolean(loadedPhotoPath || loadedPosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(loadedMaxClaims);
         setCutoffMins(loadedCutoffMins);
         setValidityMode(loadedValidityMode);
@@ -1424,6 +1431,7 @@ export default function AiDealScreen() {
         setPhotoPath(templatePhotoPath ?? null);
         setPosterUrl(templatePosterUrl);
         setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(String(row.max_claims ?? 50));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
         setValidityMode(row.is_recurring ? "recurring" : "one-time");
@@ -1489,9 +1497,11 @@ export default function AiDealScreen() {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
       setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
     } else if (posterUrlParam) {
       setPosterUrl((prev) => prev || posterUrlParam);
       setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
     }
     if (prefillDealEligibility) {
       try {
@@ -1613,6 +1623,7 @@ export default function AiDealScreen() {
     setPosterUrl(null);
     setPhotoPath(null);
     setUsePhotoAsFinal(false);
+    setMerchantOriginalWarningAcknowledged(false);
     resetGenerationState();
     void persistSelectedPhotoForRecovery(uri);
   }
@@ -1634,6 +1645,7 @@ export default function AiDealScreen() {
       setPosterUrl(null);
       setPhotoPath(null);
       setUsePhotoAsFinal(false);
+      setMerchantOriginalWarningAcknowledged(false);
       resetGenerationState();
       setShowCamera(false);
       void persistSelectedPhotoForRecovery(photo.uri);
@@ -2066,7 +2078,10 @@ export default function AiDealScreen() {
           photo_treatment: generatedAd?.poster_storage_path ? generatedAd.photo_treatment ?? null : null,
         }
       : fallbackBaseAd;
-    if (!fallbackPosterPath) setUsePhotoAsFinal(true);
+    if (!fallbackPosterPath) {
+      setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
+    }
     setGeneratedAd(fallbackAd);
     rememberImageVersion(fallbackAd, "fallback");
     applyAdToDraft(fallbackAd);
@@ -2232,6 +2247,10 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errPublishFailed"));
       return;
     }
+    if (usePhotoAsFinal && !merchantOriginalWarningAcknowledged) {
+      showPublishError(t("createAi.errOriginalPhotoAckRequired"), "warning");
+      return;
+    }
 
     publishInFlightRef.current = true;
     setPublishing(true);
@@ -2261,6 +2280,7 @@ export default function AiDealScreen() {
         finalStoragePath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         usePhotoAsFinal,
+        merchantOriginalWarningAcknowledged,
       });
       const allowTextOnlyPoster =
         generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
@@ -2384,6 +2404,7 @@ export default function AiDealScreen() {
         setPhotoPath(savedPosterPath);
         setPosterUrl(savedPosterUrl);
         setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setGeneratedAd(null);
         setImageVersions([]);
         setAdAccepted(false);
@@ -2769,6 +2790,7 @@ export default function AiDealScreen() {
                     onPress={() => {
                       const nextUseAsFinal = !usePhotoAsFinal;
                       setUsePhotoAsFinal(nextUseAsFinal);
+                      setMerchantOriginalWarningAcknowledged(false);
                       if (nextUseAsFinal) {
                         setUseCustomImageEdit(false);
                         if (generatedAd) resetGenerationState();
@@ -2776,6 +2798,37 @@ export default function AiDealScreen() {
                       }
                     }}
                   />
+                  {usePhotoAsFinal ? (
+                    <Pressable
+                      onPress={() => setMerchantOriginalWarningAcknowledged((value) => !value)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: merchantOriginalWarningAcknowledged }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        padding: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: merchantOriginalWarningAcknowledged ? theme.primary : theme.border,
+                        backgroundColor: colorScheme === "dark" ? theme.surface : "#fff",
+                      }}
+                    >
+                      <MaterialIcons
+                        name={merchantOriginalWarningAcknowledged ? "check-box" : "check-box-outline-blank"}
+                        size={22}
+                        color={merchantOriginalWarningAcknowledged ? theme.primary : theme.mutedText}
+                      />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, lineHeight: 18 }}>
+                          {t("createAi.originalPhotoAckLabel")}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                          {t("createAi.originalPhotoAckHelper")}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6, color: theme.text }}>{t("createAi.photoPolishTitle")}</Text>
                 <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>

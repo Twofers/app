@@ -13,6 +13,7 @@ export type AiDealRecoveryDraft = {
   photoTreatment: PhotoTreatment;
   customImageEditInstruction: string;
   usePhotoAsFinal: boolean;
+  merchantOriginalWarningAcknowledged: boolean;
   hintText: string;
   price: string;
   title: string;
@@ -125,6 +126,7 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
       .replace(/\s+/g, " ")
       .slice(0, 400),
     usePhotoAsFinal: input.usePhotoAsFinal === true,
+    merchantOriginalWarningAcknowledged: input.merchantOriginalWarningAcknowledged === true,
     hintText: cleanString(input.hintText),
     price: cleanString(input.price),
     title: cleanDisplayTitle(input.title),
@@ -162,6 +164,7 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       photoTreatment: parsed.photoTreatment ?? "studiopolish",
       customImageEditInstruction: parsed.customImageEditInstruction ?? "",
       usePhotoAsFinal: parsed.usePhotoAsFinal === true,
+      merchantOriginalWarningAcknowledged: parsed.merchantOriginalWarningAcknowledged === true,
       hintText: parsed.hintText ?? "",
       price: parsed.price ?? "",
       title: parsed.title ?? "",
