@@ -1944,3 +1944,63 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4x - Sanitize shared text provider exceptions
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `6ebf5274`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/_shared/openai-text-provider.ts`
+- `supabase/functions/_shared/gemini-text-provider.ts`
+- `supabase/functions/_shared/ai-text-provider.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Kept OpenAI/Gemini structured text provider classification based on upstream error code/message.
+- Changed thrown provider exception messages to generic provider/code strings so raw upstream provider messages are not retained on `AiProviderError.message`.
+- Added behavioral tests proving raw provider messages are not exposed while quota classification and error codes still work.
+- Documented the shared text-provider exception behavior.
+
+## Acceptance criteria map
+
+3. Gemini 3.5 Flash is configured as OpenAI availability/credit fallback: Preserved.
+4. OpenAI credit/quota failure falls back immediately: Preserved through local provider-message classification.
+7. Per-stage provider/model/latency/token/cost telemetry is stored: Preserved; attempts still carry provider, model, error class, error code, and request id.
+51. No generation path bypasses provider/quality controls: Improved for routed text helpers; raw upstream provider messages no longer survive on shared provider exceptions.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/_shared/openai-text-provider.ts supabase/functions/_shared/gemini-text-provider.ts supabase/functions/_shared/ai-text-provider.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-text-provider.test.ts`: passed, 1 file / 8 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 127 Edge Function files.
+- `npm run test -- --run`: passed, 135 files / 743 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4x" --clear`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- Provider-specific text adapters still parse upstream error JSON locally so classification can distinguish quota, billing, auth, and model failures; this parsed message is not returned, logged, or attached to provider attempts.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

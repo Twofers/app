@@ -117,7 +117,7 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
         /* non-JSON provider error */
       }
       const errorCode = errorCodeFromOpenAiJson(errorJson) ?? `HTTP_${res.status}`;
-      const errorMessage = errorMessageFromOpenAiJson(errorJson) ?? body.slice(0, 500);
+      const providerMessage = errorMessageFromOpenAiJson(errorJson) ?? body.slice(0, 500);
       throw new AiProviderError({
         provider: "openai",
         model: params.model,
@@ -126,10 +126,10 @@ export async function generateOpenAiStructuredJson<TSchema>(params: {
         errorClass: classifyOpenAiProviderError({
           status: res.status,
           code: errorCode,
-          message: errorMessage,
+          message: providerMessage,
         }),
         errorCode,
-        message: errorMessage,
+        message: `OpenAI structured generation failed with ${errorCode}.`,
       });
     }
 

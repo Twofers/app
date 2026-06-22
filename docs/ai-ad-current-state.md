@@ -223,7 +223,7 @@ Function: `supabase/functions/ai-generate-deal-copy/index.ts`
 
 - Uses the shared OpenAI/Gemini structured text provider router with strict JSON schema for title, promo line, and description.
 - Monthly limit defaults to 30 via `AI_COPY_MONTHLY_LIMIT`.
-- Provider attempts are logged to server-side cost/error telemetry with sanitized error classes; raw provider bodies are not returned to clients.
+- Provider attempts are logged to server-side cost/error telemetry with sanitized error classes; raw provider bodies are not returned to clients, and shared text-provider exceptions use generic provider/code messages after local classification.
 - Used by Account profile AI description and onboarding suggestions.
 
 ### Legacy One-Shot Insert

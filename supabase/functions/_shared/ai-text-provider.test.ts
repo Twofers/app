@@ -185,6 +185,105 @@ describe("generateStructuredText", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("sanitizes thrown OpenAI provider messages while preserving classification", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "rate_limit_error",
+            message: "quota exceeded raw provider secret body",
+          },
+        }),
+        { status: 429, headers: { "x-request-id": "req_raw_message" } },
+      ),
+    );
+    const noFallbackEnv = env({
+      ...baseEnv,
+      AI_TEXT_FALLBACK_ENABLED: "false",
+    });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: noFallbackEnv,
+        config: resolveAiTextProviderConfig(noFallbackEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      errorClass: "quota_exhausted",
+      errorCode: "rate_limit_error",
+      message: "OpenAI structured generation failed with rate_limit_error.",
+    });
+    expect(String((caught as Error).message)).not.toContain("raw provider secret body");
+    const attempts = (caught as { attempts?: Array<{ errorCode?: string }> }).attempts ?? [];
+    expect(attempts[0]?.errorCode).toBe("rate_limit_error");
+  });
+
+  it("sanitizes thrown Gemini provider messages while preserving classification", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "RESOURCE_EXHAUSTED",
+            message: "quota raw provider secret body",
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+    const geminiEnv = env({
+      ...baseEnv,
+      AI_TEXT_PRIMARY_PROVIDER: "gemini",
+      AI_TEXT_FALLBACK_ENABLED: "false",
+    });
+
+    let caught: unknown;
+    try {
+      await generateStructuredText({
+        operation: "creative_candidates",
+        systemPrompt: "System rules.",
+        userPrompt: "Offer facts.",
+        jsonSchema: schema,
+        maxOutputTokens: 650,
+        timeoutMs: 12000,
+        generationRunId: "11111111-1111-4111-8111-111111111111",
+        promptVersion: "test",
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: geminiEnv,
+        config: resolveAiTextProviderConfig(geminiEnv),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      errorClass: "quota_exhausted",
+      errorCode: "HTTP_429",
+      message: "Gemini structured generation failed with HTTP_429.",
+    });
+    expect(String((caught as Error).message)).not.toContain("raw provider secret body");
+    const attempts = (caught as { attempts?: Array<{ errorCode?: string }> }).attempts ?? [];
+    expect(attempts[0]?.errorCode).toBe("HTTP_429");
+  });
+
   it("sends image inputs as OpenAI multimodal content parts", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess());
 

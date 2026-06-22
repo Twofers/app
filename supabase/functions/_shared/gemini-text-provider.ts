@@ -208,7 +208,7 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
         /* non-JSON provider error */
       }
       const errorCode = errorCodeFromGeminiJson(errorJson) ?? `HTTP_${res.status}`;
-      const errorMessage = errorMessageFromGeminiJson(errorJson) ?? body.slice(0, 500);
+      const providerMessage = errorMessageFromGeminiJson(errorJson) ?? body.slice(0, 500);
       throw new AiProviderError({
         provider: "gemini",
         model: params.model,
@@ -216,10 +216,10 @@ export async function generateGeminiStructuredJson<TSchema>(params: {
         errorClass: classifyGeminiProviderError({
           status: res.status,
           code: errorCode,
-          message: errorMessage,
+          message: providerMessage,
         }),
         errorCode,
-        message: errorMessage,
+        message: `Gemini structured generation failed with ${errorCode}.`,
       });
     }
 
