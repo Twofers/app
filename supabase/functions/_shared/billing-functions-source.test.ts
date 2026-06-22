@@ -84,6 +84,16 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/trial:\$\{locationId\}:\$\{subscriptionId\}/);
   });
 
+  it("defers checkout trial subscription sync until checkout completion activates credits", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/shouldDeferTrialSubscriptionSync/);
+    expect(source).toMatch(/safeGetString\(metadata\.checkout_purpose\) === "trial_start"/);
+    expect(source).toMatch(/existingStatus === "trial_checkout_pending"/);
+    expect(source).toMatch(/stripeStatus === "trialing"/);
+    expect(source).toMatch(/shouldDeferTrialSubscriptionSync\(metadata, existingStatus, status\)/);
+    expect(source).toMatch(/metadata: mergedMetadata/);
+  });
+
   it("disables the old simulate subscribe helper", () => {
     const source = readFunction("simulate-subscribe");
     expect(source).toMatch(/status: 410/);

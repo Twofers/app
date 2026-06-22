@@ -65,6 +65,14 @@ function isRealPaidSubscriptionCycleInvoice(invoice: any): boolean {
   return amountPaid > 0 && billingReason === "subscription_cycle" && currency === "usd";
 }
 
+function shouldDeferTrialSubscriptionSync(metadata: Metadata, existingStatus: string | null, stripeStatus: string): boolean {
+  return (
+    safeGetString(metadata.checkout_purpose) === "trial_start" &&
+    existingStatus === "trial_checkout_pending" &&
+    stripeStatus === "trialing"
+  );
+}
+
 async function fetchSubscriptionForEvent(stripe: Stripe, eventType: string, obj: any): Promise<any | null> {
   if (eventType.startsWith("customer.subscription.")) return obj;
   const rawSubscription = obj?.subscription;
@@ -431,8 +439,9 @@ async function syncSubscriptionState(params: {
   locationId: string;
   billingAccountId: string;
   subscription: any;
+  metadata: Metadata;
 }) {
-  const { supabase, locationId, billingAccountId, subscription } = params;
+  const { supabase, locationId, billingAccountId, subscription, metadata } = params;
   const status = String(subscription?.status ?? "");
   const subscriptionId = safeGetString(subscription?.id);
   const priceId = firstSubscriptionPriceId(subscription);
@@ -446,6 +455,11 @@ async function syncSubscriptionState(params: {
     .eq("business_location_id", locationId)
     .maybeSingle();
   const hasFirstPaid = Boolean(existing?.first_paid_at);
+  const existingStatus = safeGetString(existing?.status);
+  if (shouldDeferTrialSubscriptionSync(metadata, existingStatus, status)) {
+    return;
+  }
+
   const nextStatus =
     status === "canceled"
       ? "canceled_suspended"
@@ -600,7 +614,7 @@ serve(async (req) => {
       event.type === "customer.subscription.created" ||
       event.type === "customer.subscription.updated"
     ) {
-      await syncSubscriptionState({ supabase, locationId, billingAccountId, subscription });
+      await syncSubscriptionState({ supabase, locationId, billingAccountId, subscription, metadata: mergedMetadata });
     } else if (event.type === "customer.subscription.deleted") {
       const { data: existing } = await supabase
         .from("location_entitlements")
