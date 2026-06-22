@@ -373,7 +373,7 @@ serve(async (req) => {
     });
 
     if (!aiRes.ok) {
-      const text = await aiRes.text();
+      const errorCode = `HTTP_${aiRes.status}`;
       await logAiCost(supabase, {
         businessId: business_id,
         ownerUserId: user.id,
@@ -383,8 +383,8 @@ serve(async (req) => {
         endpoint: "chat.completions",
         openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
         success: false,
-        errorCode: `HTTP_${aiRes.status}`,
-        errorMessage: text.slice(0, 500),
+        errorCode,
+        errorMessage: `Legacy create-deal provider request failed with ${errorCode}.`,
       });
       return new Response(
         JSON.stringify({ error: "AI generation failed.", error_code: "AI_GENERATION_FAILED" }),

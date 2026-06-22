@@ -1886,3 +1886,61 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4w - Sanitize legacy create-deal telemetry
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `080a4b88`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-create-deal/index.ts`
+- `supabase/functions/_shared/ai-create-deal-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed raw upstream OpenAI response-body reads from the default-closed legacy `ai-create-deal` HTTP failure path.
+- Kept the client-facing failure generic with `error_code: "AI_GENERATION_FAILED"` and HTTP 502.
+- Kept private cost telemetry useful with `HTTP_status` error codes and generic failure messages instead of provider response text.
+- Expanded the source guard so this route cannot silently reintroduce raw provider bodies in client responses or `ai_generation_costs.error_message`.
+- Updated current-state and deployment docs to reflect sanitized legacy-route telemetry.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved; no canned output added.
+51. No generation path bypasses provider/quality controls: Improved for the explicitly re-enabled legacy create-deal route; its failure telemetry no longer stores raw provider response bodies. The route remains default-closed and is not a pilot happy path.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/ai-create-deal/index.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-create-deal-source.test.ts`: passed, 1 file / 2 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 127 Edge Function files.
+- `npm run test -- --run`: passed, 135 files / 741 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4w" --clear`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-create-deal` still combines generation and live insert if deliberately re-enabled with `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it should remain disabled for the pilot.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

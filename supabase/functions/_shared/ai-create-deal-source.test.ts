@@ -18,18 +18,20 @@ describe("ai-create-deal legacy endpoint source guard", () => {
     expect(insertIndex).toBeGreaterThan(gateIndex);
   });
 
-  it("does not return raw OpenAI error details when explicitly re-enabled", () => {
-    const errorTextIndex = source.indexOf("const text = await aiRes.text()");
+  it("does not retain raw OpenAI error details when explicitly re-enabled", () => {
+    const failureIndex = source.indexOf("if (!aiRes.ok)");
     const parseIndex = source.indexOf("const aiJson = await aiRes.json()");
 
-    expect(errorTextIndex).toBeGreaterThan(-1);
-    expect(parseIndex).toBeGreaterThan(errorTextIndex);
+    expect(failureIndex).toBeGreaterThan(-1);
+    expect(parseIndex).toBeGreaterThan(failureIndex);
 
-    const openAiErrorBlock = source.slice(errorTextIndex, parseIndex);
-    expect(openAiErrorBlock).toMatch(/errorCode:\s*`HTTP_\$\{aiRes\.status\}`/);
-    expect(openAiErrorBlock).toMatch(/errorMessage:\s*text\.slice\(0,\s*500\)/);
+    const openAiErrorBlock = source.slice(failureIndex, parseIndex);
+    expect(openAiErrorBlock).toMatch(/const errorCode = `HTTP_\$\{aiRes\.status\}`/);
+    expect(openAiErrorBlock).toMatch(/errorCode,\s*[\r\n]+\s*errorMessage:\s*`Legacy create-deal provider request failed with/);
     expect(openAiErrorBlock).toMatch(/AI_GENERATION_FAILED/);
     expect(openAiErrorBlock).toMatch(/status:\s*502/);
+    expect(openAiErrorBlock).not.toMatch(/await aiRes\.text\(\)/);
+    expect(openAiErrorBlock).not.toMatch(/text\.slice\(0,\s*500\)/);
     expect(openAiErrorBlock).not.toMatch(/details:\s*text/);
   });
 });
