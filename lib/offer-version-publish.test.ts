@@ -9,6 +9,7 @@ import {
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
+import { buildAdImageSelection } from "./merchant-image-selection";
 
 function buildDefinition() {
   const definition = buildOfferDefinitionV1({
@@ -39,6 +40,21 @@ describe("offer version publish client helpers", () => {
 
   it("builds a native-renderer ad spec for publish audit and OfferVersion binding", () => {
     const definition = buildDefinition();
+    const imageSelection = buildAdImageSelection({
+      photoSource: "uploaded_original",
+      selectedStoragePath: "biz/poster.png",
+      qa: {
+        checked: false,
+        sourceType: "merchant_original",
+        decision: "unavailable",
+        hardFailReasons: [],
+        warningCodes: ["MERCHANT_SELECTED_ORIGINAL"],
+        missingItems: [],
+        unavailable: true,
+        merchantOverrideAllowed: true,
+        merchantOverrideAcknowledged: true,
+      },
+    });
     const spec = buildOfferVersionPublishAdSpec("create_quick", definition, {
       headline: "BOGO lattes",
       subheadline: "Bring a friend",
@@ -52,6 +68,7 @@ describe("offer version publish client helpers", () => {
       social_caption: "Coffee run",
       terms_summary: "Limit one claim.",
       item_research: { item_name: "latte", description: "", is_familiar: true },
+      image_selection: imageSelection,
     });
 
     expect(spec.adSpecVersion).toBe(1);
@@ -61,6 +78,8 @@ describe("offer version publish client helpers", () => {
     expect(spec.offer.canonicalOfferSentence).toBe(definition.canonicalOfferSentence);
     expect(spec.channels.feed.canonicalOfferSentence).toBe(definition.canonicalOfferSentence);
     expect(spec.channels.feed.visual.posterStoragePath).toBe("biz/poster.png");
+    expect(spec.channels.feed.visual.imageSelection?.selectedStoragePath).toBe("biz/poster.png");
+    expect(spec.channels.feed.visual.imageSelection?.sourceMode).toBe("merchant_original");
     expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
   });
 });

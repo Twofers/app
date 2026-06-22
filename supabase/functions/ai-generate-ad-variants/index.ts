@@ -95,11 +95,29 @@ import {
 } from "../../../lib/deal-eligibility.ts";
 import {
   QUICK_DEAL_IMAGE_QA_SCHEMA,
-  buildQuickDealImageQaPrompt,
+  buildAdImageQaPrompt,
   buildQuickDealImageRegenerationPrompt,
   normalizeQuickDealImageQaResult,
+  normalizeSourceAwareImageQaResult,
+  shouldFailClosedForImageQa,
+  unavailableSourceAwareImageQaResult,
+  type AdImageQaDecision,
+  type AdImageQaSourceType,
   type QuickDealImageQaResult,
+  type SourceAwareImageQaResult,
 } from "../../../lib/quick-deal-image-qa.ts";
+import {
+  buildAdImageSelection,
+  imageEditModeFromPhotoTreatment,
+  imageSourceModeFromPhotoSource,
+  normalizeMerchantImageEditMode,
+  normalizeMerchantImageSourceMode,
+  photoTreatmentFromImageEditMode,
+  type AdImageSelection,
+  type MerchantImageEditMode,
+  type MerchantImageSourceMode,
+} from "../../../lib/merchant-image-selection.ts";
+import { validateMerchantImageEditInstruction } from "../../../lib/merchant-image-edit-policy.ts";
 
 // Static anchors so Supabase's remote bundler includes the npm packages that
 // `_shared/ai-image-provider.ts` imports lazily when Gemini returns JPEG bytes.
@@ -148,6 +166,8 @@ type SingleAd = {
   photo_treatment: PhotoTreatment | null;
   /** Storage path in deal-photos bucket; null if image production failed. */
   poster_storage_path: string | null;
+  /** Canonical image source choice, QA decision, and lineage. */
+  image_selection?: AdImageSelection | null;
 };
 
 function utcMonthStartIso(): string {
@@ -959,15 +979,107 @@ type ImageQaTelemetry = {
   missingItems: string[];
   regenerated: boolean;
   unavailable: boolean;
+  sourceType: AdImageQaSourceType;
+  decision: AdImageQaDecision;
+  hardFailReasons: string[];
+  warningCodes: string[];
+  merchantOverrideAllowed: boolean;
+  merchantOverrideAcknowledged: boolean;
+  sourceAware: SourceAwareImageQaResult | null;
 };
 
-function skippedImageQaTelemetry(): ImageQaTelemetry {
+function imageQaTelemetryFromSourceAware(
+  sourceAware: SourceAwareImageQaResult,
+  attempts = 0,
+  regenerated = false,
+): ImageQaTelemetry {
   return {
-    checked: false,
-    attempts: 0,
-    missingItems: [],
-    regenerated: false,
-    unavailable: false,
+    checked: sourceAware.checked,
+    attempts,
+    missingItems: sourceAware.missingItems,
+    regenerated,
+    unavailable: !sourceAware.available,
+    sourceType: sourceAware.sourceType,
+    decision: sourceAware.decision,
+    hardFailReasons: sourceAware.hardFailReasons,
+    warningCodes: sourceAware.warningCodes,
+    merchantOverrideAllowed: sourceAware.merchantOverrideAllowed,
+    merchantOverrideAcknowledged: sourceAware.merchantOverrideAcknowledged,
+    sourceAware,
+  };
+}
+
+function skippedImageQaTelemetry(sourceType: AdImageQaSourceType = "deterministic_fallback"): ImageQaTelemetry {
+  return imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: { 
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        forbidden_elements: [],
+        notes: "Image QA not required for this source.",
+      },
+      requiredVisualItems: [],
+      sourceType,
+    }),
+  );
+}
+
+function originalPhotoQaTelemetry(merchantOverrideAcknowledged: boolean): ImageQaTelemetry {
+  return imageQaTelemetryFromSourceAware(
+    unavailableSourceAwareImageQaResult({
+      sourceType: "merchant_original",
+      merchantOverrideAcknowledged,
+    }),
+  );
+}
+
+function producedImageSelection(params: {
+  image: ProducedImageBase;
+  sourcePhotoPath: string | null;
+  editMode: MerchantImageEditMode;
+  selectedAt?: string;
+}): AdImageSelection {
+  return buildAdImageSelection({
+    photoSource: params.image.source,
+    editMode: params.editMode,
+    sourcePhotoPath: params.sourcePhotoPath,
+    selectedStoragePath: params.image.posterStoragePath,
+    provider: params.image.provider,
+    model: params.image.model,
+    promptVersion: params.image.prompt ? "image_prompt_v3" : null,
+    qa: {
+      checked: params.image.qa.checked,
+      sourceType: imageSourceModeFromPhotoSource(params.image.source),
+      decision: params.image.qa.decision,
+      hardFailReasons: params.image.qa.hardFailReasons,
+      warningCodes: params.image.qa.warningCodes,
+      missingItems: params.image.qa.missingItems,
+      unavailable: params.image.qa.unavailable,
+      merchantOverrideAllowed: params.image.qa.merchantOverrideAllowed,
+      merchantOverrideAcknowledged: params.image.qa.merchantOverrideAcknowledged,
+    },
+  });
+}
+
+function withImageSelection(
+  image: ProducedImageBase,
+  params: {
+    sourcePhotoPath: string | null;
+    editMode: MerchantImageEditMode;
+  },
+): ProducedImage {
+  return {
+    ...image,
+    selection: producedImageSelection({
+      image,
+      sourcePhotoPath: params.sourcePhotoPath,
+      editMode: params.editMode,
+    }),
   };
 }
 
@@ -1121,6 +1233,7 @@ async function inspectGeneratedImageForOffer(params: {
   imageBytes: Uint8Array;
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
+  sourceType?: AdImageQaSourceType;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
   if (requiredVisualItems.length === 0) return null;
@@ -1134,7 +1247,13 @@ async function inspectGeneratedImageForOffer(params: {
         {
           role: "user",
           content: [
-            { type: "input_text", text: buildQuickDealImageQaPrompt(requiredVisualItems) },
+            {
+              type: "input_text",
+              text: buildAdImageQaPrompt({
+                sourceType: params.sourceType ?? "ai_generated",
+                requiredVisualItems,
+              }),
+            },
             { type: "input_image", image_url: imageUrl, detail: "low" },
           ],
         },
@@ -1198,6 +1317,48 @@ async function inspectGeneratedImageForOffer(params: {
   }
 }
 
+async function sourceAwareQaForImageBytes(params: {
+  openAiKey: string;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+  sourceType: AdImageQaSourceType;
+  merchantOverrideAcknowledged?: boolean;
+}): Promise<SourceAwareImageQaResult> {
+  const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
+  if (requiredVisualItems.length === 0) {
+    return normalizeSourceAwareImageQaResult({
+      raw: {
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        forbidden_elements: [],
+        notes: "No required visual items for this offer.",
+      },
+      requiredVisualItems: [],
+      sourceType: params.sourceType,
+      merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+    });
+  }
+  const raw = await inspectGeneratedImageForOffer({
+    openAiKey: params.openAiKey,
+    imageBytes: params.imageBytes,
+    requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: params.sourceType,
+  });
+  return normalizeSourceAwareImageQaResult({
+    raw,
+    requiredVisualItems,
+    sourceType: params.sourceType,
+    merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+  });
+}
+
 type OpenAiProducedImage = {
   posterStoragePath: string | null;
   source: SingleAd["photo_source"];
@@ -1206,10 +1367,14 @@ type OpenAiProducedImage = {
   qa: ImageQaTelemetry;
 };
 
-type ProducedImage = OpenAiProducedImage & {
+type ProducedImageBase = OpenAiProducedImage & {
   provider: AiImageProvider;
   model: string | null;
   estimatedCostUsd: number;
+};
+
+type ProducedImage = ProducedImageBase & {
+  selection: AdImageSelection;
 };
 
 async function produceImageOpenAiOnly(params: {
@@ -1223,6 +1388,8 @@ async function produceImageOpenAiOnly(params: {
   itemHint: string;
   businessName: string;
   offerContract: DealOfferContract;
+  imageEditMode: MerchantImageEditMode;
+  merchantOverrideAcknowledged: boolean;
   costContext: AiCostContext;
 }): Promise<OpenAiProducedImage> {
   const {
@@ -1236,12 +1403,14 @@ async function produceImageOpenAiOnly(params: {
     itemHint,
     businessName,
     offerContract,
+    merchantOverrideAcknowledged,
     costContext,
   } = params;
 
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
-  const skippedQa = skippedImageQaTelemetry();
+  const requiredVisualItems = buildRequiredVisualItems(offerContract);
+  const originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
 
   // Path A — owner uploaded a photo
   if (photoPath) {
@@ -1253,7 +1422,7 @@ async function produceImageOpenAiOnly(params: {
         source: "uploaded_original",
         treatment: null,
         prompt: null,
-        qa: skippedQa,
+        qa: originalQa,
       };
     }
 
@@ -1268,7 +1437,7 @@ async function produceImageOpenAiOnly(params: {
           err: signedErr?.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
 
     let imageBytes: Uint8Array;
@@ -1276,12 +1445,12 @@ async function produceImageOpenAiOnly(params: {
     try {
       const fetched = await fetch(signed.signedUrl);
       if (!fetched.ok) {
-        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
       }
       imageMime = fetched.headers.get("content-type") || "image/png";
       imageBytes = new Uint8Array(await fetched.arrayBuffer());
     } catch {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
 
     const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
@@ -1295,8 +1464,20 @@ async function produceImageOpenAiOnly(params: {
 
     if (!enhanced) {
       // Enhancement failed — fall back to the original photo so the user still gets an ad
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
+
+    const editQa = await sourceAwareQaForImageBytes({
+      openAiKey,
+      imageBytes: enhanced,
+      requiredVisualItems,
+      costContext,
+      sourceType: "merchant_ai_edit",
+    });
+    if (shouldFailClosedForImageQa(editQa)) {
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
+    }
+    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
     const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
     const { error: upErr } = await admin.storage
@@ -1310,13 +1491,12 @@ async function produceImageOpenAiOnly(params: {
           err: upErr.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
-    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: skippedQa };
+    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
-  const requiredVisualItems = buildRequiredVisualItems(offerContract);
   const itemName = requiredVisualItems.length > 0
     ? requiredVisualItems.join(" and ")
     : research.item_name || itemHint || "menu item";
@@ -1329,13 +1509,23 @@ async function produceImageOpenAiOnly(params: {
   let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
   let png = imageGeneration.bytes;
-  const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 0,
-    attempts: 0,
-    missingItems: [],
-    regenerated: false,
-    unavailable: false,
-  };
+  const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: {
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        forbidden_elements: [],
+        notes: requiredVisualItems.length > 0 ? "Image QA pending." : "No required visual items for this offer.",
+      },
+      requiredVisualItems: [],
+      sourceType: "ai_generated",
+    }),
+  );
   if (!png) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
@@ -1346,12 +1536,31 @@ async function produceImageOpenAiOnly(params: {
       imageBytes: png,
       requiredVisualItems,
       costContext,
+      sourceType: "ai_generated",
     });
     qa.attempts = 1;
     if (!firstQa) {
-      qa.unavailable = true;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+          1,
+          qa.regenerated,
+        ),
+      );
     } else if (!firstQa.all_required_items_present) {
-      qa.missingItems = firstQa.missing_items;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
@@ -1375,19 +1584,50 @@ async function produceImageOpenAiOnly(params: {
           imageBytes: retryPng,
           requiredVisualItems,
           costContext,
+          sourceType: "ai_generated",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          qa.unavailable = true;
-          png = retryPng;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+              2,
+              true,
+            ),
+          );
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
-          qa.missingItems = retryQa.missing_items;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: retryQa,
+                requiredVisualItems,
+                sourceType: "ai_generated",
+              }),
+              2,
+              true,
+            ),
+          );
           png = retryPng;
         }
       }
+    } else {
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
     }
   }
-  if (qa.missingItems.length > 0 && !qa.unavailable) {
+  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
@@ -1407,7 +1647,7 @@ async function produceImageOpenAiOnly(params: {
   return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa };
 }
 
-function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImage {
+function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase {
   const usedOpenAiImage =
     result.source === "uploaded_enhanced" || result.source === "generated" || result.posterStoragePath === null;
   return {
@@ -1424,6 +1664,8 @@ async function produceFallbackImage(params: {
   qa: ImageQaTelemetry;
   requiredVisualItems: readonly string[];
   imageProviderConfig: AiImageProviderConfig;
+  sourcePhotoPath?: string | null;
+  editMode?: MerchantImageEditMode;
 }): Promise<ProducedImage> {
   if (params.imageProviderConfig.stockFallbackEnabled) {
     const stockPath = await findStockImageFallback({
@@ -1431,29 +1673,41 @@ async function produceFallbackImage(params: {
       requiredVisualItems: params.requiredVisualItems,
     });
     if (stockPath) {
-      return {
-        posterStoragePath: stockPath,
-        source: "stock",
-        treatment: null,
-        prompt: params.prompt,
-        qa: params.qa,
-        provider: "stock",
-        model: null,
-        estimatedCostUsd: 0,
-      };
+      return withImageSelection(
+        {
+          posterStoragePath: stockPath,
+          source: "stock",
+          treatment: null,
+          prompt: params.prompt,
+          qa: skippedImageQaTelemetry("approved_stock"),
+          provider: "stock",
+          model: null,
+          estimatedCostUsd: 0,
+        },
+        {
+          sourcePhotoPath: params.sourcePhotoPath ?? null,
+          editMode: params.editMode ?? "none",
+        },
+      );
     }
   }
 
-  return {
-    posterStoragePath: null,
-    source: "copy_only",
-    treatment: null,
-    prompt: params.prompt,
-    qa: params.qa,
-    provider: "none",
-    model: null,
-    estimatedCostUsd: 0,
-  };
+  return withImageSelection(
+    {
+      posterStoragePath: null,
+      source: "copy_only",
+      treatment: null,
+      prompt: params.prompt,
+      qa: skippedImageQaTelemetry("deterministic_fallback"),
+      provider: "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    {
+      sourcePhotoPath: params.sourcePhotoPath ?? null,
+      editMode: params.editMode ?? "none",
+    },
+  );
 }
 
 async function produceImage(params: {
@@ -1469,27 +1723,39 @@ async function produceImage(params: {
   businessName: string;
   businessCategory?: string;
   offerContract: DealOfferContract;
+  imageSourceMode: MerchantImageSourceMode;
+  imageEditMode: MerchantImageEditMode;
+  merchantOverrideAcknowledged: boolean;
   revisionPreset?: string;
   revisionFeedback?: string;
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
-  const originalUploadedPhoto = (): ProducedImage => ({
-    posterStoragePath: params.photoPath,
-    source: "uploaded_original",
-    treatment: null,
-    prompt: null,
-    qa: skippedImageQaTelemetry(),
-    provider: "none",
-    model: null,
-    estimatedCostUsd: 0,
-  });
+  const originalUploadedPhoto = (): ProducedImage => withImageSelection(
+    {
+      posterStoragePath: params.photoPath,
+      source: "uploaded_original",
+      treatment: null,
+      prompt: null,
+      qa: originalPhotoQaTelemetry(params.merchantOverrideAcknowledged),
+      provider: "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    {
+      sourcePhotoPath: params.photoPath,
+      editMode: "none",
+    },
+  );
   const openAiFallback = async (): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
     const withMetadata = withOpenAiImageMetadata(result);
     if (withMetadata.posterStoragePath || withMetadata.source === "uploaded_original") {
-      return withMetadata;
+      return withImageSelection(withMetadata, {
+        sourcePhotoPath: params.photoPath,
+        editMode: withMetadata.source === "uploaded_enhanced" ? params.imageEditMode : "none",
+      });
     }
     return produceFallbackImage({
       admin: params.admin,
@@ -1497,8 +1763,41 @@ async function produceImage(params: {
       qa: withMetadata.qa,
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      sourcePhotoPath: params.photoPath,
+      editMode: params.imageEditMode,
     });
   };
+
+  if (params.imageSourceMode === "approved_stock") {
+    return produceFallbackImage({
+      admin: params.admin,
+      prompt: null,
+      qa: skippedImageQaTelemetry("approved_stock"),
+      requiredVisualItems,
+      imageProviderConfig: params.imageProviderConfig,
+      sourcePhotoPath: null,
+      editMode: "none",
+    });
+  }
+
+  if (params.imageSourceMode === "deterministic_fallback") {
+    return withImageSelection(
+      {
+        posterStoragePath: null,
+        source: "copy_only",
+        treatment: null,
+        prompt: null,
+        qa: skippedImageQaTelemetry("deterministic_fallback"),
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: null,
+        editMode: "none",
+      },
+    );
+  }
 
   if (params.imageProviderConfig.primaryProvider === "openai") {
     return openAiFallback();
@@ -1508,23 +1807,31 @@ async function produceImage(params: {
     return produceFallbackImage({
       admin: params.admin,
       prompt: null,
-      qa: skippedImageQaTelemetry(),
+      qa: skippedImageQaTelemetry("approved_stock"),
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      sourcePhotoPath: params.photoPath,
+      editMode: params.imageEditMode,
     });
   }
 
   if (params.imageProviderConfig.primaryProvider === "none") {
-    return {
-      posterStoragePath: null,
-      source: "copy_only",
-      treatment: null,
-      prompt: null,
-      qa: skippedImageQaTelemetry(),
-      provider: "none",
-      model: null,
-      estimatedCostUsd: 0,
-    };
+    return withImageSelection(
+      {
+        posterStoragePath: null,
+        source: "copy_only",
+        treatment: null,
+        prompt: null,
+        qa: skippedImageQaTelemetry("deterministic_fallback"),
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: params.imageEditMode,
+      },
+    );
   }
 
   const useOpenAiFallback = params.imageProviderConfig.fallbackProvider === "openai";
@@ -1558,7 +1865,6 @@ async function produceImage(params: {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
 
-    const skippedQa = skippedImageQaTelemetry();
     const { data: signed, error: signedErr } = await params.userClient.storage
       .from("deal-photos")
       .createSignedUrl(params.photoPath, 60 * 60);
@@ -1617,6 +1923,18 @@ async function produceImage(params: {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
 
+    const editQa = await sourceAwareQaForImageBytes({
+      openAiKey: params.openAiKey,
+      imageBytes: gemini.bytes,
+      requiredVisualItems,
+      costContext: params.costContext,
+      sourceType: "merchant_ai_edit",
+    });
+    if (shouldFailClosedForImageQa(editQa)) {
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+    }
+    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
+
     const enhancedPath = await uploadGeneratedBytes({
       admin: params.admin,
       businessId: params.businessId,
@@ -1629,16 +1947,22 @@ async function produceImage(params: {
     if (!enhancedPath) {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
-    return {
-      posterStoragePath: enhancedPath,
-      source: "uploaded_enhanced",
-      treatment: params.photoTreatment,
-      prompt: gemini.prompt,
-      qa: skippedQa,
-      provider: "gemini",
-      model: gemini.model,
-      estimatedCostUsd: gemini.estimatedCostUsd,
-    };
+    return withImageSelection(
+      {
+        posterStoragePath: enhancedPath,
+        source: "uploaded_enhanced",
+        treatment: params.photoTreatment,
+        prompt: gemini.prompt,
+        qa: editQaTelemetry,
+        provider: "gemini",
+        model: gemini.model,
+        estimatedCostUsd: gemini.estimatedCostUsd,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: params.imageEditMode,
+      },
+    );
   }
 
   const gemini = await generateGeminiAdImageWithTelemetry({
@@ -1654,13 +1978,25 @@ async function produceImage(params: {
   let imageMimeType = gemini.mimeType;
   let imagePrompt = gemini.prompt;
   let estimatedCostUsd = gemini.estimatedCostUsd;
-  const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 0,
-    attempts: 0,
-    missingItems: [],
-    regenerated: gemini.attempts.some((attempt) => attempt.retry && attempt.success),
-    unavailable: false,
-  };
+  const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: {
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        forbidden_elements: [],
+        notes: requiredVisualItems.length > 0 ? "Image QA pending." : "No required visual items for this offer.",
+      },
+      requiredVisualItems: [],
+      sourceType: "ai_generated",
+    }),
+    0,
+    gemini.attempts.some((attempt) => attempt.retry && attempt.success),
+  );
 
   if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
@@ -1668,12 +2004,31 @@ async function produceImage(params: {
       imageBytes,
       requiredVisualItems,
       costContext: params.costContext,
+      sourceType: "ai_generated",
     });
     qa.attempts = 1;
     if (!firstQa) {
-      qa.unavailable = true;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+          1,
+          qa.regenerated,
+        ),
+      );
     } else if (!firstQa.all_required_items_present) {
-      qa.missingItems = firstQa.missing_items;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
@@ -1704,25 +2059,53 @@ async function produceImage(params: {
           imageBytes: retryGeneration.bytes,
           requiredVisualItems,
           costContext: params.costContext,
+          sourceType: "ai_generated",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          qa.unavailable = true;
-          imageBytes = retryGeneration.bytes;
-          imageMimeType = retryGeneration.mimeType;
-          imagePrompt = retryGeneration.prompt;
-          estimatedCostUsd += retryGeneration.estimatedCostUsd;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+              2,
+              true,
+            ),
+          );
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
-          qa.missingItems = retryQa.missing_items;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: retryQa,
+                requiredVisualItems,
+                sourceType: "ai_generated",
+              }),
+              2,
+              true,
+            ),
+          );
           imageBytes = retryGeneration.bytes;
           imageMimeType = retryGeneration.mimeType;
           imagePrompt = retryGeneration.prompt;
           estimatedCostUsd += retryGeneration.estimatedCostUsd;
         }
       }
+    } else {
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
     }
   }
-  if (qa.missingItems.length > 0 && !qa.unavailable) {
+  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
     imageBytes = null;
     imageMimeType = null;
   }
@@ -1738,16 +2121,22 @@ async function produceImage(params: {
       rand,
     });
     if (generatedPath) {
-      return {
-        posterStoragePath: generatedPath,
-        source: "generated",
-        treatment: null,
-        prompt: imagePrompt,
-        qa,
-        provider: "gemini",
-        model: gemini.model,
-        estimatedCostUsd,
-      };
+      return withImageSelection(
+        {
+          posterStoragePath: generatedPath,
+          source: "generated",
+          treatment: null,
+          prompt: imagePrompt,
+          qa,
+          provider: "gemini",
+          model: gemini.model,
+          estimatedCostUsd,
+        },
+        {
+          sourcePhotoPath: null,
+          editMode: "none",
+        },
+      );
     }
   }
 
@@ -1764,6 +2153,8 @@ async function produceImage(params: {
     qa,
     requiredVisualItems,
     imageProviderConfig: params.imageProviderConfig,
+    sourcePhotoPath: params.photoPath,
+    editMode: params.imageEditMode,
   });
 }
 
@@ -1877,6 +2268,8 @@ function buildGenerationTelemetry(params: {
       estimated_cost_usd: imageResult.estimatedCostUsd,
       produced_image: imageResult.posterStoragePath !== null,
     },
+    image_selection: imageResult.selection,
+    image_lineage: imageResult.selection.lineage,
     required_visual_items: buildRequiredVisualItems(offerContract),
     validation_rule_ids: validationRuleIds,
     repair_attempts: repairAttempts,
@@ -2019,6 +2412,41 @@ Deno.serve(async (req) => {
     const photoTreatment: PhotoTreatment | null =
       VALID_PHOTO_TREATMENTS.has(photoTreatmentRaw as PhotoTreatment)
         ? (photoTreatmentRaw as PhotoTreatment)
+        : null;
+    const fallbackSourceMode: MerchantImageSourceMode = photoPath
+      ? photoTreatment
+        ? "merchant_ai_edit"
+        : "merchant_original"
+      : "ai_generated";
+    const requestedImageSourceMode = normalizeMerchantImageSourceMode(body.image_source_mode, fallbackSourceMode);
+    const imageSourceMode =
+      !photoPath && (requestedImageSourceMode === "merchant_original" || requestedImageSourceMode === "merchant_ai_edit")
+        ? "ai_generated"
+        : requestedImageSourceMode;
+    const imageEditMode = normalizeMerchantImageEditMode(
+      body.image_edit_mode,
+      imageEditModeFromPhotoTreatment(photoTreatment),
+    );
+    const customEditInstruction = validateMerchantImageEditInstruction(body.custom_image_edit_instruction);
+    if (imageEditMode === "custom" && !customEditInstruction.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "Custom image edit instructions cannot change offer facts, add text/logos/QR codes, or introduce unrelated elements.",
+          error_code: "IMAGE_EDIT_INSTRUCTION_REJECTED",
+          reason_codes: customEditInstruction.reasonCodes,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const merchantImageWarningOverrideAcknowledged =
+      body.merchant_image_warning_override_acknowledged === true;
+    const effectivePhotoPath =
+      imageSourceMode === "merchant_original" || imageSourceMode === "merchant_ai_edit"
+        ? photoPath
+        : "";
+    const effectivePhotoTreatment =
+      imageSourceMode === "merchant_ai_edit"
+        ? photoTreatmentFromImageEditMode(imageEditMode) ?? photoTreatment
         : null;
 
     const businessContext: BusinessContext =
@@ -2349,16 +2777,24 @@ Deno.serve(async (req) => {
     if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
       // Copy-only revision: keep the existing image. If there is no existing image,
       // fall through to image generation because every deal must have an image.
-      imageResult = {
-        posterStoragePath: previousAd.poster_storage_path ?? null,
-        source: previousAd.photo_source === "copy_only" ? "generated" : previousAd.photo_source,
-        treatment: previousAd.photo_treatment,
-        prompt: null,
-        qa: skippedImageQaTelemetry(),
-        provider: previousAd.photo_source === "stock" ? "stock" : "none",
-        model: null,
-        estimatedCostUsd: 0,
-      };
+      imageResult = withImageSelection(
+        {
+          posterStoragePath: previousAd.poster_storage_path ?? null,
+          source: previousAd.photo_source === "copy_only" ? "generated" : previousAd.photo_source,
+          treatment: previousAd.photo_treatment,
+          prompt: null,
+          qa: previousAd.photo_source === "uploaded_original"
+            ? originalPhotoQaTelemetry(previousAd.image_selection?.qa.merchantOverrideAcknowledged === true)
+            : skippedImageQaTelemetry(imageSourceModeFromPhotoSource(previousAd.photo_source)),
+          provider: previousAd.photo_source === "stock" ? "stock" : "none",
+          model: null,
+          estimatedCostUsd: 0,
+        },
+        {
+          sourcePhotoPath: previousAd.image_selection?.sourcePhotoPath ?? (effectivePhotoPath || null),
+          editMode: previousAd.image_selection?.editMode ?? imageEditModeFromPhotoTreatment(previousAd.photo_treatment),
+        },
+      );
     } else {
       imageResult = await produceImage({
         openAiKey,
@@ -2366,8 +2802,11 @@ Deno.serve(async (req) => {
         admin,
         userClient,
         businessId,
-        photoPath: photoPath || null,
-        photoTreatment,
+        photoPath: effectivePhotoPath || null,
+        photoTreatment: effectivePhotoTreatment,
+        imageSourceMode,
+        imageEditMode,
+        merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
         research,
         itemHint: sourceHint,
         businessName,
@@ -2398,6 +2837,7 @@ Deno.serve(async (req) => {
       photo_source: imageResult.source,
       photo_treatment: imageResult.treatment,
       poster_storage_path: imageResult.posterStoragePath,
+      image_selection: imageResult.selection,
     };
 
     /**
@@ -2500,6 +2940,32 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       : "",
     220,
   );
+  const posterStoragePath =
+    typeof raw.poster_storage_path === "string" && raw.poster_storage_path.length > 0
+      ? raw.poster_storage_path
+      : null;
+  const rawImageSelection =
+    raw.image_selection && typeof raw.image_selection === "object" && !Array.isArray(raw.image_selection)
+      ? (raw.image_selection as AdImageSelection)
+      : null;
+  const imageSelection = rawImageSelection ?? producedImageSelection({
+    image: {
+      posterStoragePath,
+      source: photoSource,
+      treatment: photoTreatment,
+      prompt: null,
+      qa: photoSource === "uploaded_original"
+        ? originalPhotoQaTelemetry(false)
+        : skippedImageQaTelemetry(imageSourceModeFromPhotoSource(photoSource)),
+      provider: photoSource === "stock" ? "stock" : "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    sourcePhotoPath: photoSource === "uploaded_original" || photoSource === "uploaded_enhanced"
+      ? posterStoragePath
+      : null,
+    editMode: imageEditModeFromPhotoTreatment(photoTreatment),
+  });
 
   return {
     headline: clip(typeof raw.headline === "string" ? raw.headline : "", 70),
@@ -2541,9 +3007,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     },
     photo_source: photoSource,
     photo_treatment: photoTreatment,
-    poster_storage_path:
-      typeof raw.poster_storage_path === "string" && raw.poster_storage_path.length > 0
-        ? raw.poster_storage_path
-        : null,
+    poster_storage_path: posterStoragePath,
+    image_selection: imageSelection,
   };
 }

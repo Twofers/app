@@ -6,6 +6,10 @@ import type {
   GeneratedAd,
   PhotoTreatment,
 } from "./ad-variants";
+import type {
+  MerchantImageEditMode,
+  MerchantImageSourceMode,
+} from "./merchant-image-selection";
 import type { DealEligibilityInput } from "./deal-eligibility";
 import {
   normalizeBusinessLookupResults,
@@ -691,6 +695,10 @@ export type AiGenerateAdRequest = {
   output_language: string;
   request_group_id?: string;
   image_mode?: "generate";
+  image_source_mode?: MerchantImageSourceMode;
+  image_edit_mode?: MerchantImageEditMode;
+  custom_image_edit_instruction?: string;
+  merchant_image_warning_override_acknowledged?: boolean;
   deal_eligibility?: DealEligibilityInput;
   photo_path?: string;
   photo_treatment?: PhotoTreatment | null;
@@ -744,6 +752,12 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     output_language: body.output_language,
     ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
     ...(body.image_mode ? { image_mode: body.image_mode } : {}),
+    ...(body.image_source_mode ? { image_source_mode: body.image_source_mode } : {}),
+    ...(body.image_edit_mode ? { image_edit_mode: body.image_edit_mode } : {}),
+    ...(body.custom_image_edit_instruction ? { custom_image_edit_instruction: body.custom_image_edit_instruction } : {}),
+    ...(body.merchant_image_warning_override_acknowledged
+      ? { merchant_image_warning_override_acknowledged: true }
+      : {}),
     ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
@@ -761,6 +775,12 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     business_context: body.business_context,
     output_language: body.output_language,
     ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
+    ...(body.image_source_mode ? { image_source_mode: body.image_source_mode } : {}),
+    ...(body.image_edit_mode ? { image_edit_mode: body.image_edit_mode } : {}),
+    ...(body.custom_image_edit_instruction ? { custom_image_edit_instruction: body.custom_image_edit_instruction } : {}),
+    ...(body.merchant_image_warning_override_acknowledged
+      ? { merchant_image_warning_override_acknowledged: true }
+      : {}),
     previous_ad: body.previous_ad,
     revision_target: body.revision_target,
     revision_count: body.revision_count,

@@ -119,6 +119,12 @@ import {
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
 } from "../../lib/offer-version-publish";
+import {
+  buildAdImageSelection,
+  type AdImageSelectionQa,
+  type MerchantImageEditMode,
+  type MerchantImageSourceMode,
+} from "../../lib/merchant-image-selection";
 
 type TemplateRow = {
   id: string;
@@ -323,6 +329,103 @@ const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
   { key: "cleanbg", labelKey: "createAi.treatmentCleanbgLabel", helperKey: "createAi.treatmentCleanbgHelper" },
   { key: "studiopolish", labelKey: "createAi.treatmentStudiopolishLabel", helperKey: "createAi.treatmentStudiopolishHelper" },
 ];
+
+function imageEditModeForTreatment(treatment: PhotoTreatment | null): MerchantImageEditMode {
+  if (treatment === "cleanbg") return "clean_background";
+  if (treatment === "studiopolish") return "studio_polish";
+  if (treatment === "touchup") return "touchup";
+  return "none";
+}
+
+function imageSourceModeForPhotoChoice(
+  photoPath: string | null,
+  usePhotoAsFinal: boolean,
+): MerchantImageSourceMode {
+  if (!photoPath) return "ai_generated";
+  return usePhotoAsFinal ? "merchant_original" : "merchant_ai_edit";
+}
+
+function originalPhotoSelectionQa(acknowledged: boolean): AdImageSelectionQa {
+  return {
+    checked: false,
+    sourceType: "merchant_original",
+    decision: "unavailable",
+    hardFailReasons: [],
+    warningCodes: ["MERCHANT_SELECTED_ORIGINAL"],
+    missingItems: [],
+    unavailable: true,
+    merchantOverrideAllowed: true,
+    merchantOverrideAcknowledged: acknowledged,
+  };
+}
+
+function sourceModeForGeneratedPhotoSource(
+  photoSource: GeneratedAd["photo_source"],
+): MerchantImageSourceMode {
+  if (photoSource === "uploaded_original") return "merchant_original";
+  if (photoSource === "uploaded_enhanced") return "merchant_ai_edit";
+  if (photoSource === "stock") return "approved_stock";
+  if (photoSource === "copy_only" || photoSource === "fallback_template") return "deterministic_fallback";
+  return "ai_generated";
+}
+
+function defaultSelectionQaForSource(sourceType: MerchantImageSourceMode): AdImageSelectionQa {
+  if (sourceType === "merchant_original") return originalPhotoSelectionQa(false);
+  return {
+    checked: false,
+    sourceType,
+    decision: sourceType === "deterministic_fallback" ? "not_checked" : "pass",
+    hardFailReasons: [],
+    warningCodes: [],
+    missingItems: [],
+    unavailable: false,
+    merchantOverrideAllowed: false,
+    merchantOverrideAcknowledged: false,
+  };
+}
+
+function generatedAdForPublishSpec(params: {
+  ad: GeneratedAd | null;
+  finalStoragePath: string | null;
+  uploadedPhotoStoragePath: string | null;
+  usePhotoAsFinal: boolean;
+}): GeneratedAd | null {
+  if (!params.ad) return null;
+  const selectedStoragePath = params.finalStoragePath ?? params.ad.poster_storage_path ?? null;
+  const usingUploadedPhoto =
+    params.usePhotoAsFinal &&
+    selectedStoragePath != null &&
+    selectedStoragePath === params.uploadedPhotoStoragePath;
+  const photoSource = usingUploadedPhoto
+    ? ("uploaded_original" as const)
+    : params.ad.photo_source ?? "generated";
+  const photoTreatment = usingUploadedPhoto ? null : params.ad.photo_treatment ?? null;
+  const editMode = usingUploadedPhoto
+    ? "none"
+    : params.ad.image_selection?.editMode ?? imageEditModeForTreatment(photoTreatment);
+  const qa = usingUploadedPhoto
+    ? originalPhotoSelectionQa(true)
+    : params.ad.image_selection?.qa ?? defaultSelectionQaForSource(sourceModeForGeneratedPhotoSource(photoSource));
+
+  return {
+    ...params.ad,
+    poster_storage_path: selectedStoragePath,
+    photo_source: photoSource,
+    photo_treatment: photoTreatment,
+    image_selection: buildAdImageSelection({
+      photoSource,
+      editMode,
+      sourcePhotoPath: usingUploadedPhoto
+        ? params.uploadedPhotoStoragePath
+        : params.ad.image_selection?.sourcePhotoPath ?? params.uploadedPhotoStoragePath,
+      selectedStoragePath,
+      provider: params.ad.image_selection?.provider ?? null,
+      model: params.ad.image_selection?.model ?? null,
+      promptVersion: params.ad.image_selection?.promptVersion ?? null,
+      qa,
+    }),
+  };
+}
 
 type RevisionTarget = "copy" | "image" | "both";
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
@@ -1657,9 +1760,13 @@ export default function AiDealScreen() {
         setBanner({ message: friendly, tone: "error" });
         return;
       }
-      // Snapshot the treatment we're about to send so revisions reference the same one
+      // Snapshot the image intent we're about to send so revisions reference the same one
       // even if the user changes the selector mid-flight.
-      const sentTreatment = path ? photoTreatment : null;
+      const sentSourceMode = imageSourceModeForPhotoChoice(path, usePhotoAsFinal);
+      const sentEditMode = sentSourceMode === "merchant_ai_edit"
+        ? imageEditModeForTreatment(photoTreatment)
+        : "none";
+      const sentTreatment = sentSourceMode === "merchant_ai_edit" ? photoTreatment : null;
       const maxClaimsNum = Number(maxClaims);
 
       const { ad, quota: nextQuota } = await aiGenerateAd({
@@ -1669,7 +1776,10 @@ export default function AiDealScreen() {
         output_language: dealOutputLang,
         request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
-        ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
+        image_source_mode: sentSourceMode,
+        image_edit_mode: sentEditMode,
+        ...(path ? { photo_path: path } : {}),
+        ...(sentTreatment ? { photo_treatment: sentTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
@@ -1724,8 +1834,18 @@ export default function AiDealScreen() {
      * This way the server's image-only revision applies enhancement consistent with what the
      * user is looking at, even if they fiddled with the selector after generating.
      */
+    const sourceModeForRevision =
+      generatedAd.image_selection?.sourceMode ??
+      imageSourceModeForPhotoChoice(photoPath, usePhotoAsFinal);
+    const editModeForRevision =
+      generatedAd.image_selection?.editMode ??
+      (sourceModeForRevision === "merchant_ai_edit"
+        ? imageEditModeForTreatment(lastSentPhotoTreatmentRef.current ?? photoTreatment)
+        : "none");
     const treatmentForRevision =
-      lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
+      sourceModeForRevision === "merchant_ai_edit"
+        ? lastSentPhotoTreatmentRef.current ?? photoTreatment
+        : null;
     const maxClaimsNum = Number(maxClaims);
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
@@ -1740,7 +1860,10 @@ export default function AiDealScreen() {
         revision_count: revisionsUsed + 1,
         ...(activePreset ? { revision_preset: activePreset } : {}),
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
-        ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
+        image_source_mode: sourceModeForRevision,
+        image_edit_mode: editModeForRevision,
+        ...(photoPath ? { photo_path: photoPath } : {}),
+        ...(treatmentForRevision ? { photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
@@ -2004,6 +2127,12 @@ export default function AiDealScreen() {
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
+      const adForPublishSpec = generatedAdForPublishSpec({
+        ad: generatedAd,
+        finalStoragePath,
+        uploadedPhotoStoragePath: userPhotoStoragePath,
+        usePhotoAsFinal,
+      });
       const allowTextOnlyPoster =
         generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
       if (!posterForPublish && !allowTextOnlyPoster) {
@@ -2066,7 +2195,7 @@ export default function AiDealScreen() {
             idempotency_key:
               publishIdempotencyKeyRef.current ??
               (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
-            ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, generatedAd),
+            ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpec),
           });
           dealsOut = versionedResult.deals.map((row) => ({
             id: row.deal_id,

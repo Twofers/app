@@ -16,6 +16,29 @@ export type QuickDealImageQaResult = {
   notes: string;
 };
 
+export type AdImageQaSourceType =
+  | "merchant_original"
+  | "merchant_ai_edit"
+  | "ai_generated"
+  | "approved_stock"
+  | "deterministic_fallback";
+
+export type AdImageQaDecision = "pass" | "warn" | "block" | "unavailable" | "not_checked";
+
+export type SourceAwareImageQaResult = {
+  checked: boolean;
+  available: boolean;
+  sourceType: AdImageQaSourceType;
+  decision: AdImageQaDecision;
+  hardFailReasons: string[];
+  warningCodes: string[];
+  missingItems: string[];
+  forbiddenElements: string[];
+  merchantOverrideAllowed: boolean;
+  merchantOverrideAcknowledged: boolean;
+  notes: string;
+};
+
 export const QUICK_DEAL_IMAGE_QA_SCHEMA = {
   name: "quick_deal_image_qa",
   strict: true,
@@ -88,6 +111,23 @@ export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string
   ].join(" ");
 }
 
+export function buildAdImageQaPrompt(params: {
+  sourceType: AdImageQaSourceType;
+  requiredVisualItems: readonly string[];
+}): string {
+  const sourceGuidance =
+    params.sourceType === "merchant_original"
+      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, and non-prominent required items as warnings unless a forbidden hard blocker appears."
+      : params.sourceType === "merchant_ai_edit"
+      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
+      : params.sourceType === "approved_stock"
+      ? "This is approved stock media. It must still match the offer items and must not contain forbidden ad graphics."
+      : params.sourceType === "deterministic_fallback"
+      ? "This is a deterministic native-rendered fallback. No vision inspection is required."
+      : "This is a fully AI-generated image. It must show the required offer items and must not contain forbidden ad graphics.";
+  return [sourceGuidance, buildQuickDealImageQaPrompt(params.requiredVisualItems)].join(" ");
+}
+
 export function buildQuickDealImageRegenerationPrompt(params: {
   basePrompt: string;
   requiredVisualItems: readonly string[];
@@ -148,4 +188,109 @@ export function normalizeQuickDealImageQaResult(
     forbidden_elements,
     notes: cleanItem(rawObject.notes),
   };
+}
+
+function reasonCode(prefix: string, value: string): string {
+  return `${prefix}:${value.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
+}
+
+function unavailableDecision(
+  sourceType: AdImageQaSourceType,
+  merchantOverrideAcknowledged = false,
+): SourceAwareImageQaResult {
+  const merchantOriginal = sourceType === "merchant_original";
+  return {
+    checked: false,
+    available: false,
+    sourceType,
+    decision: merchantOriginal ? "unavailable" : "block",
+    hardFailReasons: merchantOriginal ? [] : ["VISION_QA_UNAVAILABLE"],
+    warningCodes: merchantOriginal ? ["VISION_QA_UNAVAILABLE"] : [],
+    missingItems: [],
+    forbiddenElements: [],
+    merchantOverrideAllowed: merchantOriginal,
+    merchantOverrideAcknowledged,
+    notes: "Image QA unavailable.",
+  };
+}
+
+export function normalizeSourceAwareImageQaResult(params: {
+  raw: QuickDealImageQaResult | null | undefined;
+  requiredVisualItems: readonly string[];
+  sourceType: AdImageQaSourceType;
+  merchantOverrideAcknowledged?: boolean;
+}): SourceAwareImageQaResult {
+  if (params.sourceType === "deterministic_fallback") {
+    return {
+      checked: false,
+      available: true,
+      sourceType: params.sourceType,
+      decision: "not_checked",
+      hardFailReasons: [],
+      warningCodes: [],
+      missingItems: [],
+      forbiddenElements: [],
+      merchantOverrideAllowed: false,
+      merchantOverrideAcknowledged: false,
+      notes: "Native fallback uses rendered text and no generated image asset.",
+    };
+  }
+  if (!params.raw) {
+    return unavailableDecision(params.sourceType, params.merchantOverrideAcknowledged === true);
+  }
+
+  const qa = params.raw;
+  const missingItems = qa.items
+    .filter((item) => !item.present || !item.prominent)
+    .map((item) => item.item);
+  const forbiddenElements = qa.forbidden_elements;
+  const forbiddenReasons = [
+    ...(qa.has_readable_text ? ["READABLE_TEXT"] : []),
+    ...(qa.has_forbidden_logo_or_brand ? ["LOGO_OR_BRAND_MARK"] : []),
+    ...(qa.has_qr_code ? ["QR_OR_BARCODE"] : []),
+    ...(qa.has_unrelated_mascot_or_animal ? ["UNRELATED_MASCOT_OR_ANIMAL"] : []),
+    ...forbiddenElements.map((item) => reasonCode("FORBIDDEN_ELEMENT", item)),
+  ];
+  const generatedLike =
+    params.sourceType === "ai_generated" ||
+    params.sourceType === "merchant_ai_edit" ||
+    params.sourceType === "approved_stock";
+  const hardFailReasons = generatedLike
+    ? [...missingItems.map((item) => reasonCode("MISSING_REQUIRED_ITEM", item)), ...forbiddenReasons]
+    : forbiddenReasons;
+  const warningCodes =
+    params.sourceType === "merchant_original"
+      ? missingItems.map((item) => reasonCode("ITEM_NOT_PROMINENT", item))
+      : [];
+  const decision: AdImageQaDecision =
+    hardFailReasons.length > 0
+      ? "block"
+      : warningCodes.length > 0
+      ? "warn"
+      : "pass";
+
+  return {
+    checked: true,
+    available: true,
+    sourceType: params.sourceType,
+    decision,
+    hardFailReasons: [...new Set(hardFailReasons)],
+    warningCodes: [...new Set(warningCodes)],
+    missingItems: [...new Set(missingItems)],
+    forbiddenElements: [...new Set(forbiddenElements)],
+    merchantOverrideAllowed: decision === "warn" && params.sourceType === "merchant_original",
+    merchantOverrideAcknowledged: params.merchantOverrideAcknowledged === true,
+    notes: qa.notes,
+  };
+}
+
+export function unavailableSourceAwareImageQaResult(params: {
+  sourceType: AdImageQaSourceType;
+  merchantOverrideAcknowledged?: boolean;
+}): SourceAwareImageQaResult {
+  return unavailableDecision(params.sourceType, params.merchantOverrideAcknowledged === true);
+}
+
+export function shouldFailClosedForImageQa(result: SourceAwareImageQaResult): boolean {
+  return result.decision === "block";
 }

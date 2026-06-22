@@ -10,6 +10,7 @@ import {
   canonicalOfferSentence,
   type OfferDefinitionV1,
 } from "./offer-definition";
+import type { AdImageSelection } from "./merchant-image-selection";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -41,6 +42,8 @@ export type GeneratedAd = {
   photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "stock" | "copy_only" | "fallback_template";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment?: PhotoTreatment | null;
+  /** Canonical selected image source, QA decision, and lineage metadata. */
+  image_selection?: AdImageSelection | null;
 };
 
 export type BusinessContextPayload = {

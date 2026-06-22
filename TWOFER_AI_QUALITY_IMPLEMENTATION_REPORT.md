@@ -392,3 +392,126 @@ OPENAI_MODEL=gpt-5.4-mini
 ```
 
 If the five-lane prompt must be rolled back before PR 4 cleanup, redeploy the prior Edge Function version from PR 1. Do not roll back immutable offer validation, deterministic fallback copy, or exact-version merchant approval.
+
+---
+
+## PR 3 - Merchant image control and source-aware QA
+
+Status: Implemented locally on branch `codex/ai-quality-pr3-image-control`.
+
+Safety checkpoint: `f1b491c8`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none. PR 3 stores image-selection provenance in the existing generated-ad response, telemetry payload, and versioned publish `ad_spec`; no database migration was applied or created.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/image-asset-lineage.ts`
+- `lib/merchant-image-selection.ts`
+- `lib/merchant-image-edit-policy.ts`
+- `lib/merchant-image-selection.test.ts`
+- `lib/merchant-image-edit-policy.test.ts`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/ad-spec.ts`
+- `lib/ad-variants.ts`
+- `lib/functions.ts`
+- `lib/offer-version-publish.test.ts`
+- `lib/quick-deal-image-qa.ts`
+- `lib/quick-deal-image-qa.test.ts`
+- `supabase/functions/_shared/dalle-image.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added canonical image source modes: `merchant_original`, `merchant_ai_edit`, `ai_generated`, `approved_stock`, and `deterministic_fallback`.
+- Added canonical edit modes: `none`, `touchup`, `clean_background`, `studio_polish`, and `custom`.
+- Added image-selection and lineage helpers so generated ads can carry selected storage path, source photo path, provider, model, prompt version, QA decision, and derivative lineage.
+- Added a conservative merchant custom-edit instruction policy that blocks requests to add text/logos/QR/prices, change offer items/counts/terms, request third-party brands, or introduce distracting characters.
+- Expanded image QA into source-aware decisions:
+  - merchant originals can produce warnings and an acknowledgement path.
+  - generated, AI-edited, and approved-stock assets block on missing required items or forbidden elements.
+  - generated and AI-edited assets fail closed when vision QA is unavailable.
+- Wired the app's existing "use actual photo as final" versus polish control into `image_source_mode` and `image_edit_mode` request fields.
+- Preserved backward compatibility with legacy `photo_path` and `photo_treatment` callers.
+- Added edge response field `image_selection` and logged `image_selection` plus `image_lineage` in `ai_generation_logs.response_payload`.
+- QA-checks AI-edited merchant-photo derivatives before upload selection. If edited QA blocks or is unavailable, the server falls back to the merchant original or provider fallback.
+- Generated image QA now fails closed on QA outage instead of uploading unchecked generated imagery.
+- Approved-stock fallback is tagged as its own source rather than inheriting generated-image QA failure metadata.
+- Versioned publish `ad_spec` now carries the selected image provenance. If the merchant publishes the original uploaded photo as final, the ad spec follows that exact selected path.
+- Tightened the OpenAI image prompt to match Gemini's forbidden-elements policy for text, prices, coupons, menu boards, QR/barcodes, fake logos, watermarks, mascots, animals, and unrelated characters.
+
+## Provider routing behavior
+
+- Image provider order remains unchanged: Gemini image primary when configured, OpenAI fallback when configured, then approved-stock/copy-only fallback.
+- OpenAI remains the vision QA provider. PR 3 did not add Gemini vision QA fallback.
+- Text provider routing from PR 1/PR 2 is unchanged.
+
+## Tests added and results
+
+Focused tests added:
+
+- `lib/merchant-image-selection.test.ts`
+- `lib/merchant-image-edit-policy.test.ts`
+- source-aware cases in `lib/quick-deal-image-qa.test.ts`
+- image-selection ad-spec assertion in `lib/offer-version-publish.test.ts`
+
+Full validation:
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 119 Edge Function files checked.
+- `npm run test -- --run`: passed, 124 test files and 701 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid, 0 invalid, no changed facts.
+- Android Metro bundle probe passed:
+
+```text
+npx expo export --platform android --output-dir "%TEMP%\twofer-metro-probe-codex-ai-pr3-<id>"
+```
+
+Existing `country-flag-icons` package export warnings appeared, matching prior probes, but did not fail the bundle.
+
+## Acceptance criteria map
+
+26. Approval tied to exact final version: Implemented for generated-ad response, telemetry, and versioned publish `ad_spec`.
+27. Merchant image choice authoritative: Implemented for original-vs-edit-vs-generated request intent.
+28. Original merchant uploads remain selectable: Implemented.
+29. AI edits are derivatives with lineage: Implemented in response/ad_spec metadata; no new DB table.
+30. Generated images are clearly source-tagged: Implemented.
+31. Approved stock remains distinct from generated fallback: Implemented.
+32. Deterministic fallback remains available: Preserved and source-tagged.
+33. Source-aware QA schema exists: Implemented in shared helper types/results.
+34. Merchant originals use warning/override semantics: Implemented in helper and publish snapshot metadata.
+35. Generated/AI-edited fail closed on hard QA failures: Implemented.
+36. Generated/AI-edited fail closed on QA outage: Implemented.
+37. Required visual items checked for generated/edited images: Implemented through existing vision QA with source-aware decisions.
+38. Forbidden visual elements checked: Implemented and prompt wording expanded.
+39. Merchant custom edit instructions constrained: Implemented helper and edge rejection for invalid custom instructions.
+40. UI exposes upload/use-original/polish controls: Partially implemented through existing controls; no new custom-edit text UI.
+41. Undo/restore controls: Not implemented in PR 3.
+42. Provider order Gemini image primary/OpenAI fallback preserved: Implemented.
+43. Gemini vision QA fallback: Not implemented in PR 3.
+44. Image provenance persists: Partially implemented in `ad_spec`/telemetry; no dedicated DB lineage table.
+45. Exact selected image asset in publish audit: Implemented in versioned publish `ad_spec`.
+46. No unchecked generated image becomes publishable: Implemented for this ad-variant image path.
+47-52. Later non-image cleanup criteria: Not implemented in PR 3.
+
+## Unresolved risks
+
+- No Supabase migration was applied or created for a dedicated image-selection or image-lineage table. Provenance is stored in existing JSON payloads only.
+- Gemini vision QA fallback remains pending; OpenAI vision QA outage sends generated/edited imagery to fallback rather than a second QA provider.
+- The app has no custom image edit text box yet, though the server policy is in place.
+- Merchant-original warning acknowledgement is represented by the existing "use actual photo as final" choice, not by a separate warning modal.
+- Local validation did not perform live provider calls or publish a real deal.
+
+## Rollback
+
+Redeploy the PR 2 `ai-generate-ad-variants` Edge Function and mobile build if image-selection metadata causes issues. No migration rollback is required for PR 3.

@@ -1,5 +1,6 @@
 import type { GeneratedAd } from "./ad-variants";
 import { DEAL_COPY_LIMITS } from "./deal-offer-contract";
+import type { AdImageSelection } from "./merchant-image-selection";
 import type { OfferDefinitionV1 } from "./offer-definition";
 
 export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
@@ -26,6 +27,7 @@ export type AdSpecVisual = {
   posterStoragePath: string | null;
   sourceAssetIds: string[];
   treatment: GeneratedAd["photo_treatment"] | null;
+  imageSelection?: AdImageSelection | null;
 };
 
 export type AdSpecChannelSlot = {
@@ -281,6 +283,7 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
       posterStoragePath,
       sourceAssetIds: definition.sourceAssetIds,
       treatment: generatedAd?.photo_treatment ?? null,
+      imageSelection: generatedAd?.image_selection ?? null,
     };
   }
   if (definition.sourceAssetIds.length > 0) {
@@ -289,6 +292,7 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
       posterStoragePath: null,
       sourceAssetIds: definition.sourceAssetIds,
       treatment: null,
+      imageSelection: generatedAd?.image_selection ?? null,
     };
   }
   return {
@@ -296,6 +300,7 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
     posterStoragePath: null,
     sourceAssetIds: [],
     treatment: null,
+    imageSelection: generatedAd?.image_selection ?? null,
   };
 }
 
