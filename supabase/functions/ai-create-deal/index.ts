@@ -129,6 +129,11 @@ function omitDealEligibilityColumns<T extends Record<string, unknown>>(row: T) {
 }
 
 const CHAT_MODEL = resolveOpenAiChatModel();
+const LEGACY_CREATE_DEAL_ENABLED_FLAG = "AI_LEGACY_CREATE_DEAL_ENABLED";
+
+function isLegacyCreateDealEnabled() {
+  return Deno.env.get(LEGACY_CREATE_DEAL_ENABLED_FLAG)?.trim().toLowerCase() === "true";
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -144,6 +149,19 @@ serve(async (req) => {
         status: 405,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
+    );
+  }
+
+  if (!isLegacyCreateDealEnabled()) {
+    return new Response(
+      JSON.stringify({
+        error: "Legacy AI deal creation is disabled. Use the reviewed AI ad publish flow.",
+        error_code: "AI_CREATE_DEAL_LEGACY_DISABLED",
+      }),
+      {
+        status: 410,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 

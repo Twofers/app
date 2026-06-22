@@ -728,3 +728,69 @@ Full validation:
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4d - Legacy one-shot create-deal default gate
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `2625ccbe`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `supabase/functions/_shared/ai-create-deal-source.test.ts`
+
+## Files changed
+
+- `supabase/functions/ai-create-deal/index.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Default-closed the legacy `ai-create-deal` Edge Function behind hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`.
+- The disabled path returns `410` with `error_code: "AI_CREATE_DEAL_LEGACY_DISABLED"` before reading Supabase/OpenAI secrets, generating copy, inserting `deals`, or sending push notifications.
+- Added a source guard test to keep the gate ahead of provider and live insert work.
+- Updated current-state docs to mark the one-shot AI plus live insert path as default-closed.
+
+## Tests added and results
+
+Focused validation:
+
+- `npx vitest run supabase/functions/_shared/ai-create-deal-source.test.ts`: passed, 1 file and 1 test.
+- `deno check supabase/functions/ai-create-deal/index.ts`: passed.
+
+Full validation:
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 122 Edge Function files checked.
+- `npm run test -- --run`: passed, 128 files and 715 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 valid fixtures and 0 invalid fixtures.
+- Android Metro probe, `npx expo export --platform android --output-dir <temp>`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes, but did not fail the bundle.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved from PR 4a; no canned output added.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for `ai-create-deal`; the legacy one-shot generation plus live insert route is now default-closed unless deliberately re-enabled. Other legacy AI helper routes remain pending.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Unresolved risks
+
+- This does not remove the client wrapper in `lib/functions.ts`; it is unused by current app code and will now receive a controlled disabled response unless the hosted flag is set.
+- If Dan deliberately re-enables `AI_LEGACY_CREATE_DEAL_ENABLED=true`, the old one-shot path still calls OpenAI directly and inserts a live deal row.
+- Main AI/Quick client publish still includes direct `deals` insert fallbacks when the versioned publish RPC is unavailable; that is a separate, riskier cleanup.
+
+## Rollback
+
+Set hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true` to temporarily restore the legacy endpoint after deployment, or revert this commit. No migration rollback is required.
