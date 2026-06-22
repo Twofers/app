@@ -78,7 +78,7 @@ Use with [TEST_CASE_INPUTS.md](./TEST_CASE_INPUTS.md).
 - Date:  
 - Tester:  
 - App build / branch:  
-- Model (`OPENAI_AD_MODEL` if not default):  
+- Model (`OPENAI_MODEL` if not default):  
 - **Manual QA tag:** TC__  
 - Account profile: empty / filled (describe):  
 - Regeneration attempt: 0 / 1 / 2  

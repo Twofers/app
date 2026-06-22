@@ -88,20 +88,6 @@ export function getPublicEnvSnapshot(): Record<string, string> {
       process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK ?? "(unset)",
     EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH:
       process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH ?? "(unset)",
-    EXPO_PUBLIC_AI_AD_PIPELINE_V3: process.env.EXPO_PUBLIC_AI_AD_PIPELINE_V3 ?? "(unset)",
-    EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY: process.env.EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY ?? "(unset)",
-    EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT:
-      process.env.EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT: process.env.EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT: process.env.EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_TWOFER_STOCK_LIBRARY: process.env.EXPO_PUBLIC_TWOFER_STOCK_LIBRARY ?? "(unset)",
-    EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE: process.env.EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE ?? "(unset)",
-    EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS: process.env.EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS ?? "(unset)",
-    EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES: process.env.EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES ?? "(unset)",
-    EXPO_PUBLIC_PENGUIN_DEAL_LOADER: process.env.EXPO_PUBLIC_PENGUIN_DEAL_LOADER ?? "(unset)",
-    EXPO_PUBLIC_AD_JOB_ASYNC_STATUS: process.env.EXPO_PUBLIC_AD_JOB_ASYNC_STATUS ?? "(unset)",
-    EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT:
-      process.env.EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -122,54 +108,6 @@ export function isOfferDefinitionFallbackEnabled(): boolean {
 
 export function isOfferVersionPublishEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH === "true";
-}
-
-export function isAiAdPipelineV3Enabled(): boolean {
-  return process.env.EXPO_PUBLIC_AI_AD_PIPELINE_V3 === "true";
-}
-
-export function isBusinessMediaLibraryEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY === "true";
-}
-
-export function isBusinessSetupAutoWebsiteImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT === "true";
-}
-
-export function isInstagramMediaImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT === "true";
-}
-
-export function isFacebookMediaImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT === "true";
-}
-
-export function isTwoferStockLibraryEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_TWOFER_STOCK_LIBRARY === "true";
-}
-
-export function isStrictAiCopyStyleGateEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE === "true";
-}
-
-export function isThreeCreativeConceptsEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS === "true";
-}
-
-export function isDeterministicAdTemplatesEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES === "true";
-}
-
-export function isPenguinDealLoaderEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_PENGUIN_DEAL_LOADER === "true";
-}
-
-export function isAdJobAsyncStatusEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_AD_JOB_ASYNC_STATUS === "true";
-}
-
-export function isStrictNoPhotoGenerationInvariantEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

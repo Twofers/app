@@ -76,7 +76,7 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 **Optional / model tuning:**
 
-- `OPENAI_MODEL` / `OPENAI_AD_MODEL` / team-specific chat model vars (see `supabase/functions/_shared/openai-chat-model.ts` and docs)
+- `OPENAI_MODEL` (optional; default `gpt-5.5`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
 
 **Menu extraction (preview / explicit opt-in only):**
