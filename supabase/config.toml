@@ -569,6 +569,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-cancel-trial-subscription/index.ts"
 
+[functions.stripe-cancel-paid-subscription]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-cancel-paid-subscription/index.ts"
+
 [functions.stripe-request-introductory-refund]
 enabled = true
 verify_jwt = false

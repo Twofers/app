@@ -99,6 +99,46 @@ export default function ManageSubscriptionScreen() {
     );
   };
 
+  const cancelPaidSubscription = async () => {
+    if (busy || !locationId || (summary.status !== "pro_active" && summary.status !== "paid_active")) return;
+    if (summary.purchaseSurface !== "in_app_link") {
+      setBanner({ message: t("billing.purchaseUnavailable"), tone: "info" });
+      return;
+    }
+
+    setBusy(true);
+    setBanner({ message: t("billingManage.cancelPaidRequesting"), tone: "info" });
+    try {
+      const { error } = await supabase.functions.invoke("stripe-cancel-paid-subscription", {
+        body: { location_id: locationId },
+        timeout: EDGE_FUNCTION_TIMEOUT_MS,
+      });
+      if (error) throw error;
+      setBanner({ message: t("billingManage.cancelPaidConfirmed"), tone: "success" });
+      await refresh();
+    } catch {
+      setBanner({ message: t("billingManage.errCancelPaid"), tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmPaidCancellation = () => {
+    if (busy || (summary.status !== "pro_active" && summary.status !== "paid_active")) return;
+    Alert.alert(
+      t("billingManage.cancelPaidConfirmTitle"),
+      t("billingManage.cancelPaidConfirmBody"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("billingManage.cancelPaid"),
+          style: "destructive",
+          onPress: () => void cancelPaidSubscription(),
+        },
+      ],
+    );
+  };
+
   const requestIntroductoryRefund = async () => {
     if (busy || !locationId || !summary.refundEligible) return;
     if (summary.purchaseSurface !== "in_app_link") {
@@ -148,6 +188,17 @@ export default function ManageSubscriptionScreen() {
     defaultValue: summary.status.replace(/_/g, " "),
   });
   const canCancelTrial = summary.status === "trial_active";
+  const canCancelPaid = summary.status === "pro_active" || summary.status === "paid_active";
+  const cancelButtonTitle = canCancelTrial
+    ? t("billingManage.cancelTrial")
+    : canCancelPaid
+      ? t("billingManage.cancelPaid")
+      : t("billingManage.cancelSubscription");
+  const cancelButtonAction = canCancelTrial
+    ? confirmTrialCancellation
+    : canCancelPaid
+      ? confirmPaidCancellation
+      : () => void openCustomerPortal("cancel");
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -196,6 +247,10 @@ export default function ManageSubscriptionScreen() {
               <Banner message={t("billingManage.trialCanceling")} tone="success" />
             ) : null}
 
+            {summary.status === "pro_canceling" || summary.status === "paid_canceling" ? (
+              <Banner message={t("billingManage.paidCanceling")} tone="success" />
+            ) : null}
+
             <Text style={{ fontSize: 13, opacity: 0.7, fontWeight: "700" }}>
               {t("billingManage.actionsTitle")}
             </Text>
@@ -206,8 +261,8 @@ export default function ManageSubscriptionScreen() {
             />
 
             <SecondaryButton
-              title={canCancelTrial ? t("billingManage.cancelTrial") : t("billingManage.cancelSubscription")}
-              onPress={canCancelTrial ? confirmTrialCancellation : () => void openCustomerPortal("cancel")}
+              title={cancelButtonTitle}
+              onPress={cancelButtonAction}
               disabled={busy || summary.purchaseSurface !== "in_app_link"}
             />
 
