@@ -32,6 +32,10 @@ describe("billing locale parity", () => {
     }
   });
 
+  it("keeps Korean billing surfaces free of replacement-marker copy", () => {
+    expect(JSON.stringify({ billing: ko.billing, billingManage: ko.billingManage })).not.toMatch(/\?\?/);
+  });
+
   it("uses card-required automatic-billing trial language", () => {
     expect(en.billing.trialDisclosureBody).toContain("$30/month per location");
     expect(en.billing.trialDisclosureBody).toContain("plus applicable taxes");
