@@ -47,6 +47,17 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/event\.type === "invoice\.payment_succeeded"\) \{\s*await grantPaidPeriod/);
   });
 
+  it("retries failed Stripe provider events without replaying processed duplicates", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/provider_event_id", event\.id/);
+    expect(source).toMatch(/processing_status"\)/);
+    expect(source).toMatch(/processing_status\) === "failed"/);
+    expect(source).toMatch(/processing_status: "processing"/);
+    expect(source).toMatch(/processed_at: null/);
+    expect(source).toMatch(/error_message: null/);
+    expect(source).toMatch(/return \{ duplicate: true, id: existingId \}/);
+  });
+
   it("activates card-required trials only from checkout webhooks", () => {
     const source = readFunction("stripe-webhook");
     expect(source).toMatch(/activateTrialFromCheckout/);

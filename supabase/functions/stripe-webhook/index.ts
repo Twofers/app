@@ -89,7 +89,40 @@ async function insertProviderEvent(supabase: any, event: Stripe.Event, environme
 
   if (error) {
     const detail = `${error.code ?? ""} ${error.message ?? ""}`;
-    if (/23505|duplicate/i.test(detail)) return { duplicate: true, id: null };
+    if (/23505|duplicate/i.test(detail)) {
+      const { data: existing, error: existingError } = await supabase
+        .from("billing_provider_events")
+        .select("id,processing_status")
+        .eq("provider", "stripe")
+        .eq("provider_event_id", event.id)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      const existingId = safeGetString(existing?.id);
+      if (existingId && safeGetString(existing?.processing_status) === "failed") {
+        const { data: retry, error: retryError } = await supabase
+          .from("billing_provider_events")
+          .update({
+            environment,
+            event_type: event.type,
+            processing_status: "processing",
+            payload: event,
+            processed_at: null,
+            error_message: null,
+          })
+          .eq("id", existingId)
+          .eq("processing_status", "failed")
+          .select("id")
+          .maybeSingle();
+
+        if (retryError) throw retryError;
+        const retryId = safeGetString(retry?.id);
+        if (retryId) return { duplicate: false, id: retryId };
+      }
+
+      return { duplicate: true, id: existingId };
+    }
     throw error;
   }
   return { duplicate: false, id: data?.id ?? null };
