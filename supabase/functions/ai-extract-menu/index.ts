@@ -337,7 +337,7 @@ serve(async (req) => {
     });
 
     if (!openAiRes.ok) {
-      const errText = await openAiRes.text();
+      const menuErrorCode = `HTTP_${openAiRes.status}`;
       console.log(JSON.stringify({ tag: "ai_extract_menu", event: "openai_http", status: openAiRes.status }));
       await logAiCost(admin, {
         businessId: business_id,
@@ -348,8 +348,8 @@ serve(async (req) => {
         endpoint: "responses",
         openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
         success: false,
-        errorCode: `HTTP_${openAiRes.status}`,
-        errorMessage: errText.slice(0, 500),
+        errorCode: menuErrorCode,
+        errorMessage: `Menu extraction provider request failed with ${menuErrorCode}.`,
       });
       return new Response(
         JSON.stringify({

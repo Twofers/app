@@ -166,6 +166,7 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
+Upstream menu extraction provider failures return `OPENAI_ERROR` with sanitized status telemetry rather than raw provider response bodies.
 
 `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. These helpers can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured.
 

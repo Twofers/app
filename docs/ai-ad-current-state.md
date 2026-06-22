@@ -133,7 +133,7 @@ Current gaps:
 - `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`. If re-enabled, upstream OpenAI HTTP failure bodies are logged server-side and not returned to clients.
 - `ai-deal-suggestions`: owner dashboard insights helper. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation failures return `AI_GENERATION_FAILED` without raw provider response bodies.
 - `ai-translate-deal`: localization helper used after deal creation and by direct callers. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation failures return `AI_GENERATION_FAILED` without raw provider response bodies.
-- `ai-extract-menu`: menu photo extraction path, relevant to catalog setup.
+- `ai-extract-menu`: menu photo extraction path, relevant to catalog setup. The synthetic sample menu path is gated behind `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`; production-style missing OpenAI config returns `OPENAI_NOT_CONFIGURED`, and upstream provider HTTP failures log sanitized status details instead of raw provider bodies.
 
 ## Current Data Model
 

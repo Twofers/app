@@ -719,8 +719,6 @@ Live secret names changed: none.
 
 Revert this commit. No migration rollback is required.
 
----
-
 ## PR 4g - AI quality/cost dashboard metrics export
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -1760,6 +1758,69 @@ Live secret names changed: none.
 
 - The voice transcription-only path still uses direct Whisper/OpenAI because no provider-neutral audio transcription router exists.
 - Gemini text fallback remains hosted-flag gated and must not be enabled in production until Dan completes the public privacy/subprocessor update and deploys the updated Edge Functions.
+- Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4u - Sanitize menu extraction provider failures
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `44ea0fcf`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `supabase/functions/_shared/ai-extract-menu-source.test.ts`
+
+## Files changed
+
+- `supabase/functions/ai-extract-menu/index.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `docs/deployment-notes.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed raw OpenAI response-body reads from `ai-extract-menu` provider HTTP failures.
+- Kept provider diagnostics as sanitized status/error code telemetry in `ai_generation_costs`.
+- Added source guards proving synthetic sample menu output stays behind `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`.
+- Added source guards proving the production missing-key path returns `OPENAI_NOT_CONFIGURED` instead of sample output.
+- Documented the sanitized menu extraction failure behavior and the production-only deploy requirement.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved; synthetic sample menu output remains gated behind the explicit local preview flag.
+51. No generation path bypasses provider/quality controls: Improved for menu extraction failure telemetry and fallback gating. `ai-extract-menu` still uses a direct OpenAI Responses vision path because no provider-neutral menu extraction router exists yet.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `deno check supabase/functions/ai-extract-menu/index.ts`: passed.
+- `npx vitest run supabase/functions/_shared/ai-extract-menu-source.test.ts`: passed, 1 file / 2 tests.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npm run typecheck:functions -- --pretty false`: passed, 127 Edge Function files.
+- `npm run test -- --run`: passed, 135 files / 739 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4u" --clear`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-extract-menu` still uses a direct OpenAI Responses vision path because the shared structured text router is not a menu OCR/vision extraction router.
+- The synthetic sample menu flag must remain disabled in hosted production.
 - Hosted production still requires Dan-controlled Edge Function redeployment for this local change to take effect.
 
 ## Rollback
