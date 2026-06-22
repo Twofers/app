@@ -36,10 +36,14 @@ describe("billing locale parity", () => {
     expect(en.billing.trialDisclosureBody).toContain("$30/month per location");
     expect(en.billing.trialDisclosureBody).toContain("plus applicable taxes");
     expect(en.billing.trialConsentLabel).toContain("automatically bill monthly");
+    expect(en.billing.trialAutoBillingReminder).toContain("$30/month per location");
+    expect(en.billing.trialAutoBillingReminder).toContain("plus applicable taxes");
+    expect(en.billing.trialAutoBillingReminder).toContain("Manage subscription");
     for (const locale of [en, es, ko]) {
       expect(JSON.stringify(locale.billing)).not.toMatch(/No card required|no card required|No se requiere tarjeta/);
       expect(locale.billing).toHaveProperty("trialDisclosureBody");
       expect(locale.billing).toHaveProperty("trialConsentLabel");
+      expect(locale.billing).toHaveProperty("trialAutoBillingReminder");
       expect(locale.billing.status).toHaveProperty("trial_checkout_pending");
       expect(locale.billing.status).toHaveProperty("trial_expired_payment_failed_suspended");
     }

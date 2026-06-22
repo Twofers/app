@@ -1917,6 +1917,7 @@
     "trialConsentRequired": "체크아웃을 열기 전에 자동 청구 조건에 동의해 주세요.",
     "trialCredits": "??? ? ??? {{count}}?",
     "paidCredits": "?? ??? ? ??? {{count}}?",
+    "trialAutoBillingReminder": "알림: 체험은 {{date}}에 종료됩니다. 체험 종료 전에 취소하지 않으면 Twofer Business가 위치당 월 30달러와 관련 세금으로 자동 청구됩니다. 취소하거나 결제 수단을 업데이트하려면 구독 관리를 사용하세요.",
     "trialEndsIn": "30? ??? {{days}}? ?? ?????",
     "daysRemaining": "?? ?? {{days}}? ??",
     "hoursRemaining": "?? ?? {{hours}}?? ??",

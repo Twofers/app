@@ -13,6 +13,7 @@ import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
 import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
 import { isSuspendedBillingStatus } from "@/lib/billing/entitlements";
+import { canManageBillingInPortal, getTrialReminderWindowDays } from "@/lib/billing/trial-reminders";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { useScreenInsets } from "@/lib/screen-layout";
@@ -77,12 +78,17 @@ export default function BusinessBillingScreen() {
 
   const isSuspended = isSuspendedBillingStatus(summary.status);
   const canStartTrial = summary.status === "trial_eligible" && summary.purchaseSurface === "in_app_link";
-  const showPortal = summary.purchaseSurface === "in_app_link" && (
-    summary.status === "pro_active" ||
-    summary.status === "pro_canceling" ||
-    summary.status === "paid_active" ||
-    summary.status === "paid_canceling"
+  const showPortal = summary.purchaseSurface === "in_app_link" && canManageBillingInPortal(summary.status);
+  const trialReminderWindowDays = useMemo(
+    () => getTrialReminderWindowDays(summary.status, summary.trialEndsAt),
+    [summary.status, summary.trialEndsAt],
   );
+  const trialEndDate = useMemo(() => {
+    if (!summary.trialEndsAt) return null;
+    const date = new Date(summary.trialEndsAt);
+    if (!Number.isFinite(date.getTime())) return null;
+    return date.toLocaleDateString(i18n.resolvedLanguage ?? i18n.language);
+  }, [i18n.language, i18n.resolvedLanguage, summary.trialEndsAt]);
   const disclosureTrialEndDate = useMemo(
     () => new Date(Date.now() + 30 * 86400000).toLocaleDateString(i18n.resolvedLanguage ?? i18n.language),
     [i18n.language, i18n.resolvedLanguage],
@@ -184,6 +190,12 @@ export default function BusinessBillingScreen() {
             {locationsError ? <Banner message={locationsError} tone="error" /> : null}
             {summaryError ? <Banner message={t("billing.purchaseUnavailable")} tone="info" /> : null}
             {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
+            {trialReminderWindowDays && trialEndDate ? (
+              <Banner
+                message={t("billing.trialAutoBillingReminder", { date: trialEndDate })}
+                tone="warning"
+              />
+            ) : null}
 
             <View
               style={{

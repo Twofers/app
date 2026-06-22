@@ -1922,6 +1922,7 @@
     "trialConsentRequired": "Acknowledge the automatic-billing terms before opening Checkout.",
     "trialCredits": "{{count}} trial deal credits",
     "paidCredits": "{{count}} deal credits per billing period",
+    "trialAutoBillingReminder": "Reminder: your trial ends on {{date}}. Twofer Business will automatically bill $30/month per location, plus applicable taxes, unless you cancel before the trial ends. Use Manage subscription to cancel or update payment.",
     "trialEndsIn": "Your 30-day trial ends in {{days}} days",
     "daysRemaining": "{{days}} days left in your free trial",
     "hoursRemaining": "{{hours}} hours left in your free trial",

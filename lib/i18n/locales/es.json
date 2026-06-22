@@ -1917,6 +1917,7 @@
     "trialConsentRequired": "Acepta los terminos de cobro automatico antes de abrir Checkout.",
     "trialCredits": "{{count}} creditos de ofertas para la prueba",
     "paidCredits": "{{count}} creditos de ofertas por periodo de facturacion",
+    "trialAutoBillingReminder": "Recordatorio: tu prueba termina el {{date}}. Twofer Business se cobrara automaticamente a 30 USD al mes por ubicacion, mas impuestos aplicables, a menos que canceles antes de que termine la prueba. Usa Gestionar suscripcion para cancelar o actualizar el pago.",
     "trialEndsIn": "Tu prueba de 30 dias termina en {{days}} dias",
     "daysRemaining": "Quedan {{days}} dias de tu prueba gratis",
     "hoursRemaining": "Quedan {{hours}} horas de tu prueba gratis",
