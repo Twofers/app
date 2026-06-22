@@ -903,6 +903,66 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4j - Remove canned compose voice transcript fallback
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `76d1fcc9`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-compose-offer/index.ts`
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the `transcribe_only` missing-`OPENAI_API_KEY` success path that returned a canned voice transcript.
+- Voice transcription now validates the submitted audio, logs a failed `voice_transcribe` attempt with `openai_called=false`, and returns HTTP 503 with `error_code: "OPENAI_KEY_MISSING"` when Whisper is unavailable.
+- Expanded the existing compose-offer source guard so canned transcript text cannot be reintroduced silently.
+- Updated deployment/checklist/current-state docs to call out fail-closed compose and voice transcription behavior.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved for `ai-compose-offer`; missing OpenAI config no longer returns a canned voice transcript.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for the voice transcription-only path; the live compose and Whisper provider paths are unchanged.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`: passed, 1 file / 3 tests.
+- `deno check supabase/functions/ai-compose-offer/index.ts`: passed.
+- Canned transcript scan for `oat milk latte special` and `freshly pulled`: no matches in `ai-compose-offer`.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 124 Edge Function files.
+- `npm run test -- --run`: passed, 132 files / 722 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4j" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses direct OpenAI chat-completions and Whisper calls when configured; broader provider-router migration remains pending.
+- Voice transcription now surfaces an unavailable error instead of seeding typed prompt text when `OPENAI_API_KEY` is missing.
+- The preview/dev-only synthetic menu extraction fallback remains separately gated by `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

@@ -220,16 +220,32 @@ serve(async (req) => {
     const generate_poster_image = body.generate_poster_image === true;
 
     if (transcribeOnly) {
-      if (!openAiKey) {
-        return new Response(
-          JSON.stringify({ ok: true, transcript: promptTextRaw || "oat milk latte special — freshly pulled" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
       if (!audioBase64 || audioBase64.length > 700_000) {
         return new Response(
           JSON.stringify({ error: "Record a short voice note and try again.", error_code: "INVALID_INPUT" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (!openAiKey) {
+        const th = await sha256Hex(audioBase64.slice(0, 4000));
+        await admin.from("ai_generation_logs").insert({
+          business_id,
+          user_id: user.id,
+          request_type: "voice_transcribe",
+          input_mode: "voice",
+          request_hash: th,
+          prompt_version: PROMPT_VERSION,
+          model: WHISPER_MODEL,
+          success: false,
+          failure_reason: "OPENAI_KEY_MISSING",
+          openai_called: false,
+        });
+        return new Response(
+          JSON.stringify({
+            error: "Voice transcription is temporarily unavailable. Please contact support.",
+            error_code: "OPENAI_KEY_MISSING",
+          }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       const transcribeCooldownMs = 15_000;

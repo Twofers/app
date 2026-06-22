@@ -169,6 +169,8 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing.
 
+`ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when `OPENAI_API_KEY` is missing, including the voice transcription-only path.
+
 **Setting Edge secrets:**
 
 ```bash

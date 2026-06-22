@@ -18,6 +18,25 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/AI_ALLOW_DEMO_GENERATION/);
   });
 
+  it("does not return a canned voice transcript when Whisper is unavailable", () => {
+    const transcribeOnlyIndex = source.indexOf("if (transcribeOnly)");
+    const missingKeyIndex = source.indexOf("if (!openAiKey)", transcribeOnlyIndex);
+    const cooldownIndex = source.indexOf("const transcribeCooldownMs", transcribeOnlyIndex);
+
+    expect(transcribeOnlyIndex).toBeGreaterThan(-1);
+    expect(missingKeyIndex).toBeGreaterThan(transcribeOnlyIndex);
+    expect(cooldownIndex).toBeGreaterThan(missingKeyIndex);
+
+    const missingKeyBlock = source.slice(missingKeyIndex, cooldownIndex);
+    expect(missingKeyBlock).toMatch(/OPENAI_KEY_MISSING/);
+    expect(missingKeyBlock).toMatch(/status:\s*503/);
+    expect(missingKeyBlock).toMatch(/success:\s*false/);
+    expect(missingKeyBlock).toMatch(/openai_called:\s*false/);
+    expect(missingKeyBlock).not.toMatch(/ok:\s*true/);
+    expect(source).not.toMatch(/oat milk latte special/);
+    expect(source).not.toMatch(/freshly pulled/);
+  });
+
   it("does not generate legacy poster images with baked-in offer text", () => {
     expect(source).toMatch(/poster_disabled_reason/);
     expect(source).toMatch(/native_text_rendering_required/);
