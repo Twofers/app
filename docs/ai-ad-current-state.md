@@ -308,6 +308,8 @@ Reason: no live Supabase service-role analytics access was used, and this repo h
 
 Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-only service-role runner for these metrics. See `docs/ai-ad-baseline-metrics.md` for the access probe result, exact command, and remaining instrumentation gaps.
 
+Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents the Gemini text fallback, independent judge, image generation/edit data flow, sensitive data exclusions, and the public privacy/subprocessor activation gate. Text fallback must remain hosted with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
+
 Recommended baseline queries once Dan grants live read access:
 
 - p50/p95 copy latency from `ai_generation_logs.response_payload->copy->latency_ms`.

@@ -660,3 +660,71 @@ Full validation:
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4c - Google/Gemini data-flow activation gate
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `08136d4f`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/ai-google-data-flow.md`
+- `supabase/functions/_shared/ai-google-data-flow-docs.test.ts`
+
+## Files changed
+
+- `docs/ai-ad-current-state.md`
+- `scripts/check-ai-ad-release-gates.mjs`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Documented the Google/Gemini AI data flow for text fallback, independent candidate judging, image generation, and merchant-photo image edit paths.
+- Documented that Google/Gemini text fallback must stay disabled with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
+- Documented sensitive data exclusions: customer personal data, QR tokens, claim codes, redemption codes, push tokens, provider keys, Supabase secrets, signing material, and voice audio recordings are not sent to Google/Gemini for this feature.
+- Added exact public privacy/subprocessor copy Dan can use in the website repo.
+- Added `npm run gate:ai-ad` coverage for the Google/Gemini data-flow doc.
+- Added a source guard test that checks the doc and verifies Gemini text fallback remains closed by default in `ai-text-provider.ts`.
+
+## Tests added and results
+
+Focused validation:
+
+- `npx vitest run supabase/functions/_shared/ai-google-data-flow-docs.test.ts`: passed, 1 file and 2 tests.
+- `npm run gate:ai-ad`: passed, including the new Google/Gemini data-flow gate.
+
+Full validation:
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed, 121 Edge Function files checked.
+- `npm run test -- --run`: passed, 127 files and 714 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 valid fixtures and 0 invalid fixtures.
+- Android Metro probe, `npx expo export --platform android --output-dir <temp>`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes, but did not fail the bundle.
+
+## Acceptance criteria map
+
+50. Google data flow is documented before activation: Implemented internally with a repo release gate. Public website privacy/subprocessor deployment is still a hard-gated website-repo task for Dan before production can enable `AI_TEXT_FALLBACK_ENABLED=true`.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Partially improved through activation gating only; broader legacy route cleanup remains pending.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Unresolved risks
+
+- This slice does not deploy or update the public website privacy/subprocessor page.
+- Gemini image routing already exists behind its own image flags; this slice documents the data flow but does not change runtime image behavior.
+- Legacy generation route cleanup remains pending for non-ad-variant AI paths.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
