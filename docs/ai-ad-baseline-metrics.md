@@ -52,6 +52,19 @@ The runner records:
 - total AI cost, average cost per request group, and p50 / p95 cost per request group;
 - provider call counts by feature, endpoint, and model;
 - failed/retried provider call rate.
+- a calibration watchlist for p95 copy latency, deterministic copy fallback rate, provider fallback rate, judge hard-failure rate, image-QA unavailable rate, image-QA hard-fail rate, failed/retried provider call rate, p95 cost per request group, candidate-diversity warning thresholds, and image-aesthetic warning thresholds.
+
+## Dashboard And Calibration Handoff
+
+`BASELINE_OUTPUT_MD` is the internal quality/cost dashboard export for this repo. It is not hosted; it is a local Markdown report generated from private Supabase ledgers.
+
+The export now includes a **Calibration Watchlist**. Those review bands are not automatic product gates. They are the first dashboard thresholds to review against real non-publishing output:
+
+- keep candidate headline/body Jaccard thresholds in warning-only mode while collecting data;
+- keep uncertain image-aesthetic thresholds in warning-only mode unless Dan separately approves making one a blocker;
+- investigate high fallback, judge hard-failure, image-QA-unavailable, provider-retry, latency, or p95-cost rows before loosening safety or immutable-fact rules.
+
+To complete threshold calibration, run representative non-publishing generations with the final hosted configuration, then run the baseline script with service-role read access and save the generated local report. Do not paste secrets or raw customer/provider payloads into chat or committed docs.
 
 ## Known Instrumentation Gaps
 
@@ -60,6 +73,6 @@ The runner records:
 - Publish conversion and no-edit publish rate cannot be computed reliably until generation/ad ids are written to `deals` or a `publish_events` table.
 - End-to-end funnel from generation to exposure to claim to redemption remains weak until `AdSpec` / `OfferVersion` / publish events are durable.
 
-## Phase 0 Acceptance Impact
+## PR4 Acceptance Impact
 
-The repo now has a repeatable baseline measurement path, but the master plan acceptance item "baseline metrics are recorded" remains pending until the script is run with service-role access and the generated output is saved under a local artifact or committed doc.
+The repo now has a repeatable baseline measurement path and local quality/cost dashboard export. Live numeric calibration remains blocked from this workspace until Dan runs the script with service-role access and representative non-publishing outputs.

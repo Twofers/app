@@ -16,5 +16,10 @@ describe("AI ad baseline metrics runner source", () => {
     expect(source).toMatch(/image_qa/);
     expect(source).toMatch(/Merchant override acknowledgement rate/);
     expect(source).toMatch(/selection_source_mode_counts/);
+    expect(source).toMatch(/calibration_watchlist/);
+    expect(source).toMatch(/Calibration Watchlist/);
+    expect(source).toMatch(/candidate_diversity_warning_thresholds/);
+    expect(source).toMatch(/image_aesthetic_thresholds/);
+    expect(source).toMatch(/baseline_runner_default_review_bands/);
   });
 });

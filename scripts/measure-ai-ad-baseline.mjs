@@ -140,6 +140,24 @@ function dollars(value) {
   return Number(n.toFixed(6));
 }
 
+function calibrationStatus(value, threshold, direction = "max") {
+  const n = numberOrNull(value);
+  if (n === null) return "needs_data";
+  if (direction === "min") return n < threshold ? "review" : "ok";
+  return n > threshold ? "review" : "ok";
+}
+
+function calibrationCheck({ metric, value, threshold, direction = "max", note }) {
+  return {
+    metric,
+    value: numberOrNull(value),
+    review_threshold: threshold,
+    direction,
+    status: calibrationStatus(value, threshold, direction),
+    note,
+  };
+}
+
 function attemptLatencySummary(attempts) {
   const latencies = attempts
     .map((attempt) => numberOrNull(attempt?.latency_ms ?? attempt?.latencyMs))
@@ -385,6 +403,90 @@ const summary = {
   ],
 };
 
+const judgeHardFailureRate = rate(
+  summary.candidate_judge.latest_hard_failure_rows,
+  summary.candidate_judge.latest_quality_entries,
+);
+const imageQaHardFailRate = rate(summary.image_qa.hard_fail_rows, summary.image_qa.rows_with_image_qa);
+
+summary.calibration_watchlist = {
+  source: "baseline_runner_default_review_bands",
+  warning_mode_only: true,
+  note:
+    "These review bands are internal dashboard defaults, not automatic product gates. Calibrate them from real non-publishing output before enabling or tightening production controls.",
+  checks: [
+    calibrationCheck({
+      metric: "copy_latency_p95_ms",
+      value: summary.copy_latency_ms.p95,
+      threshold: 14_000,
+      note: "Compare against merchant wait tolerance and provider timeout settings.",
+    }),
+    calibrationCheck({
+      metric: "deterministic_copy_fallback_rate",
+      value: summary.copy_quality.deterministic_fallback_rate,
+      threshold: 0.15,
+      note: "High fallback can mean prompt, validation, or provider reliability needs tuning.",
+    }),
+    calibrationCheck({
+      metric: "provider_fallback_rate",
+      value: summary.copy_quality.provider_fallback_rate,
+      threshold: 0.25,
+      note: "High OpenAI-to-Gemini fallback can indicate quota, circuit, timeout, or configuration trouble.",
+    }),
+    calibrationCheck({
+      metric: "judge_hard_failure_rate",
+      value: judgeHardFailureRate,
+      threshold: 0.2,
+      note: "Review failed candidate themes before changing prompts or judge criteria.",
+    }),
+    calibrationCheck({
+      metric: "image_qa_unavailable_rate",
+      value: summary.image_qa.unavailable_rate,
+      threshold: 0.05,
+      note: "Generated and AI-edited images should stay closed when QA is unavailable.",
+    }),
+    calibrationCheck({
+      metric: "image_qa_hard_fail_rate",
+      value: imageQaHardFailRate,
+      threshold: 0.1,
+      note: "Investigate repeated missing-item, misleading-offer, identity, text, or QR failures.",
+    }),
+    calibrationCheck({
+      metric: "failed_or_retried_provider_call_rate",
+      value: summary.ai_costs.failed_or_retried_call_rate,
+      threshold: 0.15,
+      note: "Includes failed provider calls and retries recorded in the cost ledger.",
+    }),
+    calibrationCheck({
+      metric: "p95_cost_per_request_group_usd",
+      value: summary.ai_costs.p95_cost_per_request_group_usd,
+      threshold: 0.5,
+      note: "Default hard budget guard is 0.50 USD unless hosted env overrides it.",
+    }),
+    {
+      metric: "candidate_diversity_warning_thresholds",
+      value: "headline_jaccard>=0.65, body_jaccard>=0.75",
+      review_threshold: "warning_only",
+      direction: "n/a",
+      status: "warning_only_calibration",
+      note: "Do not hard-reject solely on these warning thresholds during the first release.",
+    },
+    {
+      metric: "image_aesthetic_thresholds",
+      value: "warning_mode",
+      review_threshold: "product_decision_required_before_blocking",
+      direction: "n/a",
+      status: "warning_only_calibration",
+      note: "Never turn an aesthetic warning on an unmodified merchant upload into a hard block without a separate product decision.",
+    },
+  ],
+  next_steps: [
+    "Run representative non-publishing generations with final hosted config.",
+    "Review dashboard rows with Dan before tightening warning thresholds.",
+    "Record failures and improve merchant context, prompts, creative briefs, or thresholds before enabling the next slice.",
+  ],
+};
+
 function ensureParent(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
@@ -393,6 +495,26 @@ function formatCounts(counts) {
   const entries = Object.entries(counts || {});
   if (entries.length === 0) return "- none";
   return entries.map(([key, value]) => `- ${key}: ${value}`).join("\n");
+}
+
+function formatCalibrationValue(value) {
+  if (value === null || value === undefined) return "n/a";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(4);
+  return String(value).replace(/\|/g, "/");
+}
+
+function formatCalibrationChecks(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) return "- none";
+  const rows = checks.map((check) =>
+    `| ${formatCalibrationValue(check.metric)} | ${formatCalibrationValue(check.value)} | ${formatCalibrationValue(
+      check.review_threshold,
+    )} | ${formatCalibrationValue(check.status)} | ${formatCalibrationValue(check.note)} |`,
+  );
+  return [
+    "| Metric | Value | Review threshold | Status | Note |",
+    "|---|---:|---:|---|---|",
+    ...rows,
+  ].join("\n");
 }
 
 function toMarkdown(data) {
@@ -410,6 +532,16 @@ Window: ${data.window.start_at} to ${data.window.end_at} (${data.window.days} da
 - Deterministic fallback rate: ${data.copy_quality.deterministic_fallback_rate ?? "n/a"}
 - Provider fallback rate: ${data.copy_quality.provider_fallback_rate ?? "n/a"}
 - Image failure rate: ${data.image_generation.failed_image_rate ?? "n/a"}
+
+## Calibration Watchlist
+
+${data.calibration_watchlist?.note ?? "Review bands unavailable."}
+
+${formatCalibrationChecks(data.calibration_watchlist?.checks)}
+
+Next steps:
+
+${(data.calibration_watchlist?.next_steps ?? []).map((step) => `- ${step}`).join("\n") || "- none"}
 
 ### Copy Provider Attempts
 
