@@ -37,6 +37,22 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/freshly pulled/);
   });
 
+  it("does not bias live compose prompts with legacy cafe-specific craft language", () => {
+    expect(source).toMatch(/plain, specific local-business language/);
+    expect(source).toMatch(/Do not invent freshness/);
+    expect(source).toMatch(/Variant A should lead with offer clarity/);
+    expect(source).not.toMatch(/craft-focused/);
+    expect(source).not.toMatch(/single-origin/);
+    expect(source).not.toMatch(/stone-ground/);
+    expect(source).not.toMatch(/freshly baked/);
+    expect(source).not.toMatch(/owner's best marketer/);
+    expect(source).not.toMatch(/craftsperson/);
+    expect(source).not.toMatch(/coffee \+ muffin/);
+    expect(source).not.toMatch(/latte \+ cookie/);
+    expect(source).not.toMatch(/cofee.*mufin/);
+    expect(source).not.toMatch(/espreso/);
+  });
+
   it("does not return raw Whisper provider errors to voice callers", () => {
     const whisperErrorIndex = source.indexOf('event: "whisper_error"');
     const responseIndex = source.indexOf("return new Response(", whisperErrorIndex);
