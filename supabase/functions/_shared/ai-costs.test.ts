@@ -5,14 +5,14 @@ import { calculateAiCost, logAiCost, normalizeAiUsage } from "./ai-costs.ts";
 describe("calculateAiCost", () => {
   it("calculates text-only ad cost", () => {
     const cost = calculateAiCost({
-      model: "gpt-5.4-mini",
+      model: "gpt-5.5",
       endpoint: "chat.completions",
       usage: { prompt_tokens: 1000, completion_tokens: 500 },
     });
 
     expect(cost.input_tokens).toBe(1000);
     expect(cost.output_tokens).toBe(500);
-    expect(cost.estimated_cost_usd).toBe(0.003);
+    expect(cost.estimated_cost_usd).toBe(0.01);
     expect(cost.warnings).toEqual([]);
   });
 

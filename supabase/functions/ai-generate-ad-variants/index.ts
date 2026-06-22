@@ -34,6 +34,11 @@ import {
   type GeminiImageAttempt,
 } from "../_shared/ai-image-provider.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -333,6 +338,7 @@ async function callResearchModel(params: {
 
 async function generateCopy(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   itemHint: string;
   research: ItemResearch;
   businessName: string;
@@ -346,9 +352,19 @@ async function generateCopy(params: {
   revisionFeedback?: string;
   previousAd?: SingleAd;
   costContext: AiCostContext;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & { fallback_reason?: string; generator_version?: string; copy_latency_ms?: number }> {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+  fallback_reason?: string;
+  generator_version?: string;
+  copy_latency_ms?: number;
+  provider_attempts?: ProviderAttempt[];
+  provider?: string;
+  model?: string;
+  provider_fallback_used?: boolean;
+  provider_fallback_reason?: string;
+}> {
   const {
     openAiKey,
+    geminiApiKey,
     itemHint,
     research,
     businessName,
@@ -368,6 +384,11 @@ async function generateCopy(params: {
   const isRevision = previousAd !== undefined;
 
   const copyStartedAt = Date.now();
+  const providerAttempts: ProviderAttempt[] = [];
+  let copyProvider: string | undefined;
+  let copyModel: string | undefined;
+  let providerFallbackUsed = false;
+  let providerFallbackReason: string | undefined;
   const selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
@@ -387,52 +408,44 @@ async function generateCopy(params: {
         validationFeedback,
       });
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openAiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: CHAT_MODEL,
-          response_format: { type: "json_schema", json_schema: jsonSchema },
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userText },
-          ],
-          ...chatCompletionTuning(CHAT_MODEL, {
-            maxTokens: 650,
-            temperature: isRevision ? 0.7 : 0.6,
-          }),
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        await logAdCost(costContext, {
-          feature: "ad_copy",
-          model: CHAT_MODEL,
-          endpoint: "chat.completions",
-          openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-          success: false,
-          errorCode: `HTTP_${res.status}`,
-          errorMessage: body.slice(0, 500),
-        });
-        throw new Error(`OPENAI_COPY_${res.status}: ${body.slice(0, 200)}`);
-      }
-      const json = await res.json();
-      await logAdCost(costContext, {
-        feature: "ad_copy",
-        model: CHAT_MODEL,
-        endpoint: "chat.completions",
-        usage: json?.usage ?? null,
-        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-        responseId: typeof json?.id === "string" ? json.id : null,
-        success: true,
-      });
-      const content = json?.choices?.[0]?.message?.content ?? "";
+      let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
       try {
-        return parseAiDealCopyVariants(typeof content === "string" ? content : "{}");
+        result = await generateStructuredText<typeof jsonSchema>({
+          operation: isRevision ? "copy_revision" : attemptNumber === 1 ? "creative_candidates" : "creative_repair",
+          systemPrompt: system,
+          userPrompt: userText,
+          jsonSchema,
+          maxOutputTokens: 650,
+          timeoutMs: 12_000,
+          generationRunId: costContext.requestGroupId,
+          promptVersion: AD_COPY_PROMPT_VERSION,
+          reasoningLevel: "medium",
+        }, {
+          openAiApiKey: openAiKey,
+          geminiApiKey,
+          admin: costContext.admin,
+          config: resolveAiTextProviderConfig(),
+          isRevision,
+        });
+      } catch (e) {
+        const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+        providerAttempts.push(...attempts);
+        await logTextProviderAttempts(costContext, "ad_copy", attempts);
+        if ((e as { errorClass?: string })?.errorClass === "provider_output_invalid") {
+          return [];
+        }
+        throw e;
+      }
+
+      providerAttempts.push(...result.attempts);
+      await logTextProviderAttempts(costContext, "ad_copy", result.attempts);
+      copyProvider = result.provider;
+      copyModel = result.model;
+      providerFallbackUsed = providerFallbackUsed || result.fallbackUsed;
+      providerFallbackReason = result.fallbackReason ?? providerFallbackReason;
+      const content = JSON.stringify(result.value);
+      try {
+        return parseAiDealCopyVariants(content);
       } catch (e) {
         console.log(
           JSON.stringify({
@@ -478,6 +491,11 @@ async function generateCopy(params: {
     fallback_reason: selected.fallback_reason,
     generator_version: selected.generator_version,
     copy_latency_ms: copyLatencyMs,
+    provider_attempts: providerAttempts,
+    provider: copyProvider,
+    model: copyModel,
+    provider_fallback_used: providerFallbackUsed,
+    provider_fallback_reason: providerFallbackReason,
     cta: defaultCta(outputLanguage),
   };
 }
@@ -561,6 +579,27 @@ async function logGeminiImageAttempts(
       success: attempt.success,
       errorCode: attempt.errorCode,
       errorMessage: attempt.errorMessage,
+    });
+  }
+}
+
+async function logTextProviderAttempts(
+  ctx: AiCostContext,
+  feature: string,
+  attempts: readonly ProviderAttempt[],
+): Promise<void> {
+  for (const attempt of attempts) {
+    await logAdCost(ctx, {
+      feature,
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      estimatedCostUsd: attempt.estimatedCostUsd,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? null,
+      errorMessage: attempt.errorClass ?? null,
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      responseId: null,
     });
   }
 }
@@ -1449,6 +1488,11 @@ function buildGenerationTelemetry(params: {
     fallback_reason?: string;
     generator_version?: string;
     copy_latency_ms?: number;
+    provider_attempts?: ProviderAttempt[];
+    provider?: string;
+    model?: string;
+    provider_fallback_used?: boolean;
+    provider_fallback_reason?: string;
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
@@ -1492,6 +1536,24 @@ function buildGenerationTelemetry(params: {
       latency_ms: copy.copy_latency_ms ?? null,
       fallback_reason: copy.fallback_reason ?? null,
       validation_failure_count: validationRuleIds.length,
+      provider: copy.provider ?? null,
+      model: copy.model ?? null,
+      provider_fallback_used: copy.provider_fallback_used ?? false,
+      provider_fallback_reason: copy.provider_fallback_reason ?? null,
+      provider_attempts: (copy.provider_attempts ?? []).map((attempt) => ({
+        provider: attempt.provider,
+        model: attempt.model,
+        operation: attempt.operation,
+        success: attempt.success,
+        latency_ms: attempt.latencyMs,
+        error_class: attempt.errorClass ?? null,
+        error_code: attempt.errorCode ?? null,
+        input_tokens: attempt.inputTokens ?? null,
+        cached_input_tokens: attempt.cachedInputTokens ?? null,
+        reasoning_tokens: attempt.reasoningTokens ?? null,
+        output_tokens: attempt.outputTokens ?? null,
+        estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+      })),
     },
     image_qa: imageResult.qa,
   };
@@ -1840,6 +1902,11 @@ Deno.serve(async (req) => {
       fallback_reason?: string;
       generator_version?: string;
       copy_latency_ms?: number;
+      provider_attempts?: ProviderAttempt[];
+      provider?: string;
+      model?: string;
+      provider_fallback_used?: boolean;
+      provider_fallback_reason?: string;
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
@@ -1862,6 +1929,7 @@ Deno.serve(async (req) => {
       try {
         copy = await generateCopy({
           openAiKey,
+          geminiApiKey,
           itemHint: sourceHint,
           research,
           businessName,
@@ -1974,10 +2042,13 @@ Deno.serve(async (req) => {
       input_mode: photoPath ? "photo" : "text",
       request_hash: `v3:${derivedRevisionCount}:${imageResult.source}:${imageResult.provider}`,
       prompt_version: AD_COPY_PROMPT_VERSION,
-      model: CHAT_MODEL,
+      model: copy.model ?? CHAT_MODEL,
       success: productionSuccess,
       failure_reason: productionSuccess ? null : "IMAGE_NULL",
-      openai_called: true,
+      openai_called:
+        (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        imageResult.provider === "openai" ||
+        !isRevision,
       response_payload: buildGenerationTelemetry({
         offerContract,
         copy,
