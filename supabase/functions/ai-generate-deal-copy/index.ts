@@ -201,11 +201,11 @@ serve(async (req) => {
     let providerConfig;
     try {
       providerConfig = resolveAiTextProviderConfig();
-    } catch (err) {
+    } catch {
       console.log(JSON.stringify({
         tag: "ai_generate_deal_copy",
         event: "text_provider_config_error",
-        err: String(err).slice(0, 200),
+        errorCode: "AI_TEXT_CONFIG_INVALID",
       }));
       return new Response(
         JSON.stringify({

@@ -195,9 +195,9 @@ async function searchGooglePlaces(
     }
 
     return jsonResponse(corsHeaders, 200, { ok: true, results });
-  } catch (err) {
+  } catch {
     return googleFailure(corsHeaders, "google_places_search_exception", 502, {
-      err: String(err),
+      errorCode: "GOOGLE_PLACES_SEARCH_EXCEPTION",
     });
   }
 }
@@ -229,9 +229,9 @@ async function getGooglePlaceDetails(
     }
 
     return jsonResponse(corsHeaders, 200, { ok: true, results: [result] });
-  } catch (err) {
+  } catch {
     return googleFailure(corsHeaders, "google_place_details_exception", 502, {
-      err: String(err),
+      errorCode: "GOOGLE_PLACE_DETAILS_EXCEPTION",
     });
   }
 }
@@ -300,8 +300,8 @@ serve(async (req) => {
     const lat = finiteNumber(body.lat);
     const lng = finiteNumber(body.lng);
     return await searchGooglePlaces(corsHeaders, googleKey, businessName, lat, lng);
-  } catch (err) {
-    logLookup("server_error", { err: String(err) });
+  } catch {
+    logLookup("server_error", { errorCode: "BUSINESS_LOOKUP_SERVER_ERROR" });
     return jsonResponse(corsHeaders, 500, { error: "Server error" });
   }
 });

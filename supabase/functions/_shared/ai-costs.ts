@@ -264,7 +264,7 @@ export async function logAiCost(admin: any, input: AiCostLogInput): Promise<void
         event: "insert_failed",
         feature: input.feature,
         endpoint: input.endpoint,
-        err: String(error.message ?? error).slice(0, 200),
+        errorCode: "AI_COST_LEDGER_INSERT_FAILED",
       }),
     );
   }

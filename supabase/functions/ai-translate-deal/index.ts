@@ -320,11 +320,11 @@ serve(async (req) => {
     let providerConfig;
     try {
       providerConfig = resolveAiTextProviderConfig();
-    } catch (err) {
+    } catch {
       console.log(JSON.stringify({
         tag: "ai_translate_deal",
         event: "text_provider_config_error",
-        err: String(err).slice(0, 200),
+        errorCode: "AI_TEXT_CONFIG_INVALID",
       }));
       await logTranslation(admin, {
         businessId,
@@ -465,8 +465,8 @@ serve(async (req) => {
     });
 
     return jsonResponse({ ok: true, ...result }, 200, corsHeaders);
-  } catch (err) {
-    console.log(JSON.stringify({ tag: "ai_translate_deal", event: "error", err: String(err) }));
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_translate_deal", event: "error", errorCode: "SERVER_ERROR" }));
     return jsonResponse({ error: "Server error" }, 500, getCorsHeaders(req));
   }
 });

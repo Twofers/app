@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { calculateAiCost, logAiCost, normalizeAiUsage } from "./ai-costs.ts";
+
+const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "ai-costs.ts"), "utf8");
 
 describe("calculateAiCost", () => {
   it("calculates text-only ad cost", () => {
@@ -149,5 +153,10 @@ describe("calculateAiCost", () => {
     expect(inserts[0]?.row.model).toBe("gemini-3.1-flash-image");
     expect(inserts[0]?.row.estimated_cost_usd).toBe(0.067);
     expect(inserts[0]?.row.error_message).toBeNull();
+  });
+
+  it("does not log raw ledger insert exception text", () => {
+    expect(source).toMatch(/AI_COST_LEDGER_INSERT_FAILED/);
+    expect(source).not.toMatch(/err:\s*String\(error\.message \?\? error\)\.slice/);
   });
 });

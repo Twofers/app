@@ -47,4 +47,18 @@ describe("ai-translate-deal source guards", () => {
     expect(providerFailureBlock).toMatch(/502,\s*corsHeaders/);
     expect(providerFailureBlock).toMatch(/error_code:\s*"AI_GENERATION_FAILED"/);
   });
+
+  it("does not log raw config or outer handler exception text", () => {
+    const configErrorIndex = source.indexOf('event: "text_provider_config_error"');
+    const outerErrorIndex = source.indexOf('event: "error"');
+    expect(configErrorIndex).toBeGreaterThan(-1);
+    expect(outerErrorIndex).toBeGreaterThan(-1);
+
+    const configErrorBlock = source.slice(configErrorIndex - 220, configErrorIndex + 260);
+    const outerErrorBlock = source.slice(outerErrorIndex - 220, outerErrorIndex + 220);
+    expect(configErrorBlock).toMatch(/errorCode:\s*"AI_TEXT_CONFIG_INVALID"/);
+    expect(outerErrorBlock).toMatch(/errorCode:\s*"SERVER_ERROR"/);
+    expect(configErrorBlock).not.toMatch(/String\(err\)/);
+    expect(outerErrorBlock).not.toMatch(/err:\s*String\(err\)/);
+  });
 });

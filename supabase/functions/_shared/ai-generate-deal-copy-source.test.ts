@@ -30,4 +30,14 @@ describe("ai-generate-deal-copy source guards", () => {
     expect(providerFailureBlock).toMatch(/status:\s*502/);
     expect(providerFailureBlock).toMatch(/error_code:\s*"AI_GENERATION_FAILED"/);
   });
+
+  it("does not log raw text-provider config exception text", () => {
+    const configErrorIndex = source.indexOf('event: "text_provider_config_error"');
+    expect(configErrorIndex).toBeGreaterThan(-1);
+
+    const configErrorBlock = source.slice(configErrorIndex - 220, configErrorIndex + 260);
+    expect(configErrorBlock).toMatch(/errorCode:\s*"AI_TEXT_CONFIG_INVALID"/);
+    expect(configErrorBlock).not.toMatch(/String\(err\)/);
+    expect(configErrorBlock).not.toMatch(/err:\s*String/);
+  });
 });
