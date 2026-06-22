@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
-import { buildPosterImagePrompt, tryGeneratePosterPngWithTelemetry } from "../_shared/dalle-image.ts";
 import { calculateAiCost, logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
@@ -702,59 +701,10 @@ serve(async (req) => {
     const offerType = String(offer.offer_type);
     const logPayload = { ...parsed, input_type: input_mode } as Record<string, unknown>;
 
-    let poster_storage_path: string | null = null;
-    let poster_image_unavailable = false;
-    if (generate_poster_image && !hasImage && hasText) {
-      const v0 = variants[0] as Record<string, unknown>;
-      const headline = String(v0.headline_en ?? "");
-      const sub = String(v0.subheadline_en ?? "");
-      const displayOffer = String(offer.display_offer ?? "");
-      const visualDirection = String(v0.visual_direction ?? "");
-      const imgPrompt = buildPosterImagePrompt({
-        businessName: String(biz.name ?? ""),
-        displayOffer,
-        headline: headline || displayOffer,
-        sub,
-        visualDirection,
-      });
-      const posterResult = await tryGeneratePosterPngWithTelemetry(openAiKey, imgPrompt);
-      for (const attempt of posterResult.attempts) {
-        await logComposeCost(costContext, {
-          feature: "poster_image_generation",
-          model: attempt.model,
-          endpoint: attempt.endpoint,
-          usage: attempt.usage,
-          openaiRequestId: attempt.openaiRequestId,
-          responseId: attempt.responseId,
-          success: attempt.success,
-          errorCode: attempt.errorCode,
-          errorMessage: attempt.errorMessage,
-        });
-      }
-      const png = posterResult.bytes;
-      if (png && png.length > 100) {
-        const storagePath = `${business_id}/ai_poster_${Date.now()}.png`;
-        const { error: upErr } = await admin.storage.from("deal-photos").upload(storagePath, png, {
-          contentType: "image/png",
-          upsert: false,
-        });
-        if (!upErr) {
-          poster_storage_path = storagePath;
-          logPayload.poster_storage_path = storagePath;
-        } else {
-          poster_image_unavailable = true;
-          console.log(
-            JSON.stringify({
-              tag: "ai_compose",
-              event: "poster_upload_failed",
-              err: String(upErr.message ?? upErr),
-            }),
-          );
-        }
-      } else {
-        poster_image_unavailable = true;
-      }
-      logPayload.poster_image_unavailable = poster_image_unavailable;
+    const poster_storage_path: string | null = null;
+    if (generate_poster_image) {
+      logPayload.poster_image_unavailable = true;
+      logPayload.poster_disabled_reason = "native_text_rendering_required";
     }
 
     await admin.from("ai_generation_logs").insert({

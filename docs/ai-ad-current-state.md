@@ -128,7 +128,7 @@ Current gaps:
 
 ### Legacy and Adjacent AI Paths
 
-- `ai-compose-offer`: composes an offer from text/image/voice. It can optionally generate a poster image with baked-in text via `buildPosterImagePrompt`. Voice audio is processed ephemerally per the spec; transcript is logged. This path is older and does not match the new "no critical text in pixels" standard when poster generation is used.
+- `ai-compose-offer`: composes an offer from text/image/voice. Legacy poster image generation is now disabled; when `generate_poster_image` is requested the function returns compose copy with `poster_image_unavailable` and `poster_disabled_reason: "native_text_rendering_required"` instead of using `buildPosterImagePrompt`. Voice audio is processed ephemerally per the spec; transcript is logged.
 - `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It uses server-side OpenAI and JSON schema but is not the main AI ad generator.
 - `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`.
 - `ai-extract-menu`: menu photo extraction path, relevant to catalog setup.
@@ -209,7 +209,7 @@ Function: `supabase/functions/ai-compose-offer/index.ts`
 
 - Uses Whisper for voice transcription when audio is supplied.
 - Uses `chat.completions` with `json_object` for offer composition.
-- Can call image generation for a poster with critical text baked into pixels.
+- Does not generate legacy poster images; requested poster generation is marked unavailable so critical text stays rendered natively.
 - Logs to `ai_generation_logs` and `ai_generation_costs`.
 
 ### Text Copy Helper
@@ -333,7 +333,7 @@ Critical architecture gaps:
 AI and quality gaps:
 
 - Legacy `ai-create-deal` can still combine generation and insert in one Edge Function when explicitly re-enabled, but is now default-closed behind `AI_LEGACY_CREATE_DEAL_ENABLED`.
-- Legacy `ai-compose-offer` poster mode can bake critical text into generated pixels.
+- Legacy `ai-compose-offer` poster mode is disabled so it cannot bake critical text into generated pixels.
 - Main copy validation is strong for offer mechanics, but there is no full `AdQualityService` with persisted hard-gate results and soft scores.
 - Moderation is prompt/rule based; there is no dedicated moderation adapter.
 - There is no formal prompt/model release table, canary mechanism, or rollback switch beyond code/env deployment.

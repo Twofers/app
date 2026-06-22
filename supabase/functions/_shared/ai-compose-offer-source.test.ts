@@ -17,4 +17,13 @@ describe("ai-compose-offer legacy fallback source guard", () => {
     expect(source).not.toMatch(/quality buy-one-get-one/);
     expect(source).not.toMatch(/AI_ALLOW_DEMO_GENERATION/);
   });
+
+  it("does not generate legacy poster images with baked-in offer text", () => {
+    expect(source).toMatch(/poster_disabled_reason/);
+    expect(source).toMatch(/native_text_rendering_required/);
+    expect(source).not.toMatch(/buildPosterImagePrompt/);
+    expect(source).not.toMatch(/tryGeneratePosterPngWithTelemetry/);
+    expect(source).not.toMatch(/poster_image_generation/);
+    expect(source).not.toMatch(/ai_poster_/);
+  });
 });

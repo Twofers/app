@@ -663,6 +663,64 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## PR 4f - Disable legacy compose-offer poster generation
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `67090bbf`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-compose-offer/index.ts`
+- `supabase/functions/_shared/ai-compose-offer-source.test.ts`
+- `lib/ai-compose-offer.ts`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Disabled the legacy `ai-compose-offer` poster image generation path that used `buildPosterImagePrompt` and could bake offer text into pixels.
+- Compose requests that still pass `generate_poster_image=true` now continue returning composed offer copy, with `poster_image_unavailable: true` and `poster_disabled_reason: "native_text_rendering_required"`.
+- Removed the compose-offer dependency on legacy poster image generation helpers.
+- Expanded the source guard test so this path cannot reintroduce `buildPosterImagePrompt`, poster upload, or `poster_image_generation` cost logging.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Preserved from PR 4a; no canned output added.
+51. No generation or publish path bypasses provider/contract/image/approval controls: Improved for `ai-compose-offer`; the legacy poster path can no longer produce text-baked generated images.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-compose-offer-source.test.ts`: passed, 1 file / 2 tests.
+- `deno check supabase/functions/ai-compose-offer/index.ts`: passed.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run typecheck:functions -- --pretty false`: passed on rerun, 122 Edge Function files. First 120s attempt timed out before completion.
+- `npm run test -- --run`: passed, 129 files / 718 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-ai-pr4f" --clear`: passed. The existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- `ai-compose-offer` still uses a legacy direct OpenAI chat-completions call for normal compose copy.
+- The client wrapper still accepts the deprecated `generate_poster_image` field for compatibility, but the Edge Function ignores it.
+- Broader compose-offer routing through the provider router remains pending.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4c - Google/Gemini data-flow activation gate
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
