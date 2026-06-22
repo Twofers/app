@@ -65,6 +65,8 @@ describe("billing edge function safety", () => {
     expect(source).toMatch(/billingReason === "subscription_cycle"/);
     expect(source).toMatch(/amountPaid > 0/);
     expect(source).toMatch(/paid_subscription:\$\{subscriptionId\}:\$\{startedAt\}/);
+    expect(source).toMatch(/if \(!existingPeriod\?\.id\)/);
+    expect(source).not.toMatch(/if \(existingPeriod\?\.id\) return/);
     expect(source).toMatch(/event\.type === "customer\.subscription\.updated"/);
     expect(source).not.toMatch(/event\.type === "invoice\.payment_succeeded"\) \{\s*await grantPaidPeriod/);
   });

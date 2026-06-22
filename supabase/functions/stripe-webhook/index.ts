@@ -192,56 +192,56 @@ async function grantPaidPeriod(params: {
       { onConflict: "business_location_id" },
     );
 
-  if (existingPeriod?.id) return;
+  if (!existingPeriod?.id) {
+    await supabase
+      .from("deal_credit_periods")
+      .update({ status: "replaced", updated_at: new Date().toISOString() })
+      .eq("business_location_id", locationId)
+      .eq("status", "active");
 
-  await supabase
-    .from("deal_credit_periods")
-    .update({ status: "replaced", updated_at: new Date().toISOString() })
-    .eq("business_location_id", locationId)
-    .eq("status", "active");
-
-  const { data: period, error: periodError } = await supabase
-    .from("deal_credit_periods")
-    .insert({
-      business_location_id: locationId,
-      source: "paid_subscription",
-      status: "active",
-      starts_at: startedAt,
-      ends_at: endsAt,
-      credits_granted: config.paidDealCreditAllowance,
-      configuration_snapshot: {
-        paid_deal_credit_allowance: config.paidDealCreditAllowance,
-        credit_reservation_ttl_minutes: config.creditReservationTtlMinutes,
-        invoice_id: invoiceId,
-        provider_subscription_id: subscriptionId,
-        granted_at: new Date().toISOString(),
-      },
-      external_reference: externalReference,
-    })
-    .select("id")
-    .single();
-
-  if (periodError) {
-    const detail = `${periodError.code ?? ""} ${periodError.message ?? ""}`;
-    if (!/23505|duplicate/i.test(detail)) throw periodError;
-  }
-
-  const creditPeriodId = period?.id;
-  if (creditPeriodId) {
-    const { error: ledgerError } = await supabase
-      .from("deal_credit_ledger")
+    const { data: period, error: periodError } = await supabase
+      .from("deal_credit_periods")
       .insert({
         business_location_id: locationId,
-        credit_period_id: creditPeriodId,
-        event_type: "grant",
-        purpose: "admin_adjustment",
-        amount: config.paidDealCreditAllowance,
-        idempotency_key: externalReference,
-        metadata: { provider: "stripe", invoice_id: invoiceId, subscription_id: subscriptionId },
-      });
-    if (ledgerError) {
-      const detail = `${ledgerError.code ?? ""} ${ledgerError.message ?? ""}`;
-      if (!/23505|duplicate/i.test(detail)) throw ledgerError;
+        source: "paid_subscription",
+        status: "active",
+        starts_at: startedAt,
+        ends_at: endsAt,
+        credits_granted: config.paidDealCreditAllowance,
+        configuration_snapshot: {
+          paid_deal_credit_allowance: config.paidDealCreditAllowance,
+          credit_reservation_ttl_minutes: config.creditReservationTtlMinutes,
+          invoice_id: invoiceId,
+          provider_subscription_id: subscriptionId,
+          granted_at: new Date().toISOString(),
+        },
+        external_reference: externalReference,
+      })
+      .select("id")
+      .single();
+
+    if (periodError) {
+      const detail = `${periodError.code ?? ""} ${periodError.message ?? ""}`;
+      if (!/23505|duplicate/i.test(detail)) throw periodError;
+    }
+
+    const creditPeriodId = period?.id;
+    if (creditPeriodId) {
+      const { error: ledgerError } = await supabase
+        .from("deal_credit_ledger")
+        .insert({
+          business_location_id: locationId,
+          credit_period_id: creditPeriodId,
+          event_type: "grant",
+          purpose: "admin_adjustment",
+          amount: config.paidDealCreditAllowance,
+          idempotency_key: externalReference,
+          metadata: { provider: "stripe", invoice_id: invoiceId, subscription_id: subscriptionId },
+        });
+      if (ledgerError) {
+        const detail = `${ledgerError.code ?? ""} ${ledgerError.message ?? ""}`;
+        if (!/23505|duplicate/i.test(detail)) throw ledgerError;
+      }
     }
   }
 
