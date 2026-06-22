@@ -2427,3 +2427,51 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ac - Localize custom image edit controls
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `2b8fdc9c`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `lib/i18n/locales/es.json`
+- `lib/i18n/locales/ko.json`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added Spanish and Korean strings for the custom image-edit option, helper, placeholder, and required-text message.
+- Parsed English, Spanish, and Korean locale JSON to confirm the locale files remain valid.
+
+## Acceptance criteria map
+
+29. Touch-up, background cleanup, studio polish, and bounded custom edits are available: Improved; the custom edit UI no longer falls back to English for Spanish and Korean users.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- Locale JSON parse via `node -e`: passed for `en.json`, `es.json`, and `ko.json`.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 766 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ac-20260622-1842`: passed. Existing `country-flag-icons` package export warnings still appeared.
+
+## Unresolved risks
+
+- This slice only localizes the custom image-edit strings added in PR 4ab; older unrelated create-flow strings remain partially untranslated in Spanish/Korean.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
