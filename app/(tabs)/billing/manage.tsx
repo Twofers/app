@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { openBrowserAsync, WebBrowserPresentationStyle } from "expo-web-browser";
@@ -59,6 +59,46 @@ export default function ManageSubscriptionScreen() {
     }
   };
 
+  const requestIntroductoryRefund = async () => {
+    if (busy || !locationId || !summary.refundEligible) return;
+    if (summary.purchaseSurface !== "in_app_link") {
+      setBanner({ message: t("billing.purchaseUnavailable"), tone: "info" });
+      return;
+    }
+
+    setBusy(true);
+    setBanner({ message: t("billing.refundRequesting"), tone: "info" });
+    try {
+      const { error } = await supabase.functions.invoke("stripe-request-introductory-refund", {
+        body: { location_id: locationId },
+        timeout: EDGE_FUNCTION_TIMEOUT_MS,
+      });
+      if (error) throw error;
+      setBanner({ message: t("billing.refundConfirmed"), tone: "success" });
+      await refresh();
+    } catch {
+      setBanner({ message: t("billing.errRefund"), tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmIntroductoryRefund = () => {
+    if (busy || !summary.refundEligible) return;
+    Alert.alert(
+      t("billing.refundConfirmTitle"),
+      t("billing.refundConfirmBody"),
+      [
+        { text: t("commonUi.cancel"), style: "cancel" },
+        {
+          text: t("billing.cancelNowRefund"),
+          style: "destructive",
+          onPress: () => void requestIntroductoryRefund(),
+        },
+      ],
+    );
+  };
+
   if (!PAID_BILLING_ENABLED) {
     return <Redirect href="/(tabs)/account" />;
   }
@@ -107,6 +147,10 @@ export default function ManageSubscriptionScreen() {
               <Banner message={t("billing.purchaseUnavailable")} tone="info" />
             ) : null}
 
+            {summary.refundEligible ? (
+              <Banner message={t("billing.refundEligibility")} tone="info" />
+            ) : null}
+
             <Text style={{ fontSize: 13, opacity: 0.7, fontWeight: "700" }}>
               {t("billingManage.actionsTitle")}
             </Text>
@@ -121,6 +165,14 @@ export default function ManageSubscriptionScreen() {
               onPress={() => void openCustomerPortal("cancel")}
               disabled={busy || summary.purchaseSurface !== "in_app_link"}
             />
+
+            {summary.refundEligible ? (
+              <SecondaryButton
+                title={t("billing.cancelNowRefund")}
+                onPress={confirmIntroductoryRefund}
+                disabled={busy || summary.purchaseSurface !== "in_app_link"}
+              />
+            ) : null}
 
             <SecondaryButton
               title={t("billingManage.viewInvoices")}

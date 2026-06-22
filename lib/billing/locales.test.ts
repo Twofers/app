@@ -44,6 +44,10 @@ describe("billing locale parity", () => {
       expect(locale.billing).toHaveProperty("trialDisclosureBody");
       expect(locale.billing).toHaveProperty("trialConsentLabel");
       expect(locale.billing).toHaveProperty("trialAutoBillingReminder");
+      expect(locale.billing).toHaveProperty("refundConfirmTitle");
+      expect(locale.billing).toHaveProperty("refundConfirmBody");
+      expect(locale.billing).toHaveProperty("refundRequesting");
+      expect(locale.billing).toHaveProperty("errRefund");
       expect(locale.billing.status).toHaveProperty("trial_checkout_pending");
       expect(locale.billing.status).toHaveProperty("trial_expired_payment_failed_suspended");
     }
