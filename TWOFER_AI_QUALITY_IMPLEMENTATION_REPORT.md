@@ -3985,3 +3985,91 @@ Deployment/rollback section: Improved; the command plan and production checklist
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## Multilingual Deals PR 1 - Locale foundation and deterministic offer rendering
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr1-foundation`.
+
+Safety checkpoint: `5c0c9fdf`.
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `.env.example`
+- `lib/supported-locales.ts`
+- `lib/ad-locale-resolver.ts`
+- `lib/merchant-localization-profile.ts`
+- `lib/localized-offer-terms.ts`
+- `lib/offer-locale-templates.ts`
+- `lib/localized-offer-renderer.ts`
+- `lib/korean-counter-registry.ts`
+- `lib/korean-offer-template-resolver.ts`
+- `lib/runtime-env.ts`
+- `lib/ad-locale-resolver.test.ts`
+- `lib/merchant-localization-profile.test.ts`
+- `lib/localized-offer-renderer.test.ts`
+- `lib/runtime-env.test.ts`
+- `docs/localization/en-US-style-guide.md`
+- `docs/localization/es-US-style-guide.md`
+- `docs/localization/ko-KR-style-guide.md`
+- `docs/localization/protected-term-policy.md`
+- `docs/localization/korean-counter-registry.md`
+- `docs/localization/native-review-log.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added canonical product locale support for `en-US`, `es-US`, and `ko-KR`, including mapping from the existing app short codes (`en`, `es`, `ko`).
+- Added customer ad-locale resolution with the planned order: explicit customer preference, app language, device language, English fallback, then ad source locale fallback.
+- Added the merchant localization profile model and defaults: all three consumer locales enabled, `automatic_verified`, preserved business names, and versioned profile metadata.
+- Added localized offer-term modeling, do-not-translate preservation, and versioned term snapshot IDs for exact approved-ad binding.
+- Added deterministic exact-offer rendering for English, U.S. Spanish, and Korean from structured `OfferDefinitionV1` facts. The renderer does not translate a completed English offer sentence and does not call a model at customer view time.
+- Added template metadata and versions for each locale and offer type.
+- Added a Korean counter registry with all current candidate counters marked unapproved, plus counter-free Korean fallback template resolution so counters are never inferred without reviewer approval.
+- Added default-off multilingual rollout flags: `AI_V5_MULTILINGUAL_FOUNDATION_ENABLED`, `AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED`, and `AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED`, with matching `EXPO_PUBLIC_` aliases.
+- Added required localization artifacts and recorded the current owner state: Dan / Twofer admin is the internal localization owner; U.S. Spanish and Korean reviewers remain TBD before production launch.
+
+## Acceptance criteria map
+
+- PR 1.1 supported locale types: Implemented in `lib/supported-locales.ts`.
+- PR 1.2 customer locale resolver: Implemented in `lib/ad-locale-resolver.ts` for foundation use; UI integration remains PR 2.
+- PR 1.3 merchant localization profile: Implemented as a typed model in `lib/merchant-localization-profile.ts`; persistence remains later work.
+- PR 1.4 localized term model: Implemented in `lib/localized-offer-terms.ts`.
+- PR 1.5 deterministic offer renderers: Implemented for `en-US`, `es-US`, and `ko-KR` in `lib/localized-offer-renderer.ts`.
+- PR 1.6 native-reviewed template versioning: Versioned template metadata exists; Spanish and Korean review status remains pending native review.
+- PR 1.7 Korean controlled counter registry: Implemented with reviewer-approved gates defaulting to false.
+- PR 1.8 unknown-counter fallback: Implemented by the Korean counter-free fallback resolver.
+- PR 1.9 UTF-8/font tests: UTF-8 deterministic output is covered by unit fixtures; real-device font testing remains blocked until device QA.
+- PR 1.10 feature flags: Implemented default-off in runtime env helpers and `.env.example`.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib\ad-locale-resolver.test.ts lib\merchant-localization-profile.test.ts lib\localized-offer-renderer.test.ts`: passed; 3 files, 9 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 155 files, 832 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript/env working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr1-20260623-1350`: passed with known `country-flag-icons` package export warnings.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- The root spec says to read `docs/twofer-developer-handoff-spec.md`, but that file is absent; the actual source-of-truth spec is at the repo root and was used.
+- Existing legacy deal localization still translates/stores `title_*` and `description_*` fields. This PR intentionally does not remove or rewire that path; later PRs must migrate customer/owner surfaces to the deterministic bundle.
+- Spanish and Korean reviewers are still TBD. Broad production use for those languages remains blocked until reviewer assignment and sign-off are recorded.
+- Korean counters are intentionally unapproved, so Korean rendering uses counter-free fallback until a reviewer approves counter metadata.
+- Real-device typography and screenshot QA were not performed in this local code slice.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
