@@ -738,6 +738,75 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3e - Targeted repair orchestration
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-repair-orchestration`.
+
+Safety checkpoint: `0330396c` (Multilingual Deals PR 3d targeted repair contract commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-repair-orchestration.md`
+- `lib/ad-localization-schema.ts`
+- `lib/ad-localization.ts`
+- `lib/ad-localization.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added repair-state metadata to each localized creative: `repairAttempted`, `repairStatus`, and `repairReasonCodes`.
+- Extended `buildQaCheckedAdLocalizationBundle()` to accept `repairedTargetCreatives` after initial target-locale deterministic QA.
+- Allows a repaired creative to replace a failed target locale only when the initial failure was a `repair` decision and the repaired creative passes deterministic QA.
+- Passing locales ignore repair candidates, which preserves the PR3 rule that targeted repair must not regenerate accepted locales.
+- Non-repairable blocked locales and failed repairs use deterministic target-language fallback with explicit reason codes in the bundle hash.
+- Added regression tests for accepted repair, ignored passing-locale repair candidates, failed repair fallback, and non-repairable fallback.
+
+## Acceptance criteria map
+
+- PR 3.1 locale-aware source creative generation: Already improved in PR 3a.
+- PR 3.2 source-language style policies: Already implemented in PR 3a.
+- PR 3.3 winning-candidate-only transcreation: Preserved from PR 3c.
+- PR 3.4 protected terms: Preserved; deterministic QA and repair metadata carry protected-term failures through bundle hashing.
+- PR 3.5 independent translation QA: Deterministic QA exists from PR 3b; independent semantic provider review remains future work.
+- PR 3.6 targeted repair: Improved; repair provider output now has a deterministic bundle-orchestration path, but the live generation endpoint still does not call the provider/repair sequence.
+- PR 3.7 deterministic target-language fallback: Improved; skipped and failed repairs now record explicit fallback reason codes.
+- PR 3.8 locale-specific presentation resolver: Not implemented in this slice.
+- PR 3.9 localization storage and hashes: Improved for hash contents only; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Already started in PR 2; no additional UI work in this slice.
+
+## Validation
+
+- `npx vitest run lib/ad-localization.test.ts lib/ad-translation-qa.test.ts supabase/functions/_shared/ai-localization-provider.test.ts`: passed; 3 files, 20 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430.
+- `npx vitest run`: passed; 160 files, 860 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3e-20260623-1502`: passed with known `country-flag-icons` package export warnings.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- The transcreation and repair providers are still not wired into `ai-generate-ad-variants`, publish storage, or owner preview state.
+- Independent semantic QA remains future work.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on repair policy, representative repairs, deterministic fallback copy, and real-device screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3d - Targeted transcreation repair contract
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-targeted-repair`.

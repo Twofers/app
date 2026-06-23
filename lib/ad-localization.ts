@@ -90,6 +90,10 @@ function bundleHash(input: Omit<AdLocalizationBundle, "localizationBundleHash">)
   return `adloc_${hashString(stableJson(input))}`;
 }
 
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
 export function buildDeterministicAdLocalizationBundle(input: {
   sourceLocale: string | null | undefined;
   sourceCreative: SourceAdCreative;
@@ -101,10 +105,10 @@ export function buildDeterministicAdLocalizationBundle(input: {
 }
 
 function deterministicFallbackReasonCodes(qa: AdTranslationQaResult | null): string[] {
-  return [
+  return uniqueStrings([
     "DETERMINISTIC_TARGET_FALLBACK",
     ...(qa?.hardFailReasons ?? []),
-  ];
+  ]);
 }
 
 export function buildQaCheckedAdLocalizationBundle(input: {
@@ -114,6 +118,7 @@ export function buildQaCheckedAdLocalizationBundle(input: {
   protectedTerms?: readonly string[] | null;
   enabledLocales?: readonly SupportedLocale[] | null;
   targetCreatives?: Partial<Record<SupportedLocale, SourceAdCreative | null>> | null;
+  repairedTargetCreatives?: Partial<Record<SupportedLocale, SourceAdCreative | null>> | null;
 }): AdLocalizationBundle {
   const sourceLocale = supportedLocaleOrDefault(input.sourceLocale);
   const enabledLocales = input.enabledLocales?.length ? [...input.enabledLocales] : [...SUPPORTED_LOCALES];
@@ -144,23 +149,70 @@ export function buildQaCheckedAdLocalizationBundle(input: {
             protectedTerms,
           })
         : null;
-      const useTranscreation = Boolean(qa && qa.decision === "pass" && targetCreative);
+      const repairedTargetCreative = !isSource && qa?.decision === "repair"
+        ? input.repairedTargetCreatives?.[locale] ?? null
+        : null;
+      const repairQa = repairedTargetCreative
+        ? validateAdTranscreationDeterministically({
+            sourceLocale,
+            targetLocale: locale,
+            sourceCreative: input.sourceCreative,
+            targetCreative: repairedTargetCreative,
+            offerDefinition: input.offerDefinition,
+            protectedTerms,
+          })
+        : null;
+      const acceptedTargetCreative = qa?.decision === "pass"
+        ? targetCreative
+        : repairQa?.decision === "pass"
+          ? repairedTargetCreative
+          : null;
+      const repairAttempted = Boolean(repairedTargetCreative);
+      const repairStatus = isSource
+        ? "not_required" as const
+        : qa?.decision === "pass"
+          ? "not_needed" as const
+          : qa?.decision === "block"
+            ? "skipped_non_repairable" as const
+            : repairAttempted
+              ? repairQa?.decision === "pass"
+                ? "attempted_pass" as const
+                : "attempted_failed" as const
+              : "not_attempted" as const;
+      const repairReasonCodes = uniqueStrings([
+        ...(qa?.hardFailReasons ?? []),
+        ...(repairQa?.decision && repairQa.decision !== "pass" ? repairQa.hardFailReasons : []),
+      ]);
+      const fallbackReasonCodes = repairStatus === "attempted_failed"
+        ? uniqueStrings([
+            "DETERMINISTIC_TARGET_FALLBACK",
+            "TRANSLATION_REPAIR_FAILED",
+            ...repairReasonCodes,
+          ])
+        : repairStatus === "skipped_non_repairable"
+          ? uniqueStrings([
+              "DETERMINISTIC_TARGET_FALLBACK",
+              "TRANSLATION_REPAIR_SKIPPED_NON_REPAIRABLE",
+              ...repairReasonCodes,
+            ])
+          : deterministicFallbackReasonCodes(qa);
+      const useTranscreation = Boolean(acceptedTargetCreative);
       const base = {
         locale,
         headline: isSource
           ? cleanText(input.sourceCreative.headline) || locked.primaryOfferLine
           : useTranscreation
-            ? cleanText(targetCreative?.headline) || FALLBACK_HEADLINE[locale]
+            ? cleanText(acceptedTargetCreative?.headline) || FALLBACK_HEADLINE[locale]
             : FALLBACK_HEADLINE[locale],
         supportingCopy: isSource
           ? cleanText(input.sourceCreative.supportingCopy) || locked.termsLine
           : useTranscreation
-            ? cleanText(targetCreative?.supportingCopy) || locked.primaryOfferLine
+            ? cleanText(acceptedTargetCreative?.supportingCopy) || locked.primaryOfferLine
             : locked.primaryOfferLine,
         imageAltText: isSource
           ? cleanText(input.sourceCreative.imageAltText) || `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`
           : useTranscreation
-            ? cleanText(targetCreative?.imageAltText) || `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`
+            ? cleanText(acceptedTargetCreative?.imageAltText) || `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`
             : `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`,
         exactOfferLine: locked.primaryOfferLine,
         termsLine: locked.termsLine,
@@ -171,7 +223,10 @@ export function buildQaCheckedAdLocalizationBundle(input: {
             ? "persuasive_transcreation" as const
             : "deterministic_fallback" as const,
         qaDecision: isSource ? "not_required" as const : "pass" as const,
-        qaReasonCodes: isSource ? [] : useTranscreation ? [] : deterministicFallbackReasonCodes(qa),
+        qaReasonCodes: isSource ? [] : useTranscreation ? [] : fallbackReasonCodes,
+        repairAttempted,
+        repairStatus,
+        repairReasonCodes: isSource || qa?.decision === "pass" ? [] : repairReasonCodes,
       };
       return [
         locale,

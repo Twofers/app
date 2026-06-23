@@ -159,4 +159,162 @@ describe("ad localization deterministic fallback bundle", () => {
     );
     expect(bundle.deterministicFallbackLocales).toEqual(["ko-KR"]);
   });
+
+  it("uses a repaired target creative after one repairable QA failure", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte con cookie gratis",
+        supportingCopy: "Tu latte de la tarde viene con una cookie.",
+        imageAltText: "Latte y cookie en Cedar Bean",
+      },
+      targetCreatives: {
+        "en-US": {
+          headline: "Cedar Bean 2x1 latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      repairedTargetCreatives: {
+        "en-US": {
+          headline: "Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["en-US"]).toMatchObject({
+      headline: "Cedar Bean latte reward",
+      translationStatus: "persuasive_transcreation",
+      qaDecision: "pass",
+      qaReasonCodes: [],
+      repairAttempted: true,
+      repairStatus: "attempted_pass",
+      repairReasonCodes: ["BANNED_SHORTHAND"],
+    });
+    expect(bundle.deterministicFallbackLocales).toEqual(["ko-KR"]);
+  });
+
+  it("does not replace a passing target locale with a repair candidate", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte con cookie gratis",
+        supportingCopy: "Tu latte de la tarde viene con una cookie.",
+        imageAltText: "Latte y cookie en Cedar Bean",
+      },
+      targetCreatives: {
+        "en-US": {
+          headline: "Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      repairedTargetCreatives: {
+        "en-US": {
+          headline: "Ignored repair headline",
+          supportingCopy: "Ignored repair supporting copy.",
+          imageAltText: "Ignored repair alt text",
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["en-US"]).toMatchObject({
+      headline: "Cedar Bean latte reward",
+      translationStatus: "persuasive_transcreation",
+      repairAttempted: false,
+      repairStatus: "not_needed",
+      repairReasonCodes: [],
+    });
+    expect(bundle.localizations["en-US"].headline).not.toBe("Ignored repair headline");
+  });
+
+  it("falls back when a targeted repair attempt still fails QA", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte con cookie gratis",
+        supportingCopy: "Tu latte de la tarde viene con una cookie.",
+        imageAltText: "Latte y cookie en Cedar Bean",
+      },
+      targetCreatives: {
+        "en-US": {
+          headline: "Cedar Bean 2x1 latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      repairedTargetCreatives: {
+        "en-US": {
+          headline: "Guaranteed Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a guaranteed cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["en-US"]).toMatchObject({
+      headline: "Local deal",
+      translationStatus: "deterministic_fallback",
+      repairAttempted: true,
+      repairStatus: "attempted_failed",
+    });
+    expect(bundle.localizations["en-US"].qaReasonCodes).toEqual(
+      expect.arrayContaining([
+        "DETERMINISTIC_TARGET_FALLBACK",
+        "TRANSLATION_REPAIR_FAILED",
+        "BANNED_SHORTHAND",
+        "UNSUPPORTED_CLAIM",
+      ]),
+    );
+    expect(bundle.deterministicFallbackLocales).toEqual(["en-US", "ko-KR"]);
+  });
+
+  it("ignores repaired copy for a non-repairable blocked target creative", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte con cookie gratis",
+        supportingCopy: "Tu latte de la tarde viene con una cookie.",
+        imageAltText: "Latte y cookie en Cedar Bean",
+      },
+      targetCreatives: {
+        "en-US": {
+          headline: "Guaranteed Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a guaranteed cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      repairedTargetCreatives: {
+        "en-US": {
+          headline: "Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["en-US"]).toMatchObject({
+      headline: "Local deal",
+      translationStatus: "deterministic_fallback",
+      repairAttempted: false,
+      repairStatus: "skipped_non_repairable",
+    });
+    expect(bundle.localizations["en-US"].qaReasonCodes).toEqual(
+      expect.arrayContaining([
+        "DETERMINISTIC_TARGET_FALLBACK",
+        "TRANSLATION_REPAIR_SKIPPED_NON_REPAIRABLE",
+        "UNSUPPORTED_CLAIM",
+      ]),
+    );
+  });
 });

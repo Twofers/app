@@ -5,6 +5,14 @@ export type AdLocalizationStatus =
   | "persuasive_transcreation"
   | "deterministic_fallback";
 
+export type AdLocalizationRepairStatus =
+  | "not_required"
+  | "not_needed"
+  | "not_attempted"
+  | "attempted_pass"
+  | "attempted_failed"
+  | "skipped_non_repairable";
+
 export type AdLocalizationQaDecision =
   | "not_required"
   | "pass"
@@ -51,6 +59,9 @@ export type AdLocalizedCreative = {
   translationStatus: AdLocalizationStatus;
   qaDecision: AdLocalizationQaDecision;
   qaReasonCodes: string[];
+  repairAttempted: boolean;
+  repairStatus: AdLocalizationRepairStatus;
+  repairReasonCodes: string[];
 };
 
 export type AdLocalizationBundle = {
