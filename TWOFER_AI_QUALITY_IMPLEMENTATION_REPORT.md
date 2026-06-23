@@ -987,6 +987,62 @@ No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 3b - Rollout telemetry and legacy fallback guardrails
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3b-legacy-cleanup`.
+
+Safety checkpoint: `9262a4a2` (Composed Ad Card PR 3 commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/composed-ad-card-telemetry-source.test.ts`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/analytics.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added stable composed-card rollout analytics event names for preview shown, style changed, approval success, approval block, and publish block.
+- Added a render-only `ComposedPreviewTelemetryBeacon` so composed preview telemetry is emitted from the same branch that renders `ComposedAdCard`, without violating parent hook order or touching auth/business/loading fallbacks.
+- Recorded internal rollout dimensions requested by the composed-card plan: selected template, alternate count, resolution reason codes, image source type, safe-zone confidence, supporting-copy removal, renderer/spec version, presentation hash, composite QA decision and repair count, screenshot-QA requirement, time to first preview, and time to approval.
+- Added style-switch telemetry with previous and next template IDs and hashes. Style switching still clears approval and still makes no model call.
+- Added publish/approval block telemetry for exact-approval mismatch, blocked composite QA, and screenshot-QA-required states.
+- Preserved the disabled-flag legacy preview fallback for rollback. No feature flag defaults changed.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/composed-ad-card-telemetry-source.test.ts lib/composed-ad-card-parity-source.test.ts lib/offer-version-publish-source.test.ts`: passed; 3 files, 6 tests.
+- `npm run test`: passed; 150 files, 816 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3b" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- Telemetry only reaches the currently configured lightweight analytics sink. Hosted metric dashboards still depend on a real sink or ingestion path being active.
+- The legacy generated preview component remains available when composed-card flags are disabled so rollback stays simple.
+- Real-device screenshots and external cohort metric review were not performed in this local Windows pass.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

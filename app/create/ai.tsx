@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -99,7 +99,7 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
-import { buildDefaultAdPresentationSpec, type AdImageSourceType } from "@/lib/ad-presentation-spec";
+import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
 import {
   buildApprovedAdCopy,
@@ -115,6 +115,7 @@ import { resolveAdPresentation } from "@/lib/ad-template-resolver";
 import {
   runDeterministicAdCompositeQa,
   shouldRunCompositeScreenshotQa,
+  type AdCompositeQaResult,
 } from "@/lib/ad-composite-qa";
 import type { SourceAwareImageQaResult } from "@/lib/quick-deal-image-qa";
 import {
@@ -221,6 +222,60 @@ function isMissingDealEligibilityColumn(error: { code?: string; message?: string
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
   const { location_id: _locationId, ...rest } = row;
   return rest;
+}
+
+function ComposedPreviewTelemetryBeacon(props: {
+  generatedAdPresent: boolean;
+  presentation: AdPresentationSpec;
+  presentationHash: string;
+  presentationOptionsCount: number;
+  imageSafeZoneConfidence: number;
+  compositeQa: AdCompositeQaResult;
+  screenshotQaRequired: boolean;
+  generationStartedAtRef: MutableRefObject<number | null>;
+  previewShownAtRef: MutableRefObject<number | null>;
+  lastHashRef: MutableRefObject<string | null>;
+}) {
+  useEffect(() => {
+    if (!props.generatedAdPresent) return;
+    if (props.lastHashRef.current === props.presentationHash) return;
+    const shownAt = Date.now();
+    props.previewShownAtRef.current = shownAt;
+    props.lastHashRef.current = props.presentationHash;
+    trackEvent(AiAdsEvents.COMPOSED_PREVIEW_SHOWN, {
+      screen: "create_ai",
+      selected_template_id: props.presentation.templateId,
+      alternate_template_count: Math.max(0, props.presentationOptionsCount - 1),
+      template_resolution_reason_codes: props.presentation.resolutionReasonCodes.join(","),
+      image_source_type: props.presentation.imageSourceType,
+      image_asset_id_present: Boolean(props.presentation.imageAssetId),
+      safe_zone_confidence: props.imageSafeZoneConfidence,
+      supporting_copy_removed: !props.presentation.showSupportingCopy,
+      presentation_spec_version: props.presentation.specVersion,
+      renderer_version: props.presentation.rendererVersion,
+      presentation_hash: props.presentationHash,
+      composite_qa_decision: props.compositeQa.decision,
+      composite_qa_repair_count: props.compositeQa.repairCodes.length,
+      composite_qa_reason_codes: props.compositeQa.hardFailReasons.join(","),
+      screenshot_qa_required: props.screenshotQaRequired,
+      time_to_first_preview_ms: props.generationStartedAtRef.current
+        ? shownAt - props.generationStartedAtRef.current
+        : null,
+    });
+  }, [
+    props.generatedAdPresent,
+    props.presentation,
+    props.presentationHash,
+    props.presentationOptionsCount,
+    props.imageSafeZoneConfidence,
+    props.compositeQa,
+    props.screenshotQaRequired,
+    props.generationStartedAtRef,
+    props.previewShownAtRef,
+    props.lastHashRef,
+  ]);
+
+  return null;
 }
 
 /**
@@ -729,6 +784,9 @@ export default function AiDealScreen() {
    */
   const generationRequestIdRef = useRef(0);
   const aiRequestGroupIdRef = useRef(createAiRequestGroupId());
+  const adGenerationStartedAtRef = useRef<number | null>(null);
+  const composedPreviewShownAtRef = useRef<number | null>(null);
+  const lastComposedPreviewTelemetryHashRef = useRef<string | null>(null);
 
   const aiDraftBaselineRef = useRef<{
     title: string;
@@ -1691,6 +1749,9 @@ export default function AiDealScreen() {
     setApprovedComposedPresentationHash(null);
     aiDraftBaselineRef.current = null;
     lastSentPhotoTreatmentRef.current = null;
+    adGenerationStartedAtRef.current = null;
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
   }
@@ -1946,6 +2007,9 @@ export default function AiDealScreen() {
     setBanner(null);
     setLastGenerationError(null);
     resetGenerationState();
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     const requestId = ++generationRequestIdRef.current;
 
     try {
@@ -2061,6 +2125,9 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
       return;
     }
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     setRevising(true);
     setBanner(null);
     const requestId = ++generationRequestIdRef.current;
@@ -2125,6 +2192,14 @@ export default function AiDealScreen() {
   function acceptAd() {
     if (!generatedAd) return;
     if (composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
+      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+        screen: "create_ai",
+        reason: "composite_qa_block",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
+      });
       setBanner({
         message: t("createAi.compositeQaBlocked", {
           defaultValue: "This ad layout needs a safer preview before publishing. Try another style or change the photo.",
@@ -2134,6 +2209,14 @@ export default function AiDealScreen() {
       return;
     }
     if (selectedComposedScreenshotQaRequired) {
+      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+        screen: "create_ai",
+        reason: "screenshot_qa_required",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+      });
       setBanner({
         message: t("createAi.compositeScreenshotQaRequired", {
           defaultValue: "This ad needs visual review before it can be approved. Try another style or use the split layout.",
@@ -2147,6 +2230,20 @@ export default function AiDealScreen() {
     setAdAccepted(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
+    if (composedAdPreviewEnabled) {
+      const approvedAt = Date.now();
+      trackEvent(AiAdsEvents.COMPOSED_APPROVED, {
+        screen: "create_ai",
+        selected_template_id: selectedComposedPresentation.templateId,
+        alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
+        merchant_style_override_used: composedStyleIndex > 0,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_repair_count: selectedComposedCompositeQa.repairCodes.length,
+        screenshot_qa_required: selectedComposedScreenshotQaRequired,
+        time_to_approval_ms: composedPreviewShownAtRef.current ? approvedAt - composedPreviewShownAtRef.current : null,
+      });
+    }
     trackEvent(AiAdsEvents.AD_SELECTED, {
       screen: "create_ai",
       creative_lane: "single",
@@ -2197,6 +2294,9 @@ export default function AiDealScreen() {
       setUsePhotoAsFinal(true);
       setMerchantOriginalWarningAcknowledged(false);
     }
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     setGeneratedAd(fallbackAd);
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
@@ -2350,6 +2450,13 @@ export default function AiDealScreen() {
     }
     if (!editingDealId && composedExactPresentationApprovalEnabled) {
       if (!adAccepted || !composedPresentationApprovalMatches) {
+        trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+          screen: "create_ai",
+          reason: "approval_required",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          approved_presentation_hash: approvedComposedPresentationHash,
+        });
         showPublishError(
           t("createAi.errPresentationApprovalRequired", {
             defaultValue: "Approve the exact ad preview again before publishing.",
@@ -2360,6 +2467,14 @@ export default function AiDealScreen() {
       }
     }
     if (!editingDealId && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
+      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+        screen: "create_ai",
+        reason: "composite_qa_block",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
+      });
       showPublishError(
         t("createAi.errCompositeQaBlocked", {
           defaultValue: "This ad preview failed layout checks. Try another style or change the photo.",
@@ -2369,6 +2484,14 @@ export default function AiDealScreen() {
       return;
     }
     if (!editingDealId && selectedComposedScreenshotQaRequired) {
+      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+        screen: "create_ai",
+        reason: "screenshot_qa_required",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+      });
       showPublishError(
         t("createAi.errCompositeScreenshotQaRequired", {
           defaultValue: "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
@@ -2517,6 +2640,11 @@ export default function AiDealScreen() {
         trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
           screen: "create_ai",
           draft_edited: edited,
+          composed_preview_enabled: composedAdPreviewEnabled,
+          selected_template_id: composedAdPreviewEnabled ? selectedComposedPresentation.templateId : null,
+          merchant_style_override_used: composedAdPreviewEnabled ? composedStyleIndex > 0 : null,
+          composite_qa_decision: composedAdPreviewEnabled ? selectedComposedCompositeQa.decision : null,
+          composite_qa_repair_count: composedAdPreviewEnabled ? selectedComposedCompositeQa.repairCodes.length : null,
         });
       }
 
@@ -3580,6 +3708,18 @@ export default function AiDealScreen() {
 
                 {composedAdPreviewEnabled ? (
                   <>
+                    <ComposedPreviewTelemetryBeacon
+                      generatedAdPresent={Boolean(generatedAd)}
+                      presentation={selectedComposedPresentation}
+                      presentationHash={selectedComposedPresentationHash}
+                      presentationOptionsCount={composedPresentationOptions.length}
+                      imageSafeZoneConfidence={composedImageSafeZones.confidence}
+                      compositeQa={selectedComposedCompositeQa}
+                      screenshotQaRequired={selectedComposedScreenshotQaRequired}
+                      generationStartedAtRef={adGenerationStartedAtRef}
+                      previewShownAtRef={composedPreviewShownAtRef}
+                      lastHashRef={lastComposedPreviewTelemetryHashRef}
+                    />
                     <ComposedAdCard
                       imageUri={adImageUri}
                       offerFacts={composedOfferFacts}
@@ -3613,7 +3753,23 @@ export default function AiDealScreen() {
                         <SecondaryButton
                           title={t("createAi.composedTryAnotherStyle", { defaultValue: "Try another style" })}
                           onPress={() => {
-                            setComposedStyleIndex((current) => (current + 1) % composedPresentationOptions.length);
+                            const nextStyleIndex = (composedStyleIndex + 1) % composedPresentationOptions.length;
+                            const nextPresentation = composedPresentationOptions[nextStyleIndex];
+                            const nextPresentationHash = createAdPresentationHash({
+                              presentation: nextPresentation,
+                              offerFacts: composedOfferFacts,
+                              copy: composedCopy,
+                            });
+                            trackEvent(AiAdsEvents.COMPOSED_STYLE_CHANGED, {
+                              screen: "create_ai",
+                              previous_template_id: selectedComposedPresentation.templateId,
+                              selected_template_id: nextPresentation.templateId,
+                              alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
+                              merchant_style_override_used: nextStyleIndex > 0,
+                              previous_presentation_hash: selectedComposedPresentationHash,
+                              presentation_hash: nextPresentationHash,
+                            });
+                            setComposedStyleIndex(nextStyleIndex);
                             setComposedEditIntent(null);
                             setAdAccepted(false);
                             setApprovedComposedPresentationHash(null);
