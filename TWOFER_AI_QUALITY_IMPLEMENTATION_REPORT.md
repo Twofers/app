@@ -1092,6 +1092,62 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 3d - Internal QA EAS rollout flags
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3d-internal-flags`.
+
+Safety checkpoint: `62582c57` (Composed Ad Card PR 3c commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/composed-ad-card-eas-profile-source.test.ts`
+
+## Files changed
+
+- `eas.json`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Enabled the composed-card internal QA flag set for the EAS `development`, `preview`, and `dev-client-apk` profiles only.
+- Internal QA profiles now opt into the composed ad card renderer, shared renderer, authoritative offer card, presentation resolver, minimal input flow, instant style alternates, deterministic composite QA, and exact presentation approval.
+- Left the `production` EAS profile unchanged so production builds do not implicitly enable composed-card v4 UI from this slice.
+- Intentionally left `EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED` unset in every profile because there is not yet a screenshot QA runner wired into the local/client publish path. Enabling that flag now could block internal publish QA without a corresponding runner.
+- Added a source-level guard test that parses `eas.json`, verifies the internal profile flags, verifies production stays unset, and verifies screenshot QA remains unset.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/composed-ad-card-eas-profile-source.test.ts lib/runtime-env.test.ts lib/composed-ad-card-telemetry-source.test.ts`: passed; 3 files, 7 tests.
+- `npm run test`: passed; 152 files, 821 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3d" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed; Git warned that `eas.json` will normalize working-copy line endings from LF to CRLF when Git writes it.
+
+## Unresolved risks
+
+- No build was created, run, submitted, or released in this slice. These flags affect future internal QA builds only.
+- Hosted publish enforcement still requires Edge Function redeploys and hosted environment configuration before production behavior changes.
+- Screenshot QA remains disabled because the screenshot runner is not implemented or wired yet.
+- Persisted `offer_versions.ad_spec` customer loading remains hard-gated by the current service-role-only table access and would require a Supabase/API design change before client rollout.
+- Real device testing was not performed in this local Windows pass.
+
+## Rollback
+
+Revert this commit, or remove the composed-card v4 flags from the `development`, `preview`, and `dev-client-apk` profile environments in `eas.json`. No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
