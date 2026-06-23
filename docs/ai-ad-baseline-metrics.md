@@ -68,7 +68,7 @@ To complete threshold calibration, run representative non-publishing generations
 
 ## Known Instrumentation Gaps
 
-- Total end-to-end generation duration is not persisted as a first-class field. The app currently records copy latency, but not full start-to-preview or all-variants-ready p50/p95.
+- Total end-to-end generation duration is recorded in the current ad-variant payload as `total_latency_ms`; older rows and hosted production rows before this Edge deploy will not have samples.
 - `ai_generation_logs` does not store `request_group_id`, so cost rows and generation log rows are aggregated separately.
 - Publish conversion and no-edit publish rate cannot be computed reliably until generation/ad ids are written to `deals` or a `publish_events` table.
 - End-to-end funnel from generation to exposure to claim to redemption remains weak until `AdSpec` / `OfferVersion` / publish events are durable.

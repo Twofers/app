@@ -295,9 +295,9 @@ Remaining gap:
 
 Implemented:
 
-- `ai_generation_logs` stores prompt version, model, request type, success/failure, token counts, estimated cost for older paths, response payload, and generation telemetry.
+- `ai_generation_logs` stores prompt version, model, request type, success/failure, token counts, estimated cost for older paths, response payload, total generation latency where the current ad-variant path writes it, and generation telemetry.
 - `ai_generation_costs` stores per-provider-call feature, model, endpoint, usage, estimated cost, OpenAI request id, response id, success/error, and request group id.
-- Main ad telemetry includes structured offer fields, copy source, variant count, selected variant index, validation failure count, repair attempts, fallback use, image source, image QA, and copy latency.
+- Main ad telemetry includes structured offer fields, copy source, variant count, selected variant index, validation failure count, repair attempts, fallback use, image source, image QA, total request latency, and copy latency.
 - Consumer funnel events use `app_analytics_events`: `deal_viewed`, `deal_opened`, `deal_claimed`, `claim_blocked`, `wallet_opened`, `redeem_started`, `redeem_completed`, and `redeem_failed`.
 - Dashboard code reads claims, redemptions, and daily deduped impressions.
 

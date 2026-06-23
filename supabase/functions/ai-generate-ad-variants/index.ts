@@ -2375,8 +2375,9 @@ function buildGenerationTelemetry(params: {
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
+  totalLatencyMs: number;
 }) {
-  const { offerContract, copy, imageResult, productionSuccess } = params;
+  const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
   const repairAttempts = copyRepairAttemptCount(copy.copy_source);
   const deterministicFallbackUsed = copy.copy_source === "DETERMINISTIC_FALLBACK";
@@ -2389,6 +2390,7 @@ function buildGenerationTelemetry(params: {
   return {
     events,
     success: productionSuccess,
+    total_latency_ms: totalLatencyMs,
     structured_offer: offerTelemetry(offerContract),
     generated: {
       headline: copy.headline,
@@ -2462,6 +2464,7 @@ function buildGenerationTelemetry(params: {
 // ─── HTTP handler ──────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const requestStartedAtMs = Date.now();
   const corsHeaders = getCorsHeaders(req);
   let adminForCreditRelease: SupabaseClient | null = null;
   let chargeableRevisionCredit: ChargeableImageRevisionReservation | null = null;
@@ -2914,6 +2917,7 @@ Deno.serve(async (req) => {
           response_payload: {
             events: ["quick_deal_ai_generation_failed"],
             stage: "copy",
+            total_latency_ms: Date.now() - requestStartedAtMs,
             structured_offer: offerTelemetry(offerContract),
           },
         });
@@ -3019,6 +3023,7 @@ Deno.serve(async (req) => {
         copy,
         imageResult,
         productionSuccess,
+        totalLatencyMs: Date.now() - requestStartedAtMs,
       }),
     });
 

@@ -10,6 +10,9 @@ const source = fs.readFileSync(
 describe("AI ad baseline metrics runner source", () => {
   it("surfaces provider fallback, judge, and image QA dashboard metrics", () => {
     expect(source).toMatch(/copy_provider_attempts/);
+    expect(source).toMatch(/total_latency_ms/);
+    expect(source).toMatch(/total_generation_latency_p95_ms/);
+    expect(source).toMatch(/Total latency p50 \/ p95/);
     expect(source).toMatch(/provider_fallback_reasons/);
     expect(source).toMatch(/candidate_judge/);
     expect(source).toMatch(/Judge skipped reasons/);

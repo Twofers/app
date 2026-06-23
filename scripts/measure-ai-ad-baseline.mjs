@@ -208,6 +208,9 @@ const judgeAttempts = logsWithCopy.flatMap((row) =>
 const copyLatencies = logs
   .map((row) => numberOrNull(jsonPath(row.response_payload, ["copy", "latency_ms"])))
   .filter((value) => value !== null);
+const totalLatencies = logs
+  .map((row) => numberOrNull(jsonPath(row.response_payload, ["total_latency_ms"])))
+  .filter((value) => value !== null);
 const fallbackLogs = logs.filter((row) => {
   const payload = row.response_payload || {};
   const events = Array.isArray(payload.events) ? payload.events : [];
@@ -300,6 +303,13 @@ const summary = {
     p95: percentile(copyLatencies, 95),
     min: copyLatencies.length ? Math.min(...copyLatencies) : null,
     max: copyLatencies.length ? Math.max(...copyLatencies) : null,
+  },
+  total_latency_ms: {
+    sample_count: totalLatencies.length,
+    p50: percentile(totalLatencies, 50),
+    p95: percentile(totalLatencies, 95),
+    min: totalLatencies.length ? Math.min(...totalLatencies) : null,
+    max: totalLatencies.length ? Math.max(...totalLatencies) : null,
   },
   copy_quality: {
     rows_with_copy_payload: logsWithCopy.length,
@@ -397,7 +407,6 @@ const summary = {
     by_model: countBy(costs, (row) => row.model),
   },
   known_gaps: [
-    "Total end-to-end generation duration is not persisted as a first-class field; copy latency is measured, but total p50/p95 is not.",
     "ai_generation_logs does not store request_group_id, so cost rows and generation log rows are aggregated separately.",
     "Publish conversion and no-edit publish rate cannot be computed reliably until generation/ad ids are written to deals or publish_events.",
   ],
@@ -420,6 +429,12 @@ summary.calibration_watchlist = {
       value: summary.copy_latency_ms.p95,
       threshold: 14_000,
       note: "Compare against merchant wait tolerance and provider timeout settings.",
+    }),
+    calibrationCheck({
+      metric: "total_generation_latency_p95_ms",
+      value: summary.total_latency_ms.p95,
+      threshold: 45_000,
+      note: "Review full start-to-preview wait time across research, copy, image generation, and QA.",
     }),
     calibrationCheck({
       metric: "deterministic_copy_fallback_rate",
@@ -528,6 +543,7 @@ Window: ${data.window.start_at} to ${data.window.end_at} (${data.window.days} da
 - Total ad log rows: ${data.ai_ad_generation.total_log_rows}
 - Success rate: ${data.ai_ad_generation.success_rate ?? "n/a"}
 - Failure rate: ${data.ai_ad_generation.failure_rate ?? "n/a"}
+- Total latency p50 / p95: ${data.total_latency_ms.p50 ?? "n/a"} ms / ${data.total_latency_ms.p95 ?? "n/a"} ms
 - Copy latency p50 / p95: ${data.copy_latency_ms.p50 ?? "n/a"} ms / ${data.copy_latency_ms.p95 ?? "n/a"} ms
 - Deterministic fallback rate: ${data.copy_quality.deterministic_fallback_rate ?? "n/a"}
 - Provider fallback rate: ${data.copy_quality.provider_fallback_rate ?? "n/a"}

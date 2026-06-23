@@ -661,6 +661,8 @@ Full validation:
 
 Revert this commit. No migration rollback is required.
 
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -3091,7 +3093,7 @@ Live secret names changed: none.
 4. Implemented - OpenAI credit/quota failure falls back immediately behind the routed fallback flags.
 5. Implemented - Full timeout does not cause a second full OpenAI wait.
 6. Partially implemented - Persistent circuit-breaker helper and migration exist, but applying the migration and verifying hosted behavior are hard-gated.
-7. Partially implemented - Provider/model/latency/token/cache/cost telemetry exists across routed paths, but total end-to-end generation duration is not persisted as a first-class field.
+7. Implemented locally - Provider/model/stage latency/token/cache/cost telemetry exists across routed paths, and the ad-variant generation log payload now records total request latency as `total_latency_ms`; hosted rows need the Edge deploy before this field appears in production data.
 8. Implemented locally - Configurable cost ceilings limit optional calls behind the cost-budget flag.
 9. Implemented - The merchant receives a preview or deterministic fallback, never a blank state, on the main ad path.
 10. Implemented - Merchant Creative Profile is available and versioned at runtime.
@@ -3135,7 +3137,7 @@ Live secret names changed: none.
 48. Implemented - Consumer feed and detail surfaces share authoritative display helpers.
 49. Implemented - Known canned AI copy/transcript/insight/compose fallbacks cannot appear as live AI; synthetic menu sample output remains explicit preview/dev-only behavior.
 50. Partially implemented - Google data flow is documented internally and guarded by release checks; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
-51. Partially implemented - Main ad copy, adjacent text helpers, translation, compose text/photo, and ad-variant image QA use the provider router, and new AI Create/Quick publishes require versioned publish plus offer definitions. Remaining gaps are media-specific direct provider paths such as Whisper transcription, menu OCR, and image generation/edit providers; existing-deal edit/update compatibility still writes directly to `deals`.
+51. Partially implemented - Main ad copy, non-web ad research, adjacent text helpers, translation, compose text/photo, app-facing base64 menu OCR, and ad-variant image QA use the provider router, and new AI Create/Quick publishes require versioned publish plus offer definitions. Remaining direct paths are live web-search preview, Whisper transcription, legacy menu `image_url` OCR, image generation/edit providers, and existing-deal edit/update compatibility.
 52. Implemented - No GPT-5.4-mini versus GPT-5.5 comparison was performed.
 
 ## Validation
@@ -3153,7 +3155,7 @@ Live secret names changed: none.
 
 - Hosted behavior still requires Dan-controlled migrations, Edge Function redeploys, app release paths, public website/privacy deployment, and production/staging non-publishing QA.
 - Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
-- Criteria 6, 7, 30, 50, and 51 are intentionally not marked fully complete because the remaining work crosses a hard gate or requires future persisted data-model work.
+- Criteria 6, 30, 50, and 51 are intentionally not marked fully complete because the remaining work crosses a hard gate or requires future persisted data-model work.
 
 ## Rollback
 
@@ -3270,6 +3272,69 @@ Live secret names changed: none.
 
 - Hosted behavior still requires redeploying `ai-extract-menu`; deployment is a hard gate and was not performed.
 - Legacy `image_url` menu extraction remains direct until there is a safe provider-neutral URL-fetch/inline-media abstraction.
+- Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4aq - Persist ad-generation total latency
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `44c6e6c0`.
+
+Deployment actions: Edge Function redeploy required for hosted behavior to change; not performed here.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts`
+- `scripts/measure-ai-ad-baseline.mjs`
+- `lib/ai-ad-baseline-runner-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/ai-ad-baseline-metrics.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `total_latency_ms` to the main ad-variant `ai_generation_logs.response_payload`, measured from Edge request entry through the logged generation result.
+- Added the same elapsed field to the copy-failure log payload so failed copy attempts still contribute to latency diagnosis.
+- Extended the baseline metrics runner to compute total generation latency p50/p95/min/max from `response_payload.total_latency_ms` and added it to the local Markdown dashboard plus calibration watchlist.
+- Updated the current-state and baseline docs so they no longer call total generation latency an unimplemented first-class telemetry gap.
+- Added source guards for the Edge telemetry field and baseline runner output.
+
+## Acceptance criteria map
+
+7. Per-stage provider/model/latency/token/cache/cost telemetry is stored: Improved; total ad-generation latency is now persisted in the ad-variant log payload without requiring a schema change.
+34. Metrics to watch after each release slice: Improved; the local dashboard now exposes full generation p50/p95 once hosted rows include `total_latency_ms`.
+51. No generation path bypasses provider/quality controls: Preserved; this slice changes telemetry only.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase\functions\_shared\ai-generate-ad-variants-telemetry-source.test.ts lib\ai-ad-baseline-runner-source.test.ts`: passed; 2 files, 3 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript/JS working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run lint`: passed.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 140 files, 781 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4aq-20260623-2050`: passed with the known `country-flag-icons` package export warnings.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 130 Edge Function files failed for that same missing-command reason.
+
+## Unresolved risks
+
+- Hosted behavior still requires redeploying `ai-generate-ad-variants`; deployment is a hard gate and was not performed.
+- Older `ai_generation_logs` rows and hosted rows before this deploy will not have `total_latency_ms`, so the baseline dashboard may show zero total-latency samples until new rows are produced.
 - Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
 
 ## Rollback
