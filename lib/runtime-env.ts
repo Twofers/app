@@ -114,6 +114,16 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED ?? "(unset)",
     AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
+    AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED ?? "(unset)",
+    AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED ?? "(unset)",
+    AI_V5_TRANSLATION_QA_ENABLED: process.env.AI_V5_TRANSLATION_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED ?? "(unset)",
+    AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED ?? "(unset)",
+    AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -186,6 +196,26 @@ export function isAiV5CustomerLocaleResolutionEnabled(): boolean {
 
 export function isAiV5DealLanguageSwitchEnabled(): boolean {
   return process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true";
+}
+
+export function isAiV5SourceLocaleCreativeEnabled(): boolean {
+  return process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED === "true";
+}
+
+export function isAiV5PersuasiveTranscreationEnabled(): boolean {
+  return process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED === "true";
+}
+
+export function isAiV5TranslationQaEnabled(): boolean {
+  return process.env.AI_V5_TRANSLATION_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED === "true";
+}
+
+export function isAiV5DeterministicLanguageFallbackEnabled(): boolean {
+  return process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED === "true";
+}
+
+export function isAiV5LocalePresentationOverridesEnabled(): boolean {
+  return process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

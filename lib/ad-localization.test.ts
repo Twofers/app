@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+
+import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
+import { buildOfferDefinitionV1 } from "./offer-definition";
+
+function definition() {
+  const built = buildOfferDefinitionV1({
+    businessId: "biz_123",
+    businessName: "Cedar Bean",
+    locationId: "loc_123",
+    locationName: "Cedar Bean - Irving",
+    dealEligibility: {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "latte",
+      requiredItemRetailValueCents: 600,
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    },
+    eligibilityResult: {
+      eligible: true,
+      eligibilityStatus: "VALID",
+      customerValuePercent: 50,
+    },
+    activeWindowHumanReadable: "Today 2:00 PM to 4:00 PM",
+    quantityLimit: 20,
+    schedule: {
+      mode: "one_time",
+      summary: "Today 2:00 PM to 4:00 PM",
+      startsAt: "2026-06-23T14:00:00-05:00",
+      endsAt: "2026-06-23T16:00:00-05:00",
+      timeZone: "America/Chicago",
+    },
+  });
+  if (!built) throw new Error("expected offer definition");
+  return built;
+}
+
+describe("ad localization deterministic fallback bundle", () => {
+  it("keeps source creative only in the source locale and target locales deterministic", () => {
+    const bundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Latte run, cookie reward",
+        supportingCopy: "Your afternoon coffee comes with a little extra.",
+        imageAltText: "Latte and cookie on a cafe counter",
+      },
+      offerDefinition: definition(),
+    });
+
+    expect(bundle.sourceLocale).toBe("en-US");
+    expect(bundle.sourceCreativeHash).toMatch(/^adsrc_[0-9a-f]{8}$/);
+    expect(bundle.localizationBundleHash).toMatch(/^adloc_[0-9a-f]{8}$/);
+    expect(bundle.deterministicFallbackLocales).toEqual(["es-US", "ko-KR"]);
+    expect(bundle.localizations["en-US"]).toMatchObject({
+      headline: "Latte run, cookie reward",
+      supportingCopy: "Your afternoon coffee comes with a little extra.",
+      translationStatus: "source_creative",
+      qaDecision: "not_required",
+    });
+    expect(bundle.localizations["es-US"]).toMatchObject({
+      headline: "Oferta local",
+      supportingCopy: "Al comprar 1 latte, recibes 1 cookie gratis",
+      translationStatus: "deterministic_fallback",
+      qaDecision: "pass",
+      qaReasonCodes: ["DETERMINISTIC_TARGET_FALLBACK"],
+    });
+    expect(bundle.localizations["ko-KR"].headline).toBe("로컬 딜");
+    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("latte");
+    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("cookie");
+  });
+
+  it("uses stable hashes and changes them when source creative changes", () => {
+    const base = {
+      sourceLocale: "es-US",
+      sourceCreative: {
+        headline: "Café con premio",
+        supportingCopy: "Tu latte viene con una galleta gratis.",
+        imageAltText: "Latte y galleta en el mostrador",
+      },
+      offerDefinition: definition(),
+    };
+    const first = buildDeterministicAdLocalizationBundle(base);
+    const second = buildDeterministicAdLocalizationBundle(base);
+    const changed = buildDeterministicAdLocalizationBundle({
+      ...base,
+      sourceCreative: { ...base.sourceCreative, headline: "Latte con premio" },
+    });
+
+    expect(second.sourceCreativeHash).toBe(first.sourceCreativeHash);
+    expect(second.localizationBundleHash).toBe(first.localizationBundleHash);
+    expect(changed.sourceCreativeHash).not.toBe(first.sourceCreativeHash);
+    expect(changed.localizationBundleHash).not.toBe(first.localizationBundleHash);
+  });
+
+  it("records protected terms preserved in deterministic output", () => {
+    const bundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "ko-KR",
+      sourceCreative: {
+        headline: "Cedar Bean 라떼 혜택",
+        supportingCopy: "Cedar Bean에서 라떼와 쿠키를 만나보세요.",
+        imageAltText: "Cedar Bean latte and cookie",
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["en-US"].preservedTerms).toEqual(
+      expect.arrayContaining(["Cedar Bean", "latte", "cookie"]),
+    );
+    expect(bundle.localizations["es-US"].preservedTerms).toEqual(
+      expect.arrayContaining(["Cedar Bean", "latte", "cookie"]),
+    );
+    expect(bundle.localizations["ko-KR"].translationStatus).toBe("source_creative");
+  });
+});

@@ -13,6 +13,7 @@ import {
   buildMerchantCreativeProfilePromptBlock,
   type MerchantCreativeProfile,
 } from "../../../lib/merchant-creative-profile.ts";
+import { buildSourceCreativePolicyPromptBlock } from "../../../lib/ad-source-locale-policy.ts";
 
 export type BusinessContext = {
   category?: string;
@@ -252,6 +253,28 @@ function contractSystemRules(contract: DealOfferContract): string[] {
   ];
 }
 
+function protectedTermsForPrompt(input: {
+  businessName: string;
+  businessContext: BusinessContext;
+  offerContract?: DealOfferContract;
+}): string[] {
+  const values = [
+    input.businessName,
+    input.businessContext.location,
+    input.offerContract?.businessName,
+    input.offerContract?.locationName,
+    ...(input.offerContract?.requiredPurchase ? [input.offerContract.requiredPurchase.itemName] : []),
+    ...(input.offerContract?.freeReward ? [input.offerContract.freeReward.itemName] : []),
+    ...(input.offerContract?.singleItemDiscount ? [input.offerContract.singleItemDiscount.itemName] : []),
+  ];
+  const out: string[] = [];
+  for (const raw of values) {
+    const clean = nonEmpty(raw);
+    if (clean && !out.some((term) => term.toLowerCase() === clean.toLowerCase())) out.push(clean);
+  }
+  return out;
+}
+
 function dealSpecificPrompt(contract: DealOfferContract): string[] {
   const required = contract.requiredPurchase;
   const reward = contract.freeReward;
@@ -380,6 +403,10 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   });
   const categoryPlaybookBlock = buildCategoryAdPlaybookPromptBlock(businessContext.category);
   const merchantProfileBlock = buildMerchantCreativeProfilePromptBlock(profile);
+  const sourceLocalePolicyBlock = buildSourceCreativePolicyPromptBlock({
+    appLanguage: outputLanguage,
+    protectedTerms: protectedTermsForPrompt({ businessName, businessContext, offerContract }),
+  });
 
   if (businessContext.category) facts.push(`Business category: ${businessContext.category.trim()}`);
   if (businessContext.description) facts.push(`Business description: ${businessContext.description.trim()}`);
@@ -420,6 +447,8 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     categoryPlaybookBlock,
     "",
     merchantProfileBlock,
+    "",
+    sourceLocalePolicyBlock,
     ...(offerContract ? contractSystemRules(offerContract) : []),
   ].join("\n");
 

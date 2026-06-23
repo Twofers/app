@@ -137,6 +137,61 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain("Claim a free bagel with a qualifying coffee purchase");
   });
 
+  it("adds source-locale policy and protected terms for Spanish source creative", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Compra un latte y recibe una galleta gratis", "latte"),
+      outputLanguage: "es",
+      businessName: "Cedar Bean",
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "latte",
+        requiredItemRetailValueCents: 600,
+        freeItemQuantity: 1,
+        freeItemDescription: "cookie",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.system).toContain("SOURCE-LANGUAGE CREATIVE POLICY");
+    expect(prompt.system).toContain("Source locale: es-US");
+    expect(prompt.system).toContain("Write all creativeBrief and candidate output fields in U.S. Spanish");
+    expect(prompt.system).toContain("Do not use literal English word order");
+    expect(prompt.system).toContain("2x1");
+    expect(prompt.system).toContain("Cedar Bean");
+    expect(prompt.system).toContain("latte");
+    expect(prompt.system).toContain("cookie");
+  });
+
+  it("adds Korean source creative safety around counters, shorthand, and protected terms", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("라떼를 사면 쿠키 무료", "latte"),
+      outputLanguage: "ko",
+      businessName: "Cedar Bean",
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "latte",
+        requiredItemRetailValueCents: 600,
+        freeItemQuantity: 1,
+        freeItemDescription: "cookie",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.system).toContain("Source locale: ko-KR");
+    expect(prompt.system).toContain("Write all creativeBrief and candidate output fields in Korean");
+    expect(prompt.system).toContain("Do not infer Korean counters");
+    expect(prompt.system).toContain("1+1");
+    expect(prompt.system).toContain("Cedar Bean");
+    expect(prompt.system).toContain("latte");
+    expect(prompt.system).toContain("cookie");
+  });
+
   it("requires plain English for same-item buy-one-get-one offers", () => {
     const prompt = buildAdCopyPrompt({
       ...basePromptParams("Buy one coffee, get one coffee free", "coffee"),

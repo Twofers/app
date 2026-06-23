@@ -23,10 +23,15 @@ import {
   isAiV4SharedRendererEnabled,
   isAiV5CustomerLocaleResolutionEnabled,
   isAiV5DealLanguageSwitchEnabled,
+  isAiV5DeterministicLanguageFallbackEnabled,
   isAiV5KoreanCounterRegistryEnabled,
   isAiV5LocalizedOwnerUiEnabled,
   isAiV5LocalizedOfferRendererEnabled,
+  isAiV5LocalePresentationOverridesEnabled,
   isAiV5MultilingualFoundationEnabled,
+  isAiV5PersuasiveTranscreationEnabled,
+  isAiV5SourceLocaleCreativeEnabled,
+  isAiV5TranslationQaEnabled,
 } from "./runtime-env";
 
 describe("runtime-env retired offer rollout flags", () => {
@@ -79,6 +84,16 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED,
     AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED,
     EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED,
+    AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED,
+    EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED,
+    AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED,
+    EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED,
+    AI_V5_TRANSLATION_QA_ENABLED: process.env.AI_V5_TRANSLATION_QA_ENABLED,
+    EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED,
+    AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED,
+    EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED,
+    AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
+    EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
   };
 
   afterEach(() => {
@@ -122,6 +137,16 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED;
     delete process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED;
+    delete process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED;
+    delete process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED;
+    delete process.env.AI_V5_TRANSLATION_QA_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED;
+    delete process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED;
+    delete process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -138,6 +163,11 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalizedOwnerUiEnabled()).toBe(false);
     expect(isAiV5CustomerLocaleResolutionEnabled()).toBe(false);
     expect(isAiV5DealLanguageSwitchEnabled()).toBe(false);
+    expect(isAiV5SourceLocaleCreativeEnabled()).toBe(false);
+    expect(isAiV5PersuasiveTranscreationEnabled()).toBe(false);
+    expect(isAiV5TranslationQaEnabled()).toBe(false);
+    expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(false);
+    expect(isAiV5LocalePresentationOverridesEnabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -156,6 +186,11 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -172,5 +207,10 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5LocalizedOwnerUiEnabled()).toBe(true);
     expect(isAiV5CustomerLocaleResolutionEnabled()).toBe(true);
     expect(isAiV5DealLanguageSwitchEnabled()).toBe(true);
+    expect(isAiV5SourceLocaleCreativeEnabled()).toBe(true);
+    expect(isAiV5PersuasiveTranscreationEnabled()).toBe(true);
+    expect(isAiV5TranslationQaEnabled()).toBe(true);
+    expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(true);
+    expect(isAiV5LocalePresentationOverridesEnabled()).toBe(true);
   });
 });

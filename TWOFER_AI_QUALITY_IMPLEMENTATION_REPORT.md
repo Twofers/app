@@ -663,6 +663,81 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3a - Source-language policy and deterministic fallback foundation
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-source-locale-policy`.
+
+Safety checkpoint: `4c041262` (Multilingual Deals PR 2 locale switching commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `.env.example`
+- `docs/localization/multilingual-deals-pr3-source-locale-policy.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-localization-schema.ts`
+- `lib/ad-localization.ts`
+- `lib/ad-localization.test.ts`
+- `lib/ad-source-locale-policy.ts`
+- `lib/ad-source-locale-policy.test.ts`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added default-off PR3 rollout flags: `AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED`, `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED`, `AI_V5_TRANSLATION_QA_ENABLED`, `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED`, and `AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED`, with matching `EXPO_PUBLIC_` aliases.
+- Added source creative locale policies for English, U.S. Spanish, and Korean, including locale-specific guidance, banned shorthand, mobile length guidance, merchant-input safety, and protected-term preservation.
+- Integrated the source-locale policy block into the `ai-generate-ad-variants` copy prompt so generated creative briefs and candidates are explicitly tied to the merchant-selected source language.
+- Added deterministic ad localization bundle schema and builder. The builder uses one source creative plus structured `OfferDefinitionV1` facts to create a three-locale bundle where non-source locales use deterministic target-language fallback copy.
+- Added stable source-copy and localization-bundle hashes for future approval/storage binding.
+- Recorded PR3 policy/fallback artifacts in localization docs and the native review log.
+
+## Acceptance criteria map
+
+- PR 3.1 locale-aware source creative generation: Improved; prompts now include source locale, app language code, protected terms, and locale-specific creative policy.
+- PR 3.2 source-language style policies: Implemented as reusable policy data in `lib/ad-source-locale-policy.ts`.
+- PR 3.3 winning-candidate-only transcreation: Not implemented in this slice; provider transcreation remains future work.
+- PR 3.4 protected terms: Implemented for prompt policy and deterministic bundle preservation metadata.
+- PR 3.5 independent translation QA: Not implemented in this slice.
+- PR 3.6 targeted repair: Not implemented in this slice.
+- PR 3.7 deterministic target-language fallback: Implemented as a pure bundle builder using deterministic localized offer rendering.
+- PR 3.8 locale-specific presentation resolver: Flag added only; resolver overrides remain future work.
+- PR 3.9 localization storage and hashes: Hash primitives added; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Already started in PR 2; no additional UI work in this slice.
+
+## Validation
+
+- `npx vitest run lib/ad-source-locale-policy.test.ts lib/ad-localization.test.ts supabase/functions/ai-generate-ad-variants/prompt.test.ts lib/runtime-env.test.ts`: passed; 4 files, 20 tests.
+- `npx tsc --noEmit`: passed.
+- `npx vitest run`: passed; 158 files, 843 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript/env working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3a-20260623-1422`: passed with known `country-flag-icons` package export warnings.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- Provider-backed transcreation, independent QA, targeted repair, storage tables, and locale presentation overrides are not yet implemented.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on source policy wording, deterministic fallback labels, UI strings, accessibility labels, and representative screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 2 - Localized owner interface and customer language switching
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr2-locale-switching`.
