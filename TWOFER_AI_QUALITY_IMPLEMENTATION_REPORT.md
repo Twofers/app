@@ -1043,6 +1043,55 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 3c - Representative preview fixture matrix
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3c-preview-fixtures`.
+
+Safety checkpoint: `dc314de6` (Composed Ad Card PR 3b commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/composed-ad-card-representative-previews.ts`
+- `lib/composed-ad-card-representative-previews.test.ts`
+
+## What landed
+
+- Added a deterministic, non-publishing representative preview matrix for the composed-card acceptance cases: coffee drink, pastry, multi-item meal, service offer, clean merchant image, busy image, storefront, logo-forward image, generated image, AI-edited merchant photo, long merchant name, long exact item names, live quantity-limited deal, scheduled deal, ended deal, and no-photo deterministic fallback.
+- Added a resolver helper that turns each representative case into the exact recommended presentation, alternates, presentation hash, resolution reason codes, and deterministic composite QA result.
+- Added tests that every representative preview resolves to a valid nonblank presentation with a stable `adp_` hash and available composite QA.
+- Added edge-case checks that busy/no-photo previews use `split_offer_panel`, scheduled/ended previews do not use `live_drop_card`, and a true live quantity-limited preview can use `live_drop_card`.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/composed-ad-card-representative-previews.test.ts lib/ad-template-resolver.test.ts lib/ad-composite-qa.test.ts`: passed; 3 files, 11 tests.
+- `npm run test`: passed; 151 files, 819 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3c" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed.
+
+## Unresolved risks
+
+- These are deterministic local fixtures, not rendered screenshots or real-device review artifacts.
+- Real iPhone and supported Android device acceptance testing remains out of scope until Dan explicitly requests local Android QA or performs TestFlight/device review.
+- The matrix uses placeholder `example.invalid` image URIs and fixture asset IDs; it validates renderer contracts and resolver decisions, not actual visual pixels.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
