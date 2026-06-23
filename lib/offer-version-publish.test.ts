@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
+import { buildVerifiedAdLocalizationApproval } from "./ad-localization-approval";
 import {
   AD_SPEC_RENDERER_VERSION,
   AD_SPEC_TEMPLATE_VERSION,
@@ -199,6 +200,36 @@ describe("offer version publish client helpers", () => {
         },
       },
     });
+    const offerFacts = buildLockedOfferContent({
+      primaryOfferLine: definition.canonicalOfferLine,
+      termsLine: definition.disclosureLine,
+    });
+    const copy = buildApprovedAdCopy({
+      headline: "Latte run, cookie reward",
+      supportingCopy: "Your afternoon coffee comes with a little extra.",
+      ctaLabel: "Claim deal",
+      fallbackHeadline: definition.canonicalOfferLine,
+    });
+    const presentationHash = createAdPresentationHash({
+      presentation,
+      offerFacts,
+      copy,
+    });
+    const approval = buildVerifiedAdLocalizationApproval({
+      bundle: localizationBundle,
+      offerDefinition: definition,
+      presentationHash,
+      selectedImageAssetId: presentation.imageAssetId,
+      localePresentationOverrides: presentation.localeOverrides,
+      providerStatus: {
+        transcreation_provider: "deterministic",
+        transcreation_model: "none",
+        semantic_qa_provider: "deterministic",
+        semantic_qa_model: "none",
+        repair_target_locales: [],
+      },
+    });
+    if (!approval.approved) throw new Error(`expected approval: ${approval.reasonCodes.join(",")}`);
     const spec = buildOfferVersionPublishAdSpec(
       "create_ai",
       definition,
@@ -222,33 +253,13 @@ describe("offer version publish client helpers", () => {
       {
         composedCard: {
           presentation,
-          presentationHash: createAdPresentationHash({
-            presentation,
-            offerFacts: buildLockedOfferContent({
-              primaryOfferLine: definition.canonicalOfferLine,
-              termsLine: definition.disclosureLine,
-            }),
-            copy: buildApprovedAdCopy({
-              headline: "Latte run, cookie reward",
-              supportingCopy: "Your afternoon coffee comes with a little extra.",
-              ctaLabel: "Claim deal",
-              fallbackHeadline: definition.canonicalOfferLine,
-            }),
-          }),
+          presentationHash,
           selectedTemplateId: presentation.templateId,
           alternateTemplateIds: [],
           merchantStyleOverrideUsed: false,
           compositeQa: runDeterministicAdCompositeQa({
-            offerFacts: buildLockedOfferContent({
-              primaryOfferLine: definition.canonicalOfferLine,
-              termsLine: definition.disclosureLine,
-            }),
-            copy: buildApprovedAdCopy({
-              headline: "Latte run, cookie reward",
-              supportingCopy: "Your afternoon coffee comes with a little extra.",
-              ctaLabel: "Claim deal",
-              fallbackHeadline: definition.canonicalOfferLine,
-            }),
+            offerFacts,
+            copy,
             merchant: { name: definition.merchantName, locationName: definition.locationName },
             presentation,
             liveState: {
@@ -268,12 +279,16 @@ describe("offer version publish client helpers", () => {
             decision: "not_run",
           },
         },
+        localizationApproval: approval.approval,
       },
     );
 
     expect(spec.localization?.sourceCreativeHash).toBe(localizationBundle.sourceCreativeHash);
     expect(spec.localization?.localizationBundleHash).toBe(localizationBundle.localizationBundleHash);
     expect(spec.localization?.localizations["es-US"]?.localizationHash).toMatch(/^adlocrow_[0-9a-f]{8}$/);
+    expect(spec.localization?.approval?.approvalHash).toBe(approval.approval.approvalHash);
+    expect(spec.localization?.approval?.presentationHash).toBe(presentationHash);
+    expect(spec.localization?.approval?.localizationBundleHash).toBe(localizationBundle.localizationBundleHash);
     expect(spec.localization?.localePresentationOverrides?.["ko-KR"]?.resolutionReasonCodes).toEqual([
       "HANGUL_FONT_METRICS_GUARD",
     ]);

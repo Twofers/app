@@ -3,6 +3,7 @@ import {
   buildOfferVersionLocalizationSnapshot,
   type OfferVersionPublishLocalizationSnapshot,
 } from "./ad-localization-storage";
+import type { AdLocalizationApprovalSnapshot } from "./ad-localization-approval";
 import {
   buildAdSpecV1,
   type AdSpecV1,
@@ -145,6 +146,7 @@ export function buildOfferVersionPublishAdSpec(
   options?: {
     composedCard?: OfferVersionPublishComposedCardSpec | null;
     localization?: OfferVersionPublishLocalizationSnapshot | null;
+    localizationApproval?: AdLocalizationApprovalSnapshot | null;
   },
 ): OfferVersionPublishAdSpec {
   const spec = buildAdSpecV1({
@@ -157,6 +159,7 @@ export function buildOfferVersionPublishAdSpec(
     offerDefinition,
     providerStatus: generatedAd?.localization_status ?? null,
     localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
+    approval: options?.localizationApproval ?? null,
   });
   if (!options?.composedCard && !localization) return spec;
   return {

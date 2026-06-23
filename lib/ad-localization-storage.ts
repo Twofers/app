@@ -5,6 +5,7 @@ import type {
   AdLocalizationStatus,
   AdLocalizedCreative,
 } from "./ad-localization-schema";
+import type { AdLocalizationApprovalSnapshot } from "./ad-localization-approval";
 import type { AdPresentationLocaleOverride } from "./ad-presentation-spec";
 import {
   LOCALIZED_OFFER_RENDERER_VERSION,
@@ -85,6 +86,7 @@ export type OfferVersionPublishLocalizationSnapshot = {
     skippedReason: string | null;
     repairTargetLocales: SupportedLocale[];
   };
+  approval?: AdLocalizationApprovalSnapshot;
   localizations: Partial<Record<SupportedLocale, AdLocalizationStorageRow>>;
 };
 
@@ -258,6 +260,7 @@ export function buildOfferVersionLocalizationSnapshot(input: {
   enabledLocales?: readonly SupportedLocale[] | null;
   providerStatus?: AdLocalizationProviderStatus | null;
   localePresentationOverrides?: Partial<Record<SupportedLocale, AdPresentationLocaleOverride>> | null;
+  approval?: AdLocalizationApprovalSnapshot | null;
 }): OfferVersionPublishLocalizationSnapshot | null {
   if (!input.bundle) return null;
   const enabledLocales = enabledSupportedLocales(input.enabledLocales);
@@ -294,6 +297,7 @@ export function buildOfferVersionLocalizationSnapshot(input: {
       skippedReason: cleanOptionalText(input.providerStatus?.semantic_qa_skipped_reason),
       repairTargetLocales: [...new Set(input.providerStatus?.repair_target_locales ?? [])],
     },
+    ...(input.approval ? { approval: input.approval } : {}),
     localizations: rows,
   };
 }

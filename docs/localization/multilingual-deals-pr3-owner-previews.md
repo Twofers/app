@@ -42,5 +42,5 @@ The copy intentionally tells the owner that the language tab is a presentation p
 
 - Wire customer-facing native deal/feed rendering to approved localization storage.
 - Add server-side publish enforcement for exact localization bundle hashes.
-- Add automatic verified-bundle approval behavior after owner acceptance.
+- Add server-side exact approval enforcement after owner acceptance.
 - Run native visual QA for Spanish and Korean previews before broad production rollout.

@@ -738,6 +738,83 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4a - Verified-bundle approval binding
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-approval-binding`.
+
+Safety checkpoint: `b2fcfaaf` (Multilingual Deals PR 3j owner language preview wiring commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-pr4-approval-binding.md`
+- `lib/ad-localization-approval.ts`
+- `lib/ad-localization-approval.test.ts`
+- `lib/ad-localization-approval-source.test.ts`
+
+## Files changed
+
+- `.env.example`
+- `app/create/ai.tsx`
+- `docs/localization/multilingual-deals-pr3-owner-previews.md`
+- `lib/ad-localization-storage.ts`
+- `lib/offer-version-publish.ts`
+- `lib/offer-version-publish.test.ts`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `buildVerifiedAdLocalizationApproval()`, a deterministic approval contract that can produce an `adlocappr_...` hash for a fully verified multilingual localization bundle.
+- The approval snapshot binds the owner approval to the offer-definition hash, source creative hash, localization-bundle hash, selected composed presentation hash, selected image asset ID, localized term snapshot hash, locale presentation override hash, per-locale storage row hashes, deterministic fallback locales, and approval/review policy versions.
+- Added a default-off rollout gate: `AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED`, plus the mobile-public alias `EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED`.
+- Prebuilt localization snapshots are rejected for approval if their source locale, enabled locales, source hash, or localization-bundle hash no longer match the bundle being approved.
+- The Create AI screen now records the verified approval hash when the owner accepts an eligible multilingual preview and clears that approval when the accepted draft is invalidated.
+- Local publish now blocks when automatic approval is enabled and the current localization approval hash no longer matches the accepted hash.
+- `buildOfferVersionPublishAdSpec()` now embeds `ad_spec.localization.approval` when the accepted approval is still exact.
+- Added source-level guards to keep the Create AI acceptance and stale-hash publish checks wired.
+
+## Acceptance criteria map
+
+- PR 4 verified-bundle automatic approval: Implemented locally behind the new default-off flag.
+- PR 4 exact localization and term-snapshot hashes: Partially implemented for local approval binding. The snapshot binds source creative, localization bundle, offer definition, terms, presentation, selected image, presentation overrides, and per-locale storage row hashes.
+- PR 4 publish enforcement: Local app stale-hash guard implemented. Server-side exact hash enforcement remains future work.
+- Screenshot QA, native reviewer workflow, and customer selected-language rendering: Not implemented in this slice.
+
+## Validation
+
+- `npx vitest run lib/ad-localization-approval.test.ts lib/ad-localization-approval-source.test.ts lib/offer-version-publish.test.ts lib/runtime-env.test.ts lib/ad-localization-storage.test.ts`: passed; 5 files, 18 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `git diff --check`: passed before this report update; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+- `npm run typecheck:functions`: failed only on the existing unrelated `supabase/functions/ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. No Supabase Function files were changed in this slice.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx vitest run`: passed; 167 files, 896 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4a-20260623`: passed with the existing `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- Server-side exact approval-hash enforcement is still future work, so this slice should not be treated as production approval enforcement.
+- No migration was applied and no Edge Function was redeployed.
+- The new automatic approval flag remains default-off and was not enabled in hosted configuration.
+- Customer rendering still does not consume approved localization storage in this slice.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on localized copy, presentation policy, and representative screenshots.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3j - Owner language previews
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-owner-previews`.

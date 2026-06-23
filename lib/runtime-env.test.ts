@@ -25,6 +25,7 @@ import {
   isAiV5DealLanguageSwitchEnabled,
   isAiV5DeterministicLanguageFallbackEnabled,
   isAiV5KoreanCounterRegistryEnabled,
+  isAiV5AutomaticVerifiedBundleApprovalEnabled,
   isAiV5LocalizedOwnerUiEnabled,
   isAiV5LocalizedOfferRendererEnabled,
   isAiV5LocalePresentationOverridesEnabled,
@@ -94,6 +95,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED,
     AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
     EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
+    AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED,
+    EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED,
   };
 
   afterEach(() => {
@@ -147,6 +150,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED;
     delete process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
+    delete process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -168,6 +173,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5TranslationQaEnabled()).toBe(false);
     expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(false);
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(false);
+    expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -191,6 +197,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -212,5 +219,6 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5TranslationQaEnabled()).toBe(true);
     expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(true);
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(true);
+    expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(true);
   });
 });

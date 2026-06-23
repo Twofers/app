@@ -101,6 +101,7 @@ import {
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
+import { buildVerifiedAdLocalizationApproval } from "@/lib/ad-localization-approval";
 import {
   buildMerchantIdentity,
   imageSourceTypeFromGeneratedAd,
@@ -123,6 +124,7 @@ import {
   isAiV4MinimalInputFlowEnabled,
   isAiV4PresentationResolverEnabled,
   isAiV4SharedRendererEnabled,
+  isAiV5AutomaticVerifiedBundleApprovalEnabled,
   isAiV5LocalizedOwnerUiEnabled,
 } from "@/lib/runtime-env";
 import {
@@ -683,6 +685,7 @@ export default function AiDealScreen() {
     businessProfile,
   } = useBusiness();
   const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
+  const automaticLocalizationApprovalEnabled = isAiV5AutomaticVerifiedBundleApprovalEnabled();
   const defaultAuthoringLocale = supportedLocaleOrDefault(businessPreferredLocale ?? i18n.language);
   const [draftSourceLocale, setDraftSourceLocale] = useState<SupportedLocale | null>(null);
   const draftSourceBusinessRef = useRef<string | null>(null);
@@ -801,6 +804,7 @@ export default function AiDealScreen() {
   const [composedStyleIndex, setComposedStyleIndex] = useState(0);
   const [composedEditIntent, setComposedEditIntent] = useState<ComposedEditIntent>(null);
   const [approvedComposedPresentationHash, setApprovedComposedPresentationHash] = useState<string | null>(null);
+  const [approvedLocalizationApprovalHash, setApprovedLocalizationApprovalHash] = useState<string | null>(null);
   /**
    * Monotonic ID for in-flight generate/revise calls. If user replaces the photo or hits
    * generate again before a revise resolves, we bump this counter and discard stale results.
@@ -1808,6 +1812,12 @@ export default function AiDealScreen() {
     setMerchantPreviewLocale((current) => current ?? effectiveDraftSourceLocale);
   }, [effectiveDraftSourceLocale, localizedOwnerUiEnabled]);
 
+  useEffect(() => {
+    if (!approvedComposedPresentationHash && approvedLocalizationApprovalHash) {
+      setApprovedLocalizationApprovalHash(null);
+    }
+  }, [approvedComposedPresentationHash, approvedLocalizationApprovalHash]);
+
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== "granted") {
@@ -2234,9 +2244,10 @@ export default function AiDealScreen() {
   }
 
   function invalidateAcceptedAdDraft() {
-    if (!adAccepted && !approvedComposedPresentationHash) return;
+    if (!adAccepted && !approvedComposedPresentationHash && !approvedLocalizationApprovalHash) return;
     setAdAccepted(false);
     setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
   }
@@ -2277,8 +2288,32 @@ export default function AiDealScreen() {
       });
       return;
     }
+    if (automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
+      if (!selectedLocalizationApproval?.approved) {
+        trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+          screen: "create_ai",
+          reason: "localization_approval_blocked",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          localization_reason_codes: selectedLocalizationApproval?.reasonCodes.join(",") ?? "missing_result",
+        });
+        setBanner({
+          message: t("createAi.localizationApprovalBlocked", {
+            defaultValue:
+              "The language versions need a safer verified preview before publishing. Try generating again or use the fallback ad.",
+          }),
+          tone: "warning",
+        });
+        return;
+      }
+    }
     applyAdToDraft(generatedAd);
     setApprovedComposedPresentationHash(composedAdPreviewEnabled ? selectedComposedPresentationHash : null);
+    setApprovedLocalizationApprovalHash(
+      automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable && selectedLocalizationApproval?.approved
+        ? selectedLocalizationApproval.approval.approvalHash
+        : null,
+    );
     setAdAccepted(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
@@ -2518,6 +2553,31 @@ export default function AiDealScreen() {
         return;
       }
     }
+    if (!editingDealId && automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
+      const localizationApprovalMatches =
+        selectedLocalizationApproval?.approved === true &&
+        approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash;
+      if (!adAccepted || !localizationApprovalMatches) {
+        trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+          screen: "create_ai",
+          reason: "localization_approval_required",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          approved_localization_hash: approvedLocalizationApprovalHash,
+          localization_approval_hash: selectedLocalizationApproval?.approved
+            ? selectedLocalizationApproval.approval.approvalHash
+            : null,
+          localization_reason_codes: selectedLocalizationApproval?.reasonCodes.join(",") ?? "missing_result",
+        });
+        showPublishError(
+          t("createAi.errLocalizationApprovalRequired", {
+            defaultValue: "Approve the exact multilingual preview again before publishing.",
+          }),
+          "warning",
+        );
+        return;
+      }
+    }
     if (!editingDealId && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
       trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
         screen: "create_ai",
@@ -2664,6 +2724,11 @@ export default function AiDealScreen() {
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
           ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpec, {
             composedCard: composedCardPublishSpec,
+            localizationApproval:
+              selectedLocalizationApproval?.approved &&
+              approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash
+                ? selectedLocalizationApproval.approval
+                : null,
           }),
         });
         const dealsOut = versionedResult.deals.map((row) => ({
@@ -2990,6 +3055,21 @@ export default function AiDealScreen() {
     composedScreenshotQaEnabled,
   );
   const selectedComposedScreenshotQaRequired = selectedComposedScreenshotQaSnapshot.required;
+  const selectedLocalizationApproval =
+    automaticLocalizationApprovalEnabled &&
+    ownerLanguagePreviewAvailable &&
+    offerDefinition &&
+    generatedAd?.localization_bundle
+      ? buildVerifiedAdLocalizationApproval({
+          bundle: generatedAd.localization_bundle,
+          offerDefinition,
+          presentationHash: selectedComposedPresentationHash,
+          selectedImageAssetId: selectedComposedPresentation.imageAssetId,
+          providerStatus: generatedAd.localization_status ?? null,
+          localePresentationOverrides: selectedComposedPresentation.localeOverrides ?? null,
+          screenshotQaRequired: selectedComposedScreenshotQaRequired,
+        })
+      : null;
   const composedPresentationApprovalMatches =
     approvedComposedPresentationHash === selectedComposedPresentationHash &&
     selectedComposedCompositeQa.decision !== "block" &&
