@@ -27,6 +27,10 @@ import {
   getDeviceDealLocale,
   setCustomerPreferredDealLocale,
 } from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
 import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
@@ -164,6 +168,7 @@ export default function DealDetail() {
   const [reportVisible, setReportVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [customerDealLocalization, setCustomerDealLocalization] = useState<CustomerDealLocalization | null>(null);
   const shareDealEnabled = isShareDealEnabled();
   const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
   const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
@@ -376,6 +381,34 @@ export default function DealDetail() {
     })();
     return () => { cancelled = true; };
   }, [deal?.id, loadActiveClaimForDeal, userId]);
+
+  useEffect(() => {
+    if (!deal?.id || !customerLocaleResolutionEnabled || !localizedOfferRendererEnabled) {
+      setCustomerDealLocalization(null);
+      return;
+    }
+    const resolvedLocale = resolveDealDisplayLocale({
+      customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+      appLanguage: i18n.language,
+      deviceLanguage: deviceDealLocaleRef.current,
+      adSourceLocale: deal.source_locale,
+    });
+    let cancelled = false;
+    void fetchCustomerDealLocalizations([deal.id], resolvedLocale.locale).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalization(localizations.get(deal.id) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    customerLocaleResolutionEnabled,
+    customerPreferredDealLocale,
+    deal?.id,
+    deal?.source_locale,
+    i18n.language,
+    localizedOfferRendererEnabled,
+    selectedDealLocale,
+  ]);
 
   // MVP open tracking: count once per loaded deal detail view.
   useEffect(() => {
@@ -607,7 +640,7 @@ export default function DealDetail() {
         enabledLocales: [supportedLocaleOrDefault(i18n.language)],
       };
   const localizedDisplay = buildLocalizedDealDisplay({
-    deal,
+    deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
     locale: resolvedDisplayLocale.locale,
     localeResolutionSource: resolvedDisplayLocale.source,
     useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
@@ -651,10 +684,11 @@ export default function DealDetail() {
         ? t("consumerHome.onlyOneLeft")
         : t("consumerHome.onlyNLeft", { count: remaining })
       : null;
-  const composedOfferFacts = renderAuthoritativeOfferFromDeal(deal, {
+  const composedOfferFacts = localizedDisplay.lockedOfferContent ?? renderAuthoritativeOfferFromDeal(deal, {
     title: displayTitle,
     description: displayDescription,
   });
+  const composedSupportingCopy = localizedDisplay.localizedCreative?.supportingCopy || displayDescription;
   const composedPresentation = buildDefaultAdPresentationSpec({
     imageAssetId: deal.poster_storage_path ?? posterUri ?? null,
     imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
@@ -664,7 +698,7 @@ export default function DealDetail() {
   });
   const composedCopy = buildApprovedAdCopy({
     headline: displayTitle,
-    supportingCopy: displayDescription,
+    supportingCopy: composedSupportingCopy,
     ctaLabel,
     fallbackHeadline: composedOfferFacts.primaryOfferLine,
   });

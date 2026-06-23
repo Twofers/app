@@ -16,10 +16,22 @@ import {
   supportedLocaleToAppLanguage,
   type SupportedLocale,
 } from "./supported-locales";
+import type { CustomerDealLocalization } from "./customer-deal-localizations";
+
+type LocalizedDealDisplayOfferVersionFields = {
+  ad_spec?: unknown;
+  adSpec?: unknown;
+};
 
 export type LocalizedDealDisplayFields = LocalizedDealFields & DealStructuredDisplayFields & {
   id?: string | null;
   business_id?: string | null;
+  ad_spec?: unknown;
+  adSpec?: unknown;
+  offer_version?: LocalizedDealDisplayOfferVersionFields | LocalizedDealDisplayOfferVersionFields[] | null;
+  offer_versions?: LocalizedDealDisplayOfferVersionFields | LocalizedDealDisplayOfferVersionFields[] | null;
+  customer_deal_localization?: CustomerDealLocalization | null;
+  customerDealLocalization?: CustomerDealLocalization | null;
   max_claims?: number | string | null;
   start_time?: string | null;
   end_time?: string | null;
@@ -36,12 +48,129 @@ export type LocalizedDealDisplay = {
   description: string;
   renderedLocale: SupportedLocale;
   localeResolutionSource: AdLocaleResolutionSource;
-  source: "localized_offer_renderer" | "legacy_localized_fields";
+  source: "approved_localization_storage" | "localized_offer_renderer" | "legacy_localized_fields";
   lockedOfferContent?: LocalizedLockedOfferContent;
+  localizedCreative?: CustomerDealLocalization;
 };
 
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function firstOfferVersion(deal: LocalizedDealDisplayFields): LocalizedDealDisplayOfferVersionFields | null {
+  const value = deal.offer_version ?? deal.offer_versions;
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && typeof candidate === "object" ? candidate : null;
+}
+
+function adSpecFromDeal(deal: LocalizedDealDisplayFields): unknown {
+  const version = firstOfferVersion(deal);
+  return deal.ad_spec ?? deal.adSpec ?? version?.ad_spec ?? version?.adSpec ?? null;
+}
+
+function translationStatus(value: unknown): CustomerDealLocalization["translationStatus"] | null {
+  if (value === "source_creative" || value === "persuasive_transcreation" || value === "deterministic_fallback") {
+    return value;
+  }
+  return null;
+}
+
+function qaDecision(value: unknown): CustomerDealLocalization["qaDecision"] | null {
+  if (value === "not_required" || value === "pass" || value === "repair" || value === "block" || value === "unavailable") {
+    return value;
+  }
+  return null;
+}
+
+function usableCustomerLocalization(
+  value: unknown,
+  locale: SupportedLocale,
+  dealId: string | null,
+): CustomerDealLocalization | null {
+  const row = record(value);
+  if (!row) return null;
+  const rowLocale = normalizeSupportedLocale(cleanText(row.locale));
+  const headline = cleanText(row.headline);
+  const localizationHash = cleanText(row.localizationHash ?? row.localization_hash);
+  const status = translationStatus(row.translationStatus ?? row.translation_status);
+  const decision = qaDecision(row.qaDecision ?? row.qa_decision);
+  if (rowLocale !== locale || !headline || !localizationHash || !status || !decision) return null;
+  if (decision !== "not_required" && decision !== "pass") return null;
+
+  return {
+    dealId: cleanText(row.dealId ?? row.deal_id) || dealId || "",
+    offerVersionId: cleanText(row.offerVersionId ?? row.offer_version_id) || null,
+    locale,
+    sourceLocale: normalizeSupportedLocale(cleanText(row.sourceLocale ?? row.source_locale)),
+    headline,
+    supportingCopy: cleanText(row.supportingCopy ?? row.supporting_copy) || null,
+    imageAltText: cleanText(row.imageAltText ?? row.image_alt_text) || null,
+    localizationHash,
+    localizationBundleHash: cleanText(row.localizationBundleHash ?? row.localization_bundle_hash) || null,
+    translationStatus: status,
+    qaDecision: decision,
+    qaReasonCodes: stringArray(row.qaReasonCodes ?? row.qa_reason_codes),
+    deterministicFallback: Boolean(row.deterministicFallback ?? row.deterministic_fallback ?? status === "deterministic_fallback"),
+    localeRendererVersion: cleanText(row.localeRendererVersion ?? row.locale_renderer_version) || null,
+    localizedTermSnapshot: row.localizedTermSnapshot ?? row.localized_term_snapshot,
+    localePresentationOverrides: row.localePresentationOverrides ?? row.locale_presentation_overrides,
+  };
+}
+
+function localizationFromAdSpec(
+  deal: LocalizedDealDisplayFields,
+  locale: SupportedLocale,
+): CustomerDealLocalization | null {
+  const adSpec = record(adSpecFromDeal(deal));
+  const localization = record(adSpec?.localization);
+  const localizations = record(localization?.localizations);
+  const approval = record(localization?.approval);
+  const approvedRowHashes = record(approval?.localizationRowHashes);
+  const row = usableCustomerLocalization(localizations?.[locale], locale, cleanText(deal.id) || null);
+  if (!row) return null;
+
+  const approvedRowHash = cleanText(approvedRowHashes?.[locale]);
+  const approvedBundleHash = cleanText(approval?.localizationBundleHash);
+  const bundleHash = cleanText(localization?.localizationBundleHash);
+  if (!approvedRowHash || approvedRowHash !== row.localizationHash) return null;
+  if (!approvedBundleHash || !bundleHash || approvedBundleHash !== bundleHash) return null;
+  return {
+    ...row,
+    localizationBundleHash: row.localizationBundleHash || bundleHash,
+    localeRendererVersion: row.localeRendererVersion || cleanText(localization?.localeRendererVersion) || null,
+    localizedTermSnapshot: row.localizedTermSnapshot ?? localization?.localizedTermSnapshot,
+    localePresentationOverrides: row.localePresentationOverrides ?? localization?.localePresentationOverrides,
+  };
+}
+
+function customerLocalizationFromDeal(
+  deal: LocalizedDealDisplayFields,
+  locale: SupportedLocale,
+): CustomerDealLocalization | null {
+  return (
+    usableCustomerLocalization(
+      deal.customer_deal_localization ?? deal.customerDealLocalization,
+      locale,
+      cleanText(deal.id) || null,
+    ) ?? localizationFromAdSpec(deal, locale)
+  );
+}
+
+function joinUniqueText(values: Array<string | null | undefined>): string {
+  const parts: string[] = [];
+  for (const value of values) {
+    const text = cleanText(value);
+    if (text && !parts.includes(text)) parts.push(text);
+  }
+  return parts.join(" ");
 }
 
 function numeric(value: unknown): number | null {
@@ -156,6 +285,18 @@ export function buildLocalizedDealDisplay(params: {
     const definition = buildOfferDefinitionFromDealDisplay(params.deal);
     if (definition) {
       const locked = renderLocalizedOfferFromDefinition(definition, { locale: params.locale });
+      const localizedCreative = customerLocalizationFromDeal(params.deal, params.locale);
+      if (localizedCreative) {
+        return {
+          title: localizedCreative.headline,
+          description: joinUniqueText([localizedCreative.supportingCopy, locked.primaryOfferLine, locked.termsLine]),
+          renderedLocale: params.locale,
+          localeResolutionSource: params.localeResolutionSource,
+          source: "approved_localization_storage",
+          lockedOfferContent: locked,
+          localizedCreative,
+        };
+      }
       return {
         title: locked.primaryOfferLine,
         description: locked.termsLine,

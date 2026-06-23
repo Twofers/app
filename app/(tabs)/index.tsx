@@ -54,6 +54,10 @@ import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { localizedDealTitle } from "@/lib/deal-localization";
 import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
 import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_FEED_BASE_SELECT,
@@ -198,6 +202,9 @@ export default function HomeScreen() {
   const [loadingBiz, setLoadingBiz] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [claimStatus, setClaimStatus] = useState<Record<string, { message: string; tone: "success" | "error" | "info" }>>({});
+  const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
+    () => new Map(),
+  );
   const [userClaimsByDeal, setUserClaimsByDeal] = useState<
     Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>
   >(() => new Map());
@@ -218,6 +225,14 @@ export default function HomeScreen() {
   dealsRef.current = deals;
   customerPreferredDealLocaleRef.current = customerPreferredDealLocale;
   customerLocaleResolutionEnabledRef.current = customerLocaleResolutionEnabled;
+  const customerDealLocalizationLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: null,
+      }).locale
+    : supportedLocaleOrDefault(i18n.language);
   // Keep the current segment readable inside the stable viewability callback below
   // (FlatList forbids changing onViewableItemsChanged/viewabilityConfig between renders).
   const feedSegmentRef = useRef(feedSegment);
@@ -311,6 +326,23 @@ export default function HomeScreen() {
       cancelled = true;
     };
   }, [deals]);
+
+  useEffect(() => {
+    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || deals.length === 0) {
+      setCustomerDealLocalizationsByDealId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealLocalizations(
+      deals.map((deal) => deal.id),
+      customerDealLocalizationLocale,
+    ).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalizationsByDealId(localizations);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerDealLocalizationLocale, customerLocaleResolutionEnabled, deals, localizedOfferRendererEnabled]);
 
   const loadUserClaims = useCallback(
     async (dealIds: string[]) => {
@@ -860,7 +892,9 @@ export default function HomeScreen() {
             enabledLocales: [supportedLocaleOrDefault(i18n.language)],
           };
       const localizedDisplay = buildLocalizedDealDisplay({
-        deal: item,
+        deal: customerDealLocalizationsByDealId.has(item.id)
+          ? { ...item, customer_deal_localization: customerDealLocalizationsByDealId.get(item.id) ?? null }
+          : item,
         locale: resolvedDisplayLocale.locale,
         localeResolutionSource: resolvedDisplayLocale.source,
         useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
@@ -909,10 +943,11 @@ export default function HomeScreen() {
                 text: theme.mutedText,
               };
       if (composedCustomerRendererEnabled) {
-        const offerFacts = renderAuthoritativeOfferFromDeal(item, {
+        const offerFacts = localizedDisplay.lockedOfferContent ?? renderAuthoritativeOfferFromDeal(item, {
           title: offerText,
           description: displayDescription,
         });
+        const supportingCopy = localizedDisplay.localizedCreative?.supportingCopy || displayDescription || t("consumerHome.tagline");
         const presentation = buildDefaultAdPresentationSpec({
           imageAssetId: item.poster_storage_path ?? posterUri ?? null,
           imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
@@ -922,7 +957,7 @@ export default function HomeScreen() {
         });
         const copy = buildApprovedAdCopy({
           headline: offerText,
-          supportingCopy: displayDescription || t("consumerHome.tagline"),
+          supportingCopy,
           ctaLabel: claimButtonTitle,
           fallbackHeadline: offerFacts.primaryOfferLine,
         });
@@ -1166,6 +1201,7 @@ export default function HomeScreen() {
       claimStatus,
       claimingDealId,
       claimCountsByDeal,
+      customerDealLocalizationsByDealId,
       doClaim,
       i18n.language,
       localizedOfferRendererEnabled,
