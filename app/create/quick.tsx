@@ -25,7 +25,6 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Banner } from "@/components/ui/banner";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
-  DancingPenguinProgressCard,
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { DealPreviewModal } from "@/components/deal-preview-modal";
@@ -663,12 +662,10 @@ export default function QuickDealExpress() {
 
             <View style={{ marginTop: Spacing.lg }}>
               {generating ? (
-                <DancingPenguinProgressCard
+                <PrimaryButton
                   title={t("createQuick.drafting")}
-                  message={photoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
-                  hint={t("createAi.generatingHint")}
-                  theme={theme}
-                  testID="quick-draft-penguin-progress"
+                  onPress={() => {}}
+                  disabled
                 />
               ) : (
                 <PrimaryButton

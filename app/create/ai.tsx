@@ -38,7 +38,6 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
-  DancingPenguinProgressCard,
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
@@ -3249,14 +3248,10 @@ export default function AiDealScreen() {
                 </Text>
               ) : null}
               {generating ? (
-                <DancingPenguinProgressCard
+                <PrimaryButton
                   title={t("createAi.generateWorking")}
-                  message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
-                  hint={t("createAi.generatingHint")}
-                  cancelLabel={t("createAi.cancel")}
-                  onCancel={cancelGeneration}
-                  theme={theme}
-                  testID="ai-draft-penguin-progress"
+                  onPress={() => {}}
+                  disabled
                 />
               ) : (
                 <PrimaryButton
