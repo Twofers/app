@@ -738,6 +738,74 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3h - Locale-specific presentation overrides
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-locale-presentation`.
+
+Safety checkpoint: `f051f8ab` (Multilingual Deals PR 3g independent semantic QA commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-locale-presentation.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-locale-presentation-resolver.ts`
+- `lib/ad-locale-presentation-resolver.test.ts`
+- `lib/ad-presentation-hash.ts`
+- `lib/ad-presentation-hash.test.ts`
+- `lib/ad-presentation-spec.ts`
+- `lib/ad-presentation-spec.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added the typed `AdPresentationSpec.localeOverrides` contract for safe per-locale template, text-panel, and supporting-copy decisions.
+- Normalized and validated locale overrides against supported locales, known template IDs, known text panels, boolean supporting-copy state, and bounded reason-code arrays.
+- Bound locale overrides into the presentation hash only when overrides are present, preserving existing hash behavior for presentations without overrides.
+- Added `resolveLocalePresentationOverrides()`, a deterministic resolver that consumes a verified localization bundle and existing text-fit estimator.
+- Kept overrides partial: locales that fit the base presentation do not get redundant override records.
+- Added deterministic guards for long U.S. Spanish copy, Korean/Hangul font metrics, exact offer overflow, supporting-copy removal, safe split-panel fallback, and screenshot-QA triggers.
+- Preserved image identity, image source type, offer facts, and creative mechanics across locale presentation resolution.
+
+## Acceptance criteria map
+
+- PR 3.8 locale-specific presentation resolver: Implemented as an unused deterministic resolver and typed presentation contract.
+- PR 3.9 localization storage and hashes: Partially improved only for presentation hash binding; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Not implemented in this slice.
+- Presentation acceptance tests: Added coverage for no-op base fit, long Spanish split panel, Korean font-metrics guard, exact-offer overflow screenshot trigger, image identity preservation, and locale-override hash changes.
+
+## Validation
+
+- `npx vitest run lib/ad-presentation-spec.test.ts lib/ad-presentation-hash.test.ts lib/ad-locale-presentation-resolver.test.ts lib/ad-text-fit.test.ts lib/ad-template-resolver.test.ts`: passed; 5 files, 20 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. No Supabase Function files were changed in this slice.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 161 files, 876 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3h-20260623`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- The resolver is not yet wired into native/customer rendering, owner previews, publish enforcement, approval binding, or persisted offer/ad versions.
+- Locale overrides are computed from deterministic text-fit heuristics; real-device screenshot QA is still required before broad Spanish or Korean rollout.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on localized copy, presentation policy, and representative screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3g - Independent semantic translation QA
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-independent-qa`.

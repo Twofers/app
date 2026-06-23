@@ -1,3 +1,8 @@
+import {
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from "./supported-locales";
+
 export type AdLayoutTemplateId =
   | "hero_image_overlay"
   | "split_offer_panel"
@@ -14,6 +19,13 @@ export type AdImageSourceType =
   | "ai_generated"
   | "approved_stock"
   | "deterministic_fallback";
+
+export type AdPresentationLocaleOverride = {
+  templateId: AdLayoutTemplateId;
+  textPanel: AdTextPanel;
+  showSupportingCopy: boolean;
+  resolutionReasonCodes: string[];
+};
 
 export type AdPresentationSpec = {
   specVersion: string;
@@ -39,6 +51,7 @@ export type AdPresentationSpec = {
   showQuantityRemaining: boolean;
   showTimeRemaining: boolean;
   resolutionReasonCodes: string[];
+  localeOverrides?: Partial<Record<SupportedLocale, AdPresentationLocaleOverride>>;
   rendererVersion: string;
 };
 
@@ -78,6 +91,14 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
 
+function cleanReasonCodes(values: readonly unknown[] | null | undefined): string[] {
+  return [...new Set((values ?? []).map(cleanText).filter(Boolean))];
+}
+
+function isReasonCodeArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => cleanText(item).length > 0);
+}
+
 function bounded01(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : NaN;
   if (!Number.isFinite(n)) return fallback;
@@ -98,6 +119,24 @@ function normalizeCrop(crop: AdPresentationSpec["crop"]): AdPresentationSpec["cr
   };
 }
 
+function normalizeLocaleOverrides(
+  overrides: Partial<Record<SupportedLocale, AdPresentationLocaleOverride>> | null | undefined,
+): Partial<Record<SupportedLocale, AdPresentationLocaleOverride>> | undefined {
+  if (!overrides) return undefined;
+  const out: Partial<Record<SupportedLocale, AdPresentationLocaleOverride>> = {};
+  for (const locale of SUPPORTED_LOCALES) {
+    const override = overrides[locale];
+    if (!override) continue;
+    out[locale] = {
+      templateId: AD_PRESENTATION_TEMPLATE_IDS.includes(override.templateId) ? override.templateId : "split_offer_panel",
+      textPanel: AD_PRESENTATION_TEXT_PANELS.includes(override.textPanel) ? override.textPanel : "solid_bottom",
+      showSupportingCopy: override.showSupportingCopy === true,
+      resolutionReasonCodes: cleanReasonCodes(override.resolutionReasonCodes),
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function buildDefaultAdPresentationSpec(params: {
   imageAssetId?: string | null;
   imageSourceType?: AdImageSourceType | null;
@@ -113,6 +152,7 @@ export function buildDefaultAdPresentationSpec(params: {
   showQuantityRemaining?: boolean;
   showTimeRemaining?: boolean;
   resolutionReasonCodes?: string[];
+  localeOverrides?: Partial<Record<SupportedLocale, AdPresentationLocaleOverride>> | null;
 }): AdPresentationSpec {
   const imageAssetId = cleanText(params.imageAssetId) || "deterministic-fallback";
   const imageSourceType = params.imageSourceType ?? (imageAssetId === "deterministic-fallback" ? "deterministic_fallback" : "merchant_original");
@@ -124,6 +164,7 @@ export function buildDefaultAdPresentationSpec(params: {
     (templateId === "split_offer_panel" ? "solid_bottom" : "bottom_gradient");
   const textZone = params.textZone ?? (textPanel === "solid_side" ? "right" : "bottom");
 
+  const localeOverrides = normalizeLocaleOverrides(params.localeOverrides);
   return {
     specVersion: AD_PRESENTATION_SPEC_VERSION,
     templateId,
@@ -146,7 +187,8 @@ export function buildDefaultAdPresentationSpec(params: {
     showLiveStatus: params.showLiveStatus ?? true,
     showQuantityRemaining: params.showQuantityRemaining ?? true,
     showTimeRemaining: params.showTimeRemaining ?? true,
-    resolutionReasonCodes: [...new Set((params.resolutionReasonCodes ?? []).map(cleanText).filter(Boolean))],
+    resolutionReasonCodes: cleanReasonCodes(params.resolutionReasonCodes),
+    ...(localeOverrides ? { localeOverrides } : {}),
     rendererVersion: AD_COMPOSED_CARD_RENDERER_VERSION,
   };
 }
@@ -206,6 +248,32 @@ export function validateAdPresentationSpec(value: unknown): AdPresentationValida
       spec.crop.y + spec.crop.height > 1
     ) {
       reasonCodes.push("INVALID_CROP");
+    }
+  }
+
+  if (spec.localeOverrides !== undefined) {
+    if (!spec.localeOverrides || typeof spec.localeOverrides !== "object" || Array.isArray(spec.localeOverrides)) {
+      reasonCodes.push("INVALID_LOCALE_OVERRIDES");
+    } else {
+      for (const [locale, override] of Object.entries(spec.localeOverrides)) {
+        if (!SUPPORTED_LOCALES.includes(locale as SupportedLocale)) reasonCodes.push("UNSUPPORTED_LOCALE_OVERRIDE");
+        if (!override || typeof override !== "object" || Array.isArray(override)) {
+          reasonCodes.push("INVALID_LOCALE_OVERRIDE");
+          continue;
+        }
+        if (!AD_PRESENTATION_TEMPLATE_IDS.includes((override as AdPresentationLocaleOverride).templateId)) {
+          reasonCodes.push("INVALID_LOCALE_OVERRIDE_TEMPLATE");
+        }
+        if (!AD_PRESENTATION_TEXT_PANELS.includes((override as AdPresentationLocaleOverride).textPanel)) {
+          reasonCodes.push("INVALID_LOCALE_OVERRIDE_TEXT_PANEL");
+        }
+        if (typeof (override as AdPresentationLocaleOverride).showSupportingCopy !== "boolean") {
+          reasonCodes.push("INVALID_LOCALE_OVERRIDE_SUPPORTING_COPY");
+        }
+        if (!isReasonCodeArray((override as AdPresentationLocaleOverride).resolutionReasonCodes)) {
+          reasonCodes.push("INVALID_LOCALE_OVERRIDE_REASONS");
+        }
+      }
     }
   }
 

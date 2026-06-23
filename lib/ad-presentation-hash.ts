@@ -60,5 +60,8 @@ export function createAdPresentationHash(input: AdPresentationHashInput): string
     specVersion: input.presentation.specVersion,
     rendererVersion: input.presentation.rendererVersion,
   };
+  if (input.presentation.localeOverrides) {
+    Object.assign(payload, { localeOverrides: input.presentation.localeOverrides });
+  }
   return `adp_${hashString(stablePresentationJson(payload))}`;
 }

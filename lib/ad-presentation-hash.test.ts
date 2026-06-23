@@ -43,6 +43,29 @@ describe("ad presentation hash", () => {
     );
   });
 
+  it("changes when locale presentation overrides change", () => {
+    const base = buildDefaultAdPresentationSpec({
+      imageAssetId: "deal-photos/cedar-latte.png",
+      imageSourceType: "merchant_original",
+      templateId: "hero_image_overlay",
+    });
+    const withLocaleOverride = buildDefaultAdPresentationSpec({
+      ...base,
+      localeOverrides: {
+        "es-US": {
+          templateId: "split_offer_panel",
+          textPanel: "solid_bottom",
+          showSupportingCopy: false,
+          resolutionReasonCodes: ["LONG_SPANISH_COPY_SAFE_SPLIT"],
+        },
+      },
+    });
+
+    expect(createAdPresentationHash({ presentation: base, offerFacts, copy })).not.toBe(
+      createAdPresentationHash({ presentation: withLocaleOverride, offerFacts, copy }),
+    );
+  });
+
   it("does not include live countdown or quantity state", () => {
     const presentation = buildDefaultAdPresentationSpec({
       imageAssetId: "deal-photos/cedar-latte.png",
