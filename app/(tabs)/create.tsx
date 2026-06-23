@@ -263,7 +263,7 @@ export default function CreateDeal() {
             </Text>
           </Pressable>
 
-          {/* ── More Tools (menu features) ── */}
+          {/* ── More Tools ── */}
           <Pressable
             onPress={toggleMoreTools}
             accessibilityRole="button"
@@ -300,7 +300,7 @@ export default function CreateDeal() {
                 <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
               </Pressable>
               <Pressable
-                onPress={() => router.push("/create/menu-offer" as Href)}
+                onPress={() => router.push("/create/menu" as Href)}
                 style={{
                   borderRadius: Radii.md,
                   padding: Spacing.md,
@@ -314,48 +314,8 @@ export default function CreateDeal() {
               >
                 <MaterialIcons name="restaurant-menu" size={22} color={theme.accentText} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuDealFastTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-scan" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="document-scanner" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.scanMenuTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-manager" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="menu-book" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuManagerTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuSubtitle")}</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
               </Pressable>

@@ -504,6 +504,8 @@
     "bizProfilePending": "Business profile found. Finalizing your business account record. You can still start creating a deal.",
     "errNameRequired": "Business name required.",
     "errCreateFailed": "Create business failed.",
+    "menuTitle": "Menu",
+    "menuSubtitle": "Crea ofertas, escanea articulos y administra tu menu guardado.",
     "menuDealFastTitle": "Crear desde mi menú",
     "menuDealFastSubtitle": "Elige articulos de tu menu guardado y genera un anuncio listo para publicar.",
     "quickDealTitle": "Quick Deal",

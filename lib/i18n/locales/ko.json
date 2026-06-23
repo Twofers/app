@@ -504,6 +504,8 @@
     "bizProfilePending": "Business profile found. Finalizing your business account record. You can still start creating a deal.",
     "errNameRequired": "Business name required.",
     "errCreateFailed": "Create business failed.",
+    "menuTitle": "Menu",
+    "menuSubtitle": "Create offers, scan items, and manage your saved menu.",
     "menuDealFastTitle": "내 메뉴로 딜 만들기",
     "menuDealFastSubtitle": "저장된 메뉴에서 항목을 고르고 바로 게시할 광고를 생성하세요.",
     "quickDealTitle": "Quick Deal",

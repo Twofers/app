@@ -66,6 +66,7 @@ export default function CreateLayout() {
       <Stack.Screen name="ai" options={{ title: t('createAi.titleScreen') }} />
       <Stack.Screen name="ai-compose" options={{ title: t('aiCompose.title') }} />
       <Stack.Screen name="reuse" options={{ title: t('reuseHub.title') }} />
+      <Stack.Screen name="menu" options={{ title: t("createHub.menuTitle") }} />
       <Stack.Screen name="menu-scan" options={{ title: t('menuScan.title') }} />
       <Stack.Screen name="menu-manager" options={{ title: t('menuManager.title') }} />
       <Stack.Screen name="menu-offer" options={{ title: t('menuOffer.title') }} />
