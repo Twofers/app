@@ -43,7 +43,7 @@ export default function CreateLayout() {
       <Redirect
         href={
           PAID_BILLING_ENABLED
-            ? ({ pathname: "/(tabs)/billing", params: { reason: "reactivate" } } as unknown as Href)
+            ? ({ pathname: "/(tabs)/account/billing", params: { reason: "reactivate" } } as unknown as Href)
             : "/(tabs)/account"
         }
       />

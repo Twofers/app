@@ -42,7 +42,6 @@ const renderSettingsTabIcon = createTabIconRenderer("gearshape.fill");
 const renderCreateTabIcon = createTabIconRenderer("plus.circle.fill");
 const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
 const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
-const renderBillingTabIcon = createTabIconRenderer("dollarsign");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
 const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <HapticTab {...props} />;
 
@@ -224,14 +223,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="billing"
-          options={{
-            title: t("tabs.billing"),
-            tabBarIcon: renderBillingTabIcon,
-            ...hideWhen(mode === "customer" || !PAID_BILLING_ENABLED || ownerPinLocked),
-          }}
-        />
-        <Tabs.Screen
           name="account"
           options={{
             title: t('tabs.account'),
@@ -239,9 +230,11 @@ export default function TabLayout() {
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
-        {/* FIX: billing/manage is a sub-route pushed from billing.tsx.
-            Without href:null, Expo Router auto-discovers it as a visible 5th
-            tab showing the raw route name "billing/manage". */}
+        <Tabs.Screen name="account/billing" options={{ href: null }} />
+        <Tabs.Screen name="account/billing/manage" options={{ href: null }} />
+        {/* Legacy billing routes redirect into Account. Keep them hidden so
+            old deep links never become tab-bar items. */}
+        <Tabs.Screen name="billing" options={{ href: null }} />
         <Tabs.Screen name="billing/manage" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
@@ -291,9 +284,15 @@ function TabModeRedirect({
   }, [segments]);
 
   const currentPath = useMemo(() => {
-    if (tab === null) return segments.join("/");
-    return tab === "index" ? "/(tabs)" : `/(tabs)/${tab}`;
-  }, [tab, segments]);
+    const tabsIdx = segments.map(String).indexOf("(tabs)");
+    if (tabsIdx === -1) return segments.join("/");
+    const tabPath = segments
+      .slice(tabsIdx + 1)
+      .map(String)
+      .filter(Boolean)
+      .join("/");
+    return !tabPath || tabPath === "index" ? "/(tabs)" : `/(tabs)/${tabPath}`;
+  }, [segments]);
 
   useEffect(() => {
     if (!ready || mode !== "business" || forceBypass || ownerPinLocked) {

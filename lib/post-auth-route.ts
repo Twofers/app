@@ -75,7 +75,7 @@ export async function resolvePostAuthReplaceHref(params: {
       await savePendingDeepLink(next);
       return "/business-setup" as Href;
     }
-    if (next.startsWith("/(tabs)/billing")) {
+    if (next.startsWith("/(tabs)/billing") || next.startsWith("/(tabs)/account/billing")) {
       return next as Href;
     }
     return "/(tabs)/create" as Href;

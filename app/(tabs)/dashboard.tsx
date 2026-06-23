@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -1230,7 +1230,7 @@ export default function BusinessDashboard() {
           />
         </CardShell>
         {billingBlocked ? (
-          <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
+          <Pressable onPress={() => router.push("/(tabs)/account/billing" as Href)} accessibilityRole="button">
             <CardShell variant="muted">
               <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
                 {t("offersDashboard.billingHintShort")}

@@ -22,7 +22,7 @@ describe("billing trial start ownership", () => {
   });
 
   it("does not expose the old no-card owner trial RPC from billing UI", () => {
-    const source = readRepoFile("app/(tabs)/billing.tsx");
+    const source = readRepoFile("app/(tabs)/account/billing.tsx");
     expect(source).not.toMatch(/start_location_trial/);
     expect(source).toMatch(/trial_acknowledged/);
     expect(source).toMatch(/stripe-expire-pending-checkout/);

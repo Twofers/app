@@ -205,7 +205,7 @@ export default function CreateDeal() {
             title={t("billing.goToBilling")}
             onPress={() =>
               router.replace({
-                pathname: PAID_BILLING_ENABLED ? "/(tabs)/billing" : "/(tabs)/account",
+                pathname: PAID_BILLING_ENABLED ? "/(tabs)/account/billing" : "/(tabs)/account",
                 params: PAID_BILLING_ENABLED ? { reason: "reactivate" } : {},
               } as unknown as Href)
             }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
-import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { BrandedSwitch } from "@/components/ui/branded-switch";
@@ -10,21 +10,21 @@ import {
 } from "@/lib/push-token";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../../lib/supabase";
-import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
-import { useBusiness } from "../../hooks/use-business";
-import { Banner } from "../../components/ui/banner";
+import { supabase } from "@/lib/supabase";
+import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
+import { useBusiness } from "@/hooks/use-business";
+import { Banner } from "@/components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
-import { PrimaryButton } from "../../components/ui/primary-button";
-import { SecondaryButton } from "../../components/ui/secondary-button";
-import type { AppLocale } from "../../lib/i18n/config";
-import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
-import { useTabMode } from "../../lib/tab-mode";
-import { LegalExternalLinks } from "../../components/legal-external-links";
-import { deleteUserAccount } from "../../lib/functions";
-import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
-import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
+import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import type { AppLocale } from "@/lib/i18n/config";
+import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { useTabMode } from "@/lib/tab-mode";
+import { LegalExternalLinks } from "@/components/legal-external-links";
+import { deleteUserAccount } from "@/lib/functions";
+import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -942,7 +942,7 @@ export default function AccountScreen() {
 
           {PAID_BILLING_ENABLED && tabMode === "business" && businessId ? (
             <Pressable
-              onPress={() => router.push("/(tabs)/billing" as Href)}
+              onPress={() => router.push("/(tabs)/account/billing" as Href)}
               accessibilityRole="button"
             >
               <CardShell variant="elevated">
