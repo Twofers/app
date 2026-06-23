@@ -1148,6 +1148,61 @@ Revert this commit, or remove the composed-card v4 flags from the `development`,
 
 ---
 
+## Composed Ad Card PR 3e - Screenshot QA publish snapshot policy
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3e-screenshot-qa-snapshot`.
+
+Safety checkpoint: `a66d1cd4` (Composed Ad Card PR 3d commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/offer-version-publish.ts`
+- `lib/offer-version-publish.test.ts`
+- `lib/offer-version-publish-source.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `buildComposedScreenshotQaSnapshot()` next to the versioned publish helper so the client publish payload has one shared policy for `required`, `triggerCodes`, and `decision`.
+- Wired AI Create to derive `selectedComposedScreenshotQaRequired` and the publish `ad_spec.composedCard.screenshotQa` payload from the same snapshot.
+- Preserved existing behavior: screenshot QA is required only when the screenshot-QA flag is enabled and deterministic composite QA says the card should be reviewed; otherwise trigger codes are recorded but publish is not blocked by screenshot QA.
+- Added tests for flag-disabled and flag-enabled snapshot behavior on a deterministic repair-trigger card.
+- Added a source guard so AI Create keeps using the shared snapshot helper instead of rebuilding screenshot-QA payloads inline.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/offer-version-publish.test.ts lib/offer-version-publish-source.test.ts lib/ad-composite-qa.test.ts supabase/functions/_shared/publish-offer-version-function.test.ts`: passed; 4 files, 17 tests.
+- `npm run test`: passed; 152 files, 822 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3e" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- This does not implement the screenshot QA runner; it only centralizes the publish snapshot contract for the existing deterministic trigger.
+- `EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED` remains unset in internal and production EAS profiles until a runner exists.
+- Hosted publish enforcement still requires Edge Function redeploys and hosted environment configuration before production behavior changes.
+- No build was created, run, submitted, or released in this slice.
+- Real device testing was not performed in this local Windows pass.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

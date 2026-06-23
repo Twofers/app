@@ -12,6 +12,7 @@ import { buildLockedOfferContent } from "./authoritative-offer-renderer";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 import {
   buildAuthoritativeDealDisplayCopy,
+  buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
@@ -171,5 +172,55 @@ describe("offer version publish client helpers", () => {
     expect(spec.composedCard?.alternateTemplateIds).toEqual(["hero_image_overlay"]);
     expect(spec.composedCard?.merchantStyleOverrideUsed).toBe(true);
     expect(spec.composedCard?.compositeQa.decision).toBe("pass");
+  });
+
+  it("builds screenshot QA publish snapshots from deterministic composite triggers", () => {
+    const definition = buildDefinition();
+    const presentation = buildDefaultAdPresentationSpec({
+      imageAssetId: "biz/busy.png",
+      imageSourceType: "ai_generated",
+      templateId: "hero_image_overlay",
+    });
+    const offerFacts = buildLockedOfferContent({
+      primaryOfferLine: definition.canonicalOfferLine,
+      termsLine: definition.disclosureLine,
+    });
+    const copy = buildApprovedAdCopy({
+      headline: "Coffee tastes better together",
+      supportingCopy: "Bring a friend",
+      ctaLabel: "Claim deal",
+      fallbackHeadline: offerFacts.primaryOfferLine,
+    });
+    const compositeQa = runDeterministicAdCompositeQa({
+      offerFacts,
+      copy,
+      merchant: { name: definition.merchantName, locationName: definition.locationName },
+      presentation,
+      liveState: {
+        status: "live",
+        statusLabel: "Live now",
+        quantityRemainingLabel: "12 left",
+        timeRemainingLabel: "Today",
+        claimAvailable: true,
+      },
+      surface: "merchant_preview",
+      imageUri: "https://example.com/busy.png",
+      selectedImageAssetId: "biz/busy.png",
+      imageSafeZoneConfidence: 0.42,
+    });
+
+    expect(compositeQa.decision).toBe("repair");
+    const disabledSnapshot = buildComposedScreenshotQaSnapshot(compositeQa, false);
+    expect(disabledSnapshot).toEqual({
+      required: false,
+      triggerCodes: ["LOW_SAFE_ZONE_CONFIDENCE", "BORDERLINE_SAFE_ZONE_CONFIDENCE"],
+      decision: "not_run",
+    });
+    const enabledSnapshot = buildComposedScreenshotQaSnapshot(compositeQa, true);
+    expect(enabledSnapshot).toEqual({
+      required: true,
+      triggerCodes: ["LOW_SAFE_ZONE_CONFIDENCE", "BORDERLINE_SAFE_ZONE_CONFIDENCE"],
+      decision: "not_run",
+    });
   });
 });

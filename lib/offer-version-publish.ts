@@ -4,7 +4,7 @@ import {
   type AdSpecV1,
   type AdSpecSource,
 } from "./ad-spec";
-import type { AdCompositeQaResult } from "./ad-composite-qa";
+import { shouldRunCompositeScreenshotQa, type AdCompositeQaResult } from "./ad-composite-qa";
 import type { AdPresentationSpec } from "./ad-presentation-spec";
 import type { OfferDefinitionV1 } from "./offer-definition";
 import { EDGE_FN_TIMEOUT_DEFAULT_MS } from "@/constants/timing";
@@ -20,11 +20,13 @@ export type OfferVersionPublishComposedCardSpec = {
   alternateTemplateIds: AdPresentationSpec["templateId"][];
   merchantStyleOverrideUsed: boolean;
   compositeQa: AdCompositeQaResult;
-  screenshotQa: {
-    required: boolean;
-    triggerCodes: string[];
-    decision: "not_run" | "pass" | "block" | "unavailable";
-  };
+  screenshotQa: OfferVersionPublishScreenshotQaSnapshot;
+};
+
+export type OfferVersionPublishScreenshotQaSnapshot = {
+  required: boolean;
+  triggerCodes: string[];
+  decision: "not_run" | "pass" | "block" | "unavailable";
 };
 
 export type OfferVersionPublishAdSpec = AdSpecV1 & {
@@ -118,6 +120,17 @@ export function createPublishIdempotencyKey(scope: "create_ai" | "create_quick")
       ? randomUUID.call(globalThis.crypto)
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   return `${scope}:${id}`;
+}
+
+export function buildComposedScreenshotQaSnapshot(
+  compositeQa: AdCompositeQaResult,
+  screenshotQaEnabled: boolean,
+): OfferVersionPublishScreenshotQaSnapshot {
+  return {
+    required: screenshotQaEnabled && shouldRunCompositeScreenshotQa(compositeQa),
+    triggerCodes: [...new Set(compositeQa.screenshotQaTriggerCodes)],
+    decision: "not_run",
+  };
 }
 
 export function buildOfferVersionPublishAdSpec(

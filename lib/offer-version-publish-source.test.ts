@@ -13,6 +13,7 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).toMatch(/selectedComposedPresentationHash/);
     expect(fullCreateSource).toMatch(/approvedComposedPresentationHash/);
     expect(fullCreateSource).toMatch(/runDeterministicAdCompositeQa/);
+    expect(fullCreateSource).toMatch(/buildComposedScreenshotQaSnapshot/);
     expect(fullCreateSource).toMatch(/composedCardPublishSpec/);
     expect(fullCreateSource).toMatch(/composedCard: composedCardPublishSpec/);
     expect(fullCreateSource).toMatch(/errPresentationApprovalRequired/);

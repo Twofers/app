@@ -114,7 +114,6 @@ import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
 import { resolveAdPresentation } from "@/lib/ad-template-resolver";
 import {
   runDeterministicAdCompositeQa,
-  shouldRunCompositeScreenshotQa,
   type AdCompositeQaResult,
 } from "@/lib/ad-composite-qa";
 import type { SourceAwareImageQaResult } from "@/lib/quick-deal-image-qa";
@@ -145,6 +144,7 @@ import {
 } from "../../lib/ai-compose-offer";
 import {
   buildAuthoritativeDealDisplayCopy,
+  buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
@@ -2541,11 +2541,7 @@ export default function AiDealScreen() {
               .map((spec) => spec.templateId),
             merchantStyleOverrideUsed: composedStyleIndex > 0,
             compositeQa: selectedComposedCompositeQa,
-            screenshotQa: {
-              required: selectedComposedScreenshotQaRequired,
-              triggerCodes: selectedComposedCompositeQa.screenshotQaTriggerCodes,
-              decision: "not_run" as const,
-            },
+            screenshotQa: selectedComposedScreenshotQaSnapshot,
           }
         : null;
       const allowTextOnlyPoster =
@@ -2930,8 +2926,11 @@ export default function AiDealScreen() {
     selectedImageAssetId: currentAdStoragePath ?? originalStoragePath ?? selectedComposedPresentation.imageAssetId,
     imageSafeZoneConfidence: composedImageSafeZones.confidence,
   });
-  const selectedComposedScreenshotQaRequired =
-    composedScreenshotQaEnabled && shouldRunCompositeScreenshotQa(selectedComposedCompositeQa);
+  const selectedComposedScreenshotQaSnapshot = buildComposedScreenshotQaSnapshot(
+    selectedComposedCompositeQa,
+    composedScreenshotQaEnabled,
+  );
+  const selectedComposedScreenshotQaRequired = selectedComposedScreenshotQaSnapshot.required;
   const composedPresentationApprovalMatches =
     approvedComposedPresentationHash === selectedComposedPresentationHash &&
     selectedComposedCompositeQa.decision !== "block" &&
