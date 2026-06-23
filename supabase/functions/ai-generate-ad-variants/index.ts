@@ -1235,10 +1235,10 @@ function detectedItemText(value: unknown): string {
     .toLowerCase();
 }
 
-async function findStockImageFallback(params: {
+async function findStockImageFallbacks(params: {
   admin: SupabaseClient;
   requiredVisualItems: readonly string[];
-}): Promise<string | null> {
+}): Promise<string[]> {
   try {
     const { data, error } = await params.admin
       .from("business_media_assets")
@@ -1250,7 +1250,7 @@ async function findStockImageFallback(params: {
       .eq("commercial_ad_use_allowed", true)
       .order("quality_score", { ascending: false })
       .limit(25);
-    if (error || !Array.isArray(data)) return null;
+    if (error || !Array.isArray(data)) return [];
     const required = params.requiredVisualItems.map((item) => item.trim().toLowerCase()).filter(Boolean);
     const ranked = data
       .map((row) => {
@@ -1263,9 +1263,9 @@ async function findStockImageFallback(params: {
       })
       .filter((row) => row.storagePath)
       .sort((left, right) => right.score - left.score);
-    return ranked[0]?.storagePath ?? null;
+    return ranked.map((row) => row.storagePath);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -1278,7 +1278,6 @@ async function inspectGeneratedImageForOffer(params: {
   sourceType?: AdImageQaSourceType;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
-  if (requiredVisualItems.length === 0) return null;
   const geminiFallback = () =>
     inspectGeneratedImageForOfferWithGemini({
       geminiApiKey: params.geminiApiKey,
@@ -1538,24 +1537,6 @@ async function sourceAwareQaForImageBytes(params: {
   merchantOverrideAcknowledged?: boolean;
 }): Promise<SourceAwareImageQaResult> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
-  if (requiredVisualItems.length === 0) {
-    return normalizeSourceAwareImageQaResult({
-      raw: {
-        all_required_items_present: true,
-        items: [],
-        missing_items: [],
-        has_readable_text: false,
-        has_forbidden_logo_or_brand: false,
-        has_qr_code: false,
-        has_unrelated_mascot_or_animal: false,
-        forbidden_elements: [],
-        notes: "No required visual items for this offer.",
-      },
-      requiredVisualItems: [],
-      sourceType: params.sourceType,
-      merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
-    });
-  }
   const raw = await inspectGeneratedImageForOffer({
     openAiKey: params.openAiKey,
     geminiApiKey: params.geminiApiKey,
@@ -1570,6 +1551,87 @@ async function sourceAwareQaForImageBytes(params: {
     sourceType: params.sourceType,
     merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
   });
+}
+
+async function fetchApprovedStockImageBytes(params: {
+  admin: SupabaseClient;
+  stockPath: string;
+}): Promise<Uint8Array | null> {
+  const { data: signed, error: signedErr } = await params.admin.storage
+    .from("deal-photos")
+    .createSignedUrl(params.stockPath, 60 * 60);
+  if (signedErr || !signed?.signedUrl) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_signed_url_failed",
+        err: signedErr?.message?.slice(0, 200),
+      }),
+    );
+    return null;
+  }
+
+  try {
+    const fetched = await fetch(signed.signedUrl);
+    if (!fetched.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "stock_fetch_failed", status: fetched.status }));
+      return null;
+    }
+    return new Uint8Array(await fetched.arrayBuffer());
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "stock_fetch_error", errorCode: "FETCH_ERROR" }));
+    return null;
+  }
+}
+
+async function qaApprovedStockFallback(params: {
+  admin: SupabaseClient;
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  stockPath: string;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+}): Promise<ImageQaTelemetry | null> {
+  const imageBytes = await fetchApprovedStockImageBytes({
+    admin: params.admin,
+    stockPath: params.stockPath,
+  });
+  if (!imageBytes) {
+    const sourceAware = unavailableSourceAwareImageQaResult({ sourceType: "approved_stock" });
+    const telemetry = imageQaTelemetryFromSourceAware(sourceAware, 0);
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_image_qa_blocked",
+        decision: telemetry.decision,
+        hardFailReasons: telemetry.hardFailReasons,
+      }),
+    );
+    return null;
+  }
+
+  const sourceAware = await sourceAwareQaForImageBytes({
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    imageBytes,
+    requiredVisualItems: params.requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: "approved_stock",
+  });
+  const telemetry = imageQaTelemetryFromSourceAware(sourceAware, 1);
+  if (shouldFailClosedForImageQa(sourceAware)) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_image_qa_blocked",
+        decision: telemetry.decision,
+        hardFailReasons: telemetry.hardFailReasons.slice(0, 8),
+        missingItems: telemetry.missingItems.slice(0, 8),
+      }),
+    );
+    return null;
+  }
+  return telemetry;
 }
 
 type OpenAiProducedImage = {
@@ -1880,26 +1942,38 @@ function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase
 
 async function produceFallbackImage(params: {
   admin: SupabaseClient;
+  openAiKey: string;
+  geminiApiKey?: string | null;
   prompt: string | null;
-  qa: ImageQaTelemetry;
   requiredVisualItems: readonly string[];
   imageProviderConfig: AiImageProviderConfig;
+  costContext: AiCostContext;
   sourcePhotoPath?: string | null;
   editMode?: MerchantImageEditMode;
 }): Promise<ProducedImage> {
   if (params.imageProviderConfig.stockFallbackEnabled) {
-    const stockPath = await findStockImageFallback({
+    const stockPaths = await findStockImageFallbacks({
       admin: params.admin,
       requiredVisualItems: params.requiredVisualItems,
     });
-    if (stockPath) {
+    const maxStockQaCandidates = Math.max(1, Math.min(envNumber("AI_STOCK_QA_CANDIDATE_LIMIT", 3), 10));
+    for (const stockPath of stockPaths.slice(0, maxStockQaCandidates)) {
+      const stockQa = await qaApprovedStockFallback({
+        admin: params.admin,
+        openAiKey: params.openAiKey,
+        geminiApiKey: params.geminiApiKey,
+        stockPath,
+        requiredVisualItems: params.requiredVisualItems,
+        costContext: params.costContext,
+      });
+      if (!stockQa) continue;
       return withImageSelection(
         {
           posterStoragePath: stockPath,
           source: "stock",
           treatment: null,
           prompt: params.prompt,
-          qa: skippedImageQaTelemetry("approved_stock"),
+          qa: stockQa,
           provider: "stock",
           model: null,
           estimatedCostUsd: 0,
@@ -1980,10 +2054,12 @@ async function produceImage(params: {
     }
     return produceFallbackImage({
       admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       prompt: withMetadata.prompt,
-      qa: withMetadata.qa,
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
       sourcePhotoPath: params.photoPath,
       editMode: params.imageEditMode,
     });
@@ -1992,10 +2068,12 @@ async function produceImage(params: {
   if (params.imageSourceMode === "approved_stock") {
     return produceFallbackImage({
       admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       prompt: null,
-      qa: skippedImageQaTelemetry("approved_stock"),
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
       sourcePhotoPath: null,
       editMode: "none",
     });
@@ -2027,10 +2105,12 @@ async function produceImage(params: {
   if (params.imageProviderConfig.primaryProvider === "stock") {
     return produceFallbackImage({
       admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       prompt: null,
-      qa: skippedImageQaTelemetry("approved_stock"),
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
       sourcePhotoPath: params.photoPath,
       editMode: params.imageEditMode,
     });
@@ -2374,10 +2454,12 @@ async function produceImage(params: {
 
   return produceFallbackImage({
     admin: params.admin,
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
     prompt,
-    qa,
     requiredVisualItems,
     imageProviderConfig: params.imageProviderConfig,
+    costContext: params.costContext,
     sourcePhotoPath: params.photoPath,
     editMode: params.imageEditMode,
   });

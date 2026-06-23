@@ -2535,3 +2535,65 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ae - Apply QA to approved stock fallback
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `5604d70a`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`
+- `lib/quick-deal-image-qa.ts`
+- `lib/quick-deal-image-qa.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Changed approved-stock fallback selection from skipped QA to source-aware image QA.
+- Ranked approved stock candidates are now checked in order, capped by `AI_STOCK_QA_CANDIDATE_LIMIT` with a default of 3 and maximum of 10.
+- Stock assets are fetched through signed storage URLs, inspected as `approved_stock`, and accepted only when source-aware QA does not block.
+- If stock bytes cannot be fetched, QA is unavailable, required items are missing, or forbidden elements are found, that stock asset is skipped and the path falls back to the next stock candidate or deterministic copy-only fallback.
+- Kept deterministic fallback as the only image source that intentionally skips vision QA.
+- Removed the zero-required-items QA short-circuit so generated, AI-edited, and stock visuals can still be checked for forbidden text, logos, QR codes, mascots, and unrelated props even when no required item is inferred.
+- Made the shared image-QA prompt source-neutral instead of calling every checked image a generated cafe image.
+
+## Acceptance criteria map
+
+39. Generated images missing required items fail or regenerate: Preserved; generated image QA still blocks and retries.
+40. Stock fallbacks receive applicable QA: Implemented locally; approved stock now receives source-aware QA before being accepted.
+41. Both QA providers unavailable triggers fallback for generated/edited/stock sources: Improved; approved stock now fails closed on QA outage and falls back to another stock candidate or copy-only.
+43. No blank image states are possible: Preserved; if stock cannot pass QA, deterministic copy-only fallback remains available.
+45. OpenAI fallback image prompts match stronger Gemini restrictions: Preserved; this slice only changes QA/fallback acceptance.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/quick-deal-image-qa.test.ts supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`: passed, 2 files / 18 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 771 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ae-20260622-1900`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production uses the new stock QA behavior.
+- Stock QA now inspects up to the configured candidate cap; if all top candidates fail, the system intentionally uses deterministic copy-only fallback instead of passing an unchecked image.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

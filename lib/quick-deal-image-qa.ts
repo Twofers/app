@@ -95,7 +95,7 @@ function cleanItem(value: unknown): string {
 export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string[]): string {
   const items = requiredVisualItems.map(cleanItem).filter(Boolean);
   return [
-    "Inspect this generated cafe deal image.",
+    "Inspect this deal image.",
     "Check only whether the required offer items are visibly present and prominent enough to understand the deal.",
     `Required items: ${items.join(", ")}.`,
     "Also check for forbidden elements: any readable text, letters, numbers, discount copy, business/app names, menu boards, signs, prices, coupons, QR codes, logos, brand marks, watermark-like marks, mascots, cartoon characters, animals, app mascots, or unrelated prop characters.",

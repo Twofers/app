@@ -64,4 +64,41 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     expect(source).toMatch(/customEditInstruction\.instruction/);
     expect(source).toMatch(/imageEditMode === "custom"\s*\?\s*"studiopolish"/);
   });
+
+  it("runs source-aware QA before accepting approved stock fallback", () => {
+    const fallbackIndex = source.indexOf("async function produceFallbackImage(");
+    const produceImageIndex = source.indexOf("async function produceImage(");
+    const helperIndex = source.indexOf("async function qaApprovedStockFallback(");
+
+    expect(helperIndex).toBeGreaterThan(-1);
+    expect(fallbackIndex).toBeGreaterThan(helperIndex);
+    expect(produceImageIndex).toBeGreaterThan(fallbackIndex);
+
+    const helperBlock = source.slice(helperIndex, fallbackIndex);
+    expect(helperBlock).toMatch(/sourceType:\s*"approved_stock"/);
+    expect(helperBlock).toMatch(/fetchApprovedStockImageBytes/);
+    expect(helperBlock).toMatch(/sourceAwareQaForImageBytes/);
+    expect(helperBlock).toMatch(/shouldFailClosedForImageQa\(sourceAware\)/);
+
+    const fallbackBlock = source.slice(fallbackIndex, produceImageIndex);
+    expect(fallbackBlock).toMatch(/findStockImageFallbacks/);
+    expect(fallbackBlock).toMatch(/AI_STOCK_QA_CANDIDATE_LIMIT/);
+    expect(fallbackBlock).toMatch(/for \(const stockPath of stockPaths\.slice\(0, maxStockQaCandidates\)\)/);
+    expect(fallbackBlock).toMatch(/qaApprovedStockFallback/);
+    expect(fallbackBlock).toMatch(/qa:\s*stockQa/);
+    expect(fallbackBlock).not.toMatch(/skippedImageQaTelemetry\("approved_stock"\)/);
+  });
+
+  it("keeps vision QA active even when no required visual items are inferred", () => {
+    const inspectIndex = source.indexOf("async function inspectGeneratedImageForOffer(");
+    const geminiHelperIndex = source.indexOf("async function inspectGeneratedImageForOfferWithGemini(");
+    const sourceAwareIndex = source.indexOf("async function sourceAwareQaForImageBytes(");
+    const stockFetchIndex = source.indexOf("async function fetchApprovedStockImageBytes(");
+
+    const inspectBlock = source.slice(inspectIndex, geminiHelperIndex);
+    const sourceAwareBlock = source.slice(sourceAwareIndex, stockFetchIndex);
+
+    expect(inspectBlock).not.toMatch(/requiredVisualItems\.length === 0\)\s*return null/);
+    expect(sourceAwareBlock).not.toMatch(/requiredVisualItems\.length === 0/);
+  });
 });

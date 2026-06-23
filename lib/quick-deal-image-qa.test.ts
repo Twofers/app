@@ -118,6 +118,17 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/latte/i);
   });
 
+  it("adds source-aware prompt guidance for approved stock", () => {
+    const prompt = buildAdImageQaPrompt({
+      sourceType: "approved_stock",
+      requiredVisualItems: ["latte"],
+    });
+
+    expect(prompt).toMatch(/approved stock media/i);
+    expect(prompt).toMatch(/must still match the offer items/i);
+    expect(prompt).toMatch(/latte/i);
+  });
+
   it("treats missing prominence as a merchant-original warning", () => {
     const result = normalizeSourceAwareImageQaResult({
       raw: normalizeQuickDealImageQaResult(
@@ -169,8 +180,34 @@ describe("quick deal image QA", () => {
     expect(shouldFailClosedForImageQa(result)).toBe(true);
   });
 
-  it("fails closed on generated QA outage but allows merchant-original acknowledgement", () => {
+  it("blocks approved stock images with missing required items", () => {
+    const result = normalizeSourceAwareImageQaResult({
+      raw: normalizeQuickDealImageQaResult(
+        {
+          all_required_items_present: false,
+          items: [{ item: "latte", present: false, prominent: false }],
+          missing_items: ["latte"],
+          has_readable_text: false,
+          has_forbidden_logo_or_brand: false,
+          has_qr_code: false,
+          has_unrelated_mascot_or_animal: false,
+          forbidden_elements: [],
+          notes: "Stock image shows a pastry, not a latte.",
+        },
+        ["latte"],
+      ),
+      requiredVisualItems: ["latte"],
+      sourceType: "approved_stock",
+    });
+
+    expect(result.decision).toBe("block");
+    expect(result.hardFailReasons).toEqual(["MISSING_REQUIRED_ITEM:LATTE"]);
+    expect(shouldFailClosedForImageQa(result)).toBe(true);
+  });
+
+  it("fails closed on generated and stock QA outage but allows merchant-original acknowledgement", () => {
     const generated = unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" });
+    const stock = unavailableSourceAwareImageQaResult({ sourceType: "approved_stock" });
     const original = unavailableSourceAwareImageQaResult({
       sourceType: "merchant_original",
       merchantOverrideAcknowledged: true,
@@ -178,6 +215,8 @@ describe("quick deal image QA", () => {
 
     expect(generated.decision).toBe("block");
     expect(shouldFailClosedForImageQa(generated)).toBe(true);
+    expect(stock.decision).toBe("block");
+    expect(shouldFailClosedForImageQa(stock)).toBe(true);
     expect(original.decision).toBe("unavailable");
     expect(original.merchantOverrideAllowed).toBe(true);
     expect(original.merchantOverrideAcknowledged).toBe(true);
