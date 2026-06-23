@@ -2946,3 +2946,60 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4al - Route image QA through shared provider router
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `7a946027`.
+
+Deployment actions: Edge Function redeploy required for hosted behavior to change; not performed here.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the ad-variant function's inline OpenAI Responses and Gemini vision QA HTTP calls with the shared structured provider router using `operation: "image_qa"` and `imageInputs`.
+- Preserved OpenAI as the primary image QA provider and kept Gemini fallback behind `AI_VISION_FALLBACK_ENABLED` plus `AI_VISION_FALLBACK_PROVIDER=gemini`.
+- Routed image QA provider telemetry through `logTextProviderAttempts`, matching the rest of the shared text-provider paths.
+- Updated source guards so future changes keep image QA on the shared router and confirm both shared providers support structured image inputs.
+- Refreshed the current-state audit to remove the stale direct `responses` / missing-provider-abstraction wording.
+
+## Acceptance criteria map
+
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Ad-variant image QA now uses the shared provider router rather than function-local provider calls.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `.\node_modules\.bin\vitest.cmd run supabase\functions\_shared\ai-generate-ad-variants-vision-qa-source.test.ts`: passed; 7 tests.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 138 files, 775 tests.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4al-20260622-2006`: passed with the known `country-flag-icons` package export warnings.
+- `npm run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 128 Edge Function files failed for that same missing-command reason.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- Hosted behavior still requires redeploying the changed Edge Function; deployment is a hard gate and was not performed.
+- The image QA flow is still synchronous and quality-check results are not persisted as first-class rows.
+- Local Deno Edge Function typechecking remains unavailable in this Windows environment until `deno` is installed.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

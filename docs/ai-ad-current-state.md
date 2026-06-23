@@ -197,7 +197,7 @@ Stages:
 - Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
-- Image QA: `responses` with JSON schema for generated images that must show multiple required items.
+- Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, OpenAI primary, and Gemini fallback only when `AI_VISION_FALLBACK_ENABLED=true`.
 
 Validation/fallback:
 
@@ -249,7 +249,7 @@ Current image behavior:
 - Uploaded original photo can be used as-is.
 - Uploaded photo can be enhanced with `touchup`, `cleanbg`, or `studiopolish`.
 - No-photo ad generation uses a generated food/product image.
-- Generated image QA checks required items for multi-item offers, uses OpenAI vision first, can fall back to Gemini vision when `AI_VISION_FALLBACK_ENABLED=true`, and may regenerate once.
+- Generated image QA checks required items for multi-item offers through the shared structured provider router, uses OpenAI vision first, can fall back to Gemini vision when `AI_VISION_FALLBACK_ENABLED=true`, and may regenerate once.
 - The active ad image prompt forbids text, logos, labels, signage, overlays, and QR codes.
 
 Gaps:
@@ -316,7 +316,7 @@ Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-on
 
 Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents the Gemini text fallback, independent judge, image generation/edit data flow, sensitive data exclusions, and the public privacy/subprocessor activation gate. Text fallback must remain hosted with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
 
-Image QA fallback follow-up: generated and AI-edited image QA now tries Gemini multimodal QA behind `AI_VISION_FALLBACK_ENABLED=true` after OpenAI vision failure. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
+Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It tries Gemini multimodal QA behind `AI_VISION_FALLBACK_ENABLED=true` after OpenAI vision failure. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
 
 Recommended baseline queries once Dan grants live read access:
 
@@ -342,7 +342,7 @@ AI and quality gaps:
 - Legacy `ai-create-deal` no longer contains a re-enableable generation-plus-insert path; it returns HTTP 410 only.
 - Legacy `ai-compose-offer` poster mode is disabled so it cannot bake critical text into generated pixels.
 - Main copy validation is strong for offer mechanics, but there is no full `AdQualityService` with persisted hard-gate results and soft scores.
-- Gemini vision QA fallback exists for the ad-variant image path, but it is still synchronous and flag-gated rather than a dedicated provider abstraction shared across all vision features.
+- Vision QA for the ad-variant image path uses the shared provider abstraction, but it is still synchronous, flag-gated, and not persisted as a first-class quality-check result.
 - Moderation is prompt/rule based; there is no dedicated moderation adapter.
 - There is no formal prompt/model release table, canary mechanism, or rollback switch beyond code/env deployment.
 

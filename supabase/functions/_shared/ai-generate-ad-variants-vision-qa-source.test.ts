@@ -6,49 +6,64 @@ const source = readFileSync(
   join(process.cwd(), "supabase", "functions", "ai-generate-ad-variants", "index.ts"),
   "utf8",
 );
+const textProviderSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "ai-text-provider.ts"),
+  "utf8",
+);
+const openAiProviderSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "openai-text-provider.ts"),
+  "utf8",
+);
+const geminiProviderSource = readFileSync(
+  join(process.cwd(), "supabase", "functions", "_shared", "gemini-text-provider.ts"),
+  "utf8",
+);
 
 describe("ai-generate-ad-variants vision QA source guard", () => {
   it("keeps Gemini vision QA fallback behind the hosted fallback flag", () => {
     expect(source).toMatch(/AI_VISION_FALLBACK_ENABLED/);
     expect(source).toMatch(/AI_VISION_FALLBACK_PROVIDER/);
     expect(source).toMatch(/function geminiVisionQaFallbackEnabled/);
+    expect(source).toMatch(/function makeImageQaConfig/);
+    expect(source).toMatch(/fallbackEnabled,\s*\n\s*fallbackProvider:\s*"gemini"/);
   });
 
-  it("falls back to Gemini when OpenAI image QA is unavailable", () => {
+  it("routes image QA through the shared structured provider router", () => {
     const inspectIndex = source.indexOf("async function inspectGeneratedImageForOffer(");
-    const geminiHelperIndex = source.indexOf("async function inspectGeneratedImageForOfferWithGemini(");
-
-    expect(inspectIndex).toBeGreaterThan(-1);
-    expect(geminiHelperIndex).toBeGreaterThan(inspectIndex);
-
-    const inspectBlock = source.slice(inspectIndex, geminiHelperIndex);
-    expect(inspectBlock).toMatch(/const geminiFallback = \(\) =>/);
-    expect(inspectBlock).toMatch(/provider:\s*"openai"/);
-    expect(inspectBlock.match(/return await geminiFallback\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
-  });
-
-  it("sends image bytes through Gemini with the same QA schema and private telemetry", () => {
-    const helperIndex = source.indexOf("async function inspectGeneratedImageForOfferWithGemini(");
     const sourceAwareIndex = source.indexOf("async function sourceAwareQaForImageBytes(");
 
-    expect(helperIndex).toBeGreaterThan(-1);
-    expect(sourceAwareIndex).toBeGreaterThan(helperIndex);
+    expect(inspectIndex).toBeGreaterThan(-1);
+    expect(sourceAwareIndex).toBeGreaterThan(inspectIndex);
 
-    const helperBlock = source.slice(helperIndex, sourceAwareIndex);
-    expect(helperBlock).toMatch(/x-goog-api-key/);
-    expect(helperBlock).toMatch(/inlineData/);
-    expect(helperBlock).toMatch(/bytesToBase64\(params\.imageBytes\)/);
-    expect(helperBlock).toMatch(/geminiResponseSchema\(QUICK_DEAL_IMAGE_QA_SCHEMA\)/);
-    expect(helperBlock).toMatch(/provider:\s*"gemini"/);
-    expect(helperBlock).toMatch(/endpoint:\s*"models\.generateContent"/);
-    expect(helperBlock).not.toMatch(/await res\.text\(\)/);
+    const inspectBlock = source.slice(inspectIndex, sourceAwareIndex);
+    expect(inspectBlock).toMatch(/generateStructuredText<typeof QUICK_DEAL_IMAGE_QA_SCHEMA, QuickDealImageQaResult>/);
+    expect(inspectBlock).toMatch(/operation:\s*"image_qa"/);
+    expect(inspectBlock).toMatch(/imageInputs:\s*\[\{ bytes: params\.imageBytes, mimeType: "image\/png" \}\]/);
+    expect(inspectBlock).toMatch(/QUICK_DEAL_IMAGE_QA_SCHEMA/);
+    expect(inspectBlock).toMatch(/config:\s*makeImageQaConfig\(\)/);
+    expect(inspectBlock).toMatch(/logTextProviderAttempts\(params\.costContext, "image_qa", result\.attempts\)/);
+    expect(inspectBlock).toMatch(/attempts\?: ProviderAttempt\[\]/);
+    expect(inspectBlock).toMatch(/AI_IMAGE_QA_UNAVAILABLE/);
+    expect(inspectBlock).not.toMatch(/api\.openai\.com\/v1\/responses/);
+    expect(inspectBlock).not.toMatch(/generativelanguage\.googleapis\.com/);
+    expect(inspectBlock).not.toMatch(/x-goog-api-key/);
+  });
+
+  it("keeps shared providers capable of structured image QA", () => {
+    expect(textProviderSource).toMatch(/\|\s*"image_qa"/);
+    expect(textProviderSource).toMatch(/operation === "image_qa"\) return "vision_qa"/);
+    expect(openAiProviderSource).toMatch(/request\.imageInputs/);
+    expect(openAiProviderSource).toMatch(/type:\s*"image_url"/);
+    expect(openAiProviderSource).toMatch(/json_schema:\s*openAiJsonSchema\(params\.request\.jsonSchema\)/);
+    expect(geminiProviderSource).toMatch(/request\.imageInputs/);
+    expect(geminiProviderSource).toMatch(/inlineData/);
+    expect(geminiProviderSource).toMatch(/responseSchema:\s*geminiResponseSchema\(params\.request\.jsonSchema\)/);
   });
 
   it("does not store raw exception text in ad-variant AI failure telemetry", () => {
     expect(source).toMatch(/Ad research failed before a usable response was returned/);
     expect(source).toMatch(/Candidate judge unavailable/);
-    expect(source).toMatch(/OpenAI image QA failed before a usable response was returned/);
-    expect(source).toMatch(/Gemini image QA failed before a usable response was returned/);
+    expect(source).toMatch(/AI_IMAGE_QA_UNAVAILABLE/);
     expect(source).toMatch(/failure_reason:\s*"COPY_FAILED"/);
     expect(source).not.toMatch(/String\(e\)\.slice/);
     expect(source).not.toMatch(/err:\s*String\(e\)/);
@@ -91,11 +106,10 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
 
   it("keeps vision QA active even when no required visual items are inferred", () => {
     const inspectIndex = source.indexOf("async function inspectGeneratedImageForOffer(");
-    const geminiHelperIndex = source.indexOf("async function inspectGeneratedImageForOfferWithGemini(");
     const sourceAwareIndex = source.indexOf("async function sourceAwareQaForImageBytes(");
     const stockFetchIndex = source.indexOf("async function fetchApprovedStockImageBytes(");
 
-    const inspectBlock = source.slice(inspectIndex, geminiHelperIndex);
+    const inspectBlock = source.slice(inspectIndex, sourceAwareIndex);
     const sourceAwareBlock = source.slice(sourceAwareIndex, stockFetchIndex);
 
     expect(inspectBlock).not.toMatch(/requiredVisualItems\.length === 0\)\s*return null/);

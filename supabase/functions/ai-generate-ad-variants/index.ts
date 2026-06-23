@@ -14,7 +14,7 @@
  */
 
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import {
   buildPhotoAdImagePrompt,
@@ -39,7 +39,7 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
-import { geminiResponseSchema, resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
+import { resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -1103,57 +1103,6 @@ async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<
   };
 }
 
-function extractResponseOutputText(data: unknown): string | null {
-  const out = (data as { output?: unknown[] })?.output;
-  if (!Array.isArray(out)) return null;
-  for (const item of out) {
-    if (!item || typeof item !== "object") continue;
-    const message = item as { type?: string; content?: unknown[] };
-    if (message.type !== "message" || !Array.isArray(message.content)) continue;
-    for (const part of message.content) {
-      if (!part || typeof part !== "object") continue;
-      const textPart = part as { type?: string; text?: string };
-      if (textPart.type === "output_text" && typeof textPart.text === "string") return textPart.text;
-    }
-  }
-  return null;
-}
-
-function extractGeminiOutputText(data: unknown): string | null {
-  const candidates = (data as { candidates?: unknown[] } | null)?.candidates;
-  if (!Array.isArray(candidates)) return null;
-  for (const candidate of candidates) {
-    const parts = (candidate as { content?: { parts?: unknown[] } } | null)?.content?.parts;
-    if (!Array.isArray(parts)) continue;
-    const text = parts
-      .map((part) => {
-        const record = part as Record<string, unknown>;
-        return typeof record.text === "string" && record.thought !== true ? record.text : "";
-      })
-      .filter(Boolean)
-      .join("");
-    if (text.trim()) return text.trim();
-  }
-  return null;
-}
-
-function geminiUsageAsAiUsage(data: unknown): AiUsageInput | null {
-  const usage = (data as { usageMetadata?: Record<string, unknown> } | null)?.usageMetadata;
-  if (!usage || typeof usage !== "object") return null;
-  const numberValue = (name: string) => {
-    const value = usage[name];
-    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
-  };
-  return {
-    input_tokens: numberValue("promptTokenCount"),
-    output_tokens: numberValue("candidatesTokenCount"),
-    total_tokens: numberValue("totalTokenCount"),
-    output_tokens_details: {
-      reasoning_tokens: numberValue("thoughtsTokenCount"),
-    },
-  };
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -1168,6 +1117,36 @@ function geminiVisionQaFallbackEnabled(): boolean {
   if (!envFlag("AI_VISION_FALLBACK_ENABLED", false)) return false;
   const provider = (Deno.env.get("AI_VISION_FALLBACK_PROVIDER") ?? "gemini").trim().toLowerCase();
   return provider === "gemini";
+}
+
+function makeImageQaConfig() {
+  let fallbackEnabled = geminiVisionQaFallbackEnabled();
+  let geminiTextModel = "gemini";
+  if (fallbackEnabled) {
+    try {
+      geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
+    } catch {
+      fallbackEnabled = false;
+      console.log(JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "gemini_image_qa_config_error",
+        errorCode: "AI_TEXT_CONFIG_INVALID",
+      }));
+    }
+  }
+  return {
+    routerEnabled: true,
+    primaryProvider: "openai" as const,
+    fallbackEnabled,
+    fallbackProvider: "gemini" as const,
+    circuitBreakerEnabled: false,
+    openAiModel: CHAT_MODEL,
+    geminiTextModel,
+    primaryTimeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
+    fallbackTimeoutMs: envNumber("AI_VISION_FALLBACK_TIMEOUT_MS", 14_000),
+    transientRetryMax: 0,
+    retryAfterFullTimeout: false,
+  };
 }
 
 function imageStylePresetFromRevision(params: {
@@ -1280,251 +1259,36 @@ async function inspectGeneratedImageForOffer(params: {
   sourceType?: AdImageQaSourceType;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
-  const geminiFallback = () =>
-    inspectGeneratedImageForOfferWithGemini({
-      geminiApiKey: params.geminiApiKey,
-      imageBytes: params.imageBytes,
-      requiredVisualItems,
-      costContext: params.costContext,
-      sourceType: params.sourceType ?? "ai_generated",
-    });
-
   try {
-    const imageUrl = `data:image/png;base64,${bytesToBase64(params.imageBytes)}`;
-    const responsesBody = {
-      model: CHAT_MODEL,
-      ...(isGpt5FamilyModel(CHAT_MODEL) ? {} : { temperature: 0.1 }),
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: buildAdImageQaPrompt({
-                sourceType: params.sourceType ?? "ai_generated",
-                requiredVisualItems,
-              }),
-            },
-            { type: "input_image", image_url: imageUrl, detail: "low" },
-          ],
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: QUICK_DEAL_IMAGE_QA_SCHEMA.name,
-          strict: QUICK_DEAL_IMAGE_QA_SCHEMA.strict,
-          schema: QUICK_DEAL_IMAGE_QA_SCHEMA.schema,
-        },
-      },
-    };
-
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(responsesBody),
-      signal: AbortSignal.timeout(25_000),
-    });
-    if (!res.ok) {
-      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_http", status: res.status }));
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        provider: "openai",
-        model: CHAT_MODEL,
-        endpoint: "responses",
-        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-        success: false,
-        errorCode: `HTTP_${res.status}`,
-        errorMessage: `Image QA failed with HTTP ${res.status}.`,
-      });
-      return await geminiFallback();
-    }
-    const json = await res.json();
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      provider: "openai",
-      model: CHAT_MODEL,
-      endpoint: "responses",
-      usage: json?.usage ?? null,
-      openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-      responseId: typeof json?.id === "string" ? json.id : null,
-      success: true,
-    });
-    const text = extractResponseOutputText(json);
-    if (!text) return await geminiFallback();
-    return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
-  } catch {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", errorCode: "FETCH_ERROR" }));
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      provider: "openai",
-      model: CHAT_MODEL,
-      endpoint: "responses",
-      success: false,
-      errorCode: "FETCH_ERROR",
-      errorMessage: "OpenAI image QA failed before a usable response was returned.",
-    });
-    return await geminiFallback();
-  }
-}
-
-async function inspectGeneratedImageForOfferWithGemini(params: {
-  geminiApiKey?: string | null;
-  imageBytes: Uint8Array;
-  requiredVisualItems: readonly string[];
-  costContext: AiCostContext;
-  sourceType: AdImageQaSourceType;
-}): Promise<QuickDealImageQaResult | null> {
-  if (!geminiVisionQaFallbackEnabled()) return null;
-
-  let model = "gemini";
-  try {
-    model = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
-  } catch {
-    console.log(JSON.stringify({
-      tag: "ai_ads_v2",
-      event: "gemini_image_qa_config_error",
-      errorCode: "AI_TEXT_CONFIG_INVALID",
-    }));
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      provider: "gemini",
-      model,
-      endpoint: "models.generateContent",
-      success: false,
-      errorCode: "AI_TEXT_CONFIG_INVALID",
-      errorMessage: "Gemini image QA configuration is invalid.",
-    });
-    return null;
-  }
-
-  const apiKey = (params.geminiApiKey ?? "").trim();
-  if (!apiKey) {
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      provider: "gemini",
-      model,
-      endpoint: "models.generateContent",
-      success: false,
-      errorCode: "GEMINI_API_KEY_MISSING",
-      errorMessage: "Gemini API key is not configured.",
-    });
-    return null;
-  }
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    const result = await generateStructuredText<typeof QUICK_DEAL_IMAGE_QA_SCHEMA, QuickDealImageQaResult>(
       {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: "You are Twofer's image quality inspector. Return JSON only." }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: buildAdImageQaPrompt({
-                    sourceType: params.sourceType,
-                    requiredVisualItems: params.requiredVisualItems,
-                  }),
-                },
-                {
-                  inlineData: {
-                    mimeType: "image/png",
-                    data: bytesToBase64(params.imageBytes),
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: geminiResponseSchema(QUICK_DEAL_IMAGE_QA_SCHEMA),
-            maxOutputTokens: 900,
-            thinkingConfig: {
-              thinkingLevel: "medium",
-            },
-          },
+        operation: "image_qa",
+        systemPrompt: "You are Twofer's image quality inspector. Return JSON only.",
+        userPrompt: buildAdImageQaPrompt({
+          sourceType: params.sourceType ?? "ai_generated",
+          requiredVisualItems,
         }),
-        signal: AbortSignal.timeout(envNumber("AI_VISION_FALLBACK_TIMEOUT_MS", 14_000)),
+        jsonSchema: QUICK_DEAL_IMAGE_QA_SCHEMA,
+        imageInputs: [{ bytes: params.imageBytes, mimeType: "image/png" }],
+        maxOutputTokens: 900,
+        timeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
+        generationRunId: params.costContext.requestGroupId,
+        promptVersion: "AI_IMAGE_QA_V1",
+        reasoningLevel: "medium",
+      },
+      {
+        openAiApiKey: params.openAiKey,
+        geminiApiKey: params.geminiApiKey,
+        admin: params.costContext.admin,
+        config: makeImageQaConfig(),
       },
     );
-
-    if (!res.ok) {
-      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_http", status: res.status }));
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        provider: "gemini",
-        model,
-        endpoint: "models.generateContent",
-        success: false,
-        errorCode: `HTTP_${res.status}`,
-        errorMessage: `Gemini image QA failed with HTTP ${res.status}.`,
-      });
-      return null;
-    }
-
-    const json = await res.json();
-    const text = extractGeminiOutputText(json);
-    if (!text) {
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        provider: "gemini",
-        model,
-        endpoint: "models.generateContent",
-        usage: geminiUsageAsAiUsage(json),
-        success: false,
-        errorCode: "GEMINI_EMPTY_CONTENT",
-        errorMessage: "Gemini returned no image QA content.",
-      });
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(text);
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        provider: "gemini",
-        model,
-        endpoint: "models.generateContent",
-        usage: geminiUsageAsAiUsage(json),
-        success: true,
-      });
-      return normalizeQuickDealImageQaResult(parsed, params.requiredVisualItems);
-    } catch {
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        provider: "gemini",
-        model,
-        endpoint: "models.generateContent",
-        usage: geminiUsageAsAiUsage(json),
-        success: false,
-        errorCode: "GEMINI_JSON_PARSE_FAILED",
-        errorMessage: "Gemini returned invalid image QA JSON.",
-      });
-      return null;
-    }
-  } catch {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "gemini_image_qa_error", errorCode: "FETCH_ERROR" }));
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      provider: "gemini",
-      model,
-      endpoint: "models.generateContent",
-      success: false,
-      errorCode: "FETCH_ERROR",
-      errorMessage: "Gemini image QA failed before a usable response was returned.",
-    });
+    await logTextProviderAttempts(params.costContext, "image_qa", result.attempts);
+    return normalizeQuickDealImageQaResult(result.value, requiredVisualItems);
+  } catch (e) {
+    const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+    await logTextProviderAttempts(params.costContext, "image_qa", attempts);
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", errorCode: "AI_IMAGE_QA_UNAVAILABLE" }));
     return null;
   }
 }
