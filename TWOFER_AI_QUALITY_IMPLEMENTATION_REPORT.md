@@ -738,6 +738,72 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4h - Rollout dashboard command
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-rollout-dashboard`.
+
+Safety checkpoint: `d0aebb38` (Multilingual Deals PR4 locale screenshot QA gate commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted analytics dashboard was changed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `scripts/generate-localization-rollout-dashboard.mjs`
+- `lib/localization-rollout-dashboard.test.ts`
+- `docs/localization/multilingual-deals-pr4-rollout-dashboard.md`
+
+## Files changed
+
+- `package.json`
+- `scripts/check-localization-rollout-gates.mjs`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `npm run dashboard:localization-rollout`, a local Markdown readiness dashboard for PR4 rollout review.
+- The dashboard reads checked-in local sources: rollout gate records, native review log rows, localized offer template review status, Korean counter approval status, and `ai_ad_versioned_publish` telemetry field coverage.
+- The current dashboard shows English allowed through the localization-specific gate, Spanish blocked for reviewer/template/screenshot QA, and Korean blocked for reviewer/template/counter/screenshot QA.
+- Added a focused executable test that runs the real dashboard command and verifies current blockers plus key telemetry coverage.
+- Extended `npm run gate:localization-rollout` so the dashboard command, generator, and handoff doc remain present.
+
+## Acceptance criteria map
+
+- PR4 rollout dashboards: Implemented locally as a source/readiness dashboard command. This is not a hosted analytics dashboard.
+- PR4 native review workflow/logs: Strengthened because the dashboard summarizes native review log coverage and final sign-off counts.
+- PR4 operational handoff: Strengthened with a dedicated dashboard handoff doc and operator notes.
+- Broad Spanish/Korean production readiness: Still blocked until named reviewers, native sign-off, and real-device screenshot QA are recorded.
+
+## Validation
+
+- `npm run dashboard:localization-rollout`: passed and printed the local readiness dashboard.
+- `npx vitest run lib/localization-rollout-dashboard.test.ts lib/localization-rollout-gate.test.ts`: passed; 2 files, 7 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 172 files, 916 tests.
+- `npm run copy:evaluate`: passed; 30 fixtures valid, 0 invalid.
+- `npm run gate:ai-ad`: passed.
+- `npm run gate:localization-rollout`: passed; 14 rollout gate checks passed.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4h-20260623`: passed; Metro emitted the existing `country-flag-icons` package export warnings.
+- `npm run typecheck:functions`: failed on the pre-existing `supabase/functions/ai-extract-menu/index.ts` Supabase client generic mismatch at lines 417 and 430. No files in this slice touch that function.
+
+## Unresolved risks
+
+- This dashboard uses source/readiness evidence only. It does not query live production analytics.
+- Hosted analytics will not include localization publish dimensions until a future approved `publish-offer-version` redeploy.
+- Reviewer assignment, native sign-off, and real-device screenshot QA remain external hard-gated inputs.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4g - Selective locale screenshot QA gate
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-locale-screenshot-qa`.

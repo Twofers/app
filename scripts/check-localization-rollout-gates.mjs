@@ -107,6 +107,36 @@ const checks = [
       /does not record localized headline text/,
     ],
   },
+  {
+    name: "rollout dashboard command is available",
+    file: "package.json",
+    patterns: [
+      /"dashboard:localization-rollout":\s*"node scripts\/generate-localization-rollout-dashboard\.mjs"/,
+    ],
+  },
+  {
+    name: "rollout dashboard generator reports readiness and telemetry fields",
+    file: "scripts/generate-localization-rollout-dashboard.mjs",
+    patterns: [
+      /Localization Rollout Dashboard/,
+      /TELEMETRY_FIELDS/,
+      /localization_source_locale/,
+      /localization_approval_hash/,
+      /NATIVE_REVIEWER_TBD/,
+      /REAL_DEVICE_SCREENSHOT_QA_PENDING/,
+      /KOREAN_COUNTER_NATIVE_REVIEW_PENDING/,
+    ],
+  },
+  {
+    name: "rollout dashboard handoff document exists",
+    file: "docs/localization/multilingual-deals-pr4-rollout-dashboard.md",
+    patterns: [
+      /npm run dashboard:localization-rollout/,
+      /source\/readiness dashboard/,
+      /U\.S\. Spanish remains blocked/,
+      /Korean remains blocked/,
+    ],
+  },
 ];
 
 let failed = 0;

@@ -20,6 +20,7 @@
     "copy:evaluate": "node scripts/evaluate-ai-promotional-copy.mjs",
     "gate:ai-ad": "node scripts/check-ai-ad-release-gates.mjs",
     "gate:localization-rollout": "node scripts/check-localization-rollout-gates.mjs",
+    "dashboard:localization-rollout": "node scripts/generate-localization-rollout-dashboard.mjs",
     "gate:rls": "node scripts/probe-rls-inventory.mjs",
     "gate:rls-smoke": "node scripts/probe-rls-smoke.mjs",
     "gate:edges": "node scripts/probe-edge-functions-smoke.mjs claim-deal redeem-token send-deal-push ai-generate-ad-variants ai-generate-deal-copy delete-user-account ingest-analytics-event",
