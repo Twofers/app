@@ -38,6 +38,38 @@ type AdSpecPayload = {
   templateVersion?: unknown;
   channels?: unknown;
   offer?: unknown;
+  composedCard?: unknown;
+};
+
+type ComposedCardPayload = {
+  presentation?: unknown;
+  presentationHash?: unknown;
+  selectedTemplateId?: unknown;
+  alternateTemplateIds?: unknown;
+  merchantStyleOverrideUsed?: unknown;
+  compositeQa?: unknown;
+  screenshotQa?: unknown;
+};
+
+type ComposedPresentationPayload = {
+  specVersion?: unknown;
+  templateId?: unknown;
+  themeId?: unknown;
+  imageAssetId?: unknown;
+  imageSourceType?: unknown;
+  textPanel?: unknown;
+  textZone?: unknown;
+  rendererVersion?: unknown;
+};
+
+type CompositeQaPayload = {
+  decision?: unknown;
+  hardFailReasons?: unknown;
+};
+
+type ScreenshotQaPayload = {
+  required?: unknown;
+  decision?: unknown;
 };
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
@@ -67,6 +99,14 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isExactPresentationApprovalRequired(): boolean {
+  return Deno.env.get("AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED") === "true";
+}
+
+function isCompositeScreenshotQaRequired(): boolean {
+  return Deno.env.get("AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED") === "true";
+}
+
 function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -92,7 +132,12 @@ function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reaso
 
 function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
-  if (value == null) return { valid: true, reasonCodes };
+  if (value == null) {
+    if (isExactPresentationApprovalRequired()) {
+      return { valid: false, reasonCodes: ["MISSING_COMPOSED_CARD_APPROVAL"] };
+    }
+    return { valid: true, reasonCodes };
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { valid: false, reasonCodes: ["NOT_OBJECT"] };
   }
@@ -106,7 +151,68 @@ function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: s
   if (!spec.channels || typeof spec.channels !== "object" || Array.isArray(spec.channels)) {
     reasonCodes.push("MISSING_CHANNELS");
   }
+  if (spec.composedCard != null) {
+    reasonCodes.push(...validateComposedCardPayload(spec.composedCard));
+  } else if (isExactPresentationApprovalRequired()) {
+    reasonCodes.push("MISSING_COMPOSED_CARD_APPROVAL");
+  }
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
+}
+
+function validateComposedCardPayload(value: unknown): string[] {
+  const reasonCodes: string[] = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return ["COMPOSED_CARD_NOT_OBJECT"];
+  }
+  const composed = value as ComposedCardPayload;
+  const presentation = composed.presentation as ComposedPresentationPayload | null;
+  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+    reasonCodes.push("MISSING_PRESENTATION_SPEC");
+  } else {
+    if (!cleanText(presentation.specVersion)) reasonCodes.push("MISSING_PRESENTATION_SPEC_VERSION");
+    if (!cleanText(presentation.rendererVersion)) reasonCodes.push("MISSING_PRESENTATION_RENDERER_VERSION");
+    if (!cleanText(presentation.templateId)) reasonCodes.push("MISSING_SELECTED_TEMPLATE");
+    if (!cleanText(presentation.themeId)) reasonCodes.push("MISSING_PRESENTATION_THEME");
+    if (!cleanText(presentation.imageAssetId)) reasonCodes.push("MISSING_PRESENTATION_IMAGE_ASSET");
+    if (!cleanText(presentation.imageSourceType)) reasonCodes.push("MISSING_PRESENTATION_IMAGE_SOURCE");
+    if (!cleanText(presentation.textPanel)) reasonCodes.push("MISSING_PRESENTATION_TEXT_PANEL");
+    if (!cleanText(presentation.textZone)) reasonCodes.push("MISSING_PRESENTATION_TEXT_ZONE");
+    if (cleanText(composed.selectedTemplateId) && cleanText(composed.selectedTemplateId) !== cleanText(presentation.templateId)) {
+      reasonCodes.push("SELECTED_TEMPLATE_MISMATCH");
+    }
+  }
+  const presentationHash = cleanText(composed.presentationHash);
+  if (!/^adp_[0-9a-f]{16}$/i.test(presentationHash)) {
+    reasonCodes.push("INVALID_PRESENTATION_HASH");
+  }
+  if (!Array.isArray(composed.alternateTemplateIds)) {
+    reasonCodes.push("INVALID_ALTERNATE_TEMPLATES");
+  }
+  if (typeof composed.merchantStyleOverrideUsed !== "boolean") {
+    reasonCodes.push("INVALID_STYLE_OVERRIDE_FLAG");
+  }
+  const compositeQa = composed.compositeQa as CompositeQaPayload | null;
+  if (!compositeQa || typeof compositeQa !== "object" || Array.isArray(compositeQa)) {
+    reasonCodes.push("MISSING_COMPOSITE_QA");
+  } else {
+    const decision = cleanText(compositeQa.decision);
+    if (!["pass", "repair", "block", "unavailable"].includes(decision)) {
+      reasonCodes.push("INVALID_COMPOSITE_QA_DECISION");
+    }
+    if (decision === "block" || decision === "unavailable") {
+      reasonCodes.push("BLOCKED_COMPOSITE_QA");
+    }
+    if (!Array.isArray(compositeQa.hardFailReasons)) {
+      reasonCodes.push("INVALID_COMPOSITE_QA_REASONS");
+    }
+  }
+  const screenshotQa = composed.screenshotQa as ScreenshotQaPayload | null;
+  if (!screenshotQa || typeof screenshotQa !== "object" || Array.isArray(screenshotQa)) {
+    reasonCodes.push("MISSING_SCREENSHOT_QA");
+  } else if (isCompositeScreenshotQaRequired() && screenshotQa.required === true && screenshotQa.decision !== "pass") {
+    reasonCodes.push("SCREENSHOT_QA_REQUIRED");
+  }
+  return reasonCodes;
 }
 
 serve(async (req) => {
@@ -260,7 +366,16 @@ serve(async (req) => {
       rendererVersion?: unknown;
       templateVersion?: unknown;
       source?: unknown;
+      composedCard?: {
+        presentationHash?: unknown;
+        selectedTemplateId?: unknown;
+        alternateTemplateIds?: unknown;
+        merchantStyleOverrideUsed?: unknown;
+        compositeQa?: { decision?: unknown; repairCodes?: unknown; hardFailReasons?: unknown };
+        screenshotQa?: { required?: unknown; decision?: unknown; triggerCodes?: unknown };
+      };
     } | null;
+    const composedForContext = adSpecForContext?.composedCard;
     try {
       await admin.from("app_analytics_events").insert({
         event_name: "ai_ad_versioned_publish",
@@ -276,6 +391,26 @@ serve(async (req) => {
           template_version:
             typeof adSpecForContext?.templateVersion === "string" ? adSpecForContext.templateVersion : null,
           source: typeof adSpecForContext?.source === "string" ? adSpecForContext.source : null,
+          composed_presentation_hash:
+            typeof composedForContext?.presentationHash === "string" ? composedForContext.presentationHash : null,
+          selected_template_id:
+            typeof composedForContext?.selectedTemplateId === "string" ? composedForContext.selectedTemplateId : null,
+          alternate_template_count: Array.isArray(composedForContext?.alternateTemplateIds)
+            ? composedForContext.alternateTemplateIds.length
+            : 0,
+          merchant_style_override_used:
+            typeof composedForContext?.merchantStyleOverrideUsed === "boolean"
+              ? composedForContext.merchantStyleOverrideUsed
+              : false,
+          composite_qa_decision:
+            typeof composedForContext?.compositeQa?.decision === "string" ? composedForContext.compositeQa.decision : null,
+          composite_qa_repair_count: Array.isArray(composedForContext?.compositeQa?.repairCodes)
+            ? composedForContext.compositeQa.repairCodes.length
+            : 0,
+          screenshot_qa_required:
+            typeof composedForContext?.screenshotQa?.required === "boolean" ? composedForContext.screenshotQa.required : false,
+          screenshot_qa_decision:
+            typeof composedForContext?.screenshotQa?.decision === "string" ? composedForContext.screenshotQa.decision : null,
         },
       });
     } catch (err) {

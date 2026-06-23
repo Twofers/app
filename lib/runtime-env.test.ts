@@ -14,6 +14,9 @@ import {
   getPublicEnvSnapshot,
   isAiV4AuthoritativeOfferCardEnabled,
   isAiV4ComposedAdCardEnabled,
+  isAiV4CompositeQaEnabled,
+  isAiV4CompositeScreenshotQaEnabled,
+  isAiV4ExactPresentationApprovalEnabled,
   isAiV4InstantStyleAlternatesEnabled,
   isAiV4MinimalInputFlowEnabled,
   isAiV4PresentationResolverEnabled,
@@ -52,6 +55,12 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED,
     AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED,
     EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED,
+    AI_V4_COMPOSITE_QA_ENABLED: process.env.AI_V4_COMPOSITE_QA_ENABLED,
+    EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED,
+    AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED,
+    EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED,
+    AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED,
+    EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED,
   };
 
   afterEach(() => {
@@ -77,6 +86,12 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED;
     delete process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED;
+    delete process.env.AI_V4_COMPOSITE_QA_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED;
+    delete process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED;
+    delete process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -84,6 +99,9 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV4PresentationResolverEnabled()).toBe(false);
     expect(isAiV4MinimalInputFlowEnabled()).toBe(false);
     expect(isAiV4InstantStyleAlternatesEnabled()).toBe(false);
+    expect(isAiV4CompositeQaEnabled()).toBe(false);
+    expect(isAiV4CompositeScreenshotQaEnabled()).toBe(false);
+    expect(isAiV4ExactPresentationApprovalEnabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -93,6 +111,9 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -100,5 +121,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV4PresentationResolverEnabled()).toBe(true);
     expect(isAiV4MinimalInputFlowEnabled()).toBe(true);
     expect(isAiV4InstantStyleAlternatesEnabled()).toBe(true);
+    expect(isAiV4CompositeQaEnabled()).toBe(true);
+    expect(isAiV4CompositeScreenshotQaEnabled()).toBe(true);
+    expect(isAiV4ExactPresentationApprovalEnabled()).toBe(true);
   });
 });

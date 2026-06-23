@@ -897,6 +897,96 @@ No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 3 - Deterministic QA and exact approval enforcement
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3`.
+
+Safety checkpoint: `a270b08f` (Composed Ad Card PR 2 commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/ad-composite-qa.ts`
+- `lib/ad-composite-qa.test.ts`
+- `lib/composed-ad-card-parity-source.test.ts`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `lib/offer-version-publish.ts`
+- `lib/offer-version-publish.test.ts`
+- `lib/offer-version-publish-source.test.ts`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `supabase/functions/publish-offer-version/index.ts`
+- `supabase/functions/_shared/publish-offer-version-function.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added deterministic composite QA for composed-card presentations. It validates the presentation contract, required locked offer and copy fields, image/presentation binding, safe-zone confidence, live-template eligibility, and text-fit repair signals.
+- Added default-off rollout flags for composite QA, screenshot-QA gating, and exact presentation approval: `AI_V4_COMPOSITE_QA_ENABLED`, `AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED`, and `AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED`, with matching `EXPO_PUBLIC_` aliases for the client.
+- Bound merchant approval to the exact composed presentation hash for new AI-created deals when exact approval is enabled. Style switches, image restoration, regenerate/revise paths, recovered drafts, fallback template creation, and manual draft copy edits clear the approval.
+- Extended versioned publish `ad_spec` payloads with composed-card approval metadata: exact presentation, presentation hash, selected template, alternates, merchant style override flag, deterministic QA result, and screenshot-QA decision placeholder.
+- Added Edge Function validation for composed-card publish metadata. With exact approval required, missing composed-card approval is rejected. Blocked/unavailable composite QA is rejected. If screenshot QA is enabled and required, publish is rejected unless screenshot QA has passed.
+- Added publish analytics context fields for composed-card approval hash, selected template, alternate count, style override, composite QA decision/repair count, and screenshot-QA status.
+- Added source guards that feed, detail, and preview remain on the shared `ComposedAdCard` renderer path behind the existing shared-renderer flag.
+
+## Composite QA behavior
+
+- `pass`: presentation is complete and deterministic checks found no repair or block condition.
+- `repair`: the card can still be approved, but deterministic repair signals are recorded, such as text fit pressure, low safe-zone confidence, or live-template fallback needs.
+- `block`: the preview is missing required offer/copy/image inputs, has an invalid presentation, mismatches the selected image asset, or has another unsafe hard-fail reason.
+- Screenshot QA is represented as a bounded publish contract and deterministic trigger. This slice does not implement a model/browser screenshot runner; when the screenshot-QA flag is enabled and a trigger is present, publish is intentionally blocked until a future runner records `pass`.
+
+## Approval and publish enforcement
+
+- Existing behavior is preserved with all PR3 flags off.
+- With exact approval enabled, new AI deal publish requires the current composed preview to match the last approved presentation hash.
+- Dynamic countdown and quantity state remain outside the approval hash, matching PR1 hash rules.
+- Server-side enforcement lives in `publish-offer-version`; hosted enforcement requires an Edge Function redeploy, which was not performed here.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/ad-composite-qa.test.ts lib/offer-version-publish.test.ts lib/runtime-env.test.ts lib/offer-version-publish-source.test.ts lib/composed-ad-card-parity-source.test.ts supabase/functions/_shared/publish-offer-version-function.test.ts`: passed; 6 files, 21 tests.
+- `npm run test`: passed; 149 files, 814 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- PR3 is still flag-gated and not enabled by default.
+- Screenshot QA is only a deterministic trigger and publish contract in this slice; no visual/model screenshot runner was added.
+- Customer feed/detail still derive composed presentation from the deal row behind the shared-renderer flag. Loading persisted `offer_versions.ad_spec` for customer surfaces remains future work after the Supabase-side rollout.
+- Hosted publish enforcement requires redeploying `publish-offer-version`; deployment is hard-gated and was not performed.
+- No real iPhone screenshots/testing were captured on this Windows machine.
+
+## Rollback
+
+Set the PR3 rollout flags false/unset:
+
+- `AI_V4_COMPOSITE_QA_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED=false`
+- `AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED=false`
+- `AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED=false`
+
+No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

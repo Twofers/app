@@ -96,6 +96,12 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED ?? "(unset)",
     AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
+    AI_V4_COMPOSITE_QA_ENABLED: process.env.AI_V4_COMPOSITE_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED ?? "(unset)",
+    AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -132,6 +138,18 @@ export function isAiV4MinimalInputFlowEnabled(): boolean {
 
 export function isAiV4InstantStyleAlternatesEnabled(): boolean {
   return process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true";
+}
+
+export function isAiV4CompositeQaEnabled(): boolean {
+  return process.env.AI_V4_COMPOSITE_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED === "true";
+}
+
+export function isAiV4CompositeScreenshotQaEnabled(): boolean {
+  return process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED === "true";
+}
+
+export function isAiV4ExactPresentationApprovalEnabled(): boolean {
+  return process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

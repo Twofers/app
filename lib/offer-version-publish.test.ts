@@ -4,6 +4,11 @@ import {
   AD_SPEC_RENDERER_VERSION,
   AD_SPEC_TEMPLATE_VERSION,
 } from "./ad-spec";
+import { runDeterministicAdCompositeQa } from "./ad-composite-qa";
+import { createAdPresentationHash } from "./ad-presentation-hash";
+import { buildDefaultAdPresentationSpec } from "./ad-presentation-spec";
+import { buildApprovedAdCopy } from "./ad-render-content";
+import { buildLockedOfferContent } from "./authoritative-offer-renderer";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 import {
   buildAuthoritativeDealDisplayCopy,
@@ -109,5 +114,62 @@ describe("offer version publish client helpers", () => {
     expect(spec.channels.feed.visual.imageSelection?.selectedStoragePath).toBe("biz/poster.png");
     expect(spec.channels.feed.visual.imageSelection?.sourceMode).toBe("merchant_original");
     expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
+  });
+
+  it("embeds exact composed-card approval metadata when provided", () => {
+    const definition = buildDefinition();
+    const presentation = buildDefaultAdPresentationSpec({
+      imageAssetId: "biz/poster.png",
+      imageSourceType: "merchant_original",
+      templateId: "split_offer_panel",
+    });
+    const offerFacts = buildLockedOfferContent({
+      primaryOfferLine: definition.canonicalOfferLine,
+      termsLine: definition.disclosureLine,
+    });
+    const copy = buildApprovedAdCopy({
+      headline: "Coffee tastes better together",
+      supportingCopy: "Bring a friend",
+      ctaLabel: "Claim deal",
+      fallbackHeadline: offerFacts.primaryOfferLine,
+    });
+    const compositeQa = runDeterministicAdCompositeQa({
+      offerFacts,
+      copy,
+      merchant: { name: definition.merchantName, locationName: definition.locationName },
+      presentation,
+      liveState: {
+        status: "live",
+        statusLabel: "Live now",
+        quantityRemainingLabel: "12 left",
+        timeRemainingLabel: "Today",
+        claimAvailable: true,
+      },
+      surface: "merchant_preview",
+      imageUri: "https://example.com/poster.png",
+      selectedImageAssetId: "biz/poster.png",
+    });
+    const presentationHash = createAdPresentationHash({ presentation, offerFacts, copy });
+    const spec = buildOfferVersionPublishAdSpec("create_ai", definition, null, {
+      composedCard: {
+        presentation,
+        presentationHash,
+        selectedTemplateId: presentation.templateId,
+        alternateTemplateIds: ["hero_image_overlay"],
+        merchantStyleOverrideUsed: true,
+        compositeQa,
+        screenshotQa: {
+          required: false,
+          triggerCodes: [],
+          decision: "not_run",
+        },
+      },
+    });
+
+    expect(spec.composedCard?.presentationHash).toBe(presentationHash);
+    expect(spec.composedCard?.selectedTemplateId).toBe("split_offer_panel");
+    expect(spec.composedCard?.alternateTemplateIds).toEqual(["hero_image_overlay"]);
+    expect(spec.composedCard?.merchantStyleOverrideUsed).toBe(true);
+    expect(spec.composedCard?.compositeQa.decision).toBe("pass");
   });
 });

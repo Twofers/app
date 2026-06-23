@@ -4,6 +4,8 @@ import {
   type AdSpecV1,
   type AdSpecSource,
 } from "./ad-spec";
+import type { AdCompositeQaResult } from "./ad-composite-qa";
+import type { AdPresentationSpec } from "./ad-presentation-spec";
 import type { OfferDefinitionV1 } from "./offer-definition";
 import { EDGE_FN_TIMEOUT_DEFAULT_MS } from "@/constants/timing";
 
@@ -11,7 +13,23 @@ export type OfferVersionPublishDealRow = Record<string, unknown> & {
   business_id: string;
 };
 
-export type OfferVersionPublishAdSpec = AdSpecV1;
+export type OfferVersionPublishComposedCardSpec = {
+  presentation: AdPresentationSpec;
+  presentationHash: string;
+  selectedTemplateId: AdPresentationSpec["templateId"];
+  alternateTemplateIds: AdPresentationSpec["templateId"][];
+  merchantStyleOverrideUsed: boolean;
+  compositeQa: AdCompositeQaResult;
+  screenshotQa: {
+    required: boolean;
+    triggerCodes: string[];
+    decision: "not_run" | "pass" | "block" | "unavailable";
+  };
+};
+
+export type OfferVersionPublishAdSpec = AdSpecV1 & {
+  composedCard?: OfferVersionPublishComposedCardSpec | null;
+};
 
 export type PublishOfferVersionedDealBody = {
   business_id: string;
@@ -106,12 +124,20 @@ export function buildOfferVersionPublishAdSpec(
   source: AdSpecSource,
   offerDefinition: OfferDefinitionV1,
   generatedAd: GeneratedAd | null | undefined,
+  options?: {
+    composedCard?: OfferVersionPublishComposedCardSpec | null;
+  },
 ): OfferVersionPublishAdSpec {
-  return buildAdSpecV1({
+  const spec = buildAdSpecV1({
     source,
     offerDefinition,
     generatedAd,
   });
+  if (!options?.composedCard) return spec;
+  return {
+    ...spec,
+    composedCard: options.composedCard,
+  };
 }
 
 export async function publishOfferVersionedDeal(
