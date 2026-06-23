@@ -6,26 +6,29 @@ const fullCreateSource = readFileSync(join(process.cwd(), "app", "create", "ai.t
 const quickCreateSource = readFileSync(join(process.cwd(), "app", "create", "quick.tsx"), "utf8");
 
 describe("offer version publish source guards", () => {
-  it("does not let full AI create silently direct-insert when versioned publish is enabled without an offer definition", () => {
-    expect(fullCreateSource).toMatch(/!editingDealId && OFFER_VERSION_PUBLISH_ENABLED && !offerDefinition/);
+  it("requires full AI create new-deal publish to use offer versions", () => {
+    expect(fullCreateSource).toMatch(/!editingDealId && !offerDefinition/);
+    expect(fullCreateSource).toMatch(/publishOfferVersionedDeal/);
+    expect(fullCreateSource).toMatch(/buildOfferVersionPublishAdSpec\("create_ai"/);
 
-    const publishBranch = fullCreateSource.indexOf("if (OFFER_VERSION_PUBLISH_ENABLED) {");
-    const definitionGuard = fullCreateSource.indexOf("Missing offer definition for versioned publish.", publishBranch);
-    const directInsert = fullCreateSource.indexOf("insertDealsWithCompatibility(rows)", publishBranch);
+    const newDealBranch = fullCreateSource.indexOf("const locTargets =");
+    const versionedPublish = fullCreateSource.indexOf("const versionedResult = await publishOfferVersionedDeal", newDealBranch);
 
-    expect(publishBranch).toBeGreaterThan(-1);
-    expect(definitionGuard).toBeGreaterThan(publishBranch);
-    expect(directInsert).toBeGreaterThan(definitionGuard);
+    expect(newDealBranch).toBeGreaterThan(-1);
+    expect(versionedPublish).toBeGreaterThan(newDealBranch);
+    expect(fullCreateSource).not.toMatch(/OFFER_VERSION_PUBLISH_ENABLED/);
+    expect(fullCreateSource).not.toMatch(/insertDealsWithCompatibility/);
   });
 
-  it("does not let quick create silently direct-insert when versioned publish is enabled without an offer definition", () => {
-    const publishBranch = quickCreateSource.indexOf("if (OFFER_VERSION_PUBLISH_ENABLED) {");
-    const definitionGuard = quickCreateSource.indexOf("Missing offer definition for versioned publish.", publishBranch);
-    const directInsert = quickCreateSource.indexOf("insertDealWithCompatibility(row)", publishBranch);
+  it("requires quick create publish to use offer versions", () => {
+    const definitionBuilder = quickCreateSource.indexOf("const offerDefinitionForPublish = buildExpressOfferDefinition");
+    const definitionGuard = quickCreateSource.indexOf("Missing offer definition for versioned publish.", definitionBuilder);
+    const versionedPublish = quickCreateSource.indexOf("const versionedResult = await publishOfferVersionedDeal", definitionGuard);
 
-    expect(publishBranch).toBeGreaterThan(-1);
-    expect(definitionGuard).toBeGreaterThan(publishBranch);
-    expect(directInsert).toBeGreaterThan(definitionGuard);
+    expect(definitionBuilder).toBeGreaterThan(-1);
+    expect(definitionGuard).toBeGreaterThan(definitionBuilder);
+    expect(versionedPublish).toBeGreaterThan(definitionGuard);
+    expect(quickCreateSource).not.toMatch(/OFFER_VERSION_PUBLISH_ENABLED/);
+    expect(quickCreateSource).not.toMatch(/insertDealWithCompatibility/);
   });
 });
-

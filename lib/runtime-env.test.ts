@@ -13,23 +13,16 @@ vi.mock("expo-constants", () => ({
 import {
   getPublicEnvSnapshot,
   isOfferDefinitionFallbackEnabled,
-  isOfferVersionPublishEnabled,
 } from "./runtime-env";
 
 describe("runtime-env offer definition fallback flag", () => {
   const previous = process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;
-  const previousPublish = process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH;
 
   afterEach(() => {
     if (previous === undefined) {
       delete process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;
     } else {
       process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK = previous;
-    }
-    if (previousPublish === undefined) {
-      delete process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH;
-    } else {
-      process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH = previousPublish;
     }
   });
 
@@ -46,17 +39,7 @@ describe("runtime-env offer definition fallback flag", () => {
 
   it("includes the fallback flag in the public diagnostics snapshot", () => {
     process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK = "true";
-    process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH = "true";
 
     expect(getPublicEnvSnapshot().EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK).toBe("true");
-    expect(getPublicEnvSnapshot().EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH).toBe("true");
-  });
-
-  it("only enables versioned publish when the public flag is true", () => {
-    process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH = "true";
-    expect(isOfferVersionPublishEnabled()).toBe(true);
-
-    process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH = "false";
-    expect(isOfferVersionPublishEnabled()).toBe(false);
   });
 });

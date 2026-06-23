@@ -31,7 +31,6 @@ import {
 import { DealPreviewModal } from "@/components/deal-preview-modal";
 import { KeyboardScreen, FORM_SCROLL_KEYBOARD_PROPS } from "@/components/ui/keyboard-screen";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { supabase } from "@/lib/supabase";
 import { aiGenerateAd, getErrorCode, notifyDealPublished, translateDealCopy } from "@/lib/functions";
 import {
   adToDealDraft,
@@ -52,11 +51,9 @@ import {
   type QuickDealAdValidationError,
 } from "@/lib/quick-deal-ad-validation";
 import {
-  DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
   dealEligibilityFormToDealColumns,
   dealEligibilityFormToInput,
-  omitDealEligibilityColumns,
   type DealEligibilityFormState,
 } from "@/lib/deal-eligibility-form";
 import { buildOfferDefinitionV1, type OfferDefinitionV1 } from "@/lib/offer-definition";
@@ -66,7 +63,7 @@ import {
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
 } from "@/lib/offer-version-publish";
-import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "@/lib/runtime-env";
+import { isOfferDefinitionFallbackEnabled } from "@/lib/runtime-env";
 
 // Express defaults; owners who need to tune these use the full AI Ads builder.
 const EXPRESS_DURATION_DAYS = 7;
@@ -74,29 +71,8 @@ const EXPRESS_MAX_CLAIMS = 50;
 const EXPRESS_CUTOFF_MINUTES = 15;
 const EXPRESS_REDEMPTION_LIMIT = `Claims close ${EXPRESS_CUTOFF_MINUTES} minutes before the deal ends.`;
 const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
-const OFFER_VERSION_PUBLISH_ENABLED = isOfferVersionPublishEnabled();
 
 type BannerState = { message: string; tone: "error" | "success" | "info" | "warning" };
-
-function isMissingDealLocationColumn(error: { code?: string; message?: string } | null | undefined) {
-  return (
-    (error?.code === "PGRST204" || error?.code === "42703") &&
-    error.message?.includes("location_id")
-  );
-}
-
-function isMissingDealEligibilityColumn(error: { code?: string; message?: string } | null | undefined) {
-  const message = error?.message ?? "";
-  return (
-    (error?.code === "PGRST204" || error?.code === "42703") &&
-    DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => message.includes(key))
-  );
-}
-
-function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
-  const { location_id: _locationId, ...rest } = row;
-  return rest;
-}
 
 function localTimeZone(): string | null {
   try {
@@ -211,27 +187,6 @@ export default function QuickDealExpress() {
       tone: "error",
     });
     return true;
-  }
-
-  async function insertDealWithCompatibility(row: Record<string, unknown>) {
-    let payload: Record<string, unknown> = row;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const result = await supabase.from("deals").insert(payload).select("id");
-      if (!result.error) return result;
-      if (isMissingDealLocationColumn(result.error) && "location_id" in payload) {
-        payload = omitDealLocationId(payload);
-        continue;
-      }
-      if (
-        isMissingDealEligibilityColumn(result.error) &&
-        DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => key in payload)
-      ) {
-        payload = omitDealEligibilityColumns(payload);
-        continue;
-      }
-      return result;
-    }
-    return supabase.from("deals").insert(payload).select("id");
   }
 
   async function onPickPhoto(fromCamera: boolean) {
@@ -420,9 +375,7 @@ export default function QuickDealExpress() {
       const now = new Date();
       const end = new Date(now.getTime() + EXPRESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
       const scheduleSummary = `One-time: ${now.toLocaleString()} to ${end.toLocaleString()}`;
-      const offerDefinitionForPublish = OFFER_DEFINITION_FALLBACK_ENABLED || OFFER_VERSION_PUBLISH_ENABLED
-        ? buildExpressOfferDefinition(now, end, scheduleSummary, posterPath)
-        : null;
+      const offerDefinitionForPublish = buildExpressOfferDefinition(now, end, scheduleSummary, posterPath);
       const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinitionForPublish, {
         title: cleanTitle,
         description: listingDescription,
@@ -466,28 +419,21 @@ export default function QuickDealExpress() {
 
       let id: string | undefined;
       let shouldNotify = true;
-      if (OFFER_VERSION_PUBLISH_ENABLED) {
-        if (!offerDefinitionForPublish) {
-          throw new Error("Missing offer definition for versioned publish.");
-        }
-        const versionedResult = await publishOfferVersionedDeal({
-          business_id: businessId,
-          offer_definition: offerDefinitionForPublish,
-          deal_rows: [row],
-          idempotency_key:
-            publishIdempotencyKeyRef.current ??
-            (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_quick")),
-          ad_spec: buildOfferVersionPublishAdSpec("create_quick", offerDefinitionForPublish, draft),
-        });
-        const published = versionedResult.deals[0];
-        id = published?.deal_id;
-        shouldNotify = published?.idempotency_replayed !== true;
-      } else {
-        const insertResult = await insertDealWithCompatibility(row);
-        const { data, error } = insertResult;
-        if (error) throw error;
-        id = data?.[0]?.id as string | undefined;
+      if (!offerDefinitionForPublish) {
+        throw new Error("Missing offer definition for versioned publish.");
       }
+      const versionedResult = await publishOfferVersionedDeal({
+        business_id: businessId,
+        offer_definition: offerDefinitionForPublish,
+        deal_rows: [row],
+        idempotency_key:
+          publishIdempotencyKeyRef.current ??
+          (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_quick")),
+        ad_spec: buildOfferVersionPublishAdSpec("create_quick", offerDefinitionForPublish, draft),
+      });
+      const published = versionedResult.deals[0];
+      id = published?.deal_id;
+      shouldNotify = published?.idempotency_replayed !== true;
       if (!id) throw new Error("Missing published deal id.");
       if (shouldNotify) void notifyDealPublished(id);
       await markRecentPublish(displayCopy.title);

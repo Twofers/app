@@ -859,7 +859,7 @@ No live metrics were recorded in this workspace. The runner now provides the das
 48. Consumer feed and detail surfaces share authoritative helpers: Implemented.
 49. Legacy canned output cannot appear as live AI: Implemented for known canned AI copy/transcript/insight/compose paths; synthetic menu sample remains explicit preview/dev-only.
 50. Google data flow is documented before activation: Implemented internally; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
-51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Partially implemented. Main ad copy, adjacent text helpers, translation, and compose text/photo now use the router; versioned publish is fail-closed under its flag. Remaining direct media-specific paths are Whisper transcription, menu OCR, and image provider/QA surfaces, and legacy direct publish compatibility still exists only for flag-disabled or edit/update compatibility.
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Partially implemented. Main ad copy, adjacent text helpers, translation, and compose text/photo now use the router; new AI Create and Quick Create publishes now require `publish-offer-version` and an offer definition. Remaining direct media-specific paths are Whisper transcription, menu OCR, and image provider/QA surfaces, and existing-deal edit/update compatibility still writes directly to `deals`.
 52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Implemented.
 
 ## Validation
@@ -2722,6 +2722,66 @@ Live secret names changed: none.
 
 - This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production returns the new disabled-only handler.
 - Historical report sections still describe earlier default-closed behavior at the time of those slices; this PR4ag section supersedes them for current state.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ah - Require versioned publish for new create flows
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `3d5609ed`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `app/create/quick.tsx`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `lib/offer-version-publish-source.test.ts`
+- `eas.json`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the public `EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH` flag from runtime diagnostics and EAS build env entries.
+- Full AI Create now always builds an offer definition for new publishes and always calls `publish-offer-version`; the client-side direct `deals` insert fallback was removed for new AI deals.
+- Quick Create now always builds an offer definition and calls `publish-offer-version`; its client-side direct `deals` insert fallback was removed.
+- Existing-deal edit/update compatibility in Full AI Create remains unchanged.
+- Updated source guards so the flag-disabled direct-insert branch cannot be reintroduced silently.
+
+## Acceptance criteria map
+
+47. Exact offer lines and terms come from structured fields: Preserved; new publishes must carry an offer definition through versioned publish.
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Improved; new AI Create and Quick Create publishes can no longer bypass `publish-offer-version` through a public build flag.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/offer-version-publish-source.test.ts lib/runtime-env.test.ts lib/offer-version-publish.test.ts`: passed, 3 files / 8 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 773 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ah-20260622-1938`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- Existing-deal edit/update still writes directly to `deals`; versioned edit semantics remain future data-model work.
+- Production still requires Dan-controlled migration and Edge Function deployment verification before the versioned publish path is guaranteed live.
 
 ## Rollback
 
