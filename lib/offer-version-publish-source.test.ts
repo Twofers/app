@@ -20,15 +20,10 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).not.toMatch(/insertDealsWithCompatibility/);
   });
 
-  it("requires quick create publish to use offer versions", () => {
-    const definitionBuilder = quickCreateSource.indexOf("const offerDefinitionForPublish = buildExpressOfferDefinition");
-    const definitionGuard = quickCreateSource.indexOf("Missing offer definition for versioned publish.", definitionBuilder);
-    const versionedPublish = quickCreateSource.indexOf("const versionedResult = await publishOfferVersionedDeal", definitionGuard);
-
-    expect(definitionBuilder).toBeGreaterThan(-1);
-    expect(definitionGuard).toBeGreaterThan(definitionBuilder);
-    expect(versionedPublish).toBeGreaterThan(definitionGuard);
-    expect(quickCreateSource).not.toMatch(/OFFER_VERSION_PUBLISH_ENABLED/);
-    expect(quickCreateSource).not.toMatch(/insertDealWithCompatibility/);
+  it("keeps quick create as a redirect into the unified AI builder", () => {
+    expect(quickCreateSource).toMatch(/pathname: "\/create\/ai"/);
+    expect(quickCreateSource).toMatch(/fromCreateHub = "1"/);
+    expect(quickCreateSource).not.toMatch(/publishOfferVersionedDeal/);
+    expect(quickCreateSource).not.toMatch(/buildOfferVersionPublishAdSpec\("create_quick"/);
   });
 });
