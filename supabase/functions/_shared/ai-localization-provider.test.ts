@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AD_LOCALIZATION_JSON_SCHEMA,
   AD_LOCALIZATION_PROMPT_VERSION,
+  AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
   adLocalizationOfferFactsFromDefinition,
   buildAdLocalizationPrompt,
+  buildAdLocalizationRepairPrompt,
   generateAdLocalizationTranscreations,
+  repairAdLocalizationTranscreation,
   type AdLocalizationProviderRequest,
+  type AdLocalizationRepairRequest,
 } from "./ai-localization-provider.ts";
 import { resolveAiTextProviderConfig } from "./ai-text-provider.ts";
 
@@ -91,6 +95,23 @@ function request(overrides: Partial<AdLocalizationProviderRequest> = {}): AdLoca
   };
 }
 
+function repairRequest(overrides: Partial<AdLocalizationRepairRequest> = {}): AdLocalizationRepairRequest {
+  const base = request();
+  return {
+    ...base,
+    targetLocale: "es-US",
+    failedCreative: {
+      headline: "Cedar Bean 2x1 en latte",
+      supportingCopy: "Tu latte viene con una cookie.",
+      imageAltText: "Latte y cookie en Cedar Bean",
+    },
+    reasonCodes: ["BANNED_SHORTHAND"],
+    conciseFeedback: ["Target fields use banned BOGO shorthand."],
+    failedFields: ["headline"],
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -114,6 +135,35 @@ describe("buildAdLocalizationPrompt", () => {
     expect(schemaText).not.toContain("terms");
     expect(schemaText).not.toContain("exactOfferLine");
     expect(schemaText).not.toContain("price");
+  });
+});
+
+describe("buildAdLocalizationRepairPrompt", () => {
+  it("targets one failed locale and carries QA feedback without passing locales", () => {
+    const prompt = buildAdLocalizationRepairPrompt(repairRequest());
+
+    expect(prompt.repairable).toBe(true);
+    expect(prompt.systemPrompt).toContain(AD_LOCALIZATION_REPAIR_PROMPT_VERSION);
+    expect(prompt.systemPrompt).toContain("Repair only the requested target locale");
+    expect(prompt.userPrompt).toContain("Repair target locale: es-US");
+    expect(prompt.userPrompt).toContain("BANNED_SHORTHAND");
+    expect(prompt.userPrompt).toContain("Target fields use banned BOGO shorthand.");
+    expect(prompt.userPrompt).toContain("Cedar Bean 2x1 en latte");
+    expect(prompt.userPrompt).not.toContain("Repair target locale: ko-KR");
+    expect(JSON.stringify(prompt.jsonSchema)).not.toContain("localizations");
+  });
+
+  it("marks fact drift and unsupported claims as non-repairable", () => {
+    const prompt = buildAdLocalizationRepairPrompt(repairRequest({
+      reasonCodes: ["OFFER_FACT_DRIFT"],
+    }));
+
+    expect(prompt).toMatchObject({
+      repairable: false,
+      skippedReason: "NON_REPAIRABLE_QA_FAILURE",
+    });
+    expect(prompt.systemPrompt).toBe("");
+    expect(prompt.userPrompt).toBe("");
   });
 });
 
@@ -185,6 +235,63 @@ describe("generateAdLocalizationTranscreations", () => {
     expect(result).toMatchObject({
       provider: "none",
       model: "none",
+      targetCreatives: {},
+      attempts: [],
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("repairAdLocalizationTranscreation", () => {
+  it("uses the shared router for one target locale repair", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(openAiSuccess({
+      localization: {
+        locale: "es-US",
+        headline: "Cedar Bean: latte con cookie gratis",
+        supportingCopy: "Tu latte de la tarde viene con una cookie.",
+        imageAltText: "Latte y cookie en Cedar Bean",
+      },
+    }));
+
+    const result = await repairAdLocalizationTranscreation(repairRequest(), {
+      openAiApiKey: "openai-test-key",
+      env: providerEnv,
+      config: resolveAiTextProviderConfig(providerEnv),
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(result.promptVersion).toBe(AD_LOCALIZATION_REPAIR_PROMPT_VERSION);
+    expect(result.attempts[0]?.operation).toBe("translation");
+    expect(result.targetCreatives["es-US"]?.headline).toBe("Cedar Bean: latte con cookie gratis");
+    expect(result.targetCreatives["ko-KR"]).toBeUndefined();
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.response_format.json_schema.name).toBe("ad_persuasive_transcreation_repair");
+    expect(body.response_format.json_schema.schema.properties.localization.required).toEqual([
+      "locale",
+      "headline",
+      "supportingCopy",
+      "imageAltText",
+    ]);
+    expect(JSON.stringify(body)).not.toContain("exactOfferLine");
+  });
+
+  it("does not call a provider for non-repairable QA failures", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const result = await repairAdLocalizationTranscreation(repairRequest({
+      reasonCodes: ["UNSUPPORTED_CLAIM"],
+    }), {
+      openAiApiKey: "openai-test-key",
+      env: providerEnv,
+      config: resolveAiTextProviderConfig(providerEnv),
+    });
+
+    expect(result).toMatchObject({
+      provider: "none",
+      model: "none",
+      skippedReason: "NON_REPAIRABLE_QA_FAILURE",
       targetCreatives: {},
       attempts: [],
     });

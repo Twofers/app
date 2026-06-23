@@ -90,11 +90,13 @@ export type AdLocalizationProviderResult = {
   model: string;
   fallbackUsed: boolean;
   fallbackReason?: string;
+  skippedReason?: string;
   attempts: ProviderAttempt[];
   promptVersion: string;
 };
 
 export const AD_LOCALIZATION_PROMPT_VERSION = "AI_AD_LOCALIZATION_PROMPT_V1";
+export const AD_LOCALIZATION_REPAIR_PROMPT_VERSION = "AI_AD_LOCALIZATION_REPAIR_PROMPT_V1";
 
 export const AD_LOCALIZATION_FIELD_LIMITS = {
   headline: 72,
@@ -130,6 +132,29 @@ export const AD_LOCALIZATION_JSON_SCHEMA = {
   },
 } as const;
 
+export const AD_LOCALIZATION_REPAIR_JSON_SCHEMA = {
+  name: "ad_persuasive_transcreation_repair",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      localization: {
+        type: "object",
+        properties: {
+          locale: { type: "string", enum: ["en-US", "es-US", "ko-KR"] },
+          headline: { type: "string" },
+          supportingCopy: { type: "string" },
+          imageAltText: { type: "string" },
+        },
+        required: ["locale", "headline", "supportingCopy", "imageAltText"],
+        additionalProperties: false,
+      },
+    },
+    required: ["localization"],
+    additionalProperties: false,
+  },
+} as const;
+
 const SUPPORTED_LOCALES: SupportedAdLocale[] = ["en-US", "es-US", "ko-KR"];
 
 const LOCALE_LABELS: Record<SupportedAdLocale, string> = {
@@ -154,6 +179,35 @@ const LOCALE_RULES: Record<SupportedAdLocale, string[]> = {
 };
 
 const BANNED_SHORTHAND = ["BOGO", "2-for-1", "2x1", "1+1", "Same-Item"];
+
+export const REPAIRABLE_AD_LOCALIZATION_REASON_CODES = [
+  "WRONG_LANGUAGE",
+  "PROTECTED_TERM_CHANGED",
+  "BANNED_SHORTHAND",
+  "MOBILE_COPY_TOO_LONG",
+  "UNNATURAL_TARGET_LANGUAGE",
+  "INCOMPLETE_FIELDS",
+  "UNEXPECTED_LANGUAGE_MIXING",
+] as const;
+
+const NON_REPAIRABLE_AD_LOCALIZATION_REASON_CODES = [
+  "OFFER_FACT_DRIFT",
+  "UNSUPPORTED_CLAIM",
+  "MEANING_CHANGED",
+] as const;
+
+export type AdLocalizationRepairReasonCode =
+  | (typeof REPAIRABLE_AD_LOCALIZATION_REASON_CODES)[number]
+  | (typeof NON_REPAIRABLE_AD_LOCALIZATION_REASON_CODES)[number]
+  | string;
+
+export type AdLocalizationRepairRequest = Omit<AdLocalizationProviderRequest, "targetLocales"> & {
+  targetLocale: SupportedAdLocale;
+  failedCreative: AdLocalizationSourceCreative;
+  reasonCodes: AdLocalizationRepairReasonCode[];
+  conciseFeedback?: string[] | null;
+  failedFields?: Array<"headline" | "supportingCopy" | "imageAltText"> | null;
+};
 
 function cleanText(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
@@ -203,6 +257,21 @@ function compactForPrompt(value: unknown, depth = 0): unknown {
 
 function promptJson(value: unknown): string {
   return JSON.stringify(compactForPrompt(value), null, 2);
+}
+
+function noProviderResult(params: {
+  promptVersion: string;
+  skippedReason?: string;
+}): AdLocalizationProviderResult {
+  return {
+    targetCreatives: {},
+    provider: "none",
+    model: "none",
+    fallbackUsed: false,
+    skippedReason: params.skippedReason,
+    attempts: [],
+    promptVersion: params.promptVersion,
+  };
 }
 
 function targetRulesBlock(targetLocales: readonly SupportedAdLocale[]): string {
@@ -301,6 +370,110 @@ export function buildAdLocalizationPrompt(input: AdLocalizationProviderRequest):
   };
 }
 
+export function isRepairableAdLocalizationFailure(reasonCodes: readonly AdLocalizationRepairReasonCode[]): boolean {
+  if (reasonCodes.length === 0) return false;
+  return reasonCodes.every((reason) =>
+    (REPAIRABLE_AD_LOCALIZATION_REASON_CODES as readonly string[]).includes(reason)
+  );
+}
+
+export function buildAdLocalizationRepairPrompt(input: AdLocalizationRepairRequest): {
+  systemPrompt: string;
+  userPrompt: string;
+  jsonSchema: typeof AD_LOCALIZATION_REPAIR_JSON_SCHEMA;
+  repairable: boolean;
+  skippedReason?: string;
+} {
+  const targetLocale = input.targetLocale;
+  const protectedTerms = uniqueClean(input.protectedTerms);
+  if (targetLocale === input.sourceLocale) {
+    return {
+      repairable: false,
+      skippedReason: "SOURCE_LOCALE_REPAIR_NOT_ALLOWED",
+      jsonSchema: AD_LOCALIZATION_REPAIR_JSON_SCHEMA,
+      systemPrompt: "",
+      userPrompt: "",
+    };
+  }
+  if (!isRepairableAdLocalizationFailure(input.reasonCodes)) {
+    return {
+      repairable: false,
+      skippedReason: "NON_REPAIRABLE_QA_FAILURE",
+      jsonSchema: AD_LOCALIZATION_REPAIR_JSON_SCHEMA,
+      systemPrompt: "",
+      userPrompt: "",
+    };
+  }
+
+  return {
+    repairable: true,
+    jsonSchema: AD_LOCALIZATION_REPAIR_JSON_SCHEMA,
+    systemPrompt: [
+      `Prompt version: ${AD_LOCALIZATION_REPAIR_PROMPT_VERSION}.`,
+      "You repair one failed target-locale persuasive ad localization for Twofer.",
+      "Repair only the requested target locale. Do not generate, mention, or alter any passing locale.",
+      "Return exactly one localization object for the requested target locale.",
+      "Use the QA feedback to fix only language, protected-term preservation, banned shorthand, mobile length, field completeness, or language-mixing issues.",
+      "If the previous target copy included a fact drift, unsupported claim, or changed meaning, this repair prompt should not have been called; do not preserve that defect.",
+      "The model must not author exact offer lines, terms, price, time, quantity mechanics, CTA, eligibility, inventory, or redemption instructions.",
+      "Preserve protected merchant names, business names, branded item names, and exact item names character-for-character.",
+      "Do not add claims, ingredients, ratings, guarantees, dietary claims, popularity claims, price claims, or urgency.",
+      `Field limits: headline <= ${AD_LOCALIZATION_FIELD_LIMITS.headline} chars, supportingCopy <= ${AD_LOCALIZATION_FIELD_LIMITS.supportingCopy} chars, imageAltText <= ${AD_LOCALIZATION_FIELD_LIMITS.imageAltText} chars.`,
+      `Banned shorthand in every locale: ${BANNED_SHORTHAND.join(", ")}.`,
+      "Return JSON only and follow the schema exactly.",
+    ].join("\n"),
+    userPrompt: [
+      `Ad version id: ${cleanText(input.adVersionId, 120) || "unknown"}`,
+      `Source locale: ${input.sourceLocale} (${LOCALE_LABELS[input.sourceLocale]}).`,
+      `Repair target locale: ${targetLocale} (${LOCALE_LABELS[targetLocale]}).`,
+      "",
+      "TARGET LOCALE RULES:",
+      targetRulesBlock([targetLocale]),
+      "",
+      "QA REASONS TO REPAIR:",
+      uniqueClean(input.reasonCodes, 12).map((reason) => `- ${reason}`).join("\n"),
+      "",
+      "QA FEEDBACK:",
+      uniqueClean(input.conciseFeedback ?? [], 12).map((feedback) => `- ${feedback}`).join("\n") || "- (none supplied)",
+      "",
+      "FAILED FIELDS:",
+      uniqueClean(input.failedFields ?? [], 3).map((field) => `- ${field}`).join("\n") || "- (not specified)",
+      "",
+      "PROTECTED TERMS TO PRESERVE EXACTLY:",
+      protectedTerms.length ? protectedTerms.map((term) => `- ${term}`).join("\n") : "- (none supplied)",
+      "",
+      "SOURCE CREATIVE:",
+      promptJson({
+        strategy: cleanText(input.sourceCreative.strategy, 120),
+        headline: cleanText(input.sourceCreative.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+        supportingCopy: cleanText(input.sourceCreative.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+        imageAltText: cleanText(input.sourceCreative.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+      }),
+      "",
+      "FAILED TARGET CREATIVE TO REPAIR:",
+      promptJson({
+        headline: cleanText(input.failedCreative.headline, AD_LOCALIZATION_FIELD_LIMITS.headline + 80),
+        supportingCopy: cleanText(input.failedCreative.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy + 120),
+        imageAltText: cleanText(input.failedCreative.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText + 80),
+      }),
+      "",
+      "CREATIVE BRIEF:",
+      promptJson(input.creativeBrief ?? {}),
+      "",
+      "IMMUTABLE OFFER FACTS FOR GUARDRAILS ONLY:",
+      promptJson(input.offerFacts),
+      "",
+      "LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:",
+      promptJson(input.localizedTerms ?? []),
+      "",
+      "MERCHANT CREATIVE PROFILE:",
+      promptJson(input.merchantProfile ?? {}),
+      "",
+      "Output only repaired headline, supportingCopy, and imageAltText for the repair target locale.",
+    ].join("\n"),
+  };
+}
+
 function normalizeProviderValue(
   value: unknown,
   targetLocales: readonly SupportedAdLocale[],
@@ -323,6 +496,23 @@ function normalizeProviderValue(
     };
   }
   return out;
+}
+
+function normalizeProviderRepairValue(
+  value: unknown,
+  targetLocale: SupportedAdLocale,
+): Partial<Record<SupportedAdLocale, AdLocalizationProviderCreative>> {
+  const localization = (value as { localization?: unknown } | null)?.localization;
+  const record = localization && typeof localization === "object" ? localization as Record<string, unknown> : {};
+  if (record.locale !== targetLocale) return {};
+  return {
+    [targetLocale]: {
+      locale: targetLocale,
+      headline: cleanText(record.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+      supportingCopy: cleanText(record.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+      imageAltText: cleanText(record.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+    },
+  };
 }
 
 export async function generateAdLocalizationTranscreations(
@@ -364,5 +554,43 @@ export async function generateAdLocalizationTranscreations(
     fallbackReason: generation.fallbackReason,
     attempts: generation.attempts,
     promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+  };
+}
+
+export async function repairAdLocalizationTranscreation(
+  request: AdLocalizationRepairRequest,
+  deps: AiTextProviderDeps,
+): Promise<AdLocalizationProviderResult> {
+  const prompt = buildAdLocalizationRepairPrompt(request);
+  if (!prompt.repairable) {
+    return noProviderResult({
+      promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
+      skippedReason: prompt.skippedReason ?? "REPAIR_SKIPPED",
+    });
+  }
+
+  const generation = await generateStructuredText<typeof AD_LOCALIZATION_REPAIR_JSON_SCHEMA, unknown>({
+    operation: "translation",
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    jsonSchema: prompt.jsonSchema,
+    maxOutputTokens: 550,
+    timeoutMs: 10_000,
+    generationRunId: request.generationRunId,
+    promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
+    reasoningLevel: "medium",
+  }, {
+    ...deps,
+    config: deps.config ?? resolveAiTextProviderConfig(deps.env),
+  });
+
+  return {
+    targetCreatives: normalizeProviderRepairValue(generation.value, request.targetLocale),
+    provider: generation.provider,
+    model: generation.model,
+    fallbackUsed: generation.fallbackUsed,
+    fallbackReason: generation.fallbackReason,
+    attempts: generation.attempts,
+    promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
   };
 }
