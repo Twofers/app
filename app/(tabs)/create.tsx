@@ -225,9 +225,14 @@ export default function CreateDeal() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── New Deal (express flow: photo/item → AI draft → publish) ── */}
+          {/* ── New Deal (unified AI builder: photo, voice, or text → review → publish) ── */}
           <Pressable
-            onPress={() => router.push("/create/quick")}
+            onPress={() =>
+              router.push({
+                pathname: "/create/ai",
+                params: { fromCreateHub: "1" },
+              } as Href)
+            }
             style={{
               borderRadius: Radii.lg,
               padding: Spacing.xl,
@@ -279,26 +284,6 @@ export default function CreateDeal() {
 
           {moreToolsOpen ? (
             <View style={{ gap: Spacing.sm }}>
-              <Pressable
-                onPress={() => router.push("/create/ai" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="auto-awesome" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.aiAdsTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.aiAdsSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
               <Pressable
                 onPress={() => router.push("/create/menu" as Href)}
                 style={{
