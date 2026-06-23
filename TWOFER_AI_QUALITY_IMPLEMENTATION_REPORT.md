@@ -663,6 +663,156 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 1 - Shared renderer and English authoritative card
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr1`.
+
+Safety checkpoint: `9fda6598`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/ad-presentation-spec.ts`
+- `lib/ad-presentation-hash.ts`
+- `lib/ad-render-content.ts`
+- `lib/ad-theme-tokens.ts`
+- `lib/authoritative-offer-renderer.ts`
+- `lib/ad-presentation-spec.test.ts`
+- `lib/ad-presentation-hash.test.ts`
+- `lib/authoritative-offer-renderer.test.ts`
+- `components/composed-ad-card/ComposedAdCard.tsx`
+- `components/composed-ad-card/AdAccessibilityText.tsx`
+- `components/composed-ad-card/AdBrandRow.tsx`
+- `components/composed-ad-card/AdCallToAction.tsx`
+- `components/composed-ad-card/AdHeadline.tsx`
+- `components/composed-ad-card/AdImageLayer.tsx`
+- `components/composed-ad-card/AdStatusBadges.tsx`
+- `components/composed-ad-card/AdSupportingCopy.tsx`
+- `components/composed-ad-card/LockedOfferLine.tsx`
+- `components/composed-ad-card/types.ts`
+- `components/composed-ad-card/templates/HeroImageOverlayTemplate.tsx`
+- `components/composed-ad-card/templates/SplitOfferPanelTemplate.tsx`
+- `components/composed-ad-card/templates/LiveDropCardTemplate.tsx`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `app/(tabs)/index.tsx`
+- `app/deal/[id].tsx`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a bounded `AdPresentationSpec` contract with PR 1 template IDs, theme IDs, image source types, crop/focal clamping, validation, and renderer/spec version constants.
+- Added the English authoritative offer renderer that builds native locked offer content from `OfferDefinitionV1`, `DealOfferContract`, or existing deal display fields, and rejects `BOGO` / `2-for-1` style shorthand for customer-facing locked text.
+- Added a stable presentation hash that covers approved image/presentation/copy/locked-offer inputs and deliberately excludes live quantity and countdown state.
+- Added bounded theme tokens and renderer-facing content types for merchant identity, approved copy, immutable offer facts, and live state.
+- Built the shared native `ComposedAdCard` renderer with `hero_image_overlay`, `split_offer_panel`, and `live_drop_card`; unsupported/fallback/risky cases fail closed to `split_offer_panel`.
+- Wired merchant AI preview to the shared renderer behind `AI_V4_COMPOSED_AD_CARD_ENABLED`, `AI_V4_SHARED_RENDERER_ENABLED`, or `AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED`.
+- Wired customer Home feed and Deal Detail to the same renderer behind `AI_V4_SHARED_RENDERER_ENABLED`; flags default off, so existing production surfaces remain unchanged until enabled.
+- Added public Expo aliases for the client-side flags: `EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED`, `EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED`, and `EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED`.
+
+## Renderer version
+
+- Presentation spec version: `twofer-ad-presentation-v1`
+- Renderer version: `twofer-composed-card-renderer-v1`
+- Authoritative offer renderer version: `twofer-authoritative-offer-en-v1`
+
+## Templates implemented
+
+- `hero_image_overlay`
+- `split_offer_panel`
+- `live_drop_card`
+
+Deferred to PR 2: `social_moment_card`, `local_discovery_card`, `signature_item_card`, deterministic resolver, style alternates, and merchant style switching.
+
+## Deterministic resolver behavior
+
+PR 1 does not implement the full resolver. The renderer accepts a bounded presentation spec and fails safely:
+
+- `live_drop_card` renders only for live deals.
+- `hero_image_overlay` renders only when a real image source is present.
+- deterministic fallback and unsupported template requests render as `split_offer_panel`.
+
+## Presentation hash behavior
+
+- Hash covers image asset ID, crop/focal point, template, theme, logo/supporting-copy visibility, headline, supporting copy, CTA, locked offer line, terms line, spec version, and renderer version.
+- Hash excludes live quantity, countdown, and schedule display state.
+
+## Safe-zone and crop behavior
+
+- PR 1 stores bounded crop/focal metadata and clamps it to the 0-1 image coordinate space.
+- Full image safe-zone detection and crop repair are deferred to PR 2.
+- Merchant originals are not modified; crop/focal values are presentation metadata only.
+
+## Merchant first-preview flow
+
+- Existing flow remains unchanged with flags off.
+- With composed-card flags on, the AI preview uses the same `ComposedAdCard` renderer and the exact locked offer content.
+- No new mandatory merchant input was added.
+
+## Style-switch behavior
+
+- Not implemented in PR 1. Deferred to PR 2.
+
+## Composite QA triggers and outcomes
+
+- Not implemented in PR 1. Deterministic composite QA and selective screenshot QA are deferred to PR 3.
+
+## Approval and publish enforcement
+
+- Existing publish behavior is preserved.
+- Exact presentation approval binding and server-side publish enforcement are deferred to PR 3.
+
+## Representative screenshots and real-device findings
+
+- Not captured in this local PR 1 pass.
+- Real iPhone testing remains out of scope on this Windows machine.
+
+## Metrics
+
+- Telemetry for renderer usage, repairs, approval, and style edits is deferred to PR 2/3.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/authoritative-offer-renderer.test.ts lib/ad-presentation-spec.test.ts lib/ad-presentation-hash.test.ts lib/runtime-env.test.ts`: passed; 4 files, 12 tests.
+- `npx vitest run`: passed; 143 files, 794 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo lint`: passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr1" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- The composed renderer is flag-gated and not enabled by default.
+- Customer feed/detail adapters derive display facts from currently selected deal rows; richer versioned `ad_spec` customer loading remains future work after the relevant Supabase-side rollout.
+- PR 1 intentionally does not add database fields, migrations, full resolver, style switching, composite QA, screenshot QA, or publish enforcement.
+
+## Rollback
+
+Set the rollout flags false/unset:
+
+- `AI_V4_COMPOSED_AD_CARD_ENABLED=false`
+- `AI_V4_SHARED_RENDERER_ENABLED=false`
+- `AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED=false`
+
+No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

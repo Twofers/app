@@ -10,6 +10,7 @@ import { claimDeal } from "../../lib/functions";
 import { buildClaimDealTelemetry } from "../../lib/claim-telemetry";
 import { trackAppAnalyticsEvent } from "../../lib/app-analytics";
 import { Banner } from "../../components/ui/banner";
+import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { ScreenHeader } from "../../components/ui/screen-header";
@@ -30,10 +31,13 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { ReportSheet } from "@/components/report-sheet";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
-import { isShareDealEnabled } from "@/lib/runtime-env";
+import { isAiV4SharedRendererEnabled, isShareDealEnabled } from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
 import { getDealDetailActionState } from "@/lib/deal-action-state";
+import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
+import { buildApprovedAdCopy, buildMerchantIdentity } from "@/lib/ad-render-content";
+import { renderAuthoritativeOfferFromDeal } from "@/lib/authoritative-offer-renderer";
 
 type Deal = DealStructuredDisplayFields & {
   id: string;
@@ -143,6 +147,7 @@ export default function DealDetail() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
+  const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -549,6 +554,53 @@ export default function DealDetail() {
   const biz = deal.businesses;
   const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
   const directionsAvailable = hasDirectionsTarget(biz);
+  const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+  const validitySummary = formatValiditySummary(deal, {
+    lang: i18n.language,
+    endsVerb: t("commonUi.dealEndsVerb"),
+    t,
+    showTimeZone: false,
+  });
+  const detailScarcityLabel =
+    claimsCountReliable && remaining >= 1 && remaining <= 5
+      ? remaining === 1
+        ? t("consumerHome.onlyOneLeft")
+        : t("consumerHome.onlyNLeft", { count: remaining })
+      : null;
+  const composedOfferFacts = renderAuthoritativeOfferFromDeal(deal, {
+    title: displayTitle,
+    description: displayDescription,
+  });
+  const composedPresentation = buildDefaultAdPresentationSpec({
+    imageAssetId: deal.poster_storage_path ?? posterUri ?? null,
+    imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
+    templateId: posterUri ? "hero_image_overlay" : "split_offer_panel",
+    themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+    resolutionReasonCodes: posterUri ? ["DEAL_DETAIL_IMAGE"] : ["DEAL_DETAIL_FALLBACK"],
+  });
+  const composedCopy = buildApprovedAdCopy({
+    headline: displayTitle,
+    supportingCopy: displayDescription,
+    ctaLabel,
+    fallbackHeadline: composedOfferFacts.primaryOfferLine,
+  });
+  const composedMerchant = buildMerchantIdentity({
+    businessName: deal.businesses?.name,
+    locationName: deal.businesses?.location,
+    addressLine,
+  });
+  const composedLiveState = {
+    status:
+      actionState.kind === "active_claimed"
+        ? ("claimed" as const)
+        : actionState.kind === "unavailable"
+          ? ("unavailable" as const)
+          : ("live" as const),
+    statusLabel: actionState.kind === "unavailable" ? actionState.statusLabel : actionState.kind === "active_claimed" ? t("dealStatus.claimed") : t("dealStatus.live"),
+    quantityRemainingLabel: detailScarcityLabel,
+    timeRemainingLabel: actionState.kind === "unavailable" ? null : validitySummary,
+    claimAvailable: !ctaDisabled && !dealIsDemo,
+  };
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -606,34 +658,49 @@ export default function DealDetail() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: scrollBottom + stickyBarHeight + stickyBottom }}
+        contentContainerStyle={{
+          paddingBottom: scrollBottom + (composedCustomerRendererEnabled ? Spacing.xl : stickyBarHeight + stickyBottom),
+        }}
       >
-        <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
-          {displayTitle}
-        </Text>
-        {(() => {
-          const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
-          return posterUri ? (
-            <Image
-              source={{ uri: posterUri }}
-              style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg, marginTop: Spacing.lg }}
-              contentFit="cover"
-            />
-          ) : (
-            <View
-              style={{
-                height: heroHeight,
-                borderRadius: Radii.lg,
-                marginTop: Spacing.lg,
-                backgroundColor: theme.surfaceMuted,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
-            </View>
-          );
-        })()}
+        {composedCustomerRendererEnabled ? (
+          <ComposedAdCard
+            imageUri={posterUri}
+            offerFacts={composedOfferFacts}
+            merchant={composedMerchant}
+            copy={composedCopy}
+            presentation={composedPresentation}
+            liveState={composedLiveState}
+            surface="deal_detail"
+            fallbackVisualLabel={t("dealDetail.noImage")}
+            onPrimaryAction={() => void ctaPress()}
+          />
+        ) : (
+          <>
+            <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+              {displayTitle}
+            </Text>
+            {posterUri ? (
+              <Image
+                source={{ uri: posterUri }}
+                style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg, marginTop: Spacing.lg }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  height: heroHeight,
+                  borderRadius: Radii.lg,
+                  marginTop: Spacing.lg,
+                  backgroundColor: theme.surfaceMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+              </View>
+            )}
+          </>
+        )}
 
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text }}>
@@ -688,12 +755,7 @@ export default function DealDetail() {
             {t("dealDetail.claimsAvailable", { count: remaining })}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {formatValiditySummary(deal, {
-              lang: i18n.language,
-              endsVerb: t("commonUi.dealEndsVerb"),
-              t,
-              showTimeZone: false,
-            })}
+            {validitySummary}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {deal.claim_cutoff_buffer_minutes > 0
@@ -717,26 +779,28 @@ export default function DealDetail() {
         </Pressable>
       </ScrollView>
 
-      <View
-        style={{
-          position: "absolute",
-          left: horizontal,
-          right: horizontal,
-          bottom: stickyBottom,
-          minHeight: stickyBarHeight,
-          justifyContent: "center",
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.sm,
-          backgroundColor: theme.background,
-        }}
-      >
-        <PrimaryButton
-          title={ctaLabel}
-          onPress={() => void ctaPress()}
-          disabled={ctaDisabled || dealIsDemo}
-          style={ctaDisabled ? { backgroundColor: theme.surfaceMuted } : undefined}
-        />
-      </View>
+      {!composedCustomerRendererEnabled ? (
+        <View
+          style={{
+            position: "absolute",
+            left: horizontal,
+            right: horizontal,
+            bottom: stickyBottom,
+            minHeight: stickyBarHeight,
+            justifyContent: "center",
+            paddingTop: Spacing.sm,
+            paddingBottom: Spacing.sm,
+            backgroundColor: theme.background,
+          }}
+        >
+          <PrimaryButton
+            title={ctaLabel}
+            onPress={() => void ctaPress()}
+            disabled={ctaDisabled || dealIsDemo}
+            style={ctaDisabled ? { backgroundColor: theme.surfaceMuted } : undefined}
+          />
+        </View>
+      ) : null}
 
       <ReportSheet
         visible={reportVisible}

@@ -84,6 +84,12 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
+    AI_V4_SHARED_RENDERER_ENABLED: process.env.AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
+    AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -96,6 +102,18 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+export function isAiV4ComposedAdCardEnabled(): boolean {
+  return process.env.AI_V4_COMPOSED_AD_CARD_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED === "true";
+}
+
+export function isAiV4SharedRendererEnabled(): boolean {
+  return process.env.AI_V4_SHARED_RENDERER_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED === "true";
+}
+
+export function isAiV4AuthoritativeOfferCardEnabled(): boolean {
+  return process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

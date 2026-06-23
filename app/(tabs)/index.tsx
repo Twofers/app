@@ -31,6 +31,7 @@ import { BrandedConfirmModal } from "@/components/ui/branded-confirm-modal";
 import { BusinessRowCard } from "@/components/business-row-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
+import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { useBusiness } from "@/hooks/use-business";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
@@ -67,6 +68,10 @@ import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
+import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
+import { buildApprovedAdCopy, buildMerchantIdentity } from "@/lib/ad-render-content";
+import { renderAuthoritativeOfferFromDeal } from "@/lib/authoritative-offer-renderer";
+import { isAiV4SharedRendererEnabled } from "@/lib/runtime-env";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
@@ -162,6 +167,7 @@ export default function HomeScreen() {
   const { isLoggedIn, userId } = useBusiness();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
   const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -811,6 +817,7 @@ export default function HomeScreen() {
       const isFavorite = favoriteBusinessIds.includes(item.business_id);
       const itemIsDemo = isDemoOffer(item);
       const isLive = st === "live";
+      const displayDescription = localizedDealDescription(item, i18n.language);
       const statusLabel =
         st === "live"
           ? t("dealStatus.live")
@@ -845,6 +852,66 @@ export default function HomeScreen() {
                 border: theme.border,
                 text: theme.mutedText,
               };
+      if (composedCustomerRendererEnabled) {
+        const offerFacts = renderAuthoritativeOfferFromDeal(item, {
+          title: offerText,
+          description: displayDescription,
+        });
+        const presentation = buildDefaultAdPresentationSpec({
+          imageAssetId: item.poster_storage_path ?? posterUri ?? null,
+          imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
+          templateId: isLive && scarcityLabel ? "live_drop_card" : posterUri ? "hero_image_overlay" : "split_offer_panel",
+          themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+          resolutionReasonCodes: posterUri ? ["CONSUMER_FEED_IMAGE"] : ["CONSUMER_FEED_FALLBACK"],
+        });
+        const copy = buildApprovedAdCopy({
+          headline: offerText,
+          supportingCopy: displayDescription || t("consumerHome.tagline"),
+          ctaLabel: claimButtonTitle,
+          fallbackHeadline: offerFacts.primaryOfferLine,
+        });
+        const merchant = buildMerchantIdentity({
+          businessName,
+          locationName: businessLocation,
+        });
+        const liveState = {
+          status:
+            st === "live"
+              ? ("live" as const)
+              : st === "claimed"
+                ? ("claimed" as const)
+                : st === "redeemed"
+                  ? ("redeemed" as const)
+                  : ("ended" as const),
+          statusLabel,
+          quantityRemainingLabel: isLive ? scarcityLabel : null,
+          timeRemainingLabel: isLive ? formatTimeLeft(item.end_time) : null,
+          claimAvailable: isLive && !itemIsDemo && claimingDealId !== item.id,
+        };
+
+        return (
+          <View style={{ marginBottom: Spacing.xl }}>
+            <ComposedAdCard
+              imageUri={posterUri}
+              offerFacts={offerFacts}
+              merchant={merchant}
+              copy={copy}
+              presentation={presentation}
+              liveState={liveState}
+              surface="consumer_feed"
+              fallbackVisualLabel={t("consumerHome.noPhotoYet", { defaultValue: "Photo coming soon" })}
+              onCardPress={() => router.push(`/deal/${item.id}`)}
+              onPrimaryAction={() => void doClaim(item.id)}
+              secondaryAction={{
+                label: isFavorite ? t("dealsBrowse.cardSaved") : t("dealsBrowse.cardSaveFavorite"),
+                selected: isFavorite,
+                onPress: () => void toggleFavorite(item.business_id),
+                accessibilityLabel: isFavorite ? t("dealDetail.favorited") : t("dealDetail.favorite"),
+              }}
+            />
+          </View>
+        );
+      }
       const businessInitial = businessName.trim().charAt(0).toUpperCase() || "T";
       return (
         <View
@@ -979,7 +1046,7 @@ export default function HomeScreen() {
               {offerText}
             </Text>
             <Text numberOfLines={2} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22 }} maxFontSizeMultiplier={1.15}>
-              {localizedDealDescription(item, i18n.language) || t("consumerHome.tagline")}
+              {displayDescription || t("consumerHome.tagline")}
             </Text>
             <View style={{ marginTop: Spacing.xs, flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap" }}>
               <MaterialIcons name={isLive ? "schedule" : "confirmation-number"} size={16} color={isLive ? theme.accentText : theme.mutedText} />
@@ -1035,6 +1102,7 @@ export default function HomeScreen() {
       colorScheme,
       heroImageHeight,
       heroCardHeight,
+      composedCustomerRendererEnabled,
       toggleFavorite,
       formatTimeLeft,
       claimStatus,

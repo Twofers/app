@@ -40,6 +40,7 @@ import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
+import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -98,6 +99,21 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
+import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
+import {
+  buildApprovedAdCopy,
+  buildMerchantIdentity,
+  imageSourceTypeFromGeneratedAd,
+} from "@/lib/ad-render-content";
+import {
+  buildLockedOfferContent,
+  renderAuthoritativeOfferFromDefinition,
+} from "@/lib/authoritative-offer-renderer";
+import {
+  isAiV4AuthoritativeOfferCardEnabled,
+  isAiV4ComposedAdCardEnabled,
+  isAiV4SharedRendererEnabled,
+} from "@/lib/runtime-env";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -2534,6 +2550,45 @@ export default function AiDealScreen() {
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
+  const composedAdPreviewEnabled =
+    isAiV4ComposedAdCardEnabled() ||
+    isAiV4SharedRendererEnabled() ||
+    isAiV4AuthoritativeOfferCardEnabled();
+  const composedOfferFacts = offerDefinition
+    ? renderAuthoritativeOfferFromDefinition(offerDefinition)
+    : buildLockedOfferContent({
+        primaryOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
+        termsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
+      });
+  const composedPresentation = buildDefaultAdPresentationSpec({
+    imageAssetId: generatedAd?.poster_storage_path ?? originalStoragePath ?? adImageUri ?? null,
+    imageSourceType: adImageUri
+      ? imageSourceTypeFromGeneratedAd(generatedAd) === "deterministic_fallback"
+        ? "merchant_original"
+        : imageSourceTypeFromGeneratedAd(generatedAd)
+      : "deterministic_fallback",
+    templateId: adImageUri ? "hero_image_overlay" : "split_offer_panel",
+    themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+    resolutionReasonCodes: adImageUri ? ["MERCHANT_PREVIEW_IMAGE"] : ["MERCHANT_PREVIEW_FALLBACK"],
+  });
+  const composedCopy = buildApprovedAdCopy({
+    headline: generatedAd?.headline,
+    supportingCopy: generatedAd?.subheadline || generatedAd?.short_description,
+    ctaLabel: generatedAd?.cta || ctaText,
+    fallbackHeadline: composedOfferFacts.primaryOfferLine,
+  });
+  const composedMerchant = buildMerchantIdentity({
+    businessName,
+    locationName: businessProfile?.location,
+    addressLine: businessProfile?.address ?? businessProfile?.location ?? null,
+  });
+  const composedLiveState = {
+    status: "live" as const,
+    statusLabel: t("dealStatus.live"),
+    quantityRemainingLabel: `${t("createAi.maxClaimsLabel")} ${maxClaims}`.trim(),
+    timeRemainingLabel: displayScheduleSummary,
+    claimAvailable: true,
+  };
   const canCompareImages = Boolean(
     selectedPhotoUri &&
       adImageUri &&
@@ -3301,27 +3356,40 @@ export default function AiDealScreen() {
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                <GeneratedAdPreviewCard
-                  imageUri={adImageUri}
-                  businessName={businessName}
-                  headline={generatedAd.headline}
-                  body={generatedAd.subheadline}
-                  offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                  termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                  cta={generatedAd.cta}
-                  scheduleSummary={displayScheduleSummary}
-                  maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                  maxClaimsValue={maxClaims}
-                  termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                  termsHelper={t("createAi.lockedTermsHelper", {
-                    defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                  })}
-                  noImageLabel={t("createAi.noImage")}
-                  fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
-                  addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                  theme={theme}
-                  darkMode={colorScheme === "dark"}
-                />
+                {composedAdPreviewEnabled ? (
+                  <ComposedAdCard
+                    imageUri={adImageUri}
+                    offerFacts={composedOfferFacts}
+                    merchant={composedMerchant}
+                    copy={composedCopy}
+                    presentation={composedPresentation}
+                    liveState={composedLiveState}
+                    surface="merchant_preview"
+                    fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                  />
+                ) : (
+                  <GeneratedAdPreviewCard
+                    imageUri={adImageUri}
+                    businessName={businessName}
+                    headline={generatedAd.headline}
+                    body={generatedAd.subheadline}
+                    offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
+                    termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
+                    cta={generatedAd.cta}
+                    scheduleSummary={displayScheduleSummary}
+                    maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                    maxClaimsValue={maxClaims}
+                    termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                    termsHelper={t("createAi.lockedTermsHelper", {
+                      defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                    })}
+                    noImageLabel={t("createAi.noImage")}
+                    fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                    addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                    theme={theme}
+                    darkMode={colorScheme === "dark"}
+                  />
+                )}
 
                 {canCompareImages && originalImageVersion ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
