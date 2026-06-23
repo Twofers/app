@@ -128,6 +128,21 @@ const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
+const ITEM_RESEARCH_PROMPT_VERSION = "AI_ITEM_RESEARCH_V1";
+const ITEM_RESEARCH_SCHEMA = {
+  name: "item_research",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      item_name: { type: "string" },
+      description: { type: "string" },
+      is_familiar: { type: "boolean" },
+    },
+    required: ["item_name", "description", "is_familiar"],
+    additionalProperties: false,
+  },
+} as const;
 
 /** Included revision allowance. Extra image-affecting revisions must reserve a deal credit. */
 const MAX_REVISION_COUNT = INCLUDED_IMAGE_REVISIONS;
@@ -218,12 +233,13 @@ function dealNotEligibleForAiResponse(
  */
 async function researchMenuItem(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   itemHint: string;
   businessName: string;
   businessLocation: string;
   costContext?: AiCostContext;
 }): Promise<ItemResearch> {
-  const { openAiKey, itemHint, businessName, businessLocation, costContext } = params;
+  const { openAiKey, geminiApiKey, itemHint, businessName, businessLocation, costContext } = params;
   const cleanHint = itemHint.trim().slice(0, 400);
   if (!cleanHint) {
     return { item_name: "", description: "", is_familiar: false };
@@ -249,6 +265,7 @@ async function researchMenuItem(params: {
   // Stage 1a: use the standard model first; common cafe items do not need live lookup.
   const fallbackResult = await callResearchModel({
     openAiKey,
+    geminiApiKey,
     model: CHAT_MODEL,
     prompt,
     cleanHint,
@@ -262,6 +279,7 @@ async function researchMenuItem(params: {
   // Stage 1b: use search only for unfamiliar, ambiguous, local, or branded items.
   const webSearchResult = await callResearchModel({
     openAiKey,
+    geminiApiKey,
     model: RESEARCH_MODEL,
     prompt,
     cleanHint,
@@ -274,15 +292,59 @@ async function researchMenuItem(params: {
   return { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
 }
 
+function normalizeItemResearch(value: Partial<ItemResearch>, cleanHint: string): ItemResearch {
+  return {
+    item_name: clip(typeof value.item_name === "string" ? value.item_name : cleanHint, 80),
+    description: clip(typeof value.description === "string" ? value.description : "", 280),
+    is_familiar: value.is_familiar === true,
+  };
+}
+
 async function callResearchModel(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   model: string;
   prompt: string;
   cleanHint: string;
   isWebSearch: boolean;
   costContext?: AiCostContext;
 }): Promise<ItemResearch | null> {
-  const { openAiKey, model, prompt, cleanHint, isWebSearch, costContext } = params;
+  const { openAiKey, geminiApiKey, model, prompt, cleanHint, isWebSearch, costContext } = params;
+  if (!isWebSearch) {
+    try {
+      const result = await generateStructuredText<typeof ITEM_RESEARCH_SCHEMA, ItemResearch>({
+        operation: "merchant_context",
+        systemPrompt: "Identify a menu item for local-business ad generation. Return only grounded JSON.",
+        userPrompt: prompt,
+        jsonSchema: ITEM_RESEARCH_SCHEMA,
+        maxOutputTokens: 220,
+        timeoutMs: 12_000,
+        generationRunId: costContext?.requestGroupId ?? crypto.randomUUID(),
+        promptVersion: ITEM_RESEARCH_PROMPT_VERSION,
+        reasoningLevel: "low",
+      }, {
+        openAiApiKey: openAiKey,
+        geminiApiKey,
+        admin: costContext?.admin,
+        config: resolveAiTextProviderConfig(),
+      });
+      if (costContext) await logTextProviderAttempts(costContext, "ad_research", result.attempts);
+      return normalizeItemResearch(result.value, cleanHint);
+    } catch (e) {
+      const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+      if (costContext) await logTextProviderAttempts(costContext, "ad_research", attempts);
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "research_router_error",
+          model,
+          errorCode: (e as { errorCode?: string })?.errorCode ?? "AI_RESEARCH_FAILED",
+        }),
+      );
+      return null;
+    }
+  }
+
   try {
     // gpt-4o-search-preview rejects temperature; standard chat models accept it.
     // chatCompletionTuning also maps the token/temperature params correctly for the
@@ -345,11 +407,7 @@ async function callResearchModel(params: {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]) as Partial<ItemResearch>;
-    return {
-      item_name: clip(typeof parsed.item_name === "string" ? parsed.item_name : cleanHint, 80),
-      description: clip(typeof parsed.description === "string" ? parsed.description : "", 280),
-      is_familiar: parsed.is_familiar === true,
-    };
+    return normalizeItemResearch(parsed, cleanHint);
   } catch {
     console.log(
       JSON.stringify({
@@ -2784,6 +2842,7 @@ Deno.serve(async (req) => {
     } else {
       research = await researchMenuItem({
         openAiKey,
+        geminiApiKey,
         itemHint: sourceHint,
         businessName,
         businessLocation: businessContext.location ?? "",

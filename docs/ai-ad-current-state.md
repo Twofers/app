@@ -193,7 +193,7 @@ Model and provider controls:
 
 Stages:
 
-- Research: `chat.completions`, normal chat model first and `gpt-4o-search-preview` when needed.
+- Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed.
 - Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
@@ -318,6 +318,8 @@ Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents t
 
 Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It tries Gemini multimodal QA behind `AI_VISION_FALLBACK_ENABLED=true` after OpenAI vision failure. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
 
+Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet.
+
 Recommended baseline queries once Dan grants live read access:
 
 - p50/p95 copy latency from `ai_generation_logs.response_payload->copy->latency_ms`.
@@ -343,6 +345,7 @@ AI and quality gaps:
 - Legacy `ai-compose-offer` poster mode is disabled so it cannot bake critical text into generated pixels.
 - Main copy validation is strong for offer mechanics, but there is no full `AdQualityService` with persisted hard-gate results and soft scores.
 - Vision QA for the ad-variant image path uses the shared provider abstraction, but it is still synchronous, flag-gated, and not persisted as a first-class quality-check result.
+- Non-web ad research uses the shared provider router; live web-search preview, Whisper transcription, menu OCR, and image generation/edit providers still use media- or tool-specific direct provider calls.
 - Moderation is prompt/rule based; there is no dedicated moderation adapter.
 - There is no formal prompt/model release table, canary mechanism, or rollback switch beyond code/env deployment.
 

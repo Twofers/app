@@ -3158,3 +3158,61 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this documentation commit. No migration rollback is required.
+
+---
+
+## PR 4ao - Route non-web ad research through provider router
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `305a66e9`.
+
+Deployment actions: Edge Function redeploy required for hosted behavior to change; not performed here.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-research-source.test.ts`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a strict `ITEM_RESEARCH_SCHEMA` and prompt version for ad-variant item research.
+- Routed the non-web item-identification research pass through `generateStructuredText` with `operation: "merchant_context"`, shared provider config, Gemini fallback support, and shared provider-attempt telemetry.
+- Kept the explicit `gpt-4o-search-preview` web-search branch direct because the shared provider router does not model live-search tooling yet.
+- Added a source guard that prevents the non-web research pass from drifting back to raw OpenAI chat completions while preserving the separately logged web-search branch.
+- Updated the current-state audit to distinguish routed non-web research from remaining media/tool-specific direct provider paths.
+
+## Acceptance criteria map
+
+51. No generation path bypasses provider/quality controls: Improved; ad-variant non-web item research now shares the provider router used by other text helper paths. Remaining direct provider paths are live web-search preview, Whisper transcription, menu OCR, image generation/edit providers, and existing-deal edit/update compatibility.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase\functions\_shared\ai-generate-ad-variants-research-source.test.ts`: passed; 1 file, 2 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run lint`: passed.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 139 files, 778 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ao-20260623-2031`: passed with the known `country-flag-icons` package export warnings.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 129 Edge Function files failed for that same missing-command reason.
+
+## Unresolved risks
+
+- Hosted behavior still requires redeploying `ai-generate-ad-variants`; deployment is a hard gate and was not performed.
+- Live web-search preview remains a direct OpenAI search-preview call until there is a provider-neutral live-search abstraction.
+- Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
