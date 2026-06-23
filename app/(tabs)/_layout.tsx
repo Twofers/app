@@ -42,7 +42,7 @@ const renderSettingsTabIcon = createTabIconRenderer("gearshape.fill");
 const renderCreateTabIcon = createTabIconRenderer("plus.circle.fill");
 const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
 const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
-const renderBillingTabIcon = createTabIconRenderer("heart.fill");
+const renderBillingTabIcon = createTabIconRenderer("dollarsign");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
 const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <HapticTab {...props} />;
 

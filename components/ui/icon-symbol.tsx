@@ -23,6 +23,7 @@ export const ICON_SYMBOL_TO_MATERIAL_ICON = {
   'chart.bar.fill': 'bar-chart',
   'plus.circle.fill': 'add-circle',
   'heart.fill': 'favorite',
+  dollarsign: 'attach-money',
   'gearshape.fill': 'settings',
   'person.crop.circle.fill': 'person',
   'wallet.pass.fill': 'account-balance-wallet',
