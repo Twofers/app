@@ -208,6 +208,9 @@ type SingleAd = {
     transcreation_provider: string;
     transcreation_model: string;
     transcreation_skipped_reason?: string | null;
+    semantic_qa_provider: string;
+    semantic_qa_model: string;
+    semantic_qa_skipped_reason?: string | null;
     repair_target_locales: SupportedLocale[];
   } | null;
 };
@@ -2450,6 +2453,28 @@ function providerAttemptTelemetry(attempt: ProviderAttempt) {
 function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null) {
   if (!result) return { enabled: false };
   const repairEntries = Object.entries(result.repairs);
+  const qaReviewTelemetry = (qa: VerifiedAdLocalizationBundleResult["semanticQa"]) => ({
+    provider: qa.provider,
+    model: qa.model,
+    prompt_version: qa.promptVersion,
+    fallback_used: qa.fallbackUsed,
+    fallback_reason: qa.fallbackReason ?? null,
+    skipped_reason: qa.skippedReason ?? null,
+    attempts: qa.attempts.map(providerAttemptTelemetry),
+    decisions_by_locale: Object.fromEntries(
+      Object.entries(qa.reviews).map(([locale, review]) => [
+        locale,
+        review
+          ? {
+              decision: review.decision,
+              hard_fail_reasons: review.hardFailReasons,
+              scores: review.scores,
+              feedback_count: review.conciseFeedback.length,
+            }
+          : null,
+      ]),
+    ),
+  });
   return {
     enabled: true,
     source_locale: result.bundle.sourceLocale,
@@ -2476,8 +2501,10 @@ function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null
               feedback_count: qa.conciseFeedback.length,
             }
           : null,
-      ]),
+        ]),
     ),
+    semantic_qa: qaReviewTelemetry(result.semanticQa),
+    repaired_semantic_qa: qaReviewTelemetry(result.repairedSemanticQa),
     repairs: {
       target_locales: result.repairTargetLocales,
       count: repairEntries.length,
@@ -3159,8 +3186,11 @@ Deno.serve(async (req) => {
         },
         providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
         repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+        semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
       });
       await logTextProviderAttempts(costContext, "ad_localization_transcreation", localizationResult.transcreation.attempts);
+      await logTextProviderAttempts(costContext, "ad_localization_translation_qa", localizationResult.semanticQa.attempts);
+      await logTextProviderAttempts(costContext, "ad_localization_repaired_translation_qa", localizationResult.repairedSemanticQa.attempts);
       for (const repair of Object.values(localizationResult.repairs)) {
         if (repair) await logTextProviderAttempts(costContext, "ad_localization_repair", repair.attempts);
       }
@@ -3194,6 +3224,9 @@ Deno.serve(async (req) => {
             transcreation_provider: localizationResult.transcreation.provider,
             transcreation_model: localizationResult.transcreation.model,
             transcreation_skipped_reason: localizationResult.transcreation.skippedReason ?? null,
+            semantic_qa_provider: localizationResult.semanticQa.provider,
+            semantic_qa_model: localizationResult.semanticQa.model,
+            semantic_qa_skipped_reason: localizationResult.semanticQa.skippedReason ?? null,
             repair_target_locales: localizationResult.repairTargetLocales,
           }
         : null,
@@ -3219,6 +3252,8 @@ Deno.serve(async (req) => {
       openai_called:
         (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
         (localizationResult?.transcreation.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.semanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.repairedSemanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
         Object.values(localizationResult?.repairs ?? {}).some((repair) =>
           (repair?.attempts ?? []).some((attempt) => attempt.provider === "openai")
         ) ||

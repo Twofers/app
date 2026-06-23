@@ -1,15 +1,19 @@
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
+  type AiTextProviderConfig,
   type AiTextProviderDeps,
   type ProviderAttempt,
 } from "./ai-text-provider.ts";
+import { resolveGeminiTextModel } from "./gemini-text-provider.ts";
 import {
   buildQaCheckedAdLocalizationBundle,
 } from "../../../lib/ad-localization.ts";
 import type {
   AdLocalizationBundle,
+  AdTranslationQaHardFailReason,
   AdTranslationQaResult,
+  AdTranslationQaScores,
   SourceAdCreative,
 } from "../../../lib/ad-localization-schema.ts";
 import {
@@ -108,16 +112,30 @@ export type AdLocalizationProviderResult = {
   promptVersion: string;
 };
 
+export type AdLocalizationSemanticQaProviderResult = {
+  reviews: Partial<Record<SupportedAdLocale, AdTranslationQaResult>>;
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+  fallbackReason?: string;
+  skippedReason?: string;
+  attempts: ProviderAttempt[];
+  promptVersion: string;
+};
+
 export type VerifiedAdLocalizationBundleResult = {
   bundle: AdLocalizationBundle;
   transcreation: AdLocalizationProviderResult;
   repairs: Partial<Record<SupportedAdLocale, AdLocalizationProviderResult>>;
   deterministicQa: Partial<Record<SupportedAdLocale, AdTranslationQaResult>>;
+  semanticQa: AdLocalizationSemanticQaProviderResult;
+  repairedSemanticQa: AdLocalizationSemanticQaProviderResult;
   repairTargetLocales: SupportedAdLocale[];
 };
 
 export const AD_LOCALIZATION_PROMPT_VERSION = "AI_AD_LOCALIZATION_PROMPT_V1";
 export const AD_LOCALIZATION_REPAIR_PROMPT_VERSION = "AI_AD_LOCALIZATION_REPAIR_PROMPT_V1";
+export const AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION = "AI_AD_LOCALIZATION_SEMANTIC_QA_PROMPT_V1";
 
 export const AD_LOCALIZATION_FIELD_LIMITS = {
   headline: 72,
@@ -172,6 +190,68 @@ export const AD_LOCALIZATION_REPAIR_JSON_SCHEMA = {
       },
     },
     required: ["localization"],
+    additionalProperties: false,
+  },
+} as const;
+
+export const AD_LOCALIZATION_SEMANTIC_QA_JSON_SCHEMA = {
+  name: "ad_translation_semantic_qa",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      reviews: {
+        type: "array",
+        minItems: 1,
+        maxItems: 2,
+        items: {
+          type: "object",
+          properties: {
+            locale: { type: "string", enum: ["en-US", "es-US", "ko-KR"] },
+            decision: { type: "string", enum: ["pass", "repair", "block", "unavailable"] },
+            hardFailReasons: {
+              type: "array",
+              maxItems: 8,
+              items: {
+                type: "string",
+                enum: [
+                  "WRONG_LANGUAGE",
+                  "OFFER_FACT_DRIFT",
+                  "UNSUPPORTED_CLAIM",
+                  "PROTECTED_TERM_CHANGED",
+                  "BANNED_SHORTHAND",
+                  "MEANING_CHANGED",
+                  "MOBILE_COPY_TOO_LONG",
+                  "UNNATURAL_TARGET_LANGUAGE",
+                  "INCOMPLETE_FIELDS",
+                  "UNEXPECTED_LANGUAGE_MIXING",
+                ],
+              },
+            },
+            scores: {
+              type: "object",
+              properties: {
+                semanticParity: { type: "number" },
+                naturalness: { type: "number" },
+                merchantTone: { type: "number" },
+                clarity: { type: "number" },
+                mobileReadability: { type: "number" },
+              },
+              required: ["semanticParity", "naturalness", "merchantTone", "clarity", "mobileReadability"],
+              additionalProperties: false,
+            },
+            conciseFeedback: {
+              type: "array",
+              maxItems: 6,
+              items: { type: "string" },
+            },
+          },
+          required: ["locale", "decision", "hardFailReasons", "scores", "conciseFeedback"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["reviews"],
     additionalProperties: false,
   },
 } as const;
@@ -293,6 +373,48 @@ function noProviderResult(params: {
     skippedReason: params.skippedReason,
     attempts: params.attempts ?? [],
     promptVersion: params.promptVersion,
+  };
+}
+
+function noSemanticQaResult(params: {
+  skippedReason?: string;
+  attempts?: ProviderAttempt[];
+}): AdLocalizationSemanticQaProviderResult {
+  return {
+    reviews: {},
+    provider: "none",
+    model: "none",
+    fallbackUsed: false,
+    skippedReason: params.skippedReason,
+    attempts: params.attempts ?? [],
+    promptVersion: AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION,
+  };
+}
+
+function envNumber(env: { get(name: string): string | undefined | null }, name: string, fallback: number): number {
+  const raw = Number(env.get(name));
+  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+}
+
+function edgeEnv() {
+  return Deno.env;
+}
+
+export function resolveAdLocalizationSemanticQaConfig(
+  env: { get(name: string): string | undefined | null } = edgeEnv(),
+): AiTextProviderConfig {
+  const base = resolveAiTextProviderConfig(env);
+  return {
+    ...base,
+    routerEnabled: true,
+    primaryProvider: "gemini",
+    fallbackEnabled: false,
+    fallbackProvider: "openai",
+    geminiTextModel: resolveGeminiTextModel(env, "GEMINI_JUDGE_MODEL"),
+    primaryTimeoutMs: envNumber(env, "AI_TRANSLATION_QA_TIMEOUT_MS", 9_000),
+    fallbackTimeoutMs: envNumber(env, "AI_TRANSLATION_QA_TIMEOUT_MS", 9_000),
+    transientRetryMax: 0,
+    retryAfterFullTimeout: false,
   };
 }
 
@@ -496,6 +618,148 @@ export function buildAdLocalizationRepairPrompt(input: AdLocalizationRepairReque
   };
 }
 
+export function buildAdLocalizationSemanticQaPrompt(input: {
+  request: AdLocalizationProviderRequest;
+  targetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative | null>>;
+}): {
+  systemPrompt: string;
+  userPrompt: string;
+  jsonSchema: typeof AD_LOCALIZATION_SEMANTIC_QA_JSON_SCHEMA;
+  targetLocales: SupportedAdLocale[];
+} {
+  const targetLocales = normalizeTargetLocales(input.request.sourceLocale, input.request.targetLocales)
+    .filter((locale) => input.targetCreatives[locale]);
+  const protectedTerms = uniqueClean(input.request.protectedTerms);
+  return {
+    targetLocales,
+    jsonSchema: AD_LOCALIZATION_SEMANTIC_QA_JSON_SCHEMA,
+    systemPrompt: [
+      `Prompt version: ${AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION}.`,
+      "You are an independent translation QA reviewer for Twofer localized ad copy.",
+      "Review only semantic parity, target-language naturalness, merchant tone, clarity, and mobile readability.",
+      "Do not rewrite the copy. Do not judge exact offer mechanics, CTA labels, terms, inventory, price, time, or eligibility beyond detecting persuasive-copy drift.",
+      "Do not assume the transcreation provider, model, or prior score; none is provided.",
+      "Preserve protected merchant names, business names, branded item names, and exact item names character-for-character.",
+      "Return pass only when the target copy preserves the source idea and sounds natural in the target locale.",
+      "Return repair for localized copy that is fixable by editing the target fields without changing offer facts.",
+      "Return block for changed meaning, unsupported claims, fact drift, or protected-term changes.",
+      "Return unavailable only if the supplied target copy cannot be reviewed from the provided information.",
+      "Return JSON only and follow the schema exactly.",
+    ].join("\n"),
+    userPrompt: [
+      `Ad version id: ${cleanText(input.request.adVersionId, 120) || "unknown"}`,
+      `Source locale: ${input.request.sourceLocale} (${LOCALE_LABELS[input.request.sourceLocale]}).`,
+      `Review target locales: ${targetLocales.map((locale) => `${locale} (${LOCALE_LABELS[locale]})`).join(", ") || "(none)"}.`,
+      "",
+      "TARGET LOCALE RULES:",
+      targetRulesBlock(targetLocales),
+      "",
+      "PROTECTED TERMS THAT MUST STAY EXACTLY AS WRITTEN:",
+      protectedTerms.length ? protectedTerms.map((term) => `- ${term}`).join("\n") : "- (none supplied)",
+      "",
+      "SOURCE CREATIVE:",
+      promptJson({
+        strategy: cleanText(input.request.sourceCreative.strategy, 120),
+        headline: cleanText(input.request.sourceCreative.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+        supportingCopy: cleanText(input.request.sourceCreative.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+        imageAltText: cleanText(input.request.sourceCreative.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+      }),
+      "",
+      "TARGET CREATIVES TO REVIEW:",
+      promptJson(Object.fromEntries(
+        targetLocales.map((locale) => [
+          locale,
+          {
+            headline: cleanText(input.targetCreatives[locale]?.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+            supportingCopy: cleanText(input.targetCreatives[locale]?.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+            imageAltText: cleanText(input.targetCreatives[locale]?.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+          },
+        ]),
+      )),
+      "",
+      "IMMUTABLE OFFER FACTS FOR DRIFT DETECTION ONLY:",
+      promptJson(input.request.offerFacts),
+      "",
+      "CREATIVE BRIEF:",
+      promptJson(input.request.creativeBrief ?? {}),
+      "",
+      "Return one review per target locale.",
+    ].join("\n"),
+  };
+}
+
+const QA_DECISIONS: AdTranslationQaResult["decision"][] = ["pass", "repair", "block", "unavailable"];
+const QA_REASON_CODES: AdTranslationQaHardFailReason[] = [
+  "WRONG_LANGUAGE",
+  "OFFER_FACT_DRIFT",
+  "UNSUPPORTED_CLAIM",
+  "PROTECTED_TERM_CHANGED",
+  "BANNED_SHORTHAND",
+  "MEANING_CHANGED",
+  "MOBILE_COPY_TOO_LONG",
+  "UNNATURAL_TARGET_LANGUAGE",
+  "INCOMPLETE_FIELDS",
+  "UNEXPECTED_LANGUAGE_MIXING",
+];
+
+function clampScore(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function normalizeQaScores(value: unknown): AdTranslationQaScores {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    semanticParity: clampScore(record.semanticParity),
+    naturalness: clampScore(record.naturalness),
+    merchantTone: clampScore(record.merchantTone),
+    clarity: clampScore(record.clarity),
+    mobileReadability: clampScore(record.mobileReadability),
+  };
+}
+
+function normalizeQaDecision(value: unknown): AdTranslationQaResult["decision"] {
+  return QA_DECISIONS.includes(value as AdTranslationQaResult["decision"])
+    ? value as AdTranslationQaResult["decision"]
+    : "unavailable";
+}
+
+function normalizeQaReasonCodes(value: unknown): AdTranslationQaHardFailReason[] {
+  if (!Array.isArray(value)) return [];
+  const out: AdTranslationQaHardFailReason[] = [];
+  for (const item of value) {
+    if (!QA_REASON_CODES.includes(item as AdTranslationQaHardFailReason)) continue;
+    const code = item as AdTranslationQaHardFailReason;
+    if (!out.includes(code)) out.push(code);
+  }
+  return out;
+}
+
+function normalizeSemanticQaProviderValue(
+  value: unknown,
+  targetLocales: readonly SupportedAdLocale[],
+): Partial<Record<SupportedAdLocale, AdTranslationQaResult>> {
+  const reviews = (value as { reviews?: unknown[] } | null)?.reviews;
+  if (!Array.isArray(reviews)) return {};
+  const targetSet = new Set(targetLocales);
+  const out: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
+  for (const item of reviews) {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const locale = record.locale;
+    if (!SUPPORTED_LOCALES.includes(locale as SupportedAdLocale)) continue;
+    const supportedLocale = locale as SupportedAdLocale;
+    if (!targetSet.has(supportedLocale) || out[supportedLocale]) continue;
+    out[supportedLocale] = {
+      locale: supportedLocale,
+      decision: normalizeQaDecision(record.decision),
+      hardFailReasons: normalizeQaReasonCodes(record.hardFailReasons),
+      scores: normalizeQaScores(record.scores),
+      conciseFeedback: uniqueClean(Array.isArray(record.conciseFeedback) ? record.conciseFeedback : [], 6),
+    };
+  }
+  return out;
+}
+
 function normalizeProviderValue(
   value: unknown,
   targetLocales: readonly SupportedAdLocale[],
@@ -617,6 +881,44 @@ export async function repairAdLocalizationTranscreation(
   };
 }
 
+export async function reviewAdLocalizationSemanticQa(
+  input: {
+    request: AdLocalizationProviderRequest;
+    targetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative | null>>;
+  },
+  deps: AiTextProviderDeps,
+): Promise<AdLocalizationSemanticQaProviderResult> {
+  const prompt = buildAdLocalizationSemanticQaPrompt(input);
+  if (prompt.targetLocales.length === 0) {
+    return noSemanticQaResult({ skippedReason: "NO_TARGET_CREATIVES_TO_REVIEW" });
+  }
+
+  const generation = await generateStructuredText<typeof AD_LOCALIZATION_SEMANTIC_QA_JSON_SCHEMA, unknown>({
+    operation: "translation_qa",
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    jsonSchema: prompt.jsonSchema,
+    maxOutputTokens: 850,
+    timeoutMs: 9_000,
+    generationRunId: input.request.generationRunId,
+    promptVersion: AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION,
+    reasoningLevel: "medium",
+  }, {
+    ...deps,
+    config: resolveAdLocalizationSemanticQaConfig(deps.env),
+  });
+
+  return {
+    reviews: normalizeSemanticQaProviderValue(generation.value, prompt.targetLocales),
+    provider: generation.provider,
+    model: generation.model,
+    fallbackUsed: generation.fallbackUsed,
+    fallbackReason: generation.fallbackReason,
+    attempts: generation.attempts,
+    promptVersion: AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION,
+  };
+}
+
 function providerCreativeToSourceCreative(
   creative: AdLocalizationProviderCreative | AdLocalizationSourceCreative | null | undefined,
 ): SourceAdCreative {
@@ -664,12 +966,46 @@ function failedFieldsForQa(input: {
   return fields.length ? fields : ["headline", "supportingCopy", "imageAltText"];
 }
 
+function unavailableIndependentQa(locale: SupportedAdLocale, feedback: string): AdTranslationQaResult {
+  return {
+    locale,
+    decision: "unavailable",
+    hardFailReasons: [],
+    scores: {
+      semanticParity: 0,
+      naturalness: 0,
+      merchantTone: 0,
+      clarity: 0,
+      mobileReadability: 0,
+    },
+    conciseFeedback: [feedback],
+  };
+}
+
+function combinedQaResult(input: {
+  deterministicQa: AdTranslationQaResult;
+  semanticQaEnabled: boolean;
+  semanticQa: AdLocalizationSemanticQaProviderResult;
+  locale: SupportedAdLocale;
+}): AdTranslationQaResult {
+  if (input.deterministicQa.decision !== "pass" || !input.semanticQaEnabled) {
+    return input.deterministicQa;
+  }
+  return input.semanticQa.reviews[input.locale] ?? unavailableIndependentQa(
+    input.locale,
+    input.semanticQa.skippedReason
+      ? `Independent translation QA skipped: ${input.semanticQa.skippedReason}.`
+      : "Independent translation QA did not return a review for this locale.",
+  );
+}
+
 export async function generateVerifiedAdLocalizationBundle(input: {
   request: AdLocalizationProviderRequest;
   offerDefinition: OfferDefinitionV1;
   deps: AiTextProviderDeps;
   providerEnabled: boolean;
   repairEnabled: boolean;
+  semanticQaEnabled: boolean;
 }): Promise<VerifiedAdLocalizationBundleResult> {
   const sourceCreative = providerCreativeToSourceCreative(input.request.sourceCreative);
   let transcreation: AdLocalizationProviderResult = noProviderResult({
@@ -692,8 +1028,16 @@ export async function generateVerifiedAdLocalizationBundle(input: {
   const targetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative>> = {};
   const repairedTargetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative>> = {};
   const deterministicQa: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
+  const targetQaResults: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
+  const repairedTargetQaResults: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
   const repairs: Partial<Record<SupportedAdLocale, AdLocalizationProviderResult>> = {};
   const repairTargetLocales: SupportedAdLocale[] = [];
+  let semanticQa: AdLocalizationSemanticQaProviderResult = noSemanticQaResult({
+    skippedReason: input.semanticQaEnabled ? "NO_DETERMINISTICALLY_PASSING_TARGETS" : "SEMANTIC_QA_FLAG_DISABLED",
+  });
+  let repairedSemanticQa: AdLocalizationSemanticQaProviderResult = noSemanticQaResult({
+    skippedReason: input.semanticQaEnabled ? "NO_REPAIRED_TARGETS_TO_REVIEW" : "SEMANTIC_QA_FLAG_DISABLED",
+  });
 
   for (const locale of normalizeTargetLocales(input.request.sourceLocale, input.request.targetLocales)) {
     const targetCreative = transcreation.targetCreatives[locale];
@@ -710,6 +1054,37 @@ export async function generateVerifiedAdLocalizationBundle(input: {
       protectedTerms: input.request.protectedTerms,
     });
     deterministicQa[locale] = qa;
+  }
+
+  const semanticQaTargets = Object.fromEntries(
+    Object.entries(targetCreatives).filter(([locale]) => deterministicQa[locale as SupportedAdLocale]?.decision === "pass"),
+  ) as Partial<Record<SupportedAdLocale, SourceAdCreative>>;
+  if (input.semanticQaEnabled && Object.keys(semanticQaTargets).length > 0) {
+    try {
+      semanticQa = await reviewAdLocalizationSemanticQa({
+        request: input.request,
+        targetCreatives: semanticQaTargets,
+      }, input.deps);
+    } catch (error) {
+      semanticQa = noSemanticQaResult({
+        skippedReason: "SEMANTIC_QA_PROVIDER_FAILED",
+        attempts: (error as { attempts?: ProviderAttempt[] } | null)?.attempts ?? [],
+      });
+    }
+  }
+
+  for (const locale of normalizeTargetLocales(input.request.sourceLocale, input.request.targetLocales)) {
+    const normalizedTarget = targetCreatives[locale];
+    const deterministic = deterministicQa[locale];
+    if (!normalizedTarget || !deterministic) continue;
+
+    const qa = combinedQaResult({
+      deterministicQa: deterministic,
+      semanticQaEnabled: input.semanticQaEnabled,
+      semanticQa,
+      locale,
+    });
+    targetQaResults[locale] = qa;
 
     if (!input.repairEnabled || qa.decision !== "repair") continue;
     repairTargetLocales.push(locale);
@@ -738,6 +1113,47 @@ export async function generateVerifiedAdLocalizationBundle(input: {
     }
   }
 
+  const repairedDeterministicQa: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
+  const repairedSemanticQaTargets: Partial<Record<SupportedAdLocale, SourceAdCreative>> = {};
+  for (const [localeKey, repairedTargetCreative] of Object.entries(repairedTargetCreatives)) {
+    const locale = localeKey as SupportedAdLocale;
+    if (!repairedTargetCreative) continue;
+    const repairedQa = validateAdTranscreationDeterministically({
+      sourceLocale: input.request.sourceLocale,
+      targetLocale: locale,
+      sourceCreative,
+      targetCreative: repairedTargetCreative,
+      offerDefinition: input.offerDefinition,
+      protectedTerms: input.request.protectedTerms,
+    });
+    repairedDeterministicQa[locale] = repairedQa;
+    if (repairedQa.decision === "pass") repairedSemanticQaTargets[locale] = repairedTargetCreative;
+  }
+
+  if (input.semanticQaEnabled && Object.keys(repairedSemanticQaTargets).length > 0) {
+    try {
+      repairedSemanticQa = await reviewAdLocalizationSemanticQa({
+        request: input.request,
+        targetCreatives: repairedSemanticQaTargets,
+      }, input.deps);
+    } catch (error) {
+      repairedSemanticQa = noSemanticQaResult({
+        skippedReason: "REPAIRED_SEMANTIC_QA_PROVIDER_FAILED",
+        attempts: (error as { attempts?: ProviderAttempt[] } | null)?.attempts ?? [],
+      });
+    }
+  }
+
+  for (const [localeKey, repairedQa] of Object.entries(repairedDeterministicQa)) {
+    const locale = localeKey as SupportedAdLocale;
+    repairedTargetQaResults[locale] = combinedQaResult({
+      deterministicQa: repairedQa,
+      semanticQaEnabled: input.semanticQaEnabled,
+      semanticQa: repairedSemanticQa,
+      locale,
+    });
+  }
+
   const bundle = buildQaCheckedAdLocalizationBundle({
     sourceLocale: input.request.sourceLocale,
     sourceCreative,
@@ -745,6 +1161,8 @@ export async function generateVerifiedAdLocalizationBundle(input: {
     protectedTerms: input.request.protectedTerms,
     targetCreatives,
     repairedTargetCreatives,
+    targetQaResults,
+    repairedTargetQaResults,
   });
 
   return {
@@ -752,6 +1170,8 @@ export async function generateVerifiedAdLocalizationBundle(input: {
     transcreation,
     repairs,
     deterministicQa,
+    semanticQa,
+    repairedSemanticQa,
     repairTargetLocales,
   };
 }

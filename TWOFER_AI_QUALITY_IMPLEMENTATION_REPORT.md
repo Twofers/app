@@ -738,6 +738,82 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3g - Independent semantic translation QA
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-independent-qa`.
+
+Safety checkpoint: `e468d3d1` (Multilingual Deals PR 3f generation bundle wiring commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-independent-qa.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-localization.ts`
+- `lib/ad-localization.test.ts`
+- `lib/ad-variants.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts`
+- `supabase/functions/_shared/ai-localization-provider.ts`
+- `supabase/functions/_shared/ai-localization-provider.test.ts`
+- `supabase/functions/_shared/ai-text-provider.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `AI_AD_LOCALIZATION_SEMANTIC_QA_PROMPT_V1`, a bounded structured-output reviewer prompt/schema for independent semantic translation QA.
+- Added `translation_qa` as a judge-style provider-router operation so semantic QA can use the existing Gemini independent-judge path.
+- The semantic reviewer defaults to Gemini through `GEMINI_JUDGE_MODEL`, disables fallback, and does not receive the transcreation provider identity, model identity, deterministic score, or prior decision.
+- `generateVerifiedAdLocalizationBundle()` now runs semantic QA after deterministic QA when `AI_V5_TRANSLATION_QA_ENABLED=true`.
+- A target locale must pass deterministic QA and semantic QA before persuasive transcreation is accepted into the bundle.
+- Semantic QA repair decisions trigger one targeted repair for only the failed locale, and repaired copy is re-reviewed before acceptance.
+- When semantic QA is unavailable, missing, blocked, or still failing after repair, the affected locale uses deterministic target-language fallback.
+- Localization telemetry now records semantic QA provider/model/prompt metadata, attempts, decisions by locale, repaired semantic QA, and skipped reasons.
+- Fallback localizations now preserve the actual QA decision (`repair`, `block`, or `unavailable`) instead of flattening all fallback states to `pass`.
+
+## Acceptance criteria map
+
+- PR 3.5 independent translation QA: Implemented for generated response bundles behind `AI_V5_TRANSLATION_QA_ENABLED`.
+- PR 3.6 targeted repair: Improved; semantic repair decisions can now target one failed locale and are re-reviewed before acceptance.
+- PR 3.7 deterministic target-language fallback: Improved; semantic QA unavailability or failure falls back per-locale without showing source-language persuasive copy.
+- PR 3.8 locale-specific presentation resolver: Not implemented in this slice.
+- PR 3.9 localization storage and hashes: Not implemented in this slice; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Not implemented in this slice.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts lib/ad-localization.test.ts supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts`: passed; 3 files, 26 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. The localization provider, tests, and `ai-generate-ad-variants` Deno checks passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 160 files, 869 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3g-20260623`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- Semantic QA is provider-backed but still depends on hosted flag configuration and Edge Function redeploy before production can use it.
+- Localization bundles are still response/log payloads only; they are not persisted with offer/ad versions.
+- The owner UI does not yet consume the returned bundle for provider-backed language previews.
+- Locale-specific presentation resolver and publish enforcement remain future work.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on representative transcreations, semantic QA behavior, fallback copy, repair behavior, and real-device screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3f - Generation localization bundle wiring
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-generation-bundle`.

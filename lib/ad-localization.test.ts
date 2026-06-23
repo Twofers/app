@@ -68,7 +68,7 @@ describe("ad localization deterministic fallback bundle", () => {
       headline: "Oferta local",
       supportingCopy: "Al comprar 1 latte, recibes 1 cookie gratis",
       translationStatus: "deterministic_fallback",
-      qaDecision: "pass",
+      qaDecision: "unavailable",
       qaReasonCodes: ["DETERMINISTIC_TARGET_FALLBACK"],
     });
     expect(bundle.localizations["ko-KR"].headline).toBe("로컬 딜");
@@ -152,7 +152,7 @@ describe("ad localization deterministic fallback bundle", () => {
     });
     expect(bundle.localizations["ko-KR"]).toMatchObject({
       translationStatus: "deterministic_fallback",
-      qaDecision: "pass",
+      qaDecision: "repair",
     });
     expect(bundle.localizations["ko-KR"].qaReasonCodes).toEqual(
       expect.arrayContaining(["DETERMINISTIC_TARGET_FALLBACK", "WRONG_LANGUAGE"]),
@@ -196,6 +196,55 @@ describe("ad localization deterministic fallback bundle", () => {
       repairReasonCodes: ["BANNED_SHORTHAND"],
     });
     expect(bundle.deterministicFallbackLocales).toEqual(["ko-KR"]);
+  });
+
+  it("uses external semantic QA results when accepting target transcreations", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte reward",
+        supportingCopy: "Your afternoon latte comes with a cookie.",
+        imageAltText: "Cedar Bean latte and cookie",
+      },
+      targetCreatives: {
+        "es-US": {
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde viene con una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+      },
+      targetQaResults: {
+        "es-US": {
+          locale: "es-US",
+          decision: "block",
+          hardFailReasons: ["MEANING_CHANGED"],
+          scores: {
+            semanticParity: 0.2,
+            naturalness: 0.8,
+            merchantTone: 0.7,
+            clarity: 0.8,
+            mobileReadability: 0.8,
+          },
+          conciseFeedback: ["The target headline changes the source idea."],
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["es-US"]).toMatchObject({
+      headline: "Oferta local",
+      translationStatus: "deterministic_fallback",
+      qaDecision: "block",
+      repairStatus: "skipped_non_repairable",
+    });
+    expect(bundle.localizations["es-US"].qaReasonCodes).toEqual(
+      expect.arrayContaining([
+        "DETERMINISTIC_TARGET_FALLBACK",
+        "TRANSLATION_REPAIR_SKIPPED_NON_REPAIRABLE",
+        "MEANING_CHANGED",
+      ]),
+    );
   });
 
   it("does not replace a passing target locale with a repair candidate", () => {
@@ -263,6 +312,7 @@ describe("ad localization deterministic fallback bundle", () => {
     expect(bundle.localizations["en-US"]).toMatchObject({
       headline: "Local deal",
       translationStatus: "deterministic_fallback",
+      qaDecision: "repair",
       repairAttempted: true,
       repairStatus: "attempted_failed",
     });
@@ -306,6 +356,7 @@ describe("ad localization deterministic fallback bundle", () => {
     expect(bundle.localizations["en-US"]).toMatchObject({
       headline: "Local deal",
       translationStatus: "deterministic_fallback",
+      qaDecision: "block",
       repairAttempted: false,
       repairStatus: "skipped_non_repairable",
     });

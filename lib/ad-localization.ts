@@ -119,6 +119,8 @@ export function buildQaCheckedAdLocalizationBundle(input: {
   enabledLocales?: readonly SupportedLocale[] | null;
   targetCreatives?: Partial<Record<SupportedLocale, SourceAdCreative | null>> | null;
   repairedTargetCreatives?: Partial<Record<SupportedLocale, SourceAdCreative | null>> | null;
+  targetQaResults?: Partial<Record<SupportedLocale, AdTranslationQaResult | null>> | null;
+  repairedTargetQaResults?: Partial<Record<SupportedLocale, AdTranslationQaResult | null>> | null;
 }): AdLocalizationBundle {
   const sourceLocale = supportedLocaleOrDefault(input.sourceLocale);
   const enabledLocales = input.enabledLocales?.length ? [...input.enabledLocales] : [...SUPPORTED_LOCALES];
@@ -139,7 +141,7 @@ export function buildQaCheckedAdLocalizationBundle(input: {
       const locked = renderLocalizedOfferFromDefinition(input.offerDefinition, { locale });
       const isSource = locale === sourceLocale;
       const targetCreative = !isSource ? input.targetCreatives?.[locale] ?? null : null;
-      const qa = targetCreative
+      const deterministicQa = targetCreative
         ? validateAdTranscreationDeterministically({
             sourceLocale,
             targetLocale: locale,
@@ -149,10 +151,13 @@ export function buildQaCheckedAdLocalizationBundle(input: {
             protectedTerms,
           })
         : null;
+      const qa = !isSource && targetCreative
+        ? input.targetQaResults?.[locale] ?? deterministicQa
+        : null;
       const repairedTargetCreative = !isSource && qa?.decision === "repair"
         ? input.repairedTargetCreatives?.[locale] ?? null
         : null;
-      const repairQa = repairedTargetCreative
+      const deterministicRepairQa = repairedTargetCreative
         ? validateAdTranscreationDeterministically({
             sourceLocale,
             targetLocale: locale,
@@ -161,6 +166,9 @@ export function buildQaCheckedAdLocalizationBundle(input: {
             offerDefinition: input.offerDefinition,
             protectedTerms,
           })
+        : null;
+      const repairQa = !isSource && repairedTargetCreative
+        ? input.repairedTargetQaResults?.[locale] ?? deterministicRepairQa
         : null;
       const acceptedTargetCreative = qa?.decision === "pass"
         ? targetCreative
@@ -222,7 +230,11 @@ export function buildQaCheckedAdLocalizationBundle(input: {
           : useTranscreation
             ? "persuasive_transcreation" as const
             : "deterministic_fallback" as const,
-        qaDecision: isSource ? "not_required" as const : "pass" as const,
+        qaDecision: isSource
+          ? "not_required" as const
+          : useTranscreation
+            ? "pass" as const
+            : qa?.decision ?? "unavailable" as const,
         qaReasonCodes: isSource ? [] : useTranscreation ? [] : fallbackReasonCodes,
         repairAttempted,
         repairStatus,

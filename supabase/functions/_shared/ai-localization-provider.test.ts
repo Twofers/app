@@ -4,16 +4,20 @@ import {
   AD_LOCALIZATION_JSON_SCHEMA,
   AD_LOCALIZATION_PROMPT_VERSION,
   AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
+  AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION,
   adLocalizationOfferFactsFromDefinition,
   buildAdLocalizationPrompt,
   buildAdLocalizationRepairPrompt,
+  buildAdLocalizationSemanticQaPrompt,
   generateAdLocalizationTranscreations,
   generateVerifiedAdLocalizationBundle,
+  reviewAdLocalizationSemanticQa,
   repairAdLocalizationTranscreation,
   type AdLocalizationProviderRequest,
   type AdLocalizationRepairRequest,
 } from "./ai-localization-provider.ts";
 import { resolveAiTextProviderConfig } from "./ai-text-provider.ts";
+import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
 function env(values: Record<string, string | undefined>) {
   return {
@@ -49,6 +53,26 @@ function openAiSuccess(value: unknown) {
       },
     }),
     { status: 200, headers: { "Content-Type": "application/json", "x-request-id": "req_localization" } },
+  );
+}
+
+function geminiSuccess(value: unknown) {
+  return new Response(
+    JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: JSON.stringify(value) }],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 100,
+        candidatesTokenCount: 60,
+        totalTokenCount: 160,
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }
 
@@ -110,6 +134,54 @@ function repairRequest(overrides: Partial<AdLocalizationRepairRequest> = {}): Ad
     conciseFeedback: ["Target fields use banned BOGO shorthand."],
     failedFields: ["headline"],
     ...overrides,
+  };
+}
+
+function offerDefinition(): OfferDefinitionV1 {
+  return {
+    schemaVersion: 1 as const,
+    status: "draft" as const,
+    source: "deal_eligibility_v1" as const,
+    merchantId: "biz_123",
+    merchantName: "Cedar Bean",
+    locationId: "loc_123",
+    locationName: "Cedar Bean - Irving",
+    timeZone: "America/Chicago",
+    offerType: "buy_one_get_reward_item" as const,
+    qualifyingItems: [{ catalogItemId: null, displayName: "latte", quantity: 1, verifiedAttributes: [] }],
+    reward: {
+      rule: "reward_item_free" as const,
+      discountPercent: 100 as const,
+      quantity: 1,
+      catalogItemIds: [] as string[],
+      displayNames: ["cookie"],
+    },
+    perUserClaimLimit: 1 as const,
+    totalClaimLimit: 20,
+    schedule: {
+      mode: "summary_only" as const,
+      summary: "Today 2:00 PM to 4:00 PM",
+      startsAt: null,
+      endsAt: null,
+      timeZone: "America/Chicago",
+      daysOfWeek: null,
+      windowStartMinutes: null,
+      windowEndMinutes: null,
+    },
+    redemption: {
+      exactLocationOnly: true,
+      redeemAtBusinessName: "Cedar Bean",
+      redeemAtLocationName: "Cedar Bean - Irving",
+      claimCutoffSummary: null,
+    },
+    fulfillmentModes: ["in_store"],
+    stackable: false as const,
+    sourceAssetIds: [],
+    canonicalOfferLine: "Buy 1 latte and get 1 cookie free",
+    canonicalOfferSentence: "Buy 1 latte and get 1 cookie free.",
+    canonicalTermsLine: "Buy 1 latte and get 1 cookie free.",
+    disclosureIds: ["canonical_offer_terms"],
+    disclosureLine: "Buy 1 latte and get 1 cookie free. Limit one claim per customer.",
   };
 }
 
@@ -300,6 +372,80 @@ describe("repairAdLocalizationTranscreation", () => {
   });
 });
 
+describe("reviewAdLocalizationSemanticQa", () => {
+  it("builds an independent semantic QA prompt without provider identity or prior scores", () => {
+    const prompt = buildAdLocalizationSemanticQaPrompt({
+      request: request(),
+      targetCreatives: {
+        "es-US": {
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde viene con una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+      },
+    });
+
+    expect(prompt.targetLocales).toEqual(["es-US"]);
+    expect(prompt.systemPrompt).toContain(AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION);
+    expect(prompt.systemPrompt).toContain("Do not assume the transcreation provider");
+    expect(prompt.userPrompt).toContain("Review target locales: es-US");
+    expect(prompt.userPrompt).toContain("SOURCE CREATIVE");
+    expect(prompt.userPrompt).toContain("TARGET CREATIVES TO REVIEW");
+    expect(prompt.userPrompt).not.toContain("provider:");
+    expect(prompt.userPrompt).not.toContain("prior score");
+    expect(JSON.stringify(prompt.jsonSchema)).toContain("semanticParity");
+    expect(JSON.stringify(prompt.jsonSchema)).toContain("UNNATURAL_TARGET_LANGUAGE");
+  });
+
+  it("uses the Gemini judge model for independent semantic QA", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(geminiSuccess({
+      reviews: [
+        {
+          locale: "es-US",
+          decision: "pass",
+          hardFailReasons: [],
+          scores: {
+            semanticParity: 0.96,
+            naturalness: 0.92,
+            merchantTone: 0.9,
+            clarity: 0.94,
+            mobileReadability: 0.95,
+          },
+          conciseFeedback: ["Natural and faithful."],
+        },
+      ],
+    }));
+
+    const result = await reviewAdLocalizationSemanticQa({
+      request: request(),
+      targetCreatives: {
+        "es-US": {
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde viene con una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+      },
+    }, {
+      openAiApiKey: "openai-test-key",
+      geminiApiKey: "gemini-test-key",
+      env: providerEnv,
+      config: resolveAiTextProviderConfig(providerEnv),
+    });
+
+    expect(result.provider).toBe("gemini");
+    expect(result.model).toBe("gemini-3.5-flash");
+    expect(result.promptVersion).toBe(AD_LOCALIZATION_SEMANTIC_QA_PROMPT_VERSION);
+    expect(result.attempts[0]?.operation).toBe("translation_qa");
+    expect(result.reviews["es-US"]?.decision).toBe("pass");
+    expect(result.reviews["es-US"]?.scores.semanticParity).toBe(0.96);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("generativelanguage.googleapis.com");
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.generationConfig.responseSchema.properties.reviews.items.properties).toHaveProperty("decision");
+  });
+});
+
 describe("generateVerifiedAdLocalizationBundle", () => {
   it("repairs only the failed target locale before building the bundle", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
@@ -382,6 +528,7 @@ describe("generateVerifiedAdLocalizationBundle", () => {
       },
       providerEnabled: true,
       repairEnabled: true,
+      semanticQaEnabled: false,
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -399,6 +546,224 @@ describe("generateVerifiedAdLocalizationBundle", () => {
       translationStatus: "persuasive_transcreation",
       repairAttempted: false,
       repairStatus: "not_needed",
+    });
+  });
+
+  it("uses independent semantic QA to block deterministically passing but meaning-changed copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiSuccess({
+        localizations: [
+          {
+            locale: "es-US",
+            headline: "Cedar Bean: latte con cookie gratis",
+            supportingCopy: "Tu latte de la tarde viene con una cookie.",
+            imageAltText: "Latte y cookie en Cedar Bean",
+          },
+          {
+            locale: "ko-KR",
+            headline: "Cedar Bean \uB77C\uB5BC \uD61C\uD0DD",
+            supportingCopy: "\uC624\uD6C4 latte\uC5D0 cookie\uAC00 \uD568\uAED8 \uC81C\uACF5\uB429\uB2C8\uB2E4.",
+            imageAltText: "Cedar Bean latte\uC640 cookie",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(geminiSuccess({
+        reviews: [
+          {
+            locale: "es-US",
+            decision: "pass",
+            hardFailReasons: [],
+            scores: {
+              semanticParity: 0.96,
+              naturalness: 0.93,
+              merchantTone: 0.9,
+              clarity: 0.94,
+              mobileReadability: 0.95,
+            },
+            conciseFeedback: ["Natural and faithful."],
+          },
+          {
+            locale: "ko-KR",
+            decision: "block",
+            hardFailReasons: ["MEANING_CHANGED"],
+            scores: {
+              semanticParity: 0.2,
+              naturalness: 0.85,
+              merchantTone: 0.7,
+              clarity: 0.8,
+              mobileReadability: 0.8,
+            },
+            conciseFeedback: ["The target copy changes the source customer hook."],
+          },
+        ],
+      }));
+
+    const result = await generateVerifiedAdLocalizationBundle({
+      request: request(),
+      offerDefinition: offerDefinition(),
+      deps: {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: providerEnv,
+        config: resolveAiTextProviderConfig(providerEnv),
+      },
+      providerEnabled: true,
+      repairEnabled: true,
+      semanticQaEnabled: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.semanticQa.provider).toBe("gemini");
+    expect(result.semanticQa.reviews["ko-KR"]?.decision).toBe("block");
+    expect(result.repairTargetLocales).toEqual([]);
+    expect(result.bundle.localizations["es-US"].translationStatus).toBe("persuasive_transcreation");
+    expect(result.bundle.localizations["ko-KR"]).toMatchObject({
+      translationStatus: "deterministic_fallback",
+      qaDecision: "block",
+      repairStatus: "skipped_non_repairable",
+    });
+    expect(result.bundle.localizations["ko-KR"].qaReasonCodes).toEqual(
+      expect.arrayContaining(["DETERMINISTIC_TARGET_FALLBACK", "MEANING_CHANGED"]),
+    );
+  });
+
+  it("repairs a semantic QA failure and re-reviews the repaired locale before accepting it", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiSuccess({
+        localizations: [
+          {
+            locale: "es-US",
+            headline: "Cedar Bean: latte con cookie gratis",
+            supportingCopy: "Tu latte de la tarde viene con una cookie.",
+            imageAltText: "Latte y cookie en Cedar Bean",
+          },
+          {
+            locale: "ko-KR",
+            headline: "Cedar Bean \uB77C\uB5BC \uD61C\uD0DD",
+            supportingCopy: "\uC624\uD6C4 latte\uC5D0 cookie\uAC00 \uD568\uAED8 \uC81C\uACF5\uB429\uB2C8\uB2E4.",
+            imageAltText: "Cedar Bean latte\uC640 cookie",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(geminiSuccess({
+        reviews: [
+          {
+            locale: "es-US",
+            decision: "repair",
+            hardFailReasons: ["UNNATURAL_TARGET_LANGUAGE"],
+            scores: {
+              semanticParity: 0.9,
+              naturalness: 0.35,
+              merchantTone: 0.7,
+              clarity: 0.75,
+              mobileReadability: 0.8,
+            },
+            conciseFeedback: ["The Spanish wording sounds literal."],
+          },
+          {
+            locale: "ko-KR",
+            decision: "pass",
+            hardFailReasons: [],
+            scores: {
+              semanticParity: 0.95,
+              naturalness: 0.9,
+              merchantTone: 0.88,
+              clarity: 0.9,
+              mobileReadability: 0.92,
+            },
+            conciseFeedback: ["Natural and faithful."],
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(openAiSuccess({
+        localization: {
+          locale: "es-US",
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde incluye una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+      }))
+      .mockResolvedValueOnce(geminiSuccess({
+        reviews: [
+          {
+            locale: "es-US",
+            decision: "pass",
+            hardFailReasons: [],
+            scores: {
+              semanticParity: 0.96,
+              naturalness: 0.93,
+              merchantTone: 0.9,
+              clarity: 0.94,
+              mobileReadability: 0.95,
+            },
+            conciseFeedback: ["The repaired Spanish is natural and faithful."],
+          },
+        ],
+      }));
+
+    const result = await generateVerifiedAdLocalizationBundle({
+      request: request(),
+      offerDefinition: offerDefinition(),
+      deps: {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: "gemini-test-key",
+        env: providerEnv,
+        config: resolveAiTextProviderConfig(providerEnv),
+      },
+      providerEnabled: true,
+      repairEnabled: true,
+      semanticQaEnabled: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.repairTargetLocales).toEqual(["es-US"]);
+    expect(result.semanticQa.reviews["es-US"]?.decision).toBe("repair");
+    expect(result.repairedSemanticQa.reviews["es-US"]?.decision).toBe("pass");
+    expect(result.bundle.localizations["es-US"]).toMatchObject({
+      headline: "Cedar Bean: latte con cookie gratis",
+      supportingCopy: "Tu latte de la tarde incluye una cookie.",
+      translationStatus: "persuasive_transcreation",
+      qaDecision: "pass",
+      repairAttempted: true,
+      repairStatus: "attempted_pass",
+    });
+  });
+
+  it("uses deterministic fallback when semantic QA is enabled but unavailable", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiSuccess({
+        localizations: [
+          {
+            locale: "es-US",
+            headline: "Cedar Bean: latte con cookie gratis",
+            supportingCopy: "Tu latte de la tarde viene con una cookie.",
+            imageAltText: "Latte y cookie en Cedar Bean",
+          },
+        ],
+      }));
+
+    const result = await generateVerifiedAdLocalizationBundle({
+      request: request({ targetLocales: ["es-US"] }),
+      offerDefinition: offerDefinition(),
+      deps: {
+        openAiApiKey: "openai-test-key",
+        geminiApiKey: null,
+        env: providerEnv,
+        config: resolveAiTextProviderConfig(providerEnv),
+      },
+      providerEnabled: true,
+      repairEnabled: true,
+      semanticQaEnabled: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.semanticQa.skippedReason).toBe("SEMANTIC_QA_PROVIDER_FAILED");
+    expect(result.semanticQa.reviews["es-US"]).toBeUndefined();
+    expect(result.bundle.localizations["es-US"]).toMatchObject({
+      translationStatus: "deterministic_fallback",
+      qaDecision: "unavailable",
+      repairAttempted: false,
+      repairStatus: "not_attempted",
     });
   });
 
@@ -459,6 +824,7 @@ describe("generateVerifiedAdLocalizationBundle", () => {
       },
       providerEnabled: false,
       repairEnabled: true,
+      semanticQaEnabled: false,
     });
 
     expect(fetchMock).not.toHaveBeenCalled();

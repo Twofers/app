@@ -27,7 +27,8 @@ export type AiOperation =
   | "image_qa"
   | "merchant_context"
   | "compose_offer"
-  | "translation";
+  | "translation"
+  | "translation_qa";
 
 export type AiReasoningLevel = "none" | "low" | "medium" | "high";
 
@@ -143,7 +144,7 @@ export function resolveAiTextProviderConfig(env: EnvReader = edgeEnv()): AiTextP
 }
 
 export function operationCapability(operation: AiOperation): AiProviderCapability {
-  if (operation === "candidate_judge") return "candidate_judging";
+  if (operation === "candidate_judge" || operation === "translation_qa") return "candidate_judging";
   if (operation === "image_qa") return "vision_qa";
   return "text_generation";
 }

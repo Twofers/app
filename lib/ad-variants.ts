@@ -55,6 +55,9 @@ export type GeneratedAd = {
     transcreation_provider: string;
     transcreation_model: string;
     transcreation_skipped_reason?: string | null;
+    semantic_qa_provider: string;
+    semantic_qa_model: string;
+    semantic_qa_skipped_reason?: string | null;
     repair_target_locales: SupportedLocale[];
   } | null;
 };
