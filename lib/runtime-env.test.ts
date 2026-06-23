@@ -21,7 +21,10 @@ import {
   isAiV4MinimalInputFlowEnabled,
   isAiV4PresentationResolverEnabled,
   isAiV4SharedRendererEnabled,
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5DealLanguageSwitchEnabled,
   isAiV5KoreanCounterRegistryEnabled,
+  isAiV5LocalizedOwnerUiEnabled,
   isAiV5LocalizedOfferRendererEnabled,
   isAiV5MultilingualFoundationEnabled,
 } from "./runtime-env";
@@ -70,6 +73,12 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED,
     AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED,
     EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED,
+    AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED,
+    EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED,
+    AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED,
+    EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED,
+    AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED,
+    EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED,
   };
 
   afterEach(() => {
@@ -107,6 +116,12 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED;
     delete process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED;
+    delete process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED;
+    delete process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED;
+    delete process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
@@ -120,6 +135,9 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5MultilingualFoundationEnabled()).toBe(false);
     expect(isAiV5LocalizedOfferRendererEnabled()).toBe(false);
     expect(isAiV5KoreanCounterRegistryEnabled()).toBe(false);
+    expect(isAiV5LocalizedOwnerUiEnabled()).toBe(false);
+    expect(isAiV5CustomerLocaleResolutionEnabled()).toBe(false);
+    expect(isAiV5DealLanguageSwitchEnabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
@@ -135,6 +153,9 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
@@ -148,5 +169,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5MultilingualFoundationEnabled()).toBe(true);
     expect(isAiV5LocalizedOfferRendererEnabled()).toBe(true);
     expect(isAiV5KoreanCounterRegistryEnabled()).toBe(true);
+    expect(isAiV5LocalizedOwnerUiEnabled()).toBe(true);
+    expect(isAiV5CustomerLocaleResolutionEnabled()).toBe(true);
+    expect(isAiV5DealLanguageSwitchEnabled()).toBe(true);
   });
 });

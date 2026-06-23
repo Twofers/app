@@ -663,6 +663,88 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 2 - Localized owner interface and customer language switching
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr2-locale-switching`.
+
+Safety checkpoint: `8c825739` (Multilingual Deals PR 1 foundation commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `.env.example`
+- `app/create/ai.tsx`
+- `app/deal/[id].tsx`
+- `app/(tabs)/index.tsx`
+- `docs/localization/multilingual-deals-pr2-locale-switching.md`
+- `docs/localization/native-review-log.md`
+- `lib/app-analytics.ts`
+- `lib/customer-deal-locale-storage.ts`
+- `lib/localized-deal-display.ts`
+- `lib/runtime-env.ts`
+- `lib/i18n/locales/en.json`
+- `lib/i18n/locales/es.json`
+- `lib/i18n/locales/ko.json`
+- `lib/localized-deal-display.test.ts`
+- `lib/runtime-env.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added default-off PR2 rollout flags: `AI_V5_LOCALIZED_OWNER_UI_ENABLED`, `AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED`, and `AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED`, with matching public Expo aliases.
+- Added a fixed owner source-language selector in the AI deal creation flow. Changing the app UI language no longer silently changes the in-progress source locale while the flag is enabled.
+- Kept publish compatibility with the existing `deals.source_locale` check constraint by saving source locale as the short app code (`en`, `es`, `ko`).
+- Added owner composed-card preview language switching across `en-US`, `es-US`, and `ko-KR` from locked structured offer facts. Preview switching changes text presentation only.
+- Added local customer preferred deal-language storage using product locales (`en-US`, `es-US`, `ko-KR`).
+- Integrated customer locale resolution into the home feed and deal detail screen, with deterministic localized display from structured deal facts when the localized renderer flag is enabled.
+- Added a compact deal-detail language selector that preserves deal identity, claim state, inventory, and attribution.
+- Added locale telemetry fields to deal viewed/opened events and a new `deal_language_switched` event.
+- Added localized owner/customer UI copy keys in English, Spanish, and Korean, plus a native-review-log entry for the new strings.
+
+## Acceptance criteria map
+
+- PR 2.1 localized creation interface: Implemented behind `AI_V5_LOCALIZED_OWNER_UI_ENABLED`.
+- PR 2.2 saved authoring locale: Implemented in create flow state and publish payload; persisted as existing short source locale for schema compatibility.
+- PR 2.3 per-deal source-language selector: Implemented on owner create/edit/reuse flows.
+- PR 2.4 localized validation and progress states: Existing localized create-flow strings are preserved; new source/preview strings were added for all app locales.
+- PR 2.5 customer preferred locale: Implemented with local AsyncStorage preference.
+- PR 2.6 automatic feed locale resolution: Implemented behind `AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED`.
+- PR 2.7 deal-detail language selector: Implemented behind `AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED`.
+- PR 2.8 shared composed-card renderer integration: Implemented for owner preview and customer detail/feed display through shared localized offer rendering helpers.
+- PR 2.9 real-device typography tests: Not performed locally; still requires device QA and native reviewer sign-off.
+- PR 2.10 locale telemetry: Implemented in analytics context and `deal_language_switched`.
+
+## Validation
+
+- `npx vitest run lib/ad-locale-resolver.test.ts lib/localized-offer-renderer.test.ts lib/localized-deal-display.test.ts lib/runtime-env.test.ts`: passed; 4 files, 14 tests.
+- `npx tsc --noEmit`: passed.
+- `npx vitest run`: passed; 156 files, 835 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript/env working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr2-20260623-1410`: passed with known `country-flag-icons` package export warnings.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- Spanish and Korean production use remains blocked until named native reviewers sign off on templates, UI strings, accessibility labels, and representative screenshots.
+- Real-device typography and screenshot QA were not performed in this local code slice.
+- Customer preferred deal locale is local-device storage only in PR 2; server-side profile sync remains future work.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Composed Ad Card PR 1 - Shared renderer and English authoritative card
 
 Status: Implemented locally on branch `codex/composed-ad-card-pr1`.

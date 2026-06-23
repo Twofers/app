@@ -108,6 +108,12 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED ?? "(unset)",
     AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED ?? "(unset)",
+    AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED ?? "(unset)",
+    AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED ?? "(unset)",
+    AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -168,6 +174,18 @@ export function isAiV5LocalizedOfferRendererEnabled(): boolean {
 
 export function isAiV5KoreanCounterRegistryEnabled(): boolean {
   return process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED === "true";
+}
+
+export function isAiV5LocalizedOwnerUiEnabled(): boolean {
+  return process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED === "true";
+}
+
+export function isAiV5CustomerLocaleResolutionEnabled(): boolean {
+  return process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED === "true";
+}
+
+export function isAiV5DealLanguageSwitchEnabled(): boolean {
+  return process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

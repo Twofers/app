@@ -7,6 +7,7 @@ import { devWarn } from "@/lib/dev-log";
 export type AppAnalyticsEventName =
   | "deal_viewed"
   | "deal_opened"
+  | "deal_language_switched"
   | "deal_claimed"
   | "wallet_opened"
   | "redeem_started"

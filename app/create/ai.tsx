@@ -71,7 +71,7 @@ import {
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
-import { isAppLocale, type AppLocale } from "../../lib/i18n/config";
+import type { AppLocale } from "../../lib/i18n/config";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import {
   buildDealFormDirtySnapshot,
@@ -110,6 +110,7 @@ import {
   buildLockedOfferContent,
   renderAuthoritativeOfferFromDefinition,
 } from "@/lib/authoritative-offer-renderer";
+import { renderLocalizedOfferFromDefinition } from "@/lib/localized-offer-renderer";
 import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
 import { resolveAdPresentation } from "@/lib/ad-template-resolver";
 import {
@@ -127,7 +128,15 @@ import {
   isAiV4MinimalInputFlowEnabled,
   isAiV4PresentationResolverEnabled,
   isAiV4SharedRendererEnabled,
+  isAiV5LocalizedOwnerUiEnabled,
 } from "@/lib/runtime-env";
+import {
+  SUPPORTED_LOCALES,
+  SUPPORTED_LOCALE_METADATA,
+  supportedLocaleOrDefault,
+  supportedLocaleToAppLanguage,
+  type SupportedLocale,
+} from "@/lib/supported-locales";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -678,7 +687,26 @@ export default function AiDealScreen() {
     businessName,
     businessProfile,
   } = useBusiness();
-  const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+  const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
+  const defaultAuthoringLocale = supportedLocaleOrDefault(businessPreferredLocale ?? i18n.language);
+  const [draftSourceLocale, setDraftSourceLocale] = useState<SupportedLocale | null>(null);
+  const draftSourceBusinessRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!localizedOwnerUiEnabled) return;
+    setDraftSourceLocale((current) => {
+      const nextBusinessId = businessId ?? null;
+      if (draftSourceBusinessRef.current !== nextBusinessId) {
+        draftSourceBusinessRef.current = nextBusinessId;
+        return defaultAuthoringLocale;
+      }
+      return current ?? defaultAuthoringLocale;
+    });
+  }, [businessId, defaultAuthoringLocale, localizedOwnerUiEnabled]);
+  const effectiveDraftSourceLocale = draftSourceLocale ?? defaultAuthoringLocale;
+  const dealOutputLang = localizedOwnerUiEnabled
+    ? supportedLocaleToAppLanguage(effectiveDraftSourceLocale)
+    : resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+  const [merchantPreviewLocale, setMerchantPreviewLocale] = useState<SupportedLocale | null>(null);
 
   // Voice input
   const recorder = useAudioRecorder(
@@ -1427,6 +1455,7 @@ export default function AiDealScreen() {
         }
         const row = data as Record<string, unknown>;
         const loadedSourceLocale = String(row.source_locale ?? "");
+        const loadedDraftSourceLocale = supportedLocaleOrDefault(loadedSourceLocale);
         const rawLoadedTitle = typeof row.title === "string" ? row.title : "";
         const loadedTitle = getDealDisplayTitle(
           {
@@ -1470,8 +1499,12 @@ export default function AiDealScreen() {
         const loadedLocationIds = lid ? [String(lid)] : [];
         const loadedEligibilityForm = dealEligibilityFormFromDealRow(row);
         setEditingDealId(String(row.id));
-        setEditingSourceLocale(isAppLocale(loadedSourceLocale) ? loadedSourceLocale : "en");
+        setEditingSourceLocale(supportedLocaleToAppLanguage(loadedDraftSourceLocale));
         setPrefillSourceLocale(null);
+        if (localizedOwnerUiEnabled) {
+          setDraftSourceLocale(loadedDraftSourceLocale);
+          setMerchantPreviewLocale(loadedDraftSourceLocale);
+        }
         setTitle(loadedTitle);
         setDescription(loadedDescription);
         setPromoLine("");
@@ -1535,7 +1568,7 @@ export default function AiDealScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [dealIdFromRoute, businessId, dealLoadNonce, t]);
+  }, [dealIdFromRoute, businessId, dealLoadNonce, localizedOwnerUiEnabled, t]);
 
   useEffect(() => {
     if (!dealIdFromRoute) setEditDirtyBaseline(null);
@@ -1618,8 +1651,13 @@ export default function AiDealScreen() {
     const fromReuse = g(params.fromReuse);
     const fromHub = g(params.fromCreateHub);
     const sourceFromRoute = g(params.prefillSourceLocale);
+    const prefillDraftSourceLocale = sourceFromRoute ? supportedLocaleOrDefault(sourceFromRoute) : null;
     setEditingSourceLocale(null);
-    setPrefillSourceLocale(isAppLocale(sourceFromRoute) ? sourceFromRoute : null);
+    setPrefillSourceLocale(prefillDraftSourceLocale ? supportedLocaleToAppLanguage(prefillDraftSourceLocale) : null);
+    if (localizedOwnerUiEnabled && prefillDraftSourceLocale) {
+      setDraftSourceLocale(prefillDraftSourceLocale);
+      setMerchantPreviewLocale(prefillDraftSourceLocale);
+    }
     const pl = g(params.prefillLocationId).trim();
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
@@ -1707,7 +1745,7 @@ export default function AiDealScreen() {
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath, params.prefillPosterUrl,
     params.prefillDealEligibility,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
-    params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
+    params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, localizedOwnerUiEnabled, t,
     params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
     params.prefillWindowEndMin, params.prefillTimezone, params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
@@ -1755,6 +1793,25 @@ export default function AiDealScreen() {
     aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
   }
+
+  function chooseDraftSourceLocale(locale: SupportedLocale) {
+    if (!localizedOwnerUiEnabled || locale === effectiveDraftSourceLocale) return;
+    setDraftSourceLocale(locale);
+    setMerchantPreviewLocale(locale);
+    if (generatedAd) resetGenerationState();
+    setBanner({
+      message: t("createAi.sourceLanguageChanged", {
+        language: SUPPORTED_LOCALE_METADATA[locale].productLabel,
+        defaultValue: `Source language set to ${SUPPORTED_LOCALE_METADATA[locale].productLabel}. Generate the ad again for this language.`,
+      }),
+      tone: "info",
+    });
+  }
+
+  useEffect(() => {
+    if (!localizedOwnerUiEnabled) return;
+    setMerchantPreviewLocale((current) => current ?? effectiveDraftSourceLocale);
+  }, [effectiveDraftSourceLocale, localizedOwnerUiEnabled]);
 
   async function pickPhotoFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -2552,7 +2609,9 @@ export default function AiDealScreen() {
         }));
         return;
       }
-      const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
+      const sourceLocaleForPublish = localizedOwnerUiEnabled
+        ? dealOutputLang
+        : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinition, {
         title: title.trim(),
@@ -2839,15 +2898,21 @@ export default function AiDealScreen() {
   const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
   const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
   const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
-  const composedOfferFacts = offerDefinition
+  const activeMerchantPreviewLocale = merchantPreviewLocale ?? effectiveDraftSourceLocale;
+  const composedOfferFacts = localizedOwnerUiEnabled && offerDefinition
+    ? renderLocalizedOfferFromDefinition(offerDefinition, { locale: activeMerchantPreviewLocale })
+    : offerDefinition
     ? renderAuthoritativeOfferFromDefinition(offerDefinition)
     : buildLockedOfferContent({
         primaryOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
         termsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
       });
+  const merchantPreviewShowsSourceLocale = activeMerchantPreviewLocale === effectiveDraftSourceLocale;
   const composedCopy = buildApprovedAdCopy({
-    headline: generatedAd?.headline,
-    supportingCopy: generatedAd?.subheadline || generatedAd?.short_description,
+    headline: merchantPreviewShowsSourceLocale ? generatedAd?.headline : composedOfferFacts.primaryOfferLine,
+    supportingCopy: merchantPreviewShowsSourceLocale
+      ? generatedAd?.subheadline || generatedAd?.short_description
+      : composedOfferFacts.termsLine,
     ctaLabel: generatedAd?.cta || ctaText,
     fallbackHeadline: composedOfferFacts.primaryOfferLine,
   });
@@ -3044,6 +3109,54 @@ export default function AiDealScreen() {
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
+        {localizedOwnerUiEnabled ? (
+          <View
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              gap: 8,
+            }}
+          >
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>
+              {t("createAi.sourceLanguageTitle", { defaultValue: "Ad source language" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.sourceLanguageHelp", {
+                defaultValue: "Changing the app language will not change this draft. Pick the language Twofer should write the source ad in.",
+              })}
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {SUPPORTED_LOCALES.map((locale) => {
+                const active = effectiveDraftSourceLocale === locale;
+                return (
+                  <Pressable
+                    key={locale}
+                    onPress={() => chooseDraftSourceLocale(locale)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: active ? theme.primary : theme.border,
+                      backgroundColor: active ? PrimaryTint.surface : theme.surfaceMuted,
+                    }}
+                  >
+                    <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
+                      {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
         {pendingRecoveredDraft ? (
           <View
             style={{
@@ -3729,6 +3842,47 @@ export default function AiDealScreen() {
                       surface="merchant_preview"
                       fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
                     />
+                    {localizedOwnerUiEnabled && offerDefinition ? (
+                      <View style={{ padding: 12, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 8 }}>
+                        <Text style={{ fontWeight: "800", color: theme.text }}>
+                          {t("createAi.previewLanguageTitle", { defaultValue: "Preview language" })}
+                        </Text>
+                        <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                          {t("createAi.localizedApprovalDisclosure", {
+                            sourceLanguage: SUPPORTED_LOCALE_METADATA[effectiveDraftSourceLocale].productLabel,
+                            previewLanguage: SUPPORTED_LOCALE_METADATA[activeMerchantPreviewLocale].productLabel,
+                            defaultValue:
+                              "This preview changes only the customer-facing language. The deal mechanics, image, schedule, and inventory stay tied to the same approved offer.",
+                          })}
+                        </Text>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          {SUPPORTED_LOCALES.map((locale) => {
+                            const active = activeMerchantPreviewLocale === locale;
+                            return (
+                              <Pressable
+                                key={locale}
+                                onPress={() => setMerchantPreviewLocale(locale)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: active }}
+                                accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                                style={{
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: active ? theme.primary : theme.border,
+                                  backgroundColor: active ? PrimaryTint.surface : theme.surface,
+                                }}
+                              >
+                                <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
+                                  {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
                     {composedMinimalInputEnabled ? (
                       <View style={{ gap: 8 }}>
                         <SecondaryButton

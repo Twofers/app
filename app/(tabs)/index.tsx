@@ -52,7 +52,9 @@ import {
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
-import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import { localizedDealTitle } from "@/lib/deal-localization";
+import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_FEED_BASE_SELECT,
   DEAL_FEED_SELECT,
@@ -71,7 +73,12 @@ import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { buildApprovedAdCopy, buildMerchantIdentity } from "@/lib/ad-render-content";
 import { renderAuthoritativeOfferFromDeal } from "@/lib/authoritative-offer-renderer";
-import { isAiV4SharedRendererEnabled } from "@/lib/runtime-env";
+import {
+  isAiV4SharedRendererEnabled,
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+} from "@/lib/runtime-env";
+import { supportedLocaleOrDefault } from "@/lib/supported-locales";
 
 /** Skip redundant home-tab Supabase loads when switching tabs back quickly; pull-to-refresh always reloads. */
 const MIN_FEED_FOCUS_REFRESH_MS = MIN_FEED_REFRESH_MS;
@@ -168,6 +175,8 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
   const mapClaimError = useCallback((raw: string) => translateFunctionErrorMessage(raw, t), [t]);
 
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -184,6 +193,7 @@ export default function HomeScreen() {
   const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [lastClaimDealId, setLastClaimDealId] = useState<string | null>(null);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<string[]>([]);
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<string | null>(null);
   const [loadingDeals, setLoadingDeals] = useState(true);
   const [loadingBiz, setLoadingBiz] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
@@ -201,8 +211,13 @@ export default function HomeScreen() {
   // Branded deal-alert dialog (replaces native Alert.alert) for opt-in, denied permission, and registration retry.
   const [alertDialog, setAlertDialog] = useState<null | "consent" | "permissionDenied" | "registrationFailed">(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
+  const customerPreferredDealLocaleRef = useRef<string | null>(null);
+  const customerLocaleResolutionEnabledRef = useRef(customerLocaleResolutionEnabled);
   const dealsRef = useRef(deals);
   dealsRef.current = deals;
+  customerPreferredDealLocaleRef.current = customerPreferredDealLocale;
+  customerLocaleResolutionEnabledRef.current = customerLocaleResolutionEnabled;
   // Keep the current segment readable inside the stable viewability callback below
   // (FlatList forbids changing onViewableItemsChanged/viewabilityConfig between renders).
   const feedSegmentRef = useRef(feedSegment);
@@ -219,11 +234,23 @@ export default function HomeScreen() {
       if (!deal || typeof deal.id !== "string") continue;
       if (viewedDealIdsRef.current.has(deal.id)) continue;
       viewedDealIdsRef.current.add(deal.id);
+      const resolvedLocale = customerLocaleResolutionEnabledRef.current
+        ? resolveDealDisplayLocale({
+            customerPreferredLocale: customerPreferredDealLocaleRef.current,
+            appLanguage: null,
+            deviceLanguage: deviceDealLocaleRef.current,
+            adSourceLocale: deal.source_locale,
+          })
+        : null;
       trackAppAnalyticsEvent({
         event_name: "deal_viewed",
         deal_id: deal.id,
         business_id: deal.business_id,
-        context: { source: "list" },
+        context: {
+          source: "list",
+          customer_render_locale: resolvedLocale?.locale ?? null,
+          locale_resolution_source: resolvedLocale?.source ?? null,
+        },
       });
     }
   });
@@ -241,6 +268,16 @@ export default function HomeScreen() {
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 60_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getCustomerPreferredDealLocale().then((locale) => {
+      if (!cancelled) setCustomerPreferredDealLocaleState(locale);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Scarcity counts for capped deals. RLS hides other users' claim rows, so this
@@ -810,14 +847,33 @@ export default function HomeScreen() {
             ? t("consumerHome.onlyOneLeft")
             : t("consumerHome.onlyNLeft", { count: remainingForDeal })
           : null;
-      const offerText = localizedDealTitle(item, i18n.language) || t("dealDetail.dealFallback");
+      const resolvedDisplayLocale = customerLocaleResolutionEnabled
+        ? resolveDealDisplayLocale({
+            customerPreferredLocale: customerPreferredDealLocale,
+            appLanguage: i18n.language,
+            deviceLanguage: deviceDealLocaleRef.current,
+            adSourceLocale: item.source_locale,
+          })
+        : {
+            locale: supportedLocaleOrDefault(i18n.language),
+            source: "app_language" as const,
+            enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+          };
+      const localizedDisplay = buildLocalizedDealDisplay({
+        deal: item,
+        locale: resolvedDisplayLocale.locale,
+        localeResolutionSource: resolvedDisplayLocale.source,
+        useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+        fallbackLanguage: i18n.language,
+      });
+      const offerText = localizedDisplay.title || t("dealDetail.dealFallback");
       const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
       const businessLocation = item.businesses?.location?.trim() || null;
       const isFavorite = favoriteBusinessIds.includes(item.business_id);
       const itemIsDemo = isDemoOffer(item);
       const isLive = st === "live";
-      const displayDescription = localizedDealDescription(item, i18n.language);
+      const displayDescription = localizedDisplay.description;
       const statusLabel =
         st === "live"
           ? t("dealStatus.live")
@@ -1103,6 +1159,8 @@ export default function HomeScreen() {
       heroImageHeight,
       heroCardHeight,
       composedCustomerRendererEnabled,
+      customerLocaleResolutionEnabled,
+      customerPreferredDealLocale,
       toggleFavorite,
       formatTimeLeft,
       claimStatus,
@@ -1110,6 +1168,7 @@ export default function HomeScreen() {
       claimCountsByDeal,
       doClaim,
       i18n.language,
+      localizedOfferRendererEnabled,
     ],
   );
 

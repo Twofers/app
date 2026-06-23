@@ -15,3 +15,4 @@ Broad Korean production use is blocked until a named Korean reviewer signs off.
 | 2026-06-23 | Dan / Twofer admin | all | localization ownership state | Recorded | Name U.S. Spanish and Korean reviewers before broad production | No |
 | 2026-06-23 | TBD | es-US | localized-offer-template-v1 | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | ko-KR | localized-offer-template-v1 and korean-counter-registry-v0-pending-native-review | Pending native review | Native review and counter approval required before broad production | No |
+| 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr2 owner/customer locale UI strings | Pending native review | Native review required before broad production | No |

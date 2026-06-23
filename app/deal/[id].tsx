@@ -17,11 +17,17 @@ import { ScreenHeader } from "../../components/ui/screen-header";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
-import { Colors, Radii } from "../../constants/theme";
+import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
-import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import { localizedDealTitle } from "@/lib/deal-localization";
+import {
+  getCustomerPreferredDealLocale,
+  getDeviceDealLocale,
+  setCustomerPreferredDealLocale,
+} from "@/lib/customer-deal-locale-storage";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -31,13 +37,25 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { ReportSheet } from "@/components/report-sheet";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
-import { isAiV4SharedRendererEnabled, isShareDealEnabled } from "@/lib/runtime-env";
+import {
+  isAiV4SharedRendererEnabled,
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5DealLanguageSwitchEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+  isShareDealEnabled,
+} from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
 import { getDealDetailActionState } from "@/lib/deal-action-state";
 import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { buildApprovedAdCopy, buildMerchantIdentity } from "@/lib/ad-render-content";
 import { renderAuthoritativeOfferFromDeal } from "@/lib/authoritative-offer-renderer";
+import {
+  SUPPORTED_LOCALES,
+  SUPPORTED_LOCALE_METADATA,
+  supportedLocaleOrDefault,
+  type SupportedLocale,
+} from "@/lib/supported-locales";
 
 type Deal = DealStructuredDisplayFields & {
   id: string;
@@ -148,6 +166,12 @@ export default function DealDetail() {
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
   const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const dealLanguageSwitchEnabled = isAiV5DealLanguageSwitchEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<SupportedLocale | null>(null);
+  const [selectedDealLocale, setSelectedDealLocale] = useState<SupportedLocale | null>(null);
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -173,6 +197,35 @@ export default function DealDetail() {
     });
     return () => sub.remove();
   }, [goBack, qrVisible, reportVisible]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getCustomerPreferredDealLocale().then((locale) => {
+      if (!cancelled) setCustomerPreferredDealLocaleState(locale);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleDealLanguageSelect(locale: SupportedLocale) {
+    const previous = selectedDealLocale ?? customerPreferredDealLocale;
+    setSelectedDealLocale(locale);
+    setCustomerPreferredDealLocaleState(locale);
+    void setCustomerPreferredDealLocale(locale);
+    if (deal?.id) {
+      trackAppAnalyticsEvent({
+        event_name: "deal_language_switched",
+        deal_id: deal.id,
+        business_id: deal.business_id,
+        context: {
+          previous_locale: previous ?? null,
+          customer_render_locale: locale,
+          locale_resolution_source: "customer_preference",
+        },
+      });
+    }
+  }
 
   function renderBackAction() {
     return (
@@ -329,12 +382,24 @@ export default function DealDetail() {
     if (!deal?.id || !deal.business_id) return;
     if (openedDealIdRef.current === deal.id) return;
     openedDealIdRef.current = deal.id;
+    const openedLocale = customerLocaleResolutionEnabled
+      ? resolveDealDisplayLocale({
+          customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+          appLanguage: i18n.language,
+          deviceLanguage: deviceDealLocaleRef.current,
+          adSourceLocale: deal.source_locale,
+        })
+      : null;
     trackAppAnalyticsEvent({
       event_name: "deal_opened",
       deal_id: deal.id,
       business_id: deal.business_id,
+      context: {
+        customer_render_locale: openedLocale?.locale ?? null,
+        locale_resolution_source: openedLocale?.source ?? null,
+      },
     });
-  }, [deal?.id, deal?.business_id]);
+  }, [customerLocaleResolutionEnabled, customerPreferredDealLocale, deal?.business_id, deal?.id, deal?.source_locale, i18n.language, selectedDealLocale]);
 
   async function doClaim() {
     try {
@@ -529,8 +594,27 @@ export default function DealDetail() {
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
   const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
-  const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
-  const displayDescription = localizedDealDescription(deal, i18n.language);
+  const resolvedDisplayLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: deal.source_locale,
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
+  const localizedDisplay = buildLocalizedDealDisplay({
+    deal,
+    locale: resolvedDisplayLocale.locale,
+    localeResolutionSource: resolvedDisplayLocale.source,
+    useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+    fallbackLanguage: i18n.language,
+  });
+  const displayTitle = localizedDisplay.title || t("dealDetail.dealFallback");
+  const displayDescription = localizedDisplay.description;
   const actionState = getDealDetailActionState({
     hasActiveClaim: Boolean(activeClaim),
     isClaiming,
@@ -701,6 +785,49 @@ export default function DealDetail() {
             )}
           </>
         )}
+
+        {dealLanguageSwitchEnabled ? (
+          <View
+            style={{
+              marginTop: Spacing.md,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: Spacing.xs,
+            }}
+          >
+            {SUPPORTED_LOCALES.map((locale) => {
+              const active = resolvedDisplayLocale.locale === locale;
+              return (
+                <Pressable
+                  key={locale}
+                  onPress={() => handleDealLanguageSelect(locale)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: Radii.pill,
+                    borderWidth: 1,
+                    borderColor: active ? theme.primary : theme.border,
+                    backgroundColor: active ? PrimaryTint.surface : theme.surfaceMuted,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? theme.accentText : theme.text,
+                      fontSize: 13,
+                      fontWeight: "800",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text }}>
