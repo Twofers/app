@@ -813,6 +813,90 @@ No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 2 - Resolver, safe zones, and merchant style controls
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr2`.
+
+Safety checkpoint: `d667af2d` (Composed Ad Card PR 1 commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `lib/image-safe-zone.ts`
+- `lib/ad-crop-resolver.ts`
+- `lib/ad-text-fit.ts`
+- `lib/ad-template-resolver.ts`
+- `lib/image-safe-zone.test.ts`
+- `lib/ad-crop-resolver.test.ts`
+- `lib/ad-text-fit.test.ts`
+- `lib/ad-template-resolver.test.ts`
+- `components/composed-ad-card/templates/SocialMomentTemplate.tsx`
+- `components/composed-ad-card/templates/LocalDiscoveryTemplate.tsx`
+- `components/composed-ad-card/templates/SignatureItemTemplate.tsx`
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `components/composed-ad-card/ComposedAdCard.tsx`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added deterministic image safe-zone, crop repair, text-fit, and presentation-template resolver helpers.
+- Added renderer templates for `social_moment_card`, `local_discovery_card`, and `signature_item_card`.
+- Wired the merchant AI preview to use the resolver behind `AI_V4_PRESENTATION_RESOLVER_ENABLED` / `EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED`.
+- Added default-off minimal preview controls behind `AI_V4_MINIMAL_INPUT_FLOW_ENABLED` / `EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED`: Change photo, Change words, and Try another style.
+- Added instant style cycling behind `AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED` / `EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED`; it changes only native presentation metadata and does not call AI.
+- Preserved the existing generated preview and revise flow with all new flags off.
+
+## Resolver behavior
+
+- Clean usable images can select live, hero, social, local, or signature templates and expose up to two deterministic alternates.
+- Low-confidence, blocked, missing, unavailable, or deterministic-fallback image paths fail closed to `split_offer_panel`.
+- Text-fit repairs can use compact offer lines, hide supporting copy, or switch to the split panel before any unsafe layout is rendered.
+- Crop/focal metadata stays bounded in 0-1 image coordinates; merchant originals are not modified.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/image-safe-zone.test.ts lib/ad-crop-resolver.test.ts lib/ad-text-fit.test.ts lib/ad-template-resolver.test.ts lib/runtime-env.test.ts`: passed; 5 files, 16 tests.
+- `npx vitest run`: passed; 147 files, 807 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo lint`: passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr2" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched TypeScript/Markdown working-copy line endings will normalize from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- PR2 is still flag-gated and not enabled by default.
+- No database persistence, server-side publish enforcement, composite QA, screenshot QA, or telemetry emission was added in this slice; those remain later composed-card work.
+- Real iPhone screenshots/testing remain out of scope on this Windows machine.
+
+## Rollback
+
+Set the PR2 rollout flags false/unset:
+
+- `AI_V4_PRESENTATION_RESOLVER_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED=false`
+- `AI_V4_MINIMAL_INPUT_FLOW_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED=false`
+- `AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED=false`
+- `EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED=false`
+
+No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

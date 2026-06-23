@@ -90,6 +90,12 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
     AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
+    AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED ?? "(unset)",
+    AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED ?? "(unset)",
+    AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -114,6 +120,18 @@ export function isAiV4SharedRendererEnabled(): boolean {
 
 export function isAiV4AuthoritativeOfferCardEnabled(): boolean {
   return process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true";
+}
+
+export function isAiV4PresentationResolverEnabled(): boolean {
+  return process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED === "true";
+}
+
+export function isAiV4MinimalInputFlowEnabled(): boolean {
+  return process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED === "true";
+}
+
+export function isAiV4InstantStyleAlternatesEnabled(): boolean {
+  return process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

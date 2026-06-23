@@ -14,6 +14,9 @@ import {
   getPublicEnvSnapshot,
   isAiV4AuthoritativeOfferCardEnabled,
   isAiV4ComposedAdCardEnabled,
+  isAiV4InstantStyleAlternatesEnabled,
+  isAiV4MinimalInputFlowEnabled,
+  isAiV4PresentationResolverEnabled,
   isAiV4SharedRendererEnabled,
 } from "./runtime-env";
 
@@ -43,6 +46,12 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED,
     AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED,
     EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED,
+    AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED,
+    EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED,
+    AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED,
+    EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED,
+    AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED,
+    EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED,
   };
 
   afterEach(() => {
@@ -62,19 +71,34 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED;
     delete process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED;
+    delete process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED;
+    delete process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED;
+    delete process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED;
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(false);
     expect(isAiV4SharedRendererEnabled()).toBe(false);
     expect(isAiV4AuthoritativeOfferCardEnabled()).toBe(false);
+    expect(isAiV4PresentationResolverEnabled()).toBe(false);
+    expect(isAiV4MinimalInputFlowEnabled()).toBe(false);
+    expect(isAiV4InstantStyleAlternatesEnabled()).toBe(false);
   });
 
   it("accepts public mobile aliases for client-side rollout", () => {
     process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
     expect(isAiV4SharedRendererEnabled()).toBe(true);
     expect(isAiV4AuthoritativeOfferCardEnabled()).toBe(true);
+    expect(isAiV4PresentationResolverEnabled()).toBe(true);
+    expect(isAiV4MinimalInputFlowEnabled()).toBe(true);
+    expect(isAiV4InstantStyleAlternatesEnabled()).toBe(true);
   });
 });
