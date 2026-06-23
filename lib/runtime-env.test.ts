@@ -29,6 +29,7 @@ import {
   isAiV5LocalizedOwnerUiEnabled,
   isAiV5LocalizedOfferRendererEnabled,
   isAiV5LocalePresentationOverridesEnabled,
+  isAiV5LocaleScreenshotQaEnabled,
   isAiV5MultilingualFoundationEnabled,
   isAiV5PersuasiveTranscreationEnabled,
   isAiV5SourceLocaleCreativeEnabled,
@@ -95,6 +96,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED,
     AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
     EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED,
+    AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED,
+    EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED,
     AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED,
     EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED,
   };
@@ -150,6 +153,8 @@ describe("runtime-env AI V4 composed card flags", () => {
     delete process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED;
     delete process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED;
+    delete process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED;
+    delete process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED;
     delete process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
     delete process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED;
 
@@ -173,6 +178,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5TranslationQaEnabled()).toBe(false);
     expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(false);
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(false);
+    expect(isAiV5LocaleScreenshotQaEnabled()).toBe(false);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(false);
   });
 
@@ -197,6 +203,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED = "true";
+    process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED = "true";
     process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED = "true";
 
     expect(isAiV4ComposedAdCardEnabled()).toBe(true);
@@ -219,6 +226,7 @@ describe("runtime-env AI V4 composed card flags", () => {
     expect(isAiV5TranslationQaEnabled()).toBe(true);
     expect(isAiV5DeterministicLanguageFallbackEnabled()).toBe(true);
     expect(isAiV5LocalePresentationOverridesEnabled()).toBe(true);
+    expect(isAiV5LocaleScreenshotQaEnabled()).toBe(true);
     expect(isAiV5AutomaticVerifiedBundleApprovalEnabled()).toBe(true);
   });
 });

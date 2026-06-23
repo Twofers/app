@@ -68,6 +68,36 @@ const checks = [
     ],
   },
   {
+    name: "selective locale screenshot QA is wired into owner approval",
+    file: "app/create/ai.tsx",
+    patterns: [
+      /isAiV5LocaleScreenshotQaEnabled/,
+      /resolveLocalePresentationOverrides/,
+      /selectedLocaleScreenshotQaTriggerLocales/,
+      /locale_screenshot_qa_trigger_locales/,
+      /screenshotQaRequired:\s*selectedComposedScreenshotQaRequired/,
+    ],
+  },
+  {
+    name: "locale screenshot QA rollout flag is documented",
+    file: "lib/runtime-env.ts",
+    patterns: [
+      /AI_V5_LOCALE_SCREENSHOT_QA_ENABLED/,
+      /EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED/,
+      /isAiV5LocaleScreenshotQaEnabled/,
+    ],
+  },
+  {
+    name: "locale screenshot QA handoff document exists",
+    file: "docs/localization/multilingual-deals-pr4-locale-screenshot-qa.md",
+    patterns: [
+      /AI_V5_LOCALE_SCREENSHOT_QA_ENABLED/,
+      /selective/,
+      /localized text-fit failure/,
+      /Real-device screenshot capture/,
+    ],
+  },
+  {
     name: "rollout telemetry handoff document exists",
     file: "docs/localization/multilingual-deals-pr4-rollout-telemetry.md",
     patterns: [

@@ -738,6 +738,75 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4g - Selective locale screenshot QA gate
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-locale-screenshot-qa`.
+
+Safety checkpoint: `eef7ecc0` (Multilingual Deals PR4 rollout telemetry commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-pr4-locale-screenshot-qa.md`
+
+## Files changed
+
+- `.env.example`
+- `app/create/ai.tsx`
+- `docs/localization/native-review-log.md`
+- `lib/ad-localization-approval-source.test.ts`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `scripts/check-localization-rollout-gates.mjs`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added the default-off `AI_V5_LOCALE_SCREENSHOT_QA_ENABLED` / `EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED` rollout flag.
+- Wired the existing deterministic `resolveLocalePresentationOverrides()` result into the Create AI selected presentation when locale presentation overrides are enabled.
+- The owner approval path now considers per-locale screenshot QA triggers from the localization bundle and blocks automatic localization approval when locale screenshot QA is enabled and any locale is triggered.
+- Approval/publish block telemetry now includes `locale_screenshot_qa_trigger_locales`, so review can see which locale needs visual QA instead of reviewing all locales for every deal.
+- Added a PR4 handoff note and native-review-log entry for the locale screenshot QA gate.
+- Extended `npm run gate:localization-rollout` to prove the selective locale screenshot QA wiring and flag remain present.
+
+## Acceptance criteria map
+
+- PR4 selective per-locale screenshot QA: Implemented locally as a deterministic approval gate. Triggered locales are tracked selectively; the system does not require all three locales to be reviewed for every deal.
+- PR4 exact localization approval: Strengthened because locale screenshot triggers now feed the existing `screenshotQaRequired` approval blocker.
+- PR4 full real-device suite: Not performed. This slice only prevents automatic approval when deterministic locale triggers indicate screenshot QA is required.
+- PR4 native-speaker acceptance review: Still blocked on named Spanish and Korean reviewers and final sign-off.
+
+## Validation
+
+- `npx vitest run lib/runtime-env.test.ts lib/ad-localization-approval-source.test.ts lib/ad-locale-presentation-resolver.test.ts`: passed; 3 files, 8 tests.
+- `npx tsc --noEmit`: passed.
+- `npx vitest run`: passed; 171 files, 914 tests.
+- `npm run copy:evaluate`: passed; 30 fixtures valid, 0 invalid.
+- `npm run lint`: passed.
+- `npm run gate:ai-ad`: passed.
+- `npm run gate:localization-rollout`: passed; 11 rollout gate checks passed.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4g-20260623`: passed; Metro emitted the existing `country-flag-icons` package export warnings.
+- `npm run typecheck:functions`: failed on the pre-existing `supabase/functions/ai-extract-menu/index.ts` Supabase client generic mismatch at lines 417 and 430. No files in this slice touch that function.
+
+## Unresolved risks
+
+- Hosted behavior remains unchanged until a future approved build/config path enables the V5 public flag.
+- Real-device screenshot capture and reviewer pass/fail recording are still external QA steps.
+- Spanish and Korean broad production remain blocked because reviewers are still TBD and final sign-off is not recorded.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4f - Rollout telemetry dimensions
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-rollout-telemetry`.

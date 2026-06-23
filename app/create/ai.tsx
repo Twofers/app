@@ -107,6 +107,7 @@ import {
   imageSourceTypeFromGeneratedAd,
 } from "@/lib/ad-render-content";
 import { buildOwnerLanguagePreview } from "@/lib/ad-owner-language-preview";
+import { resolveLocalePresentationOverrides } from "@/lib/ad-locale-presentation-resolver";
 import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
 import { resolveAdPresentation } from "@/lib/ad-template-resolver";
 import {
@@ -126,6 +127,8 @@ import {
   isAiV4SharedRendererEnabled,
   isAiV5AutomaticVerifiedBundleApprovalEnabled,
   isAiV5LocalizedOwnerUiEnabled,
+  isAiV5LocalePresentationOverridesEnabled,
+  isAiV5LocaleScreenshotQaEnabled,
 } from "@/lib/runtime-env";
 import {
   SUPPORTED_LOCALES,
@@ -2279,6 +2282,7 @@ export default function AiDealScreen() {
         presentation_hash: selectedComposedPresentationHash,
         composite_qa_decision: selectedComposedCompositeQa.decision,
         composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+        locale_screenshot_qa_trigger_locales: selectedLocaleScreenshotQaTriggerLocales.join(","),
       });
       setBanner({
         message: t("createAi.compositeScreenshotQaRequired", {
@@ -2603,6 +2607,7 @@ export default function AiDealScreen() {
         presentation_hash: selectedComposedPresentationHash,
         composite_qa_decision: selectedComposedCompositeQa.decision,
         composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+        locale_screenshot_qa_trigger_locales: selectedLocaleScreenshotQaTriggerLocales.join(","),
       });
       showPublishError(
         t("createAi.errCompositeScreenshotQaRequired", {
@@ -2960,6 +2965,10 @@ export default function AiDealScreen() {
   const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
   const ownerLanguagePreviewAvailable =
     localizedOwnerUiEnabled && Boolean(offerDefinition && generatedAd?.localization_bundle);
+  const localePresentationOverridesEnabled =
+    ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
+  const localeScreenshotQaEnabled =
+    ownerLanguagePreviewAvailable && isAiV5LocaleScreenshotQaEnabled();
   const activeMerchantPreviewLocale = ownerLanguagePreviewAvailable
     ? merchantPreviewLocale ?? generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale
     : effectiveDraftSourceLocale;
@@ -3031,9 +3040,19 @@ export default function AiDealScreen() {
   const composedPresentationOptions = composedPresentationResolution
     ? [composedPresentationResolution.recommended, ...composedPresentationResolution.alternates]
     : [composedBasePresentation];
-  const selectedComposedPresentation =
+  const selectedBaseComposedPresentation =
     composedPresentationOptions[Math.min(composedStyleIndex, Math.max(0, composedPresentationOptions.length - 1))] ??
     composedBasePresentation;
+  const selectedLocalePresentationResolution =
+    localePresentationOverridesEnabled && generatedAd?.localization_bundle
+      ? resolveLocalePresentationOverrides({
+          basePresentation: selectedBaseComposedPresentation,
+          localizationBundle: generatedAd.localization_bundle,
+          merchantIdentity: composedMerchant,
+        })
+      : null;
+  const selectedComposedPresentation =
+    selectedLocalePresentationResolution?.presentation ?? selectedBaseComposedPresentation;
   const selectedComposedPresentationHash = createAdPresentationHash({
     presentation: selectedComposedPresentation,
     offerFacts: composedOfferFacts,
@@ -3054,7 +3073,11 @@ export default function AiDealScreen() {
     selectedComposedCompositeQa,
     composedScreenshotQaEnabled,
   );
-  const selectedComposedScreenshotQaRequired = selectedComposedScreenshotQaSnapshot.required;
+  const selectedLocaleScreenshotQaTriggerLocales =
+    localeScreenshotQaEnabled ? selectedLocalePresentationResolution?.screenshotQaTriggerLocales ?? [] : [];
+  const selectedLocaleScreenshotQaRequired = selectedLocaleScreenshotQaTriggerLocales.length > 0;
+  const selectedComposedScreenshotQaRequired =
+    selectedComposedScreenshotQaSnapshot.required || selectedLocaleScreenshotQaRequired;
   const selectedLocalizationApproval =
     automaticLocalizationApprovalEnabled &&
     ownerLanguagePreviewAvailable &&

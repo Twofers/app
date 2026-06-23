@@ -124,6 +124,8 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED ?? "(unset)",
     AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
+    AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
     AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
@@ -218,6 +220,10 @@ export function isAiV5DeterministicLanguageFallbackEnabled(): boolean {
 
 export function isAiV5LocalePresentationOverridesEnabled(): boolean {
   return process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true";
+}
+
+export function isAiV5LocaleScreenshotQaEnabled(): boolean {
+  return process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED === "true";
 }
 
 export function isAiV5AutomaticVerifiedBundleApprovalEnabled(): boolean {
