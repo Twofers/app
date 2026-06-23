@@ -738,6 +738,72 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4f - Rollout telemetry dimensions
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-rollout-telemetry`.
+
+Safety checkpoint: `41eb8f09` (Multilingual Deals PR4 rollout gate commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-pr4-rollout-telemetry.md`
+
+## Files changed
+
+- `scripts/check-localization-rollout-gates.mjs`
+- `supabase/functions/publish-offer-version/index.ts`
+- `supabase/functions/_shared/publish-offer-version-function.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Extended the existing `ai_ad_versioned_publish` analytics insert in `publish-offer-version` with localization rollout dimensions for dashboarding.
+- Added non-sensitive source locale, enabled locale, source creative hash, localization bundle hash, renderer version, deterministic fallback, semantic QA, repair-target, locale override, localization-row, approval-hash, localized term snapshot hash, and override-hash fields.
+- Kept localized customer/merchant-facing text out of telemetry. The event does not record localized headlines, supporting copy, image alt text, QR tokens, claim codes, redemption codes, idempotency keys, secrets, or new customer identifiers.
+- Updated the localization rollout gate script so `npm run gate:localization-rollout` now verifies both the native-review production block and the publish telemetry dimensions.
+- Added a PR4 rollout telemetry handoff note that maps the new event fields to dashboard dimensions.
+
+## Acceptance criteria map
+
+- PR4 rollout dashboards: Improved locally. The hosted dashboard can now key off versioned-publish telemetry for source-locale mix, deterministic fallback rate, repair-target rate, semantic QA coverage, locale override rate, approved bundle coverage, and localization row coverage once `publish-offer-version` is redeployed.
+- PR4 native review workflow and logs: Preserved from the rollout-gate slice; Spanish and Korean broad production remain blocked until reviewers and sign-off are recorded.
+- PR4 selective screenshot QA: Not implemented in this slice. The telemetry can expose stored screenshot QA context from composed-card publish data, but no new visual QA runner was added.
+- PR4 full production sign-off: Not achieved. Real-device QA and named native reviewers remain external production gates.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/publish-offer-version-function.test.ts`: passed; 1 file, 7 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npm run gate:localization-rollout`: passed; 8 rollout gate checks passed.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx vitest run`: passed; 171 files, 914 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed; 30 fixtures valid, 0 invalid.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4f-20260623`: passed with the known `country-flag-icons` package export warnings.
+- `npm run typecheck:functions`: failed only on the existing unrelated `supabase/functions/ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. `publish-offer-version` checked after that and no new error was reported.
+
+## Unresolved risks
+
+- Hosted analytics will not include the new localization dimensions until Dan explicitly approves redeploying `publish-offer-version`.
+- The analytics table and any dashboard queries must already accept JSON context keys; no Supabase schema migration was applied here.
+- Native-review defect rate still requires reviewer workflow records. The current source of truth remains `docs/localization/native-review-log.md`.
+- Real-device screenshot QA was not performed in this local slice.
+- Spanish and Korean broad production remain blocked because reviewers are still TBD and final sign-off is not recorded.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4b - Server-side localization approval enforcement
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-server-enforcement`.

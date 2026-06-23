@@ -120,6 +120,34 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => cleanText(item).length > 0);
 }
 
+function cleanStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => cleanText(item)).filter(Boolean)
+    : [];
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function recordKeys(value: unknown): string[] {
+  return Object.keys(recordValue(value) ?? {});
+}
+
+function translationQaRollup(value: unknown): Record<string, string> {
+  const summary = recordValue(value);
+  if (!summary) return {};
+  const out: Record<string, string> = {};
+  for (const [locale, rawQa] of Object.entries(summary)) {
+    const qa = recordValue(rawQa);
+    if (!qa) continue;
+    const status = cleanText(qa.translationStatus);
+    const decision = cleanText(qa.qaDecision);
+    out[locale] = [status, decision].filter(Boolean).join(":") || "unknown";
+  }
+  return out;
+}
+
 function isExactPresentationApprovalRequired(): boolean {
   return Deno.env.get("AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED") === "true";
 }
@@ -472,8 +500,39 @@ serve(async (req) => {
         compositeQa?: { decision?: unknown; repairCodes?: unknown; hardFailReasons?: unknown };
         screenshotQa?: { required?: unknown; decision?: unknown; triggerCodes?: unknown };
       };
+      localization?: {
+        sourceLocale?: unknown;
+        enabledLocales?: unknown;
+        sourceCreativeHash?: unknown;
+        localizationBundleHash?: unknown;
+        deterministicFallbackLocales?: unknown;
+        localeRendererVersion?: unknown;
+        localePresentationOverrides?: unknown;
+        translationQaSummary?: unknown;
+        semanticQaSummary?: {
+          provider?: unknown;
+          model?: unknown;
+          skippedReason?: unknown;
+          repairTargetLocales?: unknown;
+        };
+        approval?: {
+          approvalHash?: unknown;
+          policyVersion?: unknown;
+          reviewPolicyVersion?: unknown;
+          localizedTermSnapshotHash?: unknown;
+          localePresentationOverridesHash?: unknown;
+          localizationRowHashes?: unknown;
+        };
+        localizations?: unknown;
+      };
     } | null;
     const composedForContext = adSpecForContext?.composedCard;
+    const localizationForContext = adSpecForContext?.localization;
+    const enabledLocalizationLocales = cleanStringArray(localizationForContext?.enabledLocales);
+    const deterministicFallbackLocales = cleanStringArray(localizationForContext?.deterministicFallbackLocales);
+    const repairTargetLocales = cleanStringArray(localizationForContext?.semanticQaSummary?.repairTargetLocales);
+    const localePresentationOverrideLocales = recordKeys(localizationForContext?.localePresentationOverrides);
+    const localizationRowLocales = recordKeys(localizationForContext?.localizations);
     try {
       await admin.from("app_analytics_events").insert({
         event_name: "ai_ad_versioned_publish",
@@ -509,6 +568,62 @@ serve(async (req) => {
             typeof composedForContext?.screenshotQa?.required === "boolean" ? composedForContext.screenshotQa.required : false,
           screenshot_qa_decision:
             typeof composedForContext?.screenshotQa?.decision === "string" ? composedForContext.screenshotQa.decision : null,
+          localization_present: Boolean(localizationForContext),
+          localization_source_locale:
+            typeof localizationForContext?.sourceLocale === "string" ? localizationForContext.sourceLocale : null,
+          localization_enabled_locales: enabledLocalizationLocales.join(","),
+          localization_enabled_locale_count: enabledLocalizationLocales.length,
+          localization_source_creative_hash:
+            typeof localizationForContext?.sourceCreativeHash === "string" ? localizationForContext.sourceCreativeHash : null,
+          localization_bundle_hash:
+            typeof localizationForContext?.localizationBundleHash === "string" ? localizationForContext.localizationBundleHash : null,
+          localization_locale_renderer_version:
+            typeof localizationForContext?.localeRendererVersion === "string" ? localizationForContext.localeRendererVersion : null,
+          deterministic_localization_fallback_locales: deterministicFallbackLocales.join(","),
+          deterministic_localization_fallback_count: deterministicFallbackLocales.length,
+          translation_qa_decision_by_locale: translationQaRollup(localizationForContext?.translationQaSummary),
+          semantic_qa_provider:
+            typeof localizationForContext?.semanticQaSummary?.provider === "string"
+              ? localizationForContext.semanticQaSummary.provider
+              : null,
+          semantic_qa_model:
+            typeof localizationForContext?.semanticQaSummary?.model === "string"
+              ? localizationForContext.semanticQaSummary.model
+              : null,
+          semantic_qa_skipped_reason:
+            typeof localizationForContext?.semanticQaSummary?.skippedReason === "string"
+              ? localizationForContext.semanticQaSummary.skippedReason
+              : null,
+          translation_repair_target_locales: repairTargetLocales.join(","),
+          translation_repair_target_locale_count: repairTargetLocales.length,
+          locale_template_override_locales: localePresentationOverrideLocales.join(","),
+          locale_template_override_count: localePresentationOverrideLocales.length,
+          localization_row_locales: localizationRowLocales.join(","),
+          localization_row_count: localizationRowLocales.length,
+          localization_approval_present: Boolean(localizationForContext?.approval),
+          localization_approval_hash:
+            typeof localizationForContext?.approval?.approvalHash === "string"
+              ? localizationForContext.approval.approvalHash
+              : null,
+          localization_approval_policy_version:
+            typeof localizationForContext?.approval?.policyVersion === "string"
+              ? localizationForContext.approval.policyVersion
+              : null,
+          localization_review_policy_version:
+            typeof localizationForContext?.approval?.reviewPolicyVersion === "string"
+              ? localizationForContext.approval.reviewPolicyVersion
+              : null,
+          localized_term_snapshot_hash:
+            typeof localizationForContext?.approval?.localizedTermSnapshotHash === "string"
+              ? localizationForContext.approval.localizedTermSnapshotHash
+              : null,
+          locale_presentation_overrides_hash:
+            typeof localizationForContext?.approval?.localePresentationOverridesHash === "string"
+              ? localizationForContext.approval.localePresentationOverridesHash
+              : null,
+          localization_approved_row_hash_locales: recordKeys(
+            localizationForContext?.approval?.localizationRowHashes,
+          ).join(","),
         },
       });
     } catch (err) {

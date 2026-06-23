@@ -58,6 +58,14 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/selected_template_id/);
     expect(source).toMatch(/composite_qa_decision/);
     expect(source).toMatch(/merchant_style_override_used/);
+    expect(source).toMatch(/localization_source_locale/);
+    expect(source).toMatch(/localization_bundle_hash/);
+    expect(source).toMatch(/deterministic_localization_fallback_locales/);
+    expect(source).toMatch(/translation_qa_decision_by_locale/);
+    expect(source).toMatch(/translation_repair_target_locales/);
+    expect(source).toMatch(/locale_template_override_locales/);
+    expect(source).toMatch(/localization_approval_hash/);
+    expect(source).toMatch(/localized_term_snapshot_hash/);
     expect(source).not.toMatch(/context:[\s\S]*idempotency_key/);
   });
 });

@@ -53,6 +53,30 @@ const checks = [
       /U\.S\. Spanish and Korean broad production rollout remains blocked/,
     ],
   },
+  {
+    name: "versioned publish exposes localization rollout telemetry",
+    file: "supabase/functions/publish-offer-version/index.ts",
+    patterns: [
+      /localization_source_locale/,
+      /localization_bundle_hash/,
+      /deterministic_localization_fallback_locales/,
+      /translation_qa_decision_by_locale/,
+      /translation_repair_target_locales/,
+      /locale_template_override_locales/,
+      /localization_approval_hash/,
+      /localized_term_snapshot_hash/,
+    ],
+  },
+  {
+    name: "rollout telemetry handoff document exists",
+    file: "docs/localization/multilingual-deals-pr4-rollout-telemetry.md",
+    patterns: [
+      /ai_ad_versioned_publish/,
+      /source-locale publish mix/,
+      /deterministic fallback rate by source locale/,
+      /does not record localized headline text/,
+    ],
+  },
 ];
 
 let failed = 0;
