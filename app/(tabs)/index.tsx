@@ -52,7 +52,6 @@ import {
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { logPostgrestError } from "@/lib/supabase-client-log";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
-import { localizedDealTitle } from "@/lib/deal-localization";
 import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
 import {
   fetchCustomerDealLocalizations,
@@ -225,14 +224,19 @@ export default function HomeScreen() {
   dealsRef.current = deals;
   customerPreferredDealLocaleRef.current = customerPreferredDealLocale;
   customerLocaleResolutionEnabledRef.current = customerLocaleResolutionEnabled;
-  const customerDealLocalizationLocale = customerLocaleResolutionEnabled
+  const customerDealLocalizationResolution = customerLocaleResolutionEnabled
     ? resolveDealDisplayLocale({
         customerPreferredLocale: customerPreferredDealLocale,
         appLanguage: i18n.language,
         deviceLanguage: deviceDealLocaleRef.current,
         adSourceLocale: null,
-      }).locale
-    : supportedLocaleOrDefault(i18n.language);
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
+  const customerDealLocalizationLocale = customerDealLocalizationResolution.locale;
   // Keep the current segment readable inside the stable viewability callback below
   // (FlatList forbids changing onViewableItemsChanged/viewabilityConfig between renders).
   const feedSegmentRef = useRef(feedSegment);
@@ -662,10 +666,21 @@ export default function HomeScreen() {
         void loadUserClaims(dealsRef.current.map((d) => d.id));
         // Retention nudge: remind ~1h before this claim's redemption deadline.
         const claimedDeal = dealsRef.current.find((d) => d.id === dealId);
+        const claimedDealDisplay = claimedDeal
+          ? buildLocalizedDealDisplay({
+              deal: customerDealLocalizationsByDealId.has(claimedDeal.id)
+                ? { ...claimedDeal, customer_deal_localization: customerDealLocalizationsByDealId.get(claimedDeal.id) ?? null }
+                : claimedDeal,
+              locale: customerDealLocalizationLocale,
+              localeResolutionSource: customerDealLocalizationResolution.source,
+              useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+              fallbackLanguage: i18n.language,
+            })
+          : null;
         void scheduleClaimExpiryReminder({
           claimExpiresAt: out.expires_at,
           graceMinutes: DEFAULT_CLAIM_GRACE_MINUTES,
-          dealTitle: claimedDeal ? localizedDealTitle(claimedDeal, i18n.language) : null,
+          dealTitle: claimedDealDisplay?.title ?? null,
         });
       } catch (e: unknown) {
         const msg = messageFromThrown(e) ?? t("apiErrors.operationFailedTryAgain");
@@ -687,7 +702,19 @@ export default function HomeScreen() {
         setClaimingDealId(null);
       }
     },
-    [isLoggedIn, claimingDealId, loadUserClaims, mapClaimError, t, i18n.language],
+    [
+      isLoggedIn,
+      claimingDealId,
+      loadUserClaims,
+      mapClaimError,
+      t,
+      customerDealLocalizationLocale,
+      customerDealLocalizationResolution.source,
+      customerDealLocalizationsByDealId,
+      customerLocaleResolutionEnabled,
+      i18n.language,
+      localizedOfferRendererEnabled,
+    ],
   );
 
   const hideClaimQrModal = useCallback(() => {

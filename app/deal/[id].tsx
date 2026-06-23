@@ -21,7 +21,6 @@ import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
-import { localizedDealTitle } from "@/lib/deal-localization";
 import {
   getCustomerPreferredDealLocale,
   getDeviceDealLocale,
@@ -511,6 +510,30 @@ export default function DealDetail() {
     }
   }
 
+  function currentDealDisplayTitle() {
+    if (!deal) return t("dealDetail.dealFallback");
+    const resolvedLocale = customerLocaleResolutionEnabled
+      ? resolveDealDisplayLocale({
+          customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+          appLanguage: i18n.language,
+          deviceLanguage: deviceDealLocaleRef.current,
+          adSourceLocale: deal.source_locale,
+        })
+      : {
+          locale: supportedLocaleOrDefault(i18n.language),
+          source: "app_language" as const,
+          enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+        };
+    const display = buildLocalizedDealDisplay({
+      deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
+      locale: resolvedLocale.locale,
+      localeResolutionSource: resolvedLocale.source,
+      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      fallbackLanguage: i18n.language,
+    });
+    return display.title || t("dealDetail.dealFallback");
+  }
+
   async function handleShare() {
     if (!shareDealEnabled) return;
     if (!deal || isSharing) return;
@@ -526,7 +549,7 @@ export default function DealDetail() {
       const code = await getOrCreateShareCode(deal.id);
       const copy = buildShareCopy({
         shareCode: code,
-        dealTitle: localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback"),
+        dealTitle: currentDealDisplayTitle(),
         businessName: deal.businesses?.name ?? t("dealDetail.localBusiness"),
         t,
       });

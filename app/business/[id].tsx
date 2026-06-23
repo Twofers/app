@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { ActivityIndicator, BackHandler, Linking, Platform, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -17,13 +17,23 @@ import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
   type DealStructuredDisplayFields,
 } from "@/lib/deal-feed-schema";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import {
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+} from "@/lib/runtime-env";
+import { supportedLocaleOrDefault } from "@/lib/supported-locales";
 
 type BizRow = {
   id: string;
@@ -41,6 +51,7 @@ type BizRow = {
 
 type DealRow = DealStructuredDisplayFields & {
   id: string;
+  business_id: string;
   title: string | null;
   description: string | null;
   source_locale: string | null;
@@ -54,6 +65,7 @@ type DealRow = DealStructuredDisplayFields & {
   poster_storage_path?: string | null;
   end_time: string;
   start_time: string;
+  max_claims: number | null;
   price: number | null;
   is_recurring: boolean;
   days_of_week: number[] | null;
@@ -64,7 +76,7 @@ type DealRow = DealStructuredDisplayFields & {
 };
 
 const BUSINESS_DEALS_BASE_SELECT =
-  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+  "id,business_id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,is_demo,poster_url,poster_storage_path,end_time,start_time,max_claims,price,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
 const BUSINESS_DEALS_SELECT = `${BUSINESS_DEALS_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 export default function BusinessProfileScreen() {
@@ -78,11 +90,30 @@ export default function BusinessProfileScreen() {
   const { userId, isLoggedIn, loading: authLoading } = useBusiness();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
   const [biz, setBiz] = useState<BizRow | null>(null);
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocale] = useState<string | null>(null);
+  const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
+    () => new Map(),
+  );
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
+  const resolvedDealDisplayLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: null,
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
 
   const load = useCallback(async () => {
     if (!id?.trim()) {
@@ -147,6 +178,35 @@ export default function BusinessProfileScreen() {
     }
     setLoading(false);
   }, [id, userId, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getCustomerPreferredDealLocale().then((locale) => {
+        if (!cancelled) setCustomerPreferredDealLocale(locale);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || deals.length === 0) {
+      setCustomerDealLocalizationsByDealId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealLocalizations(
+      deals.map((deal) => deal.id),
+      resolvedDealDisplayLocale.locale,
+    ).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalizationsByDealId(localizations);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerLocaleResolutionEnabled, deals, localizedOfferRendererEnabled, resolvedDealDisplayLocale.locale]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -493,8 +553,23 @@ export default function BusinessProfileScreen() {
             <View style={{ gap: Spacing.lg }}>
               {deals.map((deal) => {
                 const uri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
-                const dealTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
-                const dealDescription = localizedDealDescription(deal, i18n.language);
+                const localizedDisplay = buildLocalizedDealDisplay({
+                  deal: {
+                    ...deal,
+                    customer_deal_localization: customerDealLocalizationsByDealId.get(deal.id) ?? null,
+                    businesses: {
+                      name: biz.name,
+                      location: biz.location,
+                      address: biz.address,
+                    },
+                  },
+                  locale: resolvedDealDisplayLocale.locale,
+                  localeResolutionSource: resolvedDealDisplayLocale.source,
+                  useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+                  fallbackLanguage: i18n.language,
+                });
+                const dealTitle = localizedDisplay.title || t("dealDetail.dealFallback");
+                const dealDescription = localizedDisplay.description;
                 const isDemoDeal = deal.is_demo === true || biz.is_demo === true;
                 return (
                   <Pressable
