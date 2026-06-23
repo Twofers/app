@@ -7,9 +7,11 @@ import {
   supportedLocaleOrDefault,
   type SupportedLocale,
 } from "./supported-locales";
+import { validateAdTranscreationDeterministically } from "./ad-translation-qa";
 import type {
   AdLocalizationBundle,
   AdLocalizedCreative,
+  AdTranslationQaResult,
   SourceAdCreative,
 } from "./ad-localization-schema";
 
@@ -95,6 +97,24 @@ export function buildDeterministicAdLocalizationBundle(input: {
   protectedTerms?: readonly string[] | null;
   enabledLocales?: readonly SupportedLocale[] | null;
 }): AdLocalizationBundle {
+  return buildQaCheckedAdLocalizationBundle(input);
+}
+
+function deterministicFallbackReasonCodes(qa: AdTranslationQaResult | null): string[] {
+  return [
+    "DETERMINISTIC_TARGET_FALLBACK",
+    ...(qa?.hardFailReasons ?? []),
+  ];
+}
+
+export function buildQaCheckedAdLocalizationBundle(input: {
+  sourceLocale: string | null | undefined;
+  sourceCreative: SourceAdCreative;
+  offerDefinition: OfferDefinitionV1;
+  protectedTerms?: readonly string[] | null;
+  enabledLocales?: readonly SupportedLocale[] | null;
+  targetCreatives?: Partial<Record<SupportedLocale, SourceAdCreative | null>> | null;
+}): AdLocalizationBundle {
   const sourceLocale = supportedLocaleOrDefault(input.sourceLocale);
   const enabledLocales = input.enabledLocales?.length ? [...input.enabledLocales] : [...SUPPORTED_LOCALES];
   const protectedTerms = uniqueClean([
@@ -113,21 +133,45 @@ export function buildDeterministicAdLocalizationBundle(input: {
     SUPPORTED_LOCALES.map((locale) => {
       const locked = renderLocalizedOfferFromDefinition(input.offerDefinition, { locale });
       const isSource = locale === sourceLocale;
+      const targetCreative = !isSource ? input.targetCreatives?.[locale] ?? null : null;
+      const qa = targetCreative
+        ? validateAdTranscreationDeterministically({
+            sourceLocale,
+            targetLocale: locale,
+            sourceCreative: input.sourceCreative,
+            targetCreative,
+            offerDefinition: input.offerDefinition,
+            protectedTerms,
+          })
+        : null;
+      const useTranscreation = Boolean(qa && qa.decision === "pass" && targetCreative);
       const base = {
         locale,
-        headline: isSource ? cleanText(input.sourceCreative.headline) || locked.primaryOfferLine : FALLBACK_HEADLINE[locale],
+        headline: isSource
+          ? cleanText(input.sourceCreative.headline) || locked.primaryOfferLine
+          : useTranscreation
+            ? cleanText(targetCreative?.headline) || FALLBACK_HEADLINE[locale]
+            : FALLBACK_HEADLINE[locale],
         supportingCopy: isSource
           ? cleanText(input.sourceCreative.supportingCopy) || locked.termsLine
-          : locked.primaryOfferLine,
+          : useTranscreation
+            ? cleanText(targetCreative?.supportingCopy) || locked.primaryOfferLine
+            : locked.primaryOfferLine,
         imageAltText: isSource
           ? cleanText(input.sourceCreative.imageAltText) || `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`
-          : `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`,
+          : useTranscreation
+            ? cleanText(targetCreative?.imageAltText) || `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`
+            : `${FALLBACK_IMAGE_ALT_PREFIX[locale]} ${input.offerDefinition.merchantName}`,
         exactOfferLine: locked.primaryOfferLine,
         termsLine: locked.termsLine,
         preservedTerms: [] as string[],
-        translationStatus: isSource ? "source_creative" as const : "deterministic_fallback" as const,
+        translationStatus: isSource
+          ? "source_creative" as const
+          : useTranscreation
+            ? "persuasive_transcreation" as const
+            : "deterministic_fallback" as const,
         qaDecision: isSource ? "not_required" as const : "pass" as const,
-        qaReasonCodes: isSource ? [] : ["DETERMINISTIC_TARGET_FALLBACK"],
+        qaReasonCodes: isSource ? [] : useTranscreation ? [] : deterministicFallbackReasonCodes(qa),
       };
       return [
         locale,
@@ -142,7 +186,9 @@ export function buildDeterministicAdLocalizationBundle(input: {
   const withoutHash = {
     sourceLocale,
     sourceCreativeHash,
-    deterministicFallbackLocales: enabledLocales.filter((locale) => locale !== sourceLocale),
+    deterministicFallbackLocales: enabledLocales.filter(
+      (locale) => locale !== sourceLocale && localizations[locale].translationStatus === "deterministic_fallback",
+    ),
     localizations,
   };
   return {

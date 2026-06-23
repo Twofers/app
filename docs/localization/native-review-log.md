@@ -17,3 +17,4 @@ Broad Korean production use is blocked until a named Korean reviewer signs off.
 | 2026-06-23 | TBD | ko-KR | localized-offer-template-v1 and korean-counter-registry-v0-pending-native-review | Pending native review | Native review and counter approval required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr2 owner/customer locale UI strings | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr3 source creative policy and deterministic fallback labels | Pending native review | Native review required before broad production | No |
+| 2026-06-23 | TBD | es-US, ko-KR | ad-translation-qa-v1 deterministic QA policy | Pending native review | Native review required before broad production | No |

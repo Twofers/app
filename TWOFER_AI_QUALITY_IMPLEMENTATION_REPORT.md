@@ -738,6 +738,77 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3b - Deterministic translation QA and per-locale fallback
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-translation-qa`.
+
+Safety checkpoint: `2706fef1` (Multilingual Deals PR 3a source-locale policy foundation commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-translation-qa.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-localization-schema.ts`
+- `lib/ad-localization.ts`
+- `lib/ad-localization.test.ts`
+- `lib/ad-translation-qa.ts`
+- `lib/ad-translation-qa.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added the `ad-translation-qa-v1` deterministic QA contract for proposed target-language persuasive creative.
+- Added QA result types for locale decision, hard-fail reason codes, normalized scores, and concise feedback.
+- Added deterministic checks for target-language signal, protected-term preservation, banned BOGO shorthand, unsupported quality/ranking/guarantee/dietary claims, unexpected numeric mechanics, mobile field budgets, field completeness, and unexpected language mixing beyond protected terms.
+- Extended the localization bundle builder so passing target-locale creative is accepted as `persuasive_transcreation`, while failed or missing target locales fall back independently to deterministic target-language copy.
+- Preserved failed target reason codes alongside `DETERMINISTIC_TARGET_FALLBACK` so later provider repair, telemetry, and review workflows can see why a locale fell back.
+- Documented the QA policy and added it to the native review log.
+
+## Acceptance criteria map
+
+- PR 3.1 locale-aware source creative generation: Already improved in PR 3a; no new prompt work in this slice.
+- PR 3.2 source-language style policies: Already implemented in PR 3a.
+- PR 3.3 winning-candidate-only transcreation: Partially prepared; the bundle now accepts only selected target-locale creative inputs, but provider generation remains future work.
+- PR 3.4 protected terms: Improved; deterministic QA now fails target copy when protected terms used by the source creative are missing or changed.
+- PR 3.5 independent translation QA: Partially implemented; always-run deterministic checks now exist, while independent semantic provider review remains future work.
+- PR 3.6 targeted repair: Prepared; QA returns `repair` versus `block` decisions and concise feedback, but provider repair calls are not yet wired.
+- PR 3.7 deterministic target-language fallback: Improved; fallback is now per failed or absent target locale instead of always all non-source locales.
+- PR 3.8 locale-specific presentation resolver: Not implemented in this slice.
+- PR 3.9 localization storage and hashes: Existing hash builder now includes accepted target transcreations or fallback states; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Already started in PR 2; no additional UI work in this slice.
+
+## Validation
+
+- `npx vitest run lib/ad-translation-qa.test.ts lib/ad-localization.test.ts`: passed; 2 files, 9 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npx vitest run`: passed; 159 files, 849 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3b-20260623-1430`: passed with known `country-flag-icons` package export warnings.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- Provider-backed transcreation, independent semantic model review, targeted repair calls, localization storage, and publish enforcement are not yet implemented.
+- Deterministic language detection is intentionally conservative and must be reviewed by named U.S. Spanish and Korean reviewers before broad production use.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on QA policy, fallback wording, representative transcreations, and real-device screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 2 - Localized owner interface and customer language switching
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr2-locale-switching`.

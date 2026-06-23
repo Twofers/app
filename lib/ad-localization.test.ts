@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
+import {
+  buildDeterministicAdLocalizationBundle,
+  buildQaCheckedAdLocalizationBundle,
+} from "./ad-localization";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 
 function definition() {
@@ -115,5 +118,45 @@ describe("ad localization deterministic fallback bundle", () => {
       expect.arrayContaining(["Cedar Bean", "latte", "cookie"]),
     );
     expect(bundle.localizations["ko-KR"].translationStatus).toBe("source_creative");
+  });
+
+  it("uses passing transcreation copy and falls back only failed target locales", () => {
+    const bundle = buildQaCheckedAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Cedar Bean latte reward",
+        supportingCopy: "Your afternoon latte comes with a cookie.",
+        imageAltText: "Cedar Bean latte and cookie",
+      },
+      targetCreatives: {
+        "es-US": {
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde viene con una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+        "ko-KR": {
+          headline: "Cedar Bean latte reward",
+          supportingCopy: "Your afternoon latte comes with a cookie.",
+          imageAltText: "Cedar Bean latte and cookie",
+        },
+      },
+      offerDefinition: definition(),
+      protectedTerms: ["Cedar Bean", "latte", "cookie"],
+    });
+
+    expect(bundle.localizations["es-US"]).toMatchObject({
+      headline: "Cedar Bean: latte con cookie gratis",
+      translationStatus: "persuasive_transcreation",
+      qaDecision: "pass",
+      qaReasonCodes: [],
+    });
+    expect(bundle.localizations["ko-KR"]).toMatchObject({
+      translationStatus: "deterministic_fallback",
+      qaDecision: "pass",
+    });
+    expect(bundle.localizations["ko-KR"].qaReasonCodes).toEqual(
+      expect.arrayContaining(["DETERMINISTIC_TARGET_FALLBACK", "WRONG_LANGUAGE"]),
+    );
+    expect(bundle.deterministicFallbackLocales).toEqual(["ko-KR"]);
   });
 });
