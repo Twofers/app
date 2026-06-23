@@ -10,8 +10,7 @@
       "env": {
         "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
         "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
-        "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
-        "EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK": "true"
+        "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true"
       }
     },
     "preview": {
@@ -24,8 +23,7 @@
         "EXPO_PUBLIC_SHOW_DEBUG_PANEL": "true",
         "EXPO_PUBLIC_DEBUG_BOOT_LOG": "true",
         "EXPO_PUBLIC_PREVIEW_MATCHES_DEV": "true",
-        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
-        "EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK": "true"
+        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true"
       }
     },
     "ios-sim": {
@@ -38,8 +36,7 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
-        "EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK": "true"
+        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true"
       },
       "android": {
         "buildType": "app-bundle"
@@ -52,8 +49,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true",
-        "EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK": "true"
+        "EXPO_PUBLIC_ENABLE_SHARE_DEAL": "true"
       }
     },
     "apk": {

@@ -952,8 +952,6 @@ Live secret names changed: none.
 
 Revert this commit. No migration rollback is required.
 
----
-
 ## PR 4g - AI quality/cost dashboard metrics export
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
@@ -2782,6 +2780,63 @@ Live secret names changed: none.
 
 - Existing-deal edit/update still writes directly to `deals`; versioned edit semantics remain future data-model work.
 - Production still requires Dan-controlled migration and Edge Function deployment verification before the versioned publish path is guaranteed live.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ai - Retire offer-definition fallback rollout flag
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `6d7326ea`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/quick.tsx`
+- `lib/runtime-env.ts`
+- `lib/runtime-env.test.ts`
+- `eas.json`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Removed the public `EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK` rollout flag from runtime diagnostics and EAS build env entries.
+- Quick Create now always builds an offer definition before AI generation.
+- Quick Create's deterministic safe draft fallback is always available when `shouldUseQuickDealOfferDefinitionFallback` allows it and an offer definition exists.
+- Added a runtime-env guard so the retired flag does not reappear in public diagnostics.
+
+## Acceptance criteria map
+
+9. Merchant receives a preview or polished deterministic fallback, never a blank state: Improved for Quick Create; safe fallback no longer depends on a public build flag.
+25. Deterministic fallback usage and reason are logged: Preserved through `quick_deal_offer_definition_fallback_used`.
+49. Legacy canned output cannot appear as live AI: Preserved; fallback is deterministic and labeled.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/runtime-env.test.ts lib/quick-deal-ai-policy.test.ts lib/offer-version-publish-source.test.ts`: passed, 3 files / 6 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 772 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ai-20260622-2015`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This improves local app fallback behavior only; hosted production still requires the normal app release/deploy process.
+- Quick fallback still requires an uploaded/generated photo path when policy demands a safe visual source.
 
 ## Rollback
 

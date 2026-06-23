@@ -10,12 +10,9 @@ vi.mock("expo-constants", () => ({
   },
 }));
 
-import {
-  getPublicEnvSnapshot,
-  isOfferDefinitionFallbackEnabled,
-} from "./runtime-env";
+import { getPublicEnvSnapshot } from "./runtime-env";
 
-describe("runtime-env offer definition fallback flag", () => {
+describe("runtime-env retired offer rollout flags", () => {
   const previous = process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;
 
   afterEach(() => {
@@ -26,20 +23,9 @@ describe("runtime-env offer definition fallback flag", () => {
     }
   });
 
-  it("only enables the fallback when the public flag is true", () => {
-    process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK = "true";
-    expect(isOfferDefinitionFallbackEnabled()).toBe(true);
-
-    process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK = "false";
-    expect(isOfferDefinitionFallbackEnabled()).toBe(false);
-
-    delete process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;
-    expect(isOfferDefinitionFallbackEnabled()).toBe(false);
-  });
-
-  it("includes the fallback flag in the public diagnostics snapshot", () => {
+  it("does not expose the retired offer-definition fallback flag", () => {
     process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK = "true";
 
-    expect(getPublicEnvSnapshot().EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK).toBe("true");
+    expect(getPublicEnvSnapshot()).not.toHaveProperty("EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK");
   });
 });
