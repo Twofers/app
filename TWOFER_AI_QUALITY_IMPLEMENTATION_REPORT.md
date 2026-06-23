@@ -889,7 +889,7 @@ Full checks passed after each closeout slice:
 - Public website privacy/subprocessor update remains required before production can enable Google/Gemini text fallback.
 - Live threshold calibration remains blocked until Dan runs representative non-publishing outputs and the service-role baseline dashboard locally.
 - The role-split migration and AI limit deploy reminders from the repo spec remain separate hard-gated Supabase work.
-- `ai-create-deal` remains default-closed; if deliberately re-enabled it still combines generation and insert and should not be a pilot happy path.
+- `ai-create-deal` is now permanently disabled in source and no longer contains a re-enableable generation-plus-insert path.
 - Voice transcription and menu OCR remain direct media-specific provider calls pending future provider-neutral media routers.
 
 ## Rollback
@@ -2658,6 +2658,70 @@ Live secret names changed: none.
 
 - This is raw-image safe-zone QA, not a server-side rendered-card screenshot judge. The plan allows raw-image safe-zone QA for the first release; a composite screenshot verifier can still be a later enhancement.
 - This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production uses the expanded image-QA schema.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ag - Permanently disable legacy create-deal endpoint
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `fb77a913`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-create-deal/index.ts`
+- `supabase/functions/_shared/ai-create-deal-source.test.ts`
+- `supabase/functions/_shared/billing-functions-source.test.ts`
+- `lib/functions.ts`
+- `docs/ai-ad-current-state.md`
+- `docs/edge-function-checklist.md`
+- `docs/deployment-notes.md`
+- `docs/production-deploy-checklist.md`
+- `docs/deployment-command-plan.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the legacy `ai-create-deal` Edge Function with a disabled-only handler that returns HTTP 410 and `AI_CREATE_DEAL_LEGACY_DISABLED`.
+- Removed the hosted `AI_LEGACY_CREATE_DEAL_ENABLED` re-enable path from source.
+- Removed the old provider call, Supabase client creation, signed-photo path, deterministic copy repair, push, and direct live `deals` insert code from the function.
+- Removed the unused `aiCreateDeal()` client wrapper from `lib/functions.ts`.
+- Updated source guards so this function cannot regain OpenAI calls, `createClient`, or `.from("deals")` inserts without failing tests.
+- Updated billing source guards so the disabled-only legacy route is no longer treated as an active publish-style deal action, while active publish/deal functions still require suspension and verification checks.
+- Updated current-state and deployment docs to describe `ai-create-deal` as permanently disabled rather than default-closed.
+
+## Acceptance criteria map
+
+49. Legacy canned output cannot appear as live AI: Improved; this legacy one-shot route cannot generate or publish anything.
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Improved; `ai-create-deal` no longer contains a generation-plus-live-insert bypass.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase/functions/_shared/ai-create-deal-source.test.ts supabase/functions/_shared/billing-functions-source.test.ts lib/quick-deal-ai-policy.test.ts`: passed, 3 files / 15 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 774 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ag-20260622-1928`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production returns the new disabled-only handler.
+- Historical report sections still describe earlier default-closed behavior at the time of those slices; this PR4ag section supersedes them for current state.
 
 ## Rollback
 

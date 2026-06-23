@@ -576,65 +576,6 @@ export async function aiGenerateDealCopy(body: {
   }
 }
 
-export type AiCreateDealResult = {
-  deal_id: string;
-  title: string;
-  description: string;
-  promo_line: string;
-  poster_url: string;
-};
-
-/**
- * Legacy one-shot: AI + insert deal (Edge: `ai-create-deal`).
- * Stores a signed URL in `poster_url` (may expire); prefer the main AI ads → publish flow for production.
- */
-export async function aiCreateDeal(body: {
-  business_id: string;
-  photo_path: string;
-  hint_text: string;
-  price?: number | null;
-  end_time: string;
-  max_claims: number;
-  claim_cutoff_buffer_minutes?: number;
-}): Promise<AiCreateDealResult> {
-  const { data, error } = await supabase.functions.invoke("ai-create-deal", {
-    body: {
-      business_id: body.business_id,
-      photo_path: body.photo_path,
-      hint_text: body.hint_text,
-      price: body.price ?? undefined,
-      end_time: body.end_time,
-      max_claims: body.max_claims,
-      claim_cutoff_buffer_minutes: body.claim_cutoff_buffer_minutes ?? 15,
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
-
-  if (error) {
-    throw new Error(parseFunctionError(error));
-  }
-  if (data && typeof data === "object" && "error" in data) {
-    throw new Error(String((data as { error?: string }).error ?? "Server returned an error"));
-  }
-  const d = data as Partial<AiCreateDealResult>;
-  if (
-    typeof d.deal_id !== "string" ||
-    typeof d.title !== "string" ||
-    typeof d.description !== "string" ||
-    typeof d.promo_line !== "string" ||
-    typeof d.poster_url !== "string"
-  ) {
-    throw new Error("Unexpected response from ai-create-deal.");
-  }
-  return {
-    deal_id: d.deal_id,
-    title: d.title,
-    description: d.description,
-    promo_line: d.promo_line,
-    poster_url: d.poster_url,
-  };
-}
-
 export type AiExtractMenuItem = {
   name: string;
   category?: string;

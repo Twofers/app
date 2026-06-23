@@ -199,7 +199,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 - **Wallet / redeem:** `claim-deal`, `redeem-token`, `begin-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (and `cancel-visual-redeem` if still referenced)
 - **Account / compliance:** `delete-user-account`
 - **Telemetry:** `ingest-analytics-event`
-- **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`, `ai-create-deal` (legacy)
+- **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
 - **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)

@@ -112,7 +112,7 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `ai-compose-offer` | Voice / text/photo -> ad-copy compose (uses Whisper for voice and the shared text provider router for compose) |
 | `ai-generate-ad-variants` | Single-ad pipeline (research → copy → GPT image generate or photo edit) |
 | `ai-generate-deal-copy` | Quick-Deal "Suggest title" |
-| `ai-create-deal` | Legacy one-shot deal insert (dev tool) |
+| `ai-create-deal` | Permanently disabled legacy endpoint; returns HTTP 410 |
 | `ai-extract-menu` | Menu photo → structured items (vision) |
 | `ai-refine-ad-copy` | Chat-style refinement of selected ad |
 | `ai-business-lookup` | Business-setup lookup (name → address/phone/category) |
@@ -172,7 +172,7 @@ Upstream menu extraction provider failures return `OPENAI_ERROR` with sanitized 
 
 `ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when required provider configuration is missing. Text/photo compose can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured; the voice transcription-only path still requires OpenAI/Whisper.
 
-Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-create-deal`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures. Shared OpenAI/Gemini text-provider exceptions keep classification codes but use generic provider/code messages, and router/circuit-breaker/cost-ledger maintenance failures log fixed error codes. `ai-business-lookup` Google exception paths and `ai-generate-ad-variants` research, copy, image QA, image generation, and image edit failure paths log fixed stage/error codes instead of raw upstream response bodies or free-form exception text.
+Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures. `ai-create-deal` no longer calls a provider and always returns `AI_CREATE_DEAL_LEGACY_DISABLED`. Shared OpenAI/Gemini text-provider exceptions keep classification codes but use generic provider/code messages, and router/circuit-breaker/cost-ledger maintenance failures log fixed error codes. `ai-business-lookup` Google exception paths and `ai-generate-ad-variants` research, copy, image QA, image generation, and image edit failure paths log fixed stage/error codes instead of raw upstream response bodies or free-form exception text.
 
 **Setting Edge secrets:**
 

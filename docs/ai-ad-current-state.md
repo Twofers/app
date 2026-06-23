@@ -130,7 +130,7 @@ Current gaps:
 
 - `ai-compose-offer`: composes an offer from text/image/voice. Live text/photo offer composition now uses the shared OpenAI/Gemini structured text provider router, including router `imageInputs` for uploaded images. Legacy poster image generation is disabled; when `generate_poster_image` is requested the function returns compose copy with `poster_image_unavailable` and `poster_disabled_reason: "native_text_rendering_required"` instead of using `buildPosterImagePrompt`. Voice audio is processed ephemerally per the spec; transcript is logged. Missing OpenAI/Whisper configuration returns `OPENAI_KEY_MISSING` for transcription-only requests; text/photo compose can continue through Gemini only when the router flags and `GEMINI_API_KEY` are configured. Upstream Whisper, live compose provider, provider-config, and outer compose handler failures log only sanitized status/generic failure details, not raw provider response bodies or exception text.
 - `ai-generate-deal-copy`: text-only copy helper used for business descriptions and onboarding suggestions. It now uses the shared OpenAI/Gemini structured text provider router with strict JSON schema. Missing provider configuration still fails closed with `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and provider/config failures return `AI_GENERATION_FAILED` or `AI_TEXT_CONFIG_INVALID` without raw provider response bodies or exception text.
-- `ai-create-deal`: legacy one-shot AI plus insert flow. It verifies ownership and eligibility, uses deterministic copy repair, then inserts `deals` when explicitly re-enabled. Follow-up cleanup now default-closes this endpoint unless hosted `AI_LEGACY_CREATE_DEAL_ENABLED=true`; it is exported in `lib/functions.ts` but no current app code calls `aiCreateDeal()`. If re-enabled, upstream OpenAI HTTP failures return generic client errors and log sanitized status/error-code details rather than raw provider response bodies.
+- `ai-create-deal`: permanently disabled legacy one-shot AI plus insert endpoint. The Edge Function now returns `AI_CREATE_DEAL_LEGACY_DISABLED` with HTTP 410 and no provider, Supabase client, or `deals` insert path remains in the function source. The former `aiCreateDeal()` client wrapper was removed from `lib/functions.ts`.
 - `ai-deal-suggestions`: owner dashboard insights helper. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation/config failures return sanitized errors without raw provider response bodies or exception text.
 - `ai-translate-deal`: localization helper used after deal creation and by direct callers. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation/config/outer handler failures return sanitized errors without raw provider response bodies or exception text.
 - `ai-extract-menu`: menu photo extraction path, relevant to catalog setup. The synthetic sample menu path is gated behind `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`; production-style missing OpenAI config returns `OPENAI_NOT_CONFIGURED`, and upstream provider HTTP plus outer handler failures log sanitized status/error details instead of raw provider bodies or exception text.
@@ -230,10 +230,9 @@ Function: `supabase/functions/ai-generate-deal-copy/index.ts`
 
 Function: `supabase/functions/ai-create-deal/index.ts`
 
-- Uses a photo signed URL and hint to generate copy.
-- Applies deterministic deal copy safeguards after model output.
-- Inserts a live `deals` row.
-- This is the closest remaining anti-goal path because model generation and publish live in the same request, even though safeguards have been added. It is default-closed and no current app code calls it.
+- Permanently returns HTTP 410 with `AI_CREATE_DEAL_LEGACY_DISABLED`.
+- Does not create signed URLs, call a model provider, create a Supabase client, or insert a live `deals` row.
+- No current app code calls it, and the former exported client wrapper has been removed.
 
 ## Image Storage and Asset Handling
 
@@ -340,7 +339,7 @@ Critical architecture gaps:
 
 AI and quality gaps:
 
-- Legacy `ai-create-deal` can still combine generation and insert in one Edge Function when explicitly re-enabled, but is now default-closed behind `AI_LEGACY_CREATE_DEAL_ENABLED`.
+- Legacy `ai-create-deal` no longer contains a re-enableable generation-plus-insert path; it returns HTTP 410 only.
 - Legacy `ai-compose-offer` poster mode is disabled so it cannot bake critical text into generated pixels.
 - Main copy validation is strong for offer mechanics, but there is no full `AdQualityService` with persisted hard-gate results and soft scores.
 - Gemini vision QA fallback exists for the ad-variant image path, but it is still synchronous and flag-gated rather than a dedicated provider abstraction shared across all vision features.

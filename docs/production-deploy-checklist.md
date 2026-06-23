@@ -56,7 +56,7 @@ supabase functions deploy <function-name>
 - `delete-user-account`
 - `ingest-analytics-event`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`
-- `ai-create-deal` (legacy; still keep behavior sane if enabled)
+- `ai-create-deal` (legacy disabled endpoint; should return HTTP 410)
 - Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
 
 After deploy, hit each critical path once from a dedicated smoke/test account (claim, redeem, AI create). Demo content may remain visible for testers, but do not rely on a shared demo login.
