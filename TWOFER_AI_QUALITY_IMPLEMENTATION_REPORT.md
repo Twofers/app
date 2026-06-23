@@ -738,6 +738,79 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3c - Provider transcreation contract
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-provider-contract`.
+
+Safety checkpoint: `be362bdf` (Multilingual Deals PR 3b deterministic translation QA foundation commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-provider-contract.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-source-locale-policy.ts`
+- `supabase/functions/_shared/ai-localization-provider.ts`
+- `supabase/functions/_shared/ai-localization-provider.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `AI_AD_LOCALIZATION_PROMPT_V1`, the provider-facing prompt and strict JSON schema for persuasive ad transcreation.
+- Added `generateAdLocalizationTranscreations()`, which uses the shared structured text provider router with `operation: "translation"`.
+- Added a Deno-friendly provider request shape and `adLocalizationOfferFactsFromDefinition()` adapter for immutable offer facts.
+- Restricted provider output to target-locale `headline`, `supportingCopy`, and `imageAltText`.
+- Explicitly excludes source-locale output and any model-authored exact offer line, terms, price, time, quantity mechanics, CTA, eligibility, inventory, or redemption instructions.
+- Added tests that mock the structured provider response, inspect the OpenAI JSON schema payload, verify source-locale output is ignored, and confirm no provider call occurs when there are no target locales.
+- Updated the source-locale policy imports to Deno-compatible `.ts` specifiers so the `ai-generate-ad-variants` prompt path passes function typecheck.
+- Documented the provider contract and added the prompt to the native review log.
+
+## Acceptance criteria map
+
+- PR 3.1 locale-aware source creative generation: Already improved in PR 3a.
+- PR 3.2 source-language style policies: Already implemented in PR 3a.
+- PR 3.3 winning-candidate-only transcreation: Improved; provider contract sends only one selected source creative and requested target locales, not all five candidates.
+- PR 3.4 protected terms: Improved; provider prompt carries protected terms and requires exact preservation.
+- PR 3.5 independent translation QA: Deterministic QA exists from PR 3b; independent semantic provider review remains future work.
+- PR 3.6 targeted repair: Not implemented in this slice; targeted repair calls remain future work.
+- PR 3.7 deterministic target-language fallback: Preserved from PR 3b; missing target provider output remains detectable for fallback.
+- PR 3.8 locale-specific presentation resolver: Not implemented in this slice.
+- PR 3.9 localization storage and hashes: Not implemented in this slice; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: Already started in PR 2; no additional UI work in this slice.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts`: passed; 1 file, 3 tests.
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts lib/ad-source-locale-policy.test.ts supabase/functions/ai-generate-ad-variants/prompt.test.ts`: passed; 3 files, 17 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npm run typecheck:functions`: failed only on an existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. The prior PR3 Deno import-extension failures in `ai-generate-ad-variants` are fixed and no longer appear.
+- `npx vitest run`: passed; 160 files, 852 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3c-20260623-1443`: passed with known `country-flag-icons` package export warnings.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- The provider contract is not yet wired into `ai-generate-ad-variants`, publish storage, or owner preview state.
+- Independent semantic QA and targeted repair are not yet implemented.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on provider prompt policy, QA policy, representative transcreations, and real-device screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3b - Deterministic translation QA and per-locale fallback
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-translation-qa`.

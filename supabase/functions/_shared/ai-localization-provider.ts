@@ -1,0 +1,368 @@
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type AiTextProviderDeps,
+  type ProviderAttempt,
+} from "./ai-text-provider.ts";
+
+export type SupportedAdLocale = "en-US" | "es-US" | "ko-KR";
+
+export type AdLocalizationSourceCreative = {
+  strategy?: string | null;
+  headline: string;
+  supportingCopy?: string | null;
+  imageAltText: string;
+};
+
+export type AdLocalizationCreativeBrief = {
+  targetCustomerMoment?: string | null;
+  exactCustomerHook?: string | null;
+  desiredFeeling?: string | null;
+  naturalLanguageDirection?: string | null;
+  visualStory?: string | null;
+};
+
+export type AdLocalizationOfferFacts = {
+  merchantName: string;
+  locationName: string;
+  offerType: string;
+  paidItems: Array<{
+    displayName: string;
+    quantity: number;
+  }>;
+  reward: {
+    rule: string;
+    displayNames: string[];
+    quantity: number;
+    discountPercent: number;
+  };
+  scheduleSummary?: string | null;
+  totalClaimLimit?: number | null;
+  redemptionLocationName?: string | null;
+};
+
+export type OfferDefinitionForLocalization = {
+  merchantName: string;
+  locationName: string;
+  offerType: string;
+  qualifyingItems: Array<{
+    displayName: string;
+    quantity: number;
+  }>;
+  reward: {
+    rule: string;
+    displayNames: string[];
+    quantity: number;
+    discountPercent: number;
+  };
+  schedule: {
+    summary: string | null;
+  };
+  totalClaimLimit: number | null;
+  redemption: {
+    redeemAtLocationName: string;
+  };
+};
+
+export type AdLocalizationProviderRequest = {
+  adVersionId: string;
+  sourceLocale: SupportedAdLocale;
+  targetLocales: SupportedAdLocale[];
+  sourceCreative: AdLocalizationSourceCreative;
+  creativeBrief?: AdLocalizationCreativeBrief | null;
+  offerFacts: AdLocalizationOfferFacts;
+  protectedTerms: string[];
+  localizedTerms?: unknown[] | null;
+  merchantProfile?: unknown;
+  generationRunId: string;
+};
+
+export type AdLocalizationProviderCreative = {
+  locale: SupportedAdLocale;
+  headline: string;
+  supportingCopy: string;
+  imageAltText: string;
+};
+
+export type AdLocalizationProviderResult = {
+  targetCreatives: Partial<Record<SupportedAdLocale, AdLocalizationProviderCreative>>;
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+  fallbackReason?: string;
+  attempts: ProviderAttempt[];
+  promptVersion: string;
+};
+
+export const AD_LOCALIZATION_PROMPT_VERSION = "AI_AD_LOCALIZATION_PROMPT_V1";
+
+export const AD_LOCALIZATION_FIELD_LIMITS = {
+  headline: 72,
+  supportingCopy: 160,
+  imageAltText: 140,
+} as const;
+
+export const AD_LOCALIZATION_JSON_SCHEMA = {
+  name: "ad_persuasive_transcreation",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      localizations: {
+        type: "array",
+        minItems: 1,
+        maxItems: 2,
+        items: {
+          type: "object",
+          properties: {
+            locale: { type: "string", enum: ["en-US", "es-US", "ko-KR"] },
+            headline: { type: "string" },
+            supportingCopy: { type: "string" },
+            imageAltText: { type: "string" },
+          },
+          required: ["locale", "headline", "supportingCopy", "imageAltText"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["localizations"],
+    additionalProperties: false,
+  },
+} as const;
+
+const SUPPORTED_LOCALES: SupportedAdLocale[] = ["en-US", "es-US", "ko-KR"];
+
+const LOCALE_LABELS: Record<SupportedAdLocale, string> = {
+  "en-US": "American English",
+  "es-US": "U.S. Spanish",
+  "ko-KR": "Korean",
+};
+
+const LOCALE_RULES: Record<SupportedAdLocale, string[]> = {
+  "en-US": [
+    "Write natural American English.",
+    "Use sentence case and clear local-business language.",
+  ],
+  "es-US": [
+    "Write natural U.S. Spanish with appropriate diacritics.",
+    "Avoid literal English word order and regionally narrow slang.",
+  ],
+  "ko-KR": [
+    "Write concise, natural Korean for a mobile local-business card.",
+    "Do not infer Korean counters, particles, or transliterations for protected names.",
+  ],
+};
+
+const BANNED_SHORTHAND = ["BOGO", "2-for-1", "2x1", "1+1", "Same-Item"];
+
+function cleanText(value: unknown, max = 500): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
+}
+
+function finiteQuantity(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+}
+
+function uniqueClean(values: readonly unknown[] | null | undefined, max = 20): string[] {
+  const out: string[] = [];
+  for (const value of values ?? []) {
+    const clean = cleanText(value, 160);
+    const key = clean.toLowerCase();
+    if (!clean || out.some((existing) => existing.toLowerCase() === key)) continue;
+    out.push(clean);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function normalizeTargetLocales(
+  sourceLocale: SupportedAdLocale,
+  targetLocales: readonly SupportedAdLocale[] | null | undefined,
+): SupportedAdLocale[] {
+  const out: SupportedAdLocale[] = [];
+  const source = targetLocales?.length ? targetLocales : SUPPORTED_LOCALES;
+  for (const locale of source) {
+    if (!SUPPORTED_LOCALES.includes(locale) || locale === sourceLocale || out.includes(locale)) continue;
+    out.push(locale);
+  }
+  return out;
+}
+
+function compactForPrompt(value: unknown, depth = 0): unknown {
+  if (depth > 4) return "[truncated]";
+  if (typeof value === "string") return cleanText(value, 420);
+  if (typeof value === "number" || typeof value === "boolean" || value == null) return value;
+  if (Array.isArray(value)) return value.slice(0, 20).map((child) => compactForPrompt(child, depth + 1));
+  if (typeof value !== "object") return String(value).slice(0, 120);
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>).slice(0, 40)) {
+    out[key] = compactForPrompt(child, depth + 1);
+  }
+  return out;
+}
+
+function promptJson(value: unknown): string {
+  return JSON.stringify(compactForPrompt(value), null, 2);
+}
+
+function targetRulesBlock(targetLocales: readonly SupportedAdLocale[]): string {
+  return targetLocales
+    .map((locale) => [
+      `${locale} (${LOCALE_LABELS[locale]}):`,
+      ...LOCALE_RULES[locale].map((rule) => `- ${rule}`),
+    ].join("\n"))
+    .join("\n\n");
+}
+
+export function adLocalizationOfferFactsFromDefinition(
+  definition: OfferDefinitionForLocalization,
+): AdLocalizationOfferFacts {
+  return {
+    merchantName: cleanText(definition.merchantName, 160),
+    locationName: cleanText(definition.locationName, 160),
+    offerType: cleanText(definition.offerType, 80),
+    paidItems: (definition.qualifyingItems ?? []).map((item) => ({
+      displayName: cleanText(item.displayName, 160),
+      quantity: finiteQuantity(item.quantity),
+    })).filter((item) => item.displayName),
+    reward: {
+      rule: cleanText(definition.reward?.rule, 80),
+      displayNames: uniqueClean(definition.reward?.displayNames ?? []),
+      quantity: finiteQuantity(definition.reward?.quantity),
+      discountPercent: finiteQuantity(definition.reward?.discountPercent),
+    },
+    scheduleSummary: cleanText(definition.schedule?.summary, 220) || null,
+    totalClaimLimit:
+      typeof definition.totalClaimLimit === "number" && Number.isFinite(definition.totalClaimLimit)
+        ? Math.max(0, Math.floor(definition.totalClaimLimit))
+        : null,
+    redemptionLocationName: cleanText(definition.redemption?.redeemAtLocationName, 160) || null,
+  };
+}
+
+export function buildAdLocalizationPrompt(input: AdLocalizationProviderRequest): {
+  systemPrompt: string;
+  userPrompt: string;
+  jsonSchema: typeof AD_LOCALIZATION_JSON_SCHEMA;
+  targetLocales: SupportedAdLocale[];
+} {
+  const targetLocales = normalizeTargetLocales(input.sourceLocale, input.targetLocales);
+  const protectedTerms = uniqueClean(input.protectedTerms);
+  return {
+    targetLocales,
+    jsonSchema: AD_LOCALIZATION_JSON_SCHEMA,
+    systemPrompt: [
+      `Prompt version: ${AD_LOCALIZATION_PROMPT_VERSION}.`,
+      "You transcreate persuasive ad fields for Twofer, a mobile app for local business deals.",
+      "The source creative is already selected. Transcreate only that winning source creative into the requested target locales.",
+      "Return exactly one localization object for each requested target locale and never return the source locale.",
+      "The model must not author exact offer lines, terms, price, time, quantity mechanics, CTA, eligibility, inventory, or redemption instructions.",
+      "Exact mechanics are rendered elsewhere from structured offer facts; use those facts only as guardrails to avoid drift.",
+      "Preserve protected merchant names, business names, branded item names, and exact item names character-for-character.",
+      "Do not add claims, ingredients, ratings, guarantees, dietary claims, popularity claims, price claims, or urgency.",
+      "Avoid word-for-word translation when it sounds unnatural. Preserve the source idea, tone, and customer moment.",
+      `Field limits: headline <= ${AD_LOCALIZATION_FIELD_LIMITS.headline} chars, supportingCopy <= ${AD_LOCALIZATION_FIELD_LIMITS.supportingCopy} chars, imageAltText <= ${AD_LOCALIZATION_FIELD_LIMITS.imageAltText} chars.`,
+      `Banned shorthand in every locale: ${BANNED_SHORTHAND.join(", ")}.`,
+      "Return JSON only and follow the schema exactly.",
+    ].join("\n"),
+    userPrompt: [
+      `Ad version id: ${cleanText(input.adVersionId, 120) || "unknown"}`,
+      `Source locale: ${input.sourceLocale} (${LOCALE_LABELS[input.sourceLocale]}).`,
+      `Target locales: ${targetLocales.map((locale) => `${locale} (${LOCALE_LABELS[locale]})`).join(", ") || "(none)"}.`,
+      "",
+      "TARGET LOCALE RULES:",
+      targetRulesBlock(targetLocales),
+      "",
+      "PROTECTED TERMS TO PRESERVE EXACTLY:",
+      protectedTerms.length ? protectedTerms.map((term) => `- ${term}`).join("\n") : "- (none supplied)",
+      "",
+      "SOURCE CREATIVE:",
+      promptJson({
+        strategy: cleanText(input.sourceCreative.strategy, 120),
+        headline: cleanText(input.sourceCreative.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+        supportingCopy: cleanText(input.sourceCreative.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+        imageAltText: cleanText(input.sourceCreative.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+      }),
+      "",
+      "CREATIVE BRIEF:",
+      promptJson(input.creativeBrief ?? {}),
+      "",
+      "IMMUTABLE OFFER FACTS FOR GUARDRAILS ONLY:",
+      promptJson(input.offerFacts),
+      "",
+      "LOCALIZED TERM SNAPSHOT OR REVIEW CONTEXT:",
+      promptJson(input.localizedTerms ?? []),
+      "",
+      "MERCHANT CREATIVE PROFILE:",
+      promptJson(input.merchantProfile ?? {}),
+      "",
+      "Output only headline, supportingCopy, and imageAltText for each target locale.",
+    ].join("\n"),
+  };
+}
+
+function normalizeProviderValue(
+  value: unknown,
+  targetLocales: readonly SupportedAdLocale[],
+): Partial<Record<SupportedAdLocale, AdLocalizationProviderCreative>> {
+  const localizations = (value as { localizations?: unknown[] } | null)?.localizations;
+  if (!Array.isArray(localizations)) return {};
+  const targetSet = new Set(targetLocales);
+  const out: Partial<Record<SupportedAdLocale, AdLocalizationProviderCreative>> = {};
+  for (const item of localizations) {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const locale = record.locale;
+    if (!SUPPORTED_LOCALES.includes(locale as SupportedAdLocale)) continue;
+    const supportedLocale = locale as SupportedAdLocale;
+    if (!targetSet.has(supportedLocale) || out[supportedLocale]) continue;
+    out[supportedLocale] = {
+      locale: supportedLocale,
+      headline: cleanText(record.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+      supportingCopy: cleanText(record.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+      imageAltText: cleanText(record.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+    };
+  }
+  return out;
+}
+
+export async function generateAdLocalizationTranscreations(
+  request: AdLocalizationProviderRequest,
+  deps: AiTextProviderDeps,
+): Promise<AdLocalizationProviderResult> {
+  const prompt = buildAdLocalizationPrompt(request);
+  if (prompt.targetLocales.length === 0) {
+    return {
+      targetCreatives: {},
+      provider: "none",
+      model: "none",
+      fallbackUsed: false,
+      attempts: [],
+      promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+    };
+  }
+
+  const generation = await generateStructuredText<typeof AD_LOCALIZATION_JSON_SCHEMA, unknown>({
+    operation: "translation",
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    jsonSchema: prompt.jsonSchema,
+    maxOutputTokens: 950,
+    timeoutMs: 12_000,
+    generationRunId: request.generationRunId,
+    promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+    reasoningLevel: "medium",
+  }, {
+    ...deps,
+    config: deps.config ?? resolveAiTextProviderConfig(deps.env),
+  });
+
+  return {
+    targetCreatives: normalizeProviderValue(generation.value, prompt.targetLocales),
+    provider: generation.provider,
+    model: generation.model,
+    fallbackUsed: generation.fallbackUsed,
+    fallbackReason: generation.fallbackReason,
+    attempts: generation.attempts,
+    promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+  };
+}

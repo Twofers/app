@@ -18,3 +18,4 @@ Broad Korean production use is blocked until a named Korean reviewer signs off.
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr2 owner/customer locale UI strings | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr3 source creative policy and deterministic fallback labels | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | ad-translation-qa-v1 deterministic QA policy | Pending native review | Native review required before broad production | No |
+| 2026-06-23 | TBD | es-US, ko-KR | AI_AD_LOCALIZATION_PROMPT_V1 provider transcreation prompt | Pending native review | Native review required before broad production | No |

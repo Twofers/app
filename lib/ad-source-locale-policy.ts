@@ -1,9 +1,9 @@
-import { AD_COPY_BANNED_PHRASES } from "./ad-language-policy";
+import { AD_COPY_BANNED_PHRASES } from "./ad-language-policy.ts";
 import {
   SUPPORTED_LOCALE_METADATA,
   type SupportedAppLanguage,
   type SupportedLocale,
-} from "./supported-locales";
+} from "./supported-locales.ts";
 
 export type SourceCreativeLocalePolicy = {
   locale: SupportedLocale;
