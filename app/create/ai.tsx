@@ -678,6 +678,7 @@ export default function AiDealScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const customImageEditInputRef = useRef<TextInput | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
   const menuOfferScrollDoneRef = useRef(false);
   const reuseScrollDoneRef = useRef(false);
@@ -2801,12 +2802,12 @@ export default function AiDealScreen() {
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {PHOTO_TREATMENT_OPTIONS.map((opt) => {
-                    const selected = photoTreatment === opt.key;
+                    const selected = !useCustomImageEdit && photoTreatment === opt.key;
                     return (
                       <Pressable
                         key={opt.key}
                         onPress={() => {
-                          if (opt.key === photoTreatment) return;
+                          if (!useCustomImageEdit && opt.key === photoTreatment) return;
                           setUseCustomImageEdit(false);
                           setPhotoTreatment(opt.key);
                           // Stale-ad guard: changing the treatment after generating means the
@@ -2836,9 +2837,11 @@ export default function AiDealScreen() {
                   })}
                   <Pressable
                     onPress={() => {
-                      if (useCustomImageEdit) return;
-                      setUseCustomImageEdit(true);
-                      if (generatedAd) resetGenerationState();
+                      if (!useCustomImageEdit) {
+                        setUseCustomImageEdit(true);
+                        if (generatedAd) resetGenerationState();
+                      }
+                      requestAnimationFrame(() => customImageEditInputRef.current?.focus());
                     }}
                     style={{
                       flexGrow: 1,
@@ -2862,6 +2865,7 @@ export default function AiDealScreen() {
                 </View>
                 {useCustomImageEdit && !usePhotoAsFinal ? (
                   <TextInput
+                    ref={customImageEditInputRef}
                     value={customImageEditInstruction}
                     onChangeText={(text) => {
                       setCustomImageEditInstruction(text);
@@ -2869,6 +2873,7 @@ export default function AiDealScreen() {
                     }}
                     placeholder={t("createAi.customImageEditPlaceholder")}
                     placeholderTextColor={theme.mutedText}
+                    inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
                     maxLength={400}
                     multiline
                     style={{
