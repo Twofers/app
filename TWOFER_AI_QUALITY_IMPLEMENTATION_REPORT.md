@@ -738,6 +738,74 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4b - Server-side localization approval enforcement
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-server-enforcement`.
+
+Safety checkpoint: `45cbb498` (Multilingual Deals PR 4a verified-bundle approval binding commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-pr4-server-enforcement.md`
+- `lib/localization-approval-validation.test.ts`
+- `supabase/functions/_shared/localization-approval-validation.ts`
+
+## Files changed
+
+- `.env.example`
+- `supabase/functions/publish-offer-version/index.ts`
+- `supabase/functions/_shared/publish-offer-version-function.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` as a default-off server-side flag in `.env.example`.
+- Added a Deno-safe shared exact localization approval validator for `ad_spec.localization.approval`.
+- `publish-offer-version` now calls that validator when the exact localization approval flag is enabled.
+- The validator accepts the PR4a client-built approval snapshot and rejects stale or mismatched offer-definition, presentation, selected image, localization bundle, localized term snapshot, locale presentation override, deterministic fallback locale, renderer, source creative, and per-locale row hashes.
+- The validator also rejects protected-term failures, invalid source-locale QA, non-passing persuasive QA, unsupported translation states, and locale presentation overrides that still require text-fit review.
+- Added focused tests proving client/server approval compatibility and server rejection of stale or blocked localization approval states.
+
+## Acceptance criteria map
+
+- PR 4 verified-bundle automatic approval: Preserved from PR4a.
+- PR 4 exact localization and term-snapshot hashes: Strengthened with server-side exact validation of approval, term, override, and row hashes.
+- PR 4 publish enforcement: Partially implemented locally in `publish-offer-version` behind `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED`; not deployed.
+- Selective screenshot QA, native reviewer workflow/logs, rollout dashboards, removal of legacy untranslated customer paths, native-speaker acceptance review, and operational handoff: Not implemented in this slice.
+
+## Validation
+
+- `npx vitest run lib/localization-approval-validation.test.ts supabase/functions/_shared/publish-offer-version-function.test.ts lib/ad-localization-approval.test.ts lib/offer-version-publish.test.ts`: passed; 4 files, 23 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `supabase/functions/ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. The new localization approval validator and `publish-offer-version` checked cleanly.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx vitest run`: passed; 168 files, 901 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4b-20260623`: passed with the existing `country-flag-icons` package export warnings.
+- `git diff --check`: passed before this final report update; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- This enforcement is local code only until Dan approves redeploying `publish-offer-version`.
+- The flag remains default-off and was not enabled in hosted configuration.
+- Existing `npm run typecheck:functions` is known to fail on unrelated `supabase/functions/ai-extract-menu/index.ts` Supabase client type mismatches at lines 417 and 430.
+- Native reviewer sign-off, selective screenshot QA, and customer rendering from approved localization storage remain future PR4 work.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4a - Verified-bundle approval binding
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-approval-binding`.

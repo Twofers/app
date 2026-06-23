@@ -42,7 +42,7 @@ Automatic bundle approval is granted only when:
 - No Edge Function was deployed.
 - No hosted feature flag was changed or enabled.
 - No release build was started.
-- Server-side exact localization approval enforcement remains future work.
+- Server-side exact localization approval enforcement is documented in the PR4 server-enforcement slice.
 - Customer rendering still does not consume localization storage in this slice.
 
 ## Test Coverage
@@ -58,7 +58,7 @@ Automatic bundle approval is granted only when:
 
 ## Remaining Work
 
-- Add server-side publish enforcement for exact localization approval hashes.
+- Deploy server-side publish enforcement only after explicit approval.
 - Add migration or RPC support only after explicit approval.
 - Wire customer-facing native rendering to approved localization storage.
 - Add selective per-locale screenshot QA and reviewer sign-off workflow.

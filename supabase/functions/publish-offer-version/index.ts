@@ -10,6 +10,7 @@ import {
   businessVerificationRequiredResponseBody,
   getUnverifiedLocationFromDealRows,
 } from "../_shared/business-verification.ts";
+import { validateExactLocalizationApprovalPayload } from "../_shared/localization-approval-validation.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -83,6 +84,8 @@ type LocalizationPayload = {
   localeRendererVersion?: unknown;
   localizedTermSnapshot?: unknown;
   translationQaSummary?: unknown;
+  localePresentationOverrides?: unknown;
+  approval?: unknown;
   localizations?: unknown;
 };
 
@@ -125,6 +128,10 @@ function isCompositeScreenshotQaRequired(): boolean {
   return Deno.env.get("AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED") === "true";
 }
 
+function isExactLocalizationApprovalRequired(): boolean {
+  return Deno.env.get("AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED") === "true";
+}
+
 function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -148,13 +155,16 @@ function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reaso
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 
-function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
+function validateAdSpecPayload(value: unknown, offerDefinition: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
   if (value == null) {
     if (isExactPresentationApprovalRequired()) {
-      return { valid: false, reasonCodes: ["MISSING_COMPOSED_CARD_APPROVAL"] };
+      reasonCodes.push("MISSING_COMPOSED_CARD_APPROVAL");
     }
-    return { valid: true, reasonCodes };
+    if (isExactLocalizationApprovalRequired()) {
+      reasonCodes.push("MISSING_LOCALIZATION_APPROVAL");
+    }
+    return { valid: reasonCodes.length === 0, reasonCodes };
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { valid: false, reasonCodes: ["NOT_OBJECT"] };
@@ -176,6 +186,16 @@ function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: s
   }
   if (spec.localization != null) {
     reasonCodes.push(...validateLocalizationPayload(spec.localization));
+  } else if (isExactLocalizationApprovalRequired()) {
+    reasonCodes.push("MISSING_LOCALIZATION_APPROVAL");
+  }
+  if (isExactLocalizationApprovalRequired()) {
+    reasonCodes.push(...validateExactLocalizationApprovalPayload({
+      localization: spec.localization,
+      composedCard: spec.composedCard,
+      offerDefinition,
+      exactRequired: true,
+    }));
   }
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
@@ -388,7 +408,7 @@ serve(async (req) => {
       body.ad_spec && typeof body.ad_spec === "object" && !Array.isArray(body.ad_spec)
         ? body.ad_spec
         : null;
-    const adSpecValidation = validateAdSpecPayload(adSpec);
+    const adSpecValidation = validateAdSpecPayload(adSpec, offerDefinition);
     if (!adSpecValidation.valid) {
       return jsonResponse(
         req,

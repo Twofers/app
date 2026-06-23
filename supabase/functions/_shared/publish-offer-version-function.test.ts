@@ -39,6 +39,12 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/adlocrow_\[0-9a-f\]\{8\}/);
   });
 
+  it("can enforce exact localization approval when the PR4 flag is enabled", () => {
+    expect(source).toMatch(/AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED/);
+    expect(source).toMatch(/validateExactLocalizationApprovalPayload/);
+    expect(source).toMatch(/MISSING_LOCALIZATION_APPROVAL/);
+  });
+
   it("uses the atomic publish rpc and exposes a migration-unavailable rollback error", () => {
     expect(source).toMatch(/publish_offer_versioned_deal/);
     expect(source).toMatch(/PUBLISH_OFFER_VERSION_UNAVAILABLE/);
