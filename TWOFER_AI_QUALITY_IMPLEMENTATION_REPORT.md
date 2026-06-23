@@ -2841,3 +2841,60 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4aj - Polish deterministic fallback preview card
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `66eec2d4`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `components/generated-ad-preview-card.tsx`
+- `app/create/ai.tsx`
+- `lib/deterministic-ad-fallback-visual.ts`
+- `lib/deterministic-ad-fallback-visual.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the plain merchant-preview no-image block in the AI ad preview with a deterministic native fallback visual.
+- Added stable business initials and palette selection so fallback previews are intentional and reproducible without creating a fake AI image.
+- Added a merchant-facing source label for the fallback visual while keeping headline, offer, CTA, schedule, quantity, and terms rendered as native app text.
+- Added unit coverage for fallback initials and deterministic palette selection.
+
+## Acceptance criteria map
+
+9. Merchant receives a preview or polished deterministic fallback, never a blank state: Improved for Full AI Create preview cards.
+46. The deterministic visual fallback is polished and usable: Improved locally for merchant preview.
+47. Exact offer lines and terms come from structured fields: Preserved; fallback visual does not bake critical deal text into image pixels.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/deterministic-ad-fallback-visual.test.ts`: passed, 1 file / 3 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 138 files / 775 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4aj-20260622-2050`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This is a native-rendered merchant preview improvement, not a server-rendered composite screenshot judge.
+- Visual QA still relies on local review plus Metro export here; no local Android emulator screenshot was requested for this slice.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

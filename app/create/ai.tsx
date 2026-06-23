@@ -3317,6 +3317,7 @@ export default function AiDealScreen() {
                     defaultValue: "The offer terms are locked so customers always see the correct deal.",
                   })}
                   noImageLabel={t("createAi.noImage")}
+                  fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
                   addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
                   theme={theme}
                   darkMode={colorScheme === "dark"}

@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
+import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallback-visual";
 
 type GeneratedAdPreviewCardTheme = {
   surface: string;
@@ -27,6 +28,7 @@ export type GeneratedAdPreviewCardProps = {
   termsLabel: string;
   termsHelper: string;
   noImageLabel: string;
+  fallbackVisualLabel?: string | null;
   addressLine?: string | null;
   theme: GeneratedAdPreviewCardTheme;
   darkMode: boolean;
@@ -50,6 +52,7 @@ export function GeneratedAdPreviewCard({
   termsLabel,
   termsHelper,
   noImageLabel,
+  fallbackVisualLabel,
   addressLine,
   theme,
   darkMode,
@@ -59,6 +62,12 @@ export function GeneratedAdPreviewCard({
   const cleanTerms = clean(termsLine);
   const cleanBody = clean(body);
   const cleanAddress = clean(addressLine);
+  const fallbackVisual = buildDeterministicAdFallbackVisual({
+    businessName,
+    headline,
+    offerLine,
+  });
+  const fallbackLabel = clean(fallbackVisualLabel) || noImageLabel;
 
   return (
     <View
@@ -80,8 +89,44 @@ export function GeneratedAdPreviewCard({
             accessibilityLabel={headline}
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.noImage, { backgroundColor: theme.surfaceMuted }]}>
-            <Text style={{ color: theme.mutedText }}>{noImageLabel}</Text>
+          <View style={StyleSheet.absoluteFill}>
+            <LinearGradient
+              colors={fallbackVisual.palette.background}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.fallbackPattern} pointerEvents="none">
+              <View style={[styles.fallbackStripe, styles.fallbackStripeOne]} />
+              <View style={[styles.fallbackStripe, styles.fallbackStripeTwo]} />
+              <View style={[styles.fallbackBlock, styles.fallbackBlockOne]} />
+              <View style={[styles.fallbackBlock, styles.fallbackBlockTwo]} />
+            </View>
+            <View style={styles.fallbackArt}>
+              <View
+                style={[
+                  styles.fallbackMark,
+                  { backgroundColor: fallbackVisual.palette.markBackground },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={[styles.fallbackMarkText, { color: fallbackVisual.palette.markText }]}
+                >
+                  {fallbackVisual.initials}
+                </Text>
+              </View>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                style={[styles.fallbackLabel, { color: fallbackVisual.palette.accent }]}
+              >
+                {fallbackLabel}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -178,9 +223,79 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     overflow: "hidden",
   },
-  noImage: {
+  fallbackPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.34,
+  },
+  fallbackStripe: {
+    position: "absolute",
+    height: 58,
+    width: "125%",
+    left: "-10%",
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    transform: [{ rotate: "-16deg" }],
+  },
+  fallbackStripeOne: {
+    top: 82,
+  },
+  fallbackStripeTwo: {
+    top: 190,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  fallbackBlock: {
+    position: "absolute",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.34)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  fallbackBlockOne: {
+    width: 92,
+    height: 92,
+    right: 22,
+    top: 58,
+    transform: [{ rotate: "9deg" }],
+  },
+  fallbackBlockTwo: {
+    width: 58,
+    height: 58,
+    left: 28,
+    top: 184,
+    transform: [{ rotate: "-11deg" }],
+  },
+  fallbackArt: {
+    position: "absolute",
+    top: 82,
+    left: 18,
+    right: 18,
+    alignItems: "center",
+    gap: 10,
+  },
+  fallbackMark: {
+    width: 88,
+    height: 88,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  fallbackMarkText: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  fallbackLabel: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
   },
   heroTopRow: {
     flexDirection: "row",
