@@ -82,6 +82,8 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("generated image must be text-free");
     expect(prompt).toContain("Do not add fake business names.");
     expect(prompt).toContain("Do not add app mascots, characters, animals, penguins");
+    expect(prompt).toContain("center-safe area");
+    expect(prompt).toContain("top and bottom overlay zones");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 

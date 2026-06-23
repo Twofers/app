@@ -12,7 +12,9 @@ export type QuickDealImageQaResult = {
   has_forbidden_logo_or_brand: boolean;
   has_qr_code: boolean;
   has_unrelated_mascot_or_animal: boolean;
+  has_crop_or_overlay_risk: boolean;
   forbidden_elements: string[];
+  crop_or_overlay_issues: string[];
   notes: string;
 };
 
@@ -67,7 +69,12 @@ export const QUICK_DEAL_IMAGE_QA_SCHEMA = {
       has_forbidden_logo_or_brand: { type: "boolean" },
       has_qr_code: { type: "boolean" },
       has_unrelated_mascot_or_animal: { type: "boolean" },
+      has_crop_or_overlay_risk: { type: "boolean" },
       forbidden_elements: {
+        type: "array",
+        items: { type: "string" },
+      },
+      crop_or_overlay_issues: {
         type: "array",
         items: { type: "string" },
       },
@@ -81,7 +88,9 @@ export const QUICK_DEAL_IMAGE_QA_SCHEMA = {
       "has_forbidden_logo_or_brand",
       "has_qr_code",
       "has_unrelated_mascot_or_animal",
+      "has_crop_or_overlay_risk",
       "forbidden_elements",
+      "crop_or_overlay_issues",
       "notes",
     ],
     additionalProperties: false,
@@ -99,14 +108,17 @@ export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string
     "Check only whether the required offer items are visibly present and prominent enough to understand the deal.",
     `Required items: ${items.join(", ")}.`,
     "Also check for forbidden elements: any readable text, letters, numbers, discount copy, business/app names, menu boards, signs, prices, coupons, QR codes, logos, brand marks, watermark-like marks, mascots, cartoon characters, animals, app mascots, or unrelated prop characters.",
+    "Also check mobile crop and overlay safety: the final card is a square 1:1 image, native offer text may overlay near the top or bottom, and required items should remain recognizable in the center-safe area.",
     "Mark an item present only if a normal shopper could recognize it in the image.",
     "Mark an item prominent only if it is a main subject, not tiny background detail.",
     "Set has_readable_text true if any word, letter, number, or offer copy is visible, even if misspelled or stylized.",
     "Set has_forbidden_logo_or_brand true if any logo, app name, business name, brand mark, or watermark-like mark is visible.",
     "Set has_qr_code true if any QR/barcode-like mark is visible.",
     "Set has_unrelated_mascot_or_animal true if any mascot, cartoon character, animal, app mascot, or unrelated character prop is visible unless it is the actual product being sold.",
+    "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, likely covered by top/bottom text overlays, hard to recognize after square cover crop, or placed on a background too busy for native text.",
     "Put every forbidden element in forbidden_elements.",
-    "If required items are missing or any forbidden element is present, all_required_items_present must be false.",
+    "Put concise crop or overlay problems in crop_or_overlay_issues.",
+    "If required items are missing, any forbidden element is present, or crop/overlay risk is present, all_required_items_present must be false.",
     "Return JSON only.",
   ].join(" ");
 }
@@ -117,14 +129,14 @@ export function buildAdImageQaPrompt(params: {
 }): string {
   const sourceGuidance =
     params.sourceType === "merchant_original"
-      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, and non-prominent required items as warnings unless a forbidden hard blocker appears."
+      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, crop/overlay limits, and non-prominent required items as warnings unless a forbidden hard blocker appears."
       : params.sourceType === "merchant_ai_edit"
-      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
+      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable in a square mobile card with native text overlays, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
       : params.sourceType === "approved_stock"
-      ? "This is approved stock media. It must still match the offer items and must not contain forbidden ad graphics."
+      ? "This is approved stock media. It must still match the offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics."
       : params.sourceType === "deterministic_fallback"
       ? "This is a deterministic native-rendered fallback. No vision inspection is required."
-      : "This is a fully AI-generated image. It must show the required offer items and must not contain forbidden ad graphics.";
+      : "This is a fully AI-generated image. It must show the required offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics.";
   return [sourceGuidance, buildQuickDealImageQaPrompt(params.requiredVisualItems)].join(" ");
 }
 
@@ -169,6 +181,10 @@ export function normalizeQuickDealImageQaResult(
     .filter((item) => !item.present || !item.prominent)
     .map((item) => item.item);
   const rawForbidden = Array.isArray(rawObject.forbidden_elements) ? rawObject.forbidden_elements : [];
+  const rawCropIssues = Array.isArray(rawObject.crop_or_overlay_issues) ? rawObject.crop_or_overlay_issues : [];
+  const crop_or_overlay_issues = rawCropIssues.map(cleanItem).filter(Boolean);
+  const has_crop_or_overlay_risk =
+    rawObject.has_crop_or_overlay_risk === true || crop_or_overlay_issues.length > 0;
   const forbidden_elements = [
     ...(rawObject.has_readable_text === true ? ["readable text"] : []),
     ...(rawObject.has_forbidden_logo_or_brand === true ? ["logo or brand text"] : []),
@@ -176,7 +192,10 @@ export function normalizeQuickDealImageQaResult(
     ...(rawObject.has_unrelated_mascot_or_animal === true ? ["unrelated mascot or animal"] : []),
     ...rawForbidden.map(cleanItem).filter(Boolean),
   ].filter((value, index, list) => list.indexOf(value) === index);
-  const combined_missing_items = [...missing_items, ...forbidden_elements];
+  const crop_or_overlay_missing = has_crop_or_overlay_risk
+    ? [...(crop_or_overlay_issues.length > 0 ? crop_or_overlay_issues : ["crop or overlay risk"])]
+    : [];
+  const combined_missing_items = [...missing_items, ...forbidden_elements, ...crop_or_overlay_missing];
   return {
     all_required_items_present: combined_missing_items.length === 0,
     items,
@@ -185,7 +204,9 @@ export function normalizeQuickDealImageQaResult(
     has_forbidden_logo_or_brand: rawObject.has_forbidden_logo_or_brand === true,
     has_qr_code: rawObject.has_qr_code === true,
     has_unrelated_mascot_or_animal: rawObject.has_unrelated_mascot_or_animal === true,
+    has_crop_or_overlay_risk,
     forbidden_elements,
+    crop_or_overlay_issues,
     notes: cleanItem(rawObject.notes),
   };
 }
@@ -244,6 +265,9 @@ export function normalizeSourceAwareImageQaResult(params: {
     .filter((item) => !item.present || !item.prominent)
     .map((item) => item.item);
   const forbiddenElements = qa.forbidden_elements;
+  const cropOrOverlayIssues = qa.has_crop_or_overlay_risk
+    ? qa.crop_or_overlay_issues.length > 0 ? qa.crop_or_overlay_issues : ["crop or overlay risk"]
+    : [];
   const forbiddenReasons = [
     ...(qa.has_readable_text ? ["READABLE_TEXT"] : []),
     ...(qa.has_forbidden_logo_or_brand ? ["LOGO_OR_BRAND_MARK"] : []),
@@ -251,16 +275,24 @@ export function normalizeSourceAwareImageQaResult(params: {
     ...(qa.has_unrelated_mascot_or_animal ? ["UNRELATED_MASCOT_OR_ANIMAL"] : []),
     ...forbiddenElements.map((item) => reasonCode("FORBIDDEN_ELEMENT", item)),
   ];
+  const cropOrOverlayReasons = cropOrOverlayIssues.map((item) => reasonCode("CROP_OR_OVERLAY_RISK", item));
   const generatedLike =
     params.sourceType === "ai_generated" ||
     params.sourceType === "merchant_ai_edit" ||
     params.sourceType === "approved_stock";
   const hardFailReasons = generatedLike
-    ? [...missingItems.map((item) => reasonCode("MISSING_REQUIRED_ITEM", item)), ...forbiddenReasons]
+    ? [
+      ...missingItems.map((item) => reasonCode("MISSING_REQUIRED_ITEM", item)),
+      ...forbiddenReasons,
+      ...cropOrOverlayReasons,
+    ]
     : forbiddenReasons;
   const warningCodes =
     params.sourceType === "merchant_original"
-      ? missingItems.map((item) => reasonCode("ITEM_NOT_PROMINENT", item))
+      ? [
+        ...missingItems.map((item) => reasonCode("ITEM_NOT_PROMINENT", item)),
+        ...cropOrOverlayIssues.map((item) => reasonCode("CROP_OR_OVERLAY_WARNING", item)),
+      ]
       : [];
   const decision: AdImageQaDecision =
     hardFailReasons.length > 0

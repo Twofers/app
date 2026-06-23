@@ -41,6 +41,8 @@ describe("buildPhotoAdImagePrompt", () => {
     expect(prompt).toMatch(/Do not show only one item/i);
     expect(prompt).toMatch(/no text/i);
     expect(prompt).toMatch(/logos/i);
+    expect(prompt).toMatch(/center-safe area/i);
+    expect(prompt).toMatch(/native offer text overlays/i);
   });
 });
 

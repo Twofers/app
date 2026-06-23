@@ -2597,3 +2597,68 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4af - Harden crop and overlay image QA
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `437d6e7f`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `lib/quick-deal-image-qa.ts`
+- `lib/quick-deal-image-qa.test.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/_shared/ai-image-provider.ts`
+- `supabase/functions/_shared/ai-image-provider.test.ts`
+- `supabase/functions/_shared/dalle-image.ts`
+- `supabase/functions/_shared/dalle-image.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Expanded the strict image-QA schema with `has_crop_or_overlay_risk` and `crop_or_overlay_issues`.
+- Updated the QA prompt to evaluate square mobile-card crop safety, top/bottom native-text overlay zones, center-safe required-item placement, and busy overlay backgrounds.
+- Generated, AI-edited, and approved-stock images now hard-fail when crop/overlay risk is reported.
+- Unmodified merchant originals treat crop/overlay problems as overrideable warnings, preserving merchant control for quality issues.
+- Regeneration feedback now carries crop/overlay issues through the normalized `missing_items` list when a generated image needs repair.
+- Added center-safe and native overlay-zone instructions to both Gemini image generation and OpenAI image fallback prompts.
+- Updated deterministic raw-QA placeholders to match the expanded schema.
+
+## Acceptance criteria map
+
+35. Generated/AI-edited fail closed on hard QA failures: Improved; crop/overlay risks now become hard QA failures for generated-like sources.
+38. Forbidden visual elements checked: Preserved; schema expansion keeps existing forbidden-element checks.
+40. Stock fallbacks receive applicable QA: Preserved from PR 4ae; stock now also gets crop/overlay QA.
+44. Crop and overlay safety are checked: Implemented locally in the shared image-QA schema/prompt and provider prompts.
+45. OpenAI fallback image prompts match stronger Gemini restrictions: Improved; OpenAI fallback now includes center-safe and native overlay-zone requirements.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib/quick-deal-image-qa.test.ts supabase/functions/_shared/ai-image-provider.test.ts supabase/functions/_shared/dalle-image.test.ts supabase/functions/_shared/ai-generate-ad-variants-vision-qa-source.test.ts`: passed, 4 files / 35 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint -- --max-warnings=0`: passed, using the explicit npm CLI path because the sandboxed `npm` shim points at a missing Roaming npm install.
+- `.\node_modules\.bin\vitest.cmd run --run`: passed, 137 files / 775 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run copy:evaluate`: passed, 30 fixtures valid / 0 invalid.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4af-20260622-1911`: passed. Existing `country-flag-icons` package export warnings still appeared.
+- `npm run typecheck:functions -- --pretty false`: blocked by local environment because `deno` is not installed or on PATH; all 128 Edge Function files failed for the same missing-command reason.
+
+## Unresolved risks
+
+- This is raw-image safe-zone QA, not a server-side rendered-card screenshot judge. The plan allows raw-image safe-zone QA for the first release; a composite screenshot verifier can still be a later enhancement.
+- This is still a local implementation; the changed Edge Function must be redeployed through the normal hard-gated Supabase deployment path before hosted production uses the expanded image-QA schema.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

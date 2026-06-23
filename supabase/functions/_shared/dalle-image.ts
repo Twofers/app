@@ -168,6 +168,8 @@ export function buildPhotoAdImagePrompt(params: {
     "Natural soft daylight, realistic textures and cast shadows, true-to-life proportions, high fine detail, clean composition, shallow depth of field.",
     "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered.",
     "Honest, appetizing, magazine-quality — not stocky, not illustrated, not a CGI render.",
+    "Keep every required item fully inside the center-safe area and away from crop edges.",
+    "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast.",
     "Absolutely no text, letters, numbers, prices, coupons, discount copy, menu boards, signage, banners, overlays, QR codes, barcodes, logos, fake logos, brand marks, watermarks, mascots, cartoon characters, animals, or unrelated prop characters.",
     "No human faces, no hands holding the item.",
     "Square 1:1 framing.",

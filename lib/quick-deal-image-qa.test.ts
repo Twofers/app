@@ -4,6 +4,7 @@ import {
   buildAdImageQaPrompt,
   buildQuickDealImageQaPrompt,
   buildQuickDealImageRegenerationPrompt,
+  QUICK_DEAL_IMAGE_QA_SCHEMA,
   normalizeSourceAwareImageQaResult,
   normalizeQuickDealImageQaResult,
   shouldFailClosedForImageQa,
@@ -21,6 +22,16 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/readable text/i);
     expect(prompt).toMatch(/QR codes/i);
     expect(prompt).toMatch(/mascots/i);
+    expect(prompt).toMatch(/square 1:1/i);
+    expect(prompt).toMatch(/top or bottom/i);
+    expect(prompt).toMatch(/crop/i);
+  });
+
+  it("requires crop and overlay fields in the strict QA schema", () => {
+    expect(QUICK_DEAL_IMAGE_QA_SCHEMA.schema.required).toContain("has_crop_or_overlay_risk");
+    expect(QUICK_DEAL_IMAGE_QA_SCHEMA.schema.required).toContain("crop_or_overlay_issues");
+    expect(QUICK_DEAL_IMAGE_QA_SCHEMA.schema.properties).toHaveProperty("has_crop_or_overlay_risk");
+    expect(QUICK_DEAL_IMAGE_QA_SCHEMA.schema.properties).toHaveProperty("crop_or_overlay_issues");
   });
 
   it("normalizes missing and non-prominent items as missing", () => {
@@ -91,6 +102,30 @@ describe("quick deal image QA", () => {
     expect(result.all_required_items_present).toBe(false);
     expect(result.has_unrelated_mascot_or_animal).toBe(true);
     expect(result.missing_items).toEqual(["unrelated mascot or animal", "dancing penguin mascot"]);
+  });
+
+  it("normalizes crop and overlay risks as image QA failures", () => {
+    const result = normalizeQuickDealImageQaResult(
+      {
+        all_required_items_present: true,
+        items: [{ item: "iced latte", present: true, prominent: true }],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        has_crop_or_overlay_risk: true,
+        forbidden_elements: [],
+        crop_or_overlay_issues: ["latte sits under the bottom text area"],
+        notes: "The main item is too low.",
+      },
+      ["iced latte"],
+    );
+
+    expect(result.all_required_items_present).toBe(false);
+    expect(result.has_crop_or_overlay_risk).toBe(true);
+    expect(result.crop_or_overlay_issues).toEqual(["latte sits under the bottom text area"]);
+    expect(result.missing_items).toEqual(["latte sits under the bottom text area"]);
   });
 
   it("builds a stronger regeneration prompt around missing items", () => {
@@ -178,6 +213,61 @@ describe("quick deal image QA", () => {
     expect(result.decision).toBe("block");
     expect(result.hardFailReasons).toEqual(["MISSING_REQUIRED_ITEM:COFFEE"]);
     expect(shouldFailClosedForImageQa(result)).toBe(true);
+  });
+
+  it("blocks generated images with crop or overlay risk", () => {
+    const result = normalizeSourceAwareImageQaResult({
+      raw: normalizeQuickDealImageQaResult(
+        {
+          all_required_items_present: false,
+          items: [{ item: "coffee", present: true, prominent: true }],
+          missing_items: [],
+          has_readable_text: false,
+          has_forbidden_logo_or_brand: false,
+          has_qr_code: false,
+          has_unrelated_mascot_or_animal: false,
+          has_crop_or_overlay_risk: true,
+          forbidden_elements: [],
+          crop_or_overlay_issues: ["coffee is cut off at the right edge"],
+          notes: "Unsafe crop.",
+        },
+        ["coffee"],
+      ),
+      requiredVisualItems: ["coffee"],
+      sourceType: "ai_generated",
+    });
+
+    expect(result.decision).toBe("block");
+    expect(result.hardFailReasons).toEqual(["CROP_OR_OVERLAY_RISK:COFFEE_IS_CUT_OFF_AT_THE_RIGHT_EDGE"]);
+    expect(shouldFailClosedForImageQa(result)).toBe(true);
+  });
+
+  it("treats merchant-original crop or overlay risk as an overrideable warning", () => {
+    const result = normalizeSourceAwareImageQaResult({
+      raw: normalizeQuickDealImageQaResult(
+        {
+          all_required_items_present: false,
+          items: [{ item: "coffee", present: true, prominent: true }],
+          missing_items: [],
+          has_readable_text: false,
+          has_forbidden_logo_or_brand: false,
+          has_qr_code: false,
+          has_unrelated_mascot_or_animal: false,
+          has_crop_or_overlay_risk: true,
+          forbidden_elements: [],
+          crop_or_overlay_issues: ["coffee is near the top text area"],
+          notes: "Overlay may cover the coffee.",
+        },
+        ["coffee"],
+      ),
+      requiredVisualItems: ["coffee"],
+      sourceType: "merchant_original",
+    });
+
+    expect(result.decision).toBe("warn");
+    expect(result.warningCodes).toEqual(["CROP_OR_OVERLAY_WARNING:COFFEE_IS_NEAR_THE_TOP_TEXT_AREA"]);
+    expect(result.merchantOverrideAllowed).toBe(true);
+    expect(shouldFailClosedForImageQa(result)).toBe(false);
   });
 
   it("blocks approved stock images with missing required items", () => {
