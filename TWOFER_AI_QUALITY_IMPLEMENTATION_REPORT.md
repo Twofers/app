@@ -3003,3 +3003,56 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4am - Align AdSpec copy prompt provenance
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `d2cc4ed5`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `lib/ad-spec.ts`
+- `lib/ad-spec.test.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Updated AdSpec V3 provenance to stamp `AI_COPY_PROMPT_V4`, matching the active ad-copy prompt version.
+- Renamed the prompt-body constant from `AI_COPY_PROMPT_V3` to `AI_COPY_PROMPT_V4` so the source no longer carries stale current-version naming.
+- Added a drift guard that compares AdSpec provenance against the exported active Edge prompt version.
+
+## Acceptance criteria map
+
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Improved provenance accuracy for approved AdSpec output.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run lib\ad-spec.test.ts supabase\functions\ai-generate-ad-variants\prompt.test.ts`: passed; 2 files, 16 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 138 files, 776 tests.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4am-20260622-2015`: passed with the known `country-flag-icons` package export warnings.
+- `npm run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 128 Edge Function files failed for that same missing-command reason.
+
+## Unresolved risks
+
+- This aligns code-level provenance only; the formal prompt/model release registry remains a future data-model/deployment task.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

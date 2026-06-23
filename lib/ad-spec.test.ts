@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAdSpecV1, buildAdSpecV3, validateAdSpecV1, validateAdSpecV3 } from "./ad-spec";
+import { AD_SPEC_V3_COPY_PROMPT_VERSION, buildAdSpecV1, buildAdSpecV3, validateAdSpecV1, validateAdSpecV3 } from "./ad-spec";
 import { buildOfferDefinitionV1 } from "./offer-definition";
+import { AD_COPY_PROMPT_VERSION } from "../supabase/functions/ai-generate-ad-variants/prompt";
 
 function buildDefinition() {
   const definition = buildOfferDefinitionV1({
@@ -95,6 +96,10 @@ describe("AdSpec V1 deterministic renderer contract", () => {
 });
 
 describe("AdSpec V3 creative contract", () => {
+  it("keeps provenance aligned with the active AI copy prompt version", () => {
+    expect(AD_SPEC_V3_COPY_PROMPT_VERSION).toBe(AD_COPY_PROMPT_VERSION);
+  });
+
   it("keeps locked offer facts deterministic while carrying AI copy provenance", () => {
     const definition = buildDefinition();
     const spec = buildAdSpecV3({
@@ -125,7 +130,7 @@ describe("AdSpec V3 creative contract", () => {
     expect(spec.textProvenance.displayHook).toBe("ai_generated");
     expect(spec.textProvenance.offerLine).toBe("deterministic");
     expect(spec.visual.sourceBadge).toBe("Your photo");
-    expect(spec.provenance.copyPromptVersion).toBe("AI_COPY_PROMPT_V3");
+    expect(spec.provenance.copyPromptVersion).toBe(AD_COPY_PROMPT_VERSION);
   });
 
   it("records owner-edited fields without changing locked terms", () => {

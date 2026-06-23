@@ -149,7 +149,7 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const AI_COPY_PROMPT_V3 = [
+export const AI_COPY_PROMPT_V4 = [
   `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
   "Write a polished mobile advertisement for Twofer, a mobile app for local coffee shops, cafes, bakeries, and small food businesses. This is an ad, not a legal deal description or generic image caption.",
   "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
@@ -219,7 +219,7 @@ export const AI_COPY_PROMPT_V3 = [
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
 
-export const COPY_VOICE_RULES = AI_COPY_PROMPT_V3;
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V4;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";
