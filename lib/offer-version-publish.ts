@@ -1,5 +1,9 @@
 import type { GeneratedAd } from "./ad-variants";
 import {
+  buildOfferVersionLocalizationSnapshot,
+  type OfferVersionPublishLocalizationSnapshot,
+} from "./ad-localization-storage";
+import {
   buildAdSpecV1,
   type AdSpecV1,
   type AdSpecSource,
@@ -31,6 +35,7 @@ export type OfferVersionPublishScreenshotQaSnapshot = {
 
 export type OfferVersionPublishAdSpec = AdSpecV1 & {
   composedCard?: OfferVersionPublishComposedCardSpec | null;
+  localization?: OfferVersionPublishLocalizationSnapshot | null;
 };
 
 export type PublishOfferVersionedDealBody = {
@@ -139,6 +144,7 @@ export function buildOfferVersionPublishAdSpec(
   generatedAd: GeneratedAd | null | undefined,
   options?: {
     composedCard?: OfferVersionPublishComposedCardSpec | null;
+    localization?: OfferVersionPublishLocalizationSnapshot | null;
   },
 ): OfferVersionPublishAdSpec {
   const spec = buildAdSpecV1({
@@ -146,10 +152,17 @@ export function buildOfferVersionPublishAdSpec(
     offerDefinition,
     generatedAd,
   });
-  if (!options?.composedCard) return spec;
+  const localization = options?.localization ?? buildOfferVersionLocalizationSnapshot({
+    bundle: generatedAd?.localization_bundle ?? null,
+    offerDefinition,
+    providerStatus: generatedAd?.localization_status ?? null,
+    localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
+  });
+  if (!options?.composedCard && !localization) return spec;
   return {
     ...spec,
-    composedCard: options.composedCard,
+    ...(options?.composedCard ? { composedCard: options.composedCard } : {}),
+    ...(localization ? { localization } : {}),
   };
 }
 

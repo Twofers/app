@@ -738,6 +738,75 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3i - Localization storage contract
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-storage-contract`.
+
+Safety checkpoint: `0b23fb3d` (Multilingual Deals PR 3h locale-specific presentation overrides commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added:
+
+- `supabase/migrations/20260728120000_ad_localization_storage.sql` (draft only; not applied).
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-storage-contract.md`
+- `lib/ad-localization-storage.ts`
+- `lib/ad-localization-storage.test.ts`
+- `lib/offer-version-publish.ts`
+- `lib/offer-version-publish.test.ts`
+- `supabase/functions/_shared/ad-localization-storage-migration.test.ts`
+- `supabase/functions/_shared/publish-offer-version-function.test.ts`
+- `supabase/functions/publish-offer-version/index.ts`
+- `supabase/migrations/20260728120000_ad_localization_storage.sql`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `buildOfferVersionLocalizationSnapshot()`, a typed immutable localization storage snapshot for approved ad specs.
+- Added per-locale storage row building with source copy hashes, localization row hashes, QA state, repair state, preserved terms, and nullable provider/model metadata.
+- Dropped deterministic fallback supporting copy from persisted localization rows when it is just the locked offer line, keeping exact mechanics out of `ad_localizations`.
+- `buildOfferVersionPublishAdSpec()` now embeds `ad_spec.localization` automatically when the selected generated ad contains a verified localization bundle.
+- Added publish Edge Function validation for optional localization snapshots, including rejection of `exactOfferLine` and `termsLine` inside per-locale localization rows.
+- Added an unapplied migration draft for service-role-only `ad_localizations`, offer-version localization metadata columns, and triggers that sync rows from the immutable `ad_spec.localization` snapshot.
+
+## Acceptance criteria map
+
+- PR 3.9 localization storage and hashes: Implemented as a local app contract plus unapplied Supabase migration draft. Hashes are bound into the approved ad spec and projected to storage by the draft trigger.
+- PR 3.10 optional owner language previews: Not implemented in this slice.
+- PR 4 approval enforcement: Not implemented in this slice; exact bundle hash enforcement remains future work.
+
+## Validation
+
+- `npx vitest run lib/ad-localization-storage.test.ts lib/offer-version-publish.test.ts supabase/functions/_shared/ad-localization-storage-migration.test.ts supabase/functions/_shared/publish-offer-version-function.test.ts`: passed; 4 files, 20 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. The modified `publish-offer-version` Edge Function was checked after that and no new error was reported.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 163 files, 885 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3i-20260623`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- The migration was written but not applied; production storage remains unchanged until Dan explicitly approves the migration.
+- The changed `publish-offer-version` Edge Function was not redeployed.
+- Customer rendering, owner previews, automatic verified-bundle approval, and server-side publish enforcement do not yet consume the new storage rows.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on localized copy, presentation policy, and representative screenshots.
+
+## Rollback
+
+Revert this commit. No migration rollback is required unless the draft migration is later applied.
+
+---
+
 ## Multilingual Deals PR 3h - Locale-specific presentation overrides
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-locale-presentation`.

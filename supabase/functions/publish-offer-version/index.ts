@@ -39,6 +39,7 @@ type AdSpecPayload = {
   channels?: unknown;
   offer?: unknown;
   composedCard?: unknown;
+  localization?: unknown;
 };
 
 type ComposedCardPayload = {
@@ -72,6 +73,19 @@ type ScreenshotQaPayload = {
   decision?: unknown;
 };
 
+type LocalizationPayload = {
+  schemaVersion?: unknown;
+  sourceLocale?: unknown;
+  enabledLocales?: unknown;
+  sourceCreativeHash?: unknown;
+  localizationBundleHash?: unknown;
+  deterministicFallbackLocales?: unknown;
+  localeRendererVersion?: unknown;
+  localizedTermSnapshot?: unknown;
+  translationQaSummary?: unknown;
+  localizations?: unknown;
+};
+
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   const corsHeaders = getCorsHeaders(req);
   return new Response(JSON.stringify(body), {
@@ -97,6 +111,10 @@ function coerceDealRows(value: unknown): Record<string, unknown>[] {
 
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => cleanText(item).length > 0);
 }
 
 function isExactPresentationApprovalRequired(): boolean {
@@ -156,7 +174,67 @@ function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: s
   } else if (isExactPresentationApprovalRequired()) {
     reasonCodes.push("MISSING_COMPOSED_CARD_APPROVAL");
   }
+  if (spec.localization != null) {
+    reasonCodes.push(...validateLocalizationPayload(spec.localization));
+  }
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
+}
+
+function validateLocalizationPayload(value: unknown): string[] {
+  const reasonCodes: string[] = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return ["LOCALIZATION_NOT_OBJECT"];
+  }
+  const localization = value as LocalizationPayload;
+  if (localization.schemaVersion !== 1) reasonCodes.push("INVALID_LOCALIZATION_SCHEMA_VERSION");
+  const sourceLocale = cleanText(localization.sourceLocale);
+  if (!["en-US", "es-US", "ko-KR"].includes(sourceLocale)) reasonCodes.push("INVALID_LOCALIZATION_SOURCE_LOCALE");
+  if (!isStringArray(localization.enabledLocales)) {
+    reasonCodes.push("INVALID_LOCALIZATION_ENABLED_LOCALES");
+  }
+  if (!/^adsrc_[0-9a-f]{8}$/i.test(cleanText(localization.sourceCreativeHash))) {
+    reasonCodes.push("INVALID_SOURCE_CREATIVE_HASH");
+  }
+  if (!/^adloc_[0-9a-f]{8}$/i.test(cleanText(localization.localizationBundleHash))) {
+    reasonCodes.push("INVALID_LOCALIZATION_BUNDLE_HASH");
+  }
+  if (!isStringArray(localization.deterministicFallbackLocales)) {
+    reasonCodes.push("INVALID_DETERMINISTIC_FALLBACK_LOCALES");
+  }
+  if (!cleanText(localization.localeRendererVersion)) reasonCodes.push("MISSING_LOCALE_RENDERER_VERSION");
+  if (!localization.localizedTermSnapshot || typeof localization.localizedTermSnapshot !== "object" || Array.isArray(localization.localizedTermSnapshot)) {
+    reasonCodes.push("INVALID_LOCALIZED_TERM_SNAPSHOT");
+  }
+  if (!localization.translationQaSummary || typeof localization.translationQaSummary !== "object" || Array.isArray(localization.translationQaSummary)) {
+    reasonCodes.push("INVALID_TRANSLATION_QA_SUMMARY");
+  }
+  if (!localization.localizations || typeof localization.localizations !== "object" || Array.isArray(localization.localizations)) {
+    reasonCodes.push("INVALID_AD_LOCALIZATIONS");
+    return reasonCodes;
+  }
+  const localizations = localization.localizations as Record<string, unknown>;
+  const enabledLocales = isStringArray(localization.enabledLocales) ? localization.enabledLocales : [];
+  for (const locale of enabledLocales) {
+    if (!localizations[locale]) reasonCodes.push("MISSING_AD_LOCALIZATION");
+  }
+  for (const [locale, row] of Object.entries(localizations)) {
+    if (!["en-US", "es-US", "ko-KR"].includes(locale)) reasonCodes.push("UNSUPPORTED_AD_LOCALIZATION_LOCALE");
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      reasonCodes.push("INVALID_AD_LOCALIZATION_ROW");
+      continue;
+    }
+    const record = row as Record<string, unknown>;
+    if ("exactOfferLine" in record || "termsLine" in record) {
+      reasonCodes.push("AD_LOCALIZATION_EXACT_OFFER_FIELDS_NOT_ALLOWED");
+    }
+    if (!cleanText(record.headline)) reasonCodes.push("MISSING_AD_LOCALIZATION_HEADLINE");
+    if (!cleanText(record.imageAltText)) reasonCodes.push("MISSING_AD_LOCALIZATION_ALT_TEXT");
+    if (!/^adlocrow_[0-9a-f]{8}$/i.test(cleanText(record.localizationHash))) {
+      reasonCodes.push("INVALID_AD_LOCALIZATION_HASH");
+    }
+    if (!Array.isArray(record.qaReasonCodes)) reasonCodes.push("INVALID_AD_LOCALIZATION_QA_REASONS");
+  }
+  return reasonCodes;
 }
 
 function validateComposedCardPayload(value: unknown): string[] {

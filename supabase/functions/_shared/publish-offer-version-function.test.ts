@@ -31,6 +31,14 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/SCREENSHOT_QA_REQUIRED/);
   });
 
+  it("validates localization storage snapshots without allowing exact offer fields in localization rows", () => {
+    expect(source).toMatch(/function validateLocalizationPayload/);
+    expect(source).toMatch(/INVALID_LOCALIZATION_BUNDLE_HASH/);
+    expect(source).toMatch(/MISSING_AD_LOCALIZATION/);
+    expect(source).toMatch(/AD_LOCALIZATION_EXACT_OFFER_FIELDS_NOT_ALLOWED/);
+    expect(source).toMatch(/adlocrow_\[0-9a-f\]\{8\}/);
+  });
+
   it("uses the atomic publish rpc and exposes a migration-unavailable rollback error", () => {
     expect(source).toMatch(/publish_offer_versioned_deal/);
     expect(source).toMatch(/PUBLISH_OFFER_VERSION_UNAVAILABLE/);

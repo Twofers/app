@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { buildDeterministicAdLocalizationBundle } from "./ad-localization";
 import {
   AD_SPEC_RENDERER_VERSION,
   AD_SPEC_TEMPLATE_VERSION,
@@ -172,6 +173,112 @@ describe("offer version publish client helpers", () => {
     expect(spec.composedCard?.alternateTemplateIds).toEqual(["hero_image_overlay"]);
     expect(spec.composedCard?.merchantStyleOverrideUsed).toBe(true);
     expect(spec.composedCard?.compositeQa.decision).toBe("pass");
+  });
+
+  it("embeds verified localization storage metadata when a generated ad has a bundle", () => {
+    const definition = buildDefinition();
+    const localizationBundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Latte run, cookie reward",
+        supportingCopy: "Your afternoon coffee comes with a little extra.",
+        imageAltText: "Latte and cookie on a cafe counter",
+      },
+      offerDefinition: definition,
+      protectedTerms: ["Cedar Bean", "latte"],
+    });
+    const presentation = buildDefaultAdPresentationSpec({
+      imageAssetId: "biz/poster.png",
+      imageSourceType: "merchant_original",
+      localeOverrides: {
+        "ko-KR": {
+          templateId: "split_offer_panel",
+          textPanel: "solid_bottom",
+          showSupportingCopy: false,
+          resolutionReasonCodes: ["HANGUL_FONT_METRICS_GUARD"],
+        },
+      },
+    });
+    const spec = buildOfferVersionPublishAdSpec(
+      "create_ai",
+      definition,
+      {
+        headline: "Latte run, cookie reward",
+        subheadline: "Your afternoon coffee comes with a little extra.",
+        short_description: "Your afternoon coffee comes with a little extra.",
+        cta: "Claim deal",
+        localization_bundle: localizationBundle,
+        localization_status: {
+          source_locale: "en-US",
+          localization_bundle_hash: localizationBundle.localizationBundleHash,
+          deterministic_fallback_locales: localizationBundle.deterministicFallbackLocales,
+          transcreation_provider: "deterministic",
+          transcreation_model: "none",
+          semantic_qa_provider: "deterministic",
+          semantic_qa_model: "none",
+          repair_target_locales: [],
+        },
+      },
+      {
+        composedCard: {
+          presentation,
+          presentationHash: createAdPresentationHash({
+            presentation,
+            offerFacts: buildLockedOfferContent({
+              primaryOfferLine: definition.canonicalOfferLine,
+              termsLine: definition.disclosureLine,
+            }),
+            copy: buildApprovedAdCopy({
+              headline: "Latte run, cookie reward",
+              supportingCopy: "Your afternoon coffee comes with a little extra.",
+              ctaLabel: "Claim deal",
+              fallbackHeadline: definition.canonicalOfferLine,
+            }),
+          }),
+          selectedTemplateId: presentation.templateId,
+          alternateTemplateIds: [],
+          merchantStyleOverrideUsed: false,
+          compositeQa: runDeterministicAdCompositeQa({
+            offerFacts: buildLockedOfferContent({
+              primaryOfferLine: definition.canonicalOfferLine,
+              termsLine: definition.disclosureLine,
+            }),
+            copy: buildApprovedAdCopy({
+              headline: "Latte run, cookie reward",
+              supportingCopy: "Your afternoon coffee comes with a little extra.",
+              ctaLabel: "Claim deal",
+              fallbackHeadline: definition.canonicalOfferLine,
+            }),
+            merchant: { name: definition.merchantName, locationName: definition.locationName },
+            presentation,
+            liveState: {
+              status: "live",
+              statusLabel: "Live now",
+              quantityRemainingLabel: "12 left",
+              timeRemainingLabel: "Today",
+              claimAvailable: true,
+            },
+            surface: "merchant_preview",
+            imageUri: "https://example.com/poster.png",
+            selectedImageAssetId: "biz/poster.png",
+          }),
+          screenshotQa: {
+            required: false,
+            triggerCodes: [],
+            decision: "not_run",
+          },
+        },
+      },
+    );
+
+    expect(spec.localization?.sourceCreativeHash).toBe(localizationBundle.sourceCreativeHash);
+    expect(spec.localization?.localizationBundleHash).toBe(localizationBundle.localizationBundleHash);
+    expect(spec.localization?.localizations["es-US"]?.localizationHash).toMatch(/^adlocrow_[0-9a-f]{8}$/);
+    expect(spec.localization?.localePresentationOverrides?.["ko-KR"]?.resolutionReasonCodes).toEqual([
+      "HANGUL_FONT_METRICS_GUARD",
+    ]);
+    expect(JSON.stringify(spec.localization?.localizations)).not.toContain("exactOfferLine");
+    expect(JSON.stringify(spec.localization?.localizations)).not.toContain("termsLine");
   });
 
   it("builds screenshot QA publish snapshots from deterministic composite triggers", () => {
