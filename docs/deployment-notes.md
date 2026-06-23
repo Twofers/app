@@ -158,11 +158,21 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | Secret | Used by | Required |
 |--------|---------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem) | **Yes** |
-| `OPENAI_API_KEY` | All `ai-*` Edge functions | **Yes** |
+| `OPENAI_API_KEY` | OpenAI-backed AI paths, including Whisper voice transcription and OpenAI image generation/editing | **Yes for OpenAI paths** |
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
-| `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default chat / Whisper models | Optional |
+| `OPENAI_MODEL` | Shared OpenAI chat model override; defaults to `gpt-5.5` and fails closed when set outside the allowlist | Optional |
+| `OPENAI_WHISPER_MODEL` | Whisper voice transcription override for `ai-compose-offer` | Optional |
+| `GEMINI_API_KEY` | Gemini text fallback, independent judging, vision QA fallback, and Gemini image generation when the related flags are enabled | Required only for Gemini paths |
+| `GEMINI_TEXT_MODEL`, `GEMINI_JUDGE_MODEL` | Gemini structured text and independent-judge model overrides; default `gemini-3.5-flash` | Optional |
+| `AI_V3_PROVIDER_ROUTER_ENABLED`, `AI_TEXT_PRIMARY_PROVIDER`, `AI_TEXT_FALLBACK_ENABLED`, `AI_TEXT_FALLBACK_PROVIDER` | Shared text provider router and optional Gemini fallback | Optional; keep fallback disabled in production until the public privacy/subprocessor update is deployed |
+| `AI_TEXT_PRIMARY_TIMEOUT_MS`, `AI_TEXT_FALLBACK_TIMEOUT_MS`, `AI_TRANSIENT_RETRY_MAX`, `AI_RETRY_AFTER_FULL_TIMEOUT` | Shared text provider timeout/retry tuning | Optional |
+| `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks when the shared text router is enabled | Optional; requires the circuit-breaker migration to be applied first |
+| `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent candidate judging for ad variants | Optional |
+| `AI_VISION_FALLBACK_ENABLED`, `AI_VISION_FALLBACK_PROVIDER`, `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, `AI_STOCK_QA_CANDIDATE_LIMIT` | Ad image QA fallback and stock-candidate QA tuning | Optional |
+| `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, `AI_REVISION_COST_HARD_LIMIT_USD` | AI provider cost projection/budget controls | Optional |
 | `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-1`) | Optional |
+| `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, `AI_IMAGE_STOCK_FALLBACK_ENABLED` | Ad-image provider selection, Gemini image model/cost estimate, owner-photo reference, and stock fallback controls | Optional; Gemini image paths also require `GEMINI_API_KEY` |
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
@@ -183,6 +193,10 @@ npx supabase secrets set OPENAI_API_KEY=sk-...
 npx supabase secrets set OPENAI_IMAGE_MODEL_DEFAULT=gpt-image-1
 npx supabase secrets set OPENAI_IMAGE_MODEL_GENERATE=gpt-image-1
 npx supabase secrets set OPENAI_IMAGE_MODEL_EDIT=gpt-image-1
+npx supabase secrets set AI_V3_PROVIDER_ROUTER_ENABLED=true
+npx supabase secrets set AI_TEXT_FALLBACK_ENABLED=false
+npx supabase secrets set AI_V3_COST_BUDGET_ENABLED=true
+npx supabase secrets set AI_CIRCUIT_BREAKER_ENABLED=false
 npx supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 ```

@@ -240,15 +240,46 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`. |
+| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.5`, older allowlisted models are rollback-only. |
 | `OPENAI_WHISPER_MODEL` | Voice path in `ai-compose-offer`. |
+| `GEMINI_API_KEY` | Required only when Gemini text fallback, independent judging, vision QA fallback, or Gemini image generation is enabled. |
+| `GEMINI_TEXT_MODEL` | Gemini structured text model; default `gemini-3.5-flash`. |
+| `GEMINI_JUDGE_MODEL` | Gemini independent-judge model; default `gemini-3.5-flash`. |
+| `AI_V3_PROVIDER_ROUTER_ENABLED` | Enables the shared OpenAI/Gemini text provider router. |
+| `AI_TEXT_PRIMARY_PROVIDER` | Shared text router primary provider; defaults to `openai`. |
+| `AI_TEXT_FALLBACK_ENABLED` | Enables text fallback only when the router is enabled; keep `false` in production until the public privacy/subprocessor update is deployed. |
+| `AI_TEXT_FALLBACK_PROVIDER` | Shared text fallback provider; defaults to `gemini`. |
+| `AI_TEXT_PRIMARY_TIMEOUT_MS` | Shared text primary provider timeout; default `12000`. |
+| `AI_TEXT_FALLBACK_TIMEOUT_MS` | Shared text fallback provider timeout; default `14000`. |
+| `AI_TRANSIENT_RETRY_MAX` | Shared text transient retry count; capped at `1`. |
+| `AI_RETRY_AFTER_FULL_TIMEOUT` | Allows retry after a full primary timeout when explicitly true. |
+| `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks with the router; activate only after the circuit-breaker migration is applied. |
+| `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent judging for ad-variant candidates. |
+| `AI_VISION_FALLBACK_ENABLED` | Enables image QA fallback. |
+| `AI_VISION_FALLBACK_PROVIDER` | Image QA fallback provider; defaults to `gemini`. |
+| `AI_VISION_PRIMARY_TIMEOUT_MS` | Image QA primary timeout; default `25000`. |
+| `AI_VISION_FALLBACK_TIMEOUT_MS` | Image QA fallback timeout; default `14000`. |
+| `AI_STOCK_QA_CANDIDATE_LIMIT` | Ranked stock-candidate QA cap; default `3`, maximum `10`. |
+| `AI_V3_COST_BUDGET_ENABLED` | Enables AI provider cost projection/budget checks. |
+| `AI_TEXT_COST_SOFT_LIMIT_USD` | Text cost soft-limit telemetry threshold; default `0.2`. |
+| `AI_TEXT_COST_HARD_LIMIT_USD` | Per-text-attempt hard projection limit; default `0.5`. |
+| `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD` | Full generation hard projection limit; default `1`. |
+| `AI_REVISION_COST_HARD_LIMIT_USD` | Revision hard projection limit; default `0.35`. |
 | `OPENAI_IMAGE_MODEL_DEFAULT` | Default for both generate and edit when role-specific vars unset (`_shared/dalle-image.ts`); allowlisted ids only; invalid → `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_GENERATE` | Text-to-image / poster generation (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_EDIT` | Uploaded-photo edits (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
+| `AI_IMAGE_PROVIDER` | Ad-image primary provider; defaults to `openai`, with `gemini` usable only when `AI_IMAGE_GEMINI_ENABLED=true`. |
+| `AI_IMAGE_FALLBACK_PROVIDER` | Ad-image fallback provider; defaults to `openai`. |
+| `AI_IMAGE_GEMINI_ENABLED` | Enables Gemini as an ad-image provider when paired with `GEMINI_API_KEY`. |
+| `GEMINI_IMAGE_MODEL` | Gemini image model; default `gemini-3.1-flash-image`. |
+| `GEMINI_IMAGE_ESTIMATED_COST_1K_USD` | Gemini image cost estimate used in telemetry; default `0.067`. |
+| `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED` | Allows owner photo references in Gemini image generation; default `true`. |
+| `AI_IMAGE_STOCK_FALLBACK_ENABLED` | Allows stock fallback in ad-image provider selection; default `true`. |
 | `AI_COMPOSE_PROMPT_VERSION` | `ai-compose-offer` |
 | `AI_DEDUP_WINDOW_SECONDS` | `ai-compose-offer` |
 | `AI_COPY_MONTHLY_LIMIT` | `ai-generate-deal-copy` |
 | `AI_INSIGHTS_MONTHLY_LIMIT` | `ai-deal-suggestions` |
+| `AI_TRANSLATE_MONTHLY_LIMIT` | `ai-translate-deal` |
 | `AI_MONTHLY_LIMIT` | `_shared/ai-limits.ts` |
 | `AI_COOLDOWN_SECONDS` | `_shared/ai-limits.ts` |
 

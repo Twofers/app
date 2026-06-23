@@ -78,6 +78,16 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 - `OPENAI_MODEL` (optional; default `gpt-5.5`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
+- `GEMINI_API_KEY` (required only when Gemini text fallback, judging, vision QA, or image generation is enabled)
+- `GEMINI_TEXT_MODEL` and `GEMINI_JUDGE_MODEL` (optional; default `gemini-3.5-flash`)
+- `AI_V3_PROVIDER_ROUTER_ENABLED`, `AI_TEXT_PRIMARY_PROVIDER`, `AI_TEXT_FALLBACK_ENABLED`, and `AI_TEXT_FALLBACK_PROVIDER` (shared text router/fallback controls; keep `AI_TEXT_FALLBACK_ENABLED=false` in production until the public privacy/subprocessor update is deployed)
+- `AI_TEXT_PRIMARY_TIMEOUT_MS`, `AI_TEXT_FALLBACK_TIMEOUT_MS`, `AI_TRANSIENT_RETRY_MAX`, and `AI_RETRY_AFTER_FULL_TIMEOUT` (shared text timeout/retry tuning)
+- `AI_CIRCUIT_BREAKER_ENABLED` (requires the circuit-breaker migration before production activation)
+- `AI_V3_INDEPENDENT_JUDGE_ENABLED` (Gemini independent candidate judging)
+- `AI_VISION_FALLBACK_ENABLED`, `AI_VISION_FALLBACK_PROVIDER`, `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, and `AI_STOCK_QA_CANDIDATE_LIMIT` (ad image QA fallback/tuning)
+- `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, and `AI_REVISION_COST_HARD_LIMIT_USD` (AI cost-budget guardrails)
+- `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, and `OPENAI_IMAGE_MODEL_EDIT` (OpenAI image model overrides; default `gpt-image-1`)
+- `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, and `AI_IMAGE_STOCK_FALLBACK_ENABLED` (ad-image provider/fallback controls)
 
 **Menu extraction (preview / explicit opt-in only):**
 

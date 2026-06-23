@@ -3340,3 +3340,55 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ar - Document AI provider deployment flags
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `09a97514`.
+
+Deployment actions: none performed here. Hosted secret changes, Edge Function redeploys, website privacy/subprocessor deployment, and Supabase migrations remain hard-gated.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `.env.example`
+- `docs/deployment-notes.md`
+- `docs/production-deploy-checklist.md`
+- `docs/deployment-command-plan.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Corrected the example OpenAI chat default from the stale `gpt-4o-mini` wording to the current shared `gpt-5.5` default.
+- Added the code-backed Gemini/router/fallback, independent judge, vision QA, cost-budget, circuit-breaker, image-provider, and AI monthly-limit secret names to the deployment docs.
+- Preserved production activation gates: keep Gemini text fallback off until the public privacy/subprocessor update is deployed, do not enable circuit-breaker behavior before its migration is applied, and do not set the synthetic menu fallback in production.
+
+## Acceptance criteria map
+
+4. Google/Gemini provider setup is explicit before activation: Improved; deployment docs now list `GEMINI_API_KEY`, model overrides, router/fallback flags, vision QA flags, and Gemini image flags.
+6. Provider fallback and circuit breaker are deployment-controlled: Improved; docs now call out the router/circuit flags and the migration prerequisite.
+30. Rollout and rollback are feature-flagged: Improved; the command plan and production checklist now include the active code-backed AI provider flags rather than the older partial set.
+50. Google data flow is documented before activation: Preserved; production docs still require `AI_TEXT_FALLBACK_ENABLED=false` until the public website privacy/subprocessor update is deployed.
+
+## Validation
+
+- `git diff --check`: passed; Git warned that touched Markdown/env working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `rg -n "OPENAI_MODEL=gpt-4o-mini|leave UNSET to use gpt-4o-mini|gpt-4o-mini   # safe default" .env.example docs/deployment-notes.md docs/production-deploy-checklist.md docs/deployment-command-plan.md`: passed; no stale default text remained in the active deployment docs.
+- `rg -n "GEMINI_API_KEY|AI_V3_PROVIDER_ROUTER_ENABLED|AI_TEXT_FALLBACK_ENABLED|AI_CIRCUIT_BREAKER_ENABLED|AI_IMAGE_GEMINI_ENABLED|AI_TRANSLATE_MONTHLY_LIMIT" .env.example docs/deployment-notes.md docs/production-deploy-checklist.md docs/deployment-command-plan.md TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`: passed; deployment docs now include the active provider flag names.
+
+## Unresolved risks
+
+- This is documentation only; hosted behavior still depends on hard-gated secret changes, migrations, public website deployment, and Edge Function redeploys.
+- Local Deno Edge Function typechecking remains unavailable until `deno` is installed or available on PATH.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
