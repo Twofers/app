@@ -324,7 +324,7 @@ Menu OCR router follow-up: the app-facing base64 `ai-extract-menu` path now uses
 
 Recommended baseline queries once Dan grants live read access:
 
-- p50/p95 copy latency from `ai_generation_logs.response_payload->copy->latency_ms`.
+- p50/p95 total generation latency from `ai_generation_logs.response_payload->total_latency_ms` plus copy latency from `response_payload->copy->latency_ms`.
 - p50/p95 total generation duration if added; total duration is not currently persisted as a first-class field.
 - cost per request group from `ai_generation_costs`.
 - fallback rate from `response_payload->copy->source = DETERMINISTIC_FALLBACK`.

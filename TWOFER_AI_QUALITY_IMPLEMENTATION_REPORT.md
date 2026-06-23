@@ -3081,11 +3081,11 @@ Live secret names changed: none.
 
 ## What landed
 
-- Added a final current acceptance snapshot after the PR4 follow-up series so the report reflects the compare/restore controls, bounded custom edit UI, stock QA, shared image-QA router, and AdSpec prompt-provenance fixes.
-- Kept earlier PR acceptance notes intact as historical checkpoints; this section is the current map as of PR 4am.
+- Added a final current acceptance snapshot after the PR4 follow-up series so the report reflects the compare/restore controls, bounded custom edit UI, stock QA, shared image-QA router, AdSpec prompt-provenance fixes, routed non-web research/base64 menu OCR, and total-latency telemetry.
+- Kept earlier PR acceptance notes intact as historical checkpoints; this section is the current map as of PR 4aq.
 - Marked remaining work as partial or blocked where it requires migrations, hosted Edge Function deploys, public website/privacy deployment, production telemetry, Deno availability, or future data-model work.
 
-## Current acceptance criteria map after PR4am
+## Current acceptance criteria map after PR4aq
 
 1. Implemented - Live primary creative model resolves to `gpt-5.5`.
 2. Implemented - Unsupported model names do not silently downgrade.

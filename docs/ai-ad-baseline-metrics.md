@@ -40,7 +40,7 @@ The runner records:
 - ad generation log rows for `ad_variants` and `ad_refine`;
 - success and failure rate;
 - quota-blocked and duplicate-blocked counts;
-- p50 / p95 copy latency from `response_payload.copy.latency_ms`;
+- p50 / p95 total generation latency from `response_payload.total_latency_ms` plus copy latency from `response_payload.copy.latency_ms`;
 - deterministic fallback rate from `response_payload.copy.source`, `deterministic_fallback_used`, and fallback events;
 - provider fallback rate and fallback reasons from `response_payload.copy.provider_fallback_*`;
 - copy provider attempt counts, provider/model breakdowns, error classes, and p50 / p95 attempt latency;
@@ -52,7 +52,7 @@ The runner records:
 - total AI cost, average cost per request group, and p50 / p95 cost per request group;
 - provider call counts by feature, endpoint, and model;
 - failed/retried provider call rate.
-- a calibration watchlist for p95 copy latency, deterministic copy fallback rate, provider fallback rate, judge hard-failure rate, image-QA unavailable rate, image-QA hard-fail rate, failed/retried provider call rate, p95 cost per request group, candidate-diversity warning thresholds, and image-aesthetic warning thresholds.
+- a calibration watchlist for p95 total generation latency, p95 copy latency, deterministic copy fallback rate, provider fallback rate, judge hard-failure rate, image-QA unavailable rate, image-QA hard-fail rate, failed/retried provider call rate, p95 cost per request group, candidate-diversity warning thresholds, and image-aesthetic warning thresholds.
 
 ## Dashboard And Calibration Handoff
 
