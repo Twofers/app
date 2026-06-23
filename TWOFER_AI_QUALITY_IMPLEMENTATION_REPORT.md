@@ -3082,17 +3082,17 @@ Live secret names changed: none.
 ## What landed
 
 - Added a final current acceptance snapshot after the PR4 follow-up series so the report reflects the compare/restore controls, bounded custom edit UI, stock QA, shared image-QA router, AdSpec prompt-provenance fixes, routed non-web research/base64 menu OCR, and total-latency telemetry.
-- Kept earlier PR acceptance notes intact as historical checkpoints; this section is the current map as of PR 4aq.
+- Kept earlier PR acceptance notes intact as historical checkpoints; this section is the current map as of PR 4ar.
 - Marked remaining work as partial or blocked where it requires migrations, hosted Edge Function deploys, public website/privacy deployment, production telemetry, Deno availability, or future data-model work.
 
-## Current acceptance criteria map after PR4aq
+## Current acceptance criteria map after PR4ar
 
 1. Implemented - Live primary creative model resolves to `gpt-5.5`.
 2. Implemented - Unsupported model names do not silently downgrade.
-3. Implemented locally - Gemini 3.5 Flash is configured as OpenAI availability/credit fallback; production activation remains blocked by public privacy/subprocessor deployment and hosted flag changes.
+3. Implemented locally - Gemini 3.5 Flash is configured as OpenAI availability/credit fallback; production activation remains blocked by public privacy/subprocessor deployment and hard-gated hosted flag changes, now documented in the deploy notes.
 4. Implemented - OpenAI credit/quota failure falls back immediately behind the routed fallback flags.
 5. Implemented - Full timeout does not cause a second full OpenAI wait.
-6. Partially implemented - Persistent circuit-breaker helper and migration exist, but applying the migration and verifying hosted behavior are hard-gated.
+6. Partially implemented - Persistent circuit-breaker helper and migration exist, and deployment docs now call out the flag/migration prerequisite; applying the migration and verifying hosted behavior remain hard-gated.
 7. Implemented locally - Provider/model/stage latency/token/cache/cost telemetry exists across routed paths, and the ad-variant generation log payload now records total request latency as `total_latency_ms`; hosted rows need the Edge deploy before this field appears in production data.
 8. Implemented locally - Configurable cost ceilings limit optional calls behind the cost-budget flag.
 9. Implemented - The merchant receives a preview or deterministic fallback, never a blank state, on the main ad path.
@@ -3136,7 +3136,7 @@ Live secret names changed: none.
 47. Implemented - Exact offer lines and terms come from structured fields on the current publish/render path.
 48. Implemented - Consumer feed and detail surfaces share authoritative display helpers.
 49. Implemented - Known canned AI copy/transcript/insight/compose fallbacks cannot appear as live AI; synthetic menu sample output remains explicit preview/dev-only behavior.
-50. Partially implemented - Google data flow is documented internally and guarded by release checks; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
+50. Partially implemented - Google data flow is documented internally, release-gated, and covered in deployment flag docs; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
 51. Partially implemented - Main ad copy, non-web ad research, adjacent text helpers, translation, compose text/photo, app-facing base64 menu OCR, and ad-variant image QA use the provider router, and new AI Create/Quick publishes require versioned publish plus offer definitions. Remaining direct paths are live web-search preview, Whisper transcription, legacy menu `image_url` OCR, image generation/edit providers, and existing-deal edit/update compatibility.
 52. Implemented - No GPT-5.4-mini versus GPT-5.5 comparison was performed.
 
@@ -3375,8 +3375,9 @@ Live secret names changed: none.
 
 4. Google/Gemini provider setup is explicit before activation: Improved; deployment docs now list `GEMINI_API_KEY`, model overrides, router/fallback flags, vision QA flags, and Gemini image flags.
 6. Provider fallback and circuit breaker are deployment-controlled: Improved; docs now call out the router/circuit flags and the migration prerequisite.
-30. Rollout and rollback are feature-flagged: Improved; the command plan and production checklist now include the active code-backed AI provider flags rather than the older partial set.
 50. Google data flow is documented before activation: Preserved; production docs still require `AI_TEXT_FALLBACK_ENABLED=false` until the public website privacy/subprocessor update is deployed.
+
+Deployment/rollback section: Improved; the command plan and production checklist now include the active code-backed AI provider flags rather than the older partial set.
 
 ## Validation
 
