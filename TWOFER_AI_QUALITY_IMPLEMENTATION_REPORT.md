@@ -3216,3 +3216,62 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ap - Route base64 menu OCR through provider router
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a7b997be`.
+
+Deployment actions: Edge Function redeploy required for hosted behavior to change; not performed here.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-extract-menu/index.ts`
+- `supabase/functions/_shared/ai-extract-menu-source.test.ts`
+- `lib/functions.ts`
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a strict routed menu-extraction prompt version for app-facing base64 menu scans.
+- Routed base64 menu images through `generateStructuredText` with `operation: "merchant_context"`, image inputs, shared provider config, Gemini fallback support, and shared provider-attempt cost telemetry.
+- Kept legacy `image_url` requests on the direct OpenAI Responses path because that compatibility shape lets the provider fetch a remote URL instead of sending inline bytes.
+- Updated the client result type to accept `extraction_source: "provider_router"`.
+- Expanded menu source guards so synthetic fallback remains explicit, base64 scans stay on the router, and direct legacy provider errors remain sanitized.
+
+## Acceptance criteria map
+
+51. No generation path bypasses provider/quality controls: Improved; app-facing base64 menu OCR now shares the provider router. Remaining direct provider paths are live web-search preview, Whisper transcription, legacy menu `image_url` OCR, image generation/edit providers, and existing-deal edit/update compatibility.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `.\node_modules\.bin\vitest.cmd run supabase\functions\_shared\ai-extract-menu-source.test.ts`: passed; 1 file, 4 tests.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run lint`: passed.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 139 files, 779 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4ap-20260623-2039`: passed with the known `country-flag-icons` package export warnings.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 129 Edge Function files failed for that same missing-command reason.
+
+## Unresolved risks
+
+- Hosted behavior still requires redeploying `ai-extract-menu`; deployment is a hard gate and was not performed.
+- Legacy `image_url` menu extraction remains direct until there is a safe provider-neutral URL-fetch/inline-media abstraction.
+- Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

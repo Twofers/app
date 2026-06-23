@@ -4,10 +4,16 @@ import { resolveOpenAiChatModel, isGpt5FamilyModel } from "../_shared/openai-cha
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 
 const MODEL = resolveOpenAiChatModel();
 const MAX_B64_CHARS = 1_200_000;
 const MAX_URL_LEN = 2048;
+const MENU_EXTRACTION_PROMPT_VERSION = "AI_MENU_EXTRACTION_V1";
 
 type MenuItemRow = {
   name: string;
@@ -22,6 +28,79 @@ type ExtractionResult = {
   low_legibility: boolean;
   menu_notes: string;
 };
+
+function decodeBase64Image(value: string): Uint8Array | null {
+  const encoded = value.includes(",") ? value.split(",").at(-1) ?? "" : value;
+  try {
+    return Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeMenuItems(parsed: ExtractionResult) {
+  return Array.isArray(parsed.items)
+    ? parsed.items
+      .filter((r) => r && typeof r.name === "string" && r.name.trim().length > 0 && r.readable === true)
+      .map((r) => ({
+        name: r.name.trim(),
+        category: typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
+        price_text: typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
+        size_options: Array.isArray(r.size_options)
+          ? r.size_options
+            .filter((size) => typeof size === "string" && size.trim().length > 0)
+            .map((size) => size.trim())
+            .slice(0, 12)
+          : [],
+        readable: true,
+      }))
+    : [];
+}
+
+function menuSuccessPayload(parsed: ExtractionResult, extractionSource: "openai" | "provider_router") {
+  return {
+    ok: true,
+    items: normalizeMenuItems(parsed),
+    low_legibility: parsed.low_legibility === true,
+    extraction_source: extractionSource,
+    menu_notes: typeof parsed.menu_notes === "string" ? parsed.menu_notes : "",
+  };
+}
+
+async function logMenuProviderAttempts(params: {
+  admin: ReturnType<typeof createClient>;
+  businessId: string;
+  ownerUserId: string;
+  requestGroupId: string;
+  attempts: readonly ProviderAttempt[];
+}): Promise<void> {
+  for (const attempt of params.attempts) {
+    await logAiCost(params.admin, {
+      businessId: params.businessId,
+      ownerUserId: params.ownerUserId,
+      requestGroupId: params.requestGroupId,
+      feature: "menu_extraction",
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? undefined,
+      errorMessage: attempt.errorClass ?? undefined,
+      estimatedCostUsd: attempt.estimatedCostUsd,
+    });
+  }
+}
+
+function routerCanUseGemini(geminiApiKey: string | undefined | null): boolean {
+  if (!(geminiApiKey ?? "").trim()) return false;
+  try {
+    const config = resolveAiTextProviderConfig();
+    return config.routerEnabled && config.fallbackEnabled && config.fallbackProvider === "gemini";
+  } catch {
+    return false;
+  }
+}
 
 function responseHasRefusal(data: unknown): boolean {
   const out = (data as { output?: unknown[] })?.output;
@@ -74,6 +153,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const allowSyntheticWithoutKey =
     Deno.env.get("AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY")?.trim().toLowerCase() === "true";
 
@@ -224,6 +304,7 @@ serve(async (req) => {
       ];
     }
 
+    const canUseRouterFallbackWithoutOpenAi = Boolean(imageBase64) && routerCanUseGemini(geminiApiKey);
     if (!openAiKey && allowSyntheticWithoutKey) {
       // Explicitly opt-in synthetic fallback for preview/dev projects only.
       // Pilot production must never silently label placeholder rows as OCR output.
@@ -242,7 +323,7 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (!openAiKey) {
+    if (!openAiKey && !canUseRouterFallbackWithoutOpenAi) {
       // Return a clear configuration error so production cannot appear to have
       // extracted real menu data when AI is not configured.
       console.log(JSON.stringify({ tag: "ai_extract_menu", event: "missing_openai_key", business_id }));
@@ -303,6 +384,69 @@ serve(async (req) => {
         additionalProperties: false,
       },
     };
+
+    if (imageBase64) {
+      const imageBytes = decodeBase64Image(imageBase64);
+      if (!imageBytes || imageBytes.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Invalid image_base64.", error_code: "INVALID_INPUT" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const menuRequestGroupId = crypto.randomUUID();
+      try {
+        const generation = await generateStructuredText<typeof menuSchema, ExtractionResult>({
+          operation: "merchant_context",
+          systemPrompt: "Extract clearly readable menu items from a local-business menu image. Return only grounded JSON.",
+          userPrompt: instructionText,
+          jsonSchema: menuSchema,
+          imageInputs: [{ bytes: imageBytes, mimeType: imageMime }],
+          maxOutputTokens: 1600,
+          timeoutMs: 25_000,
+          generationRunId: menuRequestGroupId,
+          promptVersion: MENU_EXTRACTION_PROMPT_VERSION,
+          reasoningLevel: "low",
+        }, {
+          openAiApiKey: openAiKey,
+          geminiApiKey,
+          admin,
+          config: resolveAiTextProviderConfig(),
+        });
+        await logMenuProviderAttempts({
+          admin,
+          businessId: business_id,
+          ownerUserId: user.id,
+          requestGroupId: menuRequestGroupId,
+          attempts: generation.attempts,
+        });
+        return new Response(
+          JSON.stringify(menuSuccessPayload(generation.value, "provider_router")),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      } catch (err) {
+        const attempts = (err as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+        await logMenuProviderAttempts({
+          admin,
+          businessId: business_id,
+          ownerUserId: user.id,
+          requestGroupId: menuRequestGroupId,
+          attempts,
+        });
+        console.log(JSON.stringify({
+          tag: "ai_extract_menu",
+          event: "provider_router_error",
+          errorCode: (err as { errorCode?: string })?.errorCode ?? "AI_MENU_EXTRACTION_FAILED",
+        }));
+        return new Response(
+          JSON.stringify({
+            error: "Menu scan service error. Try again shortly.",
+            error_code: "AI_GENERATION_FAILED",
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     const responsesBody = {
       model: MODEL,
@@ -422,31 +566,8 @@ serve(async (req) => {
       );
     }
 
-    const items = Array.isArray(parsed.items)
-      ? parsed.items
-        .filter((r) => r && typeof r.name === "string" && r.name.trim().length > 0 && r.readable === true)
-        .map((r) => ({
-          name: r.name.trim(),
-          category: typeof r.category === "string" && r.category.trim() ? r.category.trim() : undefined,
-          price_text: typeof r.price_text === "string" && r.price_text.trim() ? r.price_text.trim() : undefined,
-          size_options: Array.isArray(r.size_options)
-            ? r.size_options
-              .filter((size) => typeof size === "string" && size.trim().length > 0)
-              .map((size) => size.trim())
-              .slice(0, 12)
-            : [],
-          readable: true,
-        }))
-      : [];
-
     return new Response(
-      JSON.stringify({
-        ok: true,
-        items,
-        low_legibility: parsed.low_legibility === true,
-        extraction_source: "openai",
-        menu_notes: typeof parsed.menu_notes === "string" ? parsed.menu_notes : "",
-      }),
+      JSON.stringify(menuSuccessPayload(parsed, "openai")),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch {

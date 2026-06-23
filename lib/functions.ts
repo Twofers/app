@@ -588,7 +588,7 @@ export type AiExtractMenuResult = {
   ok: true;
   items: AiExtractMenuItem[];
   low_legibility: boolean;
-  extraction_source?: "openai" | "synthetic_fallback";
+  extraction_source?: "openai" | "provider_router" | "synthetic_fallback";
   menu_notes: string;
 };
 

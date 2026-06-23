@@ -15,7 +15,7 @@ describe("ai-extract-menu source guards", () => {
     expect(source).toMatch(/OPENAI_NOT_CONFIGURED/);
 
     const syntheticIndex = source.indexOf("if (!openAiKey && allowSyntheticWithoutKey)");
-    const missingKeyIndex = source.indexOf("if (!openAiKey)", syntheticIndex + 1);
+    const missingKeyIndex = source.indexOf("if (!openAiKey && !canUseRouterFallbackWithoutOpenAi)");
     const providerCallIndex = source.indexOf("const openAiRes = await fetch", missingKeyIndex);
 
     expect(syntheticIndex).toBeGreaterThan(-1);
@@ -25,8 +25,28 @@ describe("ai-extract-menu source guards", () => {
     const missingKeyBlock = source.slice(missingKeyIndex, providerCallIndex);
     expect(missingKeyBlock).toMatch(/OPENAI_NOT_CONFIGURED/);
     expect(missingKeyBlock).toMatch(/status:\s*503/);
+    expect(source).toMatch(/canUseRouterFallbackWithoutOpenAi/);
+    expect(source).toMatch(/routerCanUseGemini/);
     expect(missingKeyBlock).not.toMatch(/ok:\s*true/);
     expect(missingKeyBlock).not.toMatch(/synthetic_fallback/);
+  });
+
+  it("routes base64 menu images through the shared provider router", () => {
+    const routerIndex = source.indexOf("const imageBytes = decodeBase64Image(imageBase64)");
+    const providerCallIndex = source.indexOf("const openAiRes = await fetch", routerIndex);
+
+    expect(routerIndex).toBeGreaterThan(-1);
+    expect(providerCallIndex).toBeGreaterThan(routerIndex);
+
+    const routerBlock = source.slice(routerIndex, providerCallIndex);
+    expect(routerBlock).toMatch(/generateStructuredText<typeof menuSchema, ExtractionResult>/);
+    expect(routerBlock).toMatch(/operation:\s*"merchant_context"/);
+    expect(routerBlock).toMatch(/imageInputs:\s*\[\{ bytes: imageBytes, mimeType: imageMime \}\]/);
+    expect(routerBlock).toMatch(/promptVersion:\s*MENU_EXTRACTION_PROMPT_VERSION/);
+    expect(routerBlock).toMatch(/config:\s*resolveAiTextProviderConfig\(\)/);
+    expect(routerBlock).toMatch(/logMenuProviderAttempts/);
+    expect(routerBlock).toMatch(/menuSuccessPayload\(generation\.value, "provider_router"\)/);
+    expect(routerBlock).not.toMatch(/api\.openai\.com\/v1\/responses/);
   });
 
   it("does not log raw OpenAI menu extraction provider bodies on HTTP failures", () => {

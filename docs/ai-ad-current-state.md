@@ -133,7 +133,7 @@ Current gaps:
 - `ai-create-deal`: permanently disabled legacy one-shot AI plus insert endpoint. The Edge Function now returns `AI_CREATE_DEAL_LEGACY_DISABLED` with HTTP 410 and no provider, Supabase client, or `deals` insert path remains in the function source. The former `aiCreateDeal()` client wrapper was removed from `lib/functions.ts`.
 - `ai-deal-suggestions`: owner dashboard insights helper. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation/config failures return sanitized errors without raw provider response bodies or exception text.
 - `ai-translate-deal`: localization helper used after deal creation and by direct callers. It now uses the shared OpenAI/Gemini structured text provider router. Missing provider configuration still returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured, and upstream generation/config/outer handler failures return sanitized errors without raw provider response bodies or exception text.
-- `ai-extract-menu`: menu photo extraction path, relevant to catalog setup. The synthetic sample menu path is gated behind `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`; production-style missing OpenAI config returns `OPENAI_NOT_CONFIGURED`, and upstream provider HTTP plus outer handler failures log sanitized status/error details instead of raw provider bodies or exception text.
+- `ai-extract-menu`: menu photo extraction path, relevant to catalog setup. Base64 menu images, which the app sends, now use the shared OpenAI/Gemini structured provider router with image inputs. The synthetic sample menu path is gated behind `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true`; production-style missing provider config returns `OPENAI_NOT_CONFIGURED` unless the Gemini router path is enabled and configured for base64 input. Legacy `image_url` compatibility still uses a direct OpenAI Responses vision path, and upstream provider HTTP plus outer handler failures log sanitized status/error details instead of raw provider bodies or exception text.
 
 ## Current Data Model
 
@@ -320,6 +320,8 @@ Image QA fallback follow-up: generated and AI-edited image QA now uses the share
 
 Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet.
 
+Menu OCR router follow-up: the app-facing base64 `ai-extract-menu` path now uses the shared structured provider router with image inputs, strict menu JSON schema, and provider-attempt cost telemetry. The legacy `image_url` request shape remains a direct OpenAI Responses path for compatibility because it lets the provider fetch a remote image URL rather than sending inline bytes.
+
 Recommended baseline queries once Dan grants live read access:
 
 - p50/p95 copy latency from `ai_generation_logs.response_payload->copy->latency_ms`.
@@ -345,7 +347,7 @@ AI and quality gaps:
 - Legacy `ai-compose-offer` poster mode is disabled so it cannot bake critical text into generated pixels.
 - Main copy validation is strong for offer mechanics, but there is no full `AdQualityService` with persisted hard-gate results and soft scores.
 - Vision QA for the ad-variant image path uses the shared provider abstraction, but it is still synchronous, flag-gated, and not persisted as a first-class quality-check result.
-- Non-web ad research uses the shared provider router; live web-search preview, Whisper transcription, menu OCR, and image generation/edit providers still use media- or tool-specific direct provider calls.
+- Non-web ad research and app-facing base64 menu OCR use the shared provider router; live web-search preview, Whisper transcription, legacy menu `image_url` OCR, and image generation/edit providers still use media- or tool-specific direct provider calls.
 - Moderation is prompt/rule based; there is no dedicated moderation adapter.
 - There is no formal prompt/model release table, canary mechanism, or rollback switch beyond code/env deployment.
 
