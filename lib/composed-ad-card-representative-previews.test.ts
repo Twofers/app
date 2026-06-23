@@ -3,6 +3,7 @@ import { validateAdPresentationSpec } from "./ad-presentation-spec";
 import {
   buildRepresentativeComposedAdPreviewCases,
   resolveRepresentativeComposedAdPreview,
+  summarizeRepresentativeComposedAdPreviewAcceptance,
 } from "./composed-ad-card-representative-previews";
 
 describe("representative composed ad card previews", () => {
@@ -54,5 +55,30 @@ describe("representative composed ad card previews", () => {
     expect(resolved.get("scheduled-deal")?.recommendedTemplateId).not.toBe("live_drop_card");
     expect(resolved.get("ended-deal")?.recommendedTemplateId).not.toBe("live_drop_card");
     expect(resolved.get("live-quantity-limited")?.recommendedTemplateId).toBe("live_drop_card");
+  });
+
+  it("summarizes the local owner-review acceptance matrix", () => {
+    const cases = buildRepresentativeComposedAdPreviewCases();
+    const summary = summarizeRepresentativeComposedAdPreviewAcceptance(cases);
+    const countedDecisions = Object.values(summary.compositeQaDecisionCounts).reduce(
+      (sum, count) => sum + (count ?? 0),
+      0,
+    );
+
+    expect(summary.totalCases).toBe(cases.length);
+    expect(summary.rows.map((row) => row.caseId)).toEqual(cases.map((preview) => preview.id));
+    expect(summary.rows.every((row) => /^adp_[0-9a-f]{16}$/.test(row.presentationHash))).toBe(true);
+    expect(summary.rows.every((row) => row.recommendedTemplateId.length > 0)).toBe(true);
+    expect(countedDecisions).toBe(summary.totalCases);
+    expect(summary.templateCounts.split_offer_panel ?? 0).toBeGreaterThanOrEqual(2);
+    expect(summary.blockedCaseIds).toEqual([]);
+    expect(summary.unavailableCaseIds).toEqual([]);
+    expect(summary.rows.find((row) => row.caseId === "busy-background")?.recommendedTemplateId).toBe(
+      "split_offer_panel",
+    );
+    expect(summary.rows.find((row) => row.caseId === "live-quantity-limited")?.liveStatus).toBe("live");
+    expect(summary.rows.find((row) => row.caseId === "live-quantity-limited")?.recommendedTemplateId).toBe(
+      "live_drop_card",
+    );
   });
 });

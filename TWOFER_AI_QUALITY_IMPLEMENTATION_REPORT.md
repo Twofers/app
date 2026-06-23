@@ -1203,6 +1203,58 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Composed Ad Card PR 3f - Representative acceptance summary
+
+Status: Implemented locally on branch `codex/composed-ad-card-pr3f-acceptance-summary`.
+
+Safety checkpoint: `384477d2` (Composed Ad Card PR 3e commit).
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `lib/composed-ad-card-representative-previews.ts`
+- `lib/composed-ad-card-representative-previews.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `summarizeRepresentativeComposedAdPreviewAcceptance()` over the existing non-publishing representative preview matrix.
+- The summary produces one deterministic row per owner-review case with merchant, offer line, image source type, live status, recommended template, alternates, presentation hash, composite QA decision, repair codes, hard-fail reasons, and screenshot-QA trigger state.
+- Added aggregate counts for recommended templates and composite QA decisions.
+- Added explicit case lists for screenshot-QA review, repair, blocked, and unavailable outcomes.
+- Added test coverage that the summary covers all 16 representative cases, produces stable presentation hashes, has no blocked or unavailable local acceptance cases, keeps busy/no-photo style cases on safe split-panel templates, and preserves the live-drop recommendation for the live quantity-limited case.
+
+## Validation
+
+- `npx tsc --noEmit --pretty false`: passed.
+- `npx vitest run lib/composed-ad-card-representative-previews.test.ts lib/ad-template-resolver.test.ts lib/ad-composite-qa.test.ts`: passed; 3 files, 12 tests.
+- `npm run test`: passed; 152 files, 823 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx expo export --platform android --output-dir "$env:TEMP\twofer-metro-probe-codex-composed-pr3f" --clear`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- This is a deterministic local acceptance summary, not rendered screenshots or real-device review.
+- It does not implement screenshot QA, start an emulator, create a build, or submit anything.
+- Real iPhone and supported Android device review remains out of scope until Dan explicitly requests local Android QA or performs TestFlight/device review.
+- Hosted publish enforcement and persisted `offer_versions.ad_spec` customer loading still depend on hard-gated Supabase/API rollout work.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## PR 4y - PR4 expansion, cleanup, and calibration closeout
 
 Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.

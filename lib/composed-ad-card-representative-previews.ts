@@ -1,7 +1,11 @@
 import { createAdPresentationHash } from "./ad-presentation-hash";
 import type { AdImageSourceType, AdLayoutTemplateId, AdPresentationSpec } from "./ad-presentation-spec";
 import type { ApprovedAdCopy, DealLiveState, MerchantDisplayIdentity } from "./ad-render-content";
-import { runDeterministicAdCompositeQa, type AdCompositeQaResult } from "./ad-composite-qa";
+import {
+  runDeterministicAdCompositeQa,
+  shouldRunCompositeScreenshotQa,
+  type AdCompositeQaResult,
+} from "./ad-composite-qa";
 import { resolveAdPresentation } from "./ad-template-resolver";
 import type { LockedOfferContent } from "./authoritative-offer-renderer";
 import { buildImageSafeZoneResult } from "./image-safe-zone";
@@ -53,6 +57,34 @@ export type ResolvedRepresentativeComposedAdPreview = {
   recommendedTemplateId: AdLayoutTemplateId;
   alternateTemplateIds: AdLayoutTemplateId[];
   compositeQa: AdCompositeQaResult;
+};
+
+export type RepresentativeComposedAdPreviewAcceptanceRow = {
+  caseId: RepresentativeComposedAdPreviewId;
+  description: string;
+  merchantName: string;
+  offerLine: string;
+  imageSourceType: AdImageSourceType;
+  liveStatus: DealLiveState["status"];
+  recommendedTemplateId: AdLayoutTemplateId;
+  alternateTemplateIds: AdLayoutTemplateId[];
+  presentationHash: string;
+  compositeQaDecision: AdCompositeQaResult["decision"];
+  compositeQaRepairCodes: AdCompositeQaResult["repairCodes"];
+  compositeQaHardFailReasons: string[];
+  screenshotQaWouldRun: boolean;
+  screenshotQaTriggerCodes: string[];
+};
+
+export type RepresentativeComposedAdPreviewAcceptanceSummary = {
+  totalCases: number;
+  rows: RepresentativeComposedAdPreviewAcceptanceRow[];
+  templateCounts: Partial<Record<AdLayoutTemplateId, number>>;
+  compositeQaDecisionCounts: Partial<Record<AdCompositeQaResult["decision"], number>>;
+  screenshotQaReviewCaseIds: RepresentativeComposedAdPreviewId[];
+  repairCaseIds: RepresentativeComposedAdPreviewId[];
+  blockedCaseIds: RepresentativeComposedAdPreviewId[];
+  unavailableCaseIds: RepresentativeComposedAdPreviewId[];
 };
 
 function offer(primaryOfferLine: string, termsLine = "Valid in store during the listed deal window."): LockedOfferContent {
@@ -392,5 +424,47 @@ export function resolveRepresentativeComposedAdPreview(
     recommendedTemplateId: presentation.templateId,
     alternateTemplateIds: resolution.alternates.map((alternate) => alternate.templateId),
     compositeQa,
+  };
+}
+
+export function summarizeRepresentativeComposedAdPreviewAcceptance(
+  previews = buildRepresentativeComposedAdPreviewCases(),
+): RepresentativeComposedAdPreviewAcceptanceSummary {
+  const rows = previews.map((preview): RepresentativeComposedAdPreviewAcceptanceRow => {
+    const resolved = resolveRepresentativeComposedAdPreview(preview);
+    return {
+      caseId: preview.id,
+      description: preview.description,
+      merchantName: preview.merchant.name,
+      offerLine: preview.offerFacts.primaryOfferLine,
+      imageSourceType: preview.imageSourceType,
+      liveStatus: preview.liveState.status,
+      recommendedTemplateId: resolved.recommendedTemplateId,
+      alternateTemplateIds: resolved.alternateTemplateIds,
+      presentationHash: resolved.presentationHash,
+      compositeQaDecision: resolved.compositeQa.decision,
+      compositeQaRepairCodes: resolved.compositeQa.repairCodes,
+      compositeQaHardFailReasons: resolved.compositeQa.hardFailReasons,
+      screenshotQaWouldRun: shouldRunCompositeScreenshotQa(resolved.compositeQa),
+      screenshotQaTriggerCodes: resolved.compositeQa.screenshotQaTriggerCodes,
+    };
+  });
+  const templateCounts: RepresentativeComposedAdPreviewAcceptanceSummary["templateCounts"] = {};
+  const compositeQaDecisionCounts: RepresentativeComposedAdPreviewAcceptanceSummary["compositeQaDecisionCounts"] = {};
+  for (const row of rows) {
+    templateCounts[row.recommendedTemplateId] = (templateCounts[row.recommendedTemplateId] ?? 0) + 1;
+    compositeQaDecisionCounts[row.compositeQaDecision] =
+      (compositeQaDecisionCounts[row.compositeQaDecision] ?? 0) + 1;
+  }
+
+  return {
+    totalCases: rows.length,
+    rows,
+    templateCounts,
+    compositeQaDecisionCounts,
+    screenshotQaReviewCaseIds: rows.filter((row) => row.screenshotQaWouldRun).map((row) => row.caseId),
+    repairCaseIds: rows.filter((row) => row.compositeQaDecision === "repair").map((row) => row.caseId),
+    blockedCaseIds: rows.filter((row) => row.compositeQaDecision === "block").map((row) => row.caseId),
+    unavailableCaseIds: rows.filter((row) => row.compositeQaDecision === "unavailable").map((row) => row.caseId),
   };
 }
