@@ -11,6 +11,8 @@ import {
   type OfferDefinitionV1,
 } from "./offer-definition";
 import type { AdImageSelection } from "./merchant-image-selection";
+import type { AdLocalizationBundle } from "./ad-localization-schema";
+import type { SupportedLocale } from "./supported-locales";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -44,6 +46,17 @@ export type GeneratedAd = {
   photo_treatment?: PhotoTreatment | null;
   /** Canonical selected image source, QA decision, and lineage metadata. */
   image_selection?: AdImageSelection | null;
+  /** Verified source plus target-language persuasive copy bundle, when multilingual generation is enabled. */
+  localization_bundle?: AdLocalizationBundle | null;
+  localization_status?: {
+    source_locale: SupportedLocale;
+    localization_bundle_hash: string;
+    deterministic_fallback_locales: SupportedLocale[];
+    transcreation_provider: string;
+    transcreation_model: string;
+    transcreation_skipped_reason?: string | null;
+    repair_target_locales: SupportedLocale[];
+  } | null;
 };
 
 export type BusinessContextPayload = {

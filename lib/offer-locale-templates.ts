@@ -1,5 +1,5 @@
-import type { OfferDefinitionV1OfferType } from "./offer-definition";
-import type { SupportedLocale } from "./supported-locales";
+import type { OfferDefinitionV1OfferType } from "./offer-definition.ts";
+import type { SupportedLocale } from "./supported-locales.ts";
 
 export type OfferLocaleTemplateReviewStatus =
   | "internal_owner_recorded"

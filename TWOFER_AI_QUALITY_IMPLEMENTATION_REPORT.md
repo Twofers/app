@@ -738,6 +738,93 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3f - Generation localization bundle wiring
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-generation-bundle`.
+
+Safety checkpoint: `da6ec61c` (Multilingual Deals PR 3e repair orchestration commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr3-generation-bundle.md`
+- `docs/localization/native-review-log.md`
+- `lib/ad-variants.ts`
+- `lib/ad-localization.ts`
+- `lib/ad-localization-schema.ts`
+- `lib/ad-translation-qa.ts`
+- `lib/authoritative-offer-renderer.ts`
+- `lib/korean-offer-template-resolver.ts`
+- `lib/localized-offer-renderer.ts`
+- `lib/localized-offer-terms.ts`
+- `lib/offer-definition.ts`
+- `lib/offer-locale-templates.ts`
+- `supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts`
+- `supabase/functions/_shared/ai-localization-provider.ts`
+- `supabase/functions/_shared/ai-localization-provider.test.ts`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `generateVerifiedAdLocalizationBundle()`, a shared orchestration helper that runs provider transcreation, deterministic QA, one targeted repair pass, and deterministic fallback bundle construction.
+- Wired `ai-generate-ad-variants` to attach `localization_bundle` and `localization_status` to generated ads when PR3 multilingual generation flags are enabled.
+- Source locale now derives from the owner generation language, and the source creative is the selected winning ad copy rather than all candidate lanes.
+- Provider transcreation is still gated by `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED`; deterministic fallback bundle construction is gated by `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED` or the transcreation flag.
+- Targeted repair is still gated by `AI_V5_TRANSLATION_QA_ENABLED`.
+- Added localization telemetry to the private ad-generation log payload: source locale/hash, bundle hash, deterministic fallback locales, transcreation attempts, deterministic QA decisions, and repair attempts.
+- Added Deno-compatible `.ts` import extensions through the localization/offer-rendering dependency path used by the Edge Function typechecker.
+- Added source guards and provider tests for one-locale repair orchestration and deterministic fallback when provider transcreation is disabled.
+
+## Acceptance criteria map
+
+- PR 3.1 locale-aware source creative generation: Preserved; source locale derives from generation language.
+- PR 3.2 source-language style policies: Preserved from PR 3a.
+- PR 3.3 winning-candidate-only transcreation: Improved; live generation wiring sends the selected ad copy as source creative.
+- PR 3.4 protected terms: Preserved; protected terms are derived from merchant, location, paid item, and reward item names.
+- PR 3.5 independent translation QA: Deterministic QA exists; independent semantic provider review remains future work.
+- PR 3.6 targeted repair: Improved; live generation wiring can call one targeted repair per failed repairable locale when enabled.
+- PR 3.7 deterministic target-language fallback: Improved; generation can return deterministic fallback locales when provider transcreation is disabled, unavailable, incomplete, blocked, or still invalid after repair.
+- PR 3.8 locale-specific presentation resolver: Not implemented in this slice.
+- PR 3.9 localization storage and hashes: Improved in generated response/log payload only; database storage remains future work and requires a hard-gated migration.
+- PR 3.10 optional owner language previews: The response now carries the bundle needed by future owner preview wiring; no additional UI work in this slice.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts`: passed; 1 file, 9 tests.
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts lib/ad-localization.test.ts`: passed; 3 files, 20 tests.
+- `npx vitest run supabase/functions/_shared/ai-localization-provider.test.ts supabase/functions/_shared/ai-generate-ad-variants-telemetry-source.test.ts lib/ad-localization.test.ts lib/localized-offer-renderer.test.ts`: passed; 4 files, 24 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. The localization and `ai-generate-ad-variants` Deno import path now checks cleanly.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 160 files, 863 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3f-20260623-resume`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- The generated localization bundle is not yet persisted with offer/ad versions.
+- The owner UI does not yet consume the returned bundle for provider-backed language previews.
+- Independent semantic QA remains future work.
+- Locale-specific presentation resolver and publish enforcement remain future work.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on representative transcreations, fallback copy, repair behavior, and real-device screenshots.
+- No hosted flags were enabled, so production behavior remains unchanged until Dan approves deployment/config steps.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3e - Targeted repair orchestration
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-repair-orchestration`.

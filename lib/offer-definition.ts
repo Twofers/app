@@ -1,11 +1,11 @@
 import {
   buildDealOfferContract,
   type DealOfferContract,
-} from "./deal-offer-contract";
+} from "./deal-offer-contract.ts";
 import type {
   DealEligibilityInput,
   DealEligibilityResult,
-} from "./deal-eligibility";
+} from "./deal-eligibility.ts";
 
 export type OfferDefinitionV1OfferType =
   | "buy_one_get_one"

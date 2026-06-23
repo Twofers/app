@@ -2,18 +2,18 @@ import {
   AD_COPY_BOGO_SHORTHAND_PATTERNS,
   AD_COPY_FORBIDDEN_PATTERNS,
   matchesAdCopyPattern,
-} from "./ad-language-policy";
+} from "./ad-language-policy.ts";
 import type {
   AdTranslationQaHardFailReason,
   AdTranslationQaResult,
   AdTranslationQaScores,
   SourceAdCreative,
-} from "./ad-localization-schema";
+} from "./ad-localization-schema.ts";
 import {
   SOURCE_CREATIVE_LOCALE_POLICIES,
-} from "./ad-source-locale-policy";
-import type { OfferDefinitionV1 } from "./offer-definition";
-import type { SupportedLocale } from "./supported-locales";
+} from "./ad-source-locale-policy.ts";
+import type { OfferDefinitionV1 } from "./offer-definition.ts";
+import type { SupportedLocale } from "./supported-locales.ts";
 
 export const AD_TRANSLATION_QA_VERSION = "ad-translation-qa-v1";
 

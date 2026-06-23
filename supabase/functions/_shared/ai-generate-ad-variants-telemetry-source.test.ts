@@ -33,4 +33,38 @@ describe("ai-generate-ad-variants telemetry source guard", () => {
     expect(failureIndex).toBeGreaterThan(-1);
     expect(failureBlock).toMatch(/total_latency_ms:\s*Date\.now\(\) - requestStartedAtMs/);
   });
+
+  it("attaches multilingual localization bundles only behind PR3 flags", () => {
+    const helperIndex = source.indexOf("function shouldBuildLocalizationBundle()");
+    const handlerIndex = source.indexOf("Deno.serve(async (req) =>");
+    const bundleIndex = source.indexOf("generateVerifiedAdLocalizationBundle({");
+    const adIndex = source.indexOf("const ad: SingleAd = {");
+    const logIndex = source.indexOf("response_payload: buildGenerationTelemetry({");
+
+    expect(helperIndex).toBeGreaterThan(-1);
+    expect(handlerIndex).toBeGreaterThan(helperIndex);
+    expect(bundleIndex).toBeGreaterThan(handlerIndex);
+    expect(adIndex).toBeGreaterThan(bundleIndex);
+    expect(logIndex).toBeGreaterThan(adIndex);
+
+    const helperBlock = source.slice(helperIndex, handlerIndex);
+    const bundleBlock = source.slice(bundleIndex - 700, adIndex);
+    const adBlock = source.slice(adIndex, logIndex);
+    const telemetryBlock = source.slice(source.indexOf("function localizationTelemetry("), handlerIndex);
+
+    expect(helperBlock).toMatch(/AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED/);
+    expect(helperBlock).toMatch(/AI_V5_PERSUASIVE_TRANSCRATION_ENABLED/);
+    expect(bundleBlock).toMatch(/sourceLocale/);
+    expect(bundleBlock).toMatch(/targetLocales:\s*\[\.\.\.SUPPORTED_LOCALES\]/);
+    expect(bundleBlock).toMatch(/adLocalizationOfferFactsFromDefinition\(offerDefinition\)/);
+    expect(bundleBlock).toMatch(/providerEnabled:\s*envFlag\("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false\)/);
+    expect(bundleBlock).toMatch(/repairEnabled:\s*envFlag\("AI_V5_TRANSLATION_QA_ENABLED", false\)/);
+    expect(bundleBlock).toMatch(/logTextProviderAttempts\(costContext, "ad_localization_transcreation"/);
+    expect(bundleBlock).toMatch(/logTextProviderAttempts\(costContext, "ad_localization_repair"/);
+    expect(adBlock).toMatch(/localization_bundle:\s*localizationResult\?\.bundle \?\? null/);
+    expect(adBlock).toMatch(/localization_status:\s*localizationResult/);
+    expect(telemetryBlock).toMatch(/localization_bundle_hash/);
+    expect(telemetryBlock).toMatch(/deterministic_fallback_locales/);
+    expect(telemetryBlock).toMatch(/repairTargetLocales/);
+  });
 });

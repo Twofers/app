@@ -4,6 +4,19 @@ import {
   type AiTextProviderDeps,
   type ProviderAttempt,
 } from "./ai-text-provider.ts";
+import {
+  buildQaCheckedAdLocalizationBundle,
+} from "../../../lib/ad-localization.ts";
+import type {
+  AdLocalizationBundle,
+  AdTranslationQaResult,
+  SourceAdCreative,
+} from "../../../lib/ad-localization-schema.ts";
+import {
+  AD_TRANSLATION_FIELD_LIMITS,
+  validateAdTranscreationDeterministically,
+} from "../../../lib/ad-translation-qa.ts";
+import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
 export type SupportedAdLocale = "en-US" | "es-US" | "ko-KR";
 
@@ -93,6 +106,14 @@ export type AdLocalizationProviderResult = {
   skippedReason?: string;
   attempts: ProviderAttempt[];
   promptVersion: string;
+};
+
+export type VerifiedAdLocalizationBundleResult = {
+  bundle: AdLocalizationBundle;
+  transcreation: AdLocalizationProviderResult;
+  repairs: Partial<Record<SupportedAdLocale, AdLocalizationProviderResult>>;
+  deterministicQa: Partial<Record<SupportedAdLocale, AdTranslationQaResult>>;
+  repairTargetLocales: SupportedAdLocale[];
 };
 
 export const AD_LOCALIZATION_PROMPT_VERSION = "AI_AD_LOCALIZATION_PROMPT_V1";
@@ -262,6 +283,7 @@ function promptJson(value: unknown): string {
 function noProviderResult(params: {
   promptVersion: string;
   skippedReason?: string;
+  attempts?: ProviderAttempt[];
 }): AdLocalizationProviderResult {
   return {
     targetCreatives: {},
@@ -269,7 +291,7 @@ function noProviderResult(params: {
     model: "none",
     fallbackUsed: false,
     skippedReason: params.skippedReason,
-    attempts: [],
+    attempts: params.attempts ?? [],
     promptVersion: params.promptVersion,
   };
 }
@@ -592,5 +614,144 @@ export async function repairAdLocalizationTranscreation(
     fallbackReason: generation.fallbackReason,
     attempts: generation.attempts,
     promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
+  };
+}
+
+function providerCreativeToSourceCreative(
+  creative: AdLocalizationProviderCreative | AdLocalizationSourceCreative | null | undefined,
+): SourceAdCreative {
+  return {
+    headline: cleanText(creative?.headline, AD_LOCALIZATION_FIELD_LIMITS.headline),
+    supportingCopy: cleanText(creative?.supportingCopy, AD_LOCALIZATION_FIELD_LIMITS.supportingCopy),
+    imageAltText: cleanText(creative?.imageAltText, AD_LOCALIZATION_FIELD_LIMITS.imageAltText),
+  };
+}
+
+function failedFieldsForQa(input: {
+  sourceCreative: SourceAdCreative;
+  targetCreative: SourceAdCreative;
+  qa: AdTranslationQaResult;
+}): Array<"headline" | "supportingCopy" | "imageAltText"> {
+  const fields: Array<"headline" | "supportingCopy" | "imageAltText"> = [];
+  if (
+    input.qa.hardFailReasons.includes("INCOMPLETE_FIELDS") ||
+    input.qa.hardFailReasons.includes("WRONG_LANGUAGE") ||
+    input.qa.hardFailReasons.includes("BANNED_SHORTHAND") ||
+    input.qa.hardFailReasons.includes("UNNATURAL_TARGET_LANGUAGE") ||
+    input.qa.hardFailReasons.includes("UNEXPECTED_LANGUAGE_MIXING") ||
+    input.qa.hardFailReasons.includes("PROTECTED_TERM_CHANGED")
+  ) {
+    fields.push("headline", "supportingCopy", "imageAltText");
+  }
+  if (
+    cleanText(input.targetCreative.headline).length > AD_TRANSLATION_FIELD_LIMITS.headline &&
+    !fields.includes("headline")
+  ) {
+    fields.push("headline");
+  }
+  if (
+    cleanText(input.targetCreative.supportingCopy).length > AD_TRANSLATION_FIELD_LIMITS.supportingCopy &&
+    !fields.includes("supportingCopy")
+  ) {
+    fields.push("supportingCopy");
+  }
+  if (
+    cleanText(input.targetCreative.imageAltText).length > AD_TRANSLATION_FIELD_LIMITS.imageAltText &&
+    !fields.includes("imageAltText")
+  ) {
+    fields.push("imageAltText");
+  }
+  return fields.length ? fields : ["headline", "supportingCopy", "imageAltText"];
+}
+
+export async function generateVerifiedAdLocalizationBundle(input: {
+  request: AdLocalizationProviderRequest;
+  offerDefinition: OfferDefinitionV1;
+  deps: AiTextProviderDeps;
+  providerEnabled: boolean;
+  repairEnabled: boolean;
+}): Promise<VerifiedAdLocalizationBundleResult> {
+  const sourceCreative = providerCreativeToSourceCreative(input.request.sourceCreative);
+  let transcreation: AdLocalizationProviderResult = noProviderResult({
+    promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+    skippedReason: input.providerEnabled ? "TRANSCREATION_NOT_RUN" : "TRANSCREATION_FLAG_DISABLED",
+  });
+
+  if (input.providerEnabled) {
+    try {
+      transcreation = await generateAdLocalizationTranscreations(input.request, input.deps);
+    } catch (error) {
+      transcreation = noProviderResult({
+        promptVersion: AD_LOCALIZATION_PROMPT_VERSION,
+        skippedReason: "TRANSCREATION_PROVIDER_FAILED",
+        attempts: (error as { attempts?: ProviderAttempt[] } | null)?.attempts ?? [],
+      });
+    }
+  }
+
+  const targetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative>> = {};
+  const repairedTargetCreatives: Partial<Record<SupportedAdLocale, SourceAdCreative>> = {};
+  const deterministicQa: Partial<Record<SupportedAdLocale, AdTranslationQaResult>> = {};
+  const repairs: Partial<Record<SupportedAdLocale, AdLocalizationProviderResult>> = {};
+  const repairTargetLocales: SupportedAdLocale[] = [];
+
+  for (const locale of normalizeTargetLocales(input.request.sourceLocale, input.request.targetLocales)) {
+    const targetCreative = transcreation.targetCreatives[locale];
+    if (!targetCreative) continue;
+
+    const normalizedTarget = providerCreativeToSourceCreative(targetCreative);
+    targetCreatives[locale] = normalizedTarget;
+    const qa = validateAdTranscreationDeterministically({
+      sourceLocale: input.request.sourceLocale,
+      targetLocale: locale,
+      sourceCreative,
+      targetCreative: normalizedTarget,
+      offerDefinition: input.offerDefinition,
+      protectedTerms: input.request.protectedTerms,
+    });
+    deterministicQa[locale] = qa;
+
+    if (!input.repairEnabled || qa.decision !== "repair") continue;
+    repairTargetLocales.push(locale);
+    try {
+      const repair = await repairAdLocalizationTranscreation({
+        ...input.request,
+        targetLocale: locale,
+        failedCreative: normalizedTarget,
+        reasonCodes: qa.hardFailReasons,
+        conciseFeedback: qa.conciseFeedback,
+        failedFields: failedFieldsForQa({
+          sourceCreative,
+          targetCreative: normalizedTarget,
+          qa,
+        }),
+      }, input.deps);
+      repairs[locale] = repair;
+      const repaired = repair.targetCreatives[locale];
+      if (repaired) repairedTargetCreatives[locale] = providerCreativeToSourceCreative(repaired);
+    } catch (error) {
+      repairs[locale] = noProviderResult({
+        promptVersion: AD_LOCALIZATION_REPAIR_PROMPT_VERSION,
+        skippedReason: "REPAIR_PROVIDER_FAILED",
+        attempts: (error as { attempts?: ProviderAttempt[] } | null)?.attempts ?? [],
+      });
+    }
+  }
+
+  const bundle = buildQaCheckedAdLocalizationBundle({
+    sourceLocale: input.request.sourceLocale,
+    sourceCreative,
+    offerDefinition: input.offerDefinition,
+    protectedTerms: input.request.protectedTerms,
+    targetCreatives,
+    repairedTargetCreatives,
+  });
+
+  return {
+    bundle,
+    transcreation,
+    repairs,
+    deterministicQa,
+    repairTargetLocales,
   };
 }

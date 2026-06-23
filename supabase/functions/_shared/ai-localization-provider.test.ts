@@ -8,6 +8,7 @@ import {
   buildAdLocalizationPrompt,
   buildAdLocalizationRepairPrompt,
   generateAdLocalizationTranscreations,
+  generateVerifiedAdLocalizationBundle,
   repairAdLocalizationTranscreation,
   type AdLocalizationProviderRequest,
   type AdLocalizationRepairRequest,
@@ -296,5 +297,176 @@ describe("repairAdLocalizationTranscreation", () => {
       attempts: [],
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateVerifiedAdLocalizationBundle", () => {
+  it("repairs only the failed target locale before building the bundle", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(openAiSuccess({
+        localizations: [
+          {
+            locale: "es-US",
+            headline: "Cedar Bean 2x1 en latte",
+            supportingCopy: "Tu latte de la tarde viene con una cookie.",
+            imageAltText: "Latte y cookie en Cedar Bean",
+          },
+          {
+            locale: "ko-KR",
+            headline: "Cedar Bean \uB77C\uB5BC \uD61C\uD0DD",
+            supportingCopy: "\uC624\uD6C4 latte\uC5D0 cookie\uAC00 \uD568\uAED8 \uC81C\uACF5\uB429\uB2C8\uB2E4.",
+            imageAltText: "Cedar Bean latte\uC640 cookie",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce(openAiSuccess({
+        localization: {
+          locale: "es-US",
+          headline: "Cedar Bean: latte con cookie gratis",
+          supportingCopy: "Tu latte de la tarde viene con una cookie.",
+          imageAltText: "Latte y cookie en Cedar Bean",
+        },
+      }));
+
+    const result = await generateVerifiedAdLocalizationBundle({
+      request: request(),
+      offerDefinition: {
+        schemaVersion: 1,
+        status: "draft",
+        source: "deal_eligibility_v1",
+        merchantId: "biz_123",
+        merchantName: "Cedar Bean",
+        locationId: "loc_123",
+        locationName: "Cedar Bean - Irving",
+        timeZone: "America/Chicago",
+        offerType: "buy_one_get_reward_item",
+        qualifyingItems: [{ catalogItemId: null, displayName: "latte", quantity: 1, verifiedAttributes: [] }],
+        reward: {
+          rule: "reward_item_free",
+          discountPercent: 100,
+          quantity: 1,
+          catalogItemIds: [],
+          displayNames: ["cookie"],
+        },
+        perUserClaimLimit: 1,
+        totalClaimLimit: 20,
+        schedule: {
+          mode: "summary_only",
+          summary: "Today 2:00 PM to 4:00 PM",
+          startsAt: null,
+          endsAt: null,
+          timeZone: "America/Chicago",
+          daysOfWeek: null,
+          windowStartMinutes: null,
+          windowEndMinutes: null,
+        },
+        redemption: {
+          exactLocationOnly: true,
+          redeemAtBusinessName: "Cedar Bean",
+          redeemAtLocationName: "Cedar Bean - Irving",
+          claimCutoffSummary: null,
+        },
+        fulfillmentModes: ["in_store"],
+        stackable: false,
+        sourceAssetIds: [],
+        canonicalOfferLine: "Buy 1 latte and get 1 cookie free",
+        canonicalOfferSentence: "Buy 1 latte and get 1 cookie free.",
+        canonicalTermsLine: "Buy 1 latte and get 1 cookie free.",
+        disclosureIds: ["canonical_offer_terms"],
+        disclosureLine: "Buy 1 latte and get 1 cookie free. Limit one claim per customer.",
+      },
+      deps: {
+        openAiApiKey: "openai-test-key",
+        env: providerEnv,
+        config: resolveAiTextProviderConfig(providerEnv),
+      },
+      providerEnabled: true,
+      repairEnabled: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.repairTargetLocales).toEqual(["es-US"]);
+    expect(result.deterministicQa["es-US"]?.decision).toBe("repair");
+    expect(result.repairs["es-US"]?.promptVersion).toBe(AD_LOCALIZATION_REPAIR_PROMPT_VERSION);
+    expect(result.repairs["ko-KR"]).toBeUndefined();
+    expect(result.bundle.localizations["es-US"]).toMatchObject({
+      headline: "Cedar Bean: latte con cookie gratis",
+      translationStatus: "persuasive_transcreation",
+      repairAttempted: true,
+      repairStatus: "attempted_pass",
+    });
+    expect(result.bundle.localizations["ko-KR"]).toMatchObject({
+      translationStatus: "persuasive_transcreation",
+      repairAttempted: false,
+      repairStatus: "not_needed",
+    });
+  });
+
+  it("falls back deterministically when transcreation provider is disabled", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const result = await generateVerifiedAdLocalizationBundle({
+      request: request(),
+      offerDefinition: {
+        schemaVersion: 1,
+        status: "draft",
+        source: "deal_eligibility_v1",
+        merchantId: "biz_123",
+        merchantName: "Cedar Bean",
+        locationId: "loc_123",
+        locationName: "Cedar Bean - Irving",
+        timeZone: null,
+        offerType: "buy_one_get_reward_item",
+        qualifyingItems: [{ catalogItemId: null, displayName: "latte", quantity: 1, verifiedAttributes: [] }],
+        reward: {
+          rule: "reward_item_free",
+          discountPercent: 100,
+          quantity: 1,
+          catalogItemIds: [],
+          displayNames: ["cookie"],
+        },
+        perUserClaimLimit: 1,
+        totalClaimLimit: 20,
+        schedule: {
+          mode: "summary_only",
+          summary: "Today 2:00 PM to 4:00 PM",
+          startsAt: null,
+          endsAt: null,
+          timeZone: null,
+          daysOfWeek: null,
+          windowStartMinutes: null,
+          windowEndMinutes: null,
+        },
+        redemption: {
+          exactLocationOnly: true,
+          redeemAtBusinessName: "Cedar Bean",
+          redeemAtLocationName: "Cedar Bean - Irving",
+          claimCutoffSummary: null,
+        },
+        fulfillmentModes: ["in_store"],
+        stackable: false,
+        sourceAssetIds: [],
+        canonicalOfferLine: "Buy 1 latte and get 1 cookie free",
+        canonicalOfferSentence: "Buy 1 latte and get 1 cookie free.",
+        canonicalTermsLine: "Buy 1 latte and get 1 cookie free.",
+        disclosureIds: ["canonical_offer_terms"],
+        disclosureLine: "Buy 1 latte and get 1 cookie free. Limit one claim per customer.",
+      },
+      deps: {
+        openAiApiKey: "openai-test-key",
+        env: providerEnv,
+        config: resolveAiTextProviderConfig(providerEnv),
+      },
+      providerEnabled: false,
+      repairEnabled: true,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.transcreation).toMatchObject({
+      provider: "none",
+      skippedReason: "TRANSCREATION_FLAG_DISABLED",
+    });
+    expect(result.repairTargetLocales).toEqual([]);
+    expect(result.bundle.deterministicFallbackLocales).toEqual(["es-US", "ko-KR"]);
   });
 });

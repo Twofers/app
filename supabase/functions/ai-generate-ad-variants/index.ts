@@ -118,6 +118,22 @@ import {
   type MerchantImageSourceMode,
 } from "../../../lib/merchant-image-selection.ts";
 import { validateMerchantImageEditInstruction } from "../../../lib/merchant-image-edit-policy.ts";
+import {
+  buildOfferDefinitionV1FromContract,
+  type OfferDefinitionV1,
+} from "../../../lib/offer-definition.ts";
+import {
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from "../../../lib/supported-locales.ts";
+import type {
+  AdLocalizationBundle,
+} from "../../../lib/ad-localization-schema.ts";
+import {
+  adLocalizationOfferFactsFromDefinition,
+  generateVerifiedAdLocalizationBundle,
+  type VerifiedAdLocalizationBundleResult,
+} from "../_shared/ai-localization-provider.ts";
 
 // Static anchors so Supabase's remote bundler includes the npm packages that
 // `_shared/ai-image-provider.ts` imports lazily when Gemini returns JPEG bytes.
@@ -183,6 +199,17 @@ type SingleAd = {
   poster_storage_path: string | null;
   /** Canonical image source choice, QA decision, and lineage. */
   image_selection?: AdImageSelection | null;
+  /** Verified source plus target-language persuasive copy bundle, when PR3 multilingual flags are enabled. */
+  localization_bundle?: AdLocalizationBundle | null;
+  localization_status?: {
+    source_locale: SupportedLocale;
+    localization_bundle_hash: string;
+    deterministic_fallback_locales: SupportedLocale[];
+    transcreation_provider: string;
+    transcreation_model: string;
+    transcreation_skipped_reason?: string | null;
+    repair_target_locales: SupportedLocale[];
+  } | null;
 };
 
 function utcMonthStartIso(): string {
@@ -695,6 +722,52 @@ function envFlag(name: string, fallback = false): boolean {
   const raw = Deno.env.get(name);
   if (raw == null || raw === "") return fallback;
   return /^(1|true|yes|on)$/i.test(raw.trim());
+}
+
+function outputLanguageToSupportedLocale(lang: OutputLanguage): SupportedLocale {
+  if (lang === "es") return "es-US";
+  if (lang === "ko") return "ko-KR";
+  return "en-US";
+}
+
+function shouldBuildLocalizationBundle(): boolean {
+  return envFlag("AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED", false) ||
+    envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false);
+}
+
+function uniqueCleanText(values: readonly unknown[], max = 20): string[] {
+  const out: string[] = [];
+  for (const value of values) {
+    const clean = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+    if (!clean || out.some((existing) => existing.toLowerCase() === clean.toLowerCase())) continue;
+    out.push(clean.slice(0, 160));
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function protectedTermsForLocalization(definition: OfferDefinitionV1): string[] {
+  return uniqueCleanText([
+    definition.merchantName,
+    definition.locationName,
+    ...definition.qualifyingItems.map((item) => item.displayName),
+    ...definition.reward.displayNames,
+  ]);
+}
+
+function localizationImageAltText(params: {
+  businessName: string;
+  headline: string;
+  offerLine: string;
+}): string {
+  return clip(
+    [
+      params.businessName,
+      params.headline || params.offerLine,
+      "deal image",
+    ].filter(Boolean).join(" - "),
+    140,
+  );
 }
 
 function envNumber(name: string, fallback: number): number {
@@ -2357,6 +2430,77 @@ function copyRepairAttemptCount(source: AiDealCopySource | undefined): number {
   return 0;
 }
 
+function providerAttemptTelemetry(attempt: ProviderAttempt) {
+  return {
+    provider: attempt.provider,
+    model: attempt.model,
+    operation: attempt.operation,
+    success: attempt.success,
+    latency_ms: attempt.latencyMs,
+    error_class: attempt.errorClass ?? null,
+    error_code: attempt.errorCode ?? null,
+    input_tokens: attempt.inputTokens ?? null,
+    cached_input_tokens: attempt.cachedInputTokens ?? null,
+    reasoning_tokens: attempt.reasoningTokens ?? null,
+    output_tokens: attempt.outputTokens ?? null,
+    estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+  };
+}
+
+function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null) {
+  if (!result) return { enabled: false };
+  const repairEntries = Object.entries(result.repairs);
+  return {
+    enabled: true,
+    source_locale: result.bundle.sourceLocale,
+    source_creative_hash: result.bundle.sourceCreativeHash,
+    localization_bundle_hash: result.bundle.localizationBundleHash,
+    deterministic_fallback_locales: result.bundle.deterministicFallbackLocales,
+    transcreation: {
+      provider: result.transcreation.provider,
+      model: result.transcreation.model,
+      prompt_version: result.transcreation.promptVersion,
+      fallback_used: result.transcreation.fallbackUsed,
+      fallback_reason: result.transcreation.fallbackReason ?? null,
+      skipped_reason: result.transcreation.skippedReason ?? null,
+      attempts: result.transcreation.attempts.map(providerAttemptTelemetry),
+    },
+    deterministic_qa: Object.fromEntries(
+      Object.entries(result.deterministicQa).map(([locale, qa]) => [
+        locale,
+        qa
+          ? {
+              decision: qa.decision,
+              hard_fail_reasons: qa.hardFailReasons,
+              scores: qa.scores,
+              feedback_count: qa.conciseFeedback.length,
+            }
+          : null,
+      ]),
+    ),
+    repairs: {
+      target_locales: result.repairTargetLocales,
+      count: repairEntries.length,
+      by_locale: Object.fromEntries(
+        repairEntries.map(([locale, repair]) => [
+          locale,
+          repair
+            ? {
+                provider: repair.provider,
+                model: repair.model,
+                prompt_version: repair.promptVersion,
+                fallback_used: repair.fallbackUsed,
+                fallback_reason: repair.fallbackReason ?? null,
+                skipped_reason: repair.skippedReason ?? null,
+                attempts: repair.attempts.map(providerAttemptTelemetry),
+              }
+            : null,
+        ]),
+      ),
+    },
+  };
+}
+
 function buildGenerationTelemetry(params: {
   offerContract: DealOfferContract;
   copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
@@ -2376,6 +2520,7 @@ function buildGenerationTelemetry(params: {
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
   totalLatencyMs: number;
+  localizationResult?: VerifiedAdLocalizationBundleResult | null;
 }) {
   const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
@@ -2427,36 +2572,11 @@ function buildGenerationTelemetry(params: {
       judge: {
         provider: copy.judge_provider ?? null,
         model: copy.judge_model ?? null,
-        attempts: (copy.judge_attempts ?? []).map((attempt) => ({
-          provider: attempt.provider,
-          model: attempt.model,
-          operation: attempt.operation,
-          success: attempt.success,
-          latency_ms: attempt.latencyMs,
-          error_class: attempt.errorClass ?? null,
-          error_code: attempt.errorCode ?? null,
-          input_tokens: attempt.inputTokens ?? null,
-          cached_input_tokens: attempt.cachedInputTokens ?? null,
-          reasoning_tokens: attempt.reasoningTokens ?? null,
-          output_tokens: attempt.outputTokens ?? null,
-          estimated_cost_usd: attempt.estimatedCostUsd ?? null,
-        })),
+        attempts: (copy.judge_attempts ?? []).map(providerAttemptTelemetry),
       },
-      provider_attempts: (copy.provider_attempts ?? []).map((attempt) => ({
-        provider: attempt.provider,
-        model: attempt.model,
-        operation: attempt.operation,
-        success: attempt.success,
-        latency_ms: attempt.latencyMs,
-        error_class: attempt.errorClass ?? null,
-        error_code: attempt.errorCode ?? null,
-        input_tokens: attempt.inputTokens ?? null,
-        cached_input_tokens: attempt.cachedInputTokens ?? null,
-        reasoning_tokens: attempt.reasoningTokens ?? null,
-        output_tokens: attempt.outputTokens ?? null,
-        estimated_cost_usd: attempt.estimatedCostUsd ?? null,
-      })),
+      provider_attempts: (copy.provider_attempts ?? []).map(providerAttemptTelemetry),
     },
+    localization: localizationTelemetry(params.localizationResult ?? null),
     image_qa: imageResult.qa,
   };
 }
@@ -2862,6 +2982,10 @@ Deno.serve(async (req) => {
       model?: string;
       provider_fallback_used?: boolean;
       provider_fallback_reason?: string;
+      copy_quality?: CopyQualityTelemetry[];
+      judge_attempts?: ProviderAttempt[];
+      judge_provider?: string;
+      judge_model?: string;
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
@@ -2976,6 +3100,72 @@ Deno.serve(async (req) => {
       });
     }
 
+    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
+    const offerDefinition = buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput!,
+      redemptionLimit,
+      schedule: {
+        mode: "summary_only",
+        summary: offerScheduleSummary,
+      },
+      sourceAssetIds: imageResult.posterStoragePath ? [imageResult.posterStoragePath] : [],
+    });
+    let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
+    if (shouldBuildLocalizationBundle()) {
+      const merchantProfile = buildMerchantCreativeProfile({
+        businessId,
+        businessName,
+        category: businessContext.category,
+        tone: businessContext.tone,
+        location: businessContext.location,
+        address: businessContext.address,
+        description: businessContext.description,
+        itemHint: sourceHint,
+        research,
+      });
+      localizationResult = await generateVerifiedAdLocalizationBundle({
+        request: {
+          adVersionId: `draft:${requestGroupId}`,
+          sourceLocale,
+          targetLocales: [...SUPPORTED_LOCALES],
+          sourceCreative: {
+            strategy: copy.copy_source ?? null,
+            headline: copy.headline,
+            supportingCopy: copy.short_description || copy.subheadline,
+            imageAltText: localizationImageAltText({
+              businessName,
+              headline: copy.headline,
+              offerLine: offerDefinition.canonicalOfferLine,
+            }),
+          },
+          creativeBrief: {
+            targetCustomerMoment: "",
+            exactCustomerHook: offerDefinition.canonicalOfferLine,
+            desiredFeeling: "",
+            naturalLanguageDirection: "",
+          },
+          offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinition),
+          protectedTerms: protectedTermsForLocalization(offerDefinition),
+          localizedTerms: [],
+          merchantProfile,
+          generationRunId: requestGroupId,
+        },
+        offerDefinition,
+        deps: {
+          openAiApiKey: openAiKey,
+          geminiApiKey,
+          admin,
+          config: resolveAiTextProviderConfig(),
+        },
+        providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
+        repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+      });
+      await logTextProviderAttempts(costContext, "ad_localization_transcreation", localizationResult.transcreation.attempts);
+      for (const repair of Object.values(localizationResult.repairs)) {
+        if (repair) await logTextProviderAttempts(costContext, "ad_localization_repair", repair.attempts);
+      }
+    }
+
     const ad: SingleAd = {
       headline: copy.headline,
       subheadline: copy.subheadline,
@@ -2995,6 +3185,18 @@ Deno.serve(async (req) => {
       photo_treatment: imageResult.treatment,
       poster_storage_path: imageResult.posterStoragePath,
       image_selection: imageResult.selection,
+      localization_bundle: localizationResult?.bundle ?? null,
+      localization_status: localizationResult
+        ? {
+            source_locale: localizationResult.bundle.sourceLocale,
+            localization_bundle_hash: localizationResult.bundle.localizationBundleHash,
+            deterministic_fallback_locales: localizationResult.bundle.deterministicFallbackLocales,
+            transcreation_provider: localizationResult.transcreation.provider,
+            transcreation_model: localizationResult.transcreation.model,
+            transcreation_skipped_reason: localizationResult.transcreation.skippedReason ?? null,
+            repair_target_locales: localizationResult.repairTargetLocales,
+          }
+        : null,
     };
 
     /**
@@ -3016,6 +3218,10 @@ Deno.serve(async (req) => {
       failure_reason: productionSuccess ? null : "IMAGE_NULL",
       openai_called:
         (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.transcreation.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        Object.values(localizationResult?.repairs ?? {}).some((repair) =>
+          (repair?.attempts ?? []).some((attempt) => attempt.provider === "openai")
+        ) ||
         imageResult.provider === "openai" ||
         !isRevision,
       response_payload: buildGenerationTelemetry({
@@ -3024,6 +3230,7 @@ Deno.serve(async (req) => {
         imageResult,
         productionSuccess,
         totalLatencyMs: Date.now() - requestStartedAtMs,
+        localizationResult,
       }),
     });
 

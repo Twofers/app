@@ -1,19 +1,19 @@
 import {
   renderLocalizedOfferFromDefinition,
-} from "./localized-offer-renderer";
-import type { OfferDefinitionV1 } from "./offer-definition";
+} from "./localized-offer-renderer.ts";
+import type { OfferDefinitionV1 } from "./offer-definition.ts";
 import {
   SUPPORTED_LOCALES,
   supportedLocaleOrDefault,
   type SupportedLocale,
-} from "./supported-locales";
-import { validateAdTranscreationDeterministically } from "./ad-translation-qa";
+} from "./supported-locales.ts";
+import { validateAdTranscreationDeterministically } from "./ad-translation-qa.ts";
 import type {
   AdLocalizationBundle,
   AdLocalizedCreative,
   AdTranslationQaResult,
   SourceAdCreative,
-} from "./ad-localization-schema";
+} from "./ad-localization-schema.ts";
 
 const FALLBACK_HEADLINE: Record<SupportedLocale, string> = {
   "en-US": "Local deal",

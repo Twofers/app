@@ -1,10 +1,10 @@
-import type { DealOfferContract } from "./deal-offer-contract";
+import type { DealOfferContract } from "./deal-offer-contract.ts";
 import {
   getDealDisplayDescription,
   getDealDisplayTitle,
   type DealDisplayTitleFields,
-} from "./deal-display-copy";
-import type { OfferDefinitionV1 } from "./offer-definition";
+} from "./deal-display-copy.ts";
+import type { OfferDefinitionV1 } from "./offer-definition.ts";
 
 export type LockedOfferContent = {
   primaryOfferLine: string;

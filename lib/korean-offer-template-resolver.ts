@@ -1,5 +1,5 @@
-import { getReviewedKoreanCounter } from "./korean-counter-registry";
-import type { LocalizedOfferTerm } from "./localized-offer-terms";
+import { getReviewedKoreanCounter } from "./korean-counter-registry.ts";
+import type { LocalizedOfferTerm } from "./localized-offer-terms.ts";
 
 export type KoreanOfferTemplateResolution = {
   templateId: string;

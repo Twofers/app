@@ -1,4 +1,4 @@
-import { type SupportedLocale } from "./supported-locales";
+import { type SupportedLocale } from "./supported-locales.ts";
 
 export type LocalizedOfferTermSource =
   | "merchant"

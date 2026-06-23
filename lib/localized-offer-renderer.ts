@@ -1,18 +1,18 @@
-import { renderAuthoritativeOfferFromDefinition } from "./authoritative-offer-renderer";
+import { renderAuthoritativeOfferFromDefinition } from "./authoritative-offer-renderer.ts";
 import {
   localizedTermSnapshotId,
   resolveLocalizedOfferTerm,
   type LocalizedOfferTerm,
-} from "./localized-offer-terms";
-import { getOfferLocaleTemplate } from "./offer-locale-templates";
+} from "./localized-offer-terms.ts";
+import { getOfferLocaleTemplate } from "./offer-locale-templates.ts";
 import {
   buildOfferDefinitionV1FromContract,
   type OfferDefinitionV1,
   type OfferDefinitionV1Item,
-} from "./offer-definition";
-import { resolveKoreanOfferTemplate } from "./korean-offer-template-resolver";
-import { SUPPORTED_LOCALES, supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales";
-import type { DealOfferContract } from "./deal-offer-contract";
+} from "./offer-definition.ts";
+import { resolveKoreanOfferTemplate } from "./korean-offer-template-resolver.ts";
+import { SUPPORTED_LOCALES, supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales.ts";
+import type { DealOfferContract } from "./deal-offer-contract.ts";
 
 export type LocalizedLockedOfferContent = {
   locale: SupportedLocale;
