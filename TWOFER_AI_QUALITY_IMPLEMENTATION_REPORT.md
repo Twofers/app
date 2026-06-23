@@ -738,6 +738,68 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4i - No multilingual push guard
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr4-no-multilingual-push`.
+
+Safety checkpoint: `cb1a992e` (Multilingual Deals PR4 rollout dashboard commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no push notification was sent, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `supabase/functions/_shared/send-deal-push-source.test.ts`
+- `docs/localization/multilingual-deals-pr4-no-multilingual-push.md`
+
+## Files changed
+
+- `scripts/check-localization-rollout-gates.mjs`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a source-level guard proving `send-deal-push` does not run notification-send-time translation, semantic QA, transcreation, customer-localization storage lookup, or localized legacy title/description column selection.
+- The guard also proves customer push copy is still built from structured offer facts via `buildDeterministicDealChannelCopy()`, not from customer localized display state.
+- Added a PR4 handoff doc recording that multilingual push is intentionally out of scope for this first multilingual release.
+- Extended `npm run gate:localization-rollout` so the no-multilingual-push source guard and handoff doc remain present.
+
+## Acceptance criteria map
+
+- PR4 no multilingual push: Implemented as source guard and operator handoff. Feed/detail localization remains independent from push delivery.
+- PR4 rollout does not claim localized push support: Documented and checked by the localization rollout gate.
+- Future multilingual push: Still intentionally separate and should be planned only after feed, detail, owner UI, native review, and real-device QA are stable.
+
+## Validation
+
+- `npx vitest run supabase/functions/_shared/send-deal-push-source.test.ts`: passed; 1 file, 2 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 173 files, 918 tests.
+- `npm run copy:evaluate`: passed; 30 fixtures valid, 0 invalid.
+- `npm run dashboard:localization-rollout`: passed.
+- `npm run gate:ai-ad`: passed.
+- `npm run gate:localization-rollout`: passed; 16 rollout gate checks passed.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr4i-20260623`: passed; Metro emitted the existing `country-flag-icons` package export warnings.
+- `npm run typecheck:functions`: failed on the pre-existing `supabase/functions/ai-extract-menu/index.ts` Supabase client generic mismatch at lines 417 and 430. No files in this slice touch that function.
+
+## Unresolved risks
+
+- Existing customer push copy is intentionally not localized by customer locale.
+- A future multilingual push feature would need a separate privacy, QA, reviewer, telemetry, and delivery plan.
+- Hosted behavior remains unchanged until Dan approves a future `send-deal-push` redeploy for unrelated source changes.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4h - Rollout dashboard command
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-rollout-dashboard`.

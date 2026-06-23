@@ -137,6 +137,27 @@ const checks = [
       /Korean remains blocked/,
     ],
   },
+  {
+    name: "no multilingual push policy is guarded",
+    file: "supabase/functions/_shared/send-deal-push-source.test.ts",
+    patterns: [
+      /send-deal-push multilingual rollout source guards/,
+      /buildDeterministicDealChannelCopy/,
+      /not\.toMatch\(\/generateStructuredText\//,
+      /not\.toMatch\(\/customer_deal_localizations\//,
+      /not\.toMatch\(\/title_es\|title_ko\|description_es\|description_ko\//,
+    ],
+  },
+  {
+    name: "no multilingual push handoff document exists",
+    file: "docs/localization/multilingual-deals-pr4-no-multilingual-push.md",
+    patterns: [
+      /push delivery is not multilingual/,
+      /Do not claim push notifications are multilingual/,
+      /Do not call translation/,
+      /Feed and deal-detail localization remain independent from push delivery/,
+    ],
+  },
 ];
 
 let failed = 0;
