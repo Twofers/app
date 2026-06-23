@@ -3056,3 +3056,105 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4an - Refresh final acceptance map
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `a9e276f7`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a final current acceptance snapshot after the PR4 follow-up series so the report reflects the compare/restore controls, bounded custom edit UI, stock QA, shared image-QA router, and AdSpec prompt-provenance fixes.
+- Kept earlier PR acceptance notes intact as historical checkpoints; this section is the current map as of PR 4am.
+- Marked remaining work as partial or blocked where it requires migrations, hosted Edge Function deploys, public website/privacy deployment, production telemetry, Deno availability, or future data-model work.
+
+## Current acceptance criteria map after PR4am
+
+1. Implemented - Live primary creative model resolves to `gpt-5.5`.
+2. Implemented - Unsupported model names do not silently downgrade.
+3. Implemented locally - Gemini 3.5 Flash is configured as OpenAI availability/credit fallback; production activation remains blocked by public privacy/subprocessor deployment and hosted flag changes.
+4. Implemented - OpenAI credit/quota failure falls back immediately behind the routed fallback flags.
+5. Implemented - Full timeout does not cause a second full OpenAI wait.
+6. Partially implemented - Persistent circuit-breaker helper and migration exist, but applying the migration and verifying hosted behavior are hard-gated.
+7. Partially implemented - Provider/model/latency/token/cache/cost telemetry exists across routed paths, but total end-to-end generation duration is not persisted as a first-class field.
+8. Implemented locally - Configurable cost ceilings limit optional calls behind the cost-budget flag.
+9. Implemented - The merchant receives a preview or deterministic fallback, never a blank state, on the main ad path.
+10. Implemented - Merchant Creative Profile is available and versioned at runtime.
+11. Implemented - Unverified merchant claims are excluded from prompts.
+12. Implemented - GPT-5.5 is asked for one positive creative brief and five candidates in one call on the main ad path.
+13. Implemented - The five required creative lanes are present and validated.
+14. Implemented - Hard duplicate checks are active.
+15. Implemented - Similarity heuristics are logged for calibration.
+16. Implemented - Gemini judges GPT-5.5 candidates blindly behind the hosted judge flag.
+17. Implemented - Gemini-generated fallback copy does not receive fake same-provider independent judgment.
+18. Implemented locally - Selected candidates use verified merchant context when available; live calibration remains a deployment/QA task.
+19. Implemented locally - Judge/style/quality controls can reject factually valid but forgettable candidates; live threshold calibration remains a deployment/QA task.
+20. Implemented - Existing style-gate logic is active in the production ad-variant path.
+21. Implemented - Customer-facing BOGO/2-for-1 shorthand is consistently blocked.
+22. Implemented - Immutable offer facts remain unchanged.
+23. Implemented - Revisions pass the same validation and judgment path.
+24. Implemented - Category playbooks are active and expanded.
+25. Implemented - Deterministic fallback usage and reason are logged.
+26. Implemented - Approval remains tied to the exact final version for the versioned publish path.
+27. Implemented - Merchants can upload images and choose the final source.
+28. Implemented - `Use original` performs no generative modification.
+29. Implemented locally - Touch-up, background cleanup, studio polish, and bounded custom edits have UI, validation, persistence in draft recovery, and provider prompt wiring.
+30. Partially implemented - Original uploads are preserved and edited/generated results carry derivative lineage in response/ad-spec metadata; there is still no dedicated persisted lineage table.
+31. Implemented locally - Merchants can compare original/edited images and restore earlier versions before publish in the AI create flow.
+32. Implemented - Twofer does not silently replace a merchant-selected upload with a generated or stock image in the controlled ad-variant path.
+33. Implemented - Aesthetic warnings on eligible original uploads may be overridden only with explicit acknowledgement.
+34. Implemented - Hard safety, authorization, technical, and materially misleading-offer blockers cannot be overridden.
+35. Implemented - Any image change invalidates prior approval in the AI create flow.
+36. Implemented - Publish references the exact selected image asset in versioned publish/ad spec metadata.
+37. Implemented - Generated images receive QA.
+38. Implemented - AI-edited merchant photos receive source-aware identity-preservation QA.
+39. Implemented - Original merchant photos receive source-appropriate QA.
+40. Implemented locally - Approved-stock fallbacks receive applicable QA before acceptance; broader stock-library workflows remain limited.
+41. Implemented - Generated and AI-edited images do not pass open when QA is unavailable.
+42. Implemented - A previously moderated unmodified merchant original may use the documented manual-acknowledgement path during QA outage.
+43. Implemented - OpenAI image QA can fall back to Gemini through the shared provider router for ad-variant image QA.
+44. Implemented - Crop and native overlay safety are checked.
+45. Implemented - OpenAI fallback image prompts match the stronger Gemini restrictions.
+46. Implemented - The deterministic visual fallback is polished and usable.
+47. Implemented - Exact offer lines and terms come from structured fields on the current publish/render path.
+48. Implemented - Consumer feed and detail surfaces share authoritative display helpers.
+49. Implemented - Known canned AI copy/transcript/insight/compose fallbacks cannot appear as live AI; synthetic menu sample output remains explicit preview/dev-only behavior.
+50. Partially implemented - Google data flow is documented internally and guarded by release checks; public website privacy/subprocessor deployment remains Dan-owned and hard-gated before production fallback activation.
+51. Partially implemented - Main ad copy, adjacent text helpers, translation, compose text/photo, and ad-variant image QA use the provider router, and new AI Create/Quick publishes require versioned publish plus offer definitions. Remaining gaps are media-specific direct provider paths such as Whisper transcription, menu OCR, and image generation/edit providers; existing-deal edit/update compatibility still writes directly to `deals`.
+52. Implemented - No GPT-5.4-mini versus GPT-5.5 comparison was performed.
+
+## Validation
+
+- `git diff --check`: passed; Git warned that the Markdown working-copy line endings will normalize from LF to CRLF when touched.
+- `.\node_modules\.bin\tsc.cmd --noEmit --pretty false`: passed.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run lint`: passed. Plain `npm run lint` is still blocked by this machine's broken Roaming npm shim.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `.\node_modules\.bin\vitest.cmd run`: passed; 138 files, 776 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `.\node_modules\.bin\expo.cmd export --platform android --output-dir C:\tmp\twofer-metro-probe-codex-ai-pr4an-20260623-2024`: passed with the known `country-flag-icons` package export warnings.
+- `& "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run typecheck:functions -- --pretty false`: blocked because `deno` is not installed/on PATH; all 128 Edge Function files failed for that same missing-command reason.
+
+## Unresolved risks
+
+- Hosted behavior still requires Dan-controlled migrations, Edge Function redeploys, app release paths, public website/privacy deployment, and production/staging non-publishing QA.
+- Local Edge Function typechecking remains blocked until `deno` is installed or available on PATH.
+- Criteria 6, 7, 30, 50, and 51 are intentionally not marked fully complete because the remaining work crosses a hard gate or requires future persisted data-model work.
+
+## Rollback
+
+Revert this documentation commit. No migration rollback is required.
