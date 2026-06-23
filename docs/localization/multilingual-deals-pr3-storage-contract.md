@@ -65,4 +65,4 @@ Not stored on `ad_localizations`:
 - Redeploy `publish-offer-version` after the storage contract is approved.
 - Wire customer/native rendering to approved localization storage.
 - Add server-side publish enforcement for exact localization bundle hashes.
-- Add owner language previews and automatic verified-bundle approval.
+- Add automatic verified-bundle approval after owner review.

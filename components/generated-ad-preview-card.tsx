@@ -19,6 +19,7 @@ export type GeneratedAdPreviewCardProps = {
   businessName?: string | null;
   headline: string;
   body: string;
+  imageAltText?: string | null;
   offerLine?: string | null;
   termsLine?: string | null;
   cta: string;
@@ -43,6 +44,7 @@ export function GeneratedAdPreviewCard({
   businessName,
   headline,
   body,
+  imageAltText,
   offerLine,
   termsLine,
   cta,
@@ -58,6 +60,7 @@ export function GeneratedAdPreviewCard({
   darkMode,
 }: GeneratedAdPreviewCardProps) {
   const cleanBusiness = clean(businessName);
+  const cleanImageAltText = clean(imageAltText);
   const cleanOffer = clean(offerLine);
   const cleanTerms = clean(termsLine);
   const cleanBody = clean(body);
@@ -86,7 +89,7 @@ export function GeneratedAdPreviewCard({
             source={{ uri: imageUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            accessibilityLabel={headline}
+            accessibilityLabel={cleanImageAltText || headline}
           />
         ) : (
           <View style={StyleSheet.absoluteFill}>

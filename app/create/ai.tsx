@@ -102,15 +102,10 @@ import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
 import {
-  buildApprovedAdCopy,
   buildMerchantIdentity,
   imageSourceTypeFromGeneratedAd,
 } from "@/lib/ad-render-content";
-import {
-  buildLockedOfferContent,
-  renderAuthoritativeOfferFromDefinition,
-} from "@/lib/authoritative-offer-renderer";
-import { renderLocalizedOfferFromDefinition } from "@/lib/localized-offer-renderer";
+import { buildOwnerLanguagePreview } from "@/lib/ad-owner-language-preview";
 import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
 import { resolveAdPresentation } from "@/lib/ad-template-resolver";
 import {
@@ -2898,24 +2893,23 @@ export default function AiDealScreen() {
   const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
   const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
   const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
-  const activeMerchantPreviewLocale = merchantPreviewLocale ?? effectiveDraftSourceLocale;
-  const composedOfferFacts = localizedOwnerUiEnabled && offerDefinition
-    ? renderLocalizedOfferFromDefinition(offerDefinition, { locale: activeMerchantPreviewLocale })
-    : offerDefinition
-    ? renderAuthoritativeOfferFromDefinition(offerDefinition)
-    : buildLockedOfferContent({
-        primaryOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
-        termsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
-      });
-  const merchantPreviewShowsSourceLocale = activeMerchantPreviewLocale === effectiveDraftSourceLocale;
-  const composedCopy = buildApprovedAdCopy({
-    headline: merchantPreviewShowsSourceLocale ? generatedAd?.headline : composedOfferFacts.primaryOfferLine,
-    supportingCopy: merchantPreviewShowsSourceLocale
-      ? generatedAd?.subheadline || generatedAd?.short_description
-      : composedOfferFacts.termsLine,
-    ctaLabel: generatedAd?.cta || ctaText,
-    fallbackHeadline: composedOfferFacts.primaryOfferLine,
+  const ownerLanguagePreviewAvailable =
+    localizedOwnerUiEnabled && Boolean(offerDefinition && generatedAd?.localization_bundle);
+  const activeMerchantPreviewLocale = ownerLanguagePreviewAvailable
+    ? merchantPreviewLocale ?? generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale
+    : effectiveDraftSourceLocale;
+  const ownerLanguagePreview = buildOwnerLanguagePreview({
+    generatedAd,
+    offerDefinition,
+    sourceLocale: generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale,
+    previewLocale: activeMerchantPreviewLocale,
+    localizedPreviewEnabled: ownerLanguagePreviewAvailable,
+    fallbackOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
+    fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
+    fallbackCtaLabel: ctaText,
   });
+  const composedOfferFacts = ownerLanguagePreview.offerFacts;
+  const composedCopy = ownerLanguagePreview.copy;
   const composedMerchant = buildMerchantIdentity({
     businessName,
     locationName: businessProfile?.location,
@@ -3088,6 +3082,48 @@ export default function AiDealScreen() {
     }
     setIosSchedulePicker(null);
   }
+
+  const ownerLanguagePreviewControls = ownerLanguagePreviewAvailable ? (
+    <View style={{ padding: 12, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 8 }}>
+      <Text style={{ fontWeight: "800", color: theme.text }}>
+        {t("createAi.previewLanguageTitle", { defaultValue: "Preview language" })}
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+        {t("createAi.localizedApprovalDisclosure", {
+          sourceLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.sourceLocale].productLabel,
+          previewLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.locale].productLabel,
+          defaultValue:
+            "This preview changes only the customer-facing language. The deal mechanics, image, schedule, and inventory stay tied to the same approved offer.",
+        })}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {SUPPORTED_LOCALES.map((locale) => {
+          const active = ownerLanguagePreview.locale === locale;
+          return (
+            <Pressable
+              key={locale}
+              onPress={() => setMerchantPreviewLocale(locale)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? theme.primary : theme.border,
+                backgroundColor: active ? PrimaryTint.surface : theme.surface,
+              }}
+            >
+              <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
+                {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  ) : null;
 
   return (
     <KeyboardScreen style={{ backgroundColor: theme.background }}>
@@ -3842,47 +3878,7 @@ export default function AiDealScreen() {
                       surface="merchant_preview"
                       fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
                     />
-                    {localizedOwnerUiEnabled && offerDefinition ? (
-                      <View style={{ padding: 12, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 8 }}>
-                        <Text style={{ fontWeight: "800", color: theme.text }}>
-                          {t("createAi.previewLanguageTitle", { defaultValue: "Preview language" })}
-                        </Text>
-                        <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
-                          {t("createAi.localizedApprovalDisclosure", {
-                            sourceLanguage: SUPPORTED_LOCALE_METADATA[effectiveDraftSourceLocale].productLabel,
-                            previewLanguage: SUPPORTED_LOCALE_METADATA[activeMerchantPreviewLocale].productLabel,
-                            defaultValue:
-                              "This preview changes only the customer-facing language. The deal mechanics, image, schedule, and inventory stay tied to the same approved offer.",
-                          })}
-                        </Text>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                          {SUPPORTED_LOCALES.map((locale) => {
-                            const active = activeMerchantPreviewLocale === locale;
-                            return (
-                              <Pressable
-                                key={locale}
-                                onPress={() => setMerchantPreviewLocale(locale)}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: active }}
-                                accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
-                                style={{
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 12,
-                                  borderRadius: 999,
-                                  borderWidth: 1,
-                                  borderColor: active ? theme.primary : theme.border,
-                                  backgroundColor: active ? PrimaryTint.surface : theme.surface,
-                                }}
-                              >
-                                <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
-                                  {SUPPORTED_LOCALE_METADATA[locale].productLabel}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    ) : null}
+                    {ownerLanguagePreviewControls}
                     {composedMinimalInputEnabled ? (
                       <View style={{ gap: 8 }}>
                         <SecondaryButton
@@ -3936,27 +3932,31 @@ export default function AiDealScreen() {
                     ) : null}
                   </>
                 ) : (
-                  <GeneratedAdPreviewCard
-                    imageUri={adImageUri}
-                    businessName={businessName}
-                    headline={generatedAd.headline}
-                    body={generatedAd.subheadline}
-                    offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                    termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                    cta={generatedAd.cta}
-                    scheduleSummary={displayScheduleSummary}
-                    maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                    maxClaimsValue={maxClaims}
-                    termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                    termsHelper={t("createAi.lockedTermsHelper", {
-                      defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                    })}
-                    noImageLabel={t("createAi.noImage")}
-                    fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
-                    addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                    theme={theme}
-                    darkMode={colorScheme === "dark"}
-                  />
+                  <>
+                    <GeneratedAdPreviewCard
+                      imageUri={adImageUri}
+                      businessName={businessName}
+                      headline={ownerLanguagePreview.headline}
+                      body={ownerLanguagePreview.body}
+                      imageAltText={ownerLanguagePreview.imageAltText}
+                      offerLine={ownerLanguagePreview.offerLine}
+                      termsLine={ownerLanguagePreview.termsLine}
+                      cta={ownerLanguagePreview.cta}
+                      scheduleSummary={displayScheduleSummary}
+                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                      maxClaimsValue={maxClaims}
+                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                      termsHelper={t("createAi.lockedTermsHelper", {
+                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                      })}
+                      noImageLabel={t("createAi.noImage")}
+                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                      theme={theme}
+                      darkMode={colorScheme === "dark"}
+                    />
+                    {ownerLanguagePreviewControls}
+                  </>
                 )}
 
                 {canCompareImages && originalImageVersion ? (

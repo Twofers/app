@@ -27,7 +27,7 @@ export type ResolveLocalePresentationOverridesInput = {
   statusLabelsByLocale?: Partial<Record<SupportedLocale, readonly string[]>>;
 };
 
-const DEFAULT_CTA_LABELS: Record<SupportedLocale, string> = {
+export const DEFAULT_AD_LOCALIZED_CTA_LABELS: Record<SupportedLocale, string> = {
   "en-US": "Claim deal",
   "es-US": "Reclamar oferta",
   "ko-KR": "\uB51C \uBC1B\uAE30",
@@ -154,7 +154,7 @@ export function resolveLocalePresentationOverrides(
   for (const locale of enabledLocales) {
     const localization = input.localizationBundle.localizations[locale];
     if (!localization) continue;
-    const ctaLabel = clean(input.ctaLabels?.[locale]) || DEFAULT_CTA_LABELS[locale];
+    const ctaLabel = clean(input.ctaLabels?.[locale]) || DEFAULT_AD_LOCALIZED_CTA_LABELS[locale];
     const statusLabels = (input.statusLabelsByLocale?.[locale] ?? []).map(clean).filter(Boolean);
     const copy = localizedCopy(localization, ctaLabel);
     const lockedOfferContent = localizedLockedOffer(localization);

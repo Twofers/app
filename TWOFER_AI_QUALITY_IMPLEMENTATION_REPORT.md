@@ -738,6 +738,75 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 3j - Owner language previews
+
+Status: Implemented locally on branch `codex/multilingual-deals-pr3-owner-previews`.
+
+Safety checkpoint: `11980521` (Multilingual Deals PR 3i localization storage contract commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `app/create/ai.tsx`
+- `components/generated-ad-preview-card.tsx`
+- `docs/localization/multilingual-deals-pr3-owner-previews.md`
+- `docs/localization/multilingual-deals-pr3-storage-contract.md`
+- `lib/ad-locale-presentation-resolver.ts`
+- `lib/ad-owner-language-preview.ts`
+- `lib/ad-owner-language-preview.test.ts`
+- `lib/ad-owner-language-preview-source.test.ts`
+- `lib/composed-ad-card-parity-source.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added `buildOwnerLanguagePreview()`, a shared preview derivation helper that returns the selected preview locale, source locale, approved-card copy, immutable offer facts, legacy preview fields, localized image alt text, and QA/status metadata.
+- The generated-ad review screen now uses the same owner preview result for composed ad cards and the legacy generated preview card.
+- Owner language controls now render only when a generated ad includes a verified `localization_bundle`.
+- Source-language previews keep the approved source creative and source CTA.
+- Target-language previews use the localization bundle's headline, supporting copy, image alt text, and localized CTA while exact offer line and terms line remain tied to the structured offer renderer.
+- The legacy generated preview card now accepts localized `imageAltText` for image accessibility labels.
+- Existing composed-renderer source guards were updated so the create screen can centralize copy/facts through the owner preview helper while Home and Deal Detail keep their direct shared-renderer assertions.
+
+## Acceptance criteria map
+
+- PR 3.10 optional owner language previews: Implemented locally for the generated-ad owner review surface behind the existing localized owner UI and localization bundle gates.
+- One owner approval accepts the verified bundle: Not implemented in this slice; approval remains manual and publish enforcement remains future work.
+- Customer selected-language rendering: Not implemented in this slice; customer/native rendering still does not consume localization storage.
+
+## Validation
+
+- `npx vitest run lib/ad-owner-language-preview.test.ts lib/ad-owner-language-preview-source.test.ts lib/ad-locale-presentation-resolver.test.ts`: passed; 3 files, 9 tests.
+- `npx vitest run lib/composed-ad-card-parity-source.test.ts lib/ad-owner-language-preview-source.test.ts lib/ad-owner-language-preview.test.ts`: passed; 3 files, 7 tests.
+- `npx tsc --noEmit`: passed.
+- `npm run typecheck:functions`: failed only on the existing unrelated `ai-extract-menu/index.ts` Supabase client type mismatch at lines 417 and 430. No Supabase Function files were changed in this slice.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 165 files, 890 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-pr3j-20260623`: passed. Existing `country-flag-icons` package export warnings appeared, matching prior probes.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `git diff --check`: passed; Git warned that touched files will normalize working-copy line endings from LF to CRLF when Git writes them.
+
+## Unresolved risks
+
+- This is local review-surface wiring only; customer rendering still needs to read approved localization storage.
+- One-click approval of the verified bundle and server-side publish enforcement of exact bundle hashes remain PR4 work.
+- Spanish and Korean production use remains blocked until named native reviewers sign off on localized copy, presentation policy, and representative screenshots.
+- Real-device visual QA was not performed in this local code slice.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3i - Localization storage contract
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-storage-contract`.
