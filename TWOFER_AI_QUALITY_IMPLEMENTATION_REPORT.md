@@ -2898,3 +2898,51 @@ Live secret names changed: none.
 ## Rollback
 
 Revert this commit. No migration rollback is required.
+
+---
+
+## PR 4ak - Refresh AI current-state docs
+
+Status: Implemented locally on branch `codex/ai-quality-pr4-rendering-cleanup`.
+
+Safety checkpoint: `259821ed`.
+
+Deployment actions: none.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/ai-ad-current-state.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Updated the current-state audit to describe new AI Create and Quick Create publishes as versioned `publish-offer-version` flows, with existing-deal edit/update compatibility still called out as direct `deals` updates.
+- Updated the prompt/generator version references to `AI_COPY_PROMPT_V4` and `ai-copy-v4`.
+- Updated deterministic fallback documentation to reflect the native merchant-preview fallback visual, while preserving the remaining gap for server-side/static-share template rendering.
+- Updated operational-gap wording so publish idempotency is credited for new versioned publish requests.
+
+## Acceptance criteria map
+
+46. The deterministic visual fallback is polished and usable: Documentation refreshed to reflect the local merchant-preview implementation.
+47. Exact offer lines and terms come from structured fields: Documentation refreshed for versioned publish and AdSpec V1 path.
+51. No generation or publish path bypasses provider router, offer contract, image-selection record, or approval controls: Documentation refreshed to distinguish new publishes from existing-deal compatibility updates.
+52. No GPT-5.4-mini versus GPT-5.5 comparison was performed: Confirmed; none performed.
+
+## Validation
+
+- `rg -n "AI_COPY_PROMPT_V2|ai-copy-v2|Three candidate|three candidate|publishes straight to ``deals``|Client publish writes directly|No deterministic template renderer yet|No durable ``AdSpecV1``|No server-side publish transaction|No idempotency key on generation or publish" docs\ai-ad-current-state.md`: no matches.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+
+## Unresolved risks
+
+- This is documentation only; it does not deploy migrations, Edge Functions, or website privacy/subprocessor updates.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.

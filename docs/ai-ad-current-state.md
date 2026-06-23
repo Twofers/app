@@ -58,8 +58,8 @@ Flow:
 5. Edge Function optionally researches the item, generates structured copy, validates against the contract, optionally repairs once, and falls back to deterministic copy when needed.
 6. Edge Function either uses the uploaded original, enhances it, generates one image, or returns copy-only mode depending on request state.
 7. Edge Function logs generation and cost metadata, then returns one `SingleAd`.
-8. Owner must accept/review the ad. Publish writes or updates `deals` from the client with translated copy, eligibility columns, poster path, schedule, claim limits, and location id(s).
-9. Client calls `send-deal-push` after insert/update best-effort.
+8. Owner must accept/review the ad. New publishes build an `OfferDefinitionV1` and native-renderer `AdSpecV1`, then call the `publish-offer-version` Edge Function. Existing-deal edit/update compatibility still writes the update directly to `deals`.
+9. Client calls `send-deal-push` after publish/update best-effort.
 
 Current strengths:
 
@@ -71,7 +71,8 @@ Current gaps:
 
 - Offer facts are not persisted before model generation.
 - The contract does not have a stable database identity or immutable version.
-- Client publish writes directly to `deals`; there is no server-side `PublishService` transaction tying an approved ad variant to an immutable offer version.
+- Existing-deal edit/update compatibility still writes directly to `deals`; versioned edit semantics remain future data-model work.
+- Hosted production still depends on the OfferVersion migrations and `publish-offer-version` Edge Function being deployed before new publishes can use the versioned path.
 - Multi-location publish creates multiple `deals` rows, not one campaign with per-location offer versions.
 
 ### Quick Deal Express Flow
@@ -86,8 +87,8 @@ Flow:
 
 1. Owner adds a hint and optional photo.
 2. Client invokes `ai-generate-ad-variants`.
-3. At audit time, the worktree's existing uncommitted changes add `image_mode: "copy_only"` when there is no photo, so quick drafts can succeed without image generation.
-4. Client converts the returned ad into a draft, validates title/offer quality, previews, translates, inserts a live `deals` row, and calls `send-deal-push`.
+3. Quick drafts can request copy-only behavior when there is no photo, so they can succeed without image generation.
+4. Client converts the returned ad into a draft, validates title/offer quality, previews, translates, builds an offer definition, publishes through `publish-offer-version`, and calls `send-deal-push`.
 
 Current strengths:
 
@@ -96,9 +97,8 @@ Current strengths:
 
 Current gaps:
 
-- It still publishes straight to `deals`.
-- It does not create a draft offer server-side before AI.
-- Copy-only quick mode has no deterministic visual template yet; it is a no-image ad state rather than a rendered safe ad spec.
+- It does not persist a draft offer server-side before AI generation.
+- Hosted production still depends on the OfferVersion migrations and `publish-offer-version` Edge Function being deployed before Quick publishes can use the versioned path.
 
 ### Menu-Driven Offer Flow
 
@@ -194,7 +194,7 @@ Model and provider controls:
 Stages:
 
 - Research: `chat.completions`, normal chat model first and `gpt-4o-search-preview` when needed.
-- Copy: `chat.completions` with `response_format: json_schema`; prompt version `AI_COPY_PROMPT_V2`; generator version `ai-copy-v2`.
+- Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
 - Image QA: `responses` with JSON schema for generated images that must show multiple required items.
@@ -204,7 +204,7 @@ Validation/fallback:
 - `generateValidatedDealCopy()` validates against `DealOfferContract`.
 - One repair attempt is allowed for invalid copy.
 - Deterministic fallback copy is used if model request, parse, or validation fails.
-- If image generation fails and no poster is produced, the call is treated as unsuccessful for quota unless the request intentionally used copy-only mode.
+- If image generation fails and no poster is produced, the call returns copy-only mode only when the request/policy permits that deterministic fallback path.
 
 ### Legacy Compose
 
@@ -256,7 +256,7 @@ Gaps:
 
 - No explicit EXIF/metadata stripping for owner uploads before storage.
 - No local crop/resize/background-removal pipeline independent of OpenAI.
-- No deterministic template renderer yet for safe copy-only or original-photo fallback variants.
+- Merchant preview has a deterministic native fallback visual for copy-only/no-image ads; there is still no server-side/static-share template renderer.
 - No `catalog_item_assets` or `ad_assets` table tying original and generated assets to offer/ad versions.
 - No OCR or logo-fidelity hard gate beyond prompt instruction and generated-image item QA.
 
@@ -331,10 +331,10 @@ Recommended baseline queries once Dan grants live read access:
 
 Critical architecture gaps:
 
-- No persistent `OfferDefinitionV1` or immutable `OfferVersion`.
-- No durable `AdSpecV1`; generated ad data is returned to the client and then flattened into `deals`.
+- OfferDefinition/OfferVersion migrations and versioned publish code exist locally, but production application/deploy state is not verified here.
+- New publishes can carry durable `AdSpecV1` through `publish-offer-version`; legacy rows and existing-deal edits are not fully AdSpec-driven.
 - No `ad_variants` review state; the current generator selects one ad and returns metadata about variants rather than persisting reviewable variants.
-- No server-side publish transaction that approves an ad variant and publishes an offer atomically.
+- Versioned publish provides a server-side publish transaction for new deals when the migration/RPC is deployed; existing-deal edit/update compatibility remains outside that model.
 - Claims and QR redemption do not reference the exact offer version the consumer claimed.
 
 AI and quality gaps:
@@ -349,7 +349,7 @@ AI and quality gaps:
 Asset gaps:
 
 - No upload metadata stripping.
-- No deterministic template library for native/share rendering.
+- No full deterministic template library for native/share rendering; AI Create merchant preview now has a deterministic fallback visual for no-image ads.
 - No visual snapshot or accessibility gate for ad templates.
 - No asset ownership table linking catalog item, original photo, edited asset, and ad variant.
 
@@ -357,7 +357,7 @@ Operational gaps:
 
 - Generation is synchronous; no persistent status, retry queue, or progress event stream.
 - No generation id travels through publish, exposure, claim, and redemption.
-- No idempotency key on generation or publish requests.
+- Generation requests do not carry a persisted idempotency key; new versioned publish requests do.
 - Existing drafted migrations may or may not be applied live; production state requires a Supabase-side check.
 
 UX/product gaps:
@@ -405,6 +405,7 @@ Partially present:
 
 - App renders text and CTA outside generated image in the main AI ad screen.
 - `buildFallbackTemplateAd()` exists for local fallback ad copy.
+- AI Create renders a deterministic native fallback visual for no-image merchant previews.
 - Existing deal cards render poster plus native text.
 
 Missing:
@@ -413,15 +414,15 @@ Missing:
 - Controlled template library with safe zones, dimensions, contrast, and long-text rules.
 - Static social-share renderer from the same AdSpec.
 - Visual snapshots and accessibility checks.
-- Always-publishable no-AI ad from every valid offer.
+- Always-publishable no-AI ad from every valid offer across every surface.
 
 ### Phase 3 - Structured AI Copy and Creative Concepts
 
 Partially present:
 
 - Strict JSON schema for copy.
-- Versioned prompt constant `AI_COPY_PROMPT_V2`.
-- Three candidate variants in one response, with validated selection.
+- Versioned prompt constant `AI_COPY_PROMPT_V4`.
+- Five lane-based candidate variants in one response, with validated selection.
 - Banned-claim/metadata-leak checks.
 - Bounded repair and deterministic fallback.
 - Per-call cost and metadata logging.
