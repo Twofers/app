@@ -23,3 +23,4 @@ Broad Korean production use is blocked until a named Korean reviewer signs off.
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr3 generation localization bundle wiring | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | AI_AD_LOCALIZATION_SEMANTIC_QA_PROMPT_V1 independent semantic translation QA | Pending native review | Native review required before broad production | No |
 | 2026-06-23 | TBD | es-US, ko-KR | multilingual-deals-pr3 locale presentation overrides and deterministic fit policy | Pending native review | Native review and real-device screenshot QA required before broad production | No |
+| 2026-06-23 | TBD | es-US, ko-KR | localization-rollout-gate-v1 | Pending native review | Keep U.S. Spanish and Korean broad production blocked until named native reviewers and real-device screenshot QA are recorded | No |
