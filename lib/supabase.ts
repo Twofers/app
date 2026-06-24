@@ -2,10 +2,16 @@ import "react-native-url-polyfill/auto";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { getAiStudioDevStartupGuardError } from "@/lib/runtime-env";
 
 /** Inlined at bundle time — set the same keys in EAS for `preview` and `production` environment scopes. */
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
+const aiStudioDevGuardError = getAiStudioDevStartupGuardError();
+
+if (aiStudioDevGuardError) {
+  throw new Error(`[twoforone] ${aiStudioDevGuardError}`);
+}
 
 if (!supabaseUrl || !supabaseAnonKey) {
   const missing: string[] = [];

@@ -8,13 +8,27 @@ import Constants from "expo-constants";
 export type AppExtra = {
   gitCommit?: string | null;
   easBuildProfile?: string | null;
+  appVariant?: string | null;
+  androidPackage?: string | null;
+  productionSupabaseHost?: string | null;
+  aiStudioDevPublishingDisabled?: boolean;
 };
+
+export const PRODUCTION_ANDROID_PACKAGE = "com.unvmex2.twoforone";
+export const AI_STUDIO_DEV_ANDROID_PACKAGE = "com.unvmex2.twoforone.dev";
+export const AI_STUDIO_DEV_VARIANT = "ai-studio-dev";
+export const DEFAULT_PRODUCTION_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
 
 export function getAppExtra(): AppExtra {
   const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
   return {
     gitCommit: typeof extra?.gitCommit === "string" ? extra.gitCommit : null,
     easBuildProfile: typeof extra?.easBuildProfile === "string" ? extra.easBuildProfile : null,
+    appVariant: typeof extra?.appVariant === "string" ? extra.appVariant : null,
+    androidPackage: typeof extra?.androidPackage === "string" ? extra.androidPackage : Constants.expoConfig?.android?.package ?? null,
+    productionSupabaseHost:
+      typeof extra?.productionSupabaseHost === "string" ? extra.productionSupabaseHost : DEFAULT_PRODUCTION_SUPABASE_HOST,
+    aiStudioDevPublishingDisabled: extra?.aiStudioDevPublishingDisabled === true,
   };
 }
 
@@ -67,6 +81,41 @@ export function getSupabaseUrlForDisplay(): string {
   }
 }
 
+export function getConfiguredSupabaseHost(): string | null {
+  const u = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+  if (!u) return null;
+  try {
+    return new URL(u).host;
+  } catch {
+    return null;
+  }
+}
+
+export function getAndroidPackageName(): string {
+  return getAppExtra().androidPackage ?? Constants.expoConfig?.android?.package ?? "unknown";
+}
+
+export function isAiStudioDevAppVariant(): boolean {
+  const extra = getAppExtra();
+  return extra.appVariant === AI_STUDIO_DEV_VARIANT || getAndroidPackageName() === AI_STUDIO_DEV_ANDROID_PACKAGE;
+}
+
+export function isProductionAppPackage(): boolean {
+  return getAndroidPackageName() === PRODUCTION_ANDROID_PACKAGE;
+}
+
+export function isProductionSupabaseUrlConfigured(): boolean {
+  return getConfiguredSupabaseHost() === (getAppExtra().productionSupabaseHost ?? DEFAULT_PRODUCTION_SUPABASE_HOST);
+}
+
+export function getAiStudioDevStartupGuardError(): string | null {
+  if (!isAiStudioDevAppVariant()) return null;
+  if (isProductionSupabaseUrlConfigured()) {
+    return "Twofer Dev cannot start with the production Supabase project configured. Set EXPO_PUBLIC_SUPABASE_URL to the separate development project.";
+  }
+  return null;
+}
+
 export function isSupabaseConfigured(): boolean {
   const u = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   const k = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -84,6 +133,11 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV ?? "(unset)",
+    EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING ?? "(unset)",
+    EXPO_PUBLIC_APP_VARIANT: process.env.EXPO_PUBLIC_APP_VARIANT ?? "(unset)",
+    androidPackage: getAndroidPackageName(),
+    appVariant: getAppExtra().appVariant ?? "(unset)",
     AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
     EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
     AI_V4_SHARED_RENDERER_ENABLED: process.env.AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
@@ -140,6 +194,22 @@ export function getPublicEnvSnapshot(): Record<string, string> {
 
 export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
+}
+
+export function isAiDealStudioDevEnabled(): boolean {
+  return (
+    isAiStudioDevAppVariant() &&
+    !isProductionAppPackage() &&
+    process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV === "true"
+  );
+}
+
+export function isAiStudioPublishingDisabled(): boolean {
+  return process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING === "true";
+}
+
+export function canLoadAiDealStudioDevRoutes(): boolean {
+  return isAiDealStudioDevEnabled() && isAiStudioPublishingDisabled() && !isProductionAppPackage();
 }
 
 export function isAiV4ComposedAdCardEnabled(): boolean {

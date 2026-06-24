@@ -12,6 +12,7 @@ import {
   getExecutionEnvironment,
   getNativeBuildLabel,
   getPublicEnvSnapshot,
+  isAiStudioDevAppVariant,
   isPreviewOrDevClientProfile,
   isSupabaseConfigured,
 } from "@/lib/runtime-env";
@@ -47,9 +48,24 @@ export default function DebugDiagnosticsScreen() {
   };
 
   const text = JSON.stringify(snapshot, null, 2);
+  const isDevVariant = isAiStudioDevAppVariant();
 
   return (
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal }}>
+      {isDevVariant ? (
+        <View
+          style={{
+            alignSelf: "flex-start",
+            marginBottom: Spacing.sm,
+            paddingHorizontal: Spacing.sm,
+            paddingVertical: 4,
+            borderRadius: 6,
+            backgroundColor: "#111827",
+          }}
+        >
+          <Text style={{ color: "#FBBF24", fontSize: 12, fontWeight: "800" }}>DEV</Text>
+        </View>
+      ) : null}
       <Text style={{ marginBottom: Spacing.sm, fontSize: 13, color: Gray[600] }}>
         Long-press the block below to copy (system selection).
       </Text>
