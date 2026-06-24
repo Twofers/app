@@ -18,6 +18,10 @@ describe("deal poster aspect ratio source guards", () => {
     expect(homeSource).not.toMatch(/heroImageHeight/);
   });
 
+  it("uses the feed-sized poster variant in Home", () => {
+    expect(homeSource).toContain('resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path, { variant: "feed" })');
+  });
+
   it("keeps composed feed image slots square", () => {
     for (const file of composedTemplateFiles) {
       const source = readFileSync(join(process.cwd(), "components", "composed-ad-card", "templates", file), "utf8");
