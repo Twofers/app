@@ -537,6 +537,7 @@ export default function BusinessDashboard() {
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [endingDealId, setEndingDealId] = useState<string | null>(null);
   const [pausingDealId, setPausingDealId] = useState<string | null>(null);
+  const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
   const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
   const [dealsHasMore, setDealsHasMore] = useState(false);
@@ -968,6 +969,49 @@ export default function BusinessDashboard() {
     }
   }
 
+  function deleteOldDeal(deal: DealRow) {
+    if (!businessId || deletingDealId || !canDeleteOldDeal(deal)) return;
+    const title = displayDealTitle(deal);
+    confirm({
+      iconName: "delete",
+      title: t("offersDashboard.deleteOldDealConfirmTitle", {
+        defaultValue: "Delete old deal?",
+      }),
+      message: t("offersDashboard.deleteOldDealConfirmBody", {
+        defaultValue:
+          "This removes {{title}} from My offers and deletes its dashboard history. This cannot be undone.",
+        title,
+      }),
+      confirmLabel: t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" }),
+      onConfirm: () => void doDeleteOldDeal(deal.id),
+      cancelLabel: t("commonUi.cancel"),
+    });
+  }
+
+  async function doDeleteOldDeal(dealId: string) {
+    if (!businessId) return;
+    setDeletingDealId(dealId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .delete()
+        .eq("id", dealId)
+        .eq("business_id", businessId)
+        .lte("end_time", new Date().toISOString());
+      if (error) throw error;
+      await loadMetrics();
+    } catch (err: unknown) {
+      const msg = friendlyDashboardError(
+        err,
+        t("offersDashboard.errDeleteOldDeal", { defaultValue: "Could not delete this old deal." }),
+      );
+      setBanner(msg);
+    } finally {
+      setDeletingDealId(null);
+    }
+  }
+
   async function generateFlyer(deal: DealRow) {
     if (generatingFlyerId) return;
     setGeneratingFlyerId(deal.id);
@@ -1013,6 +1057,11 @@ export default function BusinessDashboard() {
 
   function isDealPaused(item: DealRow): boolean {
     return !item.is_active && new Date(item.end_time) > new Date();
+  }
+
+  function canDeleteOldDeal(item: DealRow): boolean {
+    const endMs = new Date(item.end_time).getTime();
+    return dealScheduleStatus(item) === "ended" && Number.isFinite(endMs) && endMs <= Date.now();
   }
 
   function statusBadgeLabel(status: MerchantDealScheduleStatus, item?: DealRow): string {
@@ -1789,6 +1838,18 @@ export default function BusinessDashboard() {
                             onPress={() => duplicateDeal(item)}
                           />
                         ) : null}
+                        {canDeleteOldDeal(item) ? (
+                          deletingDealId === item.id ? (
+                            <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                              <ActivityIndicator color={theme.danger} />
+                            </View>
+                          ) : (
+                            <EndEarlyButton
+                              title={t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" })}
+                              onPress={() => deleteOldDeal(item)}
+                            />
+                          )
+                        ) : null}
                       </View>
                     </CardShell>
                   </Animated.View>
@@ -2056,6 +2117,22 @@ export default function BusinessDashboard() {
                       const id = dealManageFor.id;
                       setDealManageFor(null);
                       endDealEarly(id);
+                    }}
+                  />
+                )
+              ) : null}
+              {canDeleteOldDeal(dealManageFor) ? (
+                deletingDealId === dealManageFor.id ? (
+                  <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                    <ActivityIndicator color={theme.danger} />
+                  </View>
+                ) : (
+                  <EndEarlyButton
+                    title={t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" })}
+                    onPress={() => {
+                      const deal = dealManageFor;
+                      setDealManageFor(null);
+                      deleteOldDeal(deal);
                     }}
                   />
                 )
