@@ -665,20 +665,20 @@ Revert this commit. No migration rollback is required.
 
 ## Deal Release Push Scheduling
 
-Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`; deployed to the linked Supabase project after Dan's approval.
 
 Safety checkpoint: `f9a88016`.
 
-Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no release build was started, and no hosted cron job was scheduled.
+Deployment actions: `send-deal-push` and `weekly-deal-digest` were deployed to the linked Supabase project after approval. No release build was started, and no app-store submission action was performed.
 
-Supabase migrations applied: none.
+Supabase migrations applied by this shell: none. Read-only migration comparison showed `20260729120000_deal_release_push_events.sql` and `20260729121000_deal_release_push_cron_schedule.sql` already present remotely before any `db push` was run, so `db push` was not executed. The same compare showed unrelated localization migrations still pending, and those were not applied as part of this release-push gate.
 
 Migrations added:
 
 - `supabase/migrations/20260729120000_deal_release_push_events.sql`
 - `supabase/migrations/20260729121000_deal_release_push_cron_schedule.sql`
 
-Live secret names changed: none in hosted Supabase. The migration artifact creates the Vault secret name `deal_release_push_cron_secret` only if Dan explicitly approves applying it; no secret value was read, printed, or committed.
+Live secret names changed by this shell: none. The hosted project has the Vault-backed release-push cron path active, but no secret value was read, printed, or committed.
 
 ## Files changed
 
@@ -729,17 +729,20 @@ Live secret names changed: none in hosted Supabase. The migration artifact creat
 - `npm run gate:localization-rollout`: passed; all 20 rollout readiness checks passed.
 - `git diff --check`: passed; Git warned that touched Markdown/TypeScript/SQL working-copy line endings will normalize from LF to CRLF when Git writes them.
 - `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-deal-release-push-20260624 --clear`: passed with the known `country-flag-icons` package export warnings.
+- `node scripts/probe-edge-functions-smoke.mjs send-deal-push weekly-deal-digest`: passed; both deployed functions responded with expected unauthorized 401 responses to side-effect-free anonymous probes.
+- Authenticated RLS smoke equivalent using the provided smoke account as transient environment values: passed; deals, businesses, own consumer profile, own profile, own deal claims, own favorites, and `deal_claim_counts` RPC were readable under a real user JWT. The account identity was redacted and no credentials were written to `.env`.
+- `npx supabase db query --linked "select * from public.deal_release_push_cron_status();"`: passed; `send-due-deal-release-pushes` was active on schedule `*/5 * * * *`.
+- `npx supabase functions list`: confirmed deployed versions `send-deal-push` 45 and `weekly-deal-digest` 17.
 
 ## Unresolved risks
 
-- Hosted behavior remains unchanged until Dan approves applying the migrations, deploying `send-deal-push`, and confirming the scheduled cron status.
-- Applying `20260729120000_deal_release_push_events.sql` touches RLS-protected schema. After approval and apply, run `node scripts/probe-rls-smoke.mjs`.
-- Applying `20260729121000_deal_release_push_cron_schedule.sql` schedules a production cron job against the hosted `send-deal-push` URL. That remains a hard approval gate.
 - Real-device push delivery was not exercised locally.
+- A retry of `npx supabase migration list | Select-String ...` timed out after the function deploys. Earlier in this approval pass, the full read-only migration compare completed and showed the two release-push migrations already applied remotely.
+- The standard `node scripts/probe-rls-smoke.mjs` command still requires adding `TWOFER_SMOKE_EMAIL` / `TWOFER_SMOKE_PASSWORD` locally if Dan wants to run the exact script later; this run used an equivalent one-off probe to avoid writing credentials into `.env`.
 
 ## Rollback
 
-Revert this commit. If the migrations are later applied remotely, rollback also requires an explicit Supabase rollback plan for the event table, Vault verifier, and cron schedule.
+Revert the local commits for source rollback. Hosted rollback now requires explicit Supabase operations: redeploy the prior `send-deal-push` / `weekly-deal-digest` versions if needed, unschedule `send-due-deal-release-pushes` if disabling release pushes, and use an approved database rollback plan for the event table and Vault verifier.
 
 ---
 
