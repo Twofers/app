@@ -819,7 +819,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   );
 
   useEffect(() => {
-    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || deals.length === 0) {
+    if (!customerLocaleResolutionEnabled || deals.length === 0) {
       setCustomerDealLocalizationsByDealId(new Map());
       return;
     }
@@ -833,7 +833,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     return () => {
       cancelled = true;
     };
-  }, [customerLocaleResolutionEnabled, deals, localizedOfferRendererEnabled, resolvedDealDisplayLocale.locale]);
+  }, [customerLocaleResolutionEnabled, deals, resolvedDealDisplayLocale.locale]);
 
   const liveByBusiness = useMemo(() => {
     return deriveLiveBusinessIds(

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 type EasProfile = {
+  extends?: string;
   env?: Record<string, string>;
 };
 
@@ -23,6 +24,24 @@ const internalComposedFlags = [
   "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED",
 ] as const;
 
+const customerLocalizationFlags = [
+  "EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED",
+  "EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED",
+  "EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED",
+  "EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED",
+] as const;
+
+function resolveProfileEnv(profileName: string, seen = new Set<string>()): Record<string, string> {
+  if (seen.has(profileName)) return {};
+  seen.add(profileName);
+  const profile = eas.build[profileName];
+  if (!profile) return {};
+  return {
+    ...(profile.extends ? resolveProfileEnv(profile.extends, seen) : {}),
+    ...(profile.env ?? {}),
+  };
+}
+
 describe("composed ad card EAS rollout profile guards", () => {
   it("enables composed-card internal QA flags only in non-production build profiles", () => {
     for (const profileName of ["development", "preview", "dev-client-apk"]) {
@@ -41,6 +60,15 @@ describe("composed ad card EAS rollout profile guards", () => {
   it("keeps screenshot QA disabled in EAS profiles until a screenshot runner exists", () => {
     for (const profile of Object.values(eas.build)) {
       expect(profile.env?.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED).toBeUndefined();
+    }
+  });
+
+  it("enables customer deal localization flags in customer-facing build profiles", () => {
+    for (const profileName of ["development", "preview", "production", "dev-client-apk", "dev-apk-ai-studio", "apk"]) {
+      const env = resolveProfileEnv(profileName);
+      for (const flag of customerLocalizationFlags) {
+        expect(env[flag], `${profileName} ${flag}`).toBe("true");
+      }
     }
   });
 });

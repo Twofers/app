@@ -281,11 +281,11 @@ export function buildLocalizedDealDisplay(params: {
   useLocalizedOfferRenderer: boolean;
   fallbackLanguage: string;
 }): LocalizedDealDisplay {
+  const localizedCreative = customerLocalizationFromDeal(params.deal, params.locale);
   if (params.useLocalizedOfferRenderer) {
     const definition = buildOfferDefinitionFromDealDisplay(params.deal);
     if (definition) {
       const locked = renderLocalizedOfferFromDefinition(definition, { locale: params.locale });
-      const localizedCreative = customerLocalizationFromDeal(params.deal, params.locale);
       if (localizedCreative) {
         return {
           title: localizedCreative.headline,
@@ -309,9 +309,20 @@ export function buildLocalizedDealDisplay(params: {
   }
 
   const appLanguage = supportedLocaleToAppLanguage(params.locale);
+  const legacyDescription = localizedDealDescription(params.deal, appLanguage || params.fallbackLanguage);
+  if (localizedCreative) {
+    return {
+      title: localizedCreative.headline,
+      description: joinUniqueText([localizedCreative.supportingCopy, legacyDescription]),
+      renderedLocale: params.locale,
+      localeResolutionSource: params.localeResolutionSource,
+      source: "approved_localization_storage",
+      localizedCreative,
+    };
+  }
   return {
     title: localizedDealTitle(params.deal, appLanguage),
-    description: localizedDealDescription(params.deal, appLanguage || params.fallbackLanguage),
+    description: legacyDescription,
     renderedLocale: params.locale,
     localeResolutionSource: params.localeResolutionSource,
     source: "legacy_localized_fields",

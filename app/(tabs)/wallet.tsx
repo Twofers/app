@@ -196,7 +196,7 @@ export default function WalletScreen() {
   );
 
   useEffect(() => {
-    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || claims.length === 0) {
+    if (!customerLocaleResolutionEnabled || claims.length === 0) {
       setCustomerDealLocalizationsByDealId(new Map());
       return;
     }
@@ -208,7 +208,7 @@ export default function WalletScreen() {
     return () => {
       cancelled = true;
     };
-  }, [claims, customerLocaleResolutionEnabled, localizedOfferRendererEnabled, resolvedDealDisplayLocale.locale]);
+  }, [claims, customerLocaleResolutionEnabled, resolvedDealDisplayLocale.locale]);
 
   const loadClaims = useCallback(async () => {
     if (!userId) {

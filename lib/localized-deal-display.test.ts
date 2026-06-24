@@ -108,6 +108,56 @@ describe("localized deal display", () => {
     expect(display.lockedOfferContent?.primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 cookie gratis");
   });
 
+  it("uses approved customer localization rows when exact rendering is off or unavailable", () => {
+    const customerLocalization = {
+      dealId: "deal_123",
+      offerVersionId: "offer_version_123",
+      locale: "es-US" as const,
+      sourceLocale: "en-US" as const,
+      headline: "Tu latte viene con una galleta",
+      supportingCopy: "Pide tu latte favorito y disfruta una galleta en Cedar Bean.",
+      imageAltText: "Un latte junto a una galleta en el mostrador de Cedar Bean.",
+      localizationHash: "adlocrow_fallback_12345678",
+      localizationBundleHash: "adloc_fallback_12345678",
+      translationStatus: "persuasive_transcreation" as const,
+      qaDecision: "pass" as const,
+      qaReasonCodes: [],
+      deterministicFallback: false,
+    };
+    const rendererOff = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        customer_deal_localization: customerLocalization,
+      },
+      locale: "es-US",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: false,
+      fallbackLanguage: "en",
+    });
+    const missingStructuredFacts = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        customer_deal_localization: customerLocalization,
+        deal_type: null,
+        required_purchase_quantity: null,
+        required_item_description: null,
+        free_item_quantity: null,
+        free_item_description: null,
+      },
+      locale: "es-US",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    expect(rendererOff.source).toBe("approved_localization_storage");
+    expect(rendererOff.title).toBe("Tu latte viene con una galleta");
+    expect(rendererOff.description).toContain("Pide tu latte favorito");
+    expect(rendererOff.lockedOfferContent).toBeUndefined();
+    expect(missingStructuredFacts.source).toBe("approved_localization_storage");
+    expect(missingStructuredFacts.title).toBe("Tu latte viene con una galleta");
+  });
+
   it("ignores blocked customer localization rows and falls back to exact rendering", () => {
     const display = buildLocalizedDealDisplay({
       deal: {

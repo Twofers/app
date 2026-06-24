@@ -19,4 +19,11 @@ describe("customer localized deal paths", () => {
       expect(source).not.toMatch(/localizedDealDescription/);
     }
   });
+
+  it("fetches approved customer localizations without requiring the exact-offer renderer flag", () => {
+    for (const path of customerCardPaths) {
+      const source = readFileSync(path, "utf8");
+      expect(source).not.toMatch(/!customerLocaleResolutionEnabled\s*\|\|\s*!localizedOfferRendererEnabled/);
+    }
+  });
 });

@@ -192,7 +192,7 @@ export default function BusinessProfileScreen() {
   );
 
   useEffect(() => {
-    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || deals.length === 0) {
+    if (!customerLocaleResolutionEnabled || deals.length === 0) {
       setCustomerDealLocalizationsByDealId(new Map());
       return;
     }
@@ -206,7 +206,7 @@ export default function BusinessProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [customerLocaleResolutionEnabled, deals, localizedOfferRendererEnabled, resolvedDealDisplayLocale.locale]);
+  }, [customerLocaleResolutionEnabled, deals, resolvedDealDisplayLocale.locale]);
 
   useEffect(() => {
     if (authLoading) return;

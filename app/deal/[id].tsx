@@ -382,7 +382,7 @@ export default function DealDetail() {
   }, [deal?.id, loadActiveClaimForDeal, userId]);
 
   useEffect(() => {
-    if (!deal?.id || !customerLocaleResolutionEnabled || !localizedOfferRendererEnabled) {
+    if (!deal?.id || !customerLocaleResolutionEnabled) {
       setCustomerDealLocalization(null);
       return;
     }
@@ -405,7 +405,6 @@ export default function DealDetail() {
     deal?.id,
     deal?.source_locale,
     i18n.language,
-    localizedOfferRendererEnabled,
     selectedDealLocale,
   ]);
 

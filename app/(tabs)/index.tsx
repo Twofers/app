@@ -330,7 +330,7 @@ export default function HomeScreen() {
   }, [deals]);
 
   useEffect(() => {
-    if (!customerLocaleResolutionEnabled || !localizedOfferRendererEnabled || deals.length === 0) {
+    if (!customerLocaleResolutionEnabled || deals.length === 0) {
       setCustomerDealLocalizationsByDealId(new Map());
       return;
     }
@@ -344,7 +344,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [customerDealLocalizationLocale, customerLocaleResolutionEnabled, deals, localizedOfferRendererEnabled]);
+  }, [customerDealLocalizationLocale, customerLocaleResolutionEnabled, deals]);
 
   const loadUserClaims = useCallback(
     async (dealIds: string[]) => {
