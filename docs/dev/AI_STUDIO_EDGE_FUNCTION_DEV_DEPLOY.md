@@ -19,15 +19,34 @@ The function is draft-only. It writes `ad_generation_jobs`, `ad_creatives`, `ai_
 
 Do not put server keys in Expo env files.
 
-Optional later, set server-side only:
+Text generation uses the same shared provider pattern as the regular app:
+
+- `OPENAI_API_KEY` for the OpenAI text provider.
+- `OPENAI_MODEL` for the GPT text model. The regular app default is `gpt-5.4-mini`; AI Studio dev should use that GPT mini model.
+- Optional router controls such as `AI_V3_PROVIDER_ROUTER_ENABLED`, `AI_TEXT_PRIMARY_PROVIDER`, and `AI_TEXT_FALLBACK_ENABLED` stay server-side only. For this dev phase, keep the text primary provider as OpenAI/GPT mini.
+
+Set server-side only:
 
 ```powershell
 supabase secrets set OPENAI_API_KEY --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set OPENAI_MODEL=gpt-5.4-mini --project-ref dyzqgzrslrirzqzhhqxh
 ```
 
 This command prompts locally; do not paste the key into chat or commit it to a file.
 
-Real copy/prompt generation is dev-only and still does not generate images. Keep image generation disabled:
+Real copy/prompt generation is dev-only and still does not generate images.
+
+Image generation will use the regular app's Gemini image-provider variables later, but it remains disabled in this phase:
+
+- `GEMINI_API_KEY` for Gemini image generation, server-side only.
+- `AI_IMAGE_PROVIDER=gemini`
+- `AI_IMAGE_GEMINI_ENABLED=true`
+- `GEMINI_IMAGE_MODEL=gemini-3.1-flash-image`
+- `AI_STUDIO_ENABLE_IMAGE_GENERATION=false`
+
+Do not set `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` until image generation is separately approved.
+
+Keep image generation disabled:
 
 For no-cost validation, leave `OPENAI_API_KEY` unset or set:
 
@@ -44,6 +63,9 @@ supabase secrets unset AI_STUDIO_DRY_RUN --project-ref dyzqgzrslrirzqzhhqxh
 Image generation is disabled unless this server-side flag is explicitly enabled later:
 
 ```powershell
+supabase secrets set AI_IMAGE_PROVIDER=gemini --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set AI_IMAGE_GEMINI_ENABLED=true --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set GEMINI_IMAGE_MODEL=gemini-3.1-flash-image --project-ref dyzqgzrslrirzqzhhqxh
 supabase secrets set AI_STUDIO_ENABLE_IMAGE_GENERATION=false --project-ref dyzqgzrslrirzqzhhqxh
 ```
 

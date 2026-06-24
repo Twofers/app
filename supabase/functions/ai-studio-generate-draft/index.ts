@@ -1,7 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { calculateAiCost, logAiCost } from "../_shared/ai-costs.ts";
+import { logAiCost, type AiUsageInput } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 
 type DraftInput = {
   business_id?: unknown;
@@ -42,6 +47,21 @@ const REQUIRED_IMAGE_PROMPT_CLAUSES = [
   "Leave negative space for app-rendered copy.",
   "Use a 4:5 mobile composition.",
 ];
+const DRAFT_COPY_SCHEMA = {
+  name: "ai_studio_draft_copy",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      headline: { type: "string" },
+      supporting_copy: { type: "string" },
+      image_prompt: { type: "string" },
+      layout_recommendation: { type: "string" },
+    },
+    required: ["headline", "supporting_copy", "image_prompt", "layout_recommendation"],
+    additionalProperties: false,
+  },
+} as const;
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -143,6 +163,21 @@ function sanitizeGeneratedCopy(value: unknown, fallback: string, max: number): s
   return cleaned || fallback;
 }
 
+function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
+  return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
+}
+
+function attemptUsage(attempt: ProviderAttempt | null): AiUsageInput | null {
+  if (!attempt) return null;
+  return {
+    input_tokens: attempt.inputTokens,
+    output_tokens: attempt.outputTokens,
+    input_tokens_details: typeof attempt.cachedInputTokens === "number"
+      ? { cached_tokens: attempt.cachedInputTokens }
+      : undefined,
+  };
+}
+
 function parseDraftInput(body: DraftInput) {
   const businessId = text(body.business_id, 80);
   const productName = text(body.product_name, 90);
@@ -189,18 +224,26 @@ function parseDraftInput(body: DraftInput) {
   };
 }
 
-async function generateCopyWithOpenAi(params: {
-  apiKey: string;
+async function generateCopyWithTextProvider(params: {
+  admin: any;
+  openAiKey?: string | null;
+  geminiApiKey?: string | null;
+  requestGroupId: string;
   input: ReturnType<typeof parseDraftInput>["value"];
-}): Promise<{ draft: DraftCreative; usage?: Record<string, unknown>; requestId?: string | null }> {
-  const model = Deno.env.get("AI_STUDIO_TEXT_MODEL") ?? "gpt-4o-mini";
-  const prompt = [
+}): Promise<{ draft: DraftCreative; attempts: ProviderAttempt[] }> {
+  const systemPrompt = [
+    "You write concise, factual advertising draft copy for Twofer local deals.",
+    "Return only JSON matching the schema.",
+    "Never alter locked offer facts.",
+    "Never place offer text, business names, logos, CTAs, times, quantities, prices, letters, numbers, or watermarks in the image prompt.",
+  ].join(" ");
+  const userPrompt = [
     "Create draft copy for a local deals app creative preview.",
-    "Return strict JSON with headline, supporting_copy, image_prompt, and layout_recommendation.",
+    "Return headline, supporting_copy, image_prompt, and layout_recommendation.",
     "The offer facts below are locked. Do not change, reinterpret, round, shorten, translate, or invent product, offer terms, time window, quantity, CTA, price, or business name.",
     "Headline and supporting_copy may be persuasive, but must preserve the locked facts exactly when mentioned.",
     "The image_prompt is for a commercial image only. It must not include offer copy or any text to render.",
-    "The image_prompt must explicitly include: no text, no letters, no logo, no watermark, negative space for copy, and 4:5 mobile composition.",
+    "The image_prompt must explicitly include: no text, no letters, no logo, no watermark, negative space for native overlay copy, and 4:5 mobile composition.",
     "Never include the business name, CTA, offer terms, time, quantity, price, letters, numbers, logo, or watermark in the image prompt.",
     `Locked product: ${params.input.productName}`,
     `Description: ${params.input.productDescription ?? "none"}`,
@@ -213,35 +256,24 @@ async function generateCopyWithOpenAi(params: {
     `Requested style: ${params.input.stylePreset}`,
   ].join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: "You write concise, factual advertising draft copy. Never alter offer facts." },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.5,
-    }),
+  const generation = await generateStructuredText<typeof DRAFT_COPY_SCHEMA, Record<string, unknown>>({
+    operation: "creative_candidates",
+    systemPrompt,
+    userPrompt,
+    jsonSchema: DRAFT_COPY_SCHEMA,
+    maxOutputTokens: 900,
+    timeoutMs: 12_000,
+    generationRunId: params.requestGroupId,
+    promptVersion: PROMPT_VERSION,
+    reasoningLevel: "medium",
+  }, {
+    openAiApiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    admin: params.admin,
+    config: resolveAiTextProviderConfig(),
   });
 
-  const requestId = response.headers.get("x-request-id");
-  if (!response.ok) {
-    throw new Error(`OPENAI_TEXT_FAILED:${response.status}`);
-  }
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-  let parsed: Record<string, unknown> = {};
-  try {
-    parsed = typeof content === "string" ? JSON.parse(content) : {};
-  } catch {
-    parsed = {};
-  }
+  const parsed = generation.value;
   const fallback = fallbackDraft({
     productName: params.input.productName,
     productDescription: params.input.productDescription,
@@ -264,8 +296,7 @@ async function generateCopyWithOpenAi(params: {
       ),
       publishing_disabled: true,
     },
-    usage: payload?.usage,
-    requestId,
+    attempts: generation.attempts,
   };
 }
 
@@ -323,6 +354,7 @@ serve(async (req) => {
   const idempotencyHash = await sha256Hex(JSON.stringify({ userId: user.id, input }));
   const idempotencyKey = `ai-studio-dev:${idempotencyHash.slice(0, 40)}`;
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const forceDryRun = bool(Deno.env.get("AI_STUDIO_DRY_RUN"), false);
   const imageGenerationEnabled = bool(Deno.env.get("AI_STUDIO_ENABLE_IMAGE_GENERATION"), false);
   const dryRun = input.dryRun || forceDryRun || !openAiKey;
@@ -337,21 +369,30 @@ serve(async (req) => {
   });
   let provider = "fallback";
   let model = "dry-run-fallback";
-  let usage: Record<string, unknown> | undefined;
-  let requestId: string | null | undefined;
+  let usage: AiUsageInput | null = null;
+  let requestId: string | null = null;
+  let estimatedCost = 0;
   let fallbackReason: string | null = dryRun ? "DRY_RUN_OR_MISSING_OPENAI_KEY" : null;
 
   if (!dryRun && openAiKey) {
     try {
-      const generated = await generateCopyWithOpenAi({ apiKey: openAiKey, input });
+      const generated = await generateCopyWithTextProvider({
+        admin,
+        openAiKey,
+        geminiApiKey,
+        requestGroupId,
+        input,
+      });
       draft = generated.draft;
-      usage = generated.usage;
-      requestId = generated.requestId;
-      provider = "openai";
-      model = Deno.env.get("AI_STUDIO_TEXT_MODEL") ?? "gpt-4o-mini";
+      const attempt = representativeAttempt(generated.attempts);
+      provider = attempt?.provider ?? "openai";
+      model = attempt?.model ?? resolveAiTextProviderConfig().openAiModel;
+      usage = attemptUsage(attempt);
+      requestId = attempt?.provider === "openai" ? attempt.requestId ?? null : null;
+      estimatedCost = attempt?.estimatedCostUsd ?? 0;
       fallbackReason = null;
     } catch (error) {
-      fallbackReason = error instanceof Error ? error.message.slice(0, 120) : "OPENAI_TEXT_FAILED";
+      fallbackReason = error instanceof Error ? error.message.slice(0, 120) : "AI_TEXT_PROVIDER_FAILED";
     }
   }
   draft.image_prompt = ensureTextFreeImagePrompt(draft.image_prompt, fallbackDraft({
@@ -361,10 +402,6 @@ serve(async (req) => {
     offerTerms: input.offerTerms,
     stylePreset: input.stylePreset,
   }).image_prompt);
-
-  const estimatedCost = provider === "openai"
-    ? calculateAiCost({ model, endpoint: "chat.completions", usage }).estimated_cost_usd
-    : 0;
 
   const inputOffer = {
     product_name: input.productName,
@@ -471,17 +508,19 @@ serve(async (req) => {
     model,
     success: true,
     failure_reason: fallbackReason,
-    input_token_count: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
-    output_token_count: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : null,
+    input_token_count: typeof usage?.input_tokens === "number" ? usage.input_tokens : null,
+    output_token_count: typeof usage?.output_tokens === "number" ? usage.output_tokens : null,
     estimated_cost_usd: estimatedCost,
     response_payload: {
       job_id: job.id,
       creative_id: creative.id,
       provider,
+      model,
       dry_run: dryRun,
       copy_only: copyOnly,
       layout_recommendation: draft.layout_recommendation,
       image_prompt_validated: includesAllImagePromptRequirements(draft.image_prompt),
+      image_generation_enabled: imageGenerationEnabled,
       publishing_disabled: true,
     },
     openai_called: provider === "openai",
@@ -495,9 +534,9 @@ serve(async (req) => {
     feature: "ai_studio_draft",
     provider,
     model,
-    endpoint: provider === "openai" ? "chat.completions" : "dry_run",
+    endpoint: provider === "gemini" ? "models.generateContent" : provider === "openai" ? "chat.completions" : "dry_run",
     usage,
-    estimatedCostUsd: provider === "openai" ? estimatedCost : 0,
+    estimatedCostUsd: estimatedCost,
     openaiRequestId: requestId ?? null,
     success: true,
   });
@@ -511,6 +550,9 @@ serve(async (req) => {
       creative: adSpec,
       image_asset_path: draft.image_asset_path,
       image_signed_url: draft.image_signed_url,
+      text_provider: provider,
+      text_model: model,
+      fallback_reason: fallbackReason,
       publishing_disabled: true,
       dry_run: dryRun,
       copy_only: copyOnly,

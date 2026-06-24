@@ -31,6 +31,16 @@ function imagePromptHasRequiredClauses(value) {
   );
 }
 
+function assertLockedOffer(draft, expected) {
+  const locked = draft?.creative?.lockedOffer;
+  assert(locked?.productName === expected.product_name, "AI changed the locked product name");
+  assert(locked?.offerTerms === expected.offer_terms, "AI changed the locked offer terms");
+  assert(locked?.startTime === expected.start_time, "AI changed the locked start time");
+  assert(locked?.endTime === expected.end_time, "AI changed the locked end time");
+  assert(locked?.quantityLimit === expected.quantity_limit, "AI changed the locked quantity limit");
+  assert(locked?.cta === expected.cta, "AI changed the locked CTA");
+}
+
 async function invoke(url, anonKey, accessToken, body) {
   const response = await fetch(`${url}/functions/v1/ai-studio-generate-draft`, {
     method: "POST",
@@ -104,6 +114,7 @@ if (!email || !password || !businessId) {
   assert(draft?.dry_run === true, "Smoke test must run in dry_run mode");
   assert(draft?.image_signed_url === null, "Smoke dry-run must not expose a public/signed asset URL");
   assert(imagePromptHasRequiredClauses(draft?.creative?.imagePrompt), "Image prompt is missing required text-free clauses");
+  assertLockedOffer(draft, { ...sampleBody, business_id: businessId });
 
   const wrongBusiness = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
     ...sampleBody,
@@ -137,13 +148,22 @@ if (!email || !password || !businessId) {
     assert(realDraft?.publishing_disabled === true, "Real copy/prompt must keep publishing disabled");
     assert(realDraft?.copy_only === true, "Real copy/prompt smoke must stay copy_only");
     assert(realDraft?.image_asset_path === null && realDraft?.image_signed_url === null, "Real copy/prompt must not create image assets");
+    assert(realDraft?.creative?.headline, "Real copy/prompt must include a headline");
+    assert(realDraft?.creative?.supportingCopy, "Real copy/prompt must include supporting copy");
+    assert(realDraft?.creative?.layoutRecommendation, "Real copy/prompt must include a layout recommendation");
     assert(imagePromptHasRequiredClauses(realDraft?.creative?.imagePrompt), "Real image prompt is missing required text-free clauses");
     assert(realDraft?.dry_run === false, "Expected real copy/prompt mode. If this fails, OPENAI_API_KEY may be missing or AI_STUDIO_DRY_RUN may be true.");
+    assert(realDraft?.text_provider === "openai", `Expected GPT mini text provider via OpenAI, got ${realDraft?.text_provider}`);
+    assert(realDraft?.text_model === "gpt-5.4-mini", `Expected OPENAI_MODEL gpt-5.4-mini, got ${realDraft?.text_model}`);
+    assert(realDraft?.fallback_reason === null, `Expected no real-mode fallback, got ${realDraft?.fallback_reason}`);
+    assertLockedOffer(realDraft, { ...sampleBody, business_id: businessId, dry_run: false, copy_only: true });
     result.realCopyPrompt = {
       draftCreated: true,
       jobId: realDraft.job_id,
       creativeId: realDraft.creative_id,
       dryRun: false,
+      textProvider: realDraft.text_provider,
+      textModel: realDraft.text_model,
       imagePromptValidated: true,
       privateAssetOnly: true,
     };
