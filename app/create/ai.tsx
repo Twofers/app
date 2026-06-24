@@ -40,7 +40,6 @@ import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
-import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -155,6 +154,7 @@ import {
   buildAuthoritativeDealDisplayCopy,
   buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
+  buildPublishMechanicsValidationCopy,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
 } from "../../lib/offer-version-publish";
@@ -2471,20 +2471,11 @@ export default function AiDealScreen() {
       return;
     }
 
-    // composedDescription includes the CTA — used ONLY for the quality + strong-deal
-    // guards below, so an offer phrase that happens to live only in the CTA (e.g.
-    // "Get one free") still satisfies validation.
-    if (offerContract) {
-      const mechanicsValidation = validateAiCopyAgainstOffer(
-        {
-          headline: title,
-          short_description: promoLine || description,
-          push_notification: generatedAd?.push_notification || title,
-          social_caption: generatedAd?.social_caption,
-          terms_summary: description,
-        },
-        offerContract,
-      );
+    // Validate the locked offer mechanics that will be published. Marketing fields can
+    // repeat the same valid line in preview/draft state, which is a copy-quality issue
+    // but not a terms-change failure.
+    if (offerContract && offerDefinition) {
+      const mechanicsValidation = validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(offerDefinition), offerContract);
       if (!mechanicsValidation.valid) {
         const message = t("createAi.offerMechanicsInvalid", {
           defaultValue: "The ad copy changes the offer terms. Keep the required purchase, free item, discount, and location exactly as shown in the locked offer.",
@@ -3971,15 +3962,27 @@ export default function AiDealScreen() {
                       previewShownAtRef={composedPreviewShownAtRef}
                       lastHashRef={lastComposedPreviewTelemetryHashRef}
                     />
-                    <ComposedAdCard
+                    <GeneratedAdPreviewCard
                       imageUri={adImageUri}
-                      offerFacts={composedOfferFacts}
-                      merchant={composedMerchant}
-                      copy={composedCopy}
-                      presentation={selectedComposedPresentation}
-                      liveState={composedLiveState}
-                      surface="merchant_preview"
+                      businessName={businessName}
+                      headline={ownerLanguagePreview.headline}
+                      body={ownerLanguagePreview.body}
+                      imageAltText={ownerLanguagePreview.imageAltText}
+                      offerLine={ownerLanguagePreview.offerLine}
+                      termsLine={ownerLanguagePreview.termsLine}
+                      cta={ownerLanguagePreview.cta}
+                      scheduleSummary={displayScheduleSummary}
+                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                      maxClaimsValue={maxClaims}
+                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                      termsHelper={t("createAi.lockedTermsHelper", {
+                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                      })}
+                      noImageLabel={t("createAi.noImage")}
                       fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                      theme={theme}
+                      darkMode={colorScheme === "dark"}
                     />
                     {ownerLanguagePreviewControls}
                     {composedMinimalInputEnabled ? (

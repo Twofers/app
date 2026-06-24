@@ -133,46 +133,29 @@ export function GeneratedAdPreviewCard({
           </View>
         )}
 
-        <LinearGradient
-          colors={darkMode
-            ? ["rgba(0,0,0,0.08)", "rgba(0,0,0,0.78)"]
-            : ["rgba(0,0,0,0.02)", "rgba(0,0,0,0.68)"]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <View style={styles.heroTopRow}>
-          <View style={[styles.brandBadge, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.brandBadgeText, { color: theme.primaryText }]}>Twofer</Text>
-          </View>
-          {cleanBusiness ? (
-            <View style={styles.businessBadge}>
-              <Text numberOfLines={1} style={styles.businessBadgeText}>
-                {cleanBusiness}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.heroCopy}>
-          {cleanOffer ? (
-            <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
-              <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
-                {cleanOffer}
-              </Text>
-            </View>
-          ) : null}
-          <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.headline}>
-            {headline}
-          </Text>
-          {cleanBody ? (
-            <Text numberOfLines={3} style={styles.body}>
-              {cleanBody}
-            </Text>
-          ) : null}
-        </View>
       </View>
 
       <View style={styles.footer}>
+        {cleanBusiness ? (
+          <Text numberOfLines={1} style={[styles.businessName, { color: theme.mutedText }]}>
+            {cleanBusiness}
+          </Text>
+        ) : null}
+        {cleanOffer ? (
+          <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
+            <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
+              {cleanOffer}
+            </Text>
+          </View>
+        ) : null}
+        <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={[styles.headline, { color: theme.text }]}>
+          {headline}
+        </Text>
+        {cleanBody ? (
+          <Text numberOfLines={3} style={[styles.body, { color: theme.mutedText }]}>
+            {cleanBody}
+          </Text>
+        ) : null}
         <View style={styles.chipRow}>
           <View style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
             <Text numberOfLines={1} style={[styles.chipText, { color: theme.text }]}>
@@ -222,7 +205,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   hero: {
-    height: 360,
+    height: 260,
     justifyContent: "space-between",
     overflow: "hidden",
   },
@@ -300,47 +283,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: "uppercase",
   },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  brandBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  brandBadgeText: {
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0,
-  },
-  businessBadge: {
-    flex: 1,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.42)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  businessBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0,
-  },
-  heroCopy: {
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingBottom: 20,
-  },
   offerBadge: {
     alignSelf: "flex-start",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
     maxWidth: "100%",
+  },
+  businessName: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
   },
   offerBadgeText: {
     fontSize: 13,
@@ -349,17 +303,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   headline: {
-    color: "#fff",
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "900",
-    lineHeight: 37,
+    lineHeight: 29,
     letterSpacing: 0,
   },
   body: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    lineHeight: 22,
+    lineHeight: 21,
     letterSpacing: 0,
   },
   footer: {

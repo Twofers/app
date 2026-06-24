@@ -1,4 +1,5 @@
 import type { GeneratedAd } from "./ad-variants";
+import type { AiDealCopyVariant } from "./deal-offer-contract";
 import {
   buildOfferVersionLocalizationSnapshot,
   type OfferVersionPublishLocalizationSnapshot,
@@ -62,6 +63,13 @@ export type AuthoritativeDealDisplayCopy = {
   description: string;
 };
 
+export type PublishMechanicsValidationCopy = Pick<
+  AiDealCopyVariant,
+  "headline" | "short_description" | "push_notification"
+> & {
+  terms_summary: string;
+};
+
 type ErrorWithCode = Error & { code?: string };
 
 function cleanDisplayText(value: string | null | undefined): string {
@@ -86,6 +94,20 @@ export function buildAuthoritativeDealDisplayCopy(
     fallbackDescription;
 
   return { title, description };
+}
+
+export function buildPublishMechanicsValidationCopy(
+  offerDefinition: OfferDefinitionV1,
+): PublishMechanicsValidationCopy {
+  const lockedOffer = cleanDisplayText(offerDefinition.canonicalOfferLine);
+  const supportLine = "Redeem at the participating location during the offer window.";
+
+  return {
+    headline: lockedOffer,
+    short_description: supportLine,
+    push_notification: lockedOffer,
+    terms_summary: lockedOffer,
+  };
 }
 
 function throwInvokeError(message: string, code?: string): never {

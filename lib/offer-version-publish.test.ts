@@ -13,9 +13,14 @@ import { buildApprovedAdCopy } from "./ad-render-content";
 import { buildLockedOfferContent } from "./authoritative-offer-renderer";
 import { buildOfferDefinitionV1 } from "./offer-definition";
 import {
+  buildDealOfferContract,
+  validateAiCopyAgainstOffer,
+} from "./deal-offer-contract";
+import {
   buildAuthoritativeDealDisplayCopy,
   buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
+  buildPublishMechanicsValidationCopy,
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
 import { buildAdImageSelection } from "./merchant-image-selection";
@@ -59,6 +64,56 @@ describe("offer version publish client helpers", () => {
       title: "Buy one latte and get one free",
       description:
         "Purchase 1 latte to receive 1 latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
+    });
+  });
+
+  it("validates publish mechanics from locked offer terms instead of repeated preview copy", () => {
+    const dealEligibility = {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "egg sandwich",
+      requiredItemRetailValueCents: 700,
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    };
+    const eligibilityResult = { eligible: true, eligibilityStatus: "VALID" as const, customerValuePercent: 43 };
+    const contract = buildDealOfferContract({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Test Cafe",
+      dealEligibility,
+      eligibilityResult,
+      activeWindowHumanReadable: "Today, 8:00 AM-10:00 AM",
+      quantityLimit: 50,
+    });
+    if (!contract) throw new Error("Expected valid contract");
+    const definition = buildOfferDefinitionV1({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "Test Cafe",
+      dealEligibility,
+      eligibilityResult,
+      activeWindowHumanReadable: "Today, 8:00 AM-10:00 AM",
+      quantityLimit: 50,
+    });
+    if (!definition) throw new Error("Expected valid definition");
+
+    const repeatedPreviewCopy = {
+      headline: definition.canonicalOfferLine,
+      short_description: definition.canonicalOfferLine,
+      push_notification: definition.canonicalOfferLine,
+      social_caption: definition.canonicalOfferLine,
+    };
+
+    expect(validateAiCopyAgainstOffer(repeatedPreviewCopy, contract).reasonCodes).toContain("DUPLICATE_HEADLINE_DESCRIPTION");
+    expect(validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(definition), contract)).toEqual({
+      valid: true,
+      reasonCodes: [],
     });
   });
 

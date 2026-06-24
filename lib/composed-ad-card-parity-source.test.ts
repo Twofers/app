@@ -7,8 +7,8 @@ const homeSource = readFileSync(join(process.cwd(), "app", "(tabs)", "index.tsx"
 const detailSource = readFileSync(join(process.cwd(), "app", "deal", "[id].tsx"), "utf8");
 
 describe("composed ad card preview/customer parity source guards", () => {
-  it("keeps merchant preview, Home feed, and Deal Detail on the same composed renderer when enabled", () => {
-    for (const source of [createAiSource, homeSource, detailSource]) {
+  it("keeps customer Home feed and Deal Detail on the same composed renderer when enabled", () => {
+    for (const source of [homeSource, detailSource]) {
       expect(source).toMatch(/ComposedAdCard/);
       expect(source).toMatch(/buildDefaultAdPresentationSpec/);
       expect(source).toMatch(/buildMerchantIdentity/);
@@ -16,6 +16,7 @@ describe("composed ad card preview/customer parity source guards", () => {
     expect(createAiSource).toMatch(/buildOwnerLanguagePreview/);
     expect(createAiSource).toMatch(/composedOfferFacts = ownerLanguagePreview\.offerFacts/);
     expect(createAiSource).toMatch(/composedCopy = ownerLanguagePreview\.copy/);
+    expect(createAiSource).toMatch(/GeneratedAdPreviewCard/);
     for (const source of [homeSource, detailSource]) {
       expect(source).toMatch(/buildApprovedAdCopy/);
       expect(source).toMatch(/renderAuthoritativeOffer/);
