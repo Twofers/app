@@ -663,6 +663,86 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Deal Release Push Scheduling
+
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+
+Safety checkpoint: `f9a88016`.
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no release build was started, and no hosted cron job was scheduled.
+
+Supabase migrations applied: none.
+
+Migrations added:
+
+- `supabase/migrations/20260729120000_deal_release_push_events.sql`
+- `supabase/migrations/20260729121000_deal_release_push_cron_schedule.sql`
+
+Live secret names changed: none in hosted Supabase. The migration artifact creates the Vault secret name `deal_release_push_cron_secret` only if Dan explicitly approves applying it; no secret value was read, printed, or committed.
+
+## Files changed
+
+- `lib/deal-release-notification.ts`
+- `lib/deal-release-notification.test.ts`
+- `supabase/functions/send-deal-push/index.ts`
+- `supabase/functions/weekly-deal-digest/index.ts`
+- `supabase/functions/_shared/send-deal-push-source.test.ts`
+- `supabase/functions/_shared/weekly-deal-digest-source.test.ts`
+- `supabase/functions/_shared/deal-release-push-migrations.test.ts`
+- `supabase/migrations/20260729120000_deal_release_push_events.sql`
+- `supabase/migrations/20260729121000_deal_release_push_cron_schedule.sql`
+- `docs/beta-release-checklist.md`
+- `docs/deployment-command-plan.md`
+- `docs/deployment-notes.md`
+- `docs/production-deploy-checklist.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added shared deal release timing helpers so scheduled deals are not pushed until `start_time`, inactive deals are suppressed, ended deals are skipped, and invalid windows fail closed.
+- Reworked `send-deal-push` to reserve one customer release push per deal in a service-role-only `deal_push_events` ledger.
+- Kept live deal publish behavior best-effort: verified owners can still notify eligible favorited, opted-in consumers, while duplicate release pushes are blocked by the ledger.
+- Added a cron-authorized `dispatch_due` path that sends due pending release events, reschedules moved future starts, skips deals that are no longer live, and supports dry runs.
+- Added the service-role-only event table migration, future-deal backfill, Vault-backed secret verifier, and five-minute pg_cron scheduler migration.
+- Updated `weekly-deal-digest` so weekly digest counts only deals whose customer-visible window has already started.
+- Updated deployment notes, command plan, production checklist, and beta checklist with the required migration order, RLS smoke probe, cron status helper, and no-secret-reporting rule.
+
+## Acceptance criteria map
+
+- Future scheduled deals: Implemented; merchant publish reserves a pending release event instead of sending immediately.
+- Already-live deals: Preserved; owner-authorized publish sends to favorites with the existing server-side opt-in and owner-exclusion gates.
+- Duplicate prevention: Implemented through the `UNIQUE (deal_id, push_kind)` event ledger.
+- Cron authorization: Implemented through `CRON_SECRET` for ops/manual calls or the Vault-backed `verify_deal_release_push_secret` RPC for scheduled pg_cron calls.
+- No retroactive blast: Implemented; migration backfills only future active deals as `pending` and marks older/preexisting rows `suppressed_preexisting`.
+- Weekly digest correctness: Improved; future scheduled deals are excluded until their start window has arrived.
+
+## Validation
+
+- `npx vitest run lib/deal-release-notification.test.ts supabase/functions/_shared/send-deal-push-source.test.ts supabase/functions/_shared/deal-release-push-migrations.test.ts supabase/functions/_shared/weekly-deal-digest-source.test.ts`: passed; 4 files, 11 tests.
+- `npm run typecheck:functions -- --pretty false`: passed; 138 Edge Function files.
+- `npx vitest run`: passed; 177 files, 929 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npm run gate:localization-plan`: passed; all 13 plan-completion checks passed.
+- `npm run gate:localization-rollout`: passed; all 20 rollout readiness checks passed.
+- `git diff --check`: passed; Git warned that touched Markdown/TypeScript/SQL working-copy line endings will normalize from LF to CRLF when Git writes them.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-deal-release-push-20260624 --clear`: passed with the known `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- Hosted behavior remains unchanged until Dan approves applying the migrations, deploying `send-deal-push`, and confirming the scheduled cron status.
+- Applying `20260729120000_deal_release_push_events.sql` touches RLS-protected schema. After approval and apply, run `node scripts/probe-rls-smoke.mjs`.
+- Applying `20260729121000_deal_release_push_cron_schedule.sql` schedules a production cron job against the hosted `send-deal-push` URL. That remains a hard approval gate.
+- Real-device push delivery was not exercised locally.
+
+## Rollback
+
+Revert this commit. If the migrations are later applied remotely, rollback also requires an explicit Supabase rollback plan for the event table, Vault verifier, and cron schedule.
+
+---
+
 ## Multilingual Deals PR 4n - Native acceptance packet
 
 Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.

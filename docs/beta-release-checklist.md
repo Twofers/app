@@ -144,7 +144,26 @@ Do not select from `vault.decrypted_secrets` in a report. For status, use:
 select * from public.weekly_digest_cron_status();
 ```
 
-### 10. VersionCode And Build URL
+### 10. Deal Release Push Cron And Vault Secret
+
+- [ ] `send-deal-push` function is deployed after the release-push scheduling code lands.
+- [ ] Migration `20260729120000_deal_release_push_events.sql` is applied remotely.
+- [ ] Migration `20260729121000_deal_release_push_cron_schedule.sql` is applied remotely.
+- [ ] RLS smoke probe was run after the event table migration: `node scripts/probe-rls-smoke.mjs`.
+- [ ] Vault secret exists by name only: `deal_release_push_cron_secret`.
+- [ ] `public.verify_deal_release_push_secret(text)` exists and is executable by `service_role`.
+- [ ] `public.deal_release_push_cron_status()` returns active job `send-due-deal-release-pushes`.
+- [ ] Schedule is expected: every five minutes.
+- [ ] Dry run succeeds without sending pushes, if available.
+- Result:
+
+Do not select from `vault.decrypted_secrets` in a report. For status, use:
+
+```sql
+select * from public.deal_release_push_cron_status();
+```
+
+### 11. VersionCode And Build URL
 
 - [ ] Android versionCode:
 - [ ] EAS build URL:

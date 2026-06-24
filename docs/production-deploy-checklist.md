@@ -147,7 +147,7 @@ Run against **hosted** Supabase + production-like env (can reuse scenarios from 
 - **Stripe / billing:** `PILOT_DISABLE_BILLING_GATE` in app may extend trials for pilot; confirm billing Edge functions and webhooks match your go-live plan before turning enforcement on.
 - **Google Places:** Without `GOOGLE_PLACES_API_KEY`, lookup may fall back to OpenAI-only or error — confirm messaging matches product expectations.
 - **AI quotas / cost:** `ai_generation_logs` and any monthly caps — verify limits in Dashboard and owner-facing copy.
-- **Push / deep links:** `send-deal-push`, email confirmation redirects — test on real devices.
+- **Push / deep links:** `send-deal-push`, scheduled deal release pushes, and email confirmation redirects — test on real devices.
 - **Multilingual rollout:** U.S. Spanish and Korean broad production remain blocked until named reviewers, native sign-off, Korean counter approval, and real-device screenshot QA are recorded.
 - **Migration order:** A single failed migration on prod leaves schema half-applied; always verify last applied migration name and error logs.
 - **Metro / CI:** Local “Unable to deserialize cloned data” Metro cache warnings are environmental; use `npx expo start -c` if bundler misbehaves (not a server deploy issue).

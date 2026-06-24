@@ -133,10 +133,12 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 93. `20260727120000_ai_provider_circuit_breakers.sql`
 94. `20260728120000_ad_localization_storage.sql`
 95. `20260728123000_customer_deal_localization_projection.sql`
+96. `20260729120000_deal_release_push_events.sql`
+97. `20260729121000_deal_release_push_cron_schedule.sql`
 
 ### 2.2 Latest migration
 
-**`20260728123000_customer_deal_localization_projection.sql`**
+**`20260729121000_deal_release_push_cron_schedule.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -147,11 +149,20 @@ The multilingual approval path depends on the hosted project being current throu
 
 The projection migration exposes the customer-safe `customer_deal_localizations(p_deal_ids uuid[], p_locale text)` RPC. It must not grant direct app-role access to `ad_localizations`. See [multilingual-deals-production-approval-runbook.md](./localization/multilingual-deals-production-approval-runbook.md) before asking Dan to approve these migrations.
 
-### 2.4 Duplicate timestamp check
+### 2.4 Deal release push scheduling migrations
+
+The customer release-push path depends on applying these in order:
+
+- `20260729120000_deal_release_push_events.sql`
+- `20260729121000_deal_release_push_cron_schedule.sql`
+
+The second migration schedules a five-minute `pg_cron` job that posts to the hosted `send-deal-push` function with a Vault-backed secret. Applying either migration is production-changing and requires explicit approval; after the RLS/idempotency table migration is applied, run `node scripts/probe-rls-smoke.mjs`.
+
+### 2.5 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.5 Command to apply migrations (do not run without explicit approval)
+### 2.6 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
