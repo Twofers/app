@@ -41,6 +41,16 @@ function assertLockedOffer(draft, expected) {
   assert(locked?.cta === expected.cta, "AI changed the locked CTA");
 }
 
+function assertPrivateAiAsset(draft) {
+  const path = draft?.image_asset_path;
+  assert(typeof path === "string" && path.length > 0, "Gemini image smoke must return a private storage path");
+  assert(!/^https?:\/\//i.test(path), "Image asset path must not be a public URL");
+  assert(path.includes("/"), "Image asset path should be owner/business scoped");
+  assert(typeof draft?.image_signed_url === "string" && draft.image_signed_url.startsWith("http"), "Image preview must use a signed URL");
+  assert(draft?.image_provider === "gemini", `Expected Gemini image provider, got ${draft?.image_provider}`);
+  assert(draft?.image_generation_success === true, "Gemini image generation did not report success");
+}
+
 async function invoke(url, anonKey, accessToken, body) {
   const response = await fetch(`${url}/functions/v1/ai-studio-generate-draft`, {
     method: "POST",
@@ -171,6 +181,42 @@ if (!email || !password || !businessId) {
     result.realCopyPrompt = {
       skipped: true,
       reason: "Set TWOFER_SMOKE_REAL_AI=true locally after configuring the dev Supabase OPENAI_API_KEY secret.",
+    };
+  }
+
+  if (process.env.TWOFER_SMOKE_GEMINI_IMAGE === "true") {
+    const image = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+      ...sampleBody,
+      business_id: businessId,
+      dry_run: false,
+      copy_only: false,
+    });
+    assert(image.response.status === 200, `Expected Gemini image 200, got ${image.response.status}: ${JSON.stringify(image.json)}`);
+    const imageDraft = image.json?.draft;
+    assert(imageDraft?.job_id, "Missing Gemini image draft.job_id");
+    assert(imageDraft?.creative_id, "Missing Gemini image draft.creative_id");
+    assert(imageDraft?.publishing_disabled === true, "Gemini image draft must keep publishing disabled");
+    assert(imageDraft?.copy_only === false, "Gemini image smoke must not be copy_only");
+    assert(imageDraft?.dry_run === false, "Gemini image smoke must not be dry_run");
+    assert(imageDraft?.text_provider === "openai", `Expected GPT mini text provider via OpenAI, got ${imageDraft?.text_provider}`);
+    assert(imageDraft?.text_model === "gpt-5.4-mini", `Expected OPENAI_MODEL gpt-5.4-mini, got ${imageDraft?.text_model}`);
+    assert(imagePromptHasRequiredClauses(imageDraft?.creative?.imagePrompt), "Gemini image prompt is missing required text-free clauses");
+    assertLockedOffer(imageDraft, { ...sampleBody, business_id: businessId, dry_run: false, copy_only: false });
+    assertPrivateAiAsset(imageDraft);
+    result.geminiImage = {
+      draftCreated: true,
+      jobId: imageDraft.job_id,
+      creativeId: imageDraft.creative_id,
+      imageProvider: imageDraft.image_provider,
+      imageModel: imageDraft.image_model,
+      privateAssetPath: imageDraft.image_asset_path,
+      signedPreviewReturned: true,
+      publishingDisabled: true,
+    };
+  } else {
+    result.geminiImage = {
+      skipped: true,
+      reason: "Set TWOFER_SMOKE_GEMINI_IMAGE=true locally after configuring the dev Supabase GEMINI_API_KEY secret and image flag.",
     };
   }
 

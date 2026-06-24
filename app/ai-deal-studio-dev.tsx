@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -30,7 +31,7 @@ import { supabase } from "@/lib/supabase";
 const STYLE_PRESETS = ["Fresh", "Bold", "Premium", "Sunrise", "Macro"] as const;
 
 type StylePreset = typeof STYLE_PRESETS[number];
-type GenerationMode = "dry-run" | "real-copy";
+type GenerationMode = "dry-run" | "real-copy" | "real-image";
 
 type DraftResponse = {
   draft?: {
@@ -59,6 +60,12 @@ type DraftResponse = {
     publishing_disabled?: boolean;
     dry_run?: boolean;
     copy_only?: boolean;
+    image_asset_path?: string | null;
+    image_signed_url?: string | null;
+    image_provider?: string;
+    image_model?: string | null;
+    image_generation_success?: boolean;
+    image_generation_error_code?: string | null;
   };
   error?: string;
   details?: unknown;
@@ -183,7 +190,7 @@ export default function AiDealStudioDevScreen() {
           cta: "Claim in Twofer",
           style_preset: stylePreset,
           dry_run: generationMode === "dry-run",
-          copy_only: true,
+          copy_only: generationMode !== "real-image",
         },
       });
       if (error) throw new Error(error.message);
@@ -233,6 +240,12 @@ export default function AiDealStudioDevScreen() {
           <Banner
             tone="warning"
             message="Real copy/prompt generation may use OpenAI credits. Image generation and publishing stay disabled."
+          />
+        ) : null}
+        {generationMode === "real-image" ? (
+          <Banner
+            tone="warning"
+            message="Real copy/prompt plus Gemini image generation may use AI credits. The image stays private and publishing remains disabled."
           />
         ) : null}
 
@@ -342,7 +355,8 @@ export default function AiDealStudioDevScreen() {
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
             {[
               ["dry-run", "Dry run"],
-              ["real-copy", "Real copy/prompt generation"],
+              ["real-copy", "Real copy/prompt only"],
+              ["real-image", "Real copy/prompt + Gemini image"],
             ].map(([value, label]) => {
               const selected = generationMode === value;
               return (
@@ -376,7 +390,9 @@ export default function AiDealStudioDevScreen() {
               ? "Generating..."
               : draft
                 ? "Regenerate Draft"
-                : generationMode === "real-copy"
+                : generationMode === "real-image"
+                  ? "Generate Copy + Gemini Image"
+                  : generationMode === "real-copy"
                   ? "Generate Real Copy/Prompt"
                   : "Generate Draft"
           }
@@ -401,9 +417,31 @@ export default function AiDealStudioDevScreen() {
         {draft?.creative ? (
           <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>Draft Preview</Text>
+            {draft.image_signed_url ? (
+              <Image
+                source={{ uri: draft.image_signed_url }}
+                resizeMode="cover"
+                style={{
+                  width: "100%",
+                  aspectRatio: 4 / 5,
+                  borderRadius: Radii.md,
+                  backgroundColor: theme.surfaceMuted,
+                }}
+              />
+            ) : null}
             <PreviewRow label="Headline" value={draft.creative.headline ?? "(missing)"} />
             <PreviewRow label="Supporting copy" value={draft.creative.supportingCopy ?? "(missing)"} />
             <PreviewRow label="Text-free image prompt" value={draft.creative.imagePrompt ?? "(missing)"} />
+            <PreviewRow
+              label="Private image"
+              value={
+                draft.image_asset_path
+                  ? `${draft.image_provider ?? "image"} stored privately at ${draft.image_asset_path}`
+                  : draft.image_generation_error_code
+                    ? `No image stored (${draft.image_generation_error_code})`
+                    : "No image generated for this mode"
+              }
+            />
             <PreviewRow label="Style" value={draft.creative.stylePreset ?? stylePreset} />
             <PreviewRow label="Layout recommendation" value={draft.creative.layoutRecommendation ?? "(missing)"} />
             <PreviewRow label="Offer" value={`${offerType}: ${offerTerms}`} />

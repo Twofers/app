@@ -34,19 +34,19 @@ supabase secrets set OPENAI_MODEL=gpt-5.4-mini --project-ref dyzqgzrslrirzqzhhqx
 
 This command prompts locally; do not paste the key into chat or commit it to a file.
 
-Real copy/prompt generation is dev-only and still does not generate images.
+Real copy/prompt generation is dev-only. Gemini image generation is separately gated and still does not publish.
 
-Image generation will use the regular app's Gemini image-provider variables later, but it remains disabled in this phase:
+Image generation uses the regular app's Gemini image-provider variables:
 
 - `GEMINI_API_KEY` for Gemini image generation, server-side only.
 - `AI_IMAGE_PROVIDER=gemini`
 - `AI_IMAGE_GEMINI_ENABLED=true`
 - `GEMINI_IMAGE_MODEL=gemini-3.1-flash-image`
-- `AI_STUDIO_ENABLE_IMAGE_GENERATION=false`
+- `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` only in the separate dev project when Gemini image testing is approved.
 
-Do not set `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` until image generation is separately approved.
+The generated AI Studio image is stored only in the private `ai-deal-assets` bucket. The function returns the private storage path plus a short-lived signed preview URL for the dev draft. It does not create a `deals` row and does not call publishing.
 
-Keep image generation disabled:
+Configure Gemini image generation for dev only:
 
 For no-cost validation, leave `OPENAI_API_KEY` unset or set:
 
@@ -66,7 +66,8 @@ Image generation is disabled unless this server-side flag is explicitly enabled 
 supabase secrets set AI_IMAGE_PROVIDER=gemini --project-ref dyzqgzrslrirzqzhhqxh
 supabase secrets set AI_IMAGE_GEMINI_ENABLED=true --project-ref dyzqgzrslrirzqzhhqxh
 supabase secrets set GEMINI_IMAGE_MODEL=gemini-3.1-flash-image --project-ref dyzqgzrslrirzqzhhqxh
-supabase secrets set AI_STUDIO_ENABLE_IMAGE_GENERATION=false --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set GEMINI_API_KEY --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set AI_STUDIO_ENABLE_IMAGE_GENERATION=true --project-ref dyzqgzrslrirzqzhhqxh
 ```
 
 Do not configure Stripe for this feature.
@@ -104,5 +105,25 @@ Expected real-mode behavior:
 - `dryRun` is `false`
 - `copy_only` remains `true`
 - no image asset path or signed URL is returned
+- publishing remains disabled
+- `deals` stays `0`
+
+After `GEMINI_API_KEY` and `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` are configured in the dev Supabase project, Gemini image smoke can be enabled for the current PowerShell process:
+
+```powershell
+$env:TWOFER_SMOKE_REAL_AI="true"
+$env:TWOFER_SMOKE_GEMINI_IMAGE="true"
+node .\scripts\smoke-ai-studio-generate-draft.mjs
+Remove-Item Env:\TWOFER_SMOKE_REAL_AI -ErrorAction SilentlyContinue
+Remove-Item Env:\TWOFER_SMOKE_GEMINI_IMAGE -ErrorAction SilentlyContinue
+```
+
+Expected Gemini image behavior:
+
+- `dryRun` is `false`
+- `copy_only` is `false`
+- `image_provider` is `gemini`
+- `image_asset_path` is a private bucket path, not a URL
+- `image_signed_url` is returned only for preview
 - publishing remains disabled
 - `deals` stays `0`

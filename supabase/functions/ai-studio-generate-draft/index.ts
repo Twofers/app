@@ -7,6 +7,15 @@ import {
   resolveAiTextProviderConfig,
   type ProviderAttempt,
 } from "../_shared/ai-text-provider.ts";
+import {
+  generateGeminiAdImageWithTelemetry,
+  resolveAiImageProviderConfig,
+} from "../_shared/ai-image-provider.ts";
+
+// Static anchors so Supabase's remote bundler includes the optional JPEG->PNG
+// conversion packages used by `_shared/ai-image-provider.ts`.
+import "jpeg-js";
+import "pngjs";
 
 type DraftInput = {
   business_id?: unknown;
@@ -35,8 +44,22 @@ type DraftCreative = {
   publishing_disabled: true;
 };
 
+type ImageGenerationResult = {
+  path: string | null;
+  signedUrl: string | null;
+  provider: "gemini" | "none";
+  model: string | null;
+  endpoint: "models.generateContent" | "disabled";
+  estimatedCostUsd: number;
+  success: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  promptHash: string | null;
+};
+
 const PROMPT_VERSION = "ai_studio_draft_v2";
 const PIPELINE_VERSION = "ai_studio_draft_dev_v1";
+const AI_DEAL_ASSETS_BUCKET = "ai-deal-assets";
 const ALLOWED_STYLES = new Set(["Fresh", "Bold", "Premium", "Sunrise", "Macro"]);
 const DEFAULT_CTA = "Claim in Twofer";
 const REQUIRED_IMAGE_PROMPT_CLAUSES = [
@@ -155,7 +178,11 @@ function ensureTextFreeImagePrompt(value: string, fallback: string): string {
   const prompt = includesAllImagePromptRequirements(base)
     ? base
     : `${base} ${REQUIRED_IMAGE_PROMPT_CLAUSES.join(" ")}`;
-  return text(prompt, 900);
+  const commercialGuardrails = [
+    "Use realistic commercial food photography or an ad-quality local business visual.",
+    "Do not render offer text, business name, logo, start time, end time, quantity, price, CTA, deal terms, menu boards, signs, labels, or watermark.",
+  ].join(" ");
+  return text(`${prompt} ${commercialGuardrails}`, 1400);
 }
 
 function sanitizeGeneratedCopy(value: unknown, fallback: string, max: number): string {
@@ -300,6 +327,98 @@ async function generateCopyWithTextProvider(params: {
   };
 }
 
+async function generateAndStoreGeminiImage(params: {
+  admin: any;
+  geminiApiKey?: string | null;
+  userId: string;
+  businessId: string;
+  requestGroupId: string;
+  imagePrompt: string;
+}): Promise<ImageGenerationResult> {
+  const imageConfig = resolveAiImageProviderConfig();
+  if (imageConfig.primaryProvider !== "gemini" || !imageConfig.geminiEnabled) {
+    return {
+      path: null,
+      signedUrl: null,
+      provider: "none",
+      model: imageConfig.geminiModel,
+      endpoint: "disabled",
+      estimatedCostUsd: 0,
+      success: false,
+      errorCode: "GEMINI_IMAGE_DISABLED",
+      errorMessage: "Gemini image provider is not enabled.",
+      promptHash: null,
+    };
+  }
+
+  const image = await generateGeminiAdImageWithTelemetry({
+    apiKey: params.geminiApiKey,
+    model: imageConfig.geminiModel,
+    prompt: params.imagePrompt,
+    aspectRatio: "1:1",
+    imageSize: "1K",
+    estimatedCostUsd: imageConfig.geminiEstimatedCost1KUsd,
+    retryOnFailure: true,
+  });
+  const attempt = image.attempts.find((item) => item.success) ?? image.attempts[image.attempts.length - 1] ?? null;
+  if (!image.bytes || !image.mimeType) {
+    return {
+      path: null,
+      signedUrl: null,
+      provider: "gemini",
+      model: image.model,
+      endpoint: "models.generateContent",
+      estimatedCostUsd: 0,
+      success: false,
+      errorCode: attempt?.errorCode ?? "GEMINI_IMAGE_FAILED",
+      errorMessage: attempt?.errorMessage ?? "Gemini returned no image bytes.",
+      promptHash: image.promptHash,
+    };
+  }
+
+  const safeBusinessId = params.businessId.replace(/[^a-zA-Z0-9-]/g, "");
+  const safeUserId = params.userId.replace(/[^a-zA-Z0-9-]/g, "");
+  const path = `${safeBusinessId}/${safeUserId}/${params.requestGroupId}/creative.png`;
+  const imageBuffer = image.bytes.buffer.slice(
+    image.bytes.byteOffset,
+    image.bytes.byteOffset + image.bytes.byteLength,
+  ) as ArrayBuffer;
+  const upload = await params.admin.storage.from(AI_DEAL_ASSETS_BUCKET).upload(path, new Blob([imageBuffer], {
+    type: image.mimeType,
+  }), {
+    contentType: image.mimeType,
+    upsert: false,
+  });
+  if (upload.error) {
+    return {
+      path: null,
+      signedUrl: null,
+      provider: "gemini",
+      model: image.model,
+      endpoint: "models.generateContent",
+      estimatedCostUsd: image.estimatedCostUsd,
+      success: false,
+      errorCode: "AI_ASSET_UPLOAD_FAILED",
+      errorMessage: upload.error.message.slice(0, 160),
+      promptHash: image.promptHash,
+    };
+  }
+
+  const signed = await params.admin.storage.from(AI_DEAL_ASSETS_BUCKET).createSignedUrl(path, 60 * 20);
+  return {
+    path,
+    signedUrl: signed.data?.signedUrl ?? null,
+    provider: "gemini",
+    model: image.model,
+    endpoint: "models.generateContent",
+    estimatedCostUsd: image.estimatedCostUsd,
+    success: true,
+    errorCode: null,
+    errorMessage: null,
+    promptHash: image.promptHash,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders(req) });
@@ -358,7 +477,7 @@ serve(async (req) => {
   const forceDryRun = bool(Deno.env.get("AI_STUDIO_DRY_RUN"), false);
   const imageGenerationEnabled = bool(Deno.env.get("AI_STUDIO_ENABLE_IMAGE_GENERATION"), false);
   const dryRun = input.dryRun || forceDryRun || !openAiKey;
-  const copyOnly = input.copyOnly || !imageGenerationEnabled;
+  const copyOnly = input.copyOnly || !imageGenerationEnabled || dryRun;
 
   let draft = fallbackDraft({
     productName: input.productName,
@@ -402,6 +521,35 @@ serve(async (req) => {
     offerTerms: input.offerTerms,
     stylePreset: input.stylePreset,
   }).image_prompt);
+  let imageResult: ImageGenerationResult = {
+    path: null,
+    signedUrl: null,
+    provider: "none",
+    model: null,
+    endpoint: "disabled",
+    estimatedCostUsd: 0,
+    success: false,
+    errorCode: copyOnly ? "COPY_ONLY" : null,
+    errorMessage: null,
+    promptHash: null,
+  };
+
+  if (!copyOnly) {
+    imageResult = await generateAndStoreGeminiImage({
+      admin,
+      geminiApiKey,
+      userId: user.id,
+      businessId: input.businessId,
+      requestGroupId,
+      imagePrompt: draft.image_prompt,
+    });
+    if (imageResult.success) {
+      draft.image_asset_path = imageResult.path;
+      draft.image_signed_url = imageResult.signedUrl;
+    } else {
+      fallbackReason = imageResult.errorCode ?? fallbackReason;
+    }
+  }
 
   const inputOffer = {
     product_name: input.productName,
@@ -465,6 +613,9 @@ serve(async (req) => {
     publishingDisabled: true,
     copyOnly,
     dryRun,
+    imageProvider: imageResult.provider,
+    imageModel: imageResult.model,
+    imageGenerationSuccess: imageResult.success,
   };
 
   const { data: creative, error: creativeError } = await admin
@@ -484,9 +635,13 @@ serve(async (req) => {
       quality: {
         imageTextFreeRequired: true,
         imagePromptHasRequiredClauses: includesAllImagePromptRequirements(draft.image_prompt),
-        noImageGeneration: true,
+        noImageGeneration: copyOnly,
+        privateAssetOnly: draft.image_asset_path !== null ? draft.image_signed_url !== null : true,
         publishingDisabled: true,
         dryRun,
+        imageProvider: imageResult.provider,
+        imageGenerationSuccess: imageResult.success,
+        imageGenerationErrorCode: imageResult.errorCode,
       },
     })
     .select("id,ad_generation_job_id,business_id,ad_spec,created_at")
@@ -521,11 +676,31 @@ serve(async (req) => {
       layout_recommendation: draft.layout_recommendation,
       image_prompt_validated: includesAllImagePromptRequirements(draft.image_prompt),
       image_generation_enabled: imageGenerationEnabled,
+      image_provider: imageResult.provider,
+      image_model: imageResult.model,
+      image_asset_path: draft.image_asset_path,
+      image_prompt_hash: imageResult.promptHash,
       publishing_disabled: true,
     },
     openai_called: provider === "openai",
     user_agent: req.headers.get("user-agent"),
   });
+
+  if (imageResult.provider === "gemini") {
+    await logAiCost(admin, {
+      businessId: input.businessId,
+      ownerUserId: user.id,
+      requestGroupId,
+      feature: "ai_studio_image",
+      provider: "gemini",
+      model: imageResult.model ?? "gemini-image",
+      endpoint: imageResult.endpoint,
+      estimatedCostUsd: imageResult.estimatedCostUsd,
+      success: imageResult.success,
+      errorCode: imageResult.errorCode,
+      errorMessage: imageResult.errorMessage,
+    });
+  }
 
   await logAiCost(admin, {
     businessId: input.businessId,
@@ -550,6 +725,10 @@ serve(async (req) => {
       creative: adSpec,
       image_asset_path: draft.image_asset_path,
       image_signed_url: draft.image_signed_url,
+      image_provider: imageResult.provider,
+      image_model: imageResult.model,
+      image_generation_success: imageResult.success,
+      image_generation_error_code: imageResult.errorCode,
       text_provider: provider,
       text_model: model,
       fallback_reason: fallbackReason,
