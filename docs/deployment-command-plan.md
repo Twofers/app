@@ -519,6 +519,10 @@ From [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md):
 | `npm run lint` | ESLint |
 | `npm test` | Vitest |
 | `npm run typecheck:functions` | Deno check on Edge sources (optional) |
+| `npm run gate:ai-ad` | AI ad release gate |
+| `npm run gate:localization-plan` | Multilingual plan completion evidence audit |
+| `npm run gate:localization-rollout` | Multilingual rollout blocker gate |
+| `npm run dashboard:localization-rollout` | Local multilingual readiness dashboard |
 | `npx supabase projects list` | Confirm account access |
 | `npx supabase migration list` | After `link`; local vs remote migrations |
 | `npx eas whoami` / `npx eas env:list --environment production` | EAS readiness |
@@ -526,7 +530,7 @@ From [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md):
 ### 9.2 Commands to run next (typical order)
 
 1. Repo hygiene: clean working tree, tag candidate commit.
-2. `npm run typecheck`, `npm run lint`, `npm test` (and optional `typecheck:functions`).
+2. `npm run typecheck`, `npm run lint`, `npm test`, `npm run gate:ai-ad`, `npm run gate:localization-plan`, `npm run gate:localization-rollout`, `npm run dashboard:localization-rollout` (and optional `typecheck:functions`).
 3. `npx supabase link` → `npx supabase migration list` → human review → **`db push` only if approved**.
 4. Dashboard: Storage buckets/policies, Auth URLs, Stripe webhook (if used).
 5. Set Edge secrets (names in Section 5) without pasting values into chat.

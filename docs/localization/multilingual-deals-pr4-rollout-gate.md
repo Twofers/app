@@ -15,10 +15,11 @@ Current state:
 Use this local check during release prep:
 
 ```bash
+npm run gate:localization-plan
 npm run gate:localization-rollout
 ```
 
-That command passes when the blocked state is explicit, traceable, and backed by the production approval runbook in `docs/localization/multilingual-deals-production-approval-runbook.md`. To turn the same check into a hard broad-production readiness assertion, run it with:
+The plan audit maps PR1-PR4 requirements and required automated tests to current repo evidence. The rollout gate passes when the blocked state is explicit, traceable, and backed by the production approval runbook in `docs/localization/multilingual-deals-production-approval-runbook.md`. To turn the rollout gate into a hard broad-production readiness assertion, run it with:
 
 ```bash
 LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout

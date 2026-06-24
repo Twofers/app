@@ -163,6 +163,7 @@ const checks = [
     file: "docs/localization/multilingual-deals-production-approval-runbook.md",
     patterns: [
       /Hard Gates Before Broad Production/,
+      /npm run gate:localization-plan/,
       /20260728120000_ad_localization_storage\.sql/,
       /20260728123000_customer_deal_localization_projection\.sql/,
       /npx supabase functions deploy ai-generate-ad-variants/,
@@ -170,6 +171,20 @@ const checks = [
       /AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED/,
       /Customer viewing must not make a model call/,
       /Do not deploy `send-deal-push` to claim multilingual push support/,
+    ],
+  },
+  {
+    name: "plan completion audit gate exists",
+    file: "docs/localization/multilingual-deals-plan-completion-audit.md",
+    patterns: [
+      /# Multilingual Deals Plan Completion Audit/,
+      /## PR 1 Matrix/,
+      /## PR 2 Matrix/,
+      /## PR 3 Matrix/,
+      /## PR 4 Matrix/,
+      /## Required Automated Test Coverage/,
+      /## Completion Blockers/,
+      /npm run gate:localization-plan/,
     ],
   },
 ];

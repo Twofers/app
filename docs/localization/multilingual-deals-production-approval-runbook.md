@@ -43,6 +43,7 @@ npx vitest run
 npm run typecheck:functions
 npm run copy:evaluate
 npm run gate:ai-ad
+npm run gate:localization-plan
 npm run gate:localization-rollout
 npm run dashboard:localization-rollout
 npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-approval

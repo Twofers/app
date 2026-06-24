@@ -738,6 +738,76 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4l - Plan completion audit gate
+
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+
+Safety checkpoint: `07f6e0ba` (Multilingual Deals PR 4k deployment docs alignment commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, no push notification was sent, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-plan-completion-audit.md`
+- `scripts/check-localization-plan-completion.mjs`
+- `lib/localization-plan-completion-audit.test.ts`
+
+## Files changed
+
+- `package.json`
+- `scripts/check-localization-rollout-gates.mjs`
+- `docs/localization/multilingual-deals-production-approval-runbook.md`
+- `docs/localization/multilingual-deals-pr4-rollout-gate.md`
+- `docs/deployment-command-plan.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a repo-owned completion audit that maps the v1.1 multilingual plan's PR1-PR4 requirements, required automated test groups, and remaining production blockers to current evidence.
+- Added `npm run gate:localization-plan`, a source/documentation gate that verifies the audit artifact, core evidence anchors, hard-gate language, customer-safe localization projection path, transcreation/repair/semantic-QA anchors, rollout blockers, and no-multilingual-push guard.
+- Added a Vitest guard proving the new gate runs and remains exposed through `package.json`.
+- Linked the new plan audit gate from the multilingual production runbook, PR4 rollout gate handoff, and deployment command plan.
+- Extended `npm run gate:localization-rollout` so the plan completion audit is required rollout evidence.
+
+## Acceptance criteria map
+
+- PR4 operational handoff: Improved; the plan no longer depends on reading a long historical report to understand what is locally implemented versus externally blocked.
+- Required automated tests: Improved; the audit records the current evidence for plan sections 28.1 through 28.10 and the gate checks that the mapping remains present.
+- Broad production gating: Preserved; the audit and rollout gate still state that Spanish/Korean broad production is blocked until reviewer, template, Korean counter, and real-device screenshot QA evidence exists.
+- No production deployment: Preserved; this checkpoint is documentation/test/script only and did not cross a hard gate.
+
+## Validation
+
+- `npm run gate:localization-plan`: passed; 12 plan audit checks passed.
+- `npm run gate:localization-rollout`: passed; 18 rollout gate checks passed.
+- `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout`: failed as expected with reviewer/template/Korean counter/screenshot QA blockers; wrapper verified exit code 1.
+- `npm run dashboard:localization-rollout`: passed; dashboard generated locally and still reports Spanish/Korean broad production blockers.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 174 files, 920 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run typecheck:functions`: passed; 136 Edge Function files checked.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-plan-audit-20260623`: passed with known `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- This audit improves proof discipline but does not make the app production ready.
+- Broad U.S. Spanish and Korean production remains blocked until Dan records named reviewers, native sign-off, Korean counter approvals, and real-device screenshot QA.
+- Hosted behavior remains unchanged until Dan explicitly approves the pending Supabase migrations, Edge Function redeploys, hosted flag changes, and any future release build.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4k - Deployment docs alignment
 
 Status: Implemented locally on branch `codex/multilingual-deploy-docs-alignment`.

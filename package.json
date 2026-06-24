@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "copy:evaluate": "node scripts/evaluate-ai-promotional-copy.mjs",
     "gate:ai-ad": "node scripts/check-ai-ad-release-gates.mjs",
+    "gate:localization-plan": "node scripts/check-localization-plan-completion.mjs",
     "gate:localization-rollout": "node scripts/check-localization-rollout-gates.mjs",
     "dashboard:localization-rollout": "node scripts/generate-localization-rollout-dashboard.mjs",
     "gate:rls": "node scripts/probe-rls-inventory.mjs",
