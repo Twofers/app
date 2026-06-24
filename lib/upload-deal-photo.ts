@@ -4,15 +4,19 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import {
   DEAL_PHOTO_UPLOAD_JPEG_QUALITY,
+  resolveDealPhotoUploadCrop,
   resolveDealPhotoUploadResize,
 } from "./deal-photo-upload-sizing";
 
 async function prepareDealPhotoForUpload(uri: string): Promise<string> {
   const source = await ImageManipulator.manipulate(uri).renderAsync();
-  const resize = resolveDealPhotoUploadResize({ width: source.width, height: source.height });
-  const rendered = resize
-    ? await ImageManipulator.manipulate(uri).resize(resize).renderAsync()
-    : source;
+  const crop = resolveDealPhotoUploadCrop({ width: source.width, height: source.height });
+  const resizeSource = crop ?? { width: source.width, height: source.height };
+  const resize = resolveDealPhotoUploadResize(resizeSource);
+  const manipulator = ImageManipulator.manipulate(source);
+  if (crop) manipulator.crop(crop);
+  if (resize) manipulator.resize(resize);
+  const rendered = crop || resize ? await manipulator.renderAsync() : source;
   const saved = await rendered.saveAsync({
     compress: DEAL_PHOTO_UPLOAD_JPEG_QUALITY,
     format: SaveFormat.JPEG,

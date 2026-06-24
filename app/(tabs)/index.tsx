@@ -7,7 +7,6 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
   type ViewToken,
 } from "react-native";
 import { Image } from "expo-image";
@@ -173,7 +172,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
-  const { height: windowHeight } = useWindowDimensions();
   const { isLoggedIn, userId } = useBusiness();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -867,9 +865,6 @@ export default function HomeScreen() {
     }
   }, [refreshingFeed, loadDeals, loadBusinesses, loadFavorites, userId, hydrateLocationFromPrefs]);
 
-  const heroCardHeight = Math.min(520, Math.max(340, Math.round(windowHeight * 0.5)));
-  const heroImageHeight = Math.round(heroCardHeight * 0.57);
-
   const formatTimeLeft = useCallback(
     (endTimeIso: string) => {
       const deltaMs = new Date(endTimeIso).getTime() - nowTick;
@@ -1046,14 +1041,14 @@ export default function HomeScreen() {
             {posterUri ? (
               <Image
                 source={{ uri: posterUri }}
-                style={{ width: "100%", height: heroImageHeight }}
+                style={{ width: "100%", aspectRatio: 1 }}
                 contentFit="cover"
               />
             ) : (
               <View
                 style={{
                   width: "100%",
-                  height: heroImageHeight,
+                  aspectRatio: 1,
                   backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.12)" : "rgba(255,159,28,0.09)",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1088,7 +1083,7 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
-          <View style={{ minHeight: heroCardHeight - heroImageHeight, padding: Spacing.lg, gap: Spacing.sm }}>
+          <View style={{ padding: Spacing.lg, gap: Spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
               <Text style={{ fontSize: 20, fontWeight: "800", flex: 1, color: theme.text }} numberOfLines={2}>
                 {businessName}
@@ -1218,8 +1213,6 @@ export default function HomeScreen() {
       favoriteBusinessIds,
       theme,
       colorScheme,
-      heroImageHeight,
-      heroCardHeight,
       composedCustomerRendererEnabled,
       customerLocaleResolutionEnabled,
       customerPreferredDealLocale,

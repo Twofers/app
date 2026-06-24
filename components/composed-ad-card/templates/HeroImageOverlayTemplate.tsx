@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   hero: {
-    minHeight: 430,
+    aspectRatio: 1,
     overflow: "hidden",
   },
   topBadges: {

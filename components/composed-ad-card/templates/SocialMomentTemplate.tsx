@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    height: 265,
+    aspectRatio: 1,
     overflow: "hidden",
   },
   status: {

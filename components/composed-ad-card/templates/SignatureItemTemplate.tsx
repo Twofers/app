@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    height: 285,
+    aspectRatio: 1,
   },
   brandOverlay: {
     position: "absolute",

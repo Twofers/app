@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    height: 210,
+    aspectRatio: 1,
   },
   panel: {
     padding: 14,
