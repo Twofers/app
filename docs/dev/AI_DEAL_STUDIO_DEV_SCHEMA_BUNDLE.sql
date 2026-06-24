@@ -4,19 +4,20 @@
 -- Do not apply to production.
 -- This bundle intentionally excludes production cron, paid surfaces,
 -- seed/demo, QA content, and release-push scheduling paths.
--- Generated at: 2026-06-24T18:09:19.884Z
+-- Generated at: 2026-06-24T18:28:06.411Z
 
 
 -- ============================================================
 -- Source migration: 20250127000000_initial_schema.sql
 -- ============================================================
 
+
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Businesses table (owned by auth users)
 CREATE TABLE IF NOT EXISTS businesses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS businesses (
 
 -- Deals table
 CREATE TABLE IF NOT EXISTS deals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
@@ -44,7 +45,7 @@ CREATE TABLE IF NOT EXISTS deals (
 
 -- Deal claims table
 CREATE TABLE IF NOT EXISTS deal_claims (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   token TEXT NOT NULL UNIQUE,
@@ -55,7 +56,7 @@ CREATE TABLE IF NOT EXISTS deal_claims (
 
 -- Favorites table
 CREATE TABLE IF NOT EXISTS favorites (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -83,23 +84,28 @@ ALTER TABLE deal_claims ENABLE ROW LEVEL SECURITY;
 ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
 
 -- Businesses: Users can read all, but only insert/update their own
+DROP POLICY IF EXISTS "Anyone can read businesses" ON businesses;
 CREATE POLICY "Anyone can read businesses"
   ON businesses FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Users can insert their own business" ON businesses;
 CREATE POLICY "Users can insert their own business"
   ON businesses FOR INSERT
   WITH CHECK (auth.uid() = owner_id);
 
+DROP POLICY IF EXISTS "Users can update their own business" ON businesses;
 CREATE POLICY "Users can update their own business"
   ON businesses FOR UPDATE
   USING (auth.uid() = owner_id);
 
 -- Deals: Customers can read active deals, businesses can manage their own
+DROP POLICY IF EXISTS "Anyone can read active deals" ON deals;
 CREATE POLICY "Anyone can read active deals"
   ON deals FOR SELECT
   USING (is_active = true AND end_time > NOW());
 
+DROP POLICY IF EXISTS "Businesses can read their own deals" ON deals;
 CREATE POLICY "Businesses can read their own deals"
   ON deals FOR SELECT
   USING (
@@ -110,6 +116,7 @@ CREATE POLICY "Businesses can read their own deals"
     )
   );
 
+DROP POLICY IF EXISTS "Businesses can insert their own deals" ON deals;
 CREATE POLICY "Businesses can insert their own deals"
   ON deals FOR INSERT
   WITH CHECK (
@@ -120,6 +127,7 @@ CREATE POLICY "Businesses can insert their own deals"
     )
   );
 
+DROP POLICY IF EXISTS "Businesses can update their own deals" ON deals;
 CREATE POLICY "Businesses can update their own deals"
   ON deals FOR UPDATE
   USING (
@@ -131,10 +139,12 @@ CREATE POLICY "Businesses can update their own deals"
   );
 
 -- Deal claims: Users can read their own claims, businesses can read claims for their deals
+DROP POLICY IF EXISTS "Users can read their own claims" ON deal_claims;
 CREATE POLICY "Users can read their own claims"
   ON deal_claims FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Businesses can read claims for their deals" ON deal_claims;
 CREATE POLICY "Businesses can read claims for their deals"
   ON deal_claims FOR SELECT
   USING (
@@ -148,11 +158,13 @@ CREATE POLICY "Businesses can read claims for their deals"
 
 -- Note: Insert/update of deal_claims should be done via Edge Functions only
 -- We'll allow insert for now but Edge Function will validate
+DROP POLICY IF EXISTS "Users can insert their own claims" ON deal_claims;
 CREATE POLICY "Users can insert their own claims"
   ON deal_claims FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 -- Businesses can update (redeem) claims for their deals
+DROP POLICY IF EXISTS "Businesses can update claims for their deals" ON deal_claims;
 CREATE POLICY "Businesses can update claims for their deals"
   ON deal_claims FOR UPDATE
   USING (
@@ -165,14 +177,17 @@ CREATE POLICY "Businesses can update claims for their deals"
   );
 
 -- Favorites: Users can manage their own favorites
+DROP POLICY IF EXISTS "Users can read their own favorites" ON favorites;
 CREATE POLICY "Users can read their own favorites"
   ON favorites FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own favorites" ON favorites;
 CREATE POLICY "Users can insert their own favorites"
   ON favorites FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own favorites" ON favorites;
 CREATE POLICY "Users can delete their own favorites"
   ON favorites FOR DELETE
   USING (auth.uid() = user_id);
@@ -181,6 +196,7 @@ CREATE POLICY "Users can delete their own favorites"
 -- ============================================================
 -- Source migration: 20260127000001_add_deal_templates_and_recurring.sql
 -- ============================================================
+
 
 -- Add recurring window fields + defaults to deals (idempotent)
 ALTER TABLE IF EXISTS deals
@@ -304,7 +320,8 @@ BEGIN
     SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'deal_templates' AND policyname = 'Businesses can read their templates'
   ) THEN
     EXECUTE $pol$
-      CREATE POLICY "Businesses can read their templates"
+      DROP POLICY IF EXISTS "Businesses can read their templates" ON deal_templates;
+CREATE POLICY "Businesses can read their templates"
         ON deal_templates FOR SELECT
         USING (
           EXISTS (
@@ -320,7 +337,8 @@ BEGIN
     SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'deal_templates' AND policyname = 'Businesses can insert their templates'
   ) THEN
     EXECUTE $pol$
-      CREATE POLICY "Businesses can insert their templates"
+      DROP POLICY IF EXISTS "Businesses can insert their templates" ON deal_templates;
+CREATE POLICY "Businesses can insert their templates"
         ON deal_templates FOR INSERT
         WITH CHECK (
           EXISTS (
@@ -336,7 +354,8 @@ BEGIN
     SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'deal_templates' AND policyname = 'Businesses can update their templates'
   ) THEN
     EXECUTE $pol$
-      CREATE POLICY "Businesses can update their templates"
+      DROP POLICY IF EXISTS "Businesses can update their templates" ON deal_templates;
+CREATE POLICY "Businesses can update their templates"
         ON deal_templates FOR UPDATE
         USING (
           EXISTS (
@@ -352,7 +371,8 @@ BEGIN
     SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'deal_templates' AND policyname = 'Businesses can delete their templates'
   ) THEN
     EXECUTE $pol$
-      CREATE POLICY "Businesses can delete their templates"
+      DROP POLICY IF EXISTS "Businesses can delete their templates" ON deal_templates;
+CREATE POLICY "Businesses can delete their templates"
         ON deal_templates FOR DELETE
         USING (
           EXISTS (
@@ -371,6 +391,7 @@ $$;
 -- Source migration: 20260128120000_business_profile_ai_context.sql
 -- ============================================================
 
+
 -- Optional fields for AI ad context and future profile (nullable — never blocks MVP flows)
 ALTER TABLE IF EXISTS public.businesses
   ADD COLUMN IF NOT EXISTS category TEXT,
@@ -388,6 +409,7 @@ COMMENT ON COLUMN public.businesses.short_description IS '1–2 sentences about 
 -- Source migration: 20260129100000_deal_quality_tier.sql
 -- ============================================================
 
+
 -- For future ranking / notification eligibility (strong vs acceptable). Weak deals never inserted.
 ALTER TABLE IF EXISTS public.deals
   ADD COLUMN IF NOT EXISTS quality_tier TEXT;
@@ -398,6 +420,7 @@ COMMENT ON COLUMN public.deals.quality_tier IS 'strong | acceptable — set at p
 -- ============================================================
 -- Source migration: 20260130120000_business_preferred_locale.sql
 -- ============================================================
+
 
 -- Language for AI ad output and create-flow validation copy (en | es | ko). NULL = follow app UI locale on client.
 ALTER TABLE IF EXISTS public.businesses
@@ -410,9 +433,11 @@ COMMENT ON COLUMN public.businesses.preferred_locale IS 'en | es | ko — AI ad 
 -- Source migration: 20260323120000_users_read_claimed_deals.sql
 -- ============================================================
 
+
 -- Allow customers to read deal rows for deals they have claimed (wallet / history).
 -- Without this, RLS only exposes active future deals, so ended deals disappear from the client.
 
+DROP POLICY IF EXISTS "Users can read deals they claimed" ON public.deals;
 CREATE POLICY "Users can read deals they claimed"
   ON public.deals FOR SELECT
   USING (
@@ -428,6 +453,7 @@ CREATE POLICY "Users can read deals they claimed"
 -- Source migration: 20260324120000_business_coordinates.sql
 -- ============================================================
 
+
 -- Optional WGS84 coordinates for distance sorting / future map (nullable).
 
 ALTER TABLE public.businesses
@@ -442,6 +468,7 @@ COMMENT ON COLUMN public.businesses.longitude IS 'Optional WGS84 longitude for d
 -- Source migration: 20260324180000_business_consumer_profile_fields.sql
 -- ============================================================
 
+
 -- Optional consumer-facing profile fields (hours & phone). Nullable for existing rows.
 ALTER TABLE public.businesses
   ADD COLUMN IF NOT EXISTS phone TEXT,
@@ -454,6 +481,7 @@ COMMENT ON COLUMN public.businesses.hours_text IS 'Optional human-readable hours
 -- ============================================================
 -- Source migration: 20260325120000_ai_generation_logs.sql
 -- ============================================================
+
 
 -- AI offer composition: metering, audit trail, duplicate/cooldown support.
 -- Rows are written only from Edge Functions (service role).
@@ -509,6 +537,7 @@ COMMENT ON TABLE public.ai_generation_logs IS 'Server-side audit for AI compose-
 -- Source migration: 20260325120100_ai_compose_quota_rpc.sql
 -- ============================================================
 
+
 -- Quota display for business owners (matches default AI_MONTHLY_LIMIT=30 in Edge env).
 
 CREATE OR REPLACE FUNCTION public.ai_compose_quota_status(p_business_id uuid)
@@ -547,6 +576,7 @@ GRANT EXECUTE ON FUNCTION public.ai_compose_quota_status(uuid) TO authenticated;
 -- ============================================================
 -- Source migration: 20260325183000_strong_deal_only_guardrail.sql
 -- ============================================================
+
 
 -- Enforce curated "strong deal only" quality at write-time.
 -- Applies to inserts and title/description edits on `deals`.
@@ -617,6 +647,7 @@ EXECUTE FUNCTION public.enforce_strong_deal_only_guardrail();
 -- Source migration: 20260326120000_consumer_profiles_business_contact.sql
 -- ============================================================
 
+
 -- Consumer profiles (Supabase-backed; complements auth.users)
 CREATE TABLE IF NOT EXISTS public.consumer_profiles (
   user_id UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -648,14 +679,17 @@ CREATE INDEX IF NOT EXISTS idx_consumer_profiles_zip ON public.consumer_profiles
 
 ALTER TABLE public.consumer_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "consumer_profiles_select_own" ON public.consumer_profiles;
 CREATE POLICY "consumer_profiles_select_own"
   ON public.consumer_profiles FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "consumer_profiles_insert_own" ON public.consumer_profiles;
 CREATE POLICY "consumer_profiles_insert_own"
   ON public.consumer_profiles FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "consumer_profiles_update_own" ON public.consumer_profiles;
 CREATE POLICY "consumer_profiles_update_own"
   ON public.consumer_profiles FOR UPDATE
   USING (auth.uid() = user_id)
@@ -676,6 +710,7 @@ COMMENT ON COLUMN public.businesses.address IS 'Street or full address for profi
 -- Source migration: 20260326210000_deal_claims_short_code.sql
 -- ============================================================
 
+
 -- Human-readable code for manual / visual verification at redeem (QR still uses full token).
 ALTER TABLE public.deal_claims
   ADD COLUMN IF NOT EXISTS short_code TEXT;
@@ -691,6 +726,7 @@ COMMENT ON COLUMN public.deal_claims.short_code IS '6-char code for staff manual
 -- Source migration: 20260327120000_launch_visual_redeem_analytics.sql
 -- ============================================================
 
+
 -- Launch: visual redeem lifecycle, claim metadata for analytics, consumer birthdate, append-only events.
 
 -- --- Consumer profile: birthday (age_range optional for legacy rows)
@@ -700,6 +736,7 @@ ALTER TABLE public.consumer_profiles
 ALTER TABLE public.consumer_profiles
   ALTER COLUMN age_range DROP NOT NULL;
 
+ALTER TABLE public.consumer_profiles DROP CONSTRAINT IF EXISTS consumer_profiles_age_range_check;
 ALTER TABLE public.consumer_profiles
   ADD CONSTRAINT consumer_profiles_age_range_check CHECK (
     age_range IS NULL
@@ -743,6 +780,7 @@ ALTER TABLE public.deal_claims
 ALTER TABLE public.deal_claims
   DROP CONSTRAINT IF EXISTS deal_claims_claim_status_check;
 
+ALTER TABLE public.deal_claims DROP CONSTRAINT IF EXISTS deal_claims_claim_status_check;
 ALTER TABLE public.deal_claims
   ADD CONSTRAINT deal_claims_claim_status_check CHECK (
     claim_status IN ('active', 'redeeming', 'redeemed', 'expired', 'canceled')
@@ -757,6 +795,7 @@ ALTER TABLE public.deal_claims
 ALTER TABLE public.deal_claims
   DROP CONSTRAINT IF EXISTS deal_claims_redeem_method_check;
 
+ALTER TABLE public.deal_claims DROP CONSTRAINT IF EXISTS deal_claims_redeem_method_check;
 ALTER TABLE public.deal_claims
   ADD CONSTRAINT deal_claims_redeem_method_check CHECK (
     redeem_method IS NULL OR redeem_method IN ('visual', 'qr')
@@ -816,6 +855,7 @@ ALTER TABLE public.app_analytics_events ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "app_analytics_events_insert_own" ON public.app_analytics_events;
 
+DROP POLICY IF EXISTS "app_analytics_events_insert_own" ON public.app_analytics_events;
 CREATE POLICY "app_analytics_events_insert_own"
   ON public.app_analytics_events FOR INSERT
   WITH CHECK (auth.uid() = user_id);
@@ -824,6 +864,7 @@ CREATE POLICY "app_analytics_events_insert_own"
 -- ============================================================
 -- Source migration: 20260328140000_merchant_insights_rpc.sql
 -- ============================================================
+
 
 -- Aggregated merchant analytics only (no raw user lists). Callable by deal/business owner via RPC.
 
@@ -1116,6 +1157,7 @@ GRANT EXECUTE ON FUNCTION public.merchant_business_insights(uuid) TO authenticat
 -- Source migration: 20260330120000_fix_deal_claims_deals_rls_recursion.sql
 -- ============================================================
 
+
 -- Break RLS recursion between `deals` and `deal_claims`.
 --
 -- Policy "Users can read deals they claimed" on `deals` evaluates EXISTS (SELECT ... deal_claims).
@@ -1148,10 +1190,12 @@ GRANT EXECUTE ON FUNCTION public.deal_claim_visible_to_business_owner(uuid) TO a
 GRANT EXECUTE ON FUNCTION public.deal_claim_visible_to_business_owner(uuid) TO service_role;
 
 DROP POLICY IF EXISTS "Businesses can read claims for their deals" ON public.deal_claims;
+DROP POLICY IF EXISTS "Businesses can read claims for their deals" ON public.deal_claims;
 CREATE POLICY "Businesses can read claims for their deals"
   ON public.deal_claims FOR SELECT
   USING (public.deal_claim_visible_to_business_owner(deal_id));
 
+DROP POLICY IF EXISTS "Businesses can update claims for their deals" ON public.deal_claims;
 DROP POLICY IF EXISTS "Businesses can update claims for their deals" ON public.deal_claims;
 CREATE POLICY "Businesses can update claims for their deals"
   ON public.deal_claims FOR UPDATE
@@ -1162,9 +1206,11 @@ CREATE POLICY "Businesses can update claims for their deals"
 -- Source migration: 20260330140000_deals_public_read_start_time_deal_templates_timezone.sql
 -- ============================================================
 
+
 -- Public discovery: hide deals that have not started yet (scheduled future one-time deals).
 DROP POLICY IF EXISTS "Anyone can read active deals" ON public.deals;
 
+DROP POLICY IF EXISTS "Anyone can read active deals" ON public.deals;
 CREATE POLICY "Anyone can read active deals"
   ON public.deals FOR SELECT
   USING (
@@ -1182,6 +1228,7 @@ ALTER TABLE IF EXISTS public.deal_templates
 -- Source migration: 20260331120000_deal_poster_storage_public_read.sql
 -- ============================================================
 
+
 -- Stable storage path for deal art (optional; legacy rows still parse path from signed URLs in app).
 ALTER TABLE public.deals
   ADD COLUMN IF NOT EXISTS poster_storage_path TEXT;
@@ -1195,6 +1242,7 @@ VALUES ('deal-photos', 'deal-photos', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 DROP POLICY IF EXISTS "Public read deal-photos objects" ON storage.objects;
+DROP POLICY IF EXISTS "Public read deal-photos objects" ON storage.objects;
 CREATE POLICY "Public read deal-photos objects"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'deal-photos');
@@ -1203,6 +1251,7 @@ USING (bucket_id = 'deal-photos');
 -- ============================================================
 -- Source migration: 20260401120000_add_claim_blocked_reason_mix_to_merchant_business_insights.sql
 -- ============================================================
+
 
 -- Include claim-block reasons (from app analytics) in aggregated business insights.
 -- Must run after earlier migrations that define merchant_business_insights.
@@ -1365,6 +1414,7 @@ GRANT EXECUTE ON FUNCTION public.merchant_business_insights(uuid) TO authenticat
 -- Source migration: 20260401150000_update_strong_deal_guardrail_free_item.sql
 -- ============================================================
 
+
 -- Update strong-deal guardrail to mirror the TypeScript logic in strong-deal-guard.ts
 -- Priority order:
 --   1. FREE ITEM  — "free" (not hyphenated), "on the house", "complimentary" → PASS
@@ -1464,6 +1514,7 @@ EXECUTE FUNCTION public.enforce_strong_deal_only_guardrail();
 -- Source migration: 20260402120000_push_tokens.sql
 -- ============================================================
 
+
 -- Stores Expo push tokens for server-side notifications.
 -- One row per (user, token) pair; upsert to handle reinstalls/token refresh.
 create table if not exists push_tokens (
@@ -1480,6 +1531,7 @@ create index if not exists idx_push_tokens_user_id on push_tokens(user_id);
 
 alter table push_tokens enable row level security;
 
+DROP POLICY IF EXISTS "Users can manage their own push tokens" ON push_tokens;
 create policy "Users can manage their own push tokens"
   on push_tokens for all
   using (auth.uid() = user_id)
@@ -1489,6 +1541,7 @@ create policy "Users can manage their own push tokens"
 -- ============================================================
 -- Source migration: 20260402130000_server_set_quality_tier.sql
 -- ============================================================
+
 
 -- Ensure quality_tier is always computed server-side, never trusted from client.
 CREATE OR REPLACE FUNCTION public.set_quality_tier_on_deal()
@@ -1516,6 +1569,7 @@ EXECUTE FUNCTION public.set_quality_tier_on_deal();
 -- Source migration: 20260403120000_consumer_push_prefs.sql
 -- ============================================================
 
+
 -- Server-side consumer location + notification preferences for push targeting.
 -- Edge function "send-deal-push" uses these to find consumers within radius or by favorites.
 
@@ -1529,6 +1583,7 @@ ALTER TABLE public.consumer_profiles
 ALTER TABLE public.consumer_profiles
   DROP CONSTRAINT IF EXISTS consumer_profiles_notification_mode_check;
 
+ALTER TABLE public.consumer_profiles DROP CONSTRAINT IF EXISTS consumer_profiles_notification_mode_check;
 ALTER TABLE public.consumer_profiles
   ADD CONSTRAINT consumer_profiles_notification_mode_check CHECK (
     notification_mode IN ('all_nearby', 'favorites_only', 'none')
@@ -1537,6 +1592,7 @@ ALTER TABLE public.consumer_profiles
 ALTER TABLE public.consumer_profiles
   DROP CONSTRAINT IF EXISTS consumer_profiles_radius_miles_check;
 
+ALTER TABLE public.consumer_profiles DROP CONSTRAINT IF EXISTS consumer_profiles_radius_miles_check;
 ALTER TABLE public.consumer_profiles
   ADD CONSTRAINT consumer_profiles_radius_miles_check CHECK (
     radius_miles IN (1, 3, 5, 10)
@@ -1555,11 +1611,13 @@ CREATE INDEX IF NOT EXISTS idx_consumer_profiles_notification_mode
 -- Source migration: 20260404120000_app_analytics_events_select_business_owner.sql
 -- ============================================================
 
+
 -- Allow business owners to read analytics rows for their own deals (dashboard "views" metric).
 -- Consumers insert via ingest-analytics-event; merchants aggregate in the app client.
 
 DROP POLICY IF EXISTS "app_analytics_events_select_deal_owner" ON public.app_analytics_events;
 
+DROP POLICY IF EXISTS "app_analytics_events_select_deal_owner" ON public.app_analytics_events;
 CREATE POLICY "app_analytics_events_select_deal_owner"
   ON public.app_analytics_events FOR SELECT
   TO authenticated
@@ -1578,6 +1636,7 @@ CREATE POLICY "app_analytics_events_select_deal_owner"
 -- ============================================================
 -- Source migration: 20260429120000_business_menu_items.sql
 -- ============================================================
+
 
 -- Saved menu lines per business (owner-only; not exposed to consumers).
 
@@ -1598,6 +1657,7 @@ CREATE INDEX IF NOT EXISTS idx_business_menu_items_business_sort
 
 ALTER TABLE public.business_menu_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Owners can read their business menu items" ON public.business_menu_items;
 CREATE POLICY "Owners can read their business menu items"
   ON public.business_menu_items FOR SELECT
   USING (
@@ -1607,6 +1667,7 @@ CREATE POLICY "Owners can read their business menu items"
     )
   );
 
+DROP POLICY IF EXISTS "Owners can insert their business menu items" ON public.business_menu_items;
 CREATE POLICY "Owners can insert their business menu items"
   ON public.business_menu_items FOR INSERT
   WITH CHECK (
@@ -1616,6 +1677,7 @@ CREATE POLICY "Owners can insert their business menu items"
     )
   );
 
+DROP POLICY IF EXISTS "Owners can update their business menu items" ON public.business_menu_items;
 CREATE POLICY "Owners can update their business menu items"
   ON public.business_menu_items FOR UPDATE
   USING (
@@ -1625,6 +1687,7 @@ CREATE POLICY "Owners can update their business menu items"
     )
   );
 
+DROP POLICY IF EXISTS "Owners can delete their business menu items" ON public.business_menu_items;
 CREATE POLICY "Owners can delete their business menu items"
   ON public.business_menu_items FOR DELETE
   USING (
@@ -1641,6 +1704,7 @@ COMMENT ON TABLE public.business_menu_items IS 'Owner-saved menu lines from scan
 -- Source migration: 20260502120000_profiles_app_tab_mode.sql
 -- ============================================================
 
+
 -- Per-user app mode (consumer vs business) for strict auth routing.
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -1652,14 +1716,17 @@ COMMENT ON TABLE public.profiles IS 'Per-user app settings; app_tab_mode drives 
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
 CREATE POLICY "profiles_select_own"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
 CREATE POLICY "profiles_insert_own"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id)
@@ -1669,6 +1736,7 @@ CREATE POLICY "profiles_update_own"
 -- ============================================================
 -- Source migration: 20260601000000_create_business_profiles.sql
 -- ============================================================
+
 
 -- Create the business_profiles table.
 -- and the client-side business-profile-access helper.
@@ -1705,16 +1773,19 @@ CREATE INDEX IF NOT EXISTS idx_business_profiles_owner_id
 ALTER TABLE public.business_profiles ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: business owners can read their own profile row.
+DROP POLICY IF EXISTS "business_profiles_select_own" ON public.business_profiles;
 CREATE POLICY "business_profiles_select_own"
   ON public.business_profiles FOR SELECT
   USING (auth.uid() = user_id OR auth.uid() = owner_id);
 
 -- INSERT: authenticated users can create their own profile row.
+DROP POLICY IF EXISTS "business_profiles_insert_own" ON public.business_profiles;
 CREATE POLICY "business_profiles_insert_own"
   ON public.business_profiles FOR INSERT
   WITH CHECK (auth.uid() = user_id OR auth.uid() = owner_id);
 
 -- UPDATE: business owners can update their own profile row.
+DROP POLICY IF EXISTS "business_profiles_update_own" ON public.business_profiles;
 CREATE POLICY "business_profiles_update_own"
   ON public.business_profiles FOR UPDATE
   USING (auth.uid() = user_id OR auth.uid() = owner_id)
@@ -1724,6 +1795,7 @@ CREATE POLICY "business_profiles_update_own"
 -- ============================================================
 -- Source migration: 20260630120000_lockdown_deal_claims_client_insert.sql
 -- ============================================================
+
 
 -- Lock down `deal_claims` client INSERTs.
 -- Claim creation must go through edge function `supabase/functions/claim-deal`.
@@ -1738,6 +1810,7 @@ COMMIT;
 -- ============================================================
 -- Source migration: 20260701120001_enable_rate_limits_rls.sql
 -- ============================================================
+
 
 -- Lock down backend-only rate limiting table.
 DO $$
@@ -1754,6 +1827,7 @@ $$;
 -- Source migration: 20260702120000_deal_translation_columns.sql
 -- ============================================================
 
+
 -- Add translation columns for multilingual deal display (es = Spanish, ko = Korean).
 -- English title/description remain canonical; these are populated asynchronously
 -- by the ai-translate-deal edge function after publish.
@@ -1768,6 +1842,7 @@ ALTER TABLE deals ADD COLUMN IF NOT EXISTS description_ko TEXT;
 -- Source migration: 20260703120000_add_analytics_business_id_index.sql
 -- ============================================================
 
+
 -- Index for merchant analytics queries that filter by business_id
 CREATE INDEX IF NOT EXISTS idx_app_analytics_events_business_id
   ON app_analytics_events (business_id);
@@ -1776,6 +1851,7 @@ CREATE INDEX IF NOT EXISTS idx_app_analytics_events_business_id
 -- ============================================================
 -- Source migration: 20260703120001_push_token_cleanup.sql
 -- ============================================================
+
 
 -- Cleanup function for stale push tokens (not updated in 90+ days).
 -- Can be called via pg_cron or a scheduled edge function.
@@ -1799,7 +1875,9 @@ $$;
 -- Source migration: 20260703120002_birthdate_check_constraint.sql
 -- ============================================================
 
+
 -- Reject future or unreasonable birthdates in consumer_profiles.
+ALTER TABLE consumer_profiles DROP CONSTRAINT IF EXISTS chk_birthdate_in_past;
 ALTER TABLE consumer_profiles
   ADD CONSTRAINT chk_birthdate_in_past
   CHECK (birthdate IS NULL OR birthdate < CURRENT_DATE);
@@ -1808,6 +1886,7 @@ ALTER TABLE consumer_profiles
 -- ============================================================
 -- Source migration: 20260703120003_deal_claims_status_changed_at.sql
 -- ============================================================
+
 
 -- Track when claim_status last changed (audit trail for fraud detection).
 ALTER TABLE deal_claims
@@ -1841,6 +1920,7 @@ CREATE TRIGGER trg_claim_status_changed
 -- Source migration: 20260703120004_timezone_validation.sql
 -- ============================================================
 
+
 -- Validate that timezone columns contain valid IANA timezone strings.
 -- Invalid timezones silently fall back to UTC in date math, causing wrong
 -- claim windows, recurring schedules, and analytics aggregation.
@@ -1864,7 +1944,8 @@ BEGIN
       SELECT 1 FROM public.deals
       WHERE timezone IS NOT NULL AND NOT public.is_valid_iana_timezone(timezone)
     ) THEN
-      ALTER TABLE public.deals
+      ALTER TABLE public.deals DROP CONSTRAINT IF EXISTS chk_deals_timezone_valid;
+ALTER TABLE public.deals
         ADD CONSTRAINT chk_deals_timezone_valid
         CHECK (timezone IS NULL OR public.is_valid_iana_timezone(timezone));
     ELSE
@@ -1886,7 +1967,8 @@ BEGIN
       SELECT 1 FROM public.business_profiles
       WHERE timezone IS NOT NULL AND NOT public.is_valid_iana_timezone(timezone)
     ) THEN
-      ALTER TABLE public.business_profiles
+      ALTER TABLE public.business_profiles DROP CONSTRAINT IF EXISTS chk_business_profiles_timezone_valid;
+ALTER TABLE public.business_profiles
         ADD CONSTRAINT chk_business_profiles_timezone_valid
         CHECK (timezone IS NULL OR public.is_valid_iana_timezone(timezone));
     ELSE
@@ -1899,6 +1981,7 @@ END $$;
 -- ============================================================
 -- Source migration: 20260703120005_claim_race_guards.sql
 -- ============================================================
+
 
 -- Prevent race condition where concurrent claim requests bypass the
 -- "one active claim at a time" check (TOCTOU in claim-deal edge function).
@@ -1915,6 +1998,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_deal_claims_one_active_per_user
 -- Source migration: 20260704120000_business_logo_storage.sql
 -- ============================================================
 
+
 -- Add logo_url column for business logo images.
 ALTER TABLE public.businesses
   ADD COLUMN IF NOT EXISTS logo_url TEXT;
@@ -1928,10 +2012,12 @@ VALUES ('business-logos', 'business-logos', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 DROP POLICY IF EXISTS "Public read business-logos objects" ON storage.objects;
+DROP POLICY IF EXISTS "Public read business-logos objects" ON storage.objects;
 CREATE POLICY "Public read business-logos objects"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'business-logos');
 
+DROP POLICY IF EXISTS "Business owner upload logo" ON storage.objects;
 DROP POLICY IF EXISTS "Business owner upload logo" ON storage.objects;
 CREATE POLICY "Business owner upload logo"
 ON storage.objects FOR INSERT
@@ -1940,6 +2026,7 @@ WITH CHECK (
   AND auth.uid() IS NOT NULL
 );
 
+DROP POLICY IF EXISTS "Business owner update logo" ON storage.objects;
 DROP POLICY IF EXISTS "Business owner update logo" ON storage.objects;
 CREATE POLICY "Business owner update logo"
 ON storage.objects FOR UPDATE
@@ -1952,6 +2039,7 @@ USING (
 -- ============================================================
 -- Source migration: 20260704120001_enable_deals_realtime.sql
 -- ============================================================
+
 
 -- Enable Supabase Realtime on the deals table so consumer feeds
 -- receive live INSERT events when a business publishes a deal.
@@ -1966,6 +2054,7 @@ END $$;
 -- ============================================================
 -- Source migration: 20260704130000_enforce_max_claims_atomic.sql
 -- ============================================================
+
 
 -- Atomically enforce deals.max_claims on INSERT into deal_claims.
 --
@@ -2022,6 +2111,13 @@ CREATE TRIGGER trg_enforce_deal_max_claims
 -- ============================================================
 -- Source migration: 20260705120000_businesses_pii_column_grants.sql
 -- ============================================================
+
+
+ALTER TABLE public.businesses
+  ADD COLUMN IF NOT EXISTS website TEXT,
+  ADD COLUMN IF NOT EXISTS instagram_handle TEXT,
+  ADD COLUMN IF NOT EXISTS facebook_url TEXT,
+  ADD COLUMN IF NOT EXISTS pickup_note TEXT;
 
 -- Restrict consumer read access on the public `businesses` table to non-PII columns.
 --
@@ -2083,6 +2179,7 @@ COMMENT ON FUNCTION public.get_my_business()
 -- Source migration: 20260705120002_deal_claims_unique_active.sql
 -- ============================================================
 
+
 -- Prevent duplicate active claims per (user, deal).
 --
 -- Before: claim-deal checked "is null redeemed_at" then inserted, but two concurrent
@@ -2127,6 +2224,7 @@ COMMENT ON INDEX public.deal_claims_one_active_per_user_deal
 -- Source migration: 20260705120004_deal_claims_dashboard_index.sql
 -- ============================================================
 
+
 -- Speed up the merchant dashboard "active claims" widget and the analytics rollups
 -- that filter by (deal_id, claim_status). At 1000+ claims/day per cafe the existing
 -- single-column indexes start to require sequential scans for status-filtered queries.
@@ -2142,6 +2240,7 @@ COMMENT ON INDEX public.idx_deal_claims_deal_status
 -- ============================================================
 -- Source migration: 20260705120005_business_profiles_single_row.sql
 -- ============================================================
+
 
 -- Prevent a single user from holding multiple business_profiles rows via the dual-key
 -- (user_id, owner_id) pattern.
@@ -2183,6 +2282,7 @@ COMMENT ON INDEX public.business_profiles_one_per_auth_user
 -- Source migration: 20260705120006_realtime_publication_insert_only.sql
 -- ============================================================
 
+
 -- Restrict the supabase_realtime publication to INSERT events only.
 --
 -- Before: 20260704120000_enable_deals_realtime.sql added the deals table with the default
@@ -2203,6 +2303,7 @@ ALTER PUBLICATION supabase_realtime SET (publish = 'insert');
 -- ============================================================
 -- Source migration: 20260705120007_failed_redeem_attempts.sql
 -- ============================================================
+
 
 -- Track failed redemption attempts (wrong/unknown short codes) to prevent brute-force
 -- harvesting of valid codes by malicious merchants.
@@ -2240,6 +2341,7 @@ COMMENT ON TABLE public.failed_redeem_attempts
 -- ============================================================
 -- Source migration: 20260705120008_purge_user_data_rpc.sql
 -- ============================================================
+
 
 -- Deletes all consumer data owned by a given auth user.
 --
@@ -2298,6 +2400,7 @@ COMMENT ON FUNCTION public.purge_user_data(uuid)
 -- Source migration: 20260706120000_business_invite_gate.sql
 -- ============================================================
 
+
 -- Pilot-stage gate against random users signing up as a business and listing a
 -- cafe they don't own. Only users who've validated the shared pilot invite code
 -- (see lib/business-invite.ts) can create rows in `businesses`. Existing pilot
@@ -2313,6 +2416,7 @@ CREATE TABLE IF NOT EXISTS public.business_invite_validations (
 
 ALTER TABLE public.business_invite_validations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS business_invite_self_read ON public.business_invite_validations;
 DROP POLICY IF EXISTS business_invite_self_read ON public.business_invite_validations;
 CREATE POLICY business_invite_self_read
   ON public.business_invite_validations FOR SELECT
@@ -2385,6 +2489,7 @@ COMMIT;
 -- Source migration: 20260706130000_deal_photo_owner_upload_policies.sql
 -- ============================================================
 
+
 -- Let business owners upload deal poster assets into their own bucket folder.
 -- The app uploads to deal-photos/<business_id>/<filename> before AI generation
 -- and before publishing a photo-backed deal.
@@ -2393,6 +2498,7 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('deal-photos', 'deal-photos', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
+DROP POLICY IF EXISTS "Business owners can upload deal photos" ON storage.objects;
 DROP POLICY IF EXISTS "Business owners can upload deal photos" ON storage.objects;
 CREATE POLICY "Business owners can upload deal photos"
 ON storage.objects FOR INSERT
@@ -2407,6 +2513,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Business owners can update their deal photos" ON storage.objects;
 DROP POLICY IF EXISTS "Business owners can update their deal photos" ON storage.objects;
 CREATE POLICY "Business owners can update their deal photos"
 ON storage.objects FOR UPDATE
@@ -2430,6 +2537,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Business owners can delete their deal photos" ON storage.objects;
 DROP POLICY IF EXISTS "Business owners can delete their deal photos" ON storage.objects;
 CREATE POLICY "Business owners can delete their deal photos"
 ON storage.objects FOR DELETE
@@ -2455,6 +2563,7 @@ COMMENT ON COLUMN public.deal_templates.poster_storage_path IS
 -- Source migration: 20260707120000_business_menu_item_sizes.sql
 -- ============================================================
 
+
 ALTER TABLE public.business_menu_items
 ADD COLUMN IF NOT EXISTS size_options TEXT[] DEFAULT '{}';
 
@@ -2464,6 +2573,7 @@ COMMENT ON COLUMN public.business_menu_items.size_options IS 'Menu sizes or vari
 -- ============================================================
 -- Source migration: 20260707130000_align_strong_deal_guard_with_client.sql
 -- ============================================================
+
 
 -- Align the server strong-deal guardrail with the client mirror in
 -- lib/strong-deal-guard.ts. The previous SQL was STRICTER than the client for
@@ -2601,6 +2711,7 @@ EXECUTE FUNCTION public.enforce_strong_deal_only_guardrail();
 -- Source migration: 20260708120000_deal_viewed_daily_idempotency.sql
 -- ============================================================
 
+
 -- Server-side idempotency for impressions.
 --
 -- The old consumer feed re-emitted `deal_viewed` for every visible deal on every
@@ -2658,6 +2769,7 @@ COMMENT ON INDEX public.uq_app_analytics_deal_viewed_daily IS
 -- ============================================================
 -- Source migration: 20260708130000_nearby_geo_rpcs.sql
 -- ============================================================
+
 
 -- Server-side geo filtering for the consumer feed.
 --
@@ -2780,6 +2892,7 @@ GRANT EXECUTE ON FUNCTION public.nearby_deals(double precision, double precision
 -- Source migration: 20260708140000_consumer_deal_alerts_enabled.sql
 -- ============================================================
 
+
 -- Server-side mirror of the consumer's in-app "deal alerts" toggle.
 --
 -- The opt-in flag lives in the client's secure store (getAlertsEnabled). Server-sent
@@ -2795,6 +2908,7 @@ COMMENT ON COLUMN public.consumer_profiles.deal_alerts_enabled IS
 -- ============================================================
 -- Source migration: 20260710120000_deal_shares.sql
 -- ============================================================
+
 
 -- Share Deal MVP: per-user, per-deal share codes.
 --
@@ -2823,7 +2937,8 @@ BEGIN
     WHERE conname = 'deal_shares_share_code_key'
       AND conrelid = 'public.deal_shares'::regclass
   ) THEN
-    ALTER TABLE public.deal_shares
+    ALTER TABLE public.deal_shares DROP CONSTRAINT IF EXISTS deal_shares_share_code_key;
+ALTER TABLE public.deal_shares
       ADD CONSTRAINT deal_shares_share_code_key UNIQUE (share_code);
   END IF;
 END $$;
@@ -2836,7 +2951,8 @@ BEGIN
     WHERE conname = 'deal_shares_sender_deal_key'
       AND conrelid = 'public.deal_shares'::regclass
   ) THEN
-    ALTER TABLE public.deal_shares
+    ALTER TABLE public.deal_shares DROP CONSTRAINT IF EXISTS deal_shares_sender_deal_key;
+ALTER TABLE public.deal_shares
       ADD CONSTRAINT deal_shares_sender_deal_key UNIQUE (shared_by_user_id, deal_id);
   END IF;
 END $$;
@@ -2867,12 +2983,14 @@ DROP POLICY IF EXISTS deal_shares_public_preview_read ON public.deal_shares;
 
 -- Senders can read their own share rows.
 DROP POLICY IF EXISTS deal_shares_self_read ON public.deal_shares;
+DROP POLICY IF EXISTS deal_shares_self_read ON public.deal_shares;
 CREATE POLICY deal_shares_self_read
   ON public.deal_shares FOR SELECT
   TO authenticated
   USING (auth.uid() = shared_by_user_id);
 
 -- Senders can create their own share rows. Updates and deletes stay blocked.
+DROP POLICY IF EXISTS deal_shares_self_insert ON public.deal_shares;
 DROP POLICY IF EXISTS deal_shares_self_insert ON public.deal_shares;
 CREATE POLICY deal_shares_self_insert
   ON public.deal_shares FOR INSERT
@@ -3033,6 +3151,7 @@ COMMIT;
 -- Source migration: 20260711120000_profiles_role.sql
 -- ============================================================
 
+
 -- Hard Shopper/Business role split (spec section 4, item 2, decided 2026-06-10).
 -- The role is picked once at signup and never changes. `app_tab_mode` stays for
 -- old installed builds that still upsert it, but routing no longer reads it.
@@ -3070,6 +3189,7 @@ ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role WHERE public.profiles.role I
 -- Source migration: 20260713120000_business_claim_notifications.sql
 -- ============================================================
 
+
 -- Minimum business notifications (spec 11.8): new-claim and sold-out owner pushes.
 --
 -- 1. businesses.claim_notifications_enabled — owner-side preference, default ON.
@@ -3101,6 +3221,7 @@ COMMENT ON COLUMN public.deals.claim_push_last_sent_at IS
 -- ============================================================
 -- Source migration: 20260714120000_fix_purge_user_data_columns.sql
 -- ============================================================
+
 
 -- Corrective rewrite of purge_user_data (original: 20260705120008_purge_user_data_rpc.sql).
 --
@@ -3165,6 +3286,7 @@ COMMENT ON FUNCTION public.purge_user_data(uuid)
 -- ============================================================
 -- Source migration: 20260715120000_share_lookup_hardening.sql
 -- ============================================================
+
 
 -- Share Deal hardening (audit follow-ups). Two changes:
 --
@@ -3340,6 +3462,7 @@ COMMENT ON FUNCTION public.lookup_deal_share(text)
 
 -- Senders can only mint share codes for live deals they can see.
 DROP POLICY IF EXISTS deal_shares_self_insert ON public.deal_shares;
+DROP POLICY IF EXISTS deal_shares_self_insert ON public.deal_shares;
 CREATE POLICY deal_shares_self_insert
   ON public.deal_shares FOR INSERT
   TO authenticated
@@ -3360,6 +3483,7 @@ COMMIT;
 -- ============================================================
 -- Source migration: 20260716120000_deal_claim_counts_rpc.sql
 -- ============================================================
+
 
 -- Consumer-visible total claim counts, for scarcity UI ("Only N left") and
 -- pre-rendered sold-out states.
@@ -3399,6 +3523,7 @@ COMMENT ON FUNCTION public.deal_claim_counts(uuid[])
 -- Source migration: 20260718120000_deal_source_locale_and_english_translation.sql
 -- ============================================================
 
+
 -- Track the language a business owner used to create a deal and store all
 -- customer-facing deal copy in English, Spanish, and Korean.
 --
@@ -3417,7 +3542,8 @@ BEGIN
     FROM pg_constraint
     WHERE conname = 'deals_source_locale_check'
   ) THEN
-    ALTER TABLE public.deals
+    ALTER TABLE public.deals DROP CONSTRAINT IF EXISTS deals_source_locale_check;
+ALTER TABLE public.deals
       ADD CONSTRAINT deals_source_locale_check
       CHECK (source_locale IN ('en', 'es', 'ko'));
   END IF;
@@ -3446,6 +3572,7 @@ COMMENT ON COLUMN public.deals.description_en
 -- ============================================================
 -- Source migration: 20260722120000_ai_generation_cost_ledger.sql
 -- ============================================================
+
 
 -- Private AI cost ledger. Written by service-role Edge Functions only.
 -- Do not expose this table or its reporting views to mobile clients.
@@ -3561,6 +3688,176 @@ GRANT SELECT ON public.ai_generation_cost_by_feature_model TO service_role;
 -- Source migration: 20260723120000_offer_versions_foundation.sql
 -- ============================================================
 
+-- Dev-only business location foundation for AI Deal Studio testing.
+-- This keeps owner/location and deal location support without paid-plan columns.
+
+CREATE TABLE IF NOT EXISTS public.business_locations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES public.businesses (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  phone TEXT,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_locations_business_id
+  ON public.business_locations (business_id);
+
+ALTER TABLE public.business_locations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Owners can read their business locations" ON public.business_locations;
+DROP POLICY IF EXISTS "Owners can read their business locations" ON public.business_locations;
+CREATE POLICY "Owners can read their business locations"
+  ON public.business_locations FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.businesses b
+      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Owners can insert their business locations" ON public.business_locations;
+DROP POLICY IF EXISTS "Owners can insert their business locations" ON public.business_locations;
+CREATE POLICY "Owners can insert their business locations"
+  ON public.business_locations FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.businesses b
+      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Owners can update their business locations" ON public.business_locations;
+DROP POLICY IF EXISTS "Owners can update their business locations" ON public.business_locations;
+CREATE POLICY "Owners can update their business locations"
+  ON public.business_locations FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.businesses b
+      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Owners can delete their business locations" ON public.business_locations;
+DROP POLICY IF EXISTS "Owners can delete their business locations" ON public.business_locations;
+CREATE POLICY "Owners can delete their business locations"
+  ON public.business_locations FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.businesses b
+      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
+    )
+  );
+
+ALTER TABLE public.business_menu_items
+  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS description TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_business_menu_items_active
+  ON public.business_menu_items (business_id, sort_order)
+  WHERE archived_at IS NULL;
+
+ALTER TABLE public.deals
+  ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES public.business_locations (id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_deals_location_id ON public.deals (location_id);
+
+INSERT INTO public.business_locations (business_id, name, address, phone, lat, lng)
+SELECT
+  b.id,
+  COALESCE(NULLIF(trim(b.name), ''), 'Primary location'),
+  COALESCE(
+    NULLIF(trim(b.address), ''),
+    NULLIF(trim(b.location), ''),
+    'See business profile'
+  ),
+  NULLIF(trim(b.phone), ''),
+  b.latitude,
+  b.longitude
+FROM public.businesses b
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.business_locations bl WHERE bl.business_id = b.id
+);
+
+UPDATE public.deals d
+SET location_id = sub.loc_id
+FROM (
+  SELECT DISTINCT ON (business_id)
+    business_id,
+    id AS loc_id
+  FROM public.business_locations
+  ORDER BY business_id, created_at ASC, id ASC
+) sub
+WHERE d.business_id = sub.business_id
+  AND d.location_id IS NULL;
+
+INSERT INTO public.business_locations (business_id, name, address)
+SELECT b.id, 'Primary location', 'See business profile'
+FROM public.businesses b
+WHERE EXISTS (SELECT 1 FROM public.deals d WHERE d.business_id = b.id AND d.location_id IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM public.business_locations bl WHERE bl.business_id = b.id);
+
+UPDATE public.deals d
+SET location_id = (
+  SELECT bl.id FROM public.business_locations bl
+  WHERE bl.business_id = d.business_id
+  ORDER BY bl.created_at ASC, bl.id ASC
+  LIMIT 1
+)
+WHERE d.location_id IS NULL;
+-- Dev-only minimal redemptions table for offer-version foreign keys.
+-- This avoids pulling redemption-mode/staff-session migrations into AI Studio setup.
+
+CREATE TABLE IF NOT EXISTS public.redemptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  claim_id uuid REFERENCES public.deal_claims(id) ON DELETE SET NULL,
+  deal_id uuid REFERENCES public.deals(id) ON DELETE SET NULL,
+  business_id uuid REFERENCES public.businesses(id) ON DELETE SET NULL,
+  redeemed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  redeemed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_claim_id
+  ON public.redemptions(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_deal_id
+  ON public.redemptions(deal_id);
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_business_redeemed_at
+  ON public.redemptions(business_id, redeemed_at DESC);
+
+ALTER TABLE public.redemptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Business owners can read their redemptions" ON public.redemptions;
+DROP POLICY IF EXISTS "Business owners can read their redemptions" ON public.redemptions;
+CREATE POLICY "Business owners can read their redemptions"
+  ON public.redemptions FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.businesses b
+      WHERE b.id = redemptions.business_id
+        AND b.owner_id = auth.uid()
+    )
+  );
+-- Dev-only compatibility columns used by the offer-version legacy backfill.
+-- These are inert defaults/placeholders for local AI Deal Studio testing.
+
+ALTER TABLE public.deals
+  ADD COLUMN IF NOT EXISTS deal_type text DEFAULT 'LEGACY_DEAL',
+  ADD COLUMN IF NOT EXISTS applies_to text,
+  ADD COLUMN IF NOT EXISTS discount_percent integer,
+  ADD COLUMN IF NOT EXISTS required_purchase_quantity integer,
+  ADD COLUMN IF NOT EXISTS free_item_quantity integer,
+  ADD COLUMN IF NOT EXISTS required_item_description text,
+  ADD COLUMN IF NOT EXISTS free_item_description text,
+  ADD COLUMN IF NOT EXISTS free_item_discount_percent integer,
+  ADD COLUMN IF NOT EXISTS item_description text,
+  ADD COLUMN IF NOT EXISTS customer_value_percent integer;
 -- OfferDefinition / OfferVersion foundation for deterministic AI ad generation.
 --
 -- Drafted for the AI ad generation master plan. Do not apply without Dan's
@@ -3907,6 +4204,7 @@ COMMIT;
 -- Source migration: 20260725120000_ad_generation_media_library.sql
 -- ============================================================
 
+
 -- Brand profile, approved media library, and durable ad-generation records.
 --
 -- Drafted for the AI ad generation master plan. Do not apply without Dan's
@@ -4077,6 +4375,7 @@ CREATE INDEX IF NOT EXISTS idx_business_media_assets_hash
 ALTER TABLE public.business_brand_profiles
   DROP CONSTRAINT IF EXISTS business_brand_profiles_logo_asset_fk;
 
+ALTER TABLE public.business_brand_profiles DROP CONSTRAINT IF EXISTS business_brand_profiles_logo_asset_fk;
 ALTER TABLE public.business_brand_profiles
   ADD CONSTRAINT business_brand_profiles_logo_asset_fk
   FOREIGN KEY (logo_asset_id)
@@ -4253,6 +4552,7 @@ GRANT SELECT, INSERT, UPDATE ON public.ad_creatives TO service_role;
 GRANT SELECT, INSERT ON public.ad_creative_feedback TO service_role;
 
 DROP POLICY IF EXISTS "Owners can read their brand profile" ON public.business_brand_profiles;
+DROP POLICY IF EXISTS "Owners can read their brand profile" ON public.business_brand_profiles;
 CREATE POLICY "Owners can read their brand profile"
 ON public.business_brand_profiles FOR SELECT
 TO authenticated
@@ -4265,6 +4565,7 @@ USING (
 );
 
 DROP POLICY IF EXISTS "Owners can upsert their brand profile" ON public.business_brand_profiles;
+DROP POLICY IF EXISTS "Owners can upsert their brand profile" ON public.business_brand_profiles;
 CREATE POLICY "Owners can upsert their brand profile"
 ON public.business_brand_profiles FOR INSERT
 TO authenticated
@@ -4276,6 +4577,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Owners can update their brand profile" ON public.business_brand_profiles;
 DROP POLICY IF EXISTS "Owners can update their brand profile" ON public.business_brand_profiles;
 CREATE POLICY "Owners can update their brand profile"
 ON public.business_brand_profiles FOR UPDATE
@@ -4296,6 +4598,7 @@ WITH CHECK (
 );
 
 DROP POLICY IF EXISTS "Owners can read their social connections" ON public.business_social_connections;
+DROP POLICY IF EXISTS "Owners can read their social connections" ON public.business_social_connections;
 CREATE POLICY "Owners can read their social connections"
 ON public.business_social_connections FOR SELECT
 TO authenticated
@@ -4307,6 +4610,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Owners can read approved media and stock" ON public.business_media_assets;
 DROP POLICY IF EXISTS "Owners can read approved media and stock" ON public.business_media_assets;
 CREATE POLICY "Owners can read approved media and stock"
 ON public.business_media_assets FOR SELECT
@@ -4329,6 +4633,7 @@ USING (
 );
 
 DROP POLICY IF EXISTS "Owners can insert owner uploaded media" ON public.business_media_assets;
+DROP POLICY IF EXISTS "Owners can insert owner uploaded media" ON public.business_media_assets;
 CREATE POLICY "Owners can insert owner uploaded media"
 ON public.business_media_assets FOR INSERT
 TO authenticated
@@ -4342,6 +4647,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Owners can approve or disable their media" ON public.business_media_assets;
 DROP POLICY IF EXISTS "Owners can approve or disable their media" ON public.business_media_assets;
 CREATE POLICY "Owners can approve or disable their media"
 ON public.business_media_assets FOR UPDATE
@@ -4365,6 +4671,7 @@ WITH CHECK (
 );
 
 DROP POLICY IF EXISTS "Owners can read their ad generation jobs" ON public.ad_generation_jobs;
+DROP POLICY IF EXISTS "Owners can read their ad generation jobs" ON public.ad_generation_jobs;
 CREATE POLICY "Owners can read their ad generation jobs"
 ON public.ad_generation_jobs FOR SELECT
 TO authenticated
@@ -4376,6 +4683,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Owners can read their ad creatives" ON public.ad_creatives;
 DROP POLICY IF EXISTS "Owners can read their ad creatives" ON public.ad_creatives;
 CREATE POLICY "Owners can read their ad creatives"
 ON public.ad_creatives FOR SELECT
@@ -4389,6 +4697,7 @@ USING (
 );
 
 DROP POLICY IF EXISTS "Owners can read their ad feedback" ON public.ad_creative_feedback;
+DROP POLICY IF EXISTS "Owners can read their ad feedback" ON public.ad_creative_feedback;
 CREATE POLICY "Owners can read their ad feedback"
 ON public.ad_creative_feedback FOR SELECT
 TO authenticated
@@ -4400,6 +4709,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Owners can add ad feedback" ON public.ad_creative_feedback;
 DROP POLICY IF EXISTS "Owners can add ad feedback" ON public.ad_creative_feedback;
 CREATE POLICY "Owners can add ad feedback"
 ON public.ad_creative_feedback FOR INSERT
@@ -4438,6 +4748,7 @@ COMMIT;
 -- ============================================================
 -- Source migration: 20260725121000_business_media_import_jobs.sql
 -- ============================================================
+
 
 -- Observable media-import jobs for website and owner-authorized social discovery.
 --
@@ -4519,6 +4830,7 @@ GRANT SELECT ON public.business_media_import_jobs TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.business_media_import_jobs TO service_role;
 
 DROP POLICY IF EXISTS "Owners can read their media import jobs" ON public.business_media_import_jobs;
+DROP POLICY IF EXISTS "Owners can read their media import jobs" ON public.business_media_import_jobs;
 CREATE POLICY "Owners can read their media import jobs"
 ON public.business_media_import_jobs FOR SELECT
 TO authenticated
@@ -4541,6 +4853,7 @@ COMMIT;
 -- ============================================================
 -- Source migration: 20260727120000_ai_provider_circuit_breakers.sql
 -- ============================================================
+
 
 -- Private provider circuit breaker state. Written by service-role Edge Functions only.
 -- Do not expose this table to mobile clients.
@@ -4575,6 +4888,7 @@ COMMENT ON TABLE public.ai_provider_circuit_breakers IS
 -- Source migration: 20260730120000_deals_owner_delete_ended.sql
 -- ============================================================
 
+
 -- Allow business owners to delete their own ended deals from My offers.
 -- Do not apply without Dan's explicit migration approval.
 
@@ -4582,6 +4896,7 @@ BEGIN;
 
 DROP POLICY IF EXISTS "Businesses can delete ended own deals" ON public.deals;
 
+DROP POLICY IF EXISTS "Businesses can delete ended own deals" ON public.deals;
 CREATE POLICY "Businesses can delete ended own deals"
   ON public.deals FOR DELETE
   TO authenticated
@@ -4596,127 +4911,6 @@ CREATE POLICY "Businesses can delete ended own deals"
   );
 
 COMMIT;
-
-
--- ============================================================
--- Source helper: docs/dev/ai_deal_studio_dev_business_locations.sql
--- ============================================================
-
--- Dev-only business location foundation for AI Deal Studio testing.
--- This keeps owner/location and deal location support without paid-plan columns.
-
-CREATE TABLE IF NOT EXISTS public.business_locations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID NOT NULL REFERENCES public.businesses (id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  address TEXT NOT NULL,
-  phone TEXT,
-  lat DOUBLE PRECISION,
-  lng DOUBLE PRECISION,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_business_locations_business_id
-  ON public.business_locations (business_id);
-
-ALTER TABLE public.business_locations ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Owners can read their business locations" ON public.business_locations;
-CREATE POLICY "Owners can read their business locations"
-  ON public.business_locations FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.businesses b
-      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Owners can insert their business locations" ON public.business_locations;
-CREATE POLICY "Owners can insert their business locations"
-  ON public.business_locations FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.businesses b
-      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Owners can update their business locations" ON public.business_locations;
-CREATE POLICY "Owners can update their business locations"
-  ON public.business_locations FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.businesses b
-      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "Owners can delete their business locations" ON public.business_locations;
-CREATE POLICY "Owners can delete their business locations"
-  ON public.business_locations FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.businesses b
-      WHERE b.id = business_locations.business_id AND b.owner_id = auth.uid()
-    )
-  );
-
-ALTER TABLE public.business_menu_items
-  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS description TEXT;
-
-CREATE INDEX IF NOT EXISTS idx_business_menu_items_active
-  ON public.business_menu_items (business_id, sort_order)
-  WHERE archived_at IS NULL;
-
-ALTER TABLE public.deals
-  ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES public.business_locations (id) ON DELETE SET NULL;
-
-CREATE INDEX IF NOT EXISTS idx_deals_location_id ON public.deals (location_id);
-
-INSERT INTO public.business_locations (business_id, name, address, phone, lat, lng)
-SELECT
-  b.id,
-  COALESCE(NULLIF(trim(b.name), ''), 'Primary location'),
-  COALESCE(
-    NULLIF(trim(b.address), ''),
-    NULLIF(trim(b.location), ''),
-    'See business profile'
-  ),
-  NULLIF(trim(b.phone), ''),
-  b.latitude,
-  b.longitude
-FROM public.businesses b
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.business_locations bl WHERE bl.business_id = b.id
-);
-
-UPDATE public.deals d
-SET location_id = sub.loc_id
-FROM (
-  SELECT DISTINCT ON (business_id)
-    business_id,
-    id AS loc_id
-  FROM public.business_locations
-  ORDER BY business_id, created_at ASC, id ASC
-) sub
-WHERE d.business_id = sub.business_id
-  AND d.location_id IS NULL;
-
-INSERT INTO public.business_locations (business_id, name, address)
-SELECT b.id, 'Primary location', 'See business profile'
-FROM public.businesses b
-WHERE EXISTS (SELECT 1 FROM public.deals d WHERE d.business_id = b.id AND d.location_id IS NULL)
-  AND NOT EXISTS (SELECT 1 FROM public.business_locations bl WHERE bl.business_id = b.id);
-
-UPDATE public.deals d
-SET location_id = (
-  SELECT bl.id FROM public.business_locations bl
-  WHERE bl.business_id = d.business_id
-  ORDER BY bl.created_at ASC, bl.id ASC
-  LIMIT 1
-)
-WHERE d.location_id IS NULL;
 
 
 -- ============================================================
@@ -4742,6 +4936,7 @@ set
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Owners can read own AI deal assets" on storage.objects;
+DROP POLICY IF EXISTS "Owners can read own AI deal assets" ON storage.objects;
 create policy "Owners can read own AI deal assets"
 on storage.objects
 for select
@@ -4757,6 +4952,7 @@ using (
 );
 
 drop policy if exists "Owners can upload own AI deal assets" on storage.objects;
+DROP POLICY IF EXISTS "Owners can upload own AI deal assets" ON storage.objects;
 create policy "Owners can upload own AI deal assets"
 on storage.objects
 for insert
@@ -4772,6 +4968,7 @@ with check (
 );
 
 drop policy if exists "Owners can update own AI deal assets" on storage.objects;
+DROP POLICY IF EXISTS "Owners can update own AI deal assets" ON storage.objects;
 create policy "Owners can update own AI deal assets"
 on storage.objects
 for update
@@ -4796,6 +4993,7 @@ with check (
 );
 
 drop policy if exists "Owners can delete own AI deal assets" on storage.objects;
+DROP POLICY IF EXISTS "Owners can delete own AI deal assets" ON storage.objects;
 create policy "Owners can delete own AI deal assets"
 on storage.objects
 for delete
