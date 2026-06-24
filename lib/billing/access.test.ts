@@ -21,9 +21,9 @@ describe("isTrialExpired", () => {
 });
 
 describe("canCreateDeal", () => {
-  it("keeps paid billing surfaces disabled for the free pilot", () => {
-    expect(PAID_BILLING_ENABLED).toBe(false);
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  it("keeps paid billing surfaces enabled for this build", () => {
+    expect(PAID_BILLING_ENABLED).toBe(true);
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
   });
 
   it("blocks unauthenticated callers regardless of any other state", () => {
@@ -66,27 +66,25 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  // The next two tests document the pilot-flag behavior. When v1.1 ships and
-  // PILOT_DISABLE_BILLING_GATE is flipped to false, both should expect false.
-  it("during pilot: allows past_due (PILOT_DISABLE_BILLING_GATE bypass)", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  it("blocks past_due when the pilot billing bypass is disabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "past_due",
         trialEndsAt: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("during pilot: allows expired trial (PILOT_DISABLE_BILLING_GATE bypass)", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
+  it("blocks expired trials when the pilot billing bypass is disabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: "2000-01-01T00:00:00.000Z",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

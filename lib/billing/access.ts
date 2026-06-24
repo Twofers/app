@@ -1,10 +1,7 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
 
-/**
- * V1 App Store pilot is free. Keep paid tiers, checkout, and customer portal
- * code in place for a later release, but make every paid surface unreachable.
- */
-export const PAID_BILLING_ENABLED = false;
+/** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
+export const PAID_BILLING_ENABLED = true;
 
 /**
  * While true, trial-end status does not block deal creation: any logged-in
