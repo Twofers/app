@@ -18,6 +18,7 @@ Scope: this runbook is the local handoff for moving the multilingual deal system
 Do not enable broad Spanish production until all of these are true:
 
 - A named U.S. Spanish reviewer is recorded in `docs/localization/native-review-log.md`.
+- The PR4 native acceptance packet in `docs/localization/multilingual-deals-native-acceptance-packet.md` is complete for every Spanish-required scenario.
 - Spanish templates, UI strings, accessibility labels, prompt policies, deterministic fallback wording, and representative screenshots are signed off.
 - `lib/localization-rollout-gate.ts` marks `es-US` as signed off with screenshot QA passed.
 - `lib/offer-locale-templates.ts` marks Spanish launch templates reviewed.
@@ -25,6 +26,7 @@ Do not enable broad Spanish production until all of these are true:
 Do not enable broad Korean production until all of these are true:
 
 - A named Korean reviewer is recorded in `docs/localization/native-review-log.md`.
+- The PR4 native acceptance packet in `docs/localization/multilingual-deals-native-acceptance-packet.md` is complete for every Korean-required scenario.
 - Korean templates, UI strings, accessibility labels, prompt policies, fallback wording, counters, and representative screenshots are signed off.
 - `lib/localization-rollout-gate.ts` marks `ko-KR` as signed off with screenshot QA passed.
 - `lib/offer-locale-templates.ts` marks Korean launch templates reviewed.
@@ -128,6 +130,8 @@ AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED
 Use the matching `EXPO_PUBLIC_` aliases only for client-read flags listed in `.env.example`. `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` is server-only and is read by `publish-offer-version`.
 
 ## Manual Acceptance Checks
+
+Use `docs/localization/multilingual-deals-native-acceptance-packet.md` as the scenario checklist and evidence manifest. Keep raw screenshots under local `artifacts/` paths unless they are explicitly sanitized for source control. Do not transcribe QR tokens, claim codes, or redemption codes into docs, chat, commits, PRs, or public artifacts.
 
 For each supported owner language, create one deal in a production-like internal test environment:
 

@@ -663,6 +663,71 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4n - Native acceptance packet
+
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+
+Safety checkpoint: `cabd0fd7` (`Harden multilingual plan audit evidence checks`).
+
+Deployment actions: none. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-native-acceptance-packet.md`
+
+## Files changed
+
+- `scripts/check-localization-rollout-gates.mjs`
+- `docs/localization/multilingual-deals-production-approval-runbook.md`
+- `docs/localization/multilingual-deals-plan-completion-audit.md`
+- `docs/localization/multilingual-deals-pr4-rollout-gate.md`
+- `docs/localization/native-review-log.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added the PR4 native-speaker and real-device acceptance packet from the v1.1 plan section 29.
+- Mapped owner/customer language pairings, product scenarios, edge cases, small-device checks, accessibility text-size checks, and reviewer questions into one evidence template.
+- Documented local-only screenshot handling and no-secret rules for QR tokens, claim codes, redemption codes, credentials, and public artifacts.
+- Extended `npm run gate:localization-rollout` so the acceptance packet is required rollout evidence.
+- Linked the packet from the production approval runbook, plan completion audit, rollout gate handoff, and native review log.
+
+## Acceptance criteria map
+
+- PR4 native-speaker acceptance review: Improved locally as a structured pending evidence packet.
+- PR4 full real-device suite: Still operationally blocked; no device QA was performed in this checkpoint.
+- Broad Spanish/Korean production readiness: Still blocked until named reviewers complete the packet, the native review log is updated, templates/counters are approved, and screenshot QA is recorded.
+
+## Validation
+
+- `npm run gate:localization-rollout`: passed; 19 rollout gate checks passed, including the native acceptance packet check.
+- `npm run gate:localization-plan`: passed; 13 plan audit checks passed, including audit evidence path references.
+- `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout`: failed as expected with reviewer/template/Korean counter/screenshot QA blockers; wrapper verified exit code 1.
+- `npm run dashboard:localization-rollout`: passed; dashboard still reports Spanish/Korean broad production blockers.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run typecheck:functions`: passed; 136 Edge Function files checked.
+- `npx vitest run`: passed; 174 files, 920 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-native-acceptance-20260624`: passed with known `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- This packet is not reviewer sign-off. It is the source-controlled checklist for Dan and reviewers to complete before broad production.
+- Real-device iPhone QA remains Dan-controlled through TestFlight or physical device testing.
+- Local Android screenshot QA should only be performed when Dan explicitly requests local Android QA.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3a - Source-language policy and deterministic fallback foundation
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-source-locale-policy`.

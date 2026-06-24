@@ -138,6 +138,28 @@ const checks = [
     ],
   },
   {
+    name: "native acceptance packet exists",
+    file: "docs/localization/multilingual-deals-native-acceptance-packet.md",
+    patterns: [
+      /# Multilingual Deals Native Acceptance Packet/,
+      /English owner -> Spanish and Korean customers/,
+      /Spanish owner -> English and Korean customers/,
+      /Korean owner -> English and Spanish customers/,
+      /Coffee drink/,
+      /Unknown Korean counter/,
+      /Small iPhone/,
+      /Small Android/,
+      /Accessibility text size/,
+      /Is the exact offer correct\?/,
+      /Does this sound native rather than translated\?/,
+      /Are Korean counters and spacing correct\?/,
+      /Would a business owner be comfortable publishing it\?/,
+      /QR tokens, claim codes, redemption codes/,
+      /docs\/localization\/native-review-log\.md/,
+      /LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout/,
+    ],
+  },
+  {
     name: "no multilingual push policy is guarded",
     file: "supabase/functions/_shared/send-deal-push-source.test.ts",
     patterns: [

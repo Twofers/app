@@ -36,6 +36,7 @@ Remove-Item Env:\LOCALIZATION_BROAD_PRODUCTION_ROLLOUT
 Before that readiness assertion may pass, update all of these together:
 
 - `docs/localization/native-review-log.md` with named reviewers, decisions, required changes, and final sign-off.
+- `docs/localization/multilingual-deals-native-acceptance-packet.md` with every required PR4 native-speaker and real-device scenario mapped to evidence.
 - `lib/localization-rollout-gate.ts` reviewer and screenshot QA statuses.
 - `lib/offer-locale-templates.ts` review statuses for approved Spanish and Korean templates.
 - `lib/korean-counter-registry.ts` reviewer approvals for Korean counters.

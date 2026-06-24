@@ -29,7 +29,7 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | PR 1 locale foundation | Local evidence present; production wording still depends on native review. | `lib/supported-locales.ts`, `lib/localized-offer-renderer.ts`, `lib/korean-counter-registry.ts`, `lib/offer-locale-templates.ts`, `docs/localization/native-review-log.md` |
 | PR 2 owner UI and customer switching | Local evidence present; real-device typography remains operationally blocked. | `docs/localization/multilingual-deals-pr2-locale-switching.md`, `app/create/ai.tsx`, `app/deal/[id].tsx`, `app/(tabs)/wallet.tsx`, `lib/localized-deal-display.ts` |
 | PR 3 source creative and transcreation | Local evidence present behind default-off flags; hosted activation remains hard-gated. | `supabase/functions/_shared/ai-localization-provider.ts`, `lib/ad-localization.ts`, `lib/ad-translation-qa.ts`, `lib/ad-locale-presentation-resolver.ts`, `lib/ad-localization-storage.ts` |
-| PR 4 approval binding and cleanup | Local evidence present for approval, publish enforcement, customer rendering, rollout dashboards, and no-multilingual-push guard. Native acceptance and real-device QA remain blocked. | `lib/ad-localization-approval.ts`, `supabase/functions/publish-offer-version/index.ts`, `lib/customer-deal-localizations.ts`, `scripts/check-localization-rollout-gates.mjs`, `scripts/generate-localization-rollout-dashboard.mjs` |
+| PR 4 approval binding and cleanup | Local evidence present for approval, publish enforcement, customer rendering, rollout dashboards, acceptance packet, and no-multilingual-push guard. Native acceptance and real-device QA remain blocked. | `lib/ad-localization-approval.ts`, `supabase/functions/publish-offer-version/index.ts`, `lib/customer-deal-localizations.ts`, `scripts/check-localization-rollout-gates.mjs`, `scripts/generate-localization-rollout-dashboard.mjs`, `docs/localization/multilingual-deals-native-acceptance-packet.md` |
 | Broad production readiness | Not achieved. | `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` is expected to fail until reviewer, template, Korean counter, and screenshot QA blockers are cleared. |
 
 ## PR 1 Matrix
@@ -86,8 +86,8 @@ No Supabase migration was applied, no Edge Function was redeployed, no hosted fe
 | Full real-device suite | Operationally blocked | Requires Dan-controlled real-device QA. No release build or TestFlight action was started. |
 | Rollout dashboards | Local evidence present | `scripts/generate-localization-rollout-dashboard.mjs`, `lib/localization-rollout-dashboard.test.ts`, `docs/localization/multilingual-deals-pr4-rollout-dashboard.md`. |
 | Removal of legacy untranslated customer paths | Local evidence present | `docs/localization/multilingual-deals-pr4-legacy-customer-paths.md`, `lib/customer-localized-paths-source.test.ts`. |
-| Native-speaker acceptance review | Operationally blocked | Spanish and Korean reviewers are still `TBD`; Korean counters and templates are pending native review. |
-| Operational handoff | Local evidence present | `docs/localization/multilingual-deals-production-approval-runbook.md`, `docs/deployment-command-plan.md`, `docs/production-deploy-checklist.md`. |
+| Native-speaker acceptance review | Operationally blocked | The acceptance packet exists at `docs/localization/multilingual-deals-native-acceptance-packet.md`, but Spanish and Korean reviewers are still `TBD`; Korean counters and templates are pending native review. |
+| Operational handoff | Local evidence present | `docs/localization/multilingual-deals-production-approval-runbook.md`, `docs/localization/multilingual-deals-native-acceptance-packet.md`, `docs/deployment-command-plan.md`, `docs/production-deploy-checklist.md`. |
 
 ## Required Automated Test Coverage
 
@@ -112,10 +112,11 @@ The local implementation can be internally validated, but the plan is not comple
 2. Korean reviewer is named and final sign-off is recorded.
 3. Korean counter metadata is approved by the Korean reviewer.
 4. Real-device screenshot and typography QA is recorded for representative Spanish and Korean cases.
-5. Dan explicitly approves applying the localization migrations.
-6. Dan explicitly approves redeploying affected Edge Functions.
-7. Dan explicitly approves hosted feature flag changes.
-8. Dan explicitly approves any future release build or store submission.
+5. The PR4 native acceptance packet is completed and reconciled into the native review log.
+6. Dan explicitly approves applying the localization migrations.
+7. Dan explicitly approves redeploying affected Edge Functions.
+8. Dan explicitly approves hosted feature flag changes.
+9. Dan explicitly approves any future release build or store submission.
 
 Until those are complete, `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` should fail.
 
