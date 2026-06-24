@@ -1,0 +1,55 @@
+import { useMemo } from "react";
+
+import { useBusinessLocations, type SubscriptionTier } from "@/hooks/use-business-locations";
+import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
+import { PAID_BILLING_ENABLED, canCreateDealWithLocationBilling } from "@/lib/billing/access";
+
+type BillingGateParams = {
+  businessId: string | null;
+  subscriptionTier: SubscriptionTier;
+  isLoggedIn: boolean;
+  bypass?: boolean;
+};
+
+export function usePrimaryLocationBillingGate({
+  businessId,
+  subscriptionTier,
+  isLoggedIn,
+  bypass = false,
+}: BillingGateParams) {
+  const gatedBusinessId = PAID_BILLING_ENABLED ? businessId : null;
+  const {
+    visibleLocations,
+    loading: locationsLoading,
+    error: locationsError,
+  } = useBusinessLocations(gatedBusinessId, subscriptionTier);
+  const primaryLocationId = visibleLocations[0]?.id ?? null;
+  const {
+    summary,
+    loading: summaryLoading,
+    error: summaryError,
+    refresh,
+  } = useLocationBillingSummary(PAID_BILLING_ENABLED ? primaryLocationId : null);
+
+  const blocked = useMemo(
+    () =>
+      !canCreateDealWithLocationBilling({
+        isLoggedIn,
+        status: summary.status,
+        trialEndsAt: summary.trialEndsAt,
+        currentPeriodEndsAt: summary.currentPeriodEndsAt,
+        bypass,
+      }),
+    [bypass, isLoggedIn, summary.currentPeriodEndsAt, summary.status, summary.trialEndsAt],
+  );
+
+  return {
+    blocked,
+    loading: PAID_BILLING_ENABLED && (locationsLoading || summaryLoading),
+    primaryLocationId,
+    summary,
+    locationsError,
+    summaryError,
+    refresh,
+  };
+}

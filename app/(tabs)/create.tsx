@@ -16,8 +16,9 @@ import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
-import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
@@ -35,7 +36,7 @@ export default function CreateDeal() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
-  const { isLoggedIn, businessId, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, loading, subscriptionTier } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -51,10 +52,13 @@ export default function CreateDeal() {
   const { confirm, confirmModal } = useBrandedConfirm();
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
-  const blockedSubscription = !canCreateDeal({
+  const {
+    blocked: blockedSubscription,
+    loading: billingLoading,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
     isLoggedIn,
-    subscriptionStatus,
-    trialEndsAt,
     bypass,
   });
 
@@ -181,7 +185,7 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ color: theme.mutedText }}>{t("createHub.loginPrompt")}</Text>
         </View>
-      ) : loading || profileCheckLoading ? (
+      ) : loading || profileCheckLoading || billingLoading ? (
         <View style={{ marginTop: Spacing.lg }}>
           <ActivityIndicator color={theme.primary} />
           <Text style={{ color: theme.mutedText, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>

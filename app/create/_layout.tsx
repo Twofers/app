@@ -1,13 +1,14 @@
 import { Redirect, type Href, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router";
-import React, { useMemo } from "react";
+import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateLayout() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -17,18 +18,15 @@ export default function CreateLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
-  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading } = useBusiness();
+  const { isLoggedIn, businessId, subscriptionTier, loading: businessLoading } = useBusiness();
+  const { blocked, loading: billingLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+    bypass,
+  });
 
-  const blocked = useMemo(
-    () =>
-      !canCreateDeal({
-        isLoggedIn,
-        subscriptionStatus,
-        trialEndsAt,
-        bypass,
-      }),
-    [bypass, isLoggedIn, subscriptionStatus, trialEndsAt],
-  );
+  const loading = businessLoading || billingLoading;
 
   if (loading) {
     return (

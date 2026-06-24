@@ -16,8 +16,9 @@ import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { isRedeemerSession } from "@/lib/redemption-mode";
 import {
@@ -251,7 +252,7 @@ function TabModeRedirect({
 }) {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
-  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading: billingLoading } = business;
+  const { isLoggedIn, businessId, subscriptionTier, loading: businessLoading } = business;
   const segments = useSegments() as string[];
   const router = useRouter();
   const params = useGlobalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -268,16 +269,18 @@ function TabModeRedirect({
     e2e: browserE2EParam ?? String(params.e2e ?? ""),
     isDev: __DEV__,
   });
+  const { blocked: billingBlocked, loading: locationBillingLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+    bypass: forceBypass,
+  });
+  const billingLoading = businessLoading || locationBillingLoading;
   const businessBillingBlocked =
     PAID_BILLING_ENABLED &&
     mode === "business" &&
     !billingLoading &&
-    !canCreateDeal({
-      isLoggedIn,
-      subscriptionStatus,
-      trialEndsAt,
-      bypass: forceBypass,
-    });
+    billingBlocked;
 
   const tab = useMemo(() => {
     return deriveTabFromSegments(segments.map(String));

@@ -1,4 +1,5 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
+import type { BillingStatus } from "@/lib/billing/entitlements";
 
 /** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
 export const PAID_BILLING_ENABLED = true;
@@ -42,5 +43,38 @@ export function canCreateDeal(params: {
     if (!isTrialExpired(params.trialEndsAt)) return true;
   }
   return false;
+}
+
+function isCurrentOrMissing(endsAt: string | null): boolean {
+  if (!endsAt) return true;
+  return !isTrialExpired(endsAt);
+}
+
+export function canCreateDealWithLocationBilling(params: {
+  isLoggedIn: boolean;
+  status: BillingStatus;
+  trialEndsAt: string | null;
+  currentPeriodEndsAt: string | null;
+  bypass?: boolean;
+}): boolean {
+  if (!params.isLoggedIn) return false;
+  if (params.bypass) return true;
+  if (PILOT_DISABLE_BILLING_GATE) return true;
+
+  switch (params.status) {
+    case "trial_active":
+    case "admin_trial_active":
+      return isCurrentOrMissing(params.trialEndsAt ?? params.currentPeriodEndsAt);
+    case "trial_canceling":
+      return isCurrentOrMissing(params.trialEndsAt ?? params.currentPeriodEndsAt);
+    case "pro_active":
+    case "paid_active":
+      return true;
+    case "pro_canceling":
+    case "paid_canceling":
+      return isCurrentOrMissing(params.currentPeriodEndsAt);
+    default:
+      return false;
+  }
 }
 

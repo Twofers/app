@@ -26,8 +26,9 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
-import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -526,7 +527,7 @@ export default function BusinessDashboard() {
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { mode, ready: modeReady } = useTabMode();
-  const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionTier } = useBusiness();
   const { confirm, confirmModal } = useBrandedConfirm();
 
   const [banner, setBanner] = useState<string | null>(null);
@@ -567,15 +568,20 @@ export default function BusinessDashboard() {
   const theme = Colors[colorScheme];
   const primary = theme.primary;
 
+  const {
+    blocked: billingGateBlocked,
+    loading: billingGateLoading,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+  });
+
   const billingBlocked = Boolean(
     PAID_BILLING_ENABLED &&
       businessId &&
-      !canCreateDeal({
-        isLoggedIn,
-        subscriptionStatus,
-        trialEndsAt,
-        bypass: false,
-      }),
+      !billingGateLoading &&
+      billingGateBlocked,
   );
 
   const loadMetrics = useCallback(async () => {
