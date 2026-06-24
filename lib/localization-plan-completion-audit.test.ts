@@ -13,6 +13,7 @@ describe("localization plan completion audit", () => {
 
     expect(output).toContain("Localization plan completion audit checks passed.");
     expect(output).toContain("PASS completion blockers are explicit");
+    expect(output).toContain("PASS audit evidence path references exist");
     expect(output).toContain("PASS rollout gate still blocks broad Spanish and Korean production");
   });
 

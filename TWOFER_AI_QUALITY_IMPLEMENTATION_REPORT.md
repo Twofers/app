@@ -738,6 +738,64 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4m - Plan audit evidence path hardening
+
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+
+Safety checkpoint: `6e66702f` (Multilingual Deals PR 4l plan completion audit gate commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, no push notification was sent, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `scripts/check-localization-plan-completion.mjs`
+- `lib/localization-plan-completion-audit.test.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Hardened `npm run gate:localization-plan` so it extracts repo-path code spans from the plan completion audit and verifies each referenced evidence file exists.
+- Added focused Vitest coverage that the new path-existence check runs as part of the plan audit gate.
+- Preserved the existing no-production-change boundary: this is local release-evidence validation only.
+
+## Acceptance criteria map
+
+- Completion audit proof strength: Improved; the gate now fails if the audit points to a stale or renamed repo file.
+- PR4 operational handoff: Improved; future release prep can trust that the audit's cited repo evidence is at least present and machine-checked.
+- No production deployment: Preserved; this checkpoint is script/test/report only and did not cross a hard gate.
+
+## Validation
+
+- `npm run gate:localization-plan`: passed; 13 plan audit checks passed, including the new audit evidence path reference check.
+- `npm run gate:localization-rollout`: passed; 18 rollout gate checks passed.
+- `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout`: failed as expected with reviewer/template/Korean counter/screenshot QA blockers; wrapper verified exit code 1.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npm run dashboard:localization-rollout`: passed; dashboard generated locally and still reports Spanish/Korean broad production blockers.
+- `npx vitest run`: passed; 174 files, 920 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run typecheck:functions`: passed; 136 Edge Function files checked.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-plan-audit-hardening-20260623`: passed with known `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- This hardens local evidence references but does not make the app production ready.
+- Broad U.S. Spanish and Korean production remains blocked until Dan records named reviewers, native sign-off, Korean counter approvals, and real-device screenshot QA.
+- Hosted behavior remains unchanged until Dan explicitly approves the pending Supabase migrations, Edge Function redeploys, hosted flag changes, and any future release build.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4l - Plan completion audit gate
 
 Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.

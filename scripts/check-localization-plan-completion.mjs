@@ -10,6 +10,23 @@ function read(relativePath) {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
 }
 
+function exists(relativePath) {
+  return fs.existsSync(path.join(root, relativePath));
+}
+
+function extractRepoPathReferences(markdown) {
+  const refs = new Set();
+  for (const match of markdown.matchAll(/`([^`]+)`/g)) {
+    const value = match[1].trim();
+    const looksLikeRepoFile =
+      value === ".env.example" ||
+      /^(app|components|docs|lib|scripts|supabase)\/.+\.(md|mjs|sql|ts|tsx)$/.test(value) ||
+      /^package\.json$/.test(value);
+    if (looksLikeRepoFile) refs.add(value);
+  }
+  return [...refs].sort();
+}
+
 const checks = [
   {
     name: "plan completion audit document exists and states non-production status",
@@ -139,6 +156,21 @@ for (const check of checks) {
     console.log(`  ${check.file}`);
     failed += 1;
   }
+}
+
+const auditSource = read("docs/localization/multilingual-deals-plan-completion-audit.md");
+const referencedPaths = extractRepoPathReferences(auditSource);
+const missingReferencedPaths = referencedPaths.filter((relativePath) => !exists(relativePath));
+
+if (referencedPaths.length > 0 && missingReferencedPaths.length === 0) {
+  console.log("PASS audit evidence path references exist");
+} else {
+  console.log("FAIL audit evidence path references exist");
+  for (const missingPath of missingReferencedPaths) {
+    console.log(`  missing: ${missingPath}`);
+  }
+  if (referencedPaths.length === 0) console.log("  no repo path references found");
+  failed += 1;
 }
 
 if (failed > 0) {
