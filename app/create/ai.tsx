@@ -1825,7 +1825,7 @@ export default function AiDealScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 0.7,
+        quality: 1,
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
       const uri = result.assets[0].uri;
@@ -1853,7 +1853,7 @@ export default function AiDealScreen() {
 
   async function capturePhoto() {
     if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+    const photo = await cameraRef.current.takePictureAsync({ quality: 1 });
     if (photo?.uri) {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
