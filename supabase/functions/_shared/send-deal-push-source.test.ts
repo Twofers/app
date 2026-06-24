@@ -52,4 +52,19 @@ describe("send-deal-push multilingual rollout source guards", () => {
     expect(block).not.toMatch(/localizedDealTitle/);
     expect(block).not.toMatch(/localizedDealDescription/);
   });
+
+  it("schedules upcoming deals and sends only due live release pushes", () => {
+    expect(source).toMatch(/resolveDealReleaseNotificationState/);
+    expect(source).toMatch(/dealReleaseScheduledFor/);
+    expect(source).toMatch(/reserveDealPushEvent/);
+    expect(source).toMatch(/deal_push_events/);
+    expect(source).toMatch(/dispatch_due/);
+    expect(source).toMatch(/isCronAuthorized/);
+
+    const dueBlock = functionBlock("dispatchDueDealPushes");
+    expect(dueBlock).toMatch(/\.eq\("send_status", "pending"\)/);
+    expect(dueBlock).toMatch(/\.lte\("scheduled_for", nowIso\)/);
+    expect(dueBlock).toMatch(/state !== "live"/);
+    expect(dueBlock).toMatch(/sendDealPushToAudience/);
+  });
 });
