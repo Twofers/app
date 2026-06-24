@@ -10,14 +10,6 @@ describe("offer version publish source guards", () => {
     expect(fullCreateSource).toMatch(/!editingDealId && !offerDefinition/);
     expect(fullCreateSource).toMatch(/publishOfferVersionedDeal/);
     expect(fullCreateSource).toMatch(/buildOfferVersionPublishAdSpec\("create_ai"/);
-    expect(fullCreateSource).toMatch(/selectedComposedPresentationHash/);
-    expect(fullCreateSource).toMatch(/approvedComposedPresentationHash/);
-    expect(fullCreateSource).toMatch(/runDeterministicAdCompositeQa/);
-    expect(fullCreateSource).toMatch(/buildComposedScreenshotQaSnapshot/);
-    expect(fullCreateSource).toMatch(/composedCardPublishSpec/);
-    expect(fullCreateSource).toMatch(/composedCard: composedCardPublishSpec/);
-    expect(fullCreateSource).toMatch(/errPresentationApprovalRequired/);
-    expect(fullCreateSource).toMatch(/invalidateAcceptedAdDraft/);
 
     const newDealBranch = fullCreateSource.indexOf("const locTargets =");
     const versionedPublish = fullCreateSource.indexOf("const versionedResult = await publishOfferVersionedDeal", newDealBranch);

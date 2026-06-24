@@ -1,4 +1,4 @@
-import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -40,7 +40,6 @@ import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
-import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -99,35 +98,6 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
-import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
-import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
-import {
-  buildApprovedAdCopy,
-  buildMerchantIdentity,
-  imageSourceTypeFromGeneratedAd,
-} from "@/lib/ad-render-content";
-import {
-  buildLockedOfferContent,
-  renderAuthoritativeOfferFromDefinition,
-} from "@/lib/authoritative-offer-renderer";
-import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
-import { resolveAdPresentation } from "@/lib/ad-template-resolver";
-import {
-  runDeterministicAdCompositeQa,
-  type AdCompositeQaResult,
-} from "@/lib/ad-composite-qa";
-import type { SourceAwareImageQaResult } from "@/lib/quick-deal-image-qa";
-import {
-  isAiV4AuthoritativeOfferCardEnabled,
-  isAiV4ComposedAdCardEnabled,
-  isAiV4CompositeQaEnabled,
-  isAiV4CompositeScreenshotQaEnabled,
-  isAiV4ExactPresentationApprovalEnabled,
-  isAiV4InstantStyleAlternatesEnabled,
-  isAiV4MinimalInputFlowEnabled,
-  isAiV4PresentationResolverEnabled,
-  isAiV4SharedRendererEnabled,
-} from "@/lib/runtime-env";
 import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
@@ -144,7 +114,6 @@ import {
 } from "../../lib/ai-compose-offer";
 import {
   buildAuthoritativeDealDisplayCopy,
-  buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
@@ -222,60 +191,6 @@ function isMissingDealEligibilityColumn(error: { code?: string; message?: string
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
   const { location_id: _locationId, ...rest } = row;
   return rest;
-}
-
-function ComposedPreviewTelemetryBeacon(props: {
-  generatedAdPresent: boolean;
-  presentation: AdPresentationSpec;
-  presentationHash: string;
-  presentationOptionsCount: number;
-  imageSafeZoneConfidence: number;
-  compositeQa: AdCompositeQaResult;
-  screenshotQaRequired: boolean;
-  generationStartedAtRef: MutableRefObject<number | null>;
-  previewShownAtRef: MutableRefObject<number | null>;
-  lastHashRef: MutableRefObject<string | null>;
-}) {
-  useEffect(() => {
-    if (!props.generatedAdPresent) return;
-    if (props.lastHashRef.current === props.presentationHash) return;
-    const shownAt = Date.now();
-    props.previewShownAtRef.current = shownAt;
-    props.lastHashRef.current = props.presentationHash;
-    trackEvent(AiAdsEvents.COMPOSED_PREVIEW_SHOWN, {
-      screen: "create_ai",
-      selected_template_id: props.presentation.templateId,
-      alternate_template_count: Math.max(0, props.presentationOptionsCount - 1),
-      template_resolution_reason_codes: props.presentation.resolutionReasonCodes.join(","),
-      image_source_type: props.presentation.imageSourceType,
-      image_asset_id_present: Boolean(props.presentation.imageAssetId),
-      safe_zone_confidence: props.imageSafeZoneConfidence,
-      supporting_copy_removed: !props.presentation.showSupportingCopy,
-      presentation_spec_version: props.presentation.specVersion,
-      renderer_version: props.presentation.rendererVersion,
-      presentation_hash: props.presentationHash,
-      composite_qa_decision: props.compositeQa.decision,
-      composite_qa_repair_count: props.compositeQa.repairCodes.length,
-      composite_qa_reason_codes: props.compositeQa.hardFailReasons.join(","),
-      screenshot_qa_required: props.screenshotQaRequired,
-      time_to_first_preview_ms: props.generationStartedAtRef.current
-        ? shownAt - props.generationStartedAtRef.current
-        : null,
-    });
-  }, [
-    props.generatedAdPresent,
-    props.presentation,
-    props.presentationHash,
-    props.presentationOptionsCount,
-    props.imageSafeZoneConfidence,
-    props.compositeQa,
-    props.screenshotQaRequired,
-    props.generationStartedAtRef,
-    props.previewShownAtRef,
-    props.lastHashRef,
-  ]);
-
-  return null;
 }
 
 /**
@@ -515,7 +430,6 @@ function generatedAdForPublishSpec(params: {
 }
 
 type RevisionTarget = "copy" | "image" | "both";
-type ComposedEditIntent = "words" | null;
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
 
@@ -588,50 +502,6 @@ function buildOriginalPhotoVersionAd(ad: GeneratedAd, originalStoragePath: strin
       qa: originalPhotoSelectionQa(false),
     }),
   });
-}
-
-function sourceAwareQaFromSelectionQa(
-  qa: AdImageSelectionQa | null | undefined,
-  sourceType: AdImageSourceType,
-  hasImage: boolean,
-): SourceAwareImageQaResult {
-  if (!qa) {
-    return {
-      checked: false,
-      available: hasImage || sourceType === "deterministic_fallback",
-      sourceType,
-      decision: sourceType === "deterministic_fallback" ? "pass" : "not_checked",
-      hardFailReasons: [],
-      warningCodes: hasImage && sourceType !== "deterministic_fallback" ? ["IMAGE_QA_NOT_CHECKED"] : [],
-      missingItems: [],
-      forbiddenElements: [],
-      merchantOverrideAllowed: false,
-      merchantOverrideAcknowledged: false,
-      notes: "",
-    };
-  }
-
-  return {
-    checked: qa.checked,
-    available: hasImage && !qa.unavailable,
-    sourceType,
-    decision: qa.decision,
-    hardFailReasons: Array.isArray(qa.hardFailReasons) ? qa.hardFailReasons : [],
-    warningCodes: Array.isArray(qa.warningCodes) ? qa.warningCodes : [],
-    missingItems: Array.isArray(qa.missingItems) ? qa.missingItems : [],
-    forbiddenElements: [],
-    merchantOverrideAllowed: qa.merchantOverrideAllowed,
-    merchantOverrideAcknowledged: qa.merchantOverrideAcknowledged,
-    notes: "",
-  };
-}
-
-function cropSuitabilityScoreForQa(qa: SourceAwareImageQaResult): number {
-  if (qa.sourceType === "deterministic_fallback") return 1;
-  if (qa.decision === "pass") return 0.84;
-  if (qa.decision === "warn") return 0.62;
-  if (qa.decision === "not_checked") return 0.72;
-  return 0.34;
 }
 
 export default function AiDealScreen() {
@@ -775,18 +645,12 @@ export default function AiDealScreen() {
   const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
   const [revisionFeedback, setRevisionFeedback] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [composedStyleIndex, setComposedStyleIndex] = useState(0);
-  const [composedEditIntent, setComposedEditIntent] = useState<ComposedEditIntent>(null);
-  const [approvedComposedPresentationHash, setApprovedComposedPresentationHash] = useState<string | null>(null);
   /**
    * Monotonic ID for in-flight generate/revise calls. If user replaces the photo or hits
    * generate again before a revise resolves, we bump this counter and discard stale results.
    */
   const generationRequestIdRef = useRef(0);
   const aiRequestGroupIdRef = useRef(createAiRequestGroupId());
-  const adGenerationStartedAtRef = useRef<number | null>(null);
-  const composedPreviewShownAtRef = useRef<number | null>(null);
-  const lastComposedPreviewTelemetryHashRef = useRef<string | null>(null);
 
   const aiDraftBaselineRef = useRef<{
     title: string;
@@ -1077,9 +941,6 @@ export default function AiDealScreen() {
     setManualDraftUnlocked(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
-    setComposedStyleIndex(0);
-    setComposedEditIntent(null);
-    setApprovedComposedPresentationHash(null);
     aiDraftBaselineRef.current = null;
     setBanner({
       message: t("createAi.imageRestoredBanner", {
@@ -1280,9 +1141,6 @@ export default function AiDealScreen() {
       return entry ? [entry] : [];
     });
     setAdAccepted(draft.adAccepted);
-    setComposedStyleIndex(0);
-    setComposedEditIntent(null);
-    setApprovedComposedPresentationHash(null);
     setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
     setLastGenerationError(null);
     setTemplateLoaded(false);
@@ -1499,7 +1357,6 @@ export default function AiDealScreen() {
         setGeneratedAd(null);
         setImageVersions([]);
         setAdAccepted(false);
-        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setLastGenerationError(null);
         setTemplateLoaded(false);
@@ -1592,7 +1449,6 @@ export default function AiDealScreen() {
         setGeneratedAd(null);
         setImageVersions([]);
         setAdAccepted(false);
-        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
         setLastGenerationError(null);
@@ -1744,14 +1600,8 @@ export default function AiDealScreen() {
     setRevisionsUsed(0);
     setRevisionFeedback("");
     setActivePreset(null);
-    setComposedStyleIndex(0);
-    setComposedEditIntent(null);
-    setApprovedComposedPresentationHash(null);
     aiDraftBaselineRef.current = null;
     lastSentPhotoTreatmentRef.current = null;
-    adGenerationStartedAtRef.current = null;
-    composedPreviewShownAtRef.current = null;
-    lastComposedPreviewTelemetryHashRef.current = null;
     aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
   }
@@ -2007,9 +1857,6 @@ export default function AiDealScreen() {
     setBanner(null);
     setLastGenerationError(null);
     resetGenerationState();
-    adGenerationStartedAtRef.current = Date.now();
-    composedPreviewShownAtRef.current = null;
-    lastComposedPreviewTelemetryHashRef.current = null;
     const requestId = ++generationRequestIdRef.current;
 
     try {
@@ -2125,9 +1972,6 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
       return;
     }
-    adGenerationStartedAtRef.current = Date.now();
-    composedPreviewShownAtRef.current = null;
-    lastComposedPreviewTelemetryHashRef.current = null;
     setRevising(true);
     setBanner(null);
     const requestId = ++generationRequestIdRef.current;
@@ -2163,9 +2007,6 @@ export default function AiDealScreen() {
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");
       setActivePreset(null);
-      setComposedStyleIndex(0);
-      setComposedEditIntent(null);
-      setApprovedComposedPresentationHash(null);
       setAdAccepted(false);
       aiDraftBaselineRef.current = null;
     } catch (err: unknown) {
@@ -2181,69 +2022,12 @@ export default function AiDealScreen() {
     }
   }
 
-  function invalidateAcceptedAdDraft() {
-    if (!adAccepted && !approvedComposedPresentationHash) return;
-    setAdAccepted(false);
-    setApprovedComposedPresentationHash(null);
-    setPublishStatus("idle");
-    setPublishStatusMessage(null);
-  }
-
   function acceptAd() {
     if (!generatedAd) return;
-    if (composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
-      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
-        screen: "create_ai",
-        reason: "composite_qa_block",
-        selected_template_id: selectedComposedPresentation.templateId,
-        presentation_hash: selectedComposedPresentationHash,
-        composite_qa_decision: selectedComposedCompositeQa.decision,
-        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
-      });
-      setBanner({
-        message: t("createAi.compositeQaBlocked", {
-          defaultValue: "This ad layout needs a safer preview before publishing. Try another style or change the photo.",
-        }),
-        tone: "warning",
-      });
-      return;
-    }
-    if (selectedComposedScreenshotQaRequired) {
-      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
-        screen: "create_ai",
-        reason: "screenshot_qa_required",
-        selected_template_id: selectedComposedPresentation.templateId,
-        presentation_hash: selectedComposedPresentationHash,
-        composite_qa_decision: selectedComposedCompositeQa.decision,
-        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
-      });
-      setBanner({
-        message: t("createAi.compositeScreenshotQaRequired", {
-          defaultValue: "This ad needs visual review before it can be approved. Try another style or use the split layout.",
-        }),
-        tone: "warning",
-      });
-      return;
-    }
     applyAdToDraft(generatedAd);
-    setApprovedComposedPresentationHash(composedAdPreviewEnabled ? selectedComposedPresentationHash : null);
     setAdAccepted(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
-    if (composedAdPreviewEnabled) {
-      const approvedAt = Date.now();
-      trackEvent(AiAdsEvents.COMPOSED_APPROVED, {
-        screen: "create_ai",
-        selected_template_id: selectedComposedPresentation.templateId,
-        alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
-        merchant_style_override_used: composedStyleIndex > 0,
-        presentation_hash: selectedComposedPresentationHash,
-        composite_qa_decision: selectedComposedCompositeQa.decision,
-        composite_qa_repair_count: selectedComposedCompositeQa.repairCodes.length,
-        screenshot_qa_required: selectedComposedScreenshotQaRequired,
-        time_to_approval_ms: composedPreviewShownAtRef.current ? approvedAt - composedPreviewShownAtRef.current : null,
-      });
-    }
     trackEvent(AiAdsEvents.AD_SELECTED, {
       screen: "create_ai",
       creative_lane: "single",
@@ -2294,16 +2078,10 @@ export default function AiDealScreen() {
       setUsePhotoAsFinal(true);
       setMerchantOriginalWarningAcknowledged(false);
     }
-    adGenerationStartedAtRef.current = Date.now();
-    composedPreviewShownAtRef.current = null;
-    lastComposedPreviewTelemetryHashRef.current = null;
     setGeneratedAd(fallbackAd);
-    setComposedStyleIndex(0);
-    setComposedEditIntent(null);
-    setApprovedComposedPresentationHash(null);
     rememberImageVersion(fallbackAd, "fallback");
     applyAdToDraft(fallbackAd);
-    setAdAccepted(!composedExactPresentationApprovalEnabled);
+    setAdAccepted(true);
     setManualDraftUnlocked(true);
     setLastGenerationError(null);
     setPublishStatus("idle");
@@ -2448,58 +2226,6 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errOriginalPhotoAckRequired"), "warning");
       return;
     }
-    if (!editingDealId && composedExactPresentationApprovalEnabled) {
-      if (!adAccepted || !composedPresentationApprovalMatches) {
-        trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
-          screen: "create_ai",
-          reason: "approval_required",
-          selected_template_id: selectedComposedPresentation.templateId,
-          presentation_hash: selectedComposedPresentationHash,
-          approved_presentation_hash: approvedComposedPresentationHash,
-        });
-        showPublishError(
-          t("createAi.errPresentationApprovalRequired", {
-            defaultValue: "Approve the exact ad preview again before publishing.",
-          }),
-          "warning",
-        );
-        return;
-      }
-    }
-    if (!editingDealId && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
-      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
-        screen: "create_ai",
-        reason: "composite_qa_block",
-        selected_template_id: selectedComposedPresentation.templateId,
-        presentation_hash: selectedComposedPresentationHash,
-        composite_qa_decision: selectedComposedCompositeQa.decision,
-        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
-      });
-      showPublishError(
-        t("createAi.errCompositeQaBlocked", {
-          defaultValue: "This ad preview failed layout checks. Try another style or change the photo.",
-        }),
-        "warning",
-      );
-      return;
-    }
-    if (!editingDealId && selectedComposedScreenshotQaRequired) {
-      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
-        screen: "create_ai",
-        reason: "screenshot_qa_required",
-        selected_template_id: selectedComposedPresentation.templateId,
-        presentation_hash: selectedComposedPresentationHash,
-        composite_qa_decision: selectedComposedCompositeQa.decision,
-        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
-      });
-      showPublishError(
-        t("createAi.errCompositeScreenshotQaRequired", {
-          defaultValue: "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
-        }),
-        "warning",
-      );
-      return;
-    }
 
     publishInFlightRef.current = true;
     setPublishing(true);
@@ -2531,19 +2257,6 @@ export default function AiDealScreen() {
         usePhotoAsFinal,
         merchantOriginalWarningAcknowledged,
       });
-      const composedCardPublishSpec = composedAdPreviewEnabled
-        ? {
-            presentation: selectedComposedPresentation,
-            presentationHash: selectedComposedPresentationHash,
-            selectedTemplateId: selectedComposedPresentation.templateId,
-            alternateTemplateIds: composedPresentationOptions
-              .filter((spec) => spec.templateId !== selectedComposedPresentation.templateId)
-              .map((spec) => spec.templateId),
-            merchantStyleOverrideUsed: composedStyleIndex > 0,
-            compositeQa: selectedComposedCompositeQa,
-            screenshotQa: selectedComposedScreenshotQaSnapshot,
-          }
-        : null;
       const allowTextOnlyPoster =
         generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
       if (!posterForPublish && !allowTextOnlyPoster) {
@@ -2608,9 +2321,7 @@ export default function AiDealScreen() {
           idempotency_key:
             publishIdempotencyKeyRef.current ??
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
-          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpec, {
-            composedCard: composedCardPublishSpec,
-          }),
+          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpec),
         });
         const dealsOut = versionedResult.deals.map((row) => ({
           id: row.deal_id,
@@ -2636,11 +2347,6 @@ export default function AiDealScreen() {
         trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
           screen: "create_ai",
           draft_edited: edited,
-          composed_preview_enabled: composedAdPreviewEnabled,
-          selected_template_id: composedAdPreviewEnabled ? selectedComposedPresentation.templateId : null,
-          merchant_style_override_used: composedAdPreviewEnabled ? composedStyleIndex > 0 : null,
-          composite_qa_decision: composedAdPreviewEnabled ? selectedComposedCompositeQa.decision : null,
-          composite_qa_repair_count: composedAdPreviewEnabled ? selectedComposedCompositeQa.repairCodes.length : null,
         });
       }
 
@@ -2667,7 +2373,6 @@ export default function AiDealScreen() {
         setGeneratedAd(null);
         setImageVersions([]);
         setAdAccepted(false);
-        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
@@ -2829,115 +2534,6 @@ export default function AiDealScreen() {
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
-  const composedAdPreviewEnabled =
-    isAiV4ComposedAdCardEnabled() ||
-    isAiV4SharedRendererEnabled() ||
-    isAiV4AuthoritativeOfferCardEnabled();
-  const composedPresentationResolverEnabled = composedAdPreviewEnabled && isAiV4PresentationResolverEnabled();
-  const composedMinimalInputEnabled = composedAdPreviewEnabled && isAiV4MinimalInputFlowEnabled();
-  const composedInstantStyleAlternatesEnabled = composedAdPreviewEnabled && isAiV4InstantStyleAlternatesEnabled();
-  const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
-  const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
-  const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
-  const composedOfferFacts = offerDefinition
-    ? renderAuthoritativeOfferFromDefinition(offerDefinition)
-    : buildLockedOfferContent({
-        primaryOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
-        termsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
-      });
-  const composedCopy = buildApprovedAdCopy({
-    headline: generatedAd?.headline,
-    supportingCopy: generatedAd?.subheadline || generatedAd?.short_description,
-    ctaLabel: generatedAd?.cta || ctaText,
-    fallbackHeadline: composedOfferFacts.primaryOfferLine,
-  });
-  const composedMerchant = buildMerchantIdentity({
-    businessName,
-    locationName: businessProfile?.location,
-    addressLine: businessProfile?.address ?? businessProfile?.location ?? null,
-  });
-  const composedLiveState = {
-    status: "live" as const,
-    statusLabel: t("dealStatus.live"),
-    quantityRemainingLabel: `${t("createAi.maxClaimsLabel")} ${maxClaims}`.trim(),
-    timeRemainingLabel: displayScheduleSummary,
-    claimAvailable: true,
-  };
-  const composedImageSourceType: AdImageSourceType = adImageUri
-    ? imageSourceTypeFromGeneratedAd(generatedAd) === "deterministic_fallback"
-      ? "merchant_original"
-      : imageSourceTypeFromGeneratedAd(generatedAd)
-    : "deterministic_fallback";
-  const composedImageQa = sourceAwareQaFromSelectionQa(
-    generatedAd?.image_selection?.qa,
-    composedImageSourceType,
-    Boolean(adImageUri),
-  );
-  const composedImageSafeZones = buildImageSafeZoneResult({
-    hasImage: Boolean(adImageUri),
-    imageSourceType: composedImageSourceType,
-    imageQa: composedImageQa,
-    cropSuitabilityScore: cropSuitabilityScoreForQa(composedImageQa),
-  });
-  const composedBasePresentation = buildDefaultAdPresentationSpec({
-    imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
-    imageSourceType: composedImageSourceType,
-    templateId: adImageUri ? "hero_image_overlay" : "split_offer_panel",
-    themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
-    resolutionReasonCodes: adImageUri ? ["MERCHANT_PREVIEW_IMAGE"] : ["MERCHANT_PREVIEW_FALLBACK"],
-  });
-  const composedPresentationResolution = composedPresentationResolverEnabled
-    ? resolveAdPresentation({
-        approvedCopy: composedCopy,
-        lockedOfferContent: composedOfferFacts,
-        merchantIdentity: composedMerchant,
-        imageQa: composedImageQa,
-        imageSafeZones: composedImageSafeZones,
-        creativeStrategy: generatedAd?.item_research?.description ?? generatedAd?.headline ?? hintText,
-        liveStateCapabilities: {
-          supportsQuantityRemaining: true,
-          supportsTimeRemaining: true,
-        },
-        targetSurface: "merchant_preview",
-        imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
-        imageSourceType: composedImageSourceType,
-        themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
-      })
-    : null;
-  const composedPresentationOptions = composedPresentationResolution
-    ? [composedPresentationResolution.recommended, ...composedPresentationResolution.alternates]
-    : [composedBasePresentation];
-  const selectedComposedPresentation =
-    composedPresentationOptions[Math.min(composedStyleIndex, Math.max(0, composedPresentationOptions.length - 1))] ??
-    composedBasePresentation;
-  const selectedComposedPresentationHash = createAdPresentationHash({
-    presentation: selectedComposedPresentation,
-    offerFacts: composedOfferFacts,
-    copy: composedCopy,
-  });
-  const selectedComposedCompositeQa = runDeterministicAdCompositeQa({
-    offerFacts: composedOfferFacts,
-    merchant: composedMerchant,
-    copy: composedCopy,
-    presentation: selectedComposedPresentation,
-    liveState: composedLiveState,
-    surface: "merchant_preview",
-    imageUri: adImageUri,
-    selectedImageAssetId: currentAdStoragePath ?? originalStoragePath ?? selectedComposedPresentation.imageAssetId,
-    imageSafeZoneConfidence: composedImageSafeZones.confidence,
-  });
-  const selectedComposedScreenshotQaSnapshot = buildComposedScreenshotQaSnapshot(
-    selectedComposedCompositeQa,
-    composedScreenshotQaEnabled,
-  );
-  const selectedComposedScreenshotQaRequired = selectedComposedScreenshotQaSnapshot.required;
-  const composedPresentationApprovalMatches =
-    approvedComposedPresentationHash === selectedComposedPresentationHash &&
-    selectedComposedCompositeQa.decision !== "block" &&
-    selectedComposedCompositeQa.decision !== "unavailable" &&
-    !selectedComposedScreenshotQaRequired;
-  const canTryComposedStyle = composedInstantStyleAlternatesEnabled && composedPresentationOptions.length > 1;
-  const showComposedRevisePanel = !adAccepted && (!composedMinimalInputEnabled || composedEditIntent === "words");
   const canCompareImages = Boolean(
     selectedPhotoUri &&
       adImageUri &&
@@ -3705,105 +3301,27 @@ export default function AiDealScreen() {
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                {composedAdPreviewEnabled ? (
-                  <>
-                    <ComposedPreviewTelemetryBeacon
-                      generatedAdPresent={Boolean(generatedAd)}
-                      presentation={selectedComposedPresentation}
-                      presentationHash={selectedComposedPresentationHash}
-                      presentationOptionsCount={composedPresentationOptions.length}
-                      imageSafeZoneConfidence={composedImageSafeZones.confidence}
-                      compositeQa={selectedComposedCompositeQa}
-                      screenshotQaRequired={selectedComposedScreenshotQaRequired}
-                      generationStartedAtRef={adGenerationStartedAtRef}
-                      previewShownAtRef={composedPreviewShownAtRef}
-                      lastHashRef={lastComposedPreviewTelemetryHashRef}
-                    />
-                    <ComposedAdCard
-                      imageUri={adImageUri}
-                      offerFacts={composedOfferFacts}
-                      merchant={composedMerchant}
-                      copy={composedCopy}
-                      presentation={selectedComposedPresentation}
-                      liveState={composedLiveState}
-                      surface="merchant_preview"
-                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
-                    />
-                    {composedMinimalInputEnabled ? (
-                      <View style={{ gap: 8 }}>
-                        <SecondaryButton
-                          title={t("createAi.composedChangePhoto", { defaultValue: "Change photo" })}
-                          onPress={() => {
-                            setComposedEditIntent(null);
-                            scrollRef.current?.scrollTo({ y: 0, animated: true });
-                          }}
-                        />
-                        <SecondaryButton
-                          title={t("createAi.composedChangeWords", { defaultValue: "Change words" })}
-                          onPress={() => {
-                            setComposedEditIntent("words");
-                            setRevisionTarget("copy");
-                            setActivePreset(null);
-                            setTimeout(() => {
-                              scrollRef.current?.scrollToEnd({ animated: true });
-                            }, 80);
-                          }}
-                        />
-                        <SecondaryButton
-                          title={t("createAi.composedTryAnotherStyle", { defaultValue: "Try another style" })}
-                          onPress={() => {
-                            const nextStyleIndex = (composedStyleIndex + 1) % composedPresentationOptions.length;
-                            const nextPresentation = composedPresentationOptions[nextStyleIndex];
-                            const nextPresentationHash = createAdPresentationHash({
-                              presentation: nextPresentation,
-                              offerFacts: composedOfferFacts,
-                              copy: composedCopy,
-                            });
-                            trackEvent(AiAdsEvents.COMPOSED_STYLE_CHANGED, {
-                              screen: "create_ai",
-                              previous_template_id: selectedComposedPresentation.templateId,
-                              selected_template_id: nextPresentation.templateId,
-                              alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
-                              merchant_style_override_used: nextStyleIndex > 0,
-                              previous_presentation_hash: selectedComposedPresentationHash,
-                              presentation_hash: nextPresentationHash,
-                            });
-                            setComposedStyleIndex(nextStyleIndex);
-                            setComposedEditIntent(null);
-                            setAdAccepted(false);
-                            setApprovedComposedPresentationHash(null);
-                            setPublishStatus("idle");
-                            setPublishStatusMessage(null);
-                            aiDraftBaselineRef.current = null;
-                          }}
-                          disabled={!canTryComposedStyle}
-                        />
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <GeneratedAdPreviewCard
-                    imageUri={adImageUri}
-                    businessName={businessName}
-                    headline={generatedAd.headline}
-                    body={generatedAd.subheadline}
-                    offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                    termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                    cta={generatedAd.cta}
-                    scheduleSummary={displayScheduleSummary}
-                    maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                    maxClaimsValue={maxClaims}
-                    termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                    termsHelper={t("createAi.lockedTermsHelper", {
-                      defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                    })}
-                    noImageLabel={t("createAi.noImage")}
-                    fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
-                    addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                    theme={theme}
-                    darkMode={colorScheme === "dark"}
-                  />
-                )}
+                <GeneratedAdPreviewCard
+                  imageUri={adImageUri}
+                  businessName={businessName}
+                  headline={generatedAd.headline}
+                  body={generatedAd.subheadline}
+                  offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
+                  termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
+                  cta={generatedAd.cta}
+                  scheduleSummary={displayScheduleSummary}
+                  maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                  maxClaimsValue={maxClaims}
+                  termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                  termsHelper={t("createAi.lockedTermsHelper", {
+                    defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                  })}
+                  noImageLabel={t("createAi.noImage")}
+                  fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                  addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                  theme={theme}
+                  darkMode={colorScheme === "dark"}
+                />
 
                 {canCompareImages && originalImageVersion ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
@@ -3909,84 +3427,37 @@ export default function AiDealScreen() {
                 )}
 
                 {/* Revise panel */}
-                {showComposedRevisePanel ? (
+                {!adAccepted ? (
                   <View style={{ padding: 16, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 12 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                       <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
                       <Text style={{ fontSize: 12, color: theme.mutedText }}>{revisionsLeftLabel}</Text>
                     </View>
 
-                    {composedMinimalInputEnabled ? (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                        {[
-                          {
-                            label: t("createAi.composedWordIntentClearer", { defaultValue: "Clearer" }),
-                            preset: t("createAi.revisePresetSimpler"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentWarmer", { defaultValue: "Warmer" }),
-                            preset: t("createAi.revisePresetPremium"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentEnergetic", { defaultValue: "More energy" }),
-                            preset: t("createAi.revisePresetPunchier"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentLocal", { defaultValue: "More local" }),
-                            preset: t("createAi.revisePresetItem"),
-                          },
-                        ].map(({ label, preset }) => {
-                          const selected = activePreset === preset;
-                          return (
-                            <Pressable
-                              key={label}
-                              onPress={() => {
-                                setRevisionTarget("copy");
-                                setActivePreset(selected ? null : preset);
-                              }}
-                              style={{
-                                paddingVertical: 7,
-                                paddingHorizontal: 12,
-                                borderRadius: 999,
-                                backgroundColor: selected ? theme.primary : theme.surface,
-                                borderWidth: 1,
-                                borderColor: selected ? theme.primary : theme.border,
-                              }}
-                            >
-                              <Text style={{ fontSize: 12, fontWeight: "800", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>
-                                {label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : null}
-
-                    {!composedMinimalInputEnabled ? (
-                      <View style={{ flexDirection: "row", gap: 6 }}>
-                        {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
-                          const selected = revisionTarget === target;
-                          return (
-                            <Pressable
-                              key={target}
-                              onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
-                              style={{
-                                flex: 1,
-                                paddingVertical: 8,
-                                borderRadius: 999,
-                                backgroundColor: selected ? theme.primary : theme.surface,
-                                borderWidth: 1,
-                                borderColor: selected ? theme.primary : theme.border,
-                              }}
-                            >
-                              <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
-                                {targetLabel[target]}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : null}
+                    {/* Target toggle */}
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
+                        const selected = revisionTarget === target;
+                        return (
+                          <Pressable
+                            key={target}
+                            onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 8,
+                              borderRadius: 999,
+                              backgroundColor: selected ? theme.primary : theme.surface,
+                              borderWidth: 1,
+                              borderColor: selected ? theme.primary : theme.border,
+                            }}
+                          >
+                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
+                              {targetLabel[target]}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
 
                     {/* Presets */}
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -4076,13 +3547,13 @@ export default function AiDealScreen() {
                 </View>
 
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
-                <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editSubheadline")}</Text>
-                <TextInput value={promoLine} onChangeText={(value) => { setPromoLine(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.subheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editCta")}</Text>
-                <TextInput value={ctaText} onChangeText={(value) => { setCtaText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editDetails")}</Text>
-                <TextInput value={description} onChangeText={(value) => { setDescription(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
 
                 <View style={{ marginTop: 16, gap: 8 }}>
                   <View

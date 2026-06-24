@@ -22,13 +22,9 @@ describe("publish-offer-version edge function", () => {
 
   it("validates the renderer ad spec before publishing", () => {
     expect(source).toMatch(/function validateAdSpecPayload/);
-    expect(source).toMatch(/function validateComposedCardPayload/);
     expect(source).toMatch(/INVALID_AD_SPEC/);
     expect(source).toMatch(/MISSING_RENDERER_VERSION/);
     expect(source).toMatch(/MISSING_CHANNELS/);
-    expect(source).toMatch(/MISSING_COMPOSED_CARD_APPROVAL/);
-    expect(source).toMatch(/BLOCKED_COMPOSITE_QA/);
-    expect(source).toMatch(/SCREENSHOT_QA_REQUIRED/);
   });
 
   it("uses the atomic publish rpc and exposes a migration-unavailable rollback error", () => {
@@ -41,9 +37,6 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/app_analytics_events/);
     expect(source).toMatch(/ai_ad_versioned_publish/);
     expect(source).toMatch(/renderer_version/);
-    expect(source).toMatch(/selected_template_id/);
-    expect(source).toMatch(/composite_qa_decision/);
-    expect(source).toMatch(/merchant_style_override_used/);
     expect(source).not.toMatch(/context:[\s\S]*idempotency_key/);
   });
 });
