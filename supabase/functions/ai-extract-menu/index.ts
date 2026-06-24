@@ -29,6 +29,12 @@ type ExtractionResult = {
   menu_notes: string;
 };
 
+type AiCostLoggerClient = {
+  from: (relation: string) => {
+    insert: (values: Record<string, unknown>) => unknown;
+  };
+};
+
 function decodeBase64Image(value: string): Uint8Array | null {
   const encoded = value.includes(",") ? value.split(",").at(-1) ?? "" : value;
   try {
@@ -68,7 +74,7 @@ function menuSuccessPayload(parsed: ExtractionResult, extractionSource: "openai"
 }
 
 async function logMenuProviderAttempts(params: {
-  admin: ReturnType<typeof createClient>;
+  admin: AiCostLoggerClient;
   businessId: string;
   ownerUserId: string;
   requestGroupId: string;

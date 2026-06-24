@@ -738,6 +738,61 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Edge Function Typecheck Fix - AI extract menu provider-attempt logger
+
+Status: Implemented locally on branch `codex/fix-ai-extract-menu-typecheck`.
+
+Safety checkpoint: `8a430de6` (Multilingual Deals PR4 no multilingual push guard commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `supabase/functions/ai-extract-menu/index.ts`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Replaced the overly narrow `ReturnType<typeof createClient>` annotation on the menu provider-attempt logger with a small structural database-client type for the AI cost logger surface.
+- Preserved runtime behavior: provider attempts are still recorded through `logAiCost`, and no menu extraction routing, prompt, provider, cost, or response behavior changed.
+- Removed the previously blocking Deno Edge Function typecheck mismatch for the actual Supabase service client created inside `ai-extract-menu`.
+
+## Acceptance criteria map
+
+- Edge Function validation gate: Restored. `npm run typecheck:functions` now checks `ai-extract-menu` successfully instead of failing on the Supabase client generic mismatch at the provider-attempt logging call sites.
+- Multilingual PR4 validation follow-up: Improved. The unrelated blocker recorded in recent PR4 validation notes is fixed locally; hosted behavior still requires the normal hard-gated Edge Function redeploy before production changes.
+
+## Validation
+
+- `npm run typecheck:functions`: passed; 136 Edge Function files checked. First 120s attempt timed out before output; rerun with a longer timeout passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed.
+- `npm run copy:evaluate`: passed.
+- `npm run dashboard:localization-rollout`: passed.
+- `npm run gate:ai-ad`: passed.
+- `npm run gate:localization-rollout`: passed.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-ai-extract-menu-typecheck-20260623`: passed with known `country-flag-icons` package export warnings.
+- `git diff --check`: passed.
+- `git diff --cached --check`: passed.
+
+## Unresolved risks
+
+- Hosted behavior is unchanged until Dan approves a future `ai-extract-menu` Edge Function redeploy.
+- This change only fixes the local Edge Function typecheck gate; it does not apply migrations, change live secrets, or certify production/store readiness.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4i - No multilingual push guard
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr4-no-multilingual-push`.
