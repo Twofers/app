@@ -83,8 +83,11 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("Do not add fake business names.");
     expect(prompt).toContain("Do not add app mascots, characters, animals, penguins");
     expect(prompt).toContain("center-safe area");
-    expect(prompt).toContain("top and bottom overlay zones");
+    expect(prompt).toContain("standalone product photo");
+    expect(prompt).toContain("separate native panel outside the image");
+    expect(prompt).toContain("Do not reserve blank banner, coupon, headline, or overlay zones");
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
+    expect(prompt).not.toContain("top and bottom overlay zones");
   });
 
   it("includes bounded merchant custom edit instructions without relaxing image rules", () => {

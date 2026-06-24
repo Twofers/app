@@ -978,7 +978,7 @@ export default function HomeScreen() {
         const presentation = buildDefaultAdPresentationSpec({
           imageAssetId: item.poster_storage_path ?? posterUri ?? null,
           imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
-          templateId: isLive && scarcityLabel ? "live_drop_card" : posterUri ? "hero_image_overlay" : "split_offer_panel",
+          templateId: "split_offer_panel",
           themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
           resolutionReasonCodes: posterUri ? ["CONSUMER_FEED_IMAGE"] : ["CONSUMER_FEED_FALLBACK"],
         });

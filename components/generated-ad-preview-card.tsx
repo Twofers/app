@@ -133,46 +133,31 @@ export function GeneratedAdPreviewCard({
           </View>
         )}
 
-        <LinearGradient
-          colors={darkMode
-            ? ["rgba(0,0,0,0.08)", "rgba(0,0,0,0.78)"]
-            : ["rgba(0,0,0,0.02)", "rgba(0,0,0,0.68)"]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <View style={styles.heroTopRow}>
-          <View style={[styles.brandBadge, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.brandBadgeText, { color: theme.primaryText }]}>Twofer</Text>
-          </View>
-          {cleanBusiness ? (
-            <View style={styles.businessBadge}>
-              <Text numberOfLines={1} style={styles.businessBadgeText}>
-                {cleanBusiness}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.heroCopy}>
-          {cleanOffer ? (
-            <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
-              <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
-                {cleanOffer}
-              </Text>
-            </View>
-          ) : null}
-          <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.headline}>
-            {headline}
-          </Text>
-          {cleanBody ? (
-            <Text numberOfLines={3} style={styles.body}>
-              {cleanBody}
-            </Text>
-          ) : null}
-        </View>
       </View>
 
       <View style={styles.footer}>
+        <View style={styles.footerHeader}>
+          <Text style={[styles.footerBrand, { color: theme.accentText }]}>Twofer</Text>
+          {cleanBusiness ? (
+            <Text numberOfLines={1} style={[styles.footerBusiness, { color: theme.mutedText }]}>
+              {cleanBusiness}
+            </Text>
+          ) : null}
+        </View>
+        {cleanOffer ? (
+          <Text numberOfLines={2} style={[styles.footerOffer, { color: theme.accentText }]}>
+            {cleanOffer}
+          </Text>
+        ) : null}
+        <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.footerHeadline, { color: theme.text }]}>
+          {headline}
+        </Text>
+        {cleanBody ? (
+          <Text numberOfLines={3} style={[styles.footerBody, { color: theme.mutedText }]}>
+            {cleanBody}
+          </Text>
+        ) : null}
+
         <View style={styles.chipRow}>
           <View style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
             <Text numberOfLines={1} style={[styles.chipText, { color: theme.text }]}>
@@ -222,8 +207,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   hero: {
-    height: 360,
-    justifyContent: "space-between",
+    height: 300,
     overflow: "hidden",
   },
   fallbackPattern: {
@@ -366,6 +350,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 13,
+  },
+  footerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  footerBrand: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  footerBusiness: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+  footerOffer: {
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 18,
+    letterSpacing: 0,
+  },
+  footerHeadline: {
+    fontSize: 26,
+    fontWeight: "900",
+    lineHeight: 31,
+    letterSpacing: 0,
+  },
+  footerBody: {
+    fontSize: 15,
+    fontWeight: "600",
+    lineHeight: 21,
+    letterSpacing: 0,
   },
   chipRow: {
     flexDirection: "row",

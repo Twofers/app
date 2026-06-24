@@ -70,6 +70,63 @@ function clean(value: string): string {
   return value.trim();
 }
 
+function normalizePhrase(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function cleanInferredItem(value: string): string {
+  return normalizePhrase(
+    value
+      .replace(/^[\s,.;:!?"'()/-]+|[\s,.;:!?"'()/-]+$/g, "")
+      .replace(/^(?:a|an|one|1|the)\s+/i, "")
+      .replace(/^free\s+/i, "")
+      .replace(/\s+(?:for\s+)?free$/i, ""),
+  );
+}
+
+function buildFreeItemForm(requiredItemDescription: string, freeItemDescription: string): DealEligibilityFormState | null {
+  const required = cleanInferredItem(requiredItemDescription);
+  const free = cleanInferredItem(freeItemDescription);
+  if (!required || !free) return null;
+  const sameItem = required.toLowerCase() === free.toLowerCase();
+  return {
+    ...createDefaultDealEligibilityFormState({
+      requiredItemDescription: required,
+      freeItemDescription: sameItem ? required : free,
+    }),
+    dealType: sameItem ? "BUY_ONE_GET_ONE_FREE" : "BUY_ONE_GET_SOMETHING_FREE",
+    requiredItemDescription: required,
+    freeItemDescription: sameItem ? required : free,
+  };
+}
+
+/**
+ * Restores Quick Deal's common word-only path without handing offer facts to AI.
+ * The parser is deliberately narrow: it only accepts clear buy/get/free language
+ * and lets the normal eligibility form handle ambiguous offers.
+ */
+export function inferDealEligibilityFormFromHintText(text: string): DealEligibilityFormState | null {
+  const source = normalizePhrase(text);
+  if (!source) return null;
+
+  const sameItem = source.match(
+    /\bbuy\s+(?:one|1)\s+(.+?)(?:,|\s+and)?\s+get\s+(?:one|1)\s+free(?:[.!?]|$)/i,
+  );
+  if (sameItem?.[1]) return buildFreeItemForm(sameItem[1], sameItem[1]);
+
+  const freePrefix = source.match(
+    /\bbuy\s+(?:(?:a|an|one|1)\s+)?(.+?)(?:,|\s+and)?\s+get\s+(?:(?:a|an|one|1)\s+)?free\s+(.+?)(?:[.!?]|$)/i,
+  );
+  if (freePrefix?.[1] && freePrefix[2]) return buildFreeItemForm(freePrefix[1], freePrefix[2]);
+
+  const freeSuffix = source.match(
+    /\bbuy\s+(?:(?:a|an|one|1)\s+)?(.+?)(?:,|\s+and)?\s+get\s+(?:(?:a|an|one|1)\s+)?(.+?)\s+free(?:[.!?]|$)/i,
+  );
+  if (freeSuffix?.[1] && freeSuffix[2]) return buildFreeItemForm(freeSuffix[1], freeSuffix[2]);
+
+  return null;
+}
+
 export function dealEligibilityFormToInput(form: DealEligibilityFormState): DealEligibilityInput {
   if (form.dealType === "PERCENT_OFF_SINGLE_ITEM") {
     return {

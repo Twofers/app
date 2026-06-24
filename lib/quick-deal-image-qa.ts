@@ -108,14 +108,14 @@ export function buildQuickDealImageQaPrompt(requiredVisualItems: readonly string
     "Check only whether the required offer items are visibly present and prominent enough to understand the deal.",
     `Required items: ${items.join(", ")}.`,
     "Also check for forbidden elements: any readable text, letters, numbers, discount copy, business/app names, menu boards, signs, prices, coupons, QR codes, logos, brand marks, watermark-like marks, mascots, cartoon characters, animals, app mascots, or unrelated prop characters.",
-    "Also check mobile crop and overlay safety: the final card is a square 1:1 image, native offer text may overlay near the top or bottom, and required items should remain recognizable in the center-safe area.",
+    "Also check mobile crop safety: the final card uses a square 1:1 image with deal details rendered separately outside the image, and required items should remain recognizable in the center-safe area.",
     "Mark an item present only if a normal shopper could recognize it in the image.",
     "Mark an item prominent only if it is a main subject, not tiny background detail.",
     "Set has_readable_text true if any word, letter, number, or offer copy is visible, even if misspelled or stylized.",
     "Set has_forbidden_logo_or_brand true if any logo, app name, business name, brand mark, or watermark-like mark is visible.",
     "Set has_qr_code true if any QR/barcode-like mark is visible.",
     "Set has_unrelated_mascot_or_animal true if any mascot, cartoon character, animal, app mascot, or unrelated character prop is visible unless it is the actual product being sold.",
-    "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, likely covered by top/bottom text overlays, hard to recognize after square cover crop, or placed on a background too busy for native text.",
+    "Set has_crop_or_overlay_risk true if a required item is cut off, too close to an edge, hard to recognize after square cover crop, or placed on a background that makes the product hard to understand.",
     "Put every forbidden element in forbidden_elements.",
     "Put concise crop or overlay problems in crop_or_overlay_issues.",
     "If required items are missing, any forbidden element is present, or crop/overlay risk is present, all_required_items_present must be false.",
@@ -129,14 +129,14 @@ export function buildAdImageQaPrompt(params: {
 }): string {
   const sourceGuidance =
     params.sourceType === "merchant_original"
-      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, crop/overlay limits, and non-prominent required items as warnings unless a forbidden hard blocker appears."
+      ? "This is the merchant's original photo. Treat imperfect lighting, background clutter, crop limits, and non-prominent required items as warnings unless a forbidden hard blocker appears."
       : params.sourceType === "merchant_ai_edit"
-      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable in a square mobile card with native text overlays, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
+      ? "This is an AI-edited derivative of the merchant's photo. It must preserve the required offer items, keep them usable as a square standalone image, and must not introduce text, prices, coupons, QR codes, fake logos, mascots, animals, or unrelated props."
       : params.sourceType === "approved_stock"
-      ? "This is approved stock media. It must still match the offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics."
+      ? "This is approved stock media. It must still match the offer items, work as a square standalone image, and must not contain forbidden ad graphics."
       : params.sourceType === "deterministic_fallback"
       ? "This is a deterministic native-rendered fallback. No vision inspection is required."
-      : "This is a fully AI-generated image. It must show the required offer items, work in a square mobile card with native text overlays, and must not contain forbidden ad graphics.";
+      : "This is a fully AI-generated image. It must show the required offer items, work as a square standalone image, and must not contain forbidden ad graphics.";
   return [sourceGuidance, buildQuickDealImageQaPrompt(params.requiredVisualItems)].join(" ");
 }
 

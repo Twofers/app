@@ -93,7 +93,7 @@ import {
 } from "../../lib/ai-deal-draft-recovery";
 import { uploadDealPhoto } from "../../lib/upload-deal-photo";
 import { validateStrongDealOnly } from "../../lib/strong-deal-guard";
-import { validateDealEligibility } from "../../lib/deal-eligibility";
+import { validateDealEligibility, type DealEligibilityResult } from "../../lib/deal-eligibility";
 import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
@@ -143,6 +143,7 @@ import {
   dealEligibilityFormFromDealRow,
   dealEligibilityFormToDealColumns,
   dealEligibilityFormToInput,
+  inferDealEligibilityFormFromHintText,
   omitDealEligibilityColumns,
   type DealEligibilityFormState,
 } from "../../lib/deal-eligibility-form";
@@ -1955,6 +1956,36 @@ export default function AiDealScreen() {
     return true;
   }
 
+  type EligibilityAttempt = {
+    form: DealEligibilityFormState;
+    input: ReturnType<typeof dealEligibilityFormToInput>;
+    result: DealEligibilityResult;
+    inferredFromHint: boolean;
+  };
+
+  function resolveEligibilityForAttempt(): EligibilityAttempt {
+    const current = {
+      form: eligibilityForm,
+      input: eligibilityInput,
+      result: eligibilityResult,
+      inferredFromHint: false,
+    };
+    if (current.result.eligible) return current;
+
+    const inferredForm = inferDealEligibilityFormFromHintText(hintText);
+    if (!inferredForm) return current;
+    const inferredInput = dealEligibilityFormToInput(inferredForm);
+    const inferredResult = validateDealEligibility(inferredInput);
+    if (!inferredResult.eligible) return current;
+
+    return {
+      form: inferredForm,
+      input: inferredInput,
+      result: inferredResult,
+      inferredFromHint: true,
+    };
+  }
+
   async function ensureUploadedPhoto() {
     if (photoPath) return photoPath;
     if (!photoUri || !businessId) return null;
@@ -2029,20 +2060,22 @@ export default function AiDealScreen() {
     setBanner(null);
   }
 
-  function blockIneligibleOffer(attemptedAction: string): boolean {
-    if (eligibilityResult.eligible) return false;
+  function blockIneligibleOffer(attemptedAction: string, attempt?: EligibilityAttempt): boolean {
+    const activeResult = attempt?.result ?? eligibilityResult;
+    const activeForm = attempt?.form ?? eligibilityForm;
+    if (activeResult.eligible) return false;
     const message =
-      eligibilityResult.message ??
+      activeResult.message ??
       t("dealEligibility.invalidBody", {
         defaultValue: "Twofer deals must be free-item offers or at least 40% off one single item.",
       });
     setBanner({ message, tone: "error" });
     trackEvent("deal_validation_failed", {
       businessId,
-      attemptedDealType: eligibilityForm.dealType,
-      discountPercent: Number(eligibilityForm.discountPercent) || null,
-      customerValuePercent: eligibilityResult.customerValuePercent ?? null,
-      reasonCode: eligibilityResult.reasonCode ?? null,
+      attemptedDealType: activeForm.dealType,
+      discountPercent: Number(activeForm.discountPercent) || null,
+      customerValuePercent: activeResult.customerValuePercent ?? null,
+      reasonCode: activeResult.reasonCode ?? null,
       attemptedAction,
       source: "create_ai",
     });
@@ -2060,7 +2093,11 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errPriceNumber"), tone: "error" });
       return;
     }
-    if (blockIneligibleOffer("generate_ad")) return;
+    const eligibilityAttempt = resolveEligibilityForAttempt();
+    if (eligibilityAttempt.inferredFromHint) {
+      setEligibilityForm(eligibilityAttempt.form);
+    }
+    if (blockIneligibleOffer("generate_ad", eligibilityAttempt)) return;
     const customEditText = cleanCustomImageEditInstruction(customImageEditInstruction);
     if (selectedPhotoUri && !usePhotoAsFinal && useCustomImageEdit && !customEditText) {
       setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
@@ -2112,7 +2149,7 @@ export default function AiDealScreen() {
         business_context: businessContextForAi,
         output_language: dealOutputLang,
         request_group_id: aiRequestGroupIdRef.current,
-        deal_eligibility: eligibilityInput,
+        deal_eligibility: eligibilityAttempt.input,
         image_source_mode: sentSourceMode,
         image_edit_mode: sentEditMode,
         ...(sentEditMode === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
@@ -3015,7 +3052,7 @@ export default function AiDealScreen() {
   const composedBasePresentation = buildDefaultAdPresentationSpec({
     imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
     imageSourceType: composedImageSourceType,
-    templateId: adImageUri ? "hero_image_overlay" : "split_offer_panel",
+    templateId: "split_offer_panel",
     themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
     resolutionReasonCodes: adImageUri ? ["MERCHANT_PREVIEW_IMAGE"] : ["MERCHANT_PREVIEW_FALLBACK"],
   });
@@ -3952,7 +3989,7 @@ export default function AiDealScreen() {
               </View>
             ) : null}
 
-            {/* Single ad preview — text rendered natively over the image, not baked in */}
+            {/* Single ad preview — image stays clean; deal details render in the native panel. */}
             {generatedAd ? (
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>

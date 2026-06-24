@@ -23,7 +23,8 @@ describe("quick deal image QA", () => {
     expect(prompt).toMatch(/QR codes/i);
     expect(prompt).toMatch(/mascots/i);
     expect(prompt).toMatch(/square 1:1/i);
-    expect(prompt).toMatch(/top or bottom/i);
+    expect(prompt).toMatch(/deal details rendered separately outside the image/i);
+    expect(prompt).not.toMatch(/top or bottom/i);
     expect(prompt).toMatch(/crop/i);
   });
 

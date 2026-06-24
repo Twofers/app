@@ -42,7 +42,9 @@ describe("buildPhotoAdImagePrompt", () => {
     expect(prompt).toMatch(/no text/i);
     expect(prompt).toMatch(/logos/i);
     expect(prompt).toMatch(/center-safe area/i);
-    expect(prompt).toMatch(/native offer text overlays/i);
+    expect(prompt).toMatch(/standalone product image/i);
+    expect(prompt).toMatch(/deal details separately outside the image/i);
+    expect(prompt).not.toMatch(/native offer text overlays/i);
   });
 });
 

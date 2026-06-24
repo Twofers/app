@@ -42,7 +42,7 @@ describe("representative composed ad card previews", () => {
     }
   });
 
-  it("uses safe templates for busy, scheduled, ended, and no-photo previews", () => {
+  it("uses split panels so deal details stay outside images", () => {
     const resolved = new Map(
       buildRepresentativeComposedAdPreviewCases().map((preview) => [
         preview.id,
@@ -52,9 +52,10 @@ describe("representative composed ad card previews", () => {
 
     expect(resolved.get("busy-background")?.recommendedTemplateId).toBe("split_offer_panel");
     expect(resolved.get("no-photo-deterministic-fallback")?.recommendedTemplateId).toBe("split_offer_panel");
-    expect(resolved.get("scheduled-deal")?.recommendedTemplateId).not.toBe("live_drop_card");
-    expect(resolved.get("ended-deal")?.recommendedTemplateId).not.toBe("live_drop_card");
-    expect(resolved.get("live-quantity-limited")?.recommendedTemplateId).toBe("live_drop_card");
+    expect(resolved.get("scheduled-deal")?.recommendedTemplateId).toBe("split_offer_panel");
+    expect(resolved.get("ended-deal")?.recommendedTemplateId).toBe("split_offer_panel");
+    expect(resolved.get("live-quantity-limited")?.recommendedTemplateId).toBe("split_offer_panel");
+    expect([...resolved.values()].every((row) => row.recommendedTemplateId === "split_offer_panel")).toBe(true);
   });
 
   it("summarizes the local owner-review acceptance matrix", () => {
@@ -70,7 +71,7 @@ describe("representative composed ad card previews", () => {
     expect(summary.rows.every((row) => /^adp_[0-9a-f]{16}$/.test(row.presentationHash))).toBe(true);
     expect(summary.rows.every((row) => row.recommendedTemplateId.length > 0)).toBe(true);
     expect(countedDecisions).toBe(summary.totalCases);
-    expect(summary.templateCounts.split_offer_panel ?? 0).toBeGreaterThanOrEqual(2);
+    expect(summary.templateCounts.split_offer_panel).toBe(summary.totalCases);
     expect(summary.blockedCaseIds).toEqual([]);
     expect(summary.unavailableCaseIds).toEqual([]);
     expect(summary.rows.find((row) => row.caseId === "busy-background")?.recommendedTemplateId).toBe(
@@ -78,7 +79,7 @@ describe("representative composed ad card previews", () => {
     );
     expect(summary.rows.find((row) => row.caseId === "live-quantity-limited")?.liveStatus).toBe("live");
     expect(summary.rows.find((row) => row.caseId === "live-quantity-limited")?.recommendedTemplateId).toBe(
-      "live_drop_card",
+      "split_offer_panel",
     );
   });
 });

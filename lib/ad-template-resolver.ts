@@ -35,18 +35,6 @@ export type TemplateResolutionResult = {
   reasonCodes: string[];
 };
 
-function clean(value: string | null | undefined): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
-}
-
-function strategyIncludes(strategy: string, patterns: RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(strategy));
-}
-
-function uniqueTemplates(values: AdLayoutTemplateId[]): AdLayoutTemplateId[] {
-  return values.filter((value, index, list) => list.indexOf(value) === index);
-}
-
 function imageSourceTypeFromQa(input: TemplateResolutionInput): AdImageSourceType {
   return input.imageSourceType ?? input.imageQa.sourceType ?? "deterministic_fallback";
 }
@@ -99,10 +87,8 @@ function textFitReasonCodes(input: TemplateResolutionInput, templateId: AdLayout
 
 export function resolveAdPresentation(input: TemplateResolutionInput): TemplateResolutionResult {
   const reasonCodes: string[] = [];
-  const strategy = clean(input.creativeStrategy).toLowerCase();
   const hasUsableImage = input.imageSafeZones.available && imageSourceTypeFromQa(input) !== "deterministic_fallback";
   const lowConfidence = input.imageSafeZones.confidence < 0.58 || input.imageQa.decision === "block";
-  const liveCapable = input.liveStateCapabilities.supportsQuantityRemaining || input.liveStateCapabilities.supportsTimeRemaining;
 
   reasonCodes.push(...input.imageSafeZones.reasonCodes);
   if (!hasUsableImage) reasonCodes.push("NO_USABLE_IMAGE");
@@ -110,23 +96,9 @@ export function resolveAdPresentation(input: TemplateResolutionInput): TemplateR
   if (input.imageQa.decision === "warn") reasonCodes.push("IMAGE_QA_WARNING");
   if (input.imageQa.decision === "block") reasonCodes.push("IMAGE_QA_BLOCKED");
 
-  const preferred: AdLayoutTemplateId[] = [];
-  if (hasUsableImage && liveCapable && !lowConfidence) preferred.push("live_drop_card");
-  if (hasUsableImage && !lowConfidence) preferred.push("hero_image_overlay");
-  if (hasUsableImage && strategyIncludes(strategy, [/social/, /friend/, /occasion/, /moment/])) preferred.push("social_moment_card");
-  if (hasUsableImage && strategyIncludes(strategy, [/local/, /nearby/, /neighborhood/, /storefront/, /discovery/])) preferred.push("local_discovery_card");
-  if (hasUsableImage && strategyIncludes(strategy, [/signature/, /hero item/, /item-led/, /item led/])) preferred.push("signature_item_card");
-  preferred.push("split_offer_panel");
+  reasonCodes.push("TEXT_SEPARATE_FROM_IMAGE");
 
-  const recent = new Set(input.recentTemplateIds ?? []);
-  const candidates = uniqueTemplates(preferred).sort((a, b) => {
-    const aRecent = recent.has(a) && a !== "split_offer_panel" ? 1 : 0;
-    const bRecent = recent.has(b) && b !== "split_offer_panel" ? 1 : 0;
-    return aRecent - bRecent;
-  });
-
-  let recommendedTemplateId = candidates[0] ?? "split_offer_panel";
-  if (!hasUsableImage || lowConfidence) recommendedTemplateId = "split_offer_panel";
+  let recommendedTemplateId: AdLayoutTemplateId = "split_offer_panel";
 
   const fitCodes = textFitReasonCodes(input, recommendedTemplateId);
   if (fitCodes.includes("SWITCH_TO_SAFE_TEMPLATE") || fitCodes.includes("USE_SPLIT_OFFER_PANEL")) {
@@ -136,24 +108,10 @@ export function resolveAdPresentation(input: TemplateResolutionInput): TemplateR
   if (fitCodes.includes("REMOVE_SUPPORTING_COPY")) reasonCodes.push("REMOVE_SUPPORTING_COPY");
 
   const recommended = buildSpec(input, recommendedTemplateId, [...new Set(reasonCodes)]);
-  const alternates = candidates
-    .filter((candidate) => candidate !== recommendedTemplateId)
-    .map((candidate) => ({
-      templateId: candidate,
-      fitCodes: textFitReasonCodes(input, candidate),
-    }))
-    .filter(({ templateId, fitCodes }) => {
-      if (!hasUsableImage && templateId !== "split_offer_panel") return false;
-      if (templateId === "live_drop_card" && !liveCapable) return false;
-      if (lowConfidence && templateId !== "split_offer_panel") return false;
-      return !fitCodes.includes("SHORTEN_HEADLINE") && !fitCodes.includes("USE_SPLIT_OFFER_PANEL");
-    })
-    .slice(0, 2)
-    .map(({ templateId, fitCodes }) => buildSpec(input, templateId, ["ALTERNATE_STYLE", ...input.imageSafeZones.reasonCodes, ...fitCodes]));
 
   return {
     recommended,
-    alternates,
+    alternates: [],
     reasonCodes: recommended.resolutionReasonCodes,
   };
 }

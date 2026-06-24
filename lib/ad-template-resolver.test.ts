@@ -59,16 +59,17 @@ function input(overrides: Partial<TemplateResolutionInput> = {}): TemplateResolu
 }
 
 describe("ad template resolver", () => {
-  it("recommends a live card and provides deterministic alternates for a clean live image", () => {
+  it("keeps deal text separate from a clean live image", () => {
     const result = resolveAdPresentation(input());
 
-    expect(result.recommended.templateId).toBe("live_drop_card");
+    expect(result.recommended.templateId).toBe("split_offer_panel");
     expect(result.recommended.imageSourceType).toBe("merchant_original");
-    expect(result.alternates.map((spec) => spec.templateId)).toContain("hero_image_overlay");
+    expect(result.alternates).toEqual([]);
     expect(result.recommended.resolutionReasonCodes).toContain("USE_FULL_SAFE_CROP");
+    expect(result.recommended.resolutionReasonCodes).toContain("TEXT_SEPARATE_FROM_IMAGE");
   });
 
-  it("keeps strategy-specific templates as instant alternates", () => {
+  it("does not offer overlay alternates for strategy-specific copy", () => {
     const result = resolveAdPresentation(
       input({
         creativeStrategy: "social moment for friends after work",
@@ -79,8 +80,9 @@ describe("ad template resolver", () => {
       }),
     );
 
-    expect(result.recommended.templateId).toBe("hero_image_overlay");
-    expect(result.alternates.map((spec) => spec.templateId)).toContain("social_moment_card");
+    expect(result.recommended.templateId).toBe("split_offer_panel");
+    expect(result.alternates).toEqual([]);
+    expect(result.recommended.resolutionReasonCodes).toContain("TEXT_SEPARATE_FROM_IMAGE");
   });
 
   it("fails closed to split panel when image QA blocks the asset", () => {

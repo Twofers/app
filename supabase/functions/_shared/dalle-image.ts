@@ -4,7 +4,7 @@
  * Used by:
  * - ai-compose-offer: single poster with baked-in text.
  * - ai-generate-ad-variants: photographic single ad — no baked-in text; the app UI renders
- *   the headline above the image.
+ *   the deal details separately outside the image.
  */
 
 /** Allowlisted image model ids only — never accept model names from clients. */
@@ -146,7 +146,7 @@ export function buildPosterImagePrompt(params: {
 }
 
 // ---------------------------------------------------------------------------
-// V2: Photographic ad image — no text baked in, the app renders copy above the image
+// V2: Photographic ad image — no text baked in, the app renders copy outside the image
 // ---------------------------------------------------------------------------
 
 export function buildPhotoAdImagePrompt(params: {
@@ -169,7 +169,7 @@ export function buildPhotoAdImagePrompt(params: {
     "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered.",
     "Honest, appetizing, magazine-quality — not stocky, not illustrated, not a CGI render.",
     "Keep every required item fully inside the center-safe area and away from crop edges.",
-    "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast.",
+    "Compose this as a standalone product image; the app will render deal details separately outside the image.",
     "Absolutely no text, letters, numbers, prices, coupons, discount copy, menu boards, signage, banners, overlays, QR codes, barcodes, logos, fake logos, brand marks, watermarks, mascots, cartoon characters, animals, or unrelated prop characters.",
     "No human faces, no hands holding the item.",
     "Square 1:1 framing.",
