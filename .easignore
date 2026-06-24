@@ -62,6 +62,11 @@ cedar_bean_claim_recheck_*/
 test_cafa_redemption_recheck_*/
 ux_remediation_final_smoke/
 website-screenshots-*/
+store-assets/
+ai-staging-*/
+ai-test-runs-*/
+spanish_play_screenshots_*/
+TWOFER_AI_*.md
 meeting minutes/
 docs/store-release-prep.md
 qa-screens/
