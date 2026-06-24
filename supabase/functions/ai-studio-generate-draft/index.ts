@@ -323,7 +323,8 @@ serve(async (req) => {
       stage: "ready",
       input_offer: inputOffer,
       eligible_media_count: input.referenceImagePath ? 1 : 0,
-      generated_fallback_reason: fallbackReason,
+      generated_fallback_reason: null,
+      error_code: fallbackReason,
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
     })
