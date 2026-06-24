@@ -19,6 +19,18 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function imagePromptHasRequiredClauses(value) {
+  const normalized = String(value ?? "").toLowerCase();
+  return (
+    normalized.includes("no text") &&
+    normalized.includes("no letters") &&
+    normalized.includes("no logo") &&
+    normalized.includes("no watermark") &&
+    normalized.includes("negative space") &&
+    (normalized.includes("4:5") || normalized.includes("four-by-five") || normalized.includes("mobile composition"))
+  );
+}
+
 async function invoke(url, anonKey, accessToken, body) {
   const response = await fetch(`${url}/functions/v1/ai-studio-generate-draft`, {
     method: "POST",
@@ -55,6 +67,7 @@ const sampleBody = {
   start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   end_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
   quantity_limit: 5,
+  cta: "Claim in Twofer",
   style_preset: "Fresh",
   dry_run: true,
   copy_only: true,
@@ -90,6 +103,7 @@ if (!email || !password || !businessId) {
   assert(draft?.publishing_disabled === true, "Publishing must remain disabled");
   assert(draft?.dry_run === true, "Smoke test must run in dry_run mode");
   assert(draft?.image_signed_url === null, "Smoke dry-run must not expose a public/signed asset URL");
+  assert(imagePromptHasRequiredClauses(draft?.creative?.imagePrompt), "Image prompt is missing required text-free clauses");
 
   const wrongBusiness = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
     ...sampleBody,
@@ -97,7 +111,7 @@ if (!email || !password || !businessId) {
   });
   assert(wrongBusiness.response.status === 403, `Expected wrong-business 403, got ${wrongBusiness.response.status}`);
 
-  console.log(JSON.stringify({
+  const result = {
     unauthenticatedRejected: true,
     authenticatedDraftCreated: true,
     wrongBusinessRejected: true,
@@ -106,5 +120,39 @@ if (!email || !password || !businessId) {
     publishingDisabled: true,
     dryRun: true,
     privateAssetOnly: draft.image_asset_path === null && draft.image_signed_url === null,
-  }, null, 2));
+    imagePromptValidated: true,
+  };
+
+  if (process.env.TWOFER_SMOKE_REAL_AI === "true") {
+    const real = await invoke(supabaseUrl, anonKey, auth.session.access_token, {
+      ...sampleBody,
+      business_id: businessId,
+      dry_run: false,
+      copy_only: true,
+    });
+    assert(real.response.status === 200, `Expected real copy/prompt 200, got ${real.response.status}: ${JSON.stringify(real.json)}`);
+    const realDraft = real.json?.draft;
+    assert(realDraft?.job_id, "Missing real draft.job_id");
+    assert(realDraft?.creative_id, "Missing real draft.creative_id");
+    assert(realDraft?.publishing_disabled === true, "Real copy/prompt must keep publishing disabled");
+    assert(realDraft?.copy_only === true, "Real copy/prompt smoke must stay copy_only");
+    assert(realDraft?.image_asset_path === null && realDraft?.image_signed_url === null, "Real copy/prompt must not create image assets");
+    assert(imagePromptHasRequiredClauses(realDraft?.creative?.imagePrompt), "Real image prompt is missing required text-free clauses");
+    assert(realDraft?.dry_run === false, "Expected real copy/prompt mode. If this fails, OPENAI_API_KEY may be missing or AI_STUDIO_DRY_RUN may be true.");
+    result.realCopyPrompt = {
+      draftCreated: true,
+      jobId: realDraft.job_id,
+      creativeId: realDraft.creative_id,
+      dryRun: false,
+      imagePromptValidated: true,
+      privateAssetOnly: true,
+    };
+  } else {
+    result.realCopyPrompt = {
+      skipped: true,
+      reason: "Set TWOFER_SMOKE_REAL_AI=true locally after configuring the dev Supabase OPENAI_API_KEY secret.",
+    };
+  }
+
+  console.log(JSON.stringify(result, null, 2));
 }

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { logAiCost } from "../_shared/ai-costs.ts";
+import { calculateAiCost, logAiCost } from "../_shared/ai-costs.ts";
 
 type DraftInput = {
   business_id?: unknown;
@@ -14,6 +14,7 @@ type DraftInput = {
   quantity_limit?: unknown;
   style_preset?: unknown;
   reference_image_path?: unknown;
+  cta?: unknown;
   dry_run?: unknown;
   copy_only?: unknown;
 };
@@ -25,12 +26,22 @@ type DraftCreative = {
   image_asset_path: string | null;
   image_signed_url: string | null;
   style_preset: string;
+  layout_recommendation: string;
   publishing_disabled: true;
 };
 
-const PROMPT_VERSION = "ai_studio_draft_v1";
+const PROMPT_VERSION = "ai_studio_draft_v2";
 const PIPELINE_VERSION = "ai_studio_draft_dev_v1";
 const ALLOWED_STYLES = new Set(["Fresh", "Bold", "Premium", "Sunrise", "Macro"]);
+const DEFAULT_CTA = "Claim in Twofer";
+const REQUIRED_IMAGE_PROMPT_CLAUSES = [
+  "No text.",
+  "No letters.",
+  "No logo.",
+  "No watermark.",
+  "Leave negative space for app-rendered copy.",
+  "Use a 4:5 mobile composition.",
+];
 
 function json(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -95,13 +106,41 @@ function fallbackDraft(params: {
       `${styleLine}.`,
       `Show ${product} as the hero product.`,
       "No text, no letters, no numbers, no logo, no business name, no CTA, no offer terms, no time, no quantity badge.",
+      "No watermark.",
       "Leave clean negative space for app-rendered typography overlays.",
+      "Use a 4:5 mobile composition for a phone feed card.",
     ].join(" "),
     image_asset_path: null,
     image_signed_url: null,
     style_preset: params.stylePreset,
+    layout_recommendation: `${params.stylePreset} product hero with clean overlay-safe negative space.`,
     publishing_disabled: true,
   };
+}
+
+function includesAllImagePromptRequirements(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return (
+    normalized.includes("no text") &&
+    normalized.includes("no letters") &&
+    normalized.includes("no logo") &&
+    normalized.includes("no watermark") &&
+    normalized.includes("negative space") &&
+    (normalized.includes("4:5") || normalized.includes("four-by-five") || normalized.includes("mobile composition"))
+  );
+}
+
+function ensureTextFreeImagePrompt(value: string, fallback: string): string {
+  const base = (value || fallback).trim();
+  const prompt = includesAllImagePromptRequirements(base)
+    ? base
+    : `${base} ${REQUIRED_IMAGE_PROMPT_CLAUSES.join(" ")}`;
+  return text(prompt, 900);
+}
+
+function sanitizeGeneratedCopy(value: unknown, fallback: string, max: number): string {
+  const cleaned = text(value, max);
+  return cleaned || fallback;
 }
 
 function parseDraftInput(body: DraftInput) {
@@ -116,6 +155,7 @@ function parseDraftInput(body: DraftInput) {
   const requestedStyle = text(body.style_preset, 24) || "Fresh";
   const stylePreset = ALLOWED_STYLES.has(requestedStyle) ? requestedStyle : "Fresh";
   const referenceImagePath = optionalText(body.reference_image_path, 300);
+  const cta = text(body.cta, 80) || DEFAULT_CTA;
 
   const errors: string[] = [];
   if (!businessId) errors.push("business_id is required.");
@@ -142,6 +182,7 @@ function parseDraftInput(body: DraftInput) {
       quantityLimit,
       stylePreset,
       referenceImagePath,
+      cta,
       dryRun: bool(body.dry_run, false),
       copyOnly: bool(body.copy_only, true),
     },
@@ -155,13 +196,21 @@ async function generateCopyWithOpenAi(params: {
   const model = Deno.env.get("AI_STUDIO_TEXT_MODEL") ?? "gpt-4o-mini";
   const prompt = [
     "Create draft copy for a local deals app creative preview.",
-    "Return strict JSON with headline, supporting_copy, and image_prompt.",
-    "The image_prompt must be text-free: no words, no letters, no business name, no logo, no CTA, no prices, no time, no quantity, no offer terms.",
-    `Product: ${params.input.productName}`,
+    "Return strict JSON with headline, supporting_copy, image_prompt, and layout_recommendation.",
+    "The offer facts below are locked. Do not change, reinterpret, round, shorten, translate, or invent product, offer terms, time window, quantity, CTA, price, or business name.",
+    "Headline and supporting_copy may be persuasive, but must preserve the locked facts exactly when mentioned.",
+    "The image_prompt is for a commercial image only. It must not include offer copy or any text to render.",
+    "The image_prompt must explicitly include: no text, no letters, no logo, no watermark, negative space for copy, and 4:5 mobile composition.",
+    "Never include the business name, CTA, offer terms, time, quantity, price, letters, numbers, logo, or watermark in the image prompt.",
+    `Locked product: ${params.input.productName}`,
     `Description: ${params.input.productDescription ?? "none"}`,
-    `Offer type: ${params.input.offerType}`,
-    `Offer terms: ${params.input.offerTerms}`,
-    `Style: ${params.input.stylePreset}`,
+    `Locked offer type: ${params.input.offerType}`,
+    `Locked offer terms: ${params.input.offerTerms}`,
+    `Locked start time: ${params.input.startTime}`,
+    `Locked end time: ${params.input.endTime}`,
+    `Locked quantity limit: ${params.input.quantityLimit}`,
+    `Locked CTA: ${params.input.cta}`,
+    `Requested style: ${params.input.stylePreset}`,
   ].join("\n");
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -187,7 +236,12 @@ async function generateCopyWithOpenAi(params: {
   }
   const payload = await response.json();
   const content = payload?.choices?.[0]?.message?.content;
-  const parsed = typeof content === "string" ? JSON.parse(content) : {};
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = typeof content === "string" ? JSON.parse(content) : {};
+  } catch {
+    parsed = {};
+  }
   const fallback = fallbackDraft({
     productName: params.input.productName,
     productDescription: params.input.productDescription,
@@ -197,12 +251,17 @@ async function generateCopyWithOpenAi(params: {
   });
   return {
     draft: {
-      headline: text(parsed.headline, 72) || fallback.headline,
-      supporting_copy: text(parsed.supporting_copy, 180) || fallback.supporting_copy,
-      image_prompt: text(parsed.image_prompt, 800) || fallback.image_prompt,
+      headline: sanitizeGeneratedCopy(parsed.headline, fallback.headline, 72),
+      supporting_copy: sanitizeGeneratedCopy(parsed.supporting_copy, fallback.supporting_copy, 180),
+      image_prompt: ensureTextFreeImagePrompt(text(parsed.image_prompt, 900), fallback.image_prompt),
       image_asset_path: null,
       image_signed_url: null,
       style_preset: params.input.stylePreset,
+      layout_recommendation: sanitizeGeneratedCopy(
+        parsed.layout_recommendation,
+        fallback.layout_recommendation,
+        180,
+      ),
       publishing_disabled: true,
     },
     usage: payload?.usage,
@@ -295,6 +354,17 @@ serve(async (req) => {
       fallbackReason = error instanceof Error ? error.message.slice(0, 120) : "OPENAI_TEXT_FAILED";
     }
   }
+  draft.image_prompt = ensureTextFreeImagePrompt(draft.image_prompt, fallbackDraft({
+    productName: input.productName,
+    productDescription: input.productDescription,
+    offerType: input.offerType,
+    offerTerms: input.offerTerms,
+    stylePreset: input.stylePreset,
+  }).image_prompt);
+
+  const estimatedCost = provider === "openai"
+    ? calculateAiCost({ model, endpoint: "chat.completions", usage }).estimated_cost_usd
+    : 0;
 
   const inputOffer = {
     product_name: input.productName,
@@ -304,6 +374,7 @@ serve(async (req) => {
     start_time: input.startTime,
     end_time: input.endTime,
     quantity_limit: input.quantityLimit,
+    cta: input.cta,
     style_preset: input.stylePreset,
     reference_image_path: input.referenceImagePath,
     publishing_disabled: true,
@@ -344,6 +415,16 @@ serve(async (req) => {
     imageAssetPath: draft.image_asset_path,
     imageSignedUrl: draft.image_signed_url,
     stylePreset: draft.style_preset,
+    layoutRecommendation: draft.layout_recommendation,
+    lockedOffer: {
+      productName: input.productName,
+      offerType: input.offerType,
+      offerTerms: input.offerTerms,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      quantityLimit: input.quantityLimit,
+      cta: input.cta,
+    },
     publishingDisabled: true,
     copyOnly,
     dryRun,
@@ -365,6 +446,8 @@ serve(async (req) => {
       },
       quality: {
         imageTextFreeRequired: true,
+        imagePromptHasRequiredClauses: includesAllImagePromptRequirements(draft.image_prompt),
+        noImageGeneration: true,
         publishingDisabled: true,
         dryRun,
       },
@@ -390,13 +473,15 @@ serve(async (req) => {
     failure_reason: fallbackReason,
     input_token_count: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
     output_token_count: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : null,
-    estimated_cost_usd: 0,
+    estimated_cost_usd: estimatedCost,
     response_payload: {
       job_id: job.id,
       creative_id: creative.id,
       provider,
       dry_run: dryRun,
       copy_only: copyOnly,
+      layout_recommendation: draft.layout_recommendation,
+      image_prompt_validated: includesAllImagePromptRequirements(draft.image_prompt),
       publishing_disabled: true,
     },
     openai_called: provider === "openai",
@@ -412,7 +497,7 @@ serve(async (req) => {
     model,
     endpoint: provider === "openai" ? "chat.completions" : "dry_run",
     usage,
-    estimatedCostUsd: dryRun ? 0 : undefined,
+    estimatedCostUsd: provider === "openai" ? estimatedCost : 0,
     openaiRequestId: requestId ?? null,
     success: true,
   });

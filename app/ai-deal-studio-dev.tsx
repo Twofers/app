@@ -30,6 +30,7 @@ import { supabase } from "@/lib/supabase";
 const STYLE_PRESETS = ["Fresh", "Bold", "Premium", "Sunrise", "Macro"] as const;
 
 type StylePreset = typeof STYLE_PRESETS[number];
+type GenerationMode = "dry-run" | "real-copy";
 
 type DraftResponse = {
   draft?: {
@@ -41,9 +42,19 @@ type DraftResponse = {
       supportingCopy?: string;
       imagePrompt?: string;
       stylePreset?: string;
+      layoutRecommendation?: string;
       publishingDisabled?: boolean;
       dryRun?: boolean;
       copyOnly?: boolean;
+      lockedOffer?: {
+        productName?: string;
+        offerType?: string;
+        offerTerms?: string;
+        startTime?: string;
+        endTime?: string;
+        quantityLimit?: number;
+        cta?: string;
+      };
     };
     publishing_disabled?: boolean;
     dry_run?: boolean;
@@ -102,6 +113,7 @@ export default function AiDealStudioDevScreen() {
   const [endTime, setEndTime] = useState(defaultEndTime);
   const [quantityLimit, setQuantityLimit] = useState("5");
   const [stylePreset, setStylePreset] = useState<StylePreset>("Fresh");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("dry-run");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftResponse["draft"] | null>(null);
@@ -168,8 +180,9 @@ export default function AiDealStudioDevScreen() {
           start_time: startTime.trim(),
           end_time: endTime.trim(),
           quantity_limit: Number.parseInt(quantityLimit, 10),
+          cta: "Claim in Twofer",
           style_preset: stylePreset,
-          dry_run: true,
+          dry_run: generationMode === "dry-run",
           copy_only: true,
         },
       });
@@ -216,6 +229,12 @@ export default function AiDealStudioDevScreen() {
           <Banner tone="warning" message="No owned business was found for this dev account." />
         ) : null}
         {submitError ? <Banner tone="error" message={submitError} /> : null}
+        {generationMode === "real-copy" ? (
+          <Banner
+            tone="warning"
+            message="Real copy/prompt generation may use OpenAI credits. Image generation and publishing stay disabled."
+          />
+        ) : null}
 
         <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>
@@ -318,8 +337,49 @@ export default function AiDealStudioDevScreen() {
           </View>
         </View>
 
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={{ color: theme.text, fontWeight: "800" }}>Generation mode</Text>
+          <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+            {[
+              ["dry-run", "Dry run"],
+              ["real-copy", "Real copy/prompt generation"],
+            ].map(([value, label]) => {
+              const selected = generationMode === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => setGenerationMode(value as GenerationMode)}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: Radii.md,
+                    borderWidth: 1,
+                    borderColor: selected ? theme.primary : theme.border,
+                    backgroundColor: selected ? theme.primary : theme.surface,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: Spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: selected ? theme.primaryText : theme.text, fontWeight: "800", textAlign: "center" }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <PrimaryButton
-          title={submitting ? "Generating..." : draft ? "Regenerate Draft" : "Generate Draft"}
+          title={
+            submitting
+              ? "Generating..."
+              : draft
+                ? "Regenerate Draft"
+                : generationMode === "real-copy"
+                  ? "Generate Real Copy/Prompt"
+                  : "Generate Draft"
+          }
           onPress={() => void generateDraft()}
           disabled={!canSubmit}
         />
@@ -345,9 +405,11 @@ export default function AiDealStudioDevScreen() {
             <PreviewRow label="Supporting copy" value={draft.creative.supportingCopy ?? "(missing)"} />
             <PreviewRow label="Text-free image prompt" value={draft.creative.imagePrompt ?? "(missing)"} />
             <PreviewRow label="Style" value={draft.creative.stylePreset ?? stylePreset} />
+            <PreviewRow label="Layout recommendation" value={draft.creative.layoutRecommendation ?? "(missing)"} />
             <PreviewRow label="Offer" value={`${offerType}: ${offerTerms}`} />
             <PreviewRow label="Window and quantity" value={`${startTime} to ${endTime} · ${quantityLimit} available`} />
-            <PreviewRow label="Job status" value={`ready · dry-run ${draft.dry_run === true ? "on" : "unknown"} · publishing disabled`} />
+            <PreviewRow label="CTA" value={draft.creative.lockedOffer?.cta ?? "Claim in Twofer"} />
+            <PreviewRow label="Job status" value={`ready · dry-run ${draft.dry_run === true ? "on" : "off"} · publishing disabled`} />
           </View>
         ) : null}
 
