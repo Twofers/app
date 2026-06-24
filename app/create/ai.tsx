@@ -1822,21 +1822,24 @@ export default function AiDealScreen() {
   }, [approvedComposedPresentationHash, approvedLocalizationApprovalHash]);
 
   async function pickPhotoFromLibrary() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== "granted") {
-      setBanner({ message: t("createAi.errPhotoAccess"), tone: "error" });
-      return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
+      setPosterUrl(null);
+      setPhotoPath(null);
+      setUsePhotoAsFinal(false);
+      setMerchantOriginalWarningAcknowledged(false);
+      resetGenerationState();
+      setBanner(null);
+      void persistSelectedPhotoForRecovery(uri);
+    } catch {
+      setBanner({ message: t("createAi.errPhotoPicker"), tone: "error" });
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    const uri = result.assets[0].uri;
-    setPhotoUri(uri);
-    setPosterUrl(null);
-    setPhotoPath(null);
-    setUsePhotoAsFinal(false);
-    setMerchantOriginalWarningAcknowledged(false);
-    resetGenerationState();
-    void persistSelectedPhotoForRecovery(uri);
   }
 
   async function takePhoto() {
@@ -3348,6 +3351,9 @@ export default function AiDealScreen() {
                 <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
               </View>
             </View>
+            <Text style={{ marginTop: 8, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.photoSkipHint")}
+            </Text>
 
             {selectedPhotoUri ? (
               <Image
@@ -3541,12 +3547,15 @@ export default function AiDealScreen() {
             <View style={{ marginTop: 16 }}>
               <StepBadge n={2} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.fewWords")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.dealDescriptionLabel")}</Text>
+            <Text style={{ marginTop: 4, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {selectedPhotoUri ? t("createAi.dealDescriptionHelpWithPhoto") : t("createAi.dealDescriptionHelpNoPhoto")}
+            </Text>
             <View style={{ marginTop: 6 }}>
               <TextInput
                 value={hintText}
                 onChangeText={setHintText}
-                placeholder={t("createAi.hintPlaceholder")}
+                placeholder={selectedPhotoUri ? t("createAi.hintPlaceholder") : t("createAi.hintPlaceholderNoPhoto")}
                 placeholderTextColor={theme.mutedText}
                 multiline
                 style={{
