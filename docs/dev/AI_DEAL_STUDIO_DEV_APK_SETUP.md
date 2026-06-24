@@ -70,15 +70,32 @@ Confirm:
 
 ## Build Local APK On Windows 11
 
-Do not use EAS local builds on Windows. Use the local Android project and Gradle after setting the dev variant environment.
+Do not use EAS local builds on Windows. Load `.env.development.local`, then use the dedicated dev APK profile or the local Android project after setting the dev variant environment.
+
+PowerShell helper for the current terminal only:
 
 ```powershell
-$env:TWOFER_APP_VARIANT="ai-studio-dev"
-$env:EXPO_PUBLIC_APP_VARIANT="ai-studio-dev"
-$env:EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV="true"
-$env:EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING="true"
-$env:EXPO_PUBLIC_SUPABASE_URL="<DEV_SUPABASE_URL>"
-$env:EXPO_PUBLIC_SUPABASE_ANON_KEY="<DEV_SUPABASE_ANON_KEY>"
+$lines = Get-Content .\.env.development.local
+foreach ($line in $lines) {
+  if ($line -match '^\s*#' -or $line.Trim() -eq '') { continue }
+  $idx = $line.IndexOf('=')
+  if ($idx -gt 0) {
+    $name = $line.Substring(0,$idx)
+    $value = $line.Substring($idx + 1)
+    [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+  }
+}
+```
+
+Dedicated EAS profile command, APK output only:
+
+```powershell
+eas build --platform android --profile dev-apk-ai-studio --local
+```
+
+If local EAS build is unavailable on the machine, use the local Android project and Gradle:
+
+```powershell
 npx expo prebuild --platform android
 Set-Location android
 .\gradlew.bat assembleDebug
@@ -103,15 +120,41 @@ Confirm the package name is:
 com.unvmex2.twoforone.dev
 ```
 
-## Install Beside Play Closed Testing
-
-With a device or emulator connected:
+After installing on a connected device, verify the installed package directly:
 
 ```powershell
+adb shell pm list packages | Select-String "com.unvmex2.twoforone"
+```
+
+Expected result includes both packages when the Play closed-testing app is already installed:
+
+```text
+package:com.unvmex2.twoforone
+package:com.unvmex2.twoforone.dev
+```
+
+## Install Beside Play Closed Testing
+
+With the Samsung S10 connected by USB and USB debugging enabled:
+
+```powershell
+adb devices
 adb install -r path\to\app.apk
 ```
 
 Because the package id differs from production, Android installs `Twofer Dev` beside the Play closed-testing app instead of replacing it.
+
+## Confirm Dev Supabase Host And Disabled Publishing
+
+Open `Twofer Dev`, sign in with the dev account, then open Diagnostics. Confirm:
+
+- the app name is `Twofer Dev`
+- the package is `com.unvmex2.twoforone.dev`
+- `EXPO_PUBLIC_SUPABASE_URL` displays the dev Supabase host, not `kvodhiqhdqnptqovovia.supabase.co`
+- `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING` is `true`
+- the AI Deal Studio screen shows `Publishing disabled in dev build`
+
+The AI Deal Studio screen always calls `ai-studio-generate-draft` in `dry_run` and `copy_only` mode. It does not publish and does not create live feed deals.
 
 ## Rollback
 
