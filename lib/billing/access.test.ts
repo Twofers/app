@@ -101,6 +101,7 @@ describe("canCreateDealWithLocationBilling", () => {
       canCreateDealWithLocationBilling({
         isLoggedIn: false,
         status: "paid_active",
+        purchaseSurface: "in_app_link",
         trialEndsAt: null,
         currentPeriodEndsAt: null,
       }),
@@ -113,6 +114,7 @@ describe("canCreateDealWithLocationBilling", () => {
         canCreateDealWithLocationBilling({
           isLoggedIn: true,
           status,
+          purchaseSurface: "in_app_link",
           trialEndsAt: null,
           currentPeriodEndsAt: "2999-01-01T00:00:00.000Z",
         }),
@@ -126,6 +128,7 @@ describe("canCreateDealWithLocationBilling", () => {
         canCreateDealWithLocationBilling({
           isLoggedIn: true,
           status,
+          purchaseSurface: "in_app_link",
           trialEndsAt: "2999-01-01T00:00:00.000Z",
           currentPeriodEndsAt: null,
         }),
@@ -133,7 +136,19 @@ describe("canCreateDealWithLocationBilling", () => {
     }
   });
 
-  it("blocks pending, eligible, credit-limited, and suspended states", () => {
+  it("allows deal creation when runtime billing purchases are disabled", () => {
+    expect(
+      canCreateDealWithLocationBilling({
+        isLoggedIn: true,
+        status: "trial_eligible",
+        purchaseSurface: "disabled",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks pending, eligible, credit-limited, and suspended states when in-app billing is active", () => {
     for (const status of [
       "trial_eligible",
       "trial_checkout_pending",
@@ -146,6 +161,7 @@ describe("canCreateDealWithLocationBilling", () => {
         canCreateDealWithLocationBilling({
           isLoggedIn: true,
           status,
+          purchaseSurface: "in_app_link",
           trialEndsAt: "2999-01-01T00:00:00.000Z",
           currentPeriodEndsAt: "2999-01-01T00:00:00.000Z",
         }),
@@ -158,6 +174,7 @@ describe("canCreateDealWithLocationBilling", () => {
       canCreateDealWithLocationBilling({
         isLoggedIn: true,
         status: "paid_canceling",
+        purchaseSurface: "in_app_link",
         trialEndsAt: null,
         currentPeriodEndsAt: "2000-01-01T00:00:00.000Z",
       }),
@@ -169,6 +186,7 @@ describe("canCreateDealWithLocationBilling", () => {
       canCreateDealWithLocationBilling({
         isLoggedIn: true,
         status: "payment_failed_suspended",
+        purchaseSurface: "in_app_link",
         trialEndsAt: null,
         currentPeriodEndsAt: null,
         bypass: true,

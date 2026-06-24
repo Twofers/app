@@ -1,5 +1,5 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
-import type { BillingStatus } from "@/lib/billing/entitlements";
+import type { BillingStatus, PurchaseSurface } from "@/lib/billing/entitlements";
 
 /** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
 export const PAID_BILLING_ENABLED = true;
@@ -53,6 +53,7 @@ function isCurrentOrMissing(endsAt: string | null): boolean {
 export function canCreateDealWithLocationBilling(params: {
   isLoggedIn: boolean;
   status: BillingStatus;
+  purchaseSurface: PurchaseSurface;
   trialEndsAt: string | null;
   currentPeriodEndsAt: string | null;
   bypass?: boolean;
@@ -60,6 +61,7 @@ export function canCreateDealWithLocationBilling(params: {
   if (!params.isLoggedIn) return false;
   if (params.bypass) return true;
   if (PILOT_DISABLE_BILLING_GATE) return true;
+  if (params.purchaseSurface === "disabled") return true;
 
   switch (params.status) {
     case "trial_active":

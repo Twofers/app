@@ -36,11 +36,12 @@ export function usePrimaryLocationBillingGate({
       !canCreateDealWithLocationBilling({
         isLoggedIn,
         status: summary.status,
+        purchaseSurface: summary.purchaseSurface,
         trialEndsAt: summary.trialEndsAt,
         currentPeriodEndsAt: summary.currentPeriodEndsAt,
         bypass,
       }),
-    [bypass, isLoggedIn, summary.currentPeriodEndsAt, summary.status, summary.trialEndsAt],
+    [bypass, isLoggedIn, summary.currentPeriodEndsAt, summary.purchaseSurface, summary.status, summary.trialEndsAt],
   );
 
   return {
