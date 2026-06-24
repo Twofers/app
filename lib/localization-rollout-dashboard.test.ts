@@ -18,6 +18,11 @@ describe("localization rollout dashboard", () => {
     expect(output).toContain("NATIVE_REVIEWER_TBD");
     expect(output).toContain("REAL_DEVICE_SCREENSHOT_QA_PENDING");
     expect(output).toContain("KOREAN_COUNTER_NATIVE_REVIEW_PENDING");
+    expect(output).toContain("## Native Acceptance Packet");
+    expect(output).toContain("- Scenario rows: 23/23");
+    expect(output).toContain("- Reviewer questions: 8/8");
+    expect(output).toContain("- No-secret screenshot rule: yes");
+    expect(output).toContain("- Customer no-model-call rule: yes");
     expect(output).toContain("| localization_source_locale | yes | source-locale publish mix |");
     expect(output).toContain("| localization_approval_hash | yes | exact approval coverage |");
   });

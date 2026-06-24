@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const SUPPORTED_LOCALES = ["en-US", "es-US", "ko-KR"];
+const NATIVE_ACCEPTANCE_PACKET_PATH = "docs/localization/multilingual-deals-native-acceptance-packet.md";
+const REQUIRED_NATIVE_ACCEPTANCE_SCENARIO_COUNT = 23;
+const REQUIRED_NATIVE_ACCEPTANCE_QUESTION_COUNT = 8;
 
 const TELEMETRY_FIELDS = [
   ["localization_source_locale", "source-locale publish mix"],
@@ -141,6 +144,27 @@ function parseReviewLog(logSource) {
     });
 }
 
+function parseNativeAcceptancePacket(packetSource) {
+  const scenarioSection = packetSource.split("## Scenario Matrix")[1]?.split("## Reviewer Questions")[0] ?? "";
+  const reviewerQuestionSection =
+    packetSource.split("## Reviewer Questions")[1]?.split("## Evidence Manifest Template")[0] ?? "";
+  const scenarioRows = scenarioSection.split(/\r?\n/).filter((line) => /^\|\s*NA-\d{3}\s*\|/.test(line));
+  const reviewerQuestionRows = reviewerQuestionSection
+    .split(/\r?\n/)
+    .filter((line) => /^\|\s*(Is|Does|Are|Can|Would)\b/.test(line));
+  const manifestRows = packetSource
+    .split(/\r?\n/)
+    .filter((line) => /^\|\s*NA-\d{3}\s*\|\s*[a-z]{2}-[A-Z]{2}\s*\|/.test(line));
+
+  return {
+    scenarioCount: scenarioRows.length,
+    reviewerQuestionCount: reviewerQuestionRows.length,
+    manifestSeedRows: manifestRows.length,
+    hasNoSecretRule: packetSource.includes("Do not transcribe QR tokens, claim codes, redemption codes"),
+    hasNoModelCallRule: packetSource.includes("Customer viewing must use approved stored localizations and must not make a model call"),
+  };
+}
+
 function blockerCodesFor(record, templates, koreanCounters) {
   const blockers = [];
   if (record.nativeReviewStatus === "native_reviewer_tbd") blockers.push("NATIVE_REVIEWER_TBD");
@@ -171,6 +195,7 @@ function buildDashboard() {
   const templatesByLocale = parseTemplates(read("lib/offer-locale-templates.ts"));
   const koreanCounters = parseKoreanCounters(read("lib/korean-counter-registry.ts"));
   const reviewRows = parseReviewLog(read(gate.nativeReviewLogPath));
+  const nativeAcceptancePacket = parseNativeAcceptancePacket(read(NATIVE_ACCEPTANCE_PACKET_PATH));
   const publishSource = read("supabase/functions/publish-offer-version/index.ts");
 
   const generatedAt = new Date().toISOString();
@@ -226,6 +251,19 @@ function buildDashboard() {
     const finalSignOffs = rows.filter((row) => /^yes$/i.test(row.finalSignOff)).length;
     lines.push(`- ${locale}: ${rows.length} row(s), ${finalSignOffs} final sign-off(s).`);
   }
+
+  lines.push(
+    "",
+    "## Native Acceptance Packet",
+    "",
+    `- Packet: ${NATIVE_ACCEPTANCE_PACKET_PATH}`,
+    `- Scenario rows: ${nativeAcceptancePacket.scenarioCount}/${REQUIRED_NATIVE_ACCEPTANCE_SCENARIO_COUNT}`,
+    `- Reviewer questions: ${nativeAcceptancePacket.reviewerQuestionCount}/${REQUIRED_NATIVE_ACCEPTANCE_QUESTION_COUNT}`,
+    `- Evidence manifest seed rows: ${nativeAcceptancePacket.manifestSeedRows}`,
+    `- No-secret screenshot rule: ${yesNo(nativeAcceptancePacket.hasNoSecretRule)}`,
+    `- Customer no-model-call rule: ${yesNo(nativeAcceptancePacket.hasNoModelCallRule)}`,
+    "- Completion state: Pending external reviewer and real-device evidence.",
+  );
 
   const pendingCounters = koreanCounters.filter((counter) => !counter.reviewerApproved);
   lines.push(

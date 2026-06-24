@@ -728,6 +728,66 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4o - Native acceptance dashboard coverage
+
+Status: Implemented locally on branch `codex/multilingual-plan-completion-audit`.
+
+Safety checkpoint: `fb9963e4` (`Add multilingual native acceptance packet`).
+
+Deployment actions: none. No Supabase migration was applied, no Edge Function was redeployed, no hosted flag was changed, and no release build was started.
+
+Supabase migrations applied: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `scripts/check-localization-rollout-gates.mjs`
+- `scripts/generate-localization-rollout-dashboard.mjs`
+- `lib/localization-rollout-dashboard.test.ts`
+- `docs/localization/multilingual-deals-pr4-rollout-dashboard.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Strengthened `npm run gate:localization-rollout` so it verifies every required native acceptance scenario from `NA-001` through `NA-023`, every reviewer question, and the key evidence/no-secret rules.
+- Added a Native Acceptance Packet section to the rollout dashboard with scenario count, reviewer-question count, manifest seed rows, no-secret screenshot rule status, and customer no-model-call rule status.
+- Updated dashboard coverage tests and the dashboard handoff doc so packet coverage remains visible during release review.
+
+## Acceptance criteria map
+
+- PR4 native-speaker acceptance review: Strengthened locally because the packet is now counted and machine-checked rather than sampled by a few regexes.
+- PR4 rollout dashboards: Improved; the dashboard now surfaces acceptance packet coverage beside reviewer/template/counter blockers.
+- Broad Spanish/Korean production readiness: Still blocked until named reviewers complete sign-off and real-device screenshot QA is recorded.
+
+## Validation
+
+- `npm run gate:localization-rollout`: passed; 20 rollout gate checks passed, including the complete native acceptance scenario/question coverage check.
+- `npm run dashboard:localization-rollout`: passed; dashboard now reports 23/23 scenario rows and 8/8 reviewer questions.
+- `npx vitest run lib/localization-rollout-dashboard.test.ts`: passed; 1 file, 2 tests.
+- `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout`: failed as expected with reviewer/template/Korean counter/screenshot QA blockers; wrapper verified exit code 1.
+- `npm run gate:localization-plan`: passed; 13 plan audit checks passed, including audit evidence path references.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npm run typecheck:functions`: passed; 138 Edge Function files checked.
+- `npx vitest run`: passed; 175 files, 924 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-native-acceptance-dashboard-exact-20260624`: passed with known `country-flag-icons` package export warnings.
+- Validation note: the current worktree also contained local deal-release push changes outside this dashboard checkpoint, so the Edge Function and Vitest file counts include those local files.
+
+## Unresolved risks
+
+- This is dashboard/gate hardening only. It does not perform reviewer sign-off or real-device QA.
+- Hosted behavior remains unchanged until Dan approves the pending migrations, Edge Function redeploys, hosted flags, and any future release build.
+- Local deal-release push changes are present in the worktree but are not part of this dashboard checkpoint.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 3a - Source-language policy and deterministic fallback foundation
 
 Status: Implemented locally on branch `codex/multilingual-deals-pr3-source-locale-policy`.

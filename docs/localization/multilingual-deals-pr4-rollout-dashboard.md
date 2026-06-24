@@ -20,6 +20,7 @@ The generated dashboard is sourced from checked-in local files:
 
 - `lib/localization-rollout-gate.ts`
 - `docs/localization/native-review-log.md`
+- `docs/localization/multilingual-deals-native-acceptance-packet.md`
 - `lib/offer-locale-templates.ts`
 - `lib/korean-counter-registry.ts`
 - `supabase/functions/publish-offer-version/index.ts`
@@ -29,6 +30,7 @@ It reports:
 - per-locale reviewer status, screenshot QA status, template review counts, Korean counter review counts, and broad-production blocker state;
 - publish telemetry field coverage for the `ai_ad_versioned_publish` event;
 - native review log row counts and final sign-off counts;
+- native acceptance packet scenario and reviewer-question coverage;
 - pending Korean counter review items;
 - operator notes for broad Spanish and Korean rollout.
 

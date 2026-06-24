@@ -5,6 +5,52 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requireBroadProductionReady = process.env.LOCALIZATION_BROAD_PRODUCTION_ROLLOUT === "true";
+const NATIVE_ACCEPTANCE_PACKET_PATH = "docs/localization/multilingual-deals-native-acceptance-packet.md";
+
+const REQUIRED_NATIVE_ACCEPTANCE_SCENARIOS = [
+  ["NA-001", "English owner -> Spanish and Korean customers"],
+  ["NA-002", "Spanish owner -> English and Korean customers"],
+  ["NA-003", "Korean owner -> English and Spanish customers"],
+  ["NA-004", "Coffee drink"],
+  ["NA-005", "Pastry"],
+  ["NA-006", "Meal with two different items"],
+  ["NA-007", "Retail product"],
+  ["NA-008", "Service"],
+  ["NA-009", "Branded English item name"],
+  ["NA-010", "Hangul item name"],
+  ["NA-011", "Spanish item name"],
+  ["NA-012", "Unknown Korean counter"],
+  ["NA-013", "Long Spanish headline"],
+  ["NA-014", "Long Korean item term"],
+  ["NA-015", "Mixed protected term"],
+  ["NA-016", "Live quantity-limited offer"],
+  ["NA-017", "Scheduled offer"],
+  ["NA-018", "Deterministic fallback"],
+  ["NA-019", "No merchant photo"],
+  ["NA-020", "Busy merchant photo"],
+  ["NA-021", "Small iPhone"],
+  ["NA-022", "Small Android"],
+  ["NA-023", "Accessibility text size"],
+];
+
+const REQUIRED_NATIVE_ACCEPTANCE_QUESTIONS = [
+  "Is the exact offer correct?",
+  "Does this sound native rather than translated?",
+  "Is the level of politeness appropriate?",
+  "Are protected names handled correctly?",
+  "Are Korean counters and spacing correct?",
+  "Can the offer be understood in two seconds?",
+  "Does the card fit without awkward density?",
+  "Would a business owner be comfortable publishing it?",
+];
+
+const REQUIRED_NATIVE_ACCEPTANCE_EVIDENCE_RULES = [
+  "Store raw screenshots only under local `artifacts/` folders",
+  "Do not transcribe QR tokens, claim codes, redemption codes",
+  "Customer viewing must use approved stored localizations and must not make a model call",
+  "docs/localization/native-review-log.md",
+  "LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout",
+];
 
 const read = (relativePath) => {
   const filePath = path.join(root, relativePath);
@@ -139,7 +185,7 @@ const checks = [
   },
   {
     name: "native acceptance packet exists",
-    file: "docs/localization/multilingual-deals-native-acceptance-packet.md",
+    file: NATIVE_ACCEPTANCE_PACKET_PATH,
     patterns: [
       /# Multilingual Deals Native Acceptance Packet/,
       /English owner -> Spanish and Korean customers/,
@@ -221,6 +267,68 @@ for (const check of checks) {
     console.log(`  ${check.file}`);
     failed += 1;
   }
+}
+
+const nativeAcceptancePacketSource = read(NATIVE_ACCEPTANCE_PACKET_PATH);
+const nativeAcceptanceScenarioSection =
+  nativeAcceptancePacketSource.split("## Scenario Matrix")[1]?.split("## Reviewer Questions")[0] ?? "";
+const nativeAcceptanceQuestionSection =
+  nativeAcceptancePacketSource.split("## Reviewer Questions")[1]?.split("## Evidence Manifest Template")[0] ?? "";
+const nativeAcceptanceScenarioRows = nativeAcceptanceScenarioSection
+  .split(/\r?\n/)
+  .filter((line) => /^\|\s*NA-\d{3}\s*\|/.test(line));
+const nativeAcceptanceQuestionRows = nativeAcceptanceQuestionSection
+  .split(/\r?\n/)
+  .filter((line) => /^\|\s*(Is|Does|Are|Can|Would)\b/.test(line));
+const missingNativeAcceptanceScenarios = REQUIRED_NATIVE_ACCEPTANCE_SCENARIOS.filter(
+  ([scenarioId, label]) =>
+    !new RegExp(`\\|\\s*${scenarioId}\\s*\\|\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\|`).test(
+      nativeAcceptanceScenarioSection,
+    ),
+);
+const missingNativeAcceptanceQuestions = REQUIRED_NATIVE_ACCEPTANCE_QUESTIONS.filter(
+  (question) => !nativeAcceptanceQuestionSection.includes(`| ${question} |`),
+);
+const missingNativeAcceptanceEvidenceRules = REQUIRED_NATIVE_ACCEPTANCE_EVIDENCE_RULES.filter(
+  (rule) => !nativeAcceptancePacketSource.includes(rule),
+);
+const nativeAcceptanceScenarioCountMatches =
+  nativeAcceptanceScenarioRows.length === REQUIRED_NATIVE_ACCEPTANCE_SCENARIOS.length;
+const nativeAcceptanceQuestionCountMatches =
+  nativeAcceptanceQuestionRows.length === REQUIRED_NATIVE_ACCEPTANCE_QUESTIONS.length;
+
+if (
+  nativeAcceptancePacketSource &&
+  missingNativeAcceptanceScenarios.length === 0 &&
+  missingNativeAcceptanceQuestions.length === 0 &&
+  missingNativeAcceptanceEvidenceRules.length === 0 &&
+  nativeAcceptanceScenarioCountMatches &&
+  nativeAcceptanceQuestionCountMatches
+) {
+  console.log("PASS native acceptance packet covers required scenarios and questions");
+} else {
+  console.log("FAIL native acceptance packet covers required scenarios and questions");
+  if (!nativeAcceptancePacketSource) console.log(`  ${NATIVE_ACCEPTANCE_PACKET_PATH}`);
+  if (!nativeAcceptanceScenarioCountMatches) {
+    console.log(
+      `  scenario row count: ${nativeAcceptanceScenarioRows.length}/${REQUIRED_NATIVE_ACCEPTANCE_SCENARIOS.length}`,
+    );
+  }
+  if (!nativeAcceptanceQuestionCountMatches) {
+    console.log(
+      `  reviewer question row count: ${nativeAcceptanceQuestionRows.length}/${REQUIRED_NATIVE_ACCEPTANCE_QUESTIONS.length}`,
+    );
+  }
+  for (const [scenarioId, label] of missingNativeAcceptanceScenarios) {
+    console.log(`  missing scenario: ${scenarioId} ${label}`);
+  }
+  for (const question of missingNativeAcceptanceQuestions) {
+    console.log(`  missing question: ${question}`);
+  }
+  for (const rule of missingNativeAcceptanceEvidenceRules) {
+    console.log(`  missing evidence rule: ${rule}`);
+  }
+  failed += 1;
 }
 
 if (requireBroadProductionReady) {
