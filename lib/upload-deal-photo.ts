@@ -1,6 +1,25 @@
 import { Platform } from "react-native";
 import { File as ExpoFsFile } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
+import {
+  DEAL_PHOTO_UPLOAD_JPEG_QUALITY,
+  resolveDealPhotoUploadResize,
+} from "./deal-photo-upload-sizing";
+
+async function prepareDealPhotoForUpload(uri: string): Promise<string> {
+  const source = await ImageManipulator.manipulate(uri).renderAsync();
+  const resize = resolveDealPhotoUploadResize({ width: source.width, height: source.height });
+  const rendered = resize
+    ? await ImageManipulator.manipulate(uri).resize(resize).renderAsync()
+    : source;
+  const saved = await rendered.saveAsync({
+    compress: DEAL_PHOTO_UPLOAD_JPEG_QUALITY,
+    format: SaveFormat.JPEG,
+    base64: false,
+  });
+  return saved.uri;
+}
 
 /**
  * Upload a local image URI to the `deal-photos` bucket and return its storage path.
@@ -11,12 +30,13 @@ import { supabase } from "./supabase";
  */
 export async function uploadDealPhoto(businessId: string, uri: string): Promise<string> {
   const path = `${businessId}/${Date.now()}.jpg`;
+  const uploadUri = await prepareDealPhotoForUpload(uri);
   let body: Blob | ArrayBuffer;
   if (Platform.OS === "web") {
-    const response = await fetch(uri);
+    const response = await fetch(uploadUri);
     body = await response.blob();
   } else {
-    const b64 = await new ExpoFsFile(uri).base64();
+    const b64 = await new ExpoFsFile(uploadUri).base64();
     const raw = atob(b64);
     const bytes = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
