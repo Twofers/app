@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  ImageBackground,
   Pressable,
   ScrollView,
   Text,
@@ -29,6 +30,7 @@ import {
 import { supabase } from "@/lib/supabase";
 
 const STYLE_PRESETS = ["Fresh", "Bold", "Premium", "Sunrise", "Macro"] as const;
+const DEV_RENDER_CTA = "Claim on Twofer";
 
 type StylePreset = typeof STYLE_PRESETS[number];
 type GenerationMode = "dry-run" | "real-copy" | "real-image";
@@ -98,6 +100,158 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
     <View style={{ gap: 4 }}>
       <Text style={{ color: Gray[600], fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>{label}</Text>
       <Text style={{ color: Gray[900], fontSize: 15, lineHeight: 21 }}>{value}</Text>
+    </View>
+  );
+}
+
+function cleanDisplay(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : fallback;
+}
+
+function conciseSupportingCopy(value: string | null | undefined) {
+  const cleaned = value
+    ?.replace(/\b\d{4}-\d{2}-\d{2}T[0-9:.]+Z\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) {
+    return "A limited-time local offer, rendered with app-controlled details.";
+  }
+  const firstSentence = cleaned.match(/^[^.!?]+[.!?]/)?.[0]?.trim();
+  return firstSentence && firstSentence.length <= 118 ? firstSentence : cleaned.slice(0, 118).trim();
+}
+
+function businessInitials(name: string | null | undefined) {
+  return cleanDisplay(name, "Twofer")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "T";
+}
+
+function formatWindow(start?: string, end?: string) {
+  const startDate = start ? new Date(start) : null;
+  const endDate = end ? new Date(end) : null;
+  if (!startDate || !endDate || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
+    return `${start ?? "Start TBD"} to ${end ?? "End TBD"}`;
+  }
+  const date = startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const startText = startDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const endText = endDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${date}, ${startText} to ${endText}`;
+}
+
+function styleTheme(style: StylePreset) {
+  const themes = {
+    Fresh: { accent: "#16A34A", surface: "rgba(240, 253, 244, 0.94)", text: "#052E16", cta: "#15803D" },
+    Bold: { accent: "#EF4444", surface: "rgba(255, 241, 242, 0.95)", text: "#450A0A", cta: "#B91C1C" },
+    Premium: { accent: "#C8A24A", surface: "rgba(17, 24, 39, 0.88)", text: "#FFF7ED", cta: "#B88921" },
+    Sunrise: { accent: "#F97316", surface: "rgba(255, 247, 237, 0.95)", text: "#431407", cta: "#EA580C" },
+    Macro: { accent: "#0F766E", surface: "rgba(240, 253, 250, 0.95)", text: "#042F2E", cta: "#0F766E" },
+  } satisfies Record<StylePreset, { accent: string; surface: string; text: string; cta: string }>;
+  return themes[style];
+}
+
+function RenderedAdPreview({
+  business,
+  draft,
+  stylePreset,
+}: {
+  business: OwnerBusinessRow | null;
+  draft: NonNullable<DraftResponse["draft"]>;
+  stylePreset: StylePreset;
+}) {
+  const creative = draft.creative;
+  const locked = creative?.lockedOffer;
+  const selectedStyle = STYLE_PRESETS.includes((creative?.stylePreset as StylePreset) ?? stylePreset)
+    ? ((creative?.stylePreset as StylePreset) ?? stylePreset)
+    : stylePreset;
+  const palette = styleTheme(selectedStyle);
+  const headline = cleanDisplay(creative?.headline, cleanDisplay(locked?.productName, "Twofer offer"));
+  const support = conciseSupportingCopy(creative?.supportingCopy);
+  const terms = cleanDisplay(locked?.offerTerms, "Limited-time offer");
+  const quantity = typeof locked?.quantityLimit === "number" ? locked.quantityLimit : Number.NaN;
+  const quantityText = Number.isFinite(quantity) ? `${quantity} available` : "Limited quantity";
+  const businessName = cleanDisplay(business?.name, "Twofer business");
+  const imageUri = draft.image_signed_url ?? undefined;
+
+  const content = (
+    <View style={{ flex: 1, justifyContent: "space-between", padding: 14 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 }}>
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: palette.accent,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>{businessInitials(businessName)}</Text>
+          </View>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "900", flexShrink: 1 }}>
+            {businessName}
+          </Text>
+        </View>
+        <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 6 }}>
+          <Text style={{ color: "#111827", fontSize: 12, fontWeight: "900" }}>DRAFT PREVIEW</Text>
+        </View>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <View style={{ alignSelf: "flex-start", borderRadius: 999, backgroundColor: palette.accent, paddingHorizontal: 11, paddingVertical: 5 }}>
+          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "900" }}>Twofer offer</Text>
+        </View>
+        <View style={{ borderRadius: 14, backgroundColor: palette.surface, padding: 12, gap: 6 }}>
+          <Text numberOfLines={3} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 22, lineHeight: 27, fontWeight: "900" }}>
+            {headline}
+          </Text>
+          <Text numberOfLines={2} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 13, lineHeight: 17, fontWeight: "700" }}>
+            {support}
+          </Text>
+          <Text numberOfLines={2} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 13, lineHeight: 17, fontWeight: "800" }}>
+            {terms}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.86)", paddingHorizontal: 9, paddingVertical: 5 }}>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#111827", fontSize: 11, fontWeight: "900" }}>
+                {formatWindow(locked?.startTime, locked?.endTime)}
+              </Text>
+            </View>
+            <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.86)", paddingHorizontal: 9, paddingVertical: 5 }}>
+              <Text style={{ color: "#111827", fontSize: 11, fontWeight: "900" }}>{quantityText}</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flex: 1, borderRadius: 12, backgroundColor: palette.cta, paddingVertical: 9, alignItems: "center" }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}>{DEV_RENDER_CTA}</Text>
+            </View>
+            <Text style={{ color: palette.text, fontSize: 11, fontWeight: "900" }}>Live draft</Text>
+          </View>
+          <Text style={{ color: palette.text, opacity: 0.72, fontSize: 11, fontWeight: "800", textAlign: "center" }}>
+            Publishing disabled in dev build
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: Gray[600], fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>
+        Rendered Twofer ad preview
+      </Text>
+      <View style={{ width: "100%", aspectRatio: 4 / 5, borderRadius: Radii.md, overflow: "hidden", backgroundColor: "#111827" }}>
+        {imageUri ? (
+          <ImageBackground source={{ uri: imageUri }} resizeMode="cover" style={{ flex: 1 }}>
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.24)" }}>{content}</View>
+          </ImageBackground>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: palette.accent }}>{content}</View>
+        )}
+      </View>
     </View>
   );
 }
@@ -187,7 +341,7 @@ export default function AiDealStudioDevScreen() {
           start_time: startTime.trim(),
           end_time: endTime.trim(),
           quantity_limit: Number.parseInt(quantityLimit, 10),
-          cta: "Claim in Twofer",
+          cta: DEV_RENDER_CTA,
           style_preset: stylePreset,
           dry_run: generationMode === "dry-run",
           copy_only: generationMode !== "real-image",
@@ -417,6 +571,7 @@ export default function AiDealStudioDevScreen() {
         {draft?.creative ? (
           <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>Draft Preview</Text>
+            <RenderedAdPreview business={business} draft={draft} stylePreset={stylePreset} />
             {draft.image_signed_url ? (
               <Image
                 source={{ uri: draft.image_signed_url }}
@@ -446,7 +601,7 @@ export default function AiDealStudioDevScreen() {
             <PreviewRow label="Layout recommendation" value={draft.creative.layoutRecommendation ?? "(missing)"} />
             <PreviewRow label="Offer" value={`${offerType}: ${offerTerms}`} />
             <PreviewRow label="Window and quantity" value={`${startTime} to ${endTime} · ${quantityLimit} available`} />
-            <PreviewRow label="CTA" value={draft.creative.lockedOffer?.cta ?? "Claim in Twofer"} />
+            <PreviewRow label="CTA" value={draft.creative.lockedOffer?.cta ?? DEV_RENDER_CTA} />
             <PreviewRow label="Job status" value={`ready · dry-run ${draft.dry_run === true ? "on" : "off"} · publishing disabled`} />
           </View>
         ) : null}

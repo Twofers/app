@@ -30,6 +30,7 @@ Set server-side only:
 ```powershell
 supabase secrets set OPENAI_API_KEY --project-ref dyzqgzrslrirzqzhhqxh
 supabase secrets set OPENAI_MODEL=gpt-5.4-mini --project-ref dyzqgzrslrirzqzhhqxh
+supabase secrets set AI_TEXT_PRIMARY_TIMEOUT_MS=20000 --project-ref dyzqgzrslrirzqzhhqxh
 ```
 
 This command prompts locally; do not paste the key into chat or commit it to a file.
@@ -45,6 +46,8 @@ Image generation uses the regular app's Gemini image-provider variables:
 - `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` only in the separate dev project when Gemini image testing is approved.
 
 The generated AI Studio image is stored only in the private `ai-deal-assets` bucket. The function returns the private storage path plus a short-lived signed preview URL for the dev draft. It does not create a `deals` row and does not call publishing.
+
+The finished Twofer ad preview is rendered deterministically in the dev app from native overlay text. The Gemini image stays text-free; the app overlays the business name, headline, supporting copy, exact offer terms, time window, quantity, CTA, and disabled-publishing state. Rendered ad export/storage is intentionally not part of this phase.
 
 Configure Gemini image generation for dev only:
 

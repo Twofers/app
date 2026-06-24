@@ -87,7 +87,7 @@ const sampleBody = {
   start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   end_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
   quantity_limit: 5,
-  cta: "Claim in Twofer",
+  cta: "Claim on Twofer",
   style_preset: "Fresh",
   dry_run: true,
   copy_only: true,

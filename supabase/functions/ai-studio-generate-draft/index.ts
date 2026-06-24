@@ -61,7 +61,7 @@ const PROMPT_VERSION = "ai_studio_draft_v2";
 const PIPELINE_VERSION = "ai_studio_draft_dev_v1";
 const AI_DEAL_ASSETS_BUCKET = "ai-deal-assets";
 const ALLOWED_STYLES = new Set(["Fresh", "Bold", "Premium", "Sunrise", "Macro"]);
-const DEFAULT_CTA = "Claim in Twofer";
+const DEFAULT_CTA = "Claim on Twofer";
 const REQUIRED_IMAGE_PROMPT_CLAUSES = [
   "No text.",
   "No letters.",
@@ -288,11 +288,11 @@ async function generateCopyWithTextProvider(params: {
     systemPrompt,
     userPrompt,
     jsonSchema: DRAFT_COPY_SCHEMA,
-    maxOutputTokens: 900,
+    maxOutputTokens: 1600,
     timeoutMs: 12_000,
     generationRunId: params.requestGroupId,
     promptVersion: PROMPT_VERSION,
-    reasoningLevel: "medium",
+    reasoningLevel: "low",
   }, {
     openAiApiKey: params.openAiKey,
     geminiApiKey: params.geminiApiKey,
@@ -512,6 +512,13 @@ serve(async (req) => {
       fallbackReason = null;
     } catch (error) {
       fallbackReason = error instanceof Error ? error.message.slice(0, 120) : "AI_TEXT_PROVIDER_FAILED";
+      if (!input.dryRun && !forceDryRun) {
+        return json(req, {
+          error: "AI text generation failed.",
+          error_code: "AI_TEXT_PROVIDER_FAILED",
+          details: fallbackReason,
+        }, 502);
+      }
     }
   }
   draft.image_prompt = ensureTextFreeImagePrompt(draft.image_prompt, fallbackDraft({
