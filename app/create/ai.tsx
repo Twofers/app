@@ -3612,7 +3612,14 @@ export default function AiDealScreen() {
             >
               <StepBadge n={3} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.validity")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>
+              {t("createAi.scheduleTitle", { defaultValue: "Schedule" })}
+            </Text>
+            <Text style={{ marginTop: 4, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.scheduleHelp", {
+                defaultValue: "Choose when customers can claim this deal. Run it once or repeat it weekly.",
+              })}
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
@@ -3859,11 +3866,20 @@ export default function AiDealScreen() {
 
             <Pressable
               onPress={() => setClaimSettingsOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: claimSettingsOpen }}
+              accessibilityLabel={t("createAi.claimSettingsHeader")}
               style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
             >
               <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.claimSettingsHeader")}</Text>
               <Text style={{ fontSize: 12, opacity: 0.5, color: theme.text }}>
-                {claimSettingsOpen ? "▲" : `${maxClaims} claims, ${cutoffMins} min ▼`}
+                {claimSettingsOpen
+                  ? t("createAi.collapseSettings", { defaultValue: "Hide" })
+                  : t("createAi.claimSettingsSummary", {
+                      maxClaims,
+                      cutoffMins,
+                      defaultValue: "{{maxClaims}} claims max, {{cutoffMins}} min cutoff",
+                    })}
               </Text>
             </Pressable>
             {claimSettingsOpen ? (

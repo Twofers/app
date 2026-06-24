@@ -21,4 +21,11 @@ describe("AI ads photo picker source", () => {
     expect(createAiSource).toContain("createAi.dealDescriptionHelpNoPhoto");
     expect(createAiSource).toContain("createAi.hintPlaceholderNoPhoto");
   });
+
+  it("uses owner-friendly lower-page workflow labels", () => {
+    expect(createAiSource).toContain("createAi.scheduleTitle");
+    expect(createAiSource).toContain("createAi.scheduleHelp");
+    expect(createAiSource).toContain("createAi.claimSettingsSummary");
+    expect(createAiSource).toContain("accessibilityState={{ expanded: claimSettingsOpen }}");
+  });
 });
