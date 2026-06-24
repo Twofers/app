@@ -18,7 +18,7 @@ Use this local check during release prep:
 npm run gate:localization-rollout
 ```
 
-That command passes when the blocked state is explicit and traceable. To turn the same check into a hard broad-production readiness assertion, run it with:
+That command passes when the blocked state is explicit, traceable, and backed by the production approval runbook in `docs/localization/multilingual-deals-production-approval-runbook.md`. To turn the same check into a hard broad-production readiness assertion, run it with:
 
 ```bash
 LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout
@@ -39,3 +39,4 @@ Before that readiness assertion may pass, update all of these together:
 - `lib/offer-locale-templates.ts` review statuses for approved Spanish and Korean templates.
 - `lib/korean-counter-registry.ts` reviewer approvals for Korean counters.
 - Real-device screenshot QA evidence under local artifacts only, with no QR tokens, claim codes, or redemption codes transcribed into chat, docs, commits, or public artifacts.
+- `docs/localization/multilingual-deals-production-approval-runbook.md` if the required migration, deploy, feature flag, acceptance, or rollback sequence changes.

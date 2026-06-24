@@ -158,6 +158,20 @@ const checks = [
       /Feed and deal-detail localization remain independent from push delivery/,
     ],
   },
+  {
+    name: "production approval runbook exists",
+    file: "docs/localization/multilingual-deals-production-approval-runbook.md",
+    patterns: [
+      /Hard Gates Before Broad Production/,
+      /20260728120000_ad_localization_storage\.sql/,
+      /20260728123000_customer_deal_localization_projection\.sql/,
+      /npx supabase functions deploy ai-generate-ad-variants/,
+      /npx supabase functions deploy publish-offer-version/,
+      /AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED/,
+      /Customer viewing must not make a model call/,
+      /Do not deploy `send-deal-push` to claim multilingual push support/,
+    ],
+  },
 ];
 
 let failed = 0;

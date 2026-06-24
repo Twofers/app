@@ -738,6 +738,73 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4j - Production approval runbook
+
+Status: Implemented locally on branch `codex/multilingual-deals-production-runbook`.
+
+Safety checkpoint: `bb2ea5e9` (Edge Function typecheck fix commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, no push notification was sent, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files added
+
+- `docs/localization/multilingual-deals-production-approval-runbook.md`
+
+## Files changed
+
+- `docs/localization/multilingual-deals-pr4-rollout-gate.md`
+- `scripts/check-localization-rollout-gates.mjs`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Added a final multilingual production approval runbook that separates implemented local code from hard-gated production actions.
+- Documented the remaining broad-production gates for U.S. Spanish and Korean: named reviewers, native sign-off, real-device screenshot QA, reviewed Spanish/Korean templates, and Korean counter approval.
+- Documented the localization-specific migration approval packet for `20260728120000_ad_localization_storage.sql` and `20260728123000_customer_deal_localization_projection.sql`, including the no-direct-app-role-access boundary for `ad_localizations`.
+- Documented the Edge Function redeploy packet for `ai-generate-ad-variants`, `publish-offer-version`, and `ai-extract-menu`.
+- Clarified that `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` is server-only and read by `publish-offer-version`.
+- Extended `npm run gate:localization-rollout` so the production approval runbook is itself required rollout evidence.
+
+## Acceptance criteria map
+
+- PR4 operational handoff for continuing language review: Implemented locally as a checked production approval runbook.
+- PR4 native review rollout: Preserved as an explicit broad-production blocker until reviewer and screenshot evidence is recorded.
+- PR4 no multilingual push: Preserved; the runbook explicitly says not to deploy or describe `send-deal-push` as multilingual.
+- Final plan instruction, no customer view-time model call: Reasserted in the manual acceptance checklist.
+
+## Validation
+
+- `npm run gate:localization-rollout`: passed; 17 rollout gate checks passed.
+- `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout`: failed as expected because native reviewer sign-off, template review, Korean counter review, or screenshot QA is still pending.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed.
+- `npm run typecheck:functions`: passed.
+- `npm run copy:evaluate`: passed.
+- `npm run dashboard:localization-rollout`: passed.
+- `npm run gate:ai-ad`: passed.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-production-runbook-20260623`: passed with known `country-flag-icons` package export warnings.
+- `git diff --check`: passed.
+- `git diff --cached --check`: passed.
+
+## Unresolved risks
+
+- Broad U.S. Spanish and Korean production remains blocked until Dan records named reviewers, native sign-off, Korean counter approvals, and real-device screenshot QA.
+- Hosted behavior remains unchanged until Dan explicitly approves the pending migrations, Edge Function redeploys, hosted flag changes, and any future release build.
+- The runbook is local documentation and a release gate assertion; it does not itself prove real-device visual quality.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Edge Function Typecheck Fix - AI extract menu provider-attempt logger
 
 Status: Implemented locally on branch `codex/fix-ai-extract-menu-typecheck`.
