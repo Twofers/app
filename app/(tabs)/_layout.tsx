@@ -30,8 +30,10 @@ import type { TabMode } from "@/lib/tab-mode";
 
 type TabIconName = ComponentProps<typeof IconSymbol>["name"];
 
+const TAB_ICON_SIZE = 32;
+
 function createTabIconRenderer(name: TabIconName) {
-  const TabIconRenderer = ({ color }: { color: string }) => <IconSymbol size={28} name={name} color={color} />;
+  const TabIconRenderer = ({ color }: { color: string }) => <IconSymbol size={TAB_ICON_SIZE} name={name} color={color} />;
   TabIconRenderer.displayName = `TabIcon(${name})`;
   return TabIconRenderer;
 }
@@ -122,7 +124,7 @@ export default function TabLayout() {
   const { mode } = useTabMode();
   const business = useBusiness();
   const ownerPinLocked = useOwnerPinLockedForBusiness(mode, business.businessId);
-  const androidTabBottomPadding = Math.max(insets.bottom, 8);
+  const tabBarBottomPadding = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 6);
 
   /**
    * Hide tabs from the bar without removing them from the navigator.
@@ -147,20 +149,16 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: renderHapticTabBarButton,
           tabBarAllowFontScaling: false,
-          tabBarLabelStyle: { fontSize: 11, lineHeight: 13, fontWeight: "700" },
+          tabBarLabelStyle: { fontSize: 13, lineHeight: 16, fontWeight: "700", letterSpacing: 0 },
           tabBarItemStyle: {
-            paddingTop: Platform.OS === "android" ? 4 : 2,
-            paddingBottom: Platform.OS === "android" ? 4 : 2,
+            paddingTop: 4,
+            paddingBottom: 4,
           },
           tabBarStyle: {
             backgroundColor: theme.background,
-            ...(Platform.OS === "android"
-              ? {
-                  minHeight: 64 + androidTabBottomPadding,
-                  paddingTop: 4,
-                  paddingBottom: androidTabBottomPadding,
-                }
-              : {}),
+            minHeight: 64 + tabBarBottomPadding,
+            paddingTop: 6,
+            paddingBottom: tabBarBottomPadding,
           },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
@@ -224,7 +222,7 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="account"
+          name="account/index"
           options={{
             title: t('tabs.account'),
             tabBarIcon: renderAccountTabIcon,
