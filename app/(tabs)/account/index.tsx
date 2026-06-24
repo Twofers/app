@@ -977,31 +977,33 @@ export default function AccountScreen() {
 
           <ThemePreferenceSelector />
 
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <View>
-              <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
-              <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
+          {tabMode !== "business" ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View>
+                <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
+                <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
+              </View>
+              <BrandedSwitch
+                value={alertsEnabled}
+                onValueChange={toggleAlerts}
+                disabled={alertsLoading}
+                accessibilityRole="switch"
+                accessibilityLabel={t("account.dealAlertsTitle")}
+                accessibilityHint={t("account.dealAlertsA11yHint")}
+                accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
+              />
             </View>
-            <BrandedSwitch
-              value={alertsEnabled}
-              onValueChange={toggleAlerts}
-              disabled={alertsLoading}
-              accessibilityRole="switch"
-              accessibilityLabel={t("account.dealAlertsTitle")}
-              accessibilityHint={t("account.dealAlertsA11yHint")}
-              accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
-            />
-          </View>
+          ) : null}
 
           {bizClaimNotif !== null ? (
             <View
