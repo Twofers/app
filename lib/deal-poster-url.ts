@@ -8,18 +8,6 @@
  */
 
 const BUCKET = "deal-photos";
-export const DEAL_POSTER_FEED_IMAGE_SIZE = 720;
-export const DEAL_POSTER_FEED_IMAGE_QUALITY = 70;
-
-export type DealPosterDisplayVariant = "detail" | "feed";
-
-function encodeStoragePath(storagePath: string): string {
-  return storagePath
-    .split("/")
-    .filter(Boolean)
-    .map((seg) => encodeURIComponent(seg))
-    .join("/");
-}
 
 export function extractDealPhotoStoragePath(raw: string | null | undefined): string | null {
   if (raw == null || typeof raw !== "string") return null;
@@ -34,7 +22,6 @@ export function extractDealPhotoStoragePath(raw: string | null | undefined): str
     const pathname = u.pathname;
     const publicMarker = "/object/public/deal-photos/";
     const signMarker = "/object/sign/deal-photos/";
-    const renderPublicMarker = "/render/image/public/deal-photos/";
     const pi = pathname.indexOf(publicMarker);
     if (pi !== -1) {
       return decodeURIComponent(pathname.slice(pi + publicMarker.length));
@@ -43,38 +30,21 @@ export function extractDealPhotoStoragePath(raw: string | null | undefined): str
     if (si !== -1) {
       return decodeURIComponent(pathname.slice(si + signMarker.length));
     }
-    const ri = pathname.indexOf(renderPublicMarker);
-    if (ri !== -1) {
-      return decodeURIComponent(pathname.slice(ri + renderPublicMarker.length));
-    }
   } catch {
     /* ignore */
   }
   return null;
 }
 
-function buildTransformedPublicDealPhotoUrl(storagePath: string): string | null {
+export function buildPublicDealPhotoUrl(storagePath: string): string | null {
   const base = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   if (!base || !storagePath.trim()) return null;
   const cleanBase = base.replace(/\/$/, "");
-  const params = new URLSearchParams({
-    width: String(DEAL_POSTER_FEED_IMAGE_SIZE),
-    height: String(DEAL_POSTER_FEED_IMAGE_SIZE),
-    resize: "cover",
-    quality: String(DEAL_POSTER_FEED_IMAGE_QUALITY),
-  });
-  return `${cleanBase}/storage/v1/render/image/public/${BUCKET}/${encodeStoragePath(storagePath)}?${params.toString()}`;
-}
-
-export function buildPublicDealPhotoUrl(
-  storagePath: string,
-  options?: { variant?: DealPosterDisplayVariant },
-): string | null {
-  const base = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-  if (!base || !storagePath.trim()) return null;
-  if (options?.variant === "feed") return buildTransformedPublicDealPhotoUrl(storagePath);
-  const cleanBase = base.replace(/\/$/, "");
-  const encodedPath = encodeStoragePath(storagePath);
+  const encodedPath = storagePath
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
   return `${cleanBase}/storage/v1/object/public/${BUCKET}/${encodedPath}`;
 }
 
@@ -102,12 +72,11 @@ export function resolveCurrentDealPosterStoragePath(params: {
 export function resolveDealPosterDisplayUri(
   posterUrl: string | null | undefined,
   posterStoragePath?: string | null,
-  options?: { variant?: DealPosterDisplayVariant },
 ): string | null {
   const explicit = posterStoragePath?.trim();
   const path = explicit || extractDealPhotoStoragePath(posterUrl ?? null);
   if (path) {
-    const pub = buildPublicDealPhotoUrl(path, options);
+    const pub = buildPublicDealPhotoUrl(path);
     if (pub) return pub;
   }
   const raw = posterUrl?.trim();

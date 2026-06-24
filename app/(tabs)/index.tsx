@@ -923,7 +923,7 @@ export default function HomeScreen() {
         fallbackLanguage: i18n.language,
       });
       const offerText = localizedDisplay.title || t("dealDetail.dealFallback");
-      const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path, { variant: "feed" });
+      const posterUri = resolveDealPosterDisplayUri(item.poster_url, item.poster_storage_path);
       const businessName = item.businesses?.name ?? t("dealDetail.localBusiness");
       const businessLocation = item.businesses?.location?.trim() || null;
       const isFavorite = favoriteBusinessIds.includes(item.business_id);

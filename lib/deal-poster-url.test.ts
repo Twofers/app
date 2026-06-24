@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEAL_POSTER_FEED_IMAGE_QUALITY,
-  DEAL_POSTER_FEED_IMAGE_SIZE,
-  buildPublicDealPhotoUrl,
   extractDealPhotoStoragePath,
   resolveCurrentDealPosterStoragePath,
   resolveDealPosterDisplayUri,
@@ -17,12 +14,6 @@ describe("extractDealPhotoStoragePath", () => {
 
   it("parses public URL path", () => {
     const u = "https://abc.supabase.co/storage/v1/object/public/deal-photos/biz-1/photo.jpg";
-    expect(extractDealPhotoStoragePath(u)).toBe("biz-1/photo.jpg");
-  });
-
-  it("parses transformed public URL path", () => {
-    const u =
-      "https://abc.supabase.co/storage/v1/render/image/public/deal-photos/biz-1/photo.jpg?width=720&height=720";
     expect(extractDealPhotoStoragePath(u)).toBe("biz-1/photo.jpg");
   });
 
@@ -42,24 +33,6 @@ describe("resolveDealPosterDisplayUri", () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
     expect(resolveDealPosterDisplayUri(null, "a/b.jpg")).toBe(
       "https://proj.supabase.co/storage/v1/object/public/deal-photos/a/b.jpg",
-    );
-    process.env.EXPO_PUBLIC_SUPABASE_URL = prev;
-  });
-
-  it("builds a smaller transformed public URL for the feed variant", () => {
-    const prev = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://proj.supabase.co/";
-    expect(buildPublicDealPhotoUrl("a/b photo.jpg", { variant: "feed" })).toBe(
-      `https://proj.supabase.co/storage/v1/render/image/public/deal-photos/a/b%20photo.jpg?width=${DEAL_POSTER_FEED_IMAGE_SIZE}&height=${DEAL_POSTER_FEED_IMAGE_SIZE}&resize=cover&quality=${DEAL_POSTER_FEED_IMAGE_QUALITY}`,
-    );
-    process.env.EXPO_PUBLIC_SUPABASE_URL = prev;
-  });
-
-  it("resolves feed display URIs through the transformed image endpoint", () => {
-    const prev = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
-    expect(resolveDealPosterDisplayUri(null, "a/b.jpg", { variant: "feed" })).toBe(
-      `https://proj.supabase.co/storage/v1/render/image/public/deal-photos/a/b.jpg?width=${DEAL_POSTER_FEED_IMAGE_SIZE}&height=${DEAL_POSTER_FEED_IMAGE_SIZE}&resize=cover&quality=${DEAL_POSTER_FEED_IMAGE_QUALITY}`,
     );
     process.env.EXPO_PUBLIC_SUPABASE_URL = prev;
   });
