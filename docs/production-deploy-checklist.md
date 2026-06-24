@@ -2,7 +2,7 @@
 
 Use this after merging to `main` and before pointing pilot traffic at a **hosted** Supabase project and a **production** EAS build. Do not paste real secrets into tickets or this file.
 
-For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge coverage detail, see `docs/edge-function-checklist.md`.
+For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge coverage detail, see `docs/edge-function-checklist.md`. For multilingual release approval, use `docs/localization/multilingual-deals-production-approval-runbook.md`.
 
 ---
 
@@ -18,6 +18,10 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260704120000_business_logo_storage.sql` | `businesses.logo_url` + `business-logos` bucket + RLS for owner upload / public read. |
 | `20260706130000_deal_photo_owner_upload_policies.sql` | `deal-photos` owner-scoped upload/update policies for AI + publishing. |
 | `20260707120000_business_menu_item_sizes.sql` | Menu item `size_options` for scan → offer flows. |
+| `20260723120000_offer_versions_foundation.sql` | Immutable offer/ad version storage used by versioned publish and claims. |
+| `20260724120000_offer_version_publish_rpc.sql` | Publish RPC foundation for versioned offer/ad specs. |
+| `20260728120000_ad_localization_storage.sql` | Service-role localization storage and offer-version localization metadata. |
+| `20260728123000_customer_deal_localization_projection.sql` | Customer-safe localization projection RPC; no direct app-role access to `ad_localizations`. |
 
 **Also verify:**
 
@@ -55,6 +59,7 @@ supabase functions deploy <function-name>
 - `finalize-stale-redeems`
 - `delete-user-account`
 - `ingest-analytics-event`
+- `publish-offer-version`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`
 - `ai-create-deal` (legacy disabled endpoint; should return HTTP 410)
 - Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
@@ -88,6 +93,7 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 - `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, and `AI_REVISION_COST_HARD_LIMIT_USD` (AI cost-budget guardrails)
 - `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, and `OPENAI_IMAGE_MODEL_EDIT` (OpenAI image model overrides; default `gpt-image-1`)
 - `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, and `AI_IMAGE_STOCK_FALLBACK_ENABLED` (ad-image provider/fallback controls)
+- Multilingual flags: keep `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED`, `AI_V5_TRANSLATION_QA_ENABLED`, `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED`, and `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` off until the production approval runbook gates pass.
 
 **Menu extraction (preview / explicit opt-in only):**
 
@@ -142,6 +148,7 @@ Run against **hosted** Supabase + production-like env (can reuse scenarios from 
 - **Google Places:** Without `GOOGLE_PLACES_API_KEY`, lookup may fall back to OpenAI-only or error — confirm messaging matches product expectations.
 - **AI quotas / cost:** `ai_generation_logs` and any monthly caps — verify limits in Dashboard and owner-facing copy.
 - **Push / deep links:** `send-deal-push`, email confirmation redirects — test on real devices.
+- **Multilingual rollout:** U.S. Spanish and Korean broad production remain blocked until named reviewers, native sign-off, Korean counter approval, and real-device screenshot QA are recorded.
 - **Migration order:** A single failed migration on prod leaves schema half-applied; always verify last applied migration name and error logs.
 - **Metro / CI:** Local “Unable to deserialize cloned data” Metro cache warnings are environmental; use `npx expo start -c` if bundler misbehaves (not a server deploy issue).
 

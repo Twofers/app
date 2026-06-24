@@ -738,6 +738,69 @@ Revert this commit. No migration rollback is required.
 
 ---
 
+## Multilingual Deals PR 4k - Deployment docs alignment
+
+Status: Implemented locally on branch `codex/multilingual-deploy-docs-alignment`.
+
+Safety checkpoint: `bbb89360` (Multilingual Deals PR 4j production approval runbook commit).
+
+Deployment actions: none performed here. No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed, no push notification was sent, and no release build was started.
+
+Supabase migrations applied: none.
+
+Migrations added: none.
+
+Live secret names changed: none.
+
+## Files changed
+
+- `docs/deployment-command-plan.md`
+- `docs/production-deploy-checklist.md`
+- `docs/deployment-notes.md`
+- `docs/edge-function-checklist.md`
+- `TWOFER_AI_QUALITY_IMPLEMENTATION_REPORT.md`
+
+## What landed
+
+- Aligned the deployment command plan with the current 95-file migration inventory, including `20260704120001_enable_deals_realtime.sql` and the latest `20260728123000_customer_deal_localization_projection.sql`.
+- Pointed deployment docs at the multilingual production approval runbook instead of stale release-candidate references.
+- Documented the multilingual storage/projection migrations, customer-safe localization projection boundary, and V5 localization flag names in the production deployment docs.
+- Updated Edge Function deployment inventories to include current function folders and `publish-offer-version`; removed the stale `ai-refine-ad-copy` reference from active deployment notes.
+- Kept all production-changing operations explicitly hard-gated: migrations, Edge Function redeploys, hosted flag changes, and release builds remain pending Dan approval.
+
+## Acceptance criteria map
+
+- PR4 operational handoff: Improved; the general deployment docs now route multilingual approval decisions through the checked production runbook.
+- PR4 exact localization approval: Improved operationally; deployment docs now call out the `publish-offer-version` redeploy and `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` flag boundary.
+- PR4 customer-safe localization projection: Improved operationally; deployment docs now identify the customer projection migration and the no-direct-app-role-access boundary for `ad_localizations`.
+- No production deployment: Preserved; this checkpoint is documentation-only and did not cross a hard gate.
+
+## Validation
+
+- `rg -n "58 files|release-candidate-status|ai-refine-ad-copy|20260704120000_enable_deals_realtime|Database migrations \\(exact set\\)" docs/deployment-command-plan.md docs/production-deploy-checklist.md docs/deployment-notes.md docs/edge-function-checklist.md`: passed; no stale active deployment references remained.
+- `rg -n "20260728120000_ad_localization_storage|20260728123000_customer_deal_localization_projection|AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED|publish-offer-version|multilingual-deals-production-approval-runbook" docs/deployment-command-plan.md docs/production-deploy-checklist.md docs/deployment-notes.md docs/edge-function-checklist.md`: passed; current migration, flag, function, and runbook references are present.
+- `npm run gate:localization-rollout`: passed; 17 rollout gate checks passed.
+- `npm run dashboard:localization-rollout`: passed; dashboard generated locally and still reports Spanish/Korean broad production blockers.
+- `npm run gate:ai-ad`: passed; all 10 AI ad release gate checks passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed.
+- `npx vitest run`: passed; 173 files, 918 tests. Existing Expo push negative-path stderr appeared from tests that intentionally exercise error handling.
+- `npm run typecheck:functions`: passed; 136 Edge Function files checked.
+- `npm run copy:evaluate`: passed; 30 valid, 0 invalid.
+- `npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-deploy-docs-20260623`: passed with known `country-flag-icons` package export warnings.
+
+## Unresolved risks
+
+- Hosted behavior remains unchanged until Dan explicitly approves the pending Supabase migrations, Edge Function redeploys, hosted flag changes, and any future release build.
+- Broad U.S. Spanish and Korean production remains blocked until named reviewers, native sign-off, Korean counter approvals, and real-device screenshot QA are recorded.
+- These docs reduce deployment drift but do not prove live hosted state; production still needs a fresh hard-gated migration/function comparison before any rollout.
+
+## Rollback
+
+Revert this commit. No migration rollback is required.
+
+---
+
 ## Multilingual Deals PR 4j - Production approval runbook
 
 Status: Implemented locally on branch `codex/multilingual-deals-production-runbook`.

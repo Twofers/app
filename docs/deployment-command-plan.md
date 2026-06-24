@@ -2,7 +2,7 @@
 
 Command-by-command verification for moving from code readiness to **deployment readiness**. This doc does not deploy anything by itself.
 
-**Related:** [production-deploy-checklist.md](./production-deploy-checklist.md), [deployment-notes.md](./deployment-notes.md), [release-candidate-status.md](./release-candidate-status.md), [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md).
+**Related:** [production-deploy-checklist.md](./production-deploy-checklist.md), [deployment-notes.md](./deployment-notes.md), [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md), [multilingual-deals-production-approval-runbook.md](./localization/multilingual-deals-production-approval-runbook.md).
 
 **Legend**
 
@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (58 files, strict filename / timestamp order)
+### 2.1 Full local set (95 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -81,7 +81,7 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 41. `20260703120004_timezone_validation.sql`
 42. `20260703120005_claim_race_guards.sql`
 43. `20260704120000_business_logo_storage.sql`
-44. `20260704120000_enable_deals_realtime.sql`
+44. `20260704120001_enable_deals_realtime.sql`
 45. `20260704130000_enforce_max_claims_atomic.sql`
 46. `20260705120000_businesses_pii_column_grants.sql`
 47. `20260705120002_deal_claims_unique_active.sql`
@@ -96,21 +96,62 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 56. `20260706120000_business_invite_gate.sql`
 57. `20260706130000_deal_photo_owner_upload_policies.sql`
 58. `20260707120000_business_menu_item_sizes.sql`
+59. `20260707130000_align_strong_deal_guard_with_client.sql`
+60. `20260708120000_deal_viewed_daily_idempotency.sql`
+61. `20260708130000_nearby_geo_rpcs.sql`
+62. `20260708140000_consumer_deal_alerts_enabled.sql`
+63. `20260708150000_weekly_digest_cron.sql`
+64. `20260710120000_deal_shares.sql`
+65. `20260711120000_profiles_role.sql`
+66. `20260712120000_redemption_mode_staff_sessions.sql`
+67. `20260713120000_business_claim_notifications.sql`
+68. `20260714120000_fix_purge_user_data_columns.sql`
+69. `20260715120000_share_lookup_hardening.sql`
+70. `20260716120000_deal_claim_counts_rpc.sql`
+71. `20260717120000_fix_is_redeemer_session_null_safe.sql`
+72. `20260718120000_deal_source_locale_and_english_translation.sql`
+73. `20260719120000_demo_content_marker.sql`
+74. `20260720120000_cedar_bean_claimable_qa_deal.sql`
+75. `20260721120000_deal_wallet_redemption_rules.sql`
+76. `20260722120000_ai_generation_cost_ledger.sql`
+77. `20260723120000_offer_versions_foundation.sql`
+78. `20260724120000_offer_version_publish_rpc.sql`
+79. `20260724121000_offer_version_claim_redemption_binding.sql`
+80. `20260725120000_ad_generation_media_library.sql`
+81. `20260725121000_business_media_import_jobs.sql`
+82. `20260726120000_location_billing_entitlements.sql`
+83. `20260726123000_deal_credit_consumption_helpers.sql`
+84. `20260726124000_deal_credit_reservation_sweep_schedule.sql`
+85. `20260726125000_deal_suspension_write_guards.sql`
+86. `20260726130000_trial_ending_reminder_events.sql`
+87. `20260726131000_introductory_refund_requests.sql`
+88. `20260726132000_business_trial_identity_controls.sql`
+89. `20260726133000_business_publish_verification_controls.sql`
+90. `20260726134000_pause_recurring_deals_on_billing_suspension.sql`
+91. `20260726135000_trial_ending_reminder_cron_schedule.sql`
+92. `20260726136000_admin_trial_identity_reuse_guard.sql`
+93. `20260727120000_ai_provider_circuit_breakers.sql`
+94. `20260728120000_ad_localization_storage.sql`
+95. `20260728123000_customer_deal_localization_projection.sql`
 
 ### 2.2 Latest migration
 
-**`20260707120000_business_menu_item_sizes.sql`**
+**`20260728123000_customer_deal_localization_projection.sql`**
 
-### 2.3 Duplicate timestamp warning
+### 2.3 Multilingual rollout migrations
 
-Two files share the prefix **`20260704120000`**:
+The multilingual approval path depends on the hosted project being current through the migration chain above, including:
 
-- `20260704120000_business_logo_storage.sql` (runs **first** — `business_` before `enable_` lexicographically)
-- `20260704120000_enable_deals_realtime.sql`
+- `20260728120000_ad_localization_storage.sql`
+- `20260728123000_customer_deal_localization_projection.sql`
 
-Order is stable but duplicate prefixes are an operational footgun; prefer unique timestamps for new migrations.
+The projection migration exposes the customer-safe `customer_deal_localizations(p_deal_ids uuid[], p_locale text)` RPC. It must not grant direct app-role access to `ad_localizations`. See [multilingual-deals-production-approval-runbook.md](./localization/multilingual-deals-production-approval-runbook.md) before asking Dan to approve these migrations.
 
-### 2.4 Command to apply migrations (do not run without explicit approval)
+### 2.4 Duplicate timestamp check
+
+No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
+
+### 2.5 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
@@ -165,6 +206,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 
 | Function |
 |----------|
+| `activate-redemption-mode` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |
@@ -181,26 +223,40 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `complete-visual-redeem` |
 | `deal-link` |
 | `delete-user-account` |
+| `exit-redemption-mode` |
 | `finalize-stale-redeems` |
 | `ingest-analytics-event` |
+| `manage-redemption-devices` |
+| `owner-redemption-security` |
+| `publish-offer-version` |
 | `redeem-token` |
+| `release-claim` |
 | `send-deal-push` |
+| `send-trial-ending-reminders` |
 | `simulate-subscribe` |
+| `staff-redemption` |
+| `stripe-cancel-paid-subscription` |
+| `stripe-cancel-trial-subscription` |
 | `stripe-create-checkout-session` |
 | `stripe-customer-portal-session` |
+| `stripe-expire-pending-checkout` |
+| `stripe-request-introductory-refund` |
 | `stripe-webhook` |
+| `weekly-deal-digest` |
 
-**Note:** `docs/deployment-notes.md` may mention `ai-refine-ad-copy`; that folder is **not** in this repo. Deploy only what exists above.
+**Note:** deploy only function folders that exist above and are present in `supabase/config.toml`.
 
 **Shared code:** `supabase/functions/_shared/` is bundled with functions; redeploy functions after changing `_shared/`.
 
 ### 4.2 Pilot-critical subset (non-exhaustive)
 
-- **Wallet / redeem:** `claim-deal`, `redeem-token`, `begin-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (and `cancel-visual-redeem` if still referenced)
+- **Wallet / redeem:** `claim-deal`, `redeem-token`, `release-claim`, `begin-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (and `cancel-visual-redeem` if still referenced)
+- **Redemption Mode / staff controls:** `activate-redemption-mode`, `exit-redemption-mode`, `staff-redemption`, `manage-redemption-devices`, `owner-redemption-security`
 - **Account / compliance:** `delete-user-account`
-- **Telemetry:** `ingest-analytics-event`
+- **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
+- **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
 - **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
-- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`; treat `simulate-subscribe` as **QA-only**
+- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)
 
@@ -282,6 +338,10 @@ Never paste real secret values into tickets or commits.
 | `AI_TRANSLATE_MONTHLY_LIMIT` | `ai-translate-deal` |
 | `AI_MONTHLY_LIMIT` | `_shared/ai-limits.ts` |
 | `AI_COOLDOWN_SECONDS` | `_shared/ai-limits.ts` |
+| `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED` | Enables provider-backed ad transcreation in `ai-generate-ad-variants`; keep off until reviewer and rollout gates pass. |
+| `AI_V5_TRANSLATION_QA_ENABLED` | Enables semantic QA and targeted repair in `ai-generate-ad-variants`; keep off until reviewer and rollout gates pass. |
+| `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED` | Enables deterministic target-language fallback bundle generation in `ai-generate-ad-variants`. |
+| `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` | Server-only exact localization approval enforcement in `publish-offer-version`; enable only after migrations, reviewer sign-off, screenshot QA, and deploy approval. |
 
 ### 5.4 Menu extraction safety
 

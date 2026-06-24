@@ -14,6 +14,7 @@ This checklist tracks the Edge Functions used by the app and highlights launch r
 | `finalize-stale-redeems` | `lib/functions.ts` | app/device metadata | (best-effort; ignored by client) | Yes (for stale-state recovery) | Fire-and-forget; client suppresses failure | Silent failures can leave claims in `redeeming` too long. |
 | `delete-user-account` | `lib/functions.ts` | `{}` | `{ ok: true }` or friendly error | Yes | Website delete-account URL on failure | Deletes consumer and business-owner accounts after in-app confirmation; relies on schema cascades for owned business data. |
 | `ingest-analytics-event` | `lib/app-analytics.ts` | event payload (`event_name`, optional ids, context, app/device metadata) | append success (not used by UI) | Yes (ops visibility) | Fire-and-forget; client drops failures | Data loss is silent if endpoint or RLS breaks. |
+| `publish-offer-version` | `lib/offer-version-publish.ts` via create/publish flows | offer/ad version publish payload | published offer/ad version response or validation errors | Yes for versioned publish | None | Launch-critical for exact presentation and localization approval enforcement; deploy after approval when `_shared/localization-approval-validation.ts` changes. |
 | `ai-extract-menu` | `lib/functions.ts` via `app/create/menu-scan.tsx` | `business_id` + one of `image_url` or `image_base64` | `{ ok, items[], low_legibility, menu_notes, extraction_source }` | Yes (primary owner flow) | Optional preview synthetic fallback when explicitly enabled by secret | High: previously returned fake success when `OPENAI_API_KEY` missing; now returns config error in production mode. |
 | `ai-compose-offer` | `lib/ai-compose-offer.ts` | prompt/composition payload (typed in file) | composed offer payload used by create flow | Secondary | Internal error handling in caller | AI quality and latency variability; text/photo compose uses the shared provider router while voice transcription still depends on Whisper/OpenAI. |
 | `ai-generate-ad-variants` | `lib/functions.ts` | `business_id`, `hint_text`, `business_context`, locale and optional media/revision fields | `{ ad, ads?, quota? }` (single-ad pipeline; `ads` legacy compat) | Yes for AI-first owner flow | None in wrapper (throws) | If unavailable, owner ad generation blocks primary path; generated/edited image QA has a flag-gated Gemini fallback and still fails closed if both QA providers are unavailable. |
@@ -27,6 +28,7 @@ This checklist tracks the Edge Functions used by the app and highlights launch r
 - `stripe-customer-portal-session` in `app/(tabs)/billing/manage.tsx`
 - `simulate-subscribe` in `app/(tabs)/billing.tsx` (dev/pilot helper)
 - `send-deal-push` in `lib/functions.ts`
+- `publish-offer-version` in `lib/offer-version-publish.ts`
 - `ai-business-lookup` in `lib/functions.ts`
 - `ai-translate-deal` in `lib/functions.ts`
 - `ai-deal-suggestions` in `components/ai-insights-card.tsx`
