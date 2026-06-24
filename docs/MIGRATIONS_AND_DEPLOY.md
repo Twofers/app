@@ -37,7 +37,7 @@ The app selects `preferred_locale` in `hooks/use-business.ts`. If the column is 
 | `OPENAI_API_KEY` | Yes |
 | `SUPABASE_URL` | Auto |
 | `SUPABASE_SERVICE_ROLE_KEY` | Auto |
-| `OPENAI_MODEL` | Optional (default `gpt-5.5`; allowlisted server-side) |
+| `OPENAI_MODEL` | Optional (default `gpt-5.4-mini`; allowlisted server-side) |
 
 ### Deploy
 

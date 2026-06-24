@@ -81,7 +81,7 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 **Optional / model tuning:**
 
-- `OPENAI_MODEL` (optional; default `gpt-5.5`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
+- `OPENAI_MODEL` (optional; default `gpt-5.4-mini`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
 - `GEMINI_API_KEY` (required only when Gemini text fallback, judging, vision QA, or image generation is enabled)
 - `GEMINI_TEXT_MODEL` and `GEMINI_JUDGE_MODEL` (optional; default `gemini-3.5-flash`)

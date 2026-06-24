@@ -85,7 +85,7 @@ const baseEnv = {
   AI_TEXT_PRIMARY_PROVIDER: "openai",
   AI_TEXT_FALLBACK_ENABLED: "true",
   AI_TEXT_FALLBACK_PROVIDER: "gemini",
-  OPENAI_MODEL: "gpt-5.5",
+  OPENAI_MODEL: "gpt-5.4-mini",
   GEMINI_TEXT_MODEL: "gemini-3.5-flash",
   AI_TEXT_PRIMARY_TIMEOUT_MS: "12000",
   AI_TEXT_FALLBACK_TIMEOUT_MS: "14000",
@@ -114,7 +114,7 @@ describe("resolveAiTextProviderConfig", () => {
   it("resolves separate OpenAI and Gemini text models", () => {
     const config = resolveAiTextProviderConfig(env(baseEnv));
 
-    expect(config.openAiModel).toBe("gpt-5.5");
+    expect(config.openAiModel).toBe("gpt-5.4-mini");
     expect(config.geminiTextModel).toBe("gemini-3.5-flash");
     expect(config.fallbackEnabled).toBe(true);
   });

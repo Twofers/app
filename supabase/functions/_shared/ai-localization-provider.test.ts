@@ -31,7 +31,7 @@ const providerEnv = env({
   AI_V3_PROVIDER_ROUTER_ENABLED: "true",
   AI_TEXT_PRIMARY_PROVIDER: "openai",
   AI_TEXT_FALLBACK_ENABLED: "false",
-  OPENAI_MODEL: "gpt-5.5",
+  OPENAI_MODEL: "gpt-5.4-mini",
   GEMINI_TEXT_MODEL: "gemini-3.5-flash",
 });
 
@@ -272,7 +272,7 @@ describe("generateAdLocalizationTranscreations", () => {
     });
 
     expect(result.provider).toBe("openai");
-    expect(result.model).toBe("gpt-5.5");
+    expect(result.model).toBe("gpt-5.4-mini");
     expect(result.promptVersion).toBe(AD_LOCALIZATION_PROMPT_VERSION);
     expect(result.attempts).toHaveLength(1);
     expect(result.attempts[0]?.operation).toBe("translation");

@@ -117,7 +117,7 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | `OPENAI_API_KEY` | OpenAI-backed AI paths, including Whisper voice transcription and OpenAI image generation/editing | **Yes for OpenAI paths** |
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
-| `OPENAI_MODEL` | Shared OpenAI chat model override; defaults to `gpt-5.5` and fails closed when set outside the allowlist | Optional |
+| `OPENAI_MODEL` | Shared OpenAI chat model override; defaults to `gpt-5.4-mini` and fails closed when set outside the allowlist | Optional |
 | `OPENAI_WHISPER_MODEL` | Whisper voice transcription override for `ai-compose-offer` | Optional |
 | `GEMINI_API_KEY` | Gemini text fallback, independent judging, vision QA fallback, and Gemini image generation when the related flags are enabled | Required only for Gemini paths |
 | `GEMINI_TEXT_MODEL`, `GEMINI_JUDGE_MODEL` | Gemini structured text and independent-judge model overrides; default `gemini-3.5-flash` | Optional |

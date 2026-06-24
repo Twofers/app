@@ -3,15 +3,15 @@
  * Client must never send a model id; keep allowlist tight to avoid cost drift.
  *
  * gpt-4o and gpt-4.1 were deprecated Feb 2026 — removed from allowlist.
- * gpt-5.5 is the default production text model.
- * Older allowlisted models remain explicit rollback options only.
+ * gpt-5.4-mini is the default production text model.
+ * Other allowlisted models remain explicit override options only.
  * Unsupported configured values fail closed instead of silently downgrading.
  */
 type EnvReader = {
   get(name: string): string | undefined | null;
 };
 
-export const DEFAULT_OPENAI_MODEL = "gpt-5.5";
+export const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 
 export const ALLOWED_OPENAI_MODELS = new Set<string>([
   "gpt-4o-mini",
