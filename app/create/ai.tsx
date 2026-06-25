@@ -3009,7 +3009,7 @@ export default function AiDealScreen() {
   const composedBasePresentation = buildDefaultAdPresentationSpec({
     imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
     imageSourceType: composedImageSourceType,
-    templateId: adImageUri ? "hero_image_overlay" : "split_offer_panel",
+    templateId: "split_offer_panel",
     themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
     resolutionReasonCodes: adImageUri ? ["MERCHANT_PREVIEW_IMAGE"] : ["MERCHANT_PREVIEW_FALLBACK"],
   });
@@ -3968,7 +3968,7 @@ export default function AiDealScreen() {
               </View>
             ) : null}
 
-            {/* Single ad preview — text rendered natively over the image, not baked in */}
+            {/* Single ad preview - text rendered natively below the image, not baked in. */}
             {generatedAd ? (
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>

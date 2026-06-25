@@ -714,7 +714,7 @@ export default function DealDetail() {
   const composedPresentation = buildDefaultAdPresentationSpec({
     imageAssetId: deal.poster_storage_path ?? posterUri ?? null,
     imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
-    templateId: posterUri ? "hero_image_overlay" : "split_offer_panel",
+    templateId: "split_offer_panel",
     themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
     resolutionReasonCodes: posterUri ? ["DEAL_DETAIL_IMAGE"] : ["DEAL_DETAIL_FALLBACK"],
   });

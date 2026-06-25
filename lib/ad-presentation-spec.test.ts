@@ -18,7 +18,7 @@ describe("ad presentation spec", () => {
 
     expect(spec.specVersion).toBe(AD_PRESENTATION_SPEC_VERSION);
     expect(spec.rendererVersion).toBe(AD_COMPOSED_CARD_RENDERER_VERSION);
-    expect(spec.templateId).toBe("hero_image_overlay");
+    expect(spec.templateId).toBe("split_offer_panel");
     expect(spec.focalPoint).toEqual({ x: 1, y: 0 });
     expect(spec.crop).toEqual({ x: 0.1, y: 0.2, width: 0.9, height: 0.6 });
     expect(validateAdPresentationSpec(spec)).toEqual({ valid: true, reasonCodes: [] });

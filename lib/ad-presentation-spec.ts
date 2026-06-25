@@ -158,7 +158,7 @@ export function buildDefaultAdPresentationSpec(params: {
   const imageSourceType = params.imageSourceType ?? (imageAssetId === "deterministic-fallback" ? "deterministic_fallback" : "merchant_original");
   const templateId =
     params.templateId ??
-    (imageSourceType === "deterministic_fallback" ? "split_offer_panel" : "hero_image_overlay");
+    "split_offer_panel";
   const textPanel =
     params.textPanel ??
     (templateId === "split_offer_panel" ? "solid_bottom" : "bottom_gradient");

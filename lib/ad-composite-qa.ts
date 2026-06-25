@@ -68,6 +68,14 @@ function repairFromTextFit(code: string): AdCompositeQaRepairCode | null {
   return null;
 }
 
+function placesTextOnImage(templateId: AdPresentationSpec["templateId"]): boolean {
+  return (
+    templateId === "hero_image_overlay" ||
+    templateId === "social_moment_card" ||
+    templateId === "signature_item_card"
+  );
+}
+
 export function runDeterministicAdCompositeQa(input: AdCompositeQaInput): AdCompositeQaResult {
   const hardFailReasons: string[] = [];
   const repairCodes: AdCompositeQaRepairCode[] = [];
@@ -115,6 +123,10 @@ export function runDeterministicAdCompositeQa(input: AdCompositeQaInput): AdComp
   if (input.presentation.templateId === "live_drop_card" && input.liveState.status !== "live") {
     add(repairCodes, "SWITCH_TO_SPLIT");
     feedback.push("Live template requested for a non-live state.");
+  }
+  if (placesTextOnImage(input.presentation.templateId)) {
+    add(repairCodes, "SWITCH_TO_SPLIT");
+    feedback.push("Text-over-image templates are not approved for deal previews.");
   }
   if (safeZoneConfidence < 0.58 && input.presentation.templateId !== "split_offer_panel") {
     add(repairCodes, "SWITCH_TO_SPLIT");

@@ -64,11 +64,12 @@ describe("ad template resolver", () => {
 
     expect(result.recommended.templateId).toBe("live_drop_card");
     expect(result.recommended.imageSourceType).toBe("merchant_original");
-    expect(result.alternates.map((spec) => spec.templateId)).toContain("hero_image_overlay");
+    expect(result.alternates.map((spec) => spec.templateId)).toContain("local_discovery_card");
+    expect(result.alternates.map((spec) => spec.templateId)).not.toContain("hero_image_overlay");
     expect(result.recommended.resolutionReasonCodes).toContain("USE_FULL_SAFE_CROP");
   });
 
-  it("keeps strategy-specific templates as instant alternates", () => {
+  it("uses split panel for social strategies so preview text stays off the image", () => {
     const result = resolveAdPresentation(
       input({
         creativeStrategy: "social moment for friends after work",
@@ -79,8 +80,8 @@ describe("ad template resolver", () => {
       }),
     );
 
-    expect(result.recommended.templateId).toBe("hero_image_overlay");
-    expect(result.alternates.map((spec) => spec.templateId)).toContain("social_moment_card");
+    expect(result.recommended.templateId).toBe("split_offer_panel");
+    expect(result.alternates.map((spec) => spec.templateId)).not.toContain("social_moment_card");
   });
 
   it("fails closed to split panel when image QA blocks the asset", () => {

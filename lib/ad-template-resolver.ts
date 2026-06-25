@@ -112,10 +112,7 @@ export function resolveAdPresentation(input: TemplateResolutionInput): TemplateR
 
   const preferred: AdLayoutTemplateId[] = [];
   if (hasUsableImage && liveCapable && !lowConfidence) preferred.push("live_drop_card");
-  if (hasUsableImage && !lowConfidence) preferred.push("hero_image_overlay");
-  if (hasUsableImage && strategyIncludes(strategy, [/social/, /friend/, /occasion/, /moment/])) preferred.push("social_moment_card");
   if (hasUsableImage && strategyIncludes(strategy, [/local/, /nearby/, /neighborhood/, /storefront/, /discovery/])) preferred.push("local_discovery_card");
-  if (hasUsableImage && strategyIncludes(strategy, [/signature/, /hero item/, /item-led/, /item led/])) preferred.push("signature_item_card");
   preferred.push("split_offer_panel");
 
   const recent = new Set(input.recentTemplateIds ?? []);

@@ -34,7 +34,7 @@ describe("deterministic ad composite QA", () => {
     const presentation = buildDefaultAdPresentationSpec({
       imageAssetId: "deal-photos/latte.png",
       imageSourceType: "merchant_original",
-      templateId: "hero_image_overlay",
+      templateId: "split_offer_panel",
     });
 
     const result = runDeterministicAdCompositeQa({
@@ -54,7 +54,7 @@ describe("deterministic ad composite QA", () => {
     expect(shouldRunCompositeScreenshotQa(result)).toBe(false);
   });
 
-  it("repairs a risky overlay template instead of approving it silently", () => {
+  it("repairs an overlay template instead of approving text over the image", () => {
     const presentation = buildDefaultAdPresentationSpec({
       imageAssetId: "deal-photos/busy.png",
       imageSourceType: "ai_generated",
