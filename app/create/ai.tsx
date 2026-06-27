@@ -432,6 +432,25 @@ function imageEditModeForTreatment(treatment: PhotoTreatment | null): MerchantIm
   return "none";
 }
 
+function imageEditModeForRevisionPreset(presetKey: string | null): MerchantImageEditMode {
+  if (presetKey === "createAi.revisePresetPhotoBg") return "clean_background";
+  if (
+    presetKey === "createAi.revisePresetPhotoCrop" ||
+    presetKey === "createAi.revisePresetGenAngle" ||
+    presetKey === "createAi.revisePresetGenMoodier"
+  ) {
+    return "studio_polish";
+  }
+  if (
+    presetKey === "createAi.revisePresetPhotoBrighter" ||
+    presetKey === "createAi.revisePresetGenBrighter" ||
+    presetKey === "createAi.revisePresetTryAnotherImage"
+  ) {
+    return "touchup";
+  }
+  return "studio_polish";
+}
+
 function imageSourceModeForPhotoChoice(
   photoPath: string | null,
   usePhotoAsFinal: boolean,
@@ -556,6 +575,13 @@ const IMAGE_PRESET_KEYS_PHOTO = [
   "createAi.revisePresetPhotoBrighter",
   "createAi.revisePresetPhotoCrop",
   "createAi.revisePresetPhotoBg",
+];
+
+const BOTH_PRESET_KEYS_COMPACT = [
+  "createAi.revisePresetPunchier",
+  "createAi.revisePresetSimpler",
+  "createAi.revisePresetSavings",
+  "createAi.revisePresetTryAnotherImage",
 ];
 
 function imageVersionStoragePath(ad: GeneratedAd | null): string | null {
@@ -2023,6 +2049,71 @@ export default function AiDealScreen() {
     return t("createAi.friendlyGenerationLongError");
   }
 
+  function publishErrorDetail(err: unknown): string | null {
+    const raw = err instanceof Error ? err.message : String(err);
+    const lower = raw.toLowerCase();
+    const code = getErrorCode(err);
+
+    if (code === "INVALID_OFFER_DEFINITION") return t("createAi.errPublishInvalidOfferDefinition");
+    if (code === "INVALID_AD_SPEC") return t("createAi.errPublishInvalidAdSpec");
+    if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
+    if (code === "LOCATION_BILLING_SUSPENDED") return t("createAi.errPublishBillingSuspended");
+    if (code === "BUSINESS_LOCATION_VERIFICATION_REQUIRED") return t("createAi.errPublishVerificationRequired");
+
+    if (
+      lower.includes("must be at least 40") ||
+      lower.includes("give something free") ||
+      lower.includes("strong deal")
+    ) {
+      return t("dealQuality.strongDealMessage");
+    }
+    if (
+      lower.includes("row-level security") ||
+      lower.includes("rls") ||
+      lower.includes("policy") ||
+      lower.includes("permission denied") ||
+      lower.includes("access denied") ||
+      lower.includes("do not own") ||
+      lower.includes("not found for owner")
+    ) {
+      return t("createAi.errPublishPermission");
+    }
+    if (lower.includes("duplicate") || lower.includes("unique") || lower.includes("already exists")) {
+      return t("createAi.errPublishDuplicate");
+    }
+    if (lower.includes("storage") || lower.includes("upload") || lower.includes("photo")) {
+      return t("createAi.errPublishPhoto");
+    }
+    if (lower.includes("network") || lower.includes("fetch") || lower.includes("timed out") || lower.includes("timeout")) {
+      return t("createAi.errPublishNetwork");
+    }
+    if (lower.includes("translation") || lower.includes("translate")) {
+      return t("createAi.errPublishTranslation");
+    }
+    if (lower.includes("invalid offer definition")) return t("createAi.errPublishInvalidOfferDefinition");
+    if (lower.includes("invalid ad spec")) return t("createAi.errPublishInvalidAdSpec");
+    if (lower.includes("offer version") || lower.includes("versioned publish")) {
+      return t("createAi.errPublishVersionUnavailable");
+    }
+    if (lower.includes("billing") || lower.includes("suspended")) return t("createAi.errPublishBillingSuspended");
+    if (lower.includes("verified") || lower.includes("verification")) return t("createAi.errPublishVerificationRequired");
+
+    const cleaned = raw
+      .replace(/^error:\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return null;
+    const generic = [
+      "server error",
+      "publish failed",
+      "could not publish this offer.",
+      "couldn't publish this deal.",
+      "unexpected response from publish-offer-version.",
+    ];
+    if (generic.includes(cleaned.toLowerCase())) return null;
+    return cleaned.length > 180 ? `${cleaned.slice(0, 177).trim()}...` : cleaned;
+  }
+
   function cancelGeneration() {
     // Bumping the request id makes the in-flight result a no-op when it returns,
     // and we re-enable the UI immediately so the user is not stuck on a spinner.
@@ -2174,20 +2265,38 @@ export default function AiDealScreen() {
      * This way the server's image-only revision applies enhancement consistent with what the
      * user is looking at, even if they fiddled with the selector after generating.
      */
-    const sourceModeForRevision =
+    const selectedPresetLabel = activePreset ? t(activePreset) : "";
+    const revisionPresetForServer = activePreset
+      ? `${activePreset}: ${selectedPresetLabel}`
+      : "";
+    const revisesImage = revisionTarget === "image" || revisionTarget === "both";
+    const previousSourceMode =
       generatedAd.image_selection?.sourceMode ??
       imageSourceModeForPhotoChoice(photoPath, usePhotoAsFinal);
+    const sourceModeForRevision: MerchantImageSourceMode =
+      revisesImage && previousSourceMode === "merchant_original"
+        ? "merchant_ai_edit"
+        : revisesImage && previousSourceMode === "deterministic_fallback"
+          ? "ai_generated"
+        : previousSourceMode;
     const editModeForRevision =
-      generatedAd.image_selection?.editMode ??
-      (sourceModeForRevision === "merchant_ai_edit"
-        ? imageEditModeForTreatment(lastSentPhotoTreatmentRef.current ?? photoTreatment)
-        : "none");
+      sourceModeForRevision === "merchant_ai_edit"
+        ? generatedAd.image_selection?.editMode && generatedAd.image_selection.editMode !== "none"
+          ? generatedAd.image_selection.editMode
+          : imageEditModeForRevisionPreset(activePreset)
+        : "none";
     const treatmentForRevision =
       sourceModeForRevision === "merchant_ai_edit"
-        ? lastSentPhotoTreatmentRef.current ?? photoTreatment
+        ? lastSentPhotoTreatmentRef.current ??
+          photoTreatment ??
+          (editModeForRevision === "clean_background"
+            ? "cleanbg"
+            : editModeForRevision === "touchup"
+              ? "touchup"
+              : "studiopolish")
         : null;
     const customEditText = sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom"
-      ? cleanCustomImageEditInstruction(customImageEditInstruction || revisionFeedback)
+      ? cleanCustomImageEditInstruction(customImageEditInstruction || selectedPresetLabel || revisionFeedback)
       : "";
     if (sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom" && !customEditText) {
       setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
@@ -2211,7 +2320,7 @@ export default function AiDealScreen() {
         previous_ad: generatedAd,
         revision_target: revisionTarget,
         revision_count: revisionsUsed + 1,
-        ...(activePreset ? { revision_preset: activePreset } : {}),
+        ...(revisionPresetForServer ? { revision_preset: revisionPresetForServer } : {}),
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
         image_source_mode: sourceModeForRevision,
         image_edit_mode: editModeForRevision,
@@ -2821,28 +2930,7 @@ export default function AiDealScreen() {
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
       setAllowPostPublishNavigation(false);
-      let detail = "";
-      if (err instanceof Error) {
-        const m = err.message.toLowerCase();
-        if (
-          m.includes("must be at least 40") ||
-          m.includes("give something free") ||
-          m.includes("strong deal")
-        ) {
-          // Server strong-deal guardrail rejected the copy (it can be stricter than
-          // the client mirror for some phrasings). Show the actionable guidance
-          // instead of a bare "Publish failed" with no reason.
-          detail = t("dealQuality.strongDealMessage");
-        } else if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) {
-          detail = t("createAi.errPublishPermission");
-        } else if (m.includes("duplicate") || m.includes("unique")) {
-          detail = t("createAi.errPublishDuplicate");
-        } else if (m.includes("storage") || m.includes("upload")) {
-          detail = t("createAi.errPublishPhoto");
-        } else if (m.includes("network") || m.includes("fetch")) {
-          detail = t("createAi.errPublishNetwork");
-        }
-      }
+      const detail = publishErrorDetail(err);
       const message = detail
         ? `${t("createAi.errPublishFailed")} ${detail}`
         : t("createAi.errPublishFailed");
@@ -3136,7 +3224,8 @@ export default function AiDealScreen() {
       ? imagePresetKeys
       : revisionTarget === "copy"
         ? COPY_PRESET_KEYS
-        : [...COPY_PRESET_KEYS, ...imagePresetKeys];
+        : BOTH_PRESET_KEYS_COMPACT;
+  const canReviseAd = revisionsLeft > 0 && !revising && !generating;
   const targetLabel: Record<RevisionTarget, string> = {
     copy: t("createAi.reviseTargetCopy"),
     image: t("createAi.reviseTargetImage"),
@@ -4195,132 +4284,148 @@ export default function AiDealScreen() {
 
                 {/* Revise panel */}
                 {showComposedRevisePanel ? (
-                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 12 }}>
+                  <View style={{ padding: 14, borderRadius: 12, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
                       <Text style={{ fontSize: 12, color: theme.mutedText }}>{revisionsLeftLabel}</Text>
                     </View>
 
-                    {composedMinimalInputEnabled ? (
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                        {[
-                          {
-                            label: t("createAi.composedWordIntentClearer", { defaultValue: "Clearer" }),
-                            preset: t("createAi.revisePresetSimpler"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentWarmer", { defaultValue: "Warmer" }),
-                            preset: t("createAi.revisePresetPremium"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentEnergetic", { defaultValue: "More energy" }),
-                            preset: t("createAi.revisePresetPunchier"),
-                          },
-                          {
-                            label: t("createAi.composedWordIntentLocal", { defaultValue: "More local" }),
-                            preset: t("createAi.revisePresetItem"),
-                          },
-                        ].map(({ label, preset }) => {
-                          const selected = activePreset === preset;
-                          return (
-                            <Pressable
-                              key={label}
-                              onPress={() => {
-                                setRevisionTarget("copy");
-                                setActivePreset(selected ? null : preset);
-                              }}
-                              style={{
-                                paddingVertical: 7,
-                                paddingHorizontal: 12,
-                                borderRadius: 999,
-                                backgroundColor: selected ? theme.primary : theme.surface,
-                                borderWidth: 1,
-                                borderColor: selected ? theme.primary : theme.border,
-                              }}
-                            >
-                              <Text style={{ fontSize: 12, fontWeight: "800", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>
-                                {label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
+                    {revisionsLeft === 0 ? (
+                      <View style={{ padding: 12, borderRadius: 10, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
+                        <Text style={{ color: theme.mutedText, lineHeight: 19 }}>
+                          {t("createAi.reviseLimitBody")}
+                        </Text>
                       </View>
-                    ) : null}
+                    ) : (
+                      <>
+                        {composedMinimalInputEnabled ? (
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                            {[
+                              {
+                                label: t("createAi.composedWordIntentClearer", { defaultValue: "Clearer" }),
+                                presetKey: "createAi.revisePresetSimpler",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentWarmer", { defaultValue: "Warmer" }),
+                                presetKey: "createAi.revisePresetPremium",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentEnergetic", { defaultValue: "More energy" }),
+                                presetKey: "createAi.revisePresetPunchier",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentLocal", { defaultValue: "More local" }),
+                                presetKey: "createAi.revisePresetItem",
+                              },
+                            ].map(({ label, presetKey }) => {
+                              const selected = activePreset === presetKey;
+                              return (
+                                <Pressable
+                                  key={label}
+                                  disabled={!canReviseAd}
+                                  onPress={() => {
+                                    setRevisionTarget("copy");
+                                    setActivePreset(selected ? null : presetKey);
+                                  }}
+                                  style={{
+                                    paddingVertical: 7,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 999,
+                                    backgroundColor: selected ? theme.primary : theme.surface,
+                                    borderWidth: 1,
+                                    borderColor: selected ? theme.primary : theme.border,
+                                    opacity: canReviseAd ? 1 : 0.5,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: "800", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>
+                                    {label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
 
-                    {!composedMinimalInputEnabled ? (
-                      <View style={{ flexDirection: "row", gap: 6 }}>
-                        {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
-                          const selected = revisionTarget === target;
-                          return (
-                            <Pressable
-                              key={target}
-                              onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
-                              style={{
-                                flex: 1,
-                                paddingVertical: 8,
-                                borderRadius: 999,
-                                backgroundColor: selected ? theme.primary : theme.surface,
-                                borderWidth: 1,
-                                borderColor: selected ? theme.primary : theme.border,
-                              }}
-                            >
-                              <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
-                                {targetLabel[target]}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : null}
+                        {!composedMinimalInputEnabled ? (
+                          <View style={{ flexDirection: "row", gap: 6 }}>
+                            {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
+                              const selected = revisionTarget === target;
+                              return (
+                                <Pressable
+                                  key={target}
+                                  disabled={!canReviseAd}
+                                  onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
+                                  style={{
+                                    flex: 1,
+                                    paddingVertical: 8,
+                                    borderRadius: 999,
+                                    backgroundColor: selected ? theme.primary : theme.surface,
+                                    borderWidth: 1,
+                                    borderColor: selected ? theme.primary : theme.border,
+                                    opacity: canReviseAd ? 1 : 0.5,
+                                  }}
+                                >
+                                  <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
+                                    {targetLabel[target]}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
 
-                    {/* Presets */}
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {presetKeysForTarget.map((presetKey) => {
-                        const presetText = t(presetKey);
-                        const selected = activePreset === presetText;
-                        return (
-                          <Pressable
-                            key={presetKey}
-                            onPress={() => setActivePreset(selected ? null : presetText)}
-                            style={{
-                              paddingVertical: 6,
-                              paddingHorizontal: 12,
-                              borderRadius: 999,
-                              backgroundColor: selected ? theme.primary : theme.surface,
-                              borderWidth: 1,
-                              borderColor: selected ? theme.primary : theme.border,
-                            }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                          {presetKeysForTarget.map((presetKey) => {
+                            const presetText = t(presetKey);
+                            const selected = activePreset === presetKey;
+                            return (
+                              <Pressable
+                                key={presetKey}
+                                disabled={!canReviseAd}
+                                onPress={() => setActivePreset(selected ? null : presetKey)}
+                                style={{
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 999,
+                                  backgroundColor: selected ? theme.primary : theme.surface,
+                                  borderWidth: 1,
+                                  borderColor: selected ? theme.primary : theme.border,
+                                  opacity: canReviseAd ? 1 : 0.5,
+                                }}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
 
-                    {/* Free-text feedback */}
-                    <TextInput
-                      value={revisionFeedback}
-                      onChangeText={setRevisionFeedback}
-                      placeholder={t("createAi.reviseFeedbackPlaceholder")}
-                      placeholderTextColor={theme.mutedText}
-                      multiline
-                      style={{
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 12,
-                        padding: 12,
-                        minHeight: 50,
-                        backgroundColor: theme.surface,
-                        color: theme.text,
-                        fontSize: 14,
-                      }}
-                    />
+                        <TextInput
+                          value={revisionFeedback}
+                          onChangeText={setRevisionFeedback}
+                          placeholder={t("createAi.reviseFeedbackPlaceholder")}
+                          placeholderTextColor={theme.mutedText}
+                          multiline
+                          editable={canReviseAd}
+                          style={{
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                            borderRadius: 10,
+                            padding: 12,
+                            minHeight: 48,
+                            backgroundColor: theme.surface,
+                            color: theme.text,
+                            fontSize: 14,
+                            opacity: canReviseAd ? 1 : 0.6,
+                          }}
+                        />
 
-                    <SecondaryButton
-                      title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}
-                      onPress={() => void reviseAd()}
-                      disabled={revising || generating || revisionsUsed >= SOFT_REVISION_CAP}
-                    />
+                        <SecondaryButton
+                          title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}
+                          onPress={() => void reviseAd()}
+                          disabled={!canReviseAd}
+                        />
+                      </>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -4370,28 +4475,30 @@ export default function AiDealScreen() {
                 <TextInput value={description} onChangeText={(value) => { setDescription(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
 
                 <View style={{ marginTop: 16, gap: 8 }}>
-                  <View
-                    style={{
-                      padding: 14,
-                      borderRadius: 16,
-                      backgroundColor: publishStatusCard.backgroundColor,
-                      borderWidth: 1,
-                      borderColor: publishStatusCard.borderColor,
-                      flexDirection: "row",
-                      gap: 10,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <MaterialIcons name={publishStatusCard.icon} size={22} color={publishStatusCard.titleColor} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
-                        {publishStatusCard.title}
-                      </Text>
-                      <Text style={{ marginTop: 4, color: theme.mutedText, lineHeight: 19 }}>
-                        {publishStatusCard.body}
-                      </Text>
+                  {displayedPublishStatus !== "ready" ? (
+                    <View
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        backgroundColor: publishStatusCard.backgroundColor,
+                        borderWidth: 1,
+                        borderColor: publishStatusCard.borderColor,
+                        flexDirection: "row",
+                        gap: 10,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <MaterialIcons name={publishStatusCard.icon} size={20} color={publishStatusCard.titleColor} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
+                          {publishStatusCard.title}
+                        </Text>
+                        <Text style={{ marginTop: 3, color: theme.mutedText, lineHeight: 18 }}>
+                          {publishStatusCard.body}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                  ) : null}
                   <PrimaryButton
                     title={
                       displayedPublishStatus === "publishing"

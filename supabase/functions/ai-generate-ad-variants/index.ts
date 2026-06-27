@@ -1298,6 +1298,45 @@ function imageStylePresetFromRevision(params: {
   return "realistic-local-ad";
 }
 
+function imageRevisionInstruction(params: {
+  revisionPreset?: string;
+  revisionFeedback?: string;
+}): string | undefined {
+  const raw = `${params.revisionPreset ?? ""} ${params.revisionFeedback ?? ""}`
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 500);
+  if (!raw) return undefined;
+  const text = raw.toLowerCase();
+  const directives: string[] = [];
+  if (text.includes("revisepresettryanotherimage") || /\btry another|different image|new image\b/.test(text)) {
+    directives.push("Create a clearly different composition from the previous image while preserving the same required offer item identities.");
+  }
+  if (text.includes("revisepresetgenangle") || /\bdifferent angle|another angle\b/.test(text)) {
+    directives.push("Change the camera angle and product placement; do not reuse the same framing.");
+  }
+  if (text.includes("revisepresetgenbrighter") || text.includes("revisepresetphotobrighter") || /\bbrighter|cleaner|vibrant\b/.test(text)) {
+    directives.push("Make the image brighter, cleaner, and higher contrast with natural daylight.");
+  }
+  if (text.includes("revisepresetgenmoodier") || /\bmoodier|editorial|premium\b/.test(text)) {
+    directives.push("Make the image more premium and editorial with richer lighting and a more deliberate product-photo composition.");
+  }
+  if (text.includes("revisepresetphotocrop") || /\btighter crop|closer crop|crop\b/.test(text)) {
+    directives.push("Use a noticeably tighter crop while keeping the full required item visible and away from unsafe edges.");
+  }
+  if (text.includes("revisepresetphotobg") || /\bdifferent background|background\b/.test(text)) {
+    directives.push("Replace the background with a visibly different clean cafe surface or backdrop.");
+  }
+  if (directives.length === 0) {
+    directives.push(`Apply this merchant image revision as style, lighting, crop, composition, or background guidance only: ${raw}`);
+  }
+  return [
+    ...directives,
+    "Do not add text, prices, discounts, QR codes, logos, watermarks, people, characters, or unrelated props.",
+    "Do not change the offer item identities or invent extra offer items.",
+  ].join(" ");
+}
+
 function requiredOfferItems(contract: DealOfferContract): { paidItem?: string; freeItem?: string } {
   if (contract.dealType === "PERCENT_OFF_SINGLE_ITEM") {
     return { paidItem: contract.singleItemDiscount?.itemName };
@@ -1567,6 +1606,8 @@ async function produceImageOpenAiOnly(params: {
   imageEditMode: MerchantImageEditMode;
   customImageEditInstruction?: string;
   merchantOverrideAcknowledged: boolean;
+  revisionPreset?: string;
+  revisionFeedback?: string;
   costContext: AiCostContext;
 }): Promise<OpenAiProducedImage> {
   const {
@@ -1631,12 +1672,19 @@ async function produceImageOpenAiOnly(params: {
       return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
 
+    // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
     const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
       openAiKey,
       imageBytes,
       imageMime,
       treatment: photoTreatment,
-      customEditInstruction: params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+      customEditInstruction: [
+        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+        imageRevisionInstruction({
+          revisionPreset: params.revisionPreset,
+          revisionFeedback: params.revisionFeedback,
+        }),
+      ].filter(Boolean).join(" "),
     });
     await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
     const enhanced = enhancedResult.bytes;
@@ -1685,6 +1733,10 @@ async function produceImageOpenAiOnly(params: {
     itemDescription: research.is_familiar ? research.description : "",
     businessName,
     requiredVisualItems,
+    visualRevisionInstruction: imageRevisionInstruction({
+      revisionPreset: params.revisionPreset,
+      revisionFeedback: params.revisionFeedback,
+    }),
   });
   let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
@@ -2046,6 +2098,10 @@ async function produceImage(params: {
     revisionFeedback: params.revisionFeedback,
     photoTreatment: params.photoTreatment,
   });
+  const revisionImageInstruction = imageRevisionInstruction({
+    revisionPreset: params.revisionPreset,
+    revisionFeedback: params.revisionFeedback,
+  });
   const prompt = buildGeminiAdImagePrompt({
     businessId: params.businessId,
     businessName: params.businessName,
@@ -2055,6 +2111,7 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
+    customEditInstruction: revisionImageInstruction,
     stylePreset,
     aspectRatio: "1:1",
     imageSize: "1K",
@@ -2107,7 +2164,10 @@ async function produceImage(params: {
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
-      customEditInstruction: params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+      customEditInstruction: [
+        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+        revisionImageInstruction,
+      ].filter(Boolean).join(" "),
       stylePreset,
       aspectRatio: "1:1",
       imageSize: "1K",

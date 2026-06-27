@@ -436,7 +436,9 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     if (previousAd.terms_summary) revisionBlock.push(`  Terms summary: ${previousAd.terms_summary}`);
     if (revisionPreset) revisionBlock.push(`Apply this preset adjustment: ${revisionPreset}`);
     if (revisionFeedback) revisionBlock.push(`Apply this user feedback: ${revisionFeedback}`);
-    revisionBlock.push("Keep the same offer mechanics. Change wording only where the adjustment requires it.");
+    revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
+    revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
+    revisionBlock.push("If the adjustment is about tone, rewrite the framing and word choice while preserving the exact locked offer facts.");
   }
 
   const system = [

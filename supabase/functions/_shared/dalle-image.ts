@@ -154,8 +154,9 @@ export function buildPhotoAdImagePrompt(params: {
   itemDescription?: string;
   businessName?: string;
   requiredVisualItems?: readonly string[];
+  visualRevisionInstruction?: string;
 }): string {
-  const { itemName, itemDescription, businessName, requiredVisualItems } = params;
+  const { itemName, itemDescription, businessName, requiredVisualItems, visualRevisionInstruction } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
   return [
@@ -165,6 +166,7 @@ export function buildPhotoAdImagePrompt(params: {
     `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`,
     itemDescription ? `Description: ${esc(itemDescription)}.` : "",
     businessName ? `For an independent cafe called ${esc(businessName)}.` : "",
+    visualRevisionInstruction ? `Revision direction: ${esc(visualRevisionInstruction)}.` : "",
     "Natural soft daylight, realistic textures and cast shadows, true-to-life proportions, high fine detail, clean composition, shallow depth of field.",
     "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered.",
     "Honest, appetizing, magazine-quality — not stocky, not illustrated, not a CGI render.",
