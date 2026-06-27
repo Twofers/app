@@ -44,6 +44,24 @@ describe("buildPhotoAdImagePrompt", () => {
     expect(prompt).toMatch(/center-safe area/i);
     expect(prompt).toMatch(/native offer text overlays/i);
   });
+
+  it("can request vertical poster-ready framing while keeping images text-free", async () => {
+    Object.defineProperty(globalThis, "Deno", {
+      configurable: true,
+      value: { env: { get: () => "gpt-image-1" } },
+    });
+    const cacheBust = `./dalle-image.ts?poster=${Date.now()}`;
+    const { buildPhotoAdImagePrompt } = await import(cacheBust);
+
+    const prompt = buildPhotoAdImagePrompt({
+      itemName: "latte",
+      businessName: "Test Cafe",
+      aspectRatio: "4:5",
+    });
+
+    expect(prompt).toMatch(/Vertical 4:5 poster-ready framing/i);
+    expect(prompt).toMatch(/Absolutely no text/i);
+  });
 });
 
 describe("OpenAI image provider failure telemetry source guard", () => {

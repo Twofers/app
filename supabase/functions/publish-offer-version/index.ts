@@ -11,6 +11,8 @@ import {
   getUnverifiedLocationFromDealRows,
 } from "../_shared/business-verification.ts";
 import { validateExactLocalizationApprovalPayload } from "../_shared/localization-approval-validation.ts";
+import { validatePosterSpecV1 } from "../../../lib/poster/posterAdSpec.ts";
+import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -35,6 +37,8 @@ type OfferDefinitionPayload = {
 
 type AdSpecPayload = {
   adSpecVersion?: unknown;
+  creative_format?: unknown;
+  poster?: unknown;
   rendererVersion?: unknown;
   templateVersion?: unknown;
   channels?: unknown;
@@ -199,6 +203,20 @@ function validateAdSpecPayload(value: unknown, offerDefinition: unknown): { vali
   }
   const spec = value as AdSpecPayload;
   if (spec.adSpecVersion !== 1) reasonCodes.push("INVALID_AD_SPEC_VERSION");
+  const creativeFormat = cleanText(spec.creative_format) || "standard_card";
+  if (creativeFormat !== "standard_card" && creativeFormat !== "poster_v1") {
+    reasonCodes.push("INVALID_CREATIVE_FORMAT");
+  }
+  if (creativeFormat === "poster_v1" || spec.poster != null) {
+    const businessId = cleanText((offerDefinition as OfferDefinitionPayload | null)?.merchantId);
+    const posterValidation = validatePosterSpecV1(spec.poster, {
+      offerDefinition: offerDefinition as OfferDefinitionV1,
+      businessId,
+    });
+    if (!posterValidation.valid) {
+      reasonCodes.push(...posterValidation.reasonCodes);
+    }
+  }
   if (!cleanText(spec.rendererVersion)) reasonCodes.push("MISSING_RENDERER_VERSION");
   if (!cleanText(spec.templateVersion)) reasonCodes.push("MISSING_TEMPLATE_VERSION");
   if (!spec.offer || typeof spec.offer !== "object" || Array.isArray(spec.offer)) {

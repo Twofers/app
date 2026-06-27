@@ -56,6 +56,10 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
+import {
+  fetchCustomerDealPosterSpecs,
+  type CustomerDealPosterSpec,
+} from "@/lib/customer-deal-poster-specs";
 import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_FEED_BASE_SELECT,
@@ -202,6 +206,9 @@ export default function HomeScreen() {
   const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
     () => new Map(),
   );
+  const [customerDealPosterSpecsByDealId, setCustomerDealPosterSpecsByDealId] = useState<Map<string, CustomerDealPosterSpec>>(
+    () => new Map(),
+  );
   const [userClaimsByDeal, setUserClaimsByDeal] = useState<
     Map<string, { redeemed_at: string | null; expires_at: string; grace_period_minutes: number | null }>
   >(() => new Map());
@@ -295,7 +302,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [i18n.language]);
 
   // Scarcity counts for capped deals. RLS hides other users' claim rows, so this
   // goes through the aggregate-only deal_claim_counts RPC (20260716120000). Until
@@ -345,6 +352,20 @@ export default function HomeScreen() {
       cancelled = true;
     };
   }, [customerDealLocalizationLocale, customerLocaleResolutionEnabled, deals]);
+
+  useEffect(() => {
+    if (!composedCustomerRendererEnabled || deals.length === 0) {
+      setCustomerDealPosterSpecsByDealId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealPosterSpecs(deals.map((deal) => deal.id)).then((posterSpecs) => {
+      if (!cancelled) setCustomerDealPosterSpecsByDealId(posterSpecs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [composedCustomerRendererEnabled, deals]);
 
   const loadUserClaims = useCallback(
     async (dealIds: string[]) => {
@@ -970,6 +991,7 @@ export default function HomeScreen() {
           description: displayDescription,
         });
         const supportingCopy = localizedDisplay.localizedCreative?.supportingCopy || displayDescription || t("consumerHome.tagline");
+        const posterSpec = customerDealPosterSpecsByDealId.get(item.id)?.posterSpec ?? null;
         const presentation = buildDefaultAdPresentationSpec({
           imageAssetId: item.poster_storage_path ?? posterUri ?? null,
           imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
@@ -1006,6 +1028,7 @@ export default function HomeScreen() {
           <View style={{ marginBottom: Spacing.xl }}>
             <ComposedAdCard
               imageUri={posterUri}
+              posterSpec={posterSpec}
               offerFacts={offerFacts}
               merchant={merchant}
               copy={copy}
@@ -1222,6 +1245,7 @@ export default function HomeScreen() {
       claimingDealId,
       claimCountsByDeal,
       customerDealLocalizationsByDealId,
+      customerDealPosterSpecsByDealId,
       doClaim,
       i18n.language,
       localizedOfferRendererEnabled,

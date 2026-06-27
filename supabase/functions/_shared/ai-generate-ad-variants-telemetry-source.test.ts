@@ -75,4 +75,13 @@ describe("ai-generate-ad-variants telemetry source guard", () => {
     expect(source).toMatch(/localizationResult\?\.semanticQa\.attempts/);
     expect(source).toMatch(/localizationResult\?\.repairedSemanticQa\.attempts/);
   });
+
+  it("builds sanitized poster drafts from the locked offer contract when requested", () => {
+    expect(source).toMatch(/function parseCreativeRequest/);
+    expect(source).toMatch(/creativeRequest\.imageAspectRatio/);
+    expect(source).toMatch(/buildPosterSpecFromOfferDefinition/);
+    expect(source).toMatch(/choosePosterTemplateForOffer/);
+    expect(source).toMatch(/poster:\s*posterDraft/);
+    expect(source).toMatch(/requested_aspect_ratio/);
+  });
 });

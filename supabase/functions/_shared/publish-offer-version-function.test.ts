@@ -31,6 +31,14 @@ describe("publish-offer-version edge function", () => {
     expect(source).toMatch(/SCREENSHOT_QA_REQUIRED/);
   });
 
+  it("validates poster ad specs against policy, ownership, and locked offer lines", () => {
+    expect(source).toMatch(/validatePosterSpecV1/);
+    expect(source).toMatch(/creative_format/);
+    expect(source).toMatch(/posterValidation\.reasonCodes/);
+    expect(source).toMatch(/businessId/);
+    expect(source).toMatch(/OfferDefinitionV1/);
+  });
+
   it("validates localization storage snapshots without allowing exact offer fields in localization rows", () => {
     expect(source).toMatch(/function validateLocalizationPayload/);
     expect(source).toMatch(/INVALID_LOCALIZATION_BUNDLE_HASH/);

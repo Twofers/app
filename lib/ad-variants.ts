@@ -13,6 +13,7 @@ import {
 import type { AdImageSelection } from "./merchant-image-selection";
 import type { AdLocalizationBundle } from "./ad-localization-schema";
 import type { SupportedLocale } from "./supported-locales";
+import type { PosterDraftV1 } from "./poster/posterTypes";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -60,6 +61,8 @@ export type GeneratedAd = {
     semantic_qa_skipped_reason?: string | null;
     repair_target_locales: SupportedLocale[];
   } | null;
+  /** Optional native-rendered production poster draft. The offer lines remain deterministic. */
+  poster?: PosterDraftV1 | null;
 };
 
 export type BusinessContextPayload = {

@@ -30,6 +30,10 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
+import {
+  fetchCustomerDealPosterSpecs,
+  type CustomerDealPosterSpec,
+} from "@/lib/customer-deal-poster-specs";
 import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
@@ -168,6 +172,7 @@ export default function DealDetail() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [customerDealLocalization, setCustomerDealLocalization] = useState<CustomerDealLocalization | null>(null);
+  const [customerDealPosterSpec, setCustomerDealPosterSpec] = useState<CustomerDealPosterSpec | null>(null);
   const shareDealEnabled = isShareDealEnabled();
   const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
   const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
@@ -210,7 +215,7 @@ export default function DealDetail() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [i18n.language]);
 
   function handleDealLanguageSelect(locale: SupportedLocale) {
     const previous = selectedDealLocale ?? customerPreferredDealLocale;
@@ -407,6 +412,20 @@ export default function DealDetail() {
     i18n.language,
     selectedDealLocale,
   ]);
+
+  useEffect(() => {
+    if (!deal?.id || !composedCustomerRendererEnabled) {
+      setCustomerDealPosterSpec(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealPosterSpecs([deal.id]).then((posterSpecs) => {
+      if (!cancelled) setCustomerDealPosterSpec(posterSpecs.get(deal.id) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [composedCustomerRendererEnabled, deal?.id]);
 
   // MVP open tracking: count once per loaded deal detail view.
   useEffect(() => {
@@ -805,6 +824,7 @@ export default function DealDetail() {
         {composedCustomerRendererEnabled ? (
           <ComposedAdCard
             imageUri={posterUri}
+            posterSpec={customerDealPosterSpec?.posterSpec ?? null}
             offerFacts={composedOfferFacts}
             merchant={composedMerchant}
             copy={composedCopy}

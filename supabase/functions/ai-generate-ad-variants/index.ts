@@ -29,6 +29,7 @@ import {
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   type AiImageProvider,
+  type AiImageAspectRatio,
   type AiImageProviderConfig,
   type AiImageStylePreset,
   type GeminiImageAttempt,
@@ -126,6 +127,11 @@ import {
   SUPPORTED_LOCALES,
   type SupportedLocale,
 } from "../../../lib/supported-locales.ts";
+import {
+  buildPosterSpecFromOfferDefinition,
+  choosePosterTemplateForOffer,
+} from "../../../lib/poster/posterCopy.ts";
+import type { PosterDraftV1, PosterStyleChoice } from "../../../lib/poster/posterTypes.ts";
 import type {
   AdLocalizationBundle,
 } from "../../../lib/ad-localization-schema.ts";
@@ -199,6 +205,8 @@ type SingleAd = {
   poster_storage_path: string | null;
   /** Canonical image source choice, QA decision, and lineage. */
   image_selection?: AdImageSelection | null;
+  /** Optional native-rendered poster draft. */
+  poster?: PosterDraftV1 | null;
   /** Verified source plus target-language persuasive copy bundle, when PR3 multilingual flags are enabled. */
   localization_bundle?: AdLocalizationBundle | null;
   localization_status?: {
@@ -320,6 +328,33 @@ async function researchMenuItem(params: {
 
   // Both failed — return the hint as item_name with no description
   return { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function parsePosterStyle(value: unknown): PosterStyleChoice {
+  return value === "fresh" || value === "bold" || value === "premium" || value === "auto" ? value : "auto";
+}
+
+function parseCreativeRequest(value: unknown): {
+  requestedFormat: "standard_card" | "poster_v1";
+  posterEnabled: boolean;
+  posterStyle: PosterStyleChoice;
+  imageAspectRatio: AiImageAspectRatio;
+} {
+  const creative = recordValue(value);
+  const poster = recordValue(creative?.poster);
+  const requestedFormat =
+    creative?.requested_format === "poster_v1" || poster?.enabled === true ? "poster_v1" : "standard_card";
+  const posterEnabled = requestedFormat === "poster_v1" && poster?.enabled !== false;
+  return {
+    requestedFormat: posterEnabled ? "poster_v1" : "standard_card",
+    posterEnabled,
+    posterStyle: parsePosterStyle(poster?.style),
+    imageAspectRatio: posterEnabled ? "4:5" : "1:1",
+  };
 }
 
 function normalizeItemResearch(value: Partial<ItemResearch>, cleanHint: string): ItemResearch {
@@ -1609,6 +1644,7 @@ async function produceImageOpenAiOnly(params: {
   revisionPreset?: string;
   revisionFeedback?: string;
   costContext: AiCostContext;
+  imageAspectRatio: AiImageAspectRatio;
 }): Promise<OpenAiProducedImage> {
   const {
     openAiKey,
@@ -1737,6 +1773,7 @@ async function produceImageOpenAiOnly(params: {
       revisionPreset: params.revisionPreset,
       revisionFeedback: params.revisionFeedback,
     }),
+    aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
   });
   let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
@@ -1979,6 +2016,7 @@ async function produceImage(params: {
   revisionFeedback?: string;
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
+  imageAspectRatio: AiImageAspectRatio;
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
   const originalUploadedPhoto = (): ProducedImage => withImageSelection(
@@ -2113,7 +2151,7 @@ async function produceImage(params: {
     dealType: params.offerContract.dealType,
     customEditInstruction: revisionImageInstruction,
     stylePreset,
-    aspectRatio: "1:1",
+    aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
   });
 
@@ -2169,14 +2207,14 @@ async function produceImage(params: {
         revisionImageInstruction,
       ].filter(Boolean).join(" "),
       stylePreset,
-      aspectRatio: "1:1",
+      aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
     });
     const gemini = await generateGeminiAdImageWithTelemetry({
       apiKey: params.geminiApiKey,
       model: params.imageProviderConfig.geminiModel,
       prompt: photoPrompt,
-      aspectRatio: "1:1",
+      aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
@@ -2234,7 +2272,7 @@ async function produceImage(params: {
     apiKey: params.geminiApiKey,
     model: params.imageProviderConfig.geminiModel,
     prompt,
-    aspectRatio: "1:1",
+    aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
     estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
   });
@@ -2314,7 +2352,7 @@ async function produceImage(params: {
         apiKey: params.geminiApiKey,
         model: params.imageProviderConfig.geminiModel,
         prompt: retryPrompt,
-        aspectRatio: "1:1",
+        aspectRatio: params.imageAspectRatio,
         imageSize: "1K",
         estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
         retryOnFailure: false,
@@ -2608,6 +2646,8 @@ function buildGenerationTelemetry(params: {
   productionSuccess: boolean;
   totalLatencyMs: number;
   localizationResult?: VerifiedAdLocalizationBundleResult | null;
+  posterDraft?: PosterDraftV1 | null;
+  requestedCreativeFormat?: "standard_card" | "poster_v1";
 }) {
   const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
@@ -2636,7 +2676,18 @@ function buildGenerationTelemetry(params: {
       model: imageResult.model,
       estimated_cost_usd: imageResult.estimatedCostUsd,
       produced_image: imageResult.posterStoragePath !== null,
+      requested_aspect_ratio: params.posterDraft?.aspect_ratio ?? "1:1",
     },
+    poster: params.posterDraft
+      ? {
+          requested_format: params.requestedCreativeFormat ?? "poster_v1",
+          template_id: params.posterDraft.template_id,
+          aspect_ratio: params.posterDraft.aspect_ratio,
+          policy_passed: params.posterDraft.policy.passed,
+          policy_reason_codes: params.posterDraft.policy.reasonCodes,
+          rendered_asset_path: params.posterDraft.rendered_asset_path,
+        }
+      : { requested_format: params.requestedCreativeFormat ?? "standard_card" },
     image_selection: imageResult.selection,
     image_lineage: imageResult.selection.lineage,
     required_visual_items: buildRequiredVisualItems(offerContract),
@@ -2842,6 +2893,7 @@ Deno.serve(async (req) => {
         : crypto.randomUUID();
 
     const previousAdRaw = body.previous_ad;
+    const creativeRequest = parseCreativeRequest(body.creative);
     const revisionTargetRaw = typeof body.revision_target === "string"
       ? body.revision_target.trim().toLowerCase()
       : "";
@@ -3184,6 +3236,7 @@ Deno.serve(async (req) => {
         revisionFeedback: revisionFeedback || undefined,
         imageProviderConfig,
         costContext,
+        imageAspectRatio: creativeRequest.imageAspectRatio,
       });
     }
 
@@ -3197,6 +3250,23 @@ Deno.serve(async (req) => {
       },
       sourceAssetIds: imageResult.posterStoragePath ? [imageResult.posterStoragePath] : [],
     });
+    const posterDraft = creativeRequest.posterEnabled
+      ? buildPosterSpecFromOfferDefinition({
+          definition: offerDefinition,
+          enabled: true,
+          templateId: choosePosterTemplateForOffer(
+            creativeRequest.posterStyle,
+            offerDefinition,
+            businessContext.category,
+          ),
+          sourceAssetPath: imageResult.posterStoragePath,
+          renderedAssetPath: null,
+          headline: copy.headline,
+          subline: copy.short_description || copy.subheadline,
+          businessCategory: businessContext.category,
+          compositionPlan: imageResult.prompt,
+        })
+      : null;
     let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
     if (shouldBuildLocalizationBundle()) {
       const merchantProfile = buildMerchantCreativeProfile({
@@ -3275,6 +3345,7 @@ Deno.serve(async (req) => {
       photo_treatment: imageResult.treatment,
       poster_storage_path: imageResult.posterStoragePath,
       image_selection: imageResult.selection,
+      poster: posterDraft,
       localization_bundle: localizationResult?.bundle ?? null,
       localization_status: localizationResult
         ? {
@@ -3326,6 +3397,8 @@ Deno.serve(async (req) => {
         productionSuccess,
         totalLatencyMs: Date.now() - requestStartedAtMs,
         localizationResult,
+        posterDraft,
+        requestedCreativeFormat: creativeRequest.requestedFormat,
       }),
     });
 
@@ -3469,5 +3542,6 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     photo_treatment: photoTreatment,
     poster_storage_path: posterStoragePath,
     image_selection: imageSelection,
+    poster: recordValue(raw.poster) as PosterDraftV1 | null,
   };
 }

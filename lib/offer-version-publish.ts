@@ -175,6 +175,7 @@ export function buildOfferVersionPublishAdSpec(
     source,
     offerDefinition,
     generatedAd,
+    selectedLanguage: generatedAd?.localization_bundle?.sourceLocale,
   });
   const localization = options?.localization ?? buildOfferVersionLocalizationSnapshot({
     bundle: generatedAd?.localization_bundle ?? null,

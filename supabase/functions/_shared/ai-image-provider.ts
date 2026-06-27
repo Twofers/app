@@ -1,7 +1,7 @@
 export type AiImageProvider = "gemini" | "openai" | "stock" | "none";
 
 export type AiImageStylePreset = "realistic-local-ad" | "premium-cafe" | "playful-twofer";
-export type AiImageAspectRatio = "1:1" | "4:3" | "16:9";
+export type AiImageAspectRatio = "1:1" | "4:3" | "16:9" | "4:5";
 export type AiImageSize = "1K" | "2K";
 
 export type AiImageReference = {
@@ -158,7 +158,7 @@ function offerMechanics(input: GenerateAdImageInput): string {
   const free = cleanText(input.freeItem, 120);
   if (paid && free && paid.toLowerCase() !== free.toLowerCase()) return `Buy ${paid}, get ${free} free.`;
   if (paid && free) return `Buy one ${paid}, get one ${free} free.`;
-  return cleanText(input.offerDescription, 180) || cleanText(input.offerTitle, 180) || "Twofer local BOGO deal.";
+  return cleanText(input.offerDescription, 180) || cleanText(input.offerTitle, 180) || "local BOGO deal.";
 }
 
 function customEditInstruction(input: GenerateAdImageInput): string {
@@ -179,6 +179,10 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
   const visualItems = [...new Set([paid, free].filter(Boolean))];
+  const framing =
+    input.aspectRatio === "4:5"
+      ? "Use vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      : "Use a composition that works as a square mobile feed image.";
   const referenceInstruction =
     input.referenceImages && input.referenceImages.length > 0
       ? "Use the supplied owner photo as visual reference. Preserve the real product identity and improve only composition, lighting, crop, and background."
@@ -204,7 +208,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "- Keep every required item fully inside the center-safe area and away from crop edges.",
     "- Leave clean visual space near the top or bottom for the app to overlay the exact offer text later.",
     "- Keep the top and bottom overlay zones calm enough for native text contrast.",
-    "- Use a composition that works as a square mobile feed image.",
+    `- ${framing}`,
     "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
     "- Do not add readable text.",
     "- Do not add coupons.",
@@ -229,7 +233,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
 
 export function buildSimplifiedGeminiImagePrompt(basePrompt: string): string {
   return [
-    "Create a simple realistic square food-and-drink product photo for a local cafe mobile deal card.",
+    "Create a simple realistic food-and-drink product photo for a local cafe mobile deal card.",
     "Show only the required offer items from the original prompt as clear main subjects.",
     "Natural light, clean table, professional but realistic.",
     "No readable text, no logos, no people, no hands, no QR codes, no prices, no signs.",

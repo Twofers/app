@@ -3,12 +3,14 @@ import { resolveAdThemeTokens } from "@/lib/ad-theme-tokens";
 import { buildComposedAdAccessibilityLabel } from "./AdAccessibilityText";
 import { LiveDropCardTemplate } from "./templates/LiveDropCardTemplate";
 import { LocalDiscoveryTemplate } from "./templates/LocalDiscoveryTemplate";
+import { PosterOfferTemplate } from "./templates/PosterOfferTemplate";
 import { SplitOfferPanelTemplate } from "./templates/SplitOfferPanelTemplate";
 import type { ComposedAdCardProps } from "./types";
 
 export type { ComposedAdCardProps } from "./types";
 
 function effectiveTemplateId(props: ComposedAdCardProps) {
+  if (props.posterSpec?.enabled) return "poster_offer";
   if (props.presentation.templateId === "live_drop_card" && props.liveState.status === "live") {
     return "live_drop_card";
   }
@@ -29,6 +31,9 @@ export function ComposedAdCard(props: ComposedAdCardProps) {
   }
   if (templateId === "local_discovery_card") {
     return <LocalDiscoveryTemplate {...templateProps} />;
+  }
+  if (templateId === "poster_offer") {
+    return <PosterOfferTemplate {...templateProps} />;
   }
   return <SplitOfferPanelTemplate {...templateProps} />;
 }

@@ -1,4 +1,5 @@
 import type { AdPresentationSpec } from "@/lib/ad-presentation-spec";
+import type { PosterSpecV1 } from "@/lib/poster/posterTypes";
 import type {
   ApprovedAdCopy,
   ComposedAdCardSurface,
@@ -24,6 +25,7 @@ export type ComposedAdCardProps = {
   liveState: DealLiveState;
   surface: ComposedAdCardSurface;
   imageUri?: string | null;
+  posterSpec?: PosterSpecV1 | null;
   fallbackVisualLabel?: string | null;
   onPrimaryAction?: () => void;
   onCardPress?: () => void;

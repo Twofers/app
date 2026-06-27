@@ -87,6 +87,22 @@ describe("buildGeminiAdImagePrompt", () => {
     expect(prompt).toContain("The final headline, business name, CTA, quantity, expiration, and offer terms");
   });
 
+  it("uses poster-ready framing for native poster mode without app branding in image mechanics fallback", () => {
+    const prompt = buildGeminiAdImagePrompt({
+      businessId: "business-1",
+      businessName: "",
+      businessCategory: "bakery",
+      offerTitle: "",
+      stylePreset: "premium-cafe",
+      aspectRatio: "4:5",
+      imageSize: "1K",
+    });
+
+    expect(prompt).toContain("vertical 4:5 poster-ready framing");
+    expect(prompt).toContain("local BOGO deal");
+    expect(prompt).not.toContain("Twofer local BOGO deal");
+  });
+
   it("includes bounded merchant custom edit instructions without relaxing image rules", () => {
     const prompt = buildGeminiAdImagePrompt({
       businessId: "business-1",

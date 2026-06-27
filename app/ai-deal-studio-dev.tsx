@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  ImageBackground,
   Pressable,
   ScrollView,
   Text,
@@ -11,10 +9,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
+import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
+import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { Banner } from "@/components/ui/banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import { ScreenHeader } from "@/components/ui/screen-header";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { Colors, Gray, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -28,11 +27,13 @@ import {
   isProductionSupabaseUrlConfigured,
 } from "@/lib/runtime-env";
 import { supabase } from "@/lib/supabase";
+import { sanitizePosterText } from "@/lib/poster/posterPolicy";
+import type { PosterCopyV1, PosterTemplateId } from "@/lib/poster/posterTypes";
 
-const STYLE_PRESETS = ["Fresh", "Bold", "Premium", "Sunrise", "Macro"] as const;
-const DEV_RENDER_CTA = "Claim on Twofer";
+const STYLE_PRESETS: PosterTemplateId[] = ["fresh", "bold", "premium"];
+const DEV_RENDER_CTA = "";
 
-type StylePreset = typeof STYLE_PRESETS[number];
+type StylePreset = PosterTemplateId;
 type GenerationMode = "dry-run" | "real-copy" | "real-image";
 
 type DraftResponse = {
@@ -49,6 +50,13 @@ type DraftResponse = {
       publishingDisabled?: boolean;
       dryRun?: boolean;
       copyOnly?: boolean;
+      poster?: Partial<{
+        headline: string;
+        supportingLine: string;
+        offerLine1: string;
+        offerLine2: string;
+        subline: string;
+      }>;
       lockedOffer?: {
         productName?: string;
         offerType?: string;
@@ -64,6 +72,10 @@ type DraftResponse = {
     copy_only?: boolean;
     image_asset_path?: string | null;
     image_signed_url?: string | null;
+    source_asset_path?: string | null;
+    source_asset_signed_url?: string | null;
+    rendered_asset_path?: string | null;
+    rendered_asset_signed_url?: string | null;
     image_provider?: string;
     image_model?: string | null;
     image_generation_success?: boolean;
@@ -104,156 +116,67 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 12 }}>
+      <Text style={{ color: Gray[600], fontSize: 13, fontWeight: "800", width: 116 }}>{label}</Text>
+      <Text style={{ color: Gray[900], fontSize: 14, lineHeight: 20, flex: 1 }}>{value}</Text>
+    </View>
+  );
+}
+
 function cleanDisplay(value: string | null | undefined, fallback: string) {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
-function conciseSupportingCopy(value: string | null | undefined) {
-  const cleaned = value
-    ?.replace(/\b\d{4}-\d{2}-\d{2}T[0-9:.]+Z\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!cleaned) {
-    return "A limited-time local offer, rendered with app-controlled details.";
-  }
-  const firstSentence = cleaned.match(/^[^.!?]+[.!?]/)?.[0]?.trim();
-  return firstSentence && firstSentence.length <= 118 ? firstSentence : cleaned.slice(0, 118).trim();
+function limitPosterText(value: string | undefined | null, fallback: string, max: number) {
+  return sanitizePosterText(value ?? "", { fallback, maxChars: max });
 }
 
-function businessInitials(name: string | null | undefined) {
-  return cleanDisplay(name, "Twofer")
+function productKeyword(productName: string | undefined | null) {
+  const words = cleanDisplay(productName, "OFFER")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
     .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "T";
+    .filter(Boolean);
+  return (words[words.length - 1] ?? words[0] ?? "OFFER").toUpperCase();
 }
 
-function formatWindow(start?: string, end?: string) {
-  const startDate = start ? new Date(start) : null;
-  const endDate = end ? new Date(end) : null;
-  if (!startDate || !endDate || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
-    return `${start ?? "Start TBD"} to ${end ?? "End TBD"}`;
-  }
-  const date = startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const startText = startDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const endText = endDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${date}, ${startText} to ${endText}`;
+function posterRewardLine(offerTerms: string | undefined | null) {
+  const normalized = offerTerms?.toLowerCase() ?? "";
+  if (normalized.includes("free coffee")) return "GET FREE COFFEE";
+  if (normalized.includes("coffee")) return "GET COFFEE";
+  if (normalized.includes("free")) return "GET 1 FREE";
+  return "GET 1 MORE";
 }
 
-function styleTheme(style: StylePreset) {
-  const themes = {
-    Fresh: { accent: "#16A34A", surface: "rgba(240, 253, 244, 0.94)", text: "#052E16", cta: "#15803D" },
-    Bold: { accent: "#EF4444", surface: "rgba(255, 241, 242, 0.95)", text: "#450A0A", cta: "#B91C1C" },
-    Premium: { accent: "#C8A24A", surface: "rgba(17, 24, 39, 0.88)", text: "#FFF7ED", cta: "#B88921" },
-    Sunrise: { accent: "#F97316", surface: "rgba(255, 247, 237, 0.95)", text: "#431407", cta: "#EA580C" },
-    Macro: { accent: "#0F766E", surface: "rgba(240, 253, 250, 0.95)", text: "#042F2E", cta: "#0F766E" },
-  } satisfies Record<StylePreset, { accent: string; surface: string; text: string; cta: string }>;
-  return themes[style];
+function fallbackPosterCopy(draft: NonNullable<DraftResponse["draft"]>, businessName: string): PosterCopyV1 {
+  const locked = draft.creative?.lockedOffer;
+  const product = productKeyword(locked?.productName);
+  return {
+    business_name: sanitizePosterText(businessName, { fallback: "Local Favorite", maxChars: 34, uppercase: false }),
+    headline: limitPosterText(`${product} TIME`, "LATTE TIME", 28),
+    offer_line_1: limitPosterText(`BUY 1 ${product}`, "BUY 1", 28),
+    offer_line_2: limitPosterText(posterRewardLine(locked?.offerTerms), "GET 1 FREE", 28),
+    subline: limitPosterText("LOCAL FAVORITE", "LOCAL FAVORITE", 28),
+  };
 }
 
-function RenderedAdPreview({
-  business,
-  draft,
-  stylePreset,
-}: {
-  business: OwnerBusinessRow | null;
-  draft: NonNullable<DraftResponse["draft"]>;
-  stylePreset: StylePreset;
-}) {
-  const creative = draft.creative;
-  const locked = creative?.lockedOffer;
-  const selectedStyle = STYLE_PRESETS.includes((creative?.stylePreset as StylePreset) ?? stylePreset)
-    ? ((creative?.stylePreset as StylePreset) ?? stylePreset)
-    : stylePreset;
-  const palette = styleTheme(selectedStyle);
-  const headline = cleanDisplay(creative?.headline, cleanDisplay(locked?.productName, "Twofer offer"));
-  const support = conciseSupportingCopy(creative?.supportingCopy);
-  const terms = cleanDisplay(locked?.offerTerms, "Limited-time offer");
-  const quantity = typeof locked?.quantityLimit === "number" ? locked.quantityLimit : Number.NaN;
-  const quantityText = Number.isFinite(quantity) ? `${quantity} available` : "Limited quantity";
-  const businessName = cleanDisplay(business?.name, "Twofer business");
-  const imageUri = draft.image_signed_url ?? undefined;
+function posterCopyFromDraft(draft: NonNullable<DraftResponse["draft"]>, businessName: string): PosterCopyV1 {
+  const fallback = fallbackPosterCopy(draft, businessName);
+  const poster = draft.creative?.poster;
+  return {
+    business_name: fallback.business_name,
+    headline: limitPosterText(poster?.headline ?? draft.creative?.headline, fallback.headline, 28),
+    offer_line_1: limitPosterText(poster?.offerLine1, fallback.offer_line_1, 28),
+    offer_line_2: limitPosterText(poster?.offerLine2, fallback.offer_line_2, 28),
+    subline: limitPosterText(poster?.subline ?? poster?.supportingLine ?? draft.creative?.supportingCopy, fallback.subline ?? "", 32),
+  };
+}
 
-  const content = (
-    <View style={{ flex: 1, justifyContent: "space-between", padding: 14 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 }}>
-          <View
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: palette.accent,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>{businessInitials(businessName)}</Text>
-          </View>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "900", flexShrink: 1 }}>
-            {businessName}
-          </Text>
-        </View>
-        <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 6 }}>
-          <Text style={{ color: "#111827", fontSize: 12, fontWeight: "900" }}>DRAFT PREVIEW</Text>
-        </View>
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ alignSelf: "flex-start", borderRadius: 999, backgroundColor: palette.accent, paddingHorizontal: 11, paddingVertical: 5 }}>
-          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "900" }}>Twofer offer</Text>
-        </View>
-        <View style={{ borderRadius: 14, backgroundColor: palette.surface, padding: 12, gap: 6 }}>
-          <Text numberOfLines={3} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 22, lineHeight: 27, fontWeight: "900" }}>
-            {headline}
-          </Text>
-          <Text numberOfLines={2} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 13, lineHeight: 17, fontWeight: "700" }}>
-            {support}
-          </Text>
-          <Text numberOfLines={2} adjustsFontSizeToFit style={{ color: palette.text, fontSize: 13, lineHeight: 17, fontWeight: "800" }}>
-            {terms}
-          </Text>
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-            <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.86)", paddingHorizontal: 9, paddingVertical: 5 }}>
-              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#111827", fontSize: 11, fontWeight: "900" }}>
-                {formatWindow(locked?.startTime, locked?.endTime)}
-              </Text>
-            </View>
-            <View style={{ borderRadius: 999, backgroundColor: "rgba(255,255,255,0.86)", paddingHorizontal: 9, paddingVertical: 5 }}>
-              <Text style={{ color: "#111827", fontSize: 11, fontWeight: "900" }}>{quantityText}</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ flex: 1, borderRadius: 12, backgroundColor: palette.cta, paddingVertical: 9, alignItems: "center" }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}>{DEV_RENDER_CTA}</Text>
-            </View>
-            <Text style={{ color: palette.text, fontSize: 11, fontWeight: "900" }}>Live draft</Text>
-          </View>
-          <Text style={{ color: palette.text, opacity: 0.72, fontSize: 11, fontWeight: "800", textAlign: "center" }}>
-            Publishing disabled in dev build
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: Gray[600], fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>
-        Rendered Twofer ad preview
-      </Text>
-      <View style={{ width: "100%", aspectRatio: 4 / 5, borderRadius: Radii.md, overflow: "hidden", backgroundColor: "#111827" }}>
-        {imageUri ? (
-          <ImageBackground source={{ uri: imageUri }} resizeMode="cover" style={{ flex: 1 }}>
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.24)" }}>{content}</View>
-          </ImageBackground>
-        ) : (
-          <View style={{ flex: 1, backgroundColor: palette.accent }}>{content}</View>
-        )}
-      </View>
-    </View>
-  );
+function selectedStyleFromDraft(draft: NonNullable<DraftResponse["draft"]>, fallback: StylePreset) {
+  const candidate = draft.creative?.stylePreset?.trim().toLowerCase() as StylePreset | undefined;
+  return STYLE_PRESETS.includes(candidate ?? fallback) ? candidate ?? fallback : fallback;
 }
 
 export default function AiDealStudioDevScreen() {
@@ -266,14 +189,15 @@ export default function AiDealStudioDevScreen() {
   const [business, setBusiness] = useState<OwnerBusinessRow | null>(null);
   const [businessLoading, setBusinessLoading] = useState(true);
   const [businessError, setBusinessError] = useState<string | null>(null);
-  const [productName, setProductName] = useState("Smoke Test Latte");
-  const [productDescription, setProductDescription] = useState("A warm espresso drink for local testing.");
+  const [posterBusinessName, setPosterBusinessName] = useState("Heraz Coffee");
+  const [productName, setProductName] = useState("Bacon and Egg Sandwich");
+  const [productDescription, setProductDescription] = useState("A savory breakfast sandwich with bacon and egg, paired with coffee.");
   const [offerType, setOfferType] = useState("buy_one_get_one");
-  const [offerTerms, setOfferTerms] = useState("Buy one latte, get one latte free.");
+  const [offerTerms, setOfferTerms] = useState("Buy a bacon and egg sandwich, get a free coffee.");
   const [startTime, setStartTime] = useState(defaultStartTime);
   const [endTime, setEndTime] = useState(defaultEndTime);
   const [quantityLimit, setQuantityLimit] = useState("5");
-  const [stylePreset, setStylePreset] = useState<StylePreset>("Fresh");
+  const [stylePreset, setStylePreset] = useState<StylePreset>("premium");
   const [generationMode, setGenerationMode] = useState<GenerationMode>("dry-run");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -358,25 +282,91 @@ export default function AiDealStudioDevScreen() {
     }
   }
 
+  const generatedPoster = draft?.creative ? (
+    <AdPosterCanvas
+      imageUri={draft.source_asset_signed_url ?? draft.image_signed_url}
+      templateId={selectedStyleFromDraft(draft, stylePreset)}
+      copy={posterCopyFromDraft(draft, cleanDisplay(posterBusinessName, cleanDisplay(business?.name, "Local business")))}
+    />
+  ) : null;
+
+  const generatedDetails = draft?.creative ? (
+    <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
+      <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>Deal details</Text>
+      <DetailRow label="Poster name" value={cleanDisplay(posterBusinessName, cleanDisplay(business?.name, "Local business"))} />
+      <DetailRow label="Account business" value={cleanDisplay(business?.name, "Local business")} />
+      <DetailRow label="Product" value={cleanDisplay(draft.creative.lockedOffer?.productName, productName)} />
+      <DetailRow label="Offer terms" value={cleanDisplay(draft.creative.lockedOffer?.offerTerms, offerTerms)} />
+      <DetailRow label="Start" value={cleanDisplay(draft.creative.lockedOffer?.startTime, startTime)} />
+      <DetailRow label="End" value={cleanDisplay(draft.creative.lockedOffer?.endTime, endTime)} />
+      <DetailRow label="Total qty" value={String(draft.creative.lockedOffer?.quantityLimit ?? quantityLimit)} />
+      <DetailRow label="Remaining" value={String(draft.creative.lockedOffer?.quantityLimit ?? quantityLimit)} />
+      <DetailRow label="Location" value={cleanDisplay(business?.address ?? business?.location, "No location on file")} />
+      <DetailRow label="Style" value={draft.creative.stylePreset ?? stylePreset} />
+      <DetailRow
+        label="Source image"
+        value={
+          draft.source_asset_path ?? draft.image_asset_path
+            ? `${draft.image_provider ?? "image"} stored privately at ${draft.source_asset_path ?? draft.image_asset_path}`
+            : draft.image_generation_error_code
+              ? `No image stored (${draft.image_generation_error_code})`
+              : "No image generated for this mode"
+        }
+      />
+      <DetailRow label="Rendered ad" value={draft.rendered_asset_path ?? "Not exported in this phase"} />
+      <DetailRow label="Job status" value={`ready | dry-run ${draft.dry_run === true ? "on" : "off"} | publishing disabled`} />
+      <PreviewRow label="Text-free image prompt" value={draft.creative.imagePrompt ?? "(missing)"} />
+      <View
+        style={{
+          minHeight: 48,
+          borderRadius: Radii.md,
+          borderWidth: 1,
+          borderColor: theme.border,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: 0.7,
+        }}
+      >
+        <Text style={{ color: theme.mutedText, fontWeight: "800" }}>Publishing disabled in dev build</Text>
+      </View>
+    </View>
+  ) : null;
+
+  const hasGeneratedDraft = Boolean(draft?.creative);
+
+  const businessStatusCard = (
+    <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
+      <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>
+        {businessLoading || sessionLoading ? "Loading business..." : business?.name ?? "No owned business"}
+      </Text>
+      <Text style={{ color: theme.mutedText, fontSize: 13 }}>
+        Supabase: {getSupabaseUrlForDisplay()}
+      </Text>
+      {(businessLoading || sessionLoading) && !guardError ? <ActivityIndicator color={theme.primary} /> : null}
+    </View>
+  );
+
   return (
+    <KeyboardScreen style={{ backgroundColor: theme.background }}>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: theme.background }}>
-      <ScreenHeader title="AI Deal Studio" subtitle="Dev-only draft generation" />
       <ScrollView
-        contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom }}
-        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom, paddingTop: Spacing.sm }}
+        {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={{
-            alignSelf: "flex-start",
-            borderRadius: 6,
-            backgroundColor: "#111827",
-            paddingHorizontal: Spacing.sm,
-            paddingVertical: 4,
-          }}
-        >
-          <Text style={{ color: "#FBBF24", fontSize: 12, fontWeight: "900" }}>DEV</Text>
-        </View>
+        {!hasGeneratedDraft ? (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              borderRadius: 6,
+              backgroundColor: "#111827",
+              paddingHorizontal: Spacing.sm,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ color: "#FBBF24", fontSize: 12, fontWeight: "900" }}>DEV</Text>
+          </View>
+        ) : null}
 
         {guardError ? <Banner tone="error" message={guardError} /> : null}
         {!guardError && isProductionSupabaseUrlConfigured() ? (
@@ -390,27 +380,27 @@ export default function AiDealStudioDevScreen() {
           <Banner tone="warning" message="No owned business was found for this dev account." />
         ) : null}
         {submitError ? <Banner tone="error" message={submitError} /> : null}
-        {generationMode === "real-copy" ? (
+        {!hasGeneratedDraft && generationMode === "real-copy" ? (
           <Banner
             tone="warning"
             message="Real copy/prompt generation may use OpenAI credits. Image generation and publishing stay disabled."
           />
         ) : null}
-        {generationMode === "real-image" ? (
+        {!hasGeneratedDraft && generationMode === "real-image" ? (
           <Banner
             tone="warning"
             message="Real copy/prompt plus Gemini image generation may use AI credits. The image stays private and publishing remains disabled."
           />
         ) : null}
 
-        <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
-          <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>
-            {businessLoading || sessionLoading ? "Loading business..." : business?.name ?? "No owned business"}
-          </Text>
-          <Text style={{ color: theme.mutedText, fontSize: 13 }}>
-            Supabase: {getSupabaseUrlForDisplay()}
-          </Text>
-          {(businessLoading || sessionLoading) && !guardError ? <ActivityIndicator color={theme.primary} /> : null}
+        {draft?.creative ? null : businessStatusCard}
+        {generatedPoster}
+        {generatedDetails}
+        {draft?.creative ? businessStatusCard : null}
+
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={{ color: theme.text, fontWeight: "800" }}>Poster business name</Text>
+          <TextInput value={posterBusinessName} onChangeText={setPosterBusinessName} style={fieldStyle(theme)} placeholderTextColor={theme.mutedText} />
         </View>
 
         <View style={{ gap: Spacing.sm }}>
@@ -568,46 +558,9 @@ export default function AiDealStudioDevScreen() {
           <Text style={{ color: theme.mutedText, fontWeight: "800" }}>Publishing disabled in dev build</Text>
         </View>
 
-        {draft?.creative ? (
-          <View style={{ borderRadius: Radii.md, borderWidth: 1, borderColor: theme.border, padding: Spacing.md, gap: Spacing.md }}>
-            <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900" }}>Draft Preview</Text>
-            <RenderedAdPreview business={business} draft={draft} stylePreset={stylePreset} />
-            {draft.image_signed_url ? (
-              <Image
-                source={{ uri: draft.image_signed_url }}
-                resizeMode="cover"
-                style={{
-                  width: "100%",
-                  aspectRatio: 4 / 5,
-                  borderRadius: Radii.md,
-                  backgroundColor: theme.surfaceMuted,
-                }}
-              />
-            ) : null}
-            <PreviewRow label="Headline" value={draft.creative.headline ?? "(missing)"} />
-            <PreviewRow label="Supporting copy" value={draft.creative.supportingCopy ?? "(missing)"} />
-            <PreviewRow label="Text-free image prompt" value={draft.creative.imagePrompt ?? "(missing)"} />
-            <PreviewRow
-              label="Private image"
-              value={
-                draft.image_asset_path
-                  ? `${draft.image_provider ?? "image"} stored privately at ${draft.image_asset_path}`
-                  : draft.image_generation_error_code
-                    ? `No image stored (${draft.image_generation_error_code})`
-                    : "No image generated for this mode"
-              }
-            />
-            <PreviewRow label="Style" value={draft.creative.stylePreset ?? stylePreset} />
-            <PreviewRow label="Layout recommendation" value={draft.creative.layoutRecommendation ?? "(missing)"} />
-            <PreviewRow label="Offer" value={`${offerType}: ${offerTerms}`} />
-            <PreviewRow label="Window and quantity" value={`${startTime} to ${endTime} · ${quantityLimit} available`} />
-            <PreviewRow label="CTA" value={draft.creative.lockedOffer?.cta ?? DEV_RENDER_CTA} />
-            <PreviewRow label="Job status" value={`ready · dry-run ${draft.dry_run === true ? "on" : "off"} · publishing disabled`} />
-          </View>
-        ) : null}
-
         <SecondaryButton title="Back to Diagnostics" onPress={() => router.back()} />
       </ScrollView>
     </View>
+    </KeyboardScreen>
   );
 }

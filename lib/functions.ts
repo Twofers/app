@@ -6,6 +6,7 @@ import type {
   GeneratedAd,
   PhotoTreatment,
 } from "./ad-variants";
+import type { PosterStyleChoice } from "./poster/posterTypes";
 import type {
   MerchantImageEditMode,
   MerchantImageSourceMode,
@@ -646,6 +647,20 @@ export type AiGenerateAdRequest = {
   offer_schedule_summary?: string;
   quantity_limit?: number | null;
   redemption_limit?: string;
+  creative?: {
+    requested_format?: "standard_card" | "poster_v1";
+    poster?: {
+      enabled?: boolean;
+      style?: PosterStyleChoice;
+      aspect_ratio?: "4:5";
+      text_policy?: {
+        no_app_brand_token?: boolean;
+        no_cta?: boolean;
+        no_scarcity?: boolean;
+        center_text?: boolean;
+      };
+    };
+  };
 };
 
 export type AiReviseAdRequest = AiGenerateAdRequest & {
@@ -705,6 +720,7 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
     ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
     ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
+    ...(body.creative ? { creative: body.creative } : {}),
   });
 }
 
@@ -733,6 +749,7 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
     ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
     ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
+    ...(body.creative ? { creative: body.creative } : {}),
   });
 }
 

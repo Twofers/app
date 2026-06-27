@@ -41,6 +41,7 @@ import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
+import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -98,6 +99,16 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
+import {
+  buildPosterSpecFromOfferDefinition,
+  choosePosterTemplateForOffer,
+} from "@/lib/poster/posterCopy";
+import type {
+  AdCreativeFormat,
+  PosterSpecV1,
+  PosterStyleChoice,
+  PosterTemplateId,
+} from "@/lib/poster/posterTypes";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
 import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
 import { buildVerifiedAdLocalizationApproval } from "@/lib/ad-localization-approval";
@@ -182,6 +193,10 @@ type TemplateRow = {
 };
 
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
+type CreativeFormat = AdCreativeFormat;
+type PreviewFormat = CreativeFormat;
+
+const POSTER_STYLE_CHOICES: PosterStyleChoice[] = ["auto", "fresh", "bold", "premium"];
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
 
@@ -774,6 +789,9 @@ export default function AiDealScreen() {
   const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
   const [merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged] = useState(false);
+  const [creativeFormat, setCreativeFormat] = useState<CreativeFormat>("standard_card");
+  const [posterStyle, setPosterStyle] = useState<PosterStyleChoice>("auto");
+  const [previewFormat, setPreviewFormat] = useState<PreviewFormat>("standard_card");
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -1822,6 +1840,35 @@ export default function AiDealScreen() {
     generationRequestIdRef.current += 1;
   }
 
+  function buildCreativeRequestPayload() {
+    return {
+      requested_format: creativeFormat,
+      poster: {
+        enabled: creativeFormat === "poster_v1",
+        style: posterStyle,
+        aspect_ratio: "4:5" as const,
+        text_policy: {
+          no_app_brand_token: true,
+          no_cta: true,
+          no_scarcity: true,
+          center_text: true,
+        },
+      },
+    };
+  }
+
+  function selectCreativeFormat(next: CreativeFormat) {
+    if (next === creativeFormat) return;
+    setCreativeFormat(next);
+    setPreviewFormat(next);
+  }
+
+  function selectPosterStyle(next: PosterStyleChoice) {
+    if (next === posterStyle) return;
+    setPosterStyle(next);
+    setPreviewFormat("poster_v1");
+  }
+
   function chooseDraftSourceLocale(locale: SupportedLocale) {
     if (!localizedOwnerUiEnabled || locale === effectiveDraftSourceLocale) return;
     setDraftSourceLocale(locale);
@@ -2215,6 +2262,7 @@ export default function AiDealScreen() {
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
+        creative: buildCreativeRequestPayload(),
       });
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
@@ -2330,6 +2378,7 @@ export default function AiDealScreen() {
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
+        creative: buildCreativeRequestPayload(),
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
@@ -2751,6 +2800,27 @@ export default function AiDealScreen() {
         usePhotoAsFinal,
         merchantOriginalWarningAcknowledged,
       });
+      const posterForPublishSpec =
+        creativeFormat === "poster_v1" && offerDefinition
+          ? buildPosterSpecFromOfferDefinition({
+              definition: offerDefinition,
+              enabled: true,
+              templateId: selectedPosterTemplateId,
+              sourceAssetPath: finalStoragePath,
+              renderedAssetPath: null,
+              headline: title,
+              subline: promoLine,
+              businessCategory: businessContextForAi.category,
+              compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
+            })
+          : null;
+      const adForPublishSpecWithPoster =
+        adForPublishSpec && posterForPublishSpec
+          ? {
+              ...adForPublishSpec,
+              poster: posterForPublishSpec,
+            }
+          : adForPublishSpec;
       const composedCardPublishSpec = composedAdPreviewEnabled
         ? {
             presentation: selectedComposedPresentation,
@@ -2830,7 +2900,7 @@ export default function AiDealScreen() {
           idempotency_key:
             publishIdempotencyKeyRef.current ??
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
-          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpec, {
+          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpecWithPoster, {
             composedCard: composedCardPublishSpec,
             localizationApproval:
               selectedLocalizationApproval?.approved &&
@@ -3033,6 +3103,30 @@ export default function AiDealScreen() {
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
+  const selectedPosterTemplateId: PosterTemplateId = offerDefinition
+    ? choosePosterTemplateForOffer(posterStyle, offerDefinition, businessContextForAi.category)
+    : posterStyle === "fresh" || posterStyle === "bold" || posterStyle === "premium"
+      ? posterStyle
+      : "fresh";
+  const generatedPosterSpec = generatedAd?.poster?.enabled ? (generatedAd.poster as PosterSpecV1) : null;
+  const fallbackPosterSpec =
+    creativeFormat === "poster_v1" && offerDefinition
+      ? (buildPosterSpecFromOfferDefinition({
+          definition: offerDefinition,
+          enabled: true,
+          templateId: selectedPosterTemplateId,
+          sourceAssetPath: currentAdStoragePath ?? originalStoragePath,
+          renderedAssetPath: null,
+          headline: generatedAd?.headline ?? title,
+          subline: generatedAd?.short_description ?? promoLine,
+          businessCategory: businessContextForAi.category,
+          compositionPlan: generatedAd?.item_research?.description ?? null,
+        }) as PosterSpecV1)
+      : null;
+  const effectivePosterSpec = fallbackPosterSpec ?? generatedPosterSpec;
+  const showPosterPreview =
+    Boolean(generatedAd && effectivePosterSpec) &&
+    (previewFormat === "poster_v1" || creativeFormat === "poster_v1");
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
   const composedAdPreviewEnabled =
@@ -3998,6 +4092,113 @@ export default function AiDealScreen() {
               </>
             ) : null}
 
+            <View style={{ marginTop: 18, gap: 10 }}>
+              <Text style={{ fontWeight: "800", color: theme.text }}>
+                {t("createAi.adFormatTitle", { defaultValue: "Ad format" })}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {([
+                  {
+                    key: "standard_card" as const,
+                    label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }),
+                    icon: "view-agenda" as const,
+                  },
+                  {
+                    key: "poster_v1" as const,
+                    label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }),
+                    icon: "crop-portrait" as const,
+                  },
+                ]).map((option) => {
+                  const selected = creativeFormat === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => selectCreativeFormat(option.key)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingVertical: 9,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: selected ? theme.primary : theme.border,
+                        backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <MaterialIcons
+                        name={option.icon}
+                        size={18}
+                        color={selected ? theme.accentText : theme.mutedText}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
+                        style={{ fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {creativeFormat === "poster_v1" ? (
+                <>
+                  <Text style={{ fontWeight: "800", color: theme.text, marginTop: 2 }}>
+                    {t("createAi.posterStyleTitle", { defaultValue: "Poster style" })}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {POSTER_STYLE_CHOICES.map((styleChoice) => {
+                      const selected = posterStyle === styleChoice;
+                      const label =
+                        styleChoice === "auto"
+                          ? t("createAi.posterStyleAuto", { defaultValue: "Auto" })
+                          : styleChoice === "fresh"
+                            ? t("createAi.posterStyleFresh", { defaultValue: "Fresh" })
+                            : styleChoice === "bold"
+                              ? t("createAi.posterStyleBold", { defaultValue: "Bold" })
+                              : t("createAi.posterStylePremium", { defaultValue: "Premium" });
+                      return (
+                        <Pressable
+                          key={styleChoice}
+                          onPress={() => selectPosterStyle(styleChoice)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={{
+                            minHeight: 38,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: selected ? theme.primary : theme.border,
+                            backgroundColor: selected ? theme.primary : theme.surfaceMuted,
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: selected ? theme.primaryText : theme.text,
+                              fontWeight: "800",
+                              fontSize: 12,
+                            }}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+            </View>
+
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
             ) : null}
@@ -4062,7 +4263,93 @@ export default function AiDealScreen() {
               <View style={{ marginTop: 22, gap: 14 }}>
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                {composedAdPreviewEnabled ? (
+                {effectivePosterSpec ? (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {([
+                      { key: "standard_card" as const, label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }) },
+                      { key: "poster_v1" as const, label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }) },
+                    ]).map((tab) => {
+                      const selected = previewFormat === tab.key;
+                      return (
+                        <Pressable
+                          key={tab.key}
+                          onPress={() => setPreviewFormat(tab.key)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 9,
+                            paddingHorizontal: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: selected ? theme.primary : theme.border,
+                            backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.78}
+                            style={{ textAlign: "center", fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
+                          >
+                            {tab.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {showPosterPreview && effectivePosterSpec ? (
+                  <>
+                    <View
+                      style={{
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surface,
+                        padding: 10,
+                      }}
+                    >
+                      <AdPosterCanvas
+                        spec={effectivePosterSpec}
+                        imageUri={adImageUri ?? selectedPhotoUri}
+                        templateId={selectedPosterTemplateId}
+                      />
+                    </View>
+                    <View
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surfaceMuted,
+                        gap: 7,
+                      }}
+                    >
+                      <Text style={{ fontWeight: "800", color: theme.text }}>
+                        {t("createAi.lockedDetailsTitle", { defaultValue: "Deal details" })}
+                      </Text>
+                      <Text style={{ color: theme.text, fontWeight: "800" }}>
+                        {ownerLanguagePreview.offerLine}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {ownerLanguagePreview.termsLine}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {t("createAi.scheduleLabel")} {displayScheduleSummary}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {t("createAi.maxClaimsLabel")} {maxClaims}
+                      </Text>
+                    </View>
+                    <SecondaryButton
+                      title={t("createAi.useStandardCard", { defaultValue: "Use standard card" })}
+                      onPress={() => selectCreativeFormat("standard_card")}
+                    />
+                    {ownerLanguagePreviewControls}
+                  </>
+                ) : composedAdPreviewEnabled ? (
                   <>
                     <ComposedPreviewTelemetryBeacon
                       generatedAdPresent={Boolean(generatedAd)}

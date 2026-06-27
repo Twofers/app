@@ -155,10 +155,15 @@ export function buildPhotoAdImagePrompt(params: {
   businessName?: string;
   requiredVisualItems?: readonly string[];
   visualRevisionInstruction?: string;
+  aspectRatio?: "1:1" | "4:5";
 }): string {
   const { itemName, itemDescription, businessName, requiredVisualItems, visualRevisionInstruction } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
+  const framing =
+    params.aspectRatio === "4:5"
+      ? "Vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      : "Square 1:1 framing.";
   return [
     visualItems.length > 1
       ? `Required offer items: ${visualItems.join(", ")}. Show all required items together as equally important main subjects. Do not show only one item.`
@@ -174,7 +179,7 @@ export function buildPhotoAdImagePrompt(params: {
     "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast.",
     "Absolutely no text, letters, numbers, prices, coupons, discount copy, menu boards, signage, banners, overlays, QR codes, barcodes, logos, fake logos, brand marks, watermarks, mascots, cartoon characters, animals, or unrelated prop characters.",
     "No human faces, no hands holding the item.",
-    "Square 1:1 framing.",
+    framing,
   ]
     .filter(Boolean)
     .join(" ")
