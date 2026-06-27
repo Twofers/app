@@ -38,6 +38,7 @@ export default function CreateDeal() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
   const { isLoggedIn, businessId, loading, subscriptionTier } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+  const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export default function CreateDeal() {
   const loadTemplates = useCallback(async () => {
     if (!businessId) {
       setTemplates([]);
+      setTemplatesLoadError(null);
       setTemplatesLoading(false);
       return;
     }
@@ -97,8 +99,9 @@ export default function CreateDeal() {
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) {
-      setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+      setTemplatesLoadError(t("createHub.templatesLoadError"));
     } else {
+      setTemplatesLoadError(null);
       setTemplates((data ?? []) as TemplateRow[]);
     }
     setTemplatesLoading(false);
@@ -337,7 +340,13 @@ export default function CreateDeal() {
           {/* ── Templates ── */}
           {moreToolsOpen && templatesOpen ? (
             <View style={{ gap: Spacing.md, paddingTop: Spacing.xs }}>
-            {templatesLoading ? (
+            {templatesLoadError ? (
+              <Banner
+                message={templatesLoadError}
+                tone="error"
+                onRetry={() => void loadTemplates()}
+              />
+            ) : templatesLoading ? (
               <Text style={{ color: theme.mutedText }}>{t("createHub.templatesLoading")}</Text>
             ) : templates.length === 0 ? (
               <Text style={{ color: theme.mutedText }}>{t("createHub.templatesEmpty")}</Text>

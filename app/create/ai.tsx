@@ -157,6 +157,15 @@ import {
   type DealEligibilityFormState,
 } from "../../lib/deal-eligibility-form";
 import {
+  canUseFallbackTemplateForOutcome,
+  classifyGenerationFailure,
+  type GenerationOutcomeKind,
+} from "@/lib/create-ai-generation-outcome";
+import {
+  inferDealEligibilityFormFromText,
+  mergeInferredEligibilityForm,
+} from "@/lib/deal-eligibility-inference";
+import {
   aiComposeOfferTranscribe,
   fetchAiComposeQuota,
   type AiComposeQuota,
@@ -876,6 +885,7 @@ export default function AiDealScreen() {
   } | null>(null);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
+  const [lastGenerationOutcomeKind, setLastGenerationOutcomeKind] = useState<GenerationOutcomeKind | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
@@ -887,8 +897,15 @@ export default function AiDealScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const hintInputRef = useRef<TextInput | null>(null);
   const customImageEditInputRef = useRef<TextInput | null>(null);
+  const descriptionSectionYRef = useRef<number | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
+  const scheduleSectionYRef = useRef<number | null>(null);
+  const generationSectionYRef = useRef<number | null>(null);
+  const adReviewSectionYRef = useRef<number | null>(null);
+  const draftEditorSectionYRef = useRef<number | null>(null);
+  const previousEligibleRef = useRef(false);
   const menuOfferScrollDoneRef = useRef(false);
   const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
@@ -984,10 +1001,6 @@ export default function AiDealScreen() {
     [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone, i18n.language],
   );
 
-  const listingBody = useMemo(
-    () => composeListingDescription(promoLine, ctaText, description),
-    [promoLine, ctaText, description],
-  );
   const eligibilityInput = useMemo(
     () => dealEligibilityFormToInput(eligibilityForm),
     [eligibilityForm],
@@ -1054,9 +1067,39 @@ export default function AiDealScreen() {
     windowStart,
   ]);
 
-  const canPublish = useMemo(() => {
-    return title.trim().length > 0 && listingBody.trim().length > 0;
-  }, [title, listingBody]);
+  const publishReadiness = useMemo(() => {
+    const missingFields: ("headline" | "details")[] = [];
+    if (!title.trim()) missingFields.push("headline");
+    if (!description.trim()) missingFields.push("details");
+    const canPublish = missingFields.length === 0;
+    let reasonMessage = "";
+    if (!canPublish) {
+      if (missingFields.length === 2) {
+        reasonMessage = t("createAi.publishMissingBody");
+      } else if (missingFields[0] === "headline") {
+        reasonMessage = t("createAi.publishMissingHeadlineBody", {
+          defaultValue: "Add a headline before publishing.",
+        });
+      } else {
+        reasonMessage = t("createAi.publishMissingDetailsBody", {
+          defaultValue: "Add offer details before publishing.",
+        });
+      }
+    }
+    return {
+      canPublish,
+      missingFields,
+      reasonMessage,
+      buttonLabel: canPublish
+        ? editingDealId
+          ? t("createAi.saveDealChanges")
+          : t("createAi.publishDeal")
+        : editingDealId
+          ? t("createAi.completeDetailsToSave", { defaultValue: "Complete details to save" })
+          : t("createAi.completeDetailsToPublish", { defaultValue: "Complete details to publish" }),
+    };
+  }, [description, editingDealId, t, title]);
+  const canPublish = publishReadiness.canPublish;
 
   const displayedPublishStatus = useMemo<PublishStatus>(() => {
     if (publishing) return "publishing";
@@ -1098,7 +1141,7 @@ export default function AiDealScreen() {
         return {
           icon: "edit" as const,
           title: t("createAi.publishMissingTitle"),
-          body: t("createAi.publishMissingBody"),
+          body: publishReadiness.reasonMessage || t("createAi.publishMissingBody"),
           backgroundColor: theme.surfaceMuted,
           borderColor: theme.border,
           titleColor: theme.mutedText,
@@ -1114,7 +1157,39 @@ export default function AiDealScreen() {
           titleColor: theme.accentText,
         };
     }
-  }, [colorScheme, displayedPublishStatus, editingDealId, publishStatusMessage, t, theme]);
+  }, [colorScheme, displayedPublishStatus, editingDealId, publishReadiness.reasonMessage, publishStatusMessage, t, theme]);
+
+  const generationRecovery = useMemo(() => {
+    if (!lastGenerationError || !lastGenerationOutcomeKind) return null;
+    const fallbackAllowed = canUseFallbackTemplateForOutcome(lastGenerationOutcomeKind);
+    const body =
+      lastGenerationOutcomeKind === "ownership_blocked"
+        ? t("createAi.generationOwnershipBody", {
+            defaultValue: "This account cannot create or publish ads for this business. Log in with the owner account to continue.",
+          })
+        : lastGenerationOutcomeKind === "quota_or_cooldown_blocked"
+          ? t("createAi.generationQuotaBody", {
+              defaultValue: "AI generation is paused for this account right now. You can write the ad yourself, or try AI again when it resets.",
+            })
+          : lastGenerationOutcomeKind === "input_or_offer_blocked"
+            ? t("createAi.generationInputBody", {
+                defaultValue: "Fix the account, photo, or deal details above, then try again.",
+              })
+            : fallbackAllowed
+              ? t("createAi.fallbackTemplateBody", {
+                  defaultValue: "AI had trouble, but your confirmed photo and deal details can still make a clean fallback ad.",
+                })
+              : t("createAi.generationNoFallbackBody", {
+                  defaultValue: "AI had trouble and there is no saved image to use for a fallback. Add a photo, try again, or write the ad yourself.",
+                });
+
+    return {
+      title: lastGenerationError,
+      body,
+      showFallbackAction: fallbackAllowed,
+      showManualAction: lastGenerationOutcomeKind !== "ownership_blocked",
+    };
+  }, [lastGenerationError, lastGenerationOutcomeKind, t]);
 
   const showDraftEditor =
     templateLoaded ||
@@ -1125,6 +1200,84 @@ export default function AiDealScreen() {
     ctaText.trim().length > 0 ||
     description.trim().length > 0 ||
     manualDraftUnlocked;
+
+  function scrollToFormY(y: number | null, fallback: "none" | "end" = "none") {
+    setTimeout(() => {
+      if (y != null) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - Spacing.md), animated: true });
+      } else if (fallback === "end") {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 220);
+  }
+
+  function scrollToDescriptionStep() {
+    scrollToFormY(descriptionSectionYRef.current);
+    setTimeout(() => hintInputRef.current?.focus(), 520);
+  }
+
+  function scrollToAdReview() {
+    scrollToFormY(adReviewSectionYRef.current, "end");
+  }
+
+  function scrollToGenerationRecovery() {
+    scrollToFormY(generationSectionYRef.current, "end");
+  }
+
+  function scrollToDraftEditor() {
+    scrollToFormY(draftEditorSectionYRef.current, "end");
+  }
+
+  function hasFallbackTemplateSource() {
+    return Boolean(generatedAd?.poster_storage_path || photoPath || photoUri || posterUrl);
+  }
+
+  function clearGenerationErrorState() {
+    setLastGenerationError(null);
+    setLastGenerationOutcomeKind(null);
+  }
+
+  function setGenerationFailureState(message: string, kind: GenerationOutcomeKind) {
+    setLastGenerationError(message);
+    setLastGenerationOutcomeKind(kind);
+    setTimeout(() => scrollToGenerationRecovery(), 120);
+  }
+
+  function handleHintTextChange(text: string) {
+    setHintText(text);
+    const inferred = inferDealEligibilityFormFromText(text);
+    if (!inferred) return;
+    setEligibilityForm((current) =>
+      mergeInferredEligibilityForm(current, inferred, { allowDealTypeChange: true }),
+    );
+  }
+
+  function handleEligibilityFormChange(next: DealEligibilityFormState) {
+    const inferred = inferDealEligibilityFormFromText(hintText);
+    setEligibilityForm(mergeInferredEligibilityForm(next, inferred));
+  }
+
+  function skipPhotoToDescription() {
+    setBanner({
+      message: t("createAi.photoSkippedBanner", {
+        defaultValue: "No photo selected. Describe the deal and Twofer will use those details.",
+      }),
+      tone: "info",
+    });
+    scrollToDescriptionStep();
+  }
+
+  useEffect(() => {
+    if (eligibilityResult.eligible && !previousEligibleRef.current) {
+      const targetY = scheduleSectionY ?? scheduleSectionYRef.current;
+      setTimeout(() => {
+        if (targetY != null) {
+          scrollRef.current?.scrollTo({ y: Math.max(0, targetY - Spacing.md), animated: true });
+        }
+      }, 220);
+    }
+    previousEligibleRef.current = eligibilityResult.eligible;
+  }, [eligibilityResult.eligible, scheduleSectionY]);
 
   const rememberImageVersion = useCallback((ad: GeneratedAd, kind: ImageVersionKind) => {
     const entry = buildImageVersionEntry(ad, kind);
@@ -1358,7 +1511,7 @@ export default function AiDealScreen() {
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
     setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     setTemplateLoaded(false);
     setEditingSourceLocale(null);
     setPrefillSourceLocale(null);
@@ -1580,7 +1733,7 @@ export default function AiDealScreen() {
         setAdAccepted(false);
         setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
-        setLastGenerationError(null);
+        clearGenerationErrorState();
         setTemplateLoaded(false);
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
@@ -1674,7 +1827,7 @@ export default function AiDealScreen() {
         setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
-        setLastGenerationError(null);
+        clearGenerationErrorState();
       }
     })();
     return () => { cancelled = true; };
@@ -1838,6 +1991,7 @@ export default function AiDealScreen() {
     lastComposedPreviewTelemetryHashRef.current = null;
     aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
+    clearGenerationErrorState();
   }
 
   function buildCreativeRequestPayload() {
@@ -2168,6 +2322,7 @@ export default function AiDealScreen() {
     setGenerating(false);
     setRevising(false);
     setBanner(null);
+    clearGenerationErrorState();
   }
 
   function blockIneligibleOffer(attemptedAction: string): boolean {
@@ -2211,7 +2366,7 @@ export default function AiDealScreen() {
     trackEvent(AiAdsEvents.GENERATE_TAPPED, { screen: "create_ai" });
     setGenerating(true);
     setBanner(null);
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     resetGenerationState();
     adGenerationStartedAtRef.current = Date.now();
     composedPreviewShownAtRef.current = null;
@@ -2230,7 +2385,7 @@ export default function AiDealScreen() {
         // them the friendly "try a different photo" copy that already exists.
         if (requestId !== generationRequestIdRef.current) return;
         const friendly = t("createAi.errPublishPhoto");
-        setLastGenerationError(friendly);
+        setGenerationFailureState(friendly, "input_or_offer_blocked");
         setBanner({ message: friendly, tone: "error" });
         return;
       }
@@ -2272,6 +2427,7 @@ export default function AiDealScreen() {
       rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
+      setTimeout(() => scrollToAdReview(), 260);
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
         regeneration_attempt: 0,
@@ -2281,7 +2437,14 @@ export default function AiDealScreen() {
       const raw = err instanceof Error ? err.message : String(err);
       const code = getErrorCode(err);
       const friendly = friendlyGenerationError(raw, code);
-      setLastGenerationError(friendly);
+      setGenerationFailureState(
+        friendly,
+        classifyGenerationFailure({
+          raw,
+          code,
+          hasFallbackSource: hasFallbackTemplateSource(),
+        }),
+      );
       setBanner({ message: friendly, tone: "error" });
       trackEvent(AiAdsEvents.GENERATION_FAILED, {
         screen: "create_ai",
@@ -2501,13 +2664,21 @@ export default function AiDealScreen() {
       creative_lane: "single",
       regeneration_attempt: revisionsUsed,
     });
-    // Scroll to draft editor
     setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 200);
+      scrollToDraftEditor();
+    }, 220);
   }
 
   function useFallbackTemplateAd() {
+    if (!canUseFallbackTemplateForOutcome(lastGenerationOutcomeKind)) {
+      setBanner({
+        message: t("createAi.fallbackTemplateUnavailable", {
+          defaultValue: "A fallback template is not available for this issue. Fix the message above, then try again.",
+        }),
+        tone: "warning",
+      });
+      return;
+    }
     const fallbackPosterPath = generatedAd?.poster_storage_path ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
     if (!hasImageSource) {
@@ -2557,7 +2728,7 @@ export default function AiDealScreen() {
     applyAdToDraft(fallbackAd);
     setAdAccepted(!composedExactPresentationApprovalEnabled);
     setManualDraftUnlocked(true);
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     setPublishStatus("idle");
     setPublishStatusMessage(null);
     setBanner({
@@ -2568,8 +2739,8 @@ export default function AiDealScreen() {
     });
     trackEvent("owner_fallback_template_used", { businessId, hasPhoto: Boolean(photoPath || photoUri || posterUrl) });
     setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 200);
+      scrollToAdReview();
+    }, 260);
   }
 
   function showPublishError(message: string, tone: "error" | "warning" = "error") {
@@ -2607,7 +2778,7 @@ export default function AiDealScreen() {
     if (publishInFlightRef.current) return;
     setPublishStatusMessage(null);
     if (!canPublish) {
-      const message = t("createAi.publishMissingBody");
+      const message = publishReadiness.reasonMessage || t("createAi.publishMissingBody");
       setPublishStatus("missing");
       setBanner({ message, tone: "error" });
       return;
@@ -3537,6 +3708,26 @@ export default function AiDealScreen() {
             <Text style={{ marginTop: 8, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
               {t("createAi.photoSkipHint")}
             </Text>
+            {!selectedPhotoUri ? (
+              <Pressable
+                onPress={skipPhotoToDescription}
+                accessibilityRole="button"
+                accessibilityLabel={t("createAi.skipPhoto", { defaultValue: "Skip photo" })}
+                style={{
+                  minHeight: 44,
+                  marginTop: 6,
+                  alignSelf: "flex-start",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>
+                  {t("createAi.skipPhoto", { defaultValue: "Skip photo" })}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={18} color={theme.accentText} />
+              </Pressable>
+            ) : null}
 
             {selectedPhotoUri ? (
               <Image
@@ -3727,7 +3918,12 @@ export default function AiDealScreen() {
               </View>
             ) : null}
 
-            <View style={{ marginTop: 16 }}>
+            <View
+              onLayout={(e) => {
+                descriptionSectionYRef.current = e.nativeEvent.layout.y;
+              }}
+              style={{ marginTop: 16 }}
+            >
               <StepBadge n={2} total={3} t={t} />
             </View>
             <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.dealDescriptionLabel")}</Text>
@@ -3736,8 +3932,9 @@ export default function AiDealScreen() {
             </Text>
             <View style={{ marginTop: 6 }}>
               <TextInput
+                ref={hintInputRef}
                 value={hintText}
-                onChangeText={setHintText}
+                onChangeText={handleHintTextChange}
                 placeholder={selectedPhotoUri ? t("createAi.hintPlaceholder") : t("createAi.hintPlaceholderNoPhoto")}
                 placeholderTextColor={theme.mutedText}
                 multiline
@@ -3781,7 +3978,7 @@ export default function AiDealScreen() {
 
             <DealEligibilityForm
               value={eligibilityForm}
-              onChange={setEligibilityForm}
+              onChange={handleEligibilityFormChange}
               t={t}
               theme={theme}
               colorScheme={colorScheme}
@@ -3790,7 +3987,11 @@ export default function AiDealScreen() {
             />
 
             <View
-              onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                scheduleSectionYRef.current = y;
+                setScheduleSectionY(y);
+              }}
               style={{ marginTop: 16 }}
             >
               <StepBadge n={3} total={3} t={t} />
@@ -4052,18 +4253,27 @@ export default function AiDealScreen() {
               accessibilityRole="button"
               accessibilityState={{ expanded: claimSettingsOpen }}
               accessibilityLabel={t("createAi.claimSettingsHeader")}
-              style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              style={{ marginTop: 12, gap: 4 }}
             >
-              <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.claimSettingsHeader")}</Text>
-              <Text style={{ fontSize: 12, opacity: 0.5, color: theme.text }}>
-                {claimSettingsOpen
-                  ? t("createAi.collapseSettings", { defaultValue: "Hide" })
-                  : t("createAi.claimSettingsSummary", {
-                      maxClaims,
-                      cutoffMins,
-                      defaultValue: "{{maxClaims}} claims max, {{cutoffMins}} min cutoff",
-                    })}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Text style={{ flex: 1, fontWeight: "700", color: theme.text }}>
+                  {t("createAi.claimSettingsHeader")}
+                </Text>
+                <Text style={{ fontSize: 12, opacity: 0.55, color: theme.text }}>
+                  {claimSettingsOpen
+                    ? t("createAi.collapseSettings", { defaultValue: "Hide" })
+                    : t("createAi.expandSettings", { defaultValue: "Show" })}
+                </Text>
+              </View>
+              {!claimSettingsOpen ? (
+                <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                  {t("createAi.claimSettingsSummary", {
+                    maxClaims,
+                    cutoffMins,
+                    defaultValue: "{{maxClaims}} claims max, {{cutoffMins}} min cutoff",
+                  })}
+                </Text>
+              ) : null}
             </Pressable>
             {claimSettingsOpen ? (
               <>
@@ -4203,7 +4413,12 @@ export default function AiDealScreen() {
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
             ) : null}
 
-            <View style={{ marginTop: 16, gap: 10 }}>
+            <View
+              onLayout={(e) => {
+                generationSectionYRef.current = e.nativeEvent.layout.y;
+              }}
+              style={{ marginTop: 16, gap: 10 }}
+            >
               {quota ? (
                 <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center", color: theme.text }}>
                   {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
@@ -4233,34 +4448,42 @@ export default function AiDealScreen() {
               ) : null}
             </View>
 
-            {lastGenerationError && !generating ? (
+            {generationRecovery && !generating ? (
               <View style={{ marginTop: 16, padding: 14, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                 {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
                     failure / timeout / ownership), not a generic "couldn't generate"
                     line — so the cause is visible instead of hidden. */}
-                <Text style={{ fontWeight: "700", color: theme.text }}>{lastGenerationError}</Text>
+                <Text style={{ fontWeight: "700", color: theme.text }}>{generationRecovery.title}</Text>
                 <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
-                  {t("createAi.fallbackTemplateBody", {
-                    defaultValue: "AI image generation had trouble, so we made a clean fallback ad. You can publish this now or try AI again.",
-                  })}
+                  {generationRecovery.body}
                 </Text>
-                <PrimaryButton
-                  title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
-                  onPress={useFallbackTemplateAd}
-                />
-                <SecondaryButton
-                  title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
-                  onPress={() => {
-                    setManualDraftUnlocked(true);
-                    setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
-                  }}
-                />
+                {generationRecovery.showFallbackAction ? (
+                  <PrimaryButton
+                    title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
+                    onPress={useFallbackTemplateAd}
+                  />
+                ) : null}
+                {generationRecovery.showManualAction ? (
+                  <SecondaryButton
+                    title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
+                    onPress={() => {
+                      setManualDraftUnlocked(true);
+                      setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
+                      scrollToDraftEditor();
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
 
             {/* Single ad preview - text rendered natively below the image, not baked in. */}
             {generatedAd ? (
-              <View style={{ marginTop: 22, gap: 14 }}>
+              <View
+                onLayout={(e) => {
+                  adReviewSectionYRef.current = e.nativeEvent.layout.y;
+                }}
+                style={{ marginTop: 22, gap: 14 }}
+              >
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
                 {effectivePosterSpec ? (
@@ -4720,7 +4943,11 @@ export default function AiDealScreen() {
 
             {/* Draft editor — appears once user accepts the ad or starts a manual draft */}
             {showDraftEditor ? (
-              <>
+              <View
+                onLayout={(e) => {
+                  draftEditorSectionYRef.current = e.nativeEvent.layout.y;
+                }}
+              >
                 <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
                 <View
                   style={{
@@ -4786,26 +5013,34 @@ export default function AiDealScreen() {
                       </View>
                     </View>
                   ) : null}
-                  <PrimaryButton
-                    title={
-                      displayedPublishStatus === "publishing"
-                        ? t("createAi.publishing")
-                        : displayedPublishStatus === "success"
-                          ? editingDealId
-                            ? t("createAi.publishUpdateSuccessTitle")
-                            : t("createAi.publishSuccessTitle")
-                          : editingDealId ? t("createAi.saveDealChanges") : t("createAi.publishDeal")
-                    }
-                    onPress={() => void publishDeal()}
-                    disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
-                  />
+                  {displayedPublishStatus === "missing" ? (
+                    <SecondaryButton
+                      title={publishReadiness.buttonLabel}
+                      onPress={() => {}}
+                      disabled
+                    />
+                  ) : (
+                    <PrimaryButton
+                      title={
+                        displayedPublishStatus === "publishing"
+                          ? t("createAi.publishing")
+                          : displayedPublishStatus === "success"
+                            ? editingDealId
+                              ? t("createAi.publishUpdateSuccessTitle")
+                              : t("createAi.publishSuccessTitle")
+                            : publishReadiness.buttonLabel
+                      }
+                      onPress={() => void publishDeal()}
+                      disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
+                    />
+                  )}
                   <SecondaryButton
                     title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}
                     onPress={() => void saveTemplate()}
-                    disabled={savingTemplate}
+                    disabled={savingTemplate || !canPublish}
                   />
                 </View>
-              </>
+              </View>
             ) : null}
           </>
         )}

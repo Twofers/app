@@ -34,8 +34,20 @@ describe("AI ads photo picker source", () => {
 
   it("makes the no-photo description path visible on the screen", () => {
     expect(createAiSource).toContain("createAi.photoSkipHint");
+    expect(createAiSource).toContain("createAi.skipPhoto");
+    expect(createAiSource).toContain("skipPhotoToDescription");
+    expect(createAiSource).toContain("hintInputRef");
     expect(createAiSource).toContain("createAi.dealDescriptionHelpNoPhoto");
     expect(createAiSource).toContain("createAi.hintPlaceholderNoPhoto");
+  });
+
+  it("keeps the owner description wired to eligibility inference", () => {
+    expect(createAiSource).toContain("inferDealEligibilityFormFromText");
+    expect(createAiSource).toContain("mergeInferredEligibilityForm");
+    expect(createAiSource).toContain("function handleHintTextChange");
+    expect(createAiSource).toContain("function handleEligibilityFormChange");
+    expect(createAiSource).toContain("onChangeText={handleHintTextChange}");
+    expect(createAiSource).toContain("onChange={handleEligibilityFormChange}");
   });
 
   it("uses owner-friendly lower-page workflow labels", () => {
