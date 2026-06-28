@@ -206,6 +206,7 @@ type CreativeFormat = AdCreativeFormat;
 type PreviewFormat = CreativeFormat;
 
 const POSTER_STYLE_CHOICES: PosterStyleChoice[] = ["auto", "fresh", "bold", "premium"];
+const EXPLICIT_POSTER_STYLE_CHOICES: PosterTemplateId[] = ["fresh", "bold", "premium"];
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
 
@@ -2031,12 +2032,15 @@ export default function AiDealScreen() {
     if (next === creativeFormat) return;
     setCreativeFormat(next);
     setPreviewFormat(next);
+    if (generatedAd) invalidateAcceptedAdDraft();
   }
 
   function selectPosterStyle(next: PosterStyleChoice) {
-    if (next === posterStyle) return;
+    if (next === posterStyle && creativeFormat === "poster_v1" && previewFormat === "poster_v1") return;
     setPosterStyle(next);
+    setCreativeFormat("poster_v1");
     setPreviewFormat("poster_v1");
+    if (generatedAd) invalidateAcceptedAdDraft();
   }
 
   function chooseDraftSourceLocale(locale: SupportedLocale) {
@@ -4572,6 +4576,49 @@ export default function AiDealScreen() {
 
                 {showPosterPreview && effectivePosterSpec ? (
                   <>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {EXPLICIT_POSTER_STYLE_CHOICES.map((styleChoice) => {
+                        const selected = selectedPosterTemplateId === styleChoice;
+                        const label =
+                          styleChoice === "fresh"
+                            ? t("createAi.posterStyleFresh", { defaultValue: "Fresh" })
+                            : styleChoice === "bold"
+                              ? t("createAi.posterStyleBold", { defaultValue: "Bold" })
+                              : t("createAi.posterStylePremium", { defaultValue: "Premium" });
+                        return (
+                          <Pressable
+                            key={`review-${styleChoice}`}
+                            onPress={() => selectPosterStyle(styleChoice)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            style={{
+                              flexGrow: 1,
+                              minHeight: 38,
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: selected ? theme.primary : theme.border,
+                              backgroundColor: selected ? theme.primary : theme.surfaceMuted,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Text
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.82}
+                              style={{
+                                color: selected ? theme.primaryText : theme.text,
+                                fontWeight: "800",
+                                fontSize: 12,
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                     <View
                       style={{
                         borderRadius: 8,
@@ -4585,6 +4632,7 @@ export default function AiDealScreen() {
                         spec={effectivePosterSpec}
                         imageUri={adImageUri ?? selectedPhotoUri}
                         templateId={selectedPosterTemplateId}
+                        eyebrowLabel={t("createAi.posterTryOurLabel", { defaultValue: "Try our" })}
                       />
                     </View>
                     <View

@@ -1675,6 +1675,7 @@
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "Paso {{current}} de {{total}}",
+    "posterTryOurLabel": "Try our",
     "loginPrompt": "Please log in to create deals.",
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",

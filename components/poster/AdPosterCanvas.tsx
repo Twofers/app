@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Image,
   ImageBackground,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { Radii } from "@/constants/theme";
 import {
   assertPosterCopyPolicy,
   sanitizePosterCopy,
+  sanitizePosterText,
 } from "@/lib/poster/posterPolicy";
 import type { PosterCopyV1, PosterSpecV1, PosterTemplateId } from "@/lib/poster/posterTypes";
 import { POSTER_TEMPLATES, posterTemplateOrDefault } from "./posterTemplates";
@@ -27,19 +27,9 @@ export type AdPosterCanvasProps = {
   copy?: PosterCopyV1 | null;
   templateId?: PosterTemplateId | null;
   imageUri?: string | null;
+  eyebrowLabel?: string | null;
   style?: StyleProp<ViewStyle>;
 };
-
-function initials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join("") || "LF"
-  );
-}
 
 function useScaled(width: number) {
   return useMemo(() => {
@@ -96,51 +86,108 @@ function PosterLine({
   );
 }
 
-function PosterImage({
+function PosterBackground({
   imageUri,
   templateId,
-  scale,
 }: {
   imageUri?: string | null;
   templateId: PosterTemplateId;
-  scale: (value: number) => number;
 }) {
-  const isPremium = templateId === "premium";
-  const frame = isPremium
-    ? { left: 0, top: 0, width: POSTER_CANVAS_WIDTH, height: POSTER_CANVAS_HEIGHT, radius: 0 }
-    : templateId === "bold"
-      ? { left: 86, top: 390, width: 908, height: 610, radius: 34 }
-      : { left: 140, top: 390, width: 800, height: 650, radius: 400 };
-  const rounded = templateId === "fresh";
+  const theme = POSTER_TEMPLATES[templateId];
 
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: scale(frame.left),
-        top: scale(frame.top),
-        width: scale(frame.width),
-        height: scale(frame.height),
-        borderRadius: scale(rounded ? frame.width / 2 : frame.radius),
-        overflow: "hidden",
-        backgroundColor: "rgba(255,255,255,0.24)",
-      }}
-    >
+    <>
       {imageUri ? (
-        <Image source={{ uri: imageUri }} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+        <ImageBackground source={{ uri: imageUri }} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
       ) : (
         <LinearGradient
-          colors={["#FDE68A", "#FB923C"]}
+          colors={theme.background}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
       )}
-    </View>
+      {templateId === "fresh" ? (
+        <>
+          <LinearGradient
+            colors={["rgba(4,84,86,0.62)", "rgba(4,84,86,0.16)", "rgba(246,196,69,0.90)"]}
+            locations={[0, 0.63, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.bottomBand, { backgroundColor: "rgba(248,255,247,0.90)" }]} />
+        </>
+      ) : null}
+      {templateId === "bold" ? (
+        <>
+          <View style={[styles.splitOverlay, styles.splitOverlayLeft]} />
+          <View style={[styles.splitOverlay, styles.splitOverlayRight]} />
+          <View style={[styles.bottomBand, { backgroundColor: "rgba(10,10,14,0.84)" }]} />
+        </>
+      ) : null}
+      {templateId === "premium" ? (
+        <LinearGradient
+          colors={["rgba(0,0,0,0.88)", "rgba(0,0,0,0.42)", "rgba(0,0,0,0.10)", "rgba(0,0,0,0.82)"]}
+          locations={[0, 0.24, 0.62, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+    </>
   );
 }
 
-function OfferPanel({
+function TopCopyBlock({
+  copy,
+  templateId,
+  eyebrowLabel,
+  scale,
+}: {
+  copy: PosterCopyV1;
+  templateId: PosterTemplateId;
+  eyebrowLabel: string;
+  scale: (value: number) => number;
+}) {
+  const theme = POSTER_TEMPLATES[templateId];
+  return (
+    <>
+      <PosterLine
+        value={copy.business_name}
+        top={14}
+        left={72}
+        width={936}
+        size={40}
+        lineHeight={46}
+        color={theme.business}
+        scale={scale}
+      />
+      {eyebrowLabel ? (
+        <PosterLine
+          value={eyebrowLabel}
+          top={94}
+          left={96}
+          width={888}
+          size={42}
+          lineHeight={48}
+          color={theme.accent}
+          weight="800"
+          scale={scale}
+        />
+      ) : null}
+      <PosterLine
+        value={copy.headline}
+        top={154}
+        left={72}
+        width={936}
+        size={78}
+        lineHeight={84}
+        color={theme.headline}
+        lines={2}
+        scale={scale}
+      />
+    </>
+  );
+}
+
+function OfferBlock({
   copy,
   templateId,
   scale,
@@ -150,34 +197,36 @@ function OfferPanel({
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
-  const panelTop = templateId === "fresh" ? 1058 : 1030;
+  const lineOneColor =
+    templateId === "fresh" ? "#063D3A" : templateId === "bold" ? theme.accent : theme.accent;
+  const lineTwoColor =
+    templateId === "fresh" ? "#0F766E" : templateId === "bold" ? "#FFFFFF" : theme.headline;
+  const sublineColor =
+    templateId === "fresh" ? "#37635F" : templateId === "bold" ? "#FDE68A" : theme.subline;
+
   return (
     <View
       style={{
         position: "absolute",
-        left: scale(100),
-        top: scale(panelTop),
-        width: scale(880),
-        minHeight: scale(190),
-        borderRadius: scale(templateId === "bold" ? 22 : 8),
-        backgroundColor: theme.panel,
-        borderWidth: scale(2),
-        borderColor: templateId === "bold" ? "rgba(255,255,255,0.76)" : theme.border,
-        paddingHorizontal: scale(34),
-        paddingVertical: scale(28),
+        left: scale(72),
+        top: scale(1030),
+        width: scale(936),
+        minHeight: scale(240),
         justifyContent: "center",
+        alignItems: "center",
         zIndex: 8,
       }}
     >
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
-        minimumFontScale={0.55}
+        minimumFontScale={0.54}
         maxFontSizeMultiplier={1}
         style={{
-          color: theme.panelText,
-          fontSize: scale(62),
-          lineHeight: scale(68),
+          width: "100%",
+          color: lineOneColor,
+          fontSize: scale(68),
+          lineHeight: scale(76),
           fontWeight: "900",
           textAlign: "center",
           letterSpacing: 0,
@@ -188,13 +237,14 @@ function OfferPanel({
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
-        minimumFontScale={0.55}
+        minimumFontScale={0.54}
         maxFontSizeMultiplier={1}
         style={{
-          marginTop: scale(8),
-          color: theme.panelText,
-          fontSize: scale(72),
-          lineHeight: scale(78),
+          width: "100%",
+          marginTop: scale(12),
+          color: lineTwoColor,
+          fontSize: scale(78),
+          lineHeight: scale(86),
           fontWeight: "900",
           textAlign: "center",
           letterSpacing: 0,
@@ -202,6 +252,26 @@ function OfferPanel({
       >
         {copy.offer_line_2}
       </Text>
+      {copy.subline ? (
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          maxFontSizeMultiplier={1}
+          style={{
+            width: "100%",
+            marginTop: scale(18),
+            color: sublineColor,
+            fontSize: scale(30),
+            lineHeight: scale(36),
+            fontWeight: "800",
+            textAlign: "center",
+            letterSpacing: 0,
+          }}
+        >
+          {copy.subline}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -210,128 +280,20 @@ function PosterContent({
   copy,
   imageUri,
   templateId,
+  eyebrowLabel,
   scale,
 }: {
   copy: PosterCopyV1;
   imageUri?: string | null;
   templateId: PosterTemplateId;
+  eyebrowLabel: string;
   scale: (value: number) => number;
 }) {
-  const theme = POSTER_TEMPLATES[templateId];
-  const hasFullImage = templateId === "premium" && imageUri;
-
   return (
     <>
-      {hasFullImage ? (
-        <ImageBackground source={{ uri: imageUri }} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
-      ) : (
-        <LinearGradient
-          colors={theme.background}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.imageTint }]} />
-      {templateId === "bold" ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            right: scale(-120),
-            top: scale(38),
-            width: scale(420),
-            height: scale(420),
-            borderRadius: scale(210),
-            backgroundColor: "rgba(251,191,36,0.22)",
-          }}
-        />
-      ) : null}
-      {templateId === "fresh" ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: scale(-90),
-            top: scale(900),
-            width: scale(1260),
-            height: scale(360),
-            borderRadius: scale(180),
-            backgroundColor: "rgba(255,255,255,0.26)",
-            transform: [{ rotate: "-8deg" }],
-          }}
-        />
-      ) : null}
-      {templateId !== "premium" ? <PosterImage imageUri={imageUri} templateId={templateId} scale={scale} /> : null}
-      {templateId === "premium" ? <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.36)" }]} /> : null}
-
-      <View
-        style={{
-          position: "absolute",
-          left: scale(120),
-          top: scale(68),
-          width: scale(840),
-          alignItems: "center",
-          zIndex: 7,
-        }}
-      >
-        <View
-          style={{
-            width: scale(82),
-            height: scale(82),
-            borderRadius: scale(20),
-            backgroundColor: templateId === "bold" ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.34)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: scale(2),
-            borderColor: theme.border,
-          }}
-        >
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            maxFontSizeMultiplier={1}
-            style={{ color: theme.business, fontSize: scale(32), lineHeight: scale(38), fontWeight: "900" }}
-          >
-            {initials(copy.business_name)}
-          </Text>
-        </View>
-      </View>
-      <PosterLine
-        value={copy.business_name}
-        top={170}
-        left={96}
-        width={888}
-        size={38}
-        lineHeight={44}
-        color={theme.business}
-        scale={scale}
-      />
-      <PosterLine
-        value={copy.headline}
-        top={244}
-        left={92}
-        width={896}
-        size={72}
-        lineHeight={78}
-        color={theme.headline}
-        lines={2}
-        scale={scale}
-      />
-      {copy.subline ? (
-        <PosterLine
-          value={copy.subline}
-          top={1248}
-          left={120}
-          width={840}
-          size={30}
-          lineHeight={36}
-          color={templateId === "bold" ? "#FFFFFF" : theme.subline}
-          weight="800"
-          scale={scale}
-        />
-      ) : null}
-      <OfferPanel copy={copy} templateId={templateId} scale={scale} />
+      <PosterBackground imageUri={imageUri} templateId={templateId} />
+      <TopCopyBlock copy={copy} templateId={templateId} eyebrowLabel={eyebrowLabel} scale={scale} />
+      <OfferBlock copy={copy} templateId={templateId} scale={scale} />
     </>
   );
 }
@@ -341,7 +303,7 @@ export function posterCopyFromSpec(spec: PosterSpecV1 | null | undefined): Poste
   return spec.copy_by_language["en-US"] ?? Object.values(spec.copy_by_language)[0] ?? null;
 }
 
-export function AdPosterCanvas({ spec, copy, templateId, imageUri, style }: AdPosterCanvasProps) {
+export function AdPosterCanvas({ spec, copy, templateId, imageUri, eyebrowLabel, style }: AdPosterCanvasProps) {
   const [width, setWidth] = useState(0);
   const scale = useScaled(width);
   const height = width > 0 ? Math.round((width * POSTER_CANVAS_HEIGHT) / POSTER_CANVAS_WIDTH) : undefined;
@@ -351,6 +313,10 @@ export function AdPosterCanvas({ spec, copy, templateId, imageUri, style }: AdPo
     if (!rawCopy) return null;
     return sanitizePosterCopy(rawCopy, rawCopy.business_name || "Local Favorite").copy;
   }, [rawCopy]);
+  const sanitizedEyebrow = useMemo(
+    () => sanitizePosterText(eyebrowLabel ?? "", { fallback: "", maxChars: 18 }),
+    [eyebrowLabel],
+  );
   const policy = sanitized ? assertPosterCopyPolicy(sanitized) : null;
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
@@ -372,7 +338,13 @@ export function AdPosterCanvas({ spec, copy, templateId, imageUri, style }: AdPo
       accessibilityRole="image"
       accessibilityLabel={`${sanitized.business_name} poster. ${sanitized.headline}. ${sanitized.offer_line_1}. ${sanitized.offer_line_2}.`}
     >
-      <PosterContent copy={sanitized} imageUri={imageUri} templateId={resolvedTemplate} scale={scale} />
+      <PosterContent
+        copy={sanitized}
+        imageUri={imageUri}
+        templateId={resolvedTemplate}
+        eyebrowLabel={sanitizedEyebrow}
+        scale={scale}
+      />
     </View>
   );
 }
@@ -384,5 +356,26 @@ const styles = StyleSheet.create({
     position: "relative",
     borderRadius: Radii.md,
     overflow: "hidden",
+  },
+  bottomBand: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "75%",
+    bottom: 0,
+  },
+  splitOverlay: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: "50%",
+  },
+  splitOverlayLeft: {
+    left: 0,
+    backgroundColor: "rgba(49,16,67,0.70)",
+  },
+  splitOverlayRight: {
+    right: 0,
+    backgroundColor: "rgba(244,122,0,0.56)",
   },
 });

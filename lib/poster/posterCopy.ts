@@ -5,6 +5,7 @@ import {
   assertPosterCopyPolicy,
   sanitizePosterCopy,
   sanitizePosterText,
+  scanPosterTextPolicy,
 } from "./posterPolicy.ts";
 import type {
   PosterCopyV1,
@@ -48,6 +49,15 @@ function qtyLabel(quantity: number): string {
 
 function lineItem(value: string, maxChars = 22): string {
   return sanitizePosterText(value, { fallback: "LOCAL DEAL", maxChars });
+}
+
+function isMechanicalOfferHeadline(value: string): boolean {
+  const text = cleanText(value).toLowerCase();
+  if (!text) return false;
+  if (/\bbuy\b/.test(text) && /\bget\b/.test(text)) return true;
+  if (/\b\d+\s*%\s*off\b/.test(text)) return true;
+  if (/\bfree\b/.test(text) && /\bwith\b|\bbuy\b|\bpurchase\b/.test(text)) return true;
+  return false;
 }
 
 export function sanitizePosterBusinessName(
@@ -101,9 +111,19 @@ export function buildPosterOfferLinesFromOfferDefinition(definition: OfferDefini
 }
 
 function headlineFallback(definition: OfferDefinitionV1): string {
-  const item = cleanText(definition.qualifyingItems[0]?.displayName ?? definition.reward.displayNames[0] ?? "");
-  if (definition.offerType === "percent_off_single_item") return item ? `SAVE ON ${item}` : "LOCAL DEAL";
-  return item ? `${item} PAIRING` : "LOCAL DEAL";
+  const item = cleanText(definition.qualifyingItems[0]?.displayName ?? "");
+  const rewardItem = cleanText(definition.reward.displayNames[0] ?? "");
+  if (definition.offerType === "percent_off_single_item") return item || rewardItem || "LOCAL DEAL";
+  return item || rewardItem || "LOCAL DEAL";
+}
+
+function posterHeadline(definition: OfferDefinitionV1, requestedHeadline?: string | null): string {
+  const fallback = headlineFallback(definition);
+  const requested = cleanText(requestedHeadline);
+  if (!requested) return fallback;
+  if (!scanPosterTextPolicy(requested).passed) return fallback;
+  if (isMechanicalOfferHeadline(requested)) return fallback;
+  return requested;
 }
 
 export function buildPosterCopyFromOfferDefinition(params: {
@@ -114,11 +134,12 @@ export function buildPosterCopyFromOfferDefinition(params: {
 }): PosterCopyV1 {
   const businessName = sanitizePosterBusinessName(params.definition.merchantName, params.businessCategory);
   const lines = buildPosterOfferLinesFromOfferDefinition(params.definition);
+  const headline = posterHeadline(params.definition, params.headline);
   const base: PosterCopyV1 = {
     business_name: businessName,
-    headline: sanitizePosterText(params.headline ?? "", {
+    headline: sanitizePosterText(headline, {
       fallback: headlineFallback(params.definition),
-      maxChars: 28,
+      maxChars: 32,
     }),
     offer_line_1: lines.offer_line_1,
     offer_line_2: lines.offer_line_2,

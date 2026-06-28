@@ -134,4 +134,27 @@ describe("poster policy", () => {
     expect(copy.headline).not.toMatch(/claim|twofer/i);
     expect(copy.subline).toBeUndefined();
   });
+
+  it("uses the locked item name when generated copy repeats offer mechanics", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Bacon and egg sandwich",
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemDiscountPercent: 100,
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Buy a bacon and egg sandwich and get a free coffee",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.business_name).toBe("Merit Coffee");
+    expect(copy.headline).toBe("BACON AND EGG SANDWICH");
+    expect(copy.offer_line_1).toBe("BUY 1 BACON AND EGG SANDWICH");
+    expect(copy.offer_line_2).toBe("GET 1 COFFEE");
+  });
 });

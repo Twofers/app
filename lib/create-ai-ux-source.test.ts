@@ -77,4 +77,13 @@ describe("AI create UX source guards", () => {
       }
     }
   });
+
+  it("keeps poster styles switchable after generation", () => {
+    expect(createAiSource).toContain("EXPLICIT_POSTER_STYLE_CHOICES");
+    expect(createAiSource).toContain("key={`review-${styleChoice}`}");
+    expect(createAiSource).toContain("selectedPosterTemplateId === styleChoice");
+    expect(createAiSource).toContain('setCreativeFormat("poster_v1")');
+    expect(createAiSource).toContain("invalidateAcceptedAdDraft();");
+    expect(createAiSource).toContain("posterTryOurLabel");
+  });
 });
