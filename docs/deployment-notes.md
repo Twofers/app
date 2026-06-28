@@ -10,76 +10,33 @@
 3. **Edge Functions** — Deploy every function the app invokes (see list below). Redeploy after changing shared secrets or function code.
 4. **Mobile app (EAS / local)** — Build with `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and optional `EXPO_PUBLIC_*` legal URL overrides (see Environment variables).
 
-## Database migrations (exact set)
+## Database migrations
 
-Apply migration files in **filename (timestamp) order**. Easiest: `npx supabase db push` against the linked project after `npx supabase link --project-ref <ref>` — it applies any unmigrated files. The full ordered list as of launch:
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 99 migration files and the latest is `20260730121000_customer_deal_poster_spec_projection.sql`.
 
-| Order | File |
-|------:|------|
-| 1 | `20250127000000_initial_schema.sql` |
-| 2 | `20260127000001_add_deal_templates_and_recurring.sql` |
-| 3 | `20260128120000_business_profile_ai_context.sql` |
-| 4 | `20260129100000_deal_quality_tier.sql` |
-| 5 | `20260130120000_business_preferred_locale.sql` |
-| 6 | `20260323120000_users_read_claimed_deals.sql` |
-| 7 | `20260324120000_business_coordinates.sql` |
-| 8 | `20260324180000_business_consumer_profile_fields.sql` |
-| 9 | `20260325120000_ai_generation_logs.sql` |
-| 10 | `20260325120100_ai_compose_quota_rpc.sql` |
-| 11 | `20260325183000_strong_deal_only_guardrail.sql` |
-| 12 | `20260326120000_consumer_profiles_business_contact.sql` |
-| 13 | `20260326210000_deal_claims_short_code.sql` |
-| 14 | `20260327120000_launch_visual_redeem_analytics.sql` |
-| 15 | `20260328140000_merchant_insights_rpc.sql` |
-| 16 | `20260330120000_fix_deal_claims_deals_rls_recursion.sql` |
-| 17 | `20260330140000_deals_public_read_start_time_deal_templates_timezone.sql` |
-| 18 | `20260331120000_deal_poster_storage_public_read.sql` |
-| 19 | `20260401120000_add_claim_blocked_reason_mix_to_merchant_business_insights.sql` |
-| 20 | `20260401150000_update_strong_deal_guardrail_free_item.sql` |
-| 21 | `20260402120000_push_tokens.sql` |
-| 22 | `20260402130000_server_set_quality_tier.sql` |
-| 23 | `20260403120000_consumer_push_prefs.sql` |
-| 24 | `20260404120000_app_analytics_events_select_business_owner.sql` |
-| 25 | `20260429120000_business_menu_items.sql` |
-| 26 | `20260502120000_profiles_app_tab_mode.sql` |
-| 27 | `20260530120000_business_locations_deal_location.sql` |
-| 28 | `20260601000000_create_business_profiles.sql` |
-| 29 | `20260601153000_billing_v4_app_config_and_subscription_rls.sql` |
-| 30 | `20260601160000_create_subscription_history.sql` |
-| 31 | `20260630120000_lockdown_deal_claims_client_insert.sql` |
-| 32 | `20260630123000_enforce_business_locations_cap_insert_rls.sql` |
-| 33 | `20260701120001_enable_rate_limits_rls.sql` |
-| 34 | `20260701120002_enable_app_config_rls_backend_only.sql` |
-| 35 | `20260701130000_fix_deal_claims_rls_recursion_billing_v4.sql` |
-| 36 | `20260702120000_deal_translation_columns.sql` |
-| 37 | `20260703120000_add_analytics_business_id_index.sql` |
-| 38 | `20260703120001_push_token_cleanup.sql` |
-| 39 | `20260703120002_birthdate_check_constraint.sql` |
-| 40 | `20260703120003_deal_claims_status_changed_at.sql` |
-| 41 | `20260703120004_timezone_validation.sql` |
-| 42 | `20260704120000_enable_deals_realtime.sql` |
-| 43 | `20260704130000_enforce_max_claims_atomic.sql` |
-| 44 | `20260705120000_businesses_pii_column_grants.sql` |
-| 45 | `20260705120002_deal_claims_unique_active.sql` |
-| 46 | `20260705120003_subscription_history_idempotency.sql` |
-| 47 | `20260705120004_deal_claims_dashboard_index.sql` |
-| 48 | `20260705120005_business_profiles_single_row.sql` |
-| 49 | `20260705120006_realtime_publication_insert_only.sql` |
-| 50 | `20260705120007_failed_redeem_attempts.sql` |
-| 51 | `20260705120008_purge_user_data_rpc.sql` |
-| 52 | `20260705120009_push_token_cleanup_schedule.sql` |
-| 53 | `20260705130000_reports.sql` |
-| 54 | `20260706120000_business_invite_gate.sql` |
-| 55 | `20260706130000_deal_photo_owner_upload_policies.sql` |
-| 56 | `20260707120000_business_menu_item_sizes.sql` |
+Read-only compare:
 
-**Launch-critical for merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql` (claim lifecycle + analytics) and `20260328140000_merchant_insights_rpc.sql` (`merchant_business_insights`, `merchant_deal_insights` RPCs).
+```bash
+npx supabase migration list
+```
 
-**Launch-critical for billing (Stripe):** `20260601153000_billing_v4_app_config_and_subscription_rls.sql` (creates `app_config`, `business_profiles.subscription_*` columns, RLS) and `20260601160000_create_subscription_history.sql`. After applying, **seed the `app_config` row with current pricing** — the `billing-pricing` Edge function reads it. See `docs/stripe-setup.md`.
+Production-changing apply, only after explicit approval:
 
-**Launch-critical for menu / locations:** `20260429120000_business_menu_items.sql` (AI menu OCR storage), `20260530120000_business_locations_deal_location.sql` (multi-location).
+```bash
+npx supabase db push
+```
 
-**Launch-critical for realtime:** `20260704120000_enable_deals_realtime.sql` (Supabase Realtime publication on `deals`).
+High-signal dependencies:
+
+- **Merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql`, `20260328140000_merchant_insights_rpc.sql`.
+- **Billing / Stripe:** `20260601153000_billing_v4_app_config_and_subscription_rls.sql`, `20260601160000_create_subscription_history.sql`, and the July 2026 trial, credits, suspension, and refund migrations.
+- **Menu / locations:** `20260429120000_business_menu_items.sql`, `20260530120000_business_locations_deal_location.sql`, `20260708130000_nearby_geo_rpcs.sql`.
+- **Realtime / claim safety:** `20260704120001_enable_deals_realtime.sql`, `20260704130000_enforce_max_claims_atomic.sql`, `20260721120000_deal_wallet_redemption_rules.sql`.
+- **Role split:** `20260711120000_profiles_role.sql`.
+- **Offer versions:** `20260723120000_offer_versions_foundation.sql`, `20260724120000_offer_version_publish_rpc.sql`, `20260724121000_offer_version_claim_redemption_binding.sql`.
+- **AI / localization:** `20260722120000_ai_generation_cost_ledger.sql`, `20260727120000_ai_provider_circuit_breakers.sql`, `20260728120000_ad_localization_storage.sql`, `20260728123000_customer_deal_localization_projection.sql`.
+- **Deal release push scheduling:** `20260729120000_deal_release_push_events.sql`, then `20260729121000_deal_release_push_cron_schedule.sql`. These create the service-role-only idempotency table, Vault-backed cron secret verifier, and five-minute dispatcher for due release pushes. Applying them is production-changing and requires explicit approval.
+- **Ended-deal owner cleanup / poster projection:** `20260730120000_deals_owner_delete_ended.sql`, then `20260730121000_customer_deal_poster_spec_projection.sql`. These add owner cleanup for ended deals and a customer-safe native poster spec projection RPC. Applying them is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -109,15 +66,15 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 
 | Function | Purpose |
 |----------|---------|
-| `ai-compose-offer` | Voice / text → ad-copy compose (uses Whisper for voice) |
+| `ai-compose-offer` | Voice / text/photo -> ad-copy compose (uses Whisper for voice and the shared text provider router for compose) |
 | `ai-generate-ad-variants` | Single-ad pipeline (research → copy → GPT image generate or photo edit) |
 | `ai-generate-deal-copy` | Quick-Deal "Suggest title" |
-| `ai-create-deal` | Legacy one-shot deal insert (dev tool) |
+| `ai-create-deal` | Permanently disabled legacy endpoint; returns HTTP 410 |
 | `ai-extract-menu` | Menu photo → structured items (vision) |
-| `ai-refine-ad-copy` | Chat-style refinement of selected ad |
 | `ai-business-lookup` | Business-setup lookup (name → address/phone/category) |
 | `ai-deal-suggestions` | Deal idea suggestions |
 | `ai-translate-deal` | Localize deal copy across EN / ES / KO |
+| `publish-offer-version` | Versioned publish with exact presentation/localization approval enforcement |
 
 **Billing / Stripe (required for paid plans):**
 
@@ -158,16 +115,32 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 | Secret | Used by | Required |
 |--------|---------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem) | **Yes** |
-| `OPENAI_API_KEY` | All `ai-*` Edge functions | **Yes** |
+| `OPENAI_API_KEY` | OpenAI-backed AI paths, including Whisper voice transcription and OpenAI image generation/editing | **Yes for OpenAI paths** |
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
-| `OPENAI_MODEL`, `OPENAI_WHISPER_MODEL` | Override default chat / Whisper models | Optional |
+| `OPENAI_MODEL` | Shared OpenAI chat model override; defaults to `gpt-5.4-mini` and fails closed when set outside the allowlist | Optional |
+| `OPENAI_WHISPER_MODEL` | Whisper voice transcription override for `ai-compose-offer` | Optional |
+| `GEMINI_API_KEY` | Gemini text fallback, independent judging, vision QA fallback, and Gemini image generation when the related flags are enabled | Required only for Gemini paths |
+| `GEMINI_TEXT_MODEL`, `GEMINI_JUDGE_MODEL` | Gemini structured text and independent-judge model overrides; default `gemini-3.5-flash` | Optional |
+| `AI_V3_PROVIDER_ROUTER_ENABLED`, `AI_TEXT_PRIMARY_PROVIDER`, `AI_TEXT_FALLBACK_ENABLED`, `AI_TEXT_FALLBACK_PROVIDER` | Shared text provider router and optional Gemini fallback | Optional; keep fallback disabled in production until the public privacy/subprocessor update is deployed |
+| `AI_TEXT_PRIMARY_TIMEOUT_MS`, `AI_TEXT_FALLBACK_TIMEOUT_MS`, `AI_TRANSIENT_RETRY_MAX`, `AI_RETRY_AFTER_FULL_TIMEOUT` | Shared text provider timeout/retry tuning | Optional |
+| `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks when the shared text router is enabled | Optional; requires the circuit-breaker migration to be applied first |
+| `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent candidate judging for ad variants | Optional |
+| `AI_VISION_FALLBACK_ENABLED`, `AI_VISION_FALLBACK_PROVIDER`, `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, `AI_STOCK_QA_CANDIDATE_LIMIT` | Ad image QA fallback and stock-candidate QA tuning | Optional |
+| `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, `AI_REVISION_COST_HARD_LIMIT_USD` | AI provider cost projection/budget controls | Optional |
 | `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, `OPENAI_IMAGE_MODEL_EDIT` | GPT image model ids for `dalle-image.ts` (allowlisted server-side; default `gpt-image-1`) | Optional |
+| `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, `AI_IMAGE_STOCK_FALLBACK_ENABLED` | Ad-image provider selection, Gemini image model/cost estimate, owner-photo reference, and stock fallback controls | Optional; Gemini image paths also require `GEMINI_API_KEY` |
+| `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED`, `AI_V5_TRANSLATION_QA_ENABLED`, `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED`, `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` | Multilingual transcreation, QA, fallback, and server-side exact approval gates | Optional; keep off until `docs/localization/multilingual-deals-production-approval-runbook.md` gates pass |
 | `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY` | Allows synthetic menu scan output when `OPENAI_API_KEY` is missing (preview/dev only) | Optional (do not set in production) |
 
 **⚠️ Without `OPENAI_API_KEY`,** `ai-extract-menu` now returns a clear configuration error (`OPENAI_NOT_CONFIGURED`) in production-style behavior. Set `AI_EXTRACT_MENU_ALLOW_SAMPLE_WITHOUT_KEY=true` only in preview/dev projects if you intentionally want synthetic sample rows for demos.
+Upstream menu extraction provider failures return `OPENAI_ERROR` with sanitized status telemetry rather than raw provider response bodies. Outer menu extraction failures log a fixed `SERVER_ERROR` code rather than free-form exception text.
 
-`ai-generate-deal-copy` also returns a plain-language error with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing.
+`ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` also return plain-language errors with `error_code: OPENAI_NOT_CONFIGURED` when `OPENAI_API_KEY` is missing. These helpers can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured. Provider-config and outer helper failures log fixed error codes rather than raw exception text.
+
+`ai-compose-offer` returns a plain-language error with `error_code: OPENAI_KEY_MISSING` when required provider configuration is missing. Text/photo compose can continue through the shared Gemini text router only when the router flags and `GEMINI_API_KEY` are configured; the voice transcription-only path still requires OpenAI/Whisper.
+
+Provider failure bodies are not returned to clients. `ai-compose-offer`, `ai-generate-deal-copy`, `ai-deal-suggestions`, and `ai-translate-deal` return only `error_code: AI_GENERATION_FAILED` for upstream text generation failures. `ai-create-deal` no longer calls a provider and always returns `AI_CREATE_DEAL_LEGACY_DISABLED`. Shared OpenAI/Gemini text-provider exceptions keep classification codes but use generic provider/code messages, and router/circuit-breaker/cost-ledger maintenance failures log fixed error codes. `ai-business-lookup` Google exception paths and `ai-generate-ad-variants` research, copy, image QA, image generation, and image edit failure paths log fixed stage/error codes instead of raw upstream response bodies or free-form exception text.
 
 **Setting Edge secrets:**
 
@@ -178,6 +151,10 @@ npx supabase secrets set OPENAI_API_KEY=sk-...
 npx supabase secrets set OPENAI_IMAGE_MODEL_DEFAULT=gpt-image-1
 npx supabase secrets set OPENAI_IMAGE_MODEL_GENERATE=gpt-image-1
 npx supabase secrets set OPENAI_IMAGE_MODEL_EDIT=gpt-image-1
+npx supabase secrets set AI_V3_PROVIDER_ROUTER_ENABLED=true
+npx supabase secrets set AI_TEXT_FALLBACK_ENABLED=false
+npx supabase secrets set AI_V3_COST_BUDGET_ENABLED=true
+npx supabase secrets set AI_CIRCUIT_BREAKER_ENABLED=false
 npx supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 npx supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 ```

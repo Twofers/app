@@ -16,8 +16,9 @@ import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
-import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
@@ -35,26 +36,31 @@ export default function CreateDeal() {
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
   const router = useRouter();
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
-  const { isLoggedIn, businessId, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, loading, subscriptionTier } = useBusiness();
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+  const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
-  const [moreToolsOpen, setMoreToolsOpen] = useState(true);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const moreToolsYRef = useRef(0);
   const templatesFolderYRef = useRef(0);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
 
   const bypass = isBillingBypassEnabled(params.skipSetup, params.e2e);
-  const blockedSubscription = !canCreateDeal({
+  const {
+    blocked: blockedSubscription,
+    loading: billingLoading,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
     isLoggedIn,
-    subscriptionStatus,
-    trialEndsAt,
     bypass,
   });
 
@@ -82,6 +88,7 @@ export default function CreateDeal() {
   const loadTemplates = useCallback(async () => {
     if (!businessId) {
       setTemplates([]);
+      setTemplatesLoadError(null);
       setTemplatesLoading(false);
       return;
     }
@@ -93,8 +100,9 @@ export default function CreateDeal() {
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) {
-      setBanner({ message: t("createHub.templatesLoadError"), tone: "error" });
+      setTemplatesLoadError(t("createHub.templatesLoadError"));
     } else {
+      setTemplatesLoadError(null);
       setTemplates((data ?? []) as TemplateRow[]);
     }
     setTemplatesLoading(false);
@@ -148,7 +156,18 @@ export default function CreateDeal() {
     if (moreToolsOpen) {
       setTemplatesOpen(false);
     }
-    setMoreToolsOpen((current) => !current);
+    setMoreToolsOpen((current) => {
+      const next = !current;
+      if (next) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({
+            y: getExpandedSectionScrollY(moreToolsYRef.current),
+            animated: true,
+          });
+        });
+      }
+      return next;
+    });
   }
 
   function toggleTemplatesFolder() {
@@ -170,6 +189,10 @@ export default function CreateDeal() {
     templatesFolderYRef.current = event.nativeEvent.layout.y;
   }
 
+  function rememberMoreToolsLayout(event: LayoutChangeEvent) {
+    moreToolsYRef.current = event.nativeEvent.layout.y;
+  }
+
   const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
 
   return (
@@ -181,7 +204,7 @@ export default function CreateDeal() {
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ color: theme.mutedText }}>{t("createHub.loginPrompt")}</Text>
         </View>
-      ) : loading || profileCheckLoading ? (
+      ) : loading || profileCheckLoading || billingLoading ? (
         <View style={{ marginTop: Spacing.lg }}>
           <ActivityIndicator color={theme.primary} />
           <Text style={{ color: theme.mutedText, marginTop: Spacing.sm }}>{t("createHub.loading")}</Text>
@@ -205,7 +228,7 @@ export default function CreateDeal() {
             title={t("billing.goToBilling")}
             onPress={() =>
               router.replace({
-                pathname: PAID_BILLING_ENABLED ? "/(tabs)/billing" : "/(tabs)/account",
+                pathname: PAID_BILLING_ENABLED ? "/(tabs)/account/billing" : "/(tabs)/account",
                 params: PAID_BILLING_ENABLED ? { reason: "reactivate" } : {},
               } as unknown as Href)
             }
@@ -225,12 +248,14 @@ export default function CreateDeal() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── New Deal (express flow: photo/item → AI draft → publish) ── */}
+          {/* ── New Deal (unified AI builder: photo, voice, or text → review → publish) ── */}
           <Pressable
-            onPress={() => router.push("/create/quick")}
+            onPress={() => router.push("/create/ai?fromCreateHub=1" as Href)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t("createHub.newDeal")}. ${t("createHub.newDealSub")}`}
             style={{
               borderRadius: Radii.lg,
-              padding: Spacing.xl,
+              padding: Spacing.lg,
               backgroundColor: theme.primary,
               alignItems: "center",
             }}
@@ -246,9 +271,11 @@ export default function CreateDeal() {
           {/* ── Reuse Past Deal ── */}
           <Pressable
             onPress={() => router.push("/create/reuse")}
+            accessibilityRole="button"
+            accessibilityLabel={`${t("createHub.reuseDeal")}. ${t("createHub.reuseDealSub")}`}
             style={{
               borderRadius: Radii.lg,
-              padding: Spacing.lg,
+              padding: Spacing.md,
               backgroundColor: theme.surface,
               borderWidth: 1.5,
               borderColor: theme.border,
@@ -263,44 +290,34 @@ export default function CreateDeal() {
             </Text>
           </Pressable>
 
-          {/* ── More Tools (menu features) ── */}
+          {/* ── More Tools ── */}
           <Pressable
             onPress={toggleMoreTools}
+            onLayout={rememberMoreToolsLayout}
             accessibilityRole="button"
             accessibilityState={{ expanded: moreToolsOpen }}
           >
             <CardShell variant="muted">
-              <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
-              <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
-                {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
+                    {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={moreToolsOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                  size={22}
+                  color={theme.icon}
+                />
+              </View>
             </CardShell>
           </Pressable>
 
           {moreToolsOpen ? (
             <View style={{ gap: Spacing.sm }}>
               <Pressable
-                onPress={() => router.push("/create/ai" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="auto-awesome" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.aiAdsTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.aiAdsSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-offer" as Href)}
+                onPress={() => router.push("/create/menu" as Href)}
                 style={{
                   borderRadius: Radii.md,
                   padding: Spacing.md,
@@ -314,48 +331,8 @@ export default function CreateDeal() {
               >
                 <MaterialIcons name="restaurant-menu" size={22} color={theme.accentText} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuDealFastTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuDealFastSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-scan" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="document-scanner" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.scanMenuTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.scanMenuSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/create/menu-manager" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="menu-book" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuManagerTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuManagerSubtitle")}</Text>
+                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuSubtitle")}</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
               </Pressable>
@@ -388,7 +365,13 @@ export default function CreateDeal() {
           {/* ── Templates ── */}
           {moreToolsOpen && templatesOpen ? (
             <View style={{ gap: Spacing.md, paddingTop: Spacing.xs }}>
-            {templatesLoading ? (
+            {templatesLoadError ? (
+              <Banner
+                message={templatesLoadError}
+                tone="error"
+                onRetry={() => void loadTemplates()}
+              />
+            ) : templatesLoading ? (
               <Text style={{ color: theme.mutedText }}>{t("createHub.templatesLoading")}</Text>
             ) : templates.length === 0 ? (
               <Text style={{ color: theme.mutedText }}>{t("createHub.templatesEmpty")}</Text>

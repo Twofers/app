@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -38,10 +38,10 @@ import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
-  DancingPenguinProgressCard,
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
+import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -71,7 +71,7 @@ import {
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { format } from "date-fns";
 import { dateFnsLocaleFor } from "../../lib/i18n/date-locale";
-import { isAppLocale, type AppLocale } from "../../lib/i18n/config";
+import type { AppLocale } from "../../lib/i18n/config";
 import { formatAppDateTime } from "../../lib/i18n/format-datetime";
 import {
   buildDealFormDirtySnapshot,
@@ -100,6 +100,54 @@ import {
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import {
+  buildPosterSpecFromOfferDefinition,
+  choosePosterTemplateForOffer,
+} from "@/lib/poster/posterCopy";
+import type {
+  AdCreativeFormat,
+  PosterSpecV1,
+  PosterStyleChoice,
+  PosterTemplateId,
+} from "@/lib/poster/posterTypes";
+import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
+import { createAdPresentationHash } from "@/lib/ad-presentation-hash";
+import { buildVerifiedAdLocalizationApproval } from "@/lib/ad-localization-approval";
+import {
+  buildMerchantIdentity,
+  imageSourceTypeFromGeneratedAd,
+} from "@/lib/ad-render-content";
+import { buildOwnerLanguagePreview } from "@/lib/ad-owner-language-preview";
+import { resolveLocalePresentationOverrides } from "@/lib/ad-locale-presentation-resolver";
+import { buildImageSafeZoneResult } from "@/lib/image-safe-zone";
+import { resolveAdPresentation } from "@/lib/ad-template-resolver";
+import {
+  runDeterministicAdCompositeQa,
+  type AdCompositeQaResult,
+} from "@/lib/ad-composite-qa";
+import type { SourceAwareImageQaResult } from "@/lib/quick-deal-image-qa";
+import {
+  isAiV4AuthoritativeOfferCardEnabled,
+  isAiV4ComposedAdCardEnabled,
+  isAiV4CompositeQaEnabled,
+  isAiV4CompositeScreenshotQaEnabled,
+  isAiV4ExactPresentationApprovalEnabled,
+  isAiV4InstantStyleAlternatesEnabled,
+  isAiV4MinimalInputFlowEnabled,
+  isAiV4PresentationResolverEnabled,
+  isAiV4SharedRendererEnabled,
+  isAiV5AutomaticVerifiedBundleApprovalEnabled,
+  isAiV5LocalizedOwnerUiEnabled,
+  isAiV5LocalePresentationOverridesEnabled,
+  isAiV5LocaleScreenshotQaEnabled,
+} from "@/lib/runtime-env";
+import {
+  SUPPORTED_LOCALES,
+  SUPPORTED_LOCALE_METADATA,
+  supportedLocaleOrDefault,
+  supportedLocaleToAppLanguage,
+  type SupportedLocale,
+} from "@/lib/supported-locales";
+import {
   DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS,
   createDefaultDealEligibilityFormState,
   dealEligibilityFormFromDealRow,
@@ -109,16 +157,33 @@ import {
   type DealEligibilityFormState,
 } from "../../lib/deal-eligibility-form";
 import {
+  canUseFallbackTemplateForOutcome,
+  classifyGenerationFailure,
+  type GenerationOutcomeKind,
+} from "@/lib/create-ai-generation-outcome";
+import {
+  inferDealEligibilityFormFromText,
+  mergeInferredEligibilityForm,
+} from "@/lib/deal-eligibility-inference";
+import {
   aiComposeOfferTranscribe,
   fetchAiComposeQuota,
   type AiComposeQuota,
 } from "../../lib/ai-compose-offer";
-import { isOfferDefinitionFallbackEnabled, isOfferVersionPublishEnabled } from "../../lib/runtime-env";
 import {
+  buildAuthoritativeDealDisplayCopy,
+  buildComposedScreenshotQaSnapshot,
   buildOfferVersionPublishAdSpec,
+  buildPublishMechanicsValidationCopy,
   createPublishIdempotencyKey,
   publishOfferVersionedDeal,
 } from "../../lib/offer-version-publish";
+import {
+  buildAdImageSelection,
+  type AdImageSelectionQa,
+  type MerchantImageEditMode,
+  type MerchantImageSourceMode,
+} from "../../lib/merchant-image-selection";
 
 type TemplateRow = {
   id: string;
@@ -137,10 +202,12 @@ type TemplateRow = {
 };
 
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
+type CreativeFormat = AdCreativeFormat;
+type PreviewFormat = CreativeFormat;
+
+const POSTER_STYLE_CHOICES: PosterStyleChoice[] = ["auto", "fresh", "bold", "premium"];
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
-const OFFER_DEFINITION_FALLBACK_ENABLED = isOfferDefinitionFallbackEnabled();
-const OFFER_VERSION_PUBLISH_ENABLED = isOfferVersionPublishEnabled();
 
 const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
@@ -188,6 +255,60 @@ function isMissingDealEligibilityColumn(error: { code?: string; message?: string
 function omitDealLocationId<T extends Record<string, unknown>>(row: T) {
   const { location_id: _locationId, ...rest } = row;
   return rest;
+}
+
+function ComposedPreviewTelemetryBeacon(props: {
+  generatedAdPresent: boolean;
+  presentation: AdPresentationSpec;
+  presentationHash: string;
+  presentationOptionsCount: number;
+  imageSafeZoneConfidence: number;
+  compositeQa: AdCompositeQaResult;
+  screenshotQaRequired: boolean;
+  generationStartedAtRef: MutableRefObject<number | null>;
+  previewShownAtRef: MutableRefObject<number | null>;
+  lastHashRef: MutableRefObject<string | null>;
+}) {
+  useEffect(() => {
+    if (!props.generatedAdPresent) return;
+    if (props.lastHashRef.current === props.presentationHash) return;
+    const shownAt = Date.now();
+    props.previewShownAtRef.current = shownAt;
+    props.lastHashRef.current = props.presentationHash;
+    trackEvent(AiAdsEvents.COMPOSED_PREVIEW_SHOWN, {
+      screen: "create_ai",
+      selected_template_id: props.presentation.templateId,
+      alternate_template_count: Math.max(0, props.presentationOptionsCount - 1),
+      template_resolution_reason_codes: props.presentation.resolutionReasonCodes.join(","),
+      image_source_type: props.presentation.imageSourceType,
+      image_asset_id_present: Boolean(props.presentation.imageAssetId),
+      safe_zone_confidence: props.imageSafeZoneConfidence,
+      supporting_copy_removed: !props.presentation.showSupportingCopy,
+      presentation_spec_version: props.presentation.specVersion,
+      renderer_version: props.presentation.rendererVersion,
+      presentation_hash: props.presentationHash,
+      composite_qa_decision: props.compositeQa.decision,
+      composite_qa_repair_count: props.compositeQa.repairCodes.length,
+      composite_qa_reason_codes: props.compositeQa.hardFailReasons.join(","),
+      screenshot_qa_required: props.screenshotQaRequired,
+      time_to_first_preview_ms: props.generationStartedAtRef.current
+        ? shownAt - props.generationStartedAtRef.current
+        : null,
+    });
+  }, [
+    props.generatedAdPresent,
+    props.presentation,
+    props.presentationHash,
+    props.presentationOptionsCount,
+    props.imageSafeZoneConfidence,
+    props.compositeQa,
+    props.screenshotQaRequired,
+    props.generationStartedAtRef,
+    props.previewShownAtRef,
+    props.lastHashRef,
+  ]);
+
+  return null;
 }
 
 /**
@@ -287,7 +408,6 @@ async function fileUriToBase64(uri: string): Promise<string> {
 
 const QUOTA_FOCUS_MIN_MS = 30_000;
 const SOFT_REVISION_CAP = 2;
-const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
 function createAiRequestGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;
@@ -316,6 +436,10 @@ function sanitizeIntegerInput(raw: string): string {
   return raw.replace(/\D/g, "");
 }
 
+function cleanCustomImageEditInstruction(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").slice(0, 400);
+}
+
 type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
 
 const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
@@ -324,8 +448,134 @@ const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
   { key: "studiopolish", labelKey: "createAi.treatmentStudiopolishLabel", helperKey: "createAi.treatmentStudiopolishHelper" },
 ];
 
+function imageEditModeForTreatment(treatment: PhotoTreatment | null): MerchantImageEditMode {
+  if (treatment === "cleanbg") return "clean_background";
+  if (treatment === "studiopolish") return "studio_polish";
+  if (treatment === "touchup") return "touchup";
+  return "none";
+}
+
+function imageEditModeForRevisionPreset(presetKey: string | null): MerchantImageEditMode {
+  if (presetKey === "createAi.revisePresetPhotoBg") return "clean_background";
+  if (
+    presetKey === "createAi.revisePresetPhotoCrop" ||
+    presetKey === "createAi.revisePresetGenAngle" ||
+    presetKey === "createAi.revisePresetGenMoodier"
+  ) {
+    return "studio_polish";
+  }
+  if (
+    presetKey === "createAi.revisePresetPhotoBrighter" ||
+    presetKey === "createAi.revisePresetGenBrighter" ||
+    presetKey === "createAi.revisePresetTryAnotherImage"
+  ) {
+    return "touchup";
+  }
+  return "studio_polish";
+}
+
+function imageSourceModeForPhotoChoice(
+  photoPath: string | null,
+  usePhotoAsFinal: boolean,
+): MerchantImageSourceMode {
+  if (!photoPath) return "ai_generated";
+  return usePhotoAsFinal ? "merchant_original" : "merchant_ai_edit";
+}
+
+function originalPhotoSelectionQa(acknowledged: boolean): AdImageSelectionQa {
+  return {
+    checked: false,
+    sourceType: "merchant_original",
+    decision: "unavailable",
+    hardFailReasons: [],
+    warningCodes: ["MERCHANT_SELECTED_ORIGINAL"],
+    missingItems: [],
+    unavailable: true,
+    merchantOverrideAllowed: true,
+    merchantOverrideAcknowledged: acknowledged,
+  };
+}
+
+function sourceModeForGeneratedPhotoSource(
+  photoSource: GeneratedAd["photo_source"],
+): MerchantImageSourceMode {
+  if (photoSource === "uploaded_original") return "merchant_original";
+  if (photoSource === "uploaded_enhanced") return "merchant_ai_edit";
+  if (photoSource === "stock") return "approved_stock";
+  if (photoSource === "copy_only" || photoSource === "fallback_template") return "deterministic_fallback";
+  return "ai_generated";
+}
+
+function defaultSelectionQaForSource(sourceType: MerchantImageSourceMode): AdImageSelectionQa {
+  if (sourceType === "merchant_original") return originalPhotoSelectionQa(false);
+  return {
+    checked: false,
+    sourceType,
+    decision: sourceType === "deterministic_fallback" ? "not_checked" : "pass",
+    hardFailReasons: [],
+    warningCodes: [],
+    missingItems: [],
+    unavailable: false,
+    merchantOverrideAllowed: false,
+    merchantOverrideAcknowledged: false,
+  };
+}
+
+function generatedAdForPublishSpec(params: {
+  ad: GeneratedAd | null;
+  finalStoragePath: string | null;
+  uploadedPhotoStoragePath: string | null;
+  usePhotoAsFinal: boolean;
+  merchantOriginalWarningAcknowledged: boolean;
+}): GeneratedAd | null {
+  if (!params.ad) return null;
+  const selectedStoragePath = params.finalStoragePath ?? params.ad.poster_storage_path ?? null;
+  const usingUploadedPhoto =
+    params.usePhotoAsFinal &&
+    selectedStoragePath != null &&
+    selectedStoragePath === params.uploadedPhotoStoragePath;
+  const photoSource = usingUploadedPhoto
+    ? ("uploaded_original" as const)
+    : params.ad.photo_source ?? "generated";
+  const photoTreatment = usingUploadedPhoto ? null : params.ad.photo_treatment ?? null;
+  const editMode = usingUploadedPhoto
+    ? "none"
+    : params.ad.image_selection?.editMode ?? imageEditModeForTreatment(photoTreatment);
+  const qa = usingUploadedPhoto
+    ? originalPhotoSelectionQa(params.merchantOriginalWarningAcknowledged)
+    : params.ad.image_selection?.qa ?? defaultSelectionQaForSource(sourceModeForGeneratedPhotoSource(photoSource));
+
+  return {
+    ...params.ad,
+    poster_storage_path: selectedStoragePath,
+    photo_source: photoSource,
+    photo_treatment: photoTreatment,
+    image_selection: buildAdImageSelection({
+      photoSource,
+      editMode,
+      sourcePhotoPath: usingUploadedPhoto
+        ? params.uploadedPhotoStoragePath
+        : params.ad.image_selection?.sourcePhotoPath ?? params.uploadedPhotoStoragePath,
+      selectedStoragePath,
+      provider: params.ad.image_selection?.provider ?? null,
+      model: params.ad.image_selection?.model ?? null,
+      promptVersion: params.ad.image_selection?.promptVersion ?? null,
+      qa,
+    }),
+  };
+}
+
 type RevisionTarget = "copy" | "image" | "both";
+type ComposedEditIntent = "words" | null;
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
+type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
+
+type ImageVersionEntry = {
+  id: string;
+  kind: ImageVersionKind;
+  ad: GeneratedAd;
+  createdAt: string;
+};
 
 const COPY_PRESET_KEYS = [
   "createAi.revisePresetPunchier",
@@ -349,6 +599,98 @@ const IMAGE_PRESET_KEYS_PHOTO = [
   "createAi.revisePresetPhotoCrop",
   "createAi.revisePresetPhotoBg",
 ];
+
+const BOTH_PRESET_KEYS_COMPACT = [
+  "createAi.revisePresetPunchier",
+  "createAi.revisePresetSimpler",
+  "createAi.revisePresetSavings",
+  "createAi.revisePresetTryAnotherImage",
+];
+
+function imageVersionStoragePath(ad: GeneratedAd | null): string | null {
+  return ad?.poster_storage_path ?? ad?.image_selection?.selectedStoragePath ?? null;
+}
+
+function imageVersionId(ad: GeneratedAd): string | null {
+  const storagePath = imageVersionStoragePath(ad);
+  if (!storagePath) return null;
+  const source = ad.photo_source ?? "generated";
+  const treatment = ad.photo_treatment ?? "none";
+  const editMode = ad.image_selection?.editMode ?? "none";
+  return [storagePath, source, treatment, editMode].join("|");
+}
+
+function buildImageVersionEntry(ad: GeneratedAd, kind: ImageVersionKind): ImageVersionEntry | null {
+  const id = imageVersionId(ad);
+  if (!id) return null;
+  return {
+    id,
+    kind,
+    ad: normalizeGeneratedAdDisplayCopy(ad),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function buildOriginalPhotoVersionAd(ad: GeneratedAd, originalStoragePath: string | null): GeneratedAd | null {
+  if (!originalStoragePath) return null;
+  return normalizeGeneratedAdDisplayCopy({
+    ...ad,
+    poster_storage_path: originalStoragePath,
+    photo_source: "uploaded_original",
+    photo_treatment: null,
+    image_selection: buildAdImageSelection({
+      photoSource: "uploaded_original",
+      editMode: "none",
+      sourcePhotoPath: originalStoragePath,
+      selectedStoragePath: originalStoragePath,
+      qa: originalPhotoSelectionQa(false),
+    }),
+  });
+}
+
+function sourceAwareQaFromSelectionQa(
+  qa: AdImageSelectionQa | null | undefined,
+  sourceType: AdImageSourceType,
+  hasImage: boolean,
+): SourceAwareImageQaResult {
+  if (!qa) {
+    return {
+      checked: false,
+      available: hasImage || sourceType === "deterministic_fallback",
+      sourceType,
+      decision: sourceType === "deterministic_fallback" ? "pass" : "not_checked",
+      hardFailReasons: [],
+      warningCodes: hasImage && sourceType !== "deterministic_fallback" ? ["IMAGE_QA_NOT_CHECKED"] : [],
+      missingItems: [],
+      forbiddenElements: [],
+      merchantOverrideAllowed: false,
+      merchantOverrideAcknowledged: false,
+      notes: "",
+    };
+  }
+
+  return {
+    checked: qa.checked,
+    available: hasImage && !qa.unavailable,
+    sourceType,
+    decision: qa.decision,
+    hardFailReasons: Array.isArray(qa.hardFailReasons) ? qa.hardFailReasons : [],
+    warningCodes: Array.isArray(qa.warningCodes) ? qa.warningCodes : [],
+    missingItems: Array.isArray(qa.missingItems) ? qa.missingItems : [],
+    forbiddenElements: [],
+    merchantOverrideAllowed: qa.merchantOverrideAllowed,
+    merchantOverrideAcknowledged: qa.merchantOverrideAcknowledged,
+    notes: "",
+  };
+}
+
+function cropSuitabilityScoreForQa(qa: SourceAwareImageQaResult): number {
+  if (qa.sourceType === "deterministic_fallback") return 1;
+  if (qa.decision === "pass") return 0.84;
+  if (qa.decision === "warn") return 0.62;
+  if (qa.decision === "not_checked") return 0.72;
+  return 0.34;
+}
 
 export default function AiDealScreen() {
   const router = useRouter();
@@ -394,7 +736,27 @@ export default function AiDealScreen() {
     businessName,
     businessProfile,
   } = useBusiness();
-  const dealOutputLang = resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+  const localizedOwnerUiEnabled = isAiV5LocalizedOwnerUiEnabled();
+  const automaticLocalizationApprovalEnabled = isAiV5AutomaticVerifiedBundleApprovalEnabled();
+  const defaultAuthoringLocale = supportedLocaleOrDefault(businessPreferredLocale ?? i18n.language);
+  const [draftSourceLocale, setDraftSourceLocale] = useState<SupportedLocale | null>(null);
+  const draftSourceBusinessRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!localizedOwnerUiEnabled) return;
+    setDraftSourceLocale((current) => {
+      const nextBusinessId = businessId ?? null;
+      if (draftSourceBusinessRef.current !== nextBusinessId) {
+        draftSourceBusinessRef.current = nextBusinessId;
+        return defaultAuthoringLocale;
+      }
+      return current ?? defaultAuthoringLocale;
+    });
+  }, [businessId, defaultAuthoringLocale, localizedOwnerUiEnabled]);
+  const effectiveDraftSourceLocale = draftSourceLocale ?? defaultAuthoringLocale;
+  const dealOutputLang = localizedOwnerUiEnabled
+    ? supportedLocaleToAppLanguage(effectiveDraftSourceLocale)
+    : resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
+  const [merchantPreviewLocale, setMerchantPreviewLocale] = useState<SupportedLocale | null>(null);
 
   // Voice input
   const recorder = useAudioRecorder(
@@ -430,8 +792,16 @@ export default function AiDealScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [photoStepCollapsed, setPhotoStepCollapsed] = useState(false);
+  const pendingDescriptionScrollAfterCollapseRef = useRef(false);
   const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
+  const [useCustomImageEdit, setUseCustomImageEdit] = useState(false);
+  const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
+  const [merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged] = useState(false);
+  const [creativeFormat, setCreativeFormat] = useState<CreativeFormat>("standard_card");
+  const [posterStyle, setPosterStyle] = useState<PosterStyleChoice>("auto");
+  const [previewFormat, setPreviewFormat] = useState<PreviewFormat>("standard_card");
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");
@@ -473,6 +843,7 @@ export default function AiDealScreen() {
   // Generation state — single ad, with revise loop
   const [generating, setGenerating] = useState(false);
   const [generatedAd, setGeneratedAd] = useState<GeneratedAd | null>(null);
+  const [imageVersions, setImageVersions] = useState<ImageVersionEntry[]>([]);
   const [adAccepted, setAdAccepted] = useState(false);
   /**
    * Tracks the treatment that produced the *current* generatedAd.poster_storage_path.
@@ -487,12 +858,19 @@ export default function AiDealScreen() {
   const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
   const [revisionFeedback, setRevisionFeedback] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [composedStyleIndex, setComposedStyleIndex] = useState(0);
+  const [composedEditIntent, setComposedEditIntent] = useState<ComposedEditIntent>(null);
+  const [approvedComposedPresentationHash, setApprovedComposedPresentationHash] = useState<string | null>(null);
+  const [approvedLocalizationApprovalHash, setApprovedLocalizationApprovalHash] = useState<string | null>(null);
   /**
    * Monotonic ID for in-flight generate/revise calls. If user replaces the photo or hits
    * generate again before a revise resolves, we bump this counter and discard stale results.
    */
   const generationRequestIdRef = useRef(0);
   const aiRequestGroupIdRef = useRef(createAiRequestGroupId());
+  const adGenerationStartedAtRef = useRef<number | null>(null);
+  const composedPreviewShownAtRef = useRef<number | null>(null);
+  const lastComposedPreviewTelemetryHashRef = useRef<string | null>(null);
 
   const aiDraftBaselineRef = useRef<{
     title: string;
@@ -508,6 +886,7 @@ export default function AiDealScreen() {
   } | null>(null);
   const [manualDraftUnlocked, setManualDraftUnlocked] = useState(false);
   const [lastGenerationError, setLastGenerationError] = useState<string | null>(null);
+  const [lastGenerationOutcomeKind, setLastGenerationOutcomeKind] = useState<GenerationOutcomeKind | null>(null);
   const [publishLocationIds, setPublishLocationIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
@@ -519,7 +898,15 @@ export default function AiDealScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const hintInputRef = useRef<TextInput | null>(null);
+  const customImageEditInputRef = useRef<TextInput | null>(null);
+  const descriptionSectionYRef = useRef<number | null>(null);
   const [scheduleSectionY, setScheduleSectionY] = useState<number | null>(null);
+  const scheduleSectionYRef = useRef<number | null>(null);
+  const generationSectionYRef = useRef<number | null>(null);
+  const adReviewSectionYRef = useRef<number | null>(null);
+  const draftEditorSectionYRef = useRef<number | null>(null);
+  const previousEligibleRef = useRef(false);
   const menuOfferScrollDoneRef = useRef(false);
   const reuseScrollDoneRef = useRef(false);
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
@@ -529,6 +916,8 @@ export default function AiDealScreen() {
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
   const [editDirtyBaseline, setEditDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [composeDirtyBaseline, setComposeDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [prefillBaselineReady, setPrefillBaselineReady] = useState(false);
   const [pendingRecoveredDraft, setPendingRecoveredDraft] = useState<AiDealRecoveryDraft | null>(null);
   const draftHydratedRef = useRef(false);
 
@@ -615,10 +1004,6 @@ export default function AiDealScreen() {
     [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone, i18n.language],
   );
 
-  const listingBody = useMemo(
-    () => composeListingDescription(promoLine, ctaText, description),
-    [promoLine, ctaText, description],
-  );
   const eligibilityInput = useMemo(
     () => dealEligibilityFormToInput(eligibilityForm),
     [eligibilityForm],
@@ -656,7 +1041,6 @@ export default function AiDealScreen() {
     publishLocationIds,
   ]);
   const offerDefinition = useMemo(() => {
-    if (!OFFER_DEFINITION_FALLBACK_ENABLED && !OFFER_VERSION_PUBLISH_ENABLED) return null;
     if (!offerContract) return null;
     return buildOfferDefinitionV1FromContract(offerContract, {
       dealEligibility: eligibilityInput,
@@ -686,9 +1070,39 @@ export default function AiDealScreen() {
     windowStart,
   ]);
 
-  const canPublish = useMemo(() => {
-    return title.trim().length > 0 && listingBody.trim().length > 0;
-  }, [title, listingBody]);
+  const publishReadiness = useMemo(() => {
+    const missingFields: ("headline" | "details")[] = [];
+    if (!title.trim()) missingFields.push("headline");
+    if (!description.trim()) missingFields.push("details");
+    const canPublish = missingFields.length === 0;
+    let reasonMessage = "";
+    if (!canPublish) {
+      if (missingFields.length === 2) {
+        reasonMessage = t("createAi.publishMissingBody");
+      } else if (missingFields[0] === "headline") {
+        reasonMessage = t("createAi.publishMissingHeadlineBody", {
+          defaultValue: "Add a headline before publishing.",
+        });
+      } else {
+        reasonMessage = t("createAi.publishMissingDetailsBody", {
+          defaultValue: "Add offer details before publishing.",
+        });
+      }
+    }
+    return {
+      canPublish,
+      missingFields,
+      reasonMessage,
+      buttonLabel: canPublish
+        ? editingDealId
+          ? t("createAi.saveDealChanges")
+          : t("createAi.publishDeal")
+        : editingDealId
+          ? t("createAi.completeDetailsToSave", { defaultValue: "Complete details to save" })
+          : t("createAi.completeDetailsToPublish", { defaultValue: "Complete details to publish" }),
+    };
+  }, [description, editingDealId, t, title]);
+  const canPublish = publishReadiness.canPublish;
 
   const displayedPublishStatus = useMemo<PublishStatus>(() => {
     if (publishing) return "publishing";
@@ -730,7 +1144,7 @@ export default function AiDealScreen() {
         return {
           icon: "edit" as const,
           title: t("createAi.publishMissingTitle"),
-          body: t("createAi.publishMissingBody"),
+          body: publishReadiness.reasonMessage || t("createAi.publishMissingBody"),
           backgroundColor: theme.surfaceMuted,
           borderColor: theme.border,
           titleColor: theme.mutedText,
@@ -746,7 +1160,39 @@ export default function AiDealScreen() {
           titleColor: theme.accentText,
         };
     }
-  }, [colorScheme, displayedPublishStatus, editingDealId, publishStatusMessage, t, theme]);
+  }, [colorScheme, displayedPublishStatus, editingDealId, publishReadiness.reasonMessage, publishStatusMessage, t, theme]);
+
+  const generationRecovery = useMemo(() => {
+    if (!lastGenerationError || !lastGenerationOutcomeKind) return null;
+    const fallbackAllowed = canUseFallbackTemplateForOutcome(lastGenerationOutcomeKind);
+    const body =
+      lastGenerationOutcomeKind === "ownership_blocked"
+        ? t("createAi.generationOwnershipBody", {
+            defaultValue: "This account cannot create or publish ads for this business. Log in with the owner account to continue.",
+          })
+        : lastGenerationOutcomeKind === "quota_or_cooldown_blocked"
+          ? t("createAi.generationQuotaBody", {
+              defaultValue: "AI generation is paused for this account right now. You can write the ad yourself, or try AI again when it resets.",
+            })
+          : lastGenerationOutcomeKind === "input_or_offer_blocked"
+            ? t("createAi.generationInputBody", {
+                defaultValue: "Fix the account, photo, or deal details above, then try again.",
+              })
+            : fallbackAllowed
+              ? t("createAi.fallbackTemplateBody", {
+                  defaultValue: "AI had trouble, but your confirmed photo and deal details can still make a clean fallback ad.",
+                })
+              : t("createAi.generationNoFallbackBody", {
+                  defaultValue: "AI had trouble and there is no saved image to use for a fallback. Add a photo, try again, or write the ad yourself.",
+                });
+
+    return {
+      title: lastGenerationError,
+      body,
+      showFallbackAction: fallbackAllowed,
+      showManualAction: lastGenerationOutcomeKind !== "ownership_blocked",
+    };
+  }, [lastGenerationError, lastGenerationOutcomeKind, t]);
 
   const showDraftEditor =
     templateLoaded ||
@@ -757,6 +1203,130 @@ export default function AiDealScreen() {
     ctaText.trim().length > 0 ||
     description.trim().length > 0 ||
     manualDraftUnlocked;
+
+  const scrollToFormY = useCallback((y: number | null, fallback: "none" | "end" = "none", topOffset: number = Spacing.md) => {
+    setTimeout(() => {
+      if (y != null) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - topOffset), animated: true });
+      } else if (fallback === "end") {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 220);
+  }, []);
+
+  const scrollToDescriptionStep = useCallback(() => {
+    scrollToFormY(descriptionSectionYRef.current, "none", Spacing.xs);
+  }, [scrollToFormY]);
+
+  useEffect(() => {
+    if (!photoStepCollapsed || !pendingDescriptionScrollAfterCollapseRef.current) return;
+    const tid = setTimeout(() => {
+      pendingDescriptionScrollAfterCollapseRef.current = false;
+      scrollToDescriptionStep();
+    }, 360);
+    return () => clearTimeout(tid);
+  }, [photoStepCollapsed, scrollToDescriptionStep]);
+
+  function scrollToAdReview() {
+    scrollToFormY(adReviewSectionYRef.current, "end");
+  }
+
+  function scrollToGenerationRecovery() {
+    scrollToFormY(generationSectionYRef.current, "end");
+  }
+
+  function scrollToDraftEditor() {
+    scrollToFormY(draftEditorSectionYRef.current, "end");
+  }
+
+  function hasFallbackTemplateSource() {
+    return Boolean(generatedAd?.poster_storage_path || photoPath || photoUri || posterUrl);
+  }
+
+  function clearGenerationErrorState() {
+    setLastGenerationError(null);
+    setLastGenerationOutcomeKind(null);
+  }
+
+  function setGenerationFailureState(message: string, kind: GenerationOutcomeKind) {
+    setLastGenerationError(message);
+    setLastGenerationOutcomeKind(kind);
+    setTimeout(() => scrollToGenerationRecovery(), 120);
+  }
+
+  function handleHintTextChange(text: string) {
+    setHintText(text);
+    const inferred = inferDealEligibilityFormFromText(text);
+    if (!inferred) return;
+    setEligibilityForm((current) =>
+      mergeInferredEligibilityForm(current, inferred, { allowDealTypeChange: true }),
+    );
+  }
+
+  function handleEligibilityFormChange(next: DealEligibilityFormState) {
+    const inferred = inferDealEligibilityFormFromText(hintText);
+    setEligibilityForm(mergeInferredEligibilityForm(next, inferred));
+  }
+
+  function skipPhotoToDescription() {
+    pendingDescriptionScrollAfterCollapseRef.current = true;
+    setPhotoStepCollapsed(true);
+    setBanner({
+      message: t("createAi.photoSkippedBanner", {
+        defaultValue: "No photo selected. Describe the deal and Twofer will use those details.",
+      }),
+      tone: "info",
+    });
+  }
+
+  useEffect(() => {
+    if (eligibilityResult.eligible && !previousEligibleRef.current) {
+      const targetY = scheduleSectionY ?? scheduleSectionYRef.current;
+      setTimeout(() => {
+        if (targetY != null) {
+          scrollRef.current?.scrollTo({ y: Math.max(0, targetY - Spacing.md), animated: true });
+        }
+      }, 220);
+    }
+    previousEligibleRef.current = eligibilityResult.eligible;
+  }, [eligibilityResult.eligible, scheduleSectionY]);
+
+  const rememberImageVersion = useCallback((ad: GeneratedAd, kind: ImageVersionKind) => {
+    const entry = buildImageVersionEntry(ad, kind);
+    if (!entry) return;
+    setImageVersions((current) => {
+      const withoutDuplicate = current.filter((item) => item.id !== entry.id);
+      return [...withoutDuplicate, entry].slice(-6);
+    });
+  }, []);
+
+  function restoreImageVersion(entry: ImageVersionEntry) {
+    const restored = normalizeGeneratedAdDisplayCopy(entry.ad);
+    const restoredPath = imageVersionStoragePath(restored);
+    setGeneratedAd(restored);
+    setUsePhotoAsFinal(restored.photo_source === "uploaded_original");
+    setMerchantOriginalWarningAcknowledged(false);
+    if (restored.photo_treatment) setPhotoTreatment(restored.photo_treatment);
+    if (restored.photo_source === "uploaded_original" && restoredPath) {
+      setPhotoPath((current) => current ?? restoredPath);
+      setPosterUrl((current) => current ?? buildPublicDealPhotoUrl(restoredPath));
+    }
+    lastSentPhotoTreatmentRef.current = restored.photo_treatment ?? null;
+    setAdAccepted(false);
+    setManualDraftUnlocked(true);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    setComposedStyleIndex(0);
+    setComposedEditIntent(null);
+    setApprovedComposedPresentationHash(null);
+    aiDraftBaselineRef.current = null;
+    setBanner({
+      message: t("createAi.imageRestoredBanner", {
+        defaultValue: "Image restored. Review and approve the ad before publishing.",
+      }),
+      tone: "info",
+    });
+  }
 
   const currentDealFormSnapshot = useMemo(
     () =>
@@ -812,6 +1382,27 @@ export default function AiDealScreen() {
   );
 
   useEffect(() => {
+    if (dealIdFromRoute) return;
+    setComposeDirtyBaseline(null);
+    setPrefillBaselineReady(false);
+  }, [dealIdFromRoute, templateId, hasCreatePrefillParams]);
+
+  useEffect(() => {
+    if (dealIdFromRoute || composeDirtyBaseline) return;
+    if (templateId && !templateLoaded) return;
+    if (hasCreatePrefillParams && !prefillBaselineReady) return;
+    setComposeDirtyBaseline(currentDealFormSnapshot);
+  }, [
+    composeDirtyBaseline,
+    currentDealFormSnapshot,
+    dealIdFromRoute,
+    hasCreatePrefillParams,
+    prefillBaselineReady,
+    templateId,
+    templateLoaded,
+  ]);
+
+  useEffect(() => {
     setPublishStatus((current) => {
       if (current === "success" || current === "error") return "idle";
       return current;
@@ -835,35 +1426,10 @@ export default function AiDealScreen() {
     eligibilityForm,
   ]);
 
-  const composeDirty = useMemo(() => {
-    if (photoUri || hintText.trim() || price.trim()) return true;
-    if (generatedAd != null || adAccepted) return true;
-    if (title.trim() || promoLine.trim() || ctaText.trim() || description.trim()) return true;
-    if (JSON.stringify(eligibilityForm) !== JSON.stringify(createDefaultDealEligibilityFormState())) return true;
-    if (maxClaims !== "50" || cutoffMins !== "15") return true;
-    if (validityMode !== "one-time") return true;
-    if ([...daysOfWeek].sort((a, b) => a - b).join(",") !== DEFAULT_WEEKDAYS_SORTED_KEY) return true;
-    if (manualDraftUnlocked) return true;
-    if (templateLoaded) return true;
-    return false;
-  }, [
-    photoUri,
-    hintText,
-    price,
-    generatedAd,
-    adAccepted,
-    title,
-    promoLine,
-    ctaText,
-    description,
-    eligibilityForm,
-    maxClaims,
-    cutoffMins,
-    validityMode,
-    daysOfWeek,
-    manualDraftUnlocked,
-    templateLoaded,
-  ]);
+  const composeDirty = useMemo(
+    () => isDealFormDirty(composeDirtyBaseline, currentDealFormSnapshot),
+    [composeDirtyBaseline, currentDealFormSnapshot],
+  );
 
   const editFormDirty = useMemo(
     () => isDealFormDirty(editDirtyBaseline, currentDealFormSnapshot),
@@ -920,8 +1486,12 @@ export default function AiDealScreen() {
     setPhotoUri(null);
     setPhotoPath(draft.photoPath);
     setPosterUrl(draft.posterUrl ?? (draft.photoPath ? buildPublicDealPhotoUrl(draft.photoPath) : null));
+    setPhotoStepCollapsed(false);
     setPhotoTreatment(draft.photoTreatment);
+    setCustomImageEditInstruction(draft.customImageEditInstruction);
+    setUseCustomImageEdit(Boolean(draft.customImageEditInstruction.trim()));
     setUsePhotoAsFinal(draft.usePhotoAsFinal);
+    setMerchantOriginalWarningAcknowledged(draft.merchantOriginalWarningAcknowledged);
     setHintText(draft.hintText);
     setPrice(draft.price);
     setTitle(draft.title);
@@ -940,9 +1510,17 @@ export default function AiDealScreen() {
     setTimezone(draft.timezone);
     setPublishLocationIds(draft.publishLocationIds);
     setGeneratedAd(draft.generatedAd);
+    setImageVersions(() => {
+      if (!draft.generatedAd) return [];
+      const entry = buildImageVersionEntry(draft.generatedAd, "generated");
+      return entry ? [entry] : [];
+    });
     setAdAccepted(draft.adAccepted);
+    setComposedStyleIndex(0);
+    setComposedEditIntent(null);
+    setApprovedComposedPresentationHash(null);
     setManualDraftUnlocked(draft.manualDraftUnlocked || draft.adAccepted || Boolean(draft.generatedAd));
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     setTemplateLoaded(false);
     setEditingSourceLocale(null);
     setPrefillSourceLocale(null);
@@ -990,7 +1568,9 @@ export default function AiDealScreen() {
       photoPath,
       posterUrl,
       photoTreatment,
+      customImageEditInstruction,
       usePhotoAsFinal,
+      merchantOriginalWarningAcknowledged,
       hintText,
       price,
       title,
@@ -1035,7 +1615,9 @@ export default function AiDealScreen() {
     photoPath,
     posterUrl,
     photoTreatment,
+    customImageEditInstruction,
     usePhotoAsFinal,
+    merchantOriginalWarningAcknowledged,
     hintText,
     price,
     title,
@@ -1081,6 +1663,7 @@ export default function AiDealScreen() {
         }
         const row = data as Record<string, unknown>;
         const loadedSourceLocale = String(row.source_locale ?? "");
+        const loadedDraftSourceLocale = supportedLocaleOrDefault(loadedSourceLocale);
         const rawLoadedTitle = typeof row.title === "string" ? row.title : "";
         const loadedTitle = getDealDisplayTitle(
           {
@@ -1124,8 +1707,12 @@ export default function AiDealScreen() {
         const loadedLocationIds = lid ? [String(lid)] : [];
         const loadedEligibilityForm = dealEligibilityFormFromDealRow(row);
         setEditingDealId(String(row.id));
-        setEditingSourceLocale(isAppLocale(loadedSourceLocale) ? loadedSourceLocale : "en");
+        setEditingSourceLocale(supportedLocaleToAppLanguage(loadedDraftSourceLocale));
         setPrefillSourceLocale(null);
+        if (localizedOwnerUiEnabled) {
+          setDraftSourceLocale(loadedDraftSourceLocale);
+          setMerchantPreviewLocale(loadedDraftSourceLocale);
+        }
         setTitle(loadedTitle);
         setDescription(loadedDescription);
         setPromoLine("");
@@ -1136,7 +1723,9 @@ export default function AiDealScreen() {
         // selector renders empty when editing an existing deal that has a poster.
         setPhotoPath(loadedPhotoPath);
         setPosterUrl(loadedPosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(loadedPhotoPath || loadedPosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(loadedMaxClaims);
         setCutoffMins(loadedCutoffMins);
         setValidityMode(loadedValidityMode);
@@ -1150,9 +1739,11 @@ export default function AiDealScreen() {
         setEligibilityForm(loadedEligibilityForm);
         setManualDraftUnlocked(true);
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
+        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
-        setLastGenerationError(null);
+        clearGenerationErrorState();
         setTemplateLoaded(false);
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
@@ -1186,7 +1777,7 @@ export default function AiDealScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [dealIdFromRoute, businessId, dealLoadNonce, t]);
+  }, [dealIdFromRoute, businessId, dealLoadNonce, localizedOwnerUiEnabled, t]);
 
   useEffect(() => {
     if (!dealIdFromRoute) setEditDirtyBaseline(null);
@@ -1195,6 +1786,7 @@ export default function AiDealScreen() {
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
     let cancelled = false;
+    setTemplateLoaded(false);
     (async () => {
       const { data, error } = await supabase
         .from("deal_templates")
@@ -1220,7 +1812,9 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(templatePhotoPath ?? null);
         setPosterUrl(templatePosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(String(row.max_claims ?? 50));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
         setValidityMode(row.is_recurring ? "recurring" : "one-time");
@@ -1240,10 +1834,12 @@ export default function AiDealScreen() {
         }
         setTemplateLoaded(true);
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
+        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setManualDraftUnlocked(false);
-        setLastGenerationError(null);
+        clearGenerationErrorState();
       }
     })();
     return () => { cancelled = true; };
@@ -1266,14 +1862,22 @@ export default function AiDealScreen() {
     const fromReuse = g(params.fromReuse);
     const fromHub = g(params.fromCreateHub);
     const sourceFromRoute = g(params.prefillSourceLocale);
+    const prefillDraftSourceLocale = sourceFromRoute ? supportedLocaleOrDefault(sourceFromRoute) : null;
     setEditingSourceLocale(null);
-    setPrefillSourceLocale(isAppLocale(sourceFromRoute) ? sourceFromRoute : null);
+    setPrefillSourceLocale(prefillDraftSourceLocale ? supportedLocaleToAppLanguage(prefillDraftSourceLocale) : null);
+    if (localizedOwnerUiEnabled && prefillDraftSourceLocale) {
+      setDraftSourceLocale(prefillDraftSourceLocale);
+      setMerchantPreviewLocale(prefillDraftSourceLocale);
+    }
     const pl = g(params.prefillLocationId).trim();
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
     const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) {
+      setPrefillBaselineReady(true);
+      return;
+    }
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -1285,9 +1889,11 @@ export default function AiDealScreen() {
       setPhotoPath((prev) => prev || posterPath);
       setPosterUrl((prev) => prev || buildPublicDealPhotoUrl(posterPath));
       setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
     } else if (posterUrlParam) {
       setPosterUrl((prev) => prev || posterUrlParam);
       setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
     }
     if (prefillDealEligibility) {
       try {
@@ -1348,12 +1954,13 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.prefillFromHub"), tone: "success" });
       setManualDraftUnlocked(true);
     }
+    setPrefillBaselineReady(true);
   }, [
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath, params.prefillPosterUrl,
     params.prefillDealEligibility,
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
-    params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, t,
+    params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, localizedOwnerUiEnabled, t,
     params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
     params.prefillWindowEndMin, params.prefillTimezone, params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
@@ -1385,31 +1992,98 @@ export default function AiDealScreen() {
    */
   function resetGenerationState() {
     setGeneratedAd(null);
+    setImageVersions([]);
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
     setActivePreset(null);
+    setComposedStyleIndex(0);
+    setComposedEditIntent(null);
+    setApprovedComposedPresentationHash(null);
     aiDraftBaselineRef.current = null;
     lastSentPhotoTreatmentRef.current = null;
+    adGenerationStartedAtRef.current = null;
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     aiRequestGroupIdRef.current = createAiRequestGroupId();
     generationRequestIdRef.current += 1;
+    clearGenerationErrorState();
   }
 
-  async function pickPhotoFromLibrary() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== "granted") {
-      setBanner({ message: t("createAi.errPhotoAccess"), tone: "error" });
-      return;
+  function buildCreativeRequestPayload() {
+    return {
+      requested_format: creativeFormat,
+      poster: {
+        enabled: creativeFormat === "poster_v1",
+        style: posterStyle,
+        aspect_ratio: "4:5" as const,
+        text_policy: {
+          no_app_brand_token: true,
+          no_cta: true,
+          no_scarcity: true,
+          center_text: true,
+        },
+      },
+    };
+  }
+
+  function selectCreativeFormat(next: CreativeFormat) {
+    if (next === creativeFormat) return;
+    setCreativeFormat(next);
+    setPreviewFormat(next);
+  }
+
+  function selectPosterStyle(next: PosterStyleChoice) {
+    if (next === posterStyle) return;
+    setPosterStyle(next);
+    setPreviewFormat("poster_v1");
+  }
+
+  function chooseDraftSourceLocale(locale: SupportedLocale) {
+    if (!localizedOwnerUiEnabled || locale === effectiveDraftSourceLocale) return;
+    setDraftSourceLocale(locale);
+    setMerchantPreviewLocale(locale);
+    if (generatedAd) resetGenerationState();
+    setBanner({
+      message: t("createAi.sourceLanguageChanged", {
+        language: SUPPORTED_LOCALE_METADATA[locale].productLabel,
+        defaultValue: `Source language set to ${SUPPORTED_LOCALE_METADATA[locale].productLabel}. Generate the ad again for this language.`,
+      }),
+      tone: "info",
+    });
+  }
+
+  useEffect(() => {
+    if (!localizedOwnerUiEnabled) return;
+    setMerchantPreviewLocale((current) => current ?? effectiveDraftSourceLocale);
+  }, [effectiveDraftSourceLocale, localizedOwnerUiEnabled]);
+
+  useEffect(() => {
+    if (!approvedComposedPresentationHash && approvedLocalizationApprovalHash) {
+      setApprovedLocalizationApprovalHash(null);
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    const uri = result.assets[0].uri;
-    setPhotoUri(uri);
-    setPosterUrl(null);
-    setPhotoPath(null);
-    setUsePhotoAsFinal(false);
-    resetGenerationState();
-    void persistSelectedPhotoForRecovery(uri);
+  }, [approvedComposedPresentationHash, approvedLocalizationApprovalHash]);
+
+  async function pickPhotoFromLibrary() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
+      setPosterUrl(null);
+      setPhotoPath(null);
+      setPhotoStepCollapsed(false);
+      setUsePhotoAsFinal(false);
+      setMerchantOriginalWarningAcknowledged(false);
+      resetGenerationState();
+      setBanner(null);
+      void persistSelectedPhotoForRecovery(uri);
+    } catch {
+      setBanner({ message: t("createAi.errPhotoPicker"), tone: "error" });
+    }
   }
 
   async function takePhoto() {
@@ -1423,12 +2097,14 @@ export default function AiDealScreen() {
 
   async function capturePhoto() {
     if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+    const photo = await cameraRef.current.takePictureAsync({ quality: 1 });
     if (photo?.uri) {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      setPhotoStepCollapsed(false);
       setUsePhotoAsFinal(false);
+      setMerchantOriginalWarningAcknowledged(false);
       resetGenerationState();
       setShowCamera(false);
       void persistSelectedPhotoForRecovery(photo.uri);
@@ -1592,6 +2268,71 @@ export default function AiDealScreen() {
     return t("createAi.friendlyGenerationLongError");
   }
 
+  function publishErrorDetail(err: unknown): string | null {
+    const raw = err instanceof Error ? err.message : String(err);
+    const lower = raw.toLowerCase();
+    const code = getErrorCode(err);
+
+    if (code === "INVALID_OFFER_DEFINITION") return t("createAi.errPublishInvalidOfferDefinition");
+    if (code === "INVALID_AD_SPEC") return t("createAi.errPublishInvalidAdSpec");
+    if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
+    if (code === "LOCATION_BILLING_SUSPENDED") return t("createAi.errPublishBillingSuspended");
+    if (code === "BUSINESS_LOCATION_VERIFICATION_REQUIRED") return t("createAi.errPublishVerificationRequired");
+
+    if (
+      lower.includes("must be at least 40") ||
+      lower.includes("give something free") ||
+      lower.includes("strong deal")
+    ) {
+      return t("dealQuality.strongDealMessage");
+    }
+    if (
+      lower.includes("row-level security") ||
+      lower.includes("rls") ||
+      lower.includes("policy") ||
+      lower.includes("permission denied") ||
+      lower.includes("access denied") ||
+      lower.includes("do not own") ||
+      lower.includes("not found for owner")
+    ) {
+      return t("createAi.errPublishPermission");
+    }
+    if (lower.includes("duplicate") || lower.includes("unique") || lower.includes("already exists")) {
+      return t("createAi.errPublishDuplicate");
+    }
+    if (lower.includes("storage") || lower.includes("upload") || lower.includes("photo")) {
+      return t("createAi.errPublishPhoto");
+    }
+    if (lower.includes("network") || lower.includes("fetch") || lower.includes("timed out") || lower.includes("timeout")) {
+      return t("createAi.errPublishNetwork");
+    }
+    if (lower.includes("translation") || lower.includes("translate")) {
+      return t("createAi.errPublishTranslation");
+    }
+    if (lower.includes("invalid offer definition")) return t("createAi.errPublishInvalidOfferDefinition");
+    if (lower.includes("invalid ad spec")) return t("createAi.errPublishInvalidAdSpec");
+    if (lower.includes("offer version") || lower.includes("versioned publish")) {
+      return t("createAi.errPublishVersionUnavailable");
+    }
+    if (lower.includes("billing") || lower.includes("suspended")) return t("createAi.errPublishBillingSuspended");
+    if (lower.includes("verified") || lower.includes("verification")) return t("createAi.errPublishVerificationRequired");
+
+    const cleaned = raw
+      .replace(/^error:\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return null;
+    const generic = [
+      "server error",
+      "publish failed",
+      "could not publish this offer.",
+      "couldn't publish this deal.",
+      "unexpected response from publish-offer-version.",
+    ];
+    if (generic.includes(cleaned.toLowerCase())) return null;
+    return cleaned.length > 180 ? `${cleaned.slice(0, 177).trim()}...` : cleaned;
+  }
+
   function cancelGeneration() {
     // Bumping the request id makes the in-flight result a no-op when it returns,
     // and we re-enable the UI immediately so the user is not stuck on a spinner.
@@ -1599,6 +2340,7 @@ export default function AiDealScreen() {
     setGenerating(false);
     setRevising(false);
     setBanner(null);
+    clearGenerationErrorState();
   }
 
   function blockIneligibleOffer(attemptedAction: string): boolean {
@@ -1633,12 +2375,20 @@ export default function AiDealScreen() {
       return;
     }
     if (blockIneligibleOffer("generate_ad")) return;
+    const customEditText = cleanCustomImageEditInstruction(customImageEditInstruction);
+    if (selectedPhotoUri && !usePhotoAsFinal && useCustomImageEdit && !customEditText) {
+      setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
+      return;
+    }
 
     trackEvent(AiAdsEvents.GENERATE_TAPPED, { screen: "create_ai" });
     setGenerating(true);
     setBanner(null);
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     resetGenerationState();
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     const requestId = ++generationRequestIdRef.current;
 
     try {
@@ -1653,13 +2403,21 @@ export default function AiDealScreen() {
         // them the friendly "try a different photo" copy that already exists.
         if (requestId !== generationRequestIdRef.current) return;
         const friendly = t("createAi.errPublishPhoto");
-        setLastGenerationError(friendly);
+        setGenerationFailureState(friendly, "input_or_offer_blocked");
         setBanner({ message: friendly, tone: "error" });
         return;
       }
-      // Snapshot the treatment we're about to send so revisions reference the same one
+      // Snapshot the image intent we're about to send so revisions reference the same one
       // even if the user changes the selector mid-flight.
-      const sentTreatment = path ? photoTreatment : null;
+      const sentSourceMode = imageSourceModeForPhotoChoice(path, usePhotoAsFinal);
+      const sentEditMode = sentSourceMode === "merchant_ai_edit"
+        ? useCustomImageEdit
+          ? "custom"
+          : imageEditModeForTreatment(photoTreatment)
+        : "none";
+      const sentTreatment = sentSourceMode === "merchant_ai_edit"
+        ? useCustomImageEdit ? "studiopolish" : photoTreatment
+        : null;
       const maxClaimsNum = Number(maxClaims);
 
       const { ad, quota: nextQuota } = await aiGenerateAd({
@@ -1669,17 +2427,25 @@ export default function AiDealScreen() {
         output_language: dealOutputLang,
         request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
-        ...(path ? { photo_path: path, photo_treatment: photoTreatment } : {}),
+        image_source_mode: sentSourceMode,
+        image_edit_mode: sentEditMode,
+        ...(sentEditMode === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
+        ...(path ? { photo_path: path } : {}),
+        ...(sentTreatment ? { photo_treatment: sentTreatment } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
+        creative: buildCreativeRequestPayload(),
       });
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
-      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
+      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      setGeneratedAd(normalizedAd);
+      rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
+      setTimeout(() => scrollToAdReview(), 260);
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
         regeneration_attempt: 0,
@@ -1689,7 +2455,14 @@ export default function AiDealScreen() {
       const raw = err instanceof Error ? err.message : String(err);
       const code = getErrorCode(err);
       const friendly = friendlyGenerationError(raw, code);
-      setLastGenerationError(friendly);
+      setGenerationFailureState(
+        friendly,
+        classifyGenerationFailure({
+          raw,
+          code,
+          hasFallbackSource: hasFallbackTemplateSource(),
+        }),
+      );
       setBanner({ message: friendly, tone: "error" });
       trackEvent(AiAdsEvents.GENERATION_FAILED, {
         screen: "create_ai",
@@ -1716,16 +2489,54 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
       return;
     }
-    setRevising(true);
-    setBanner(null);
-    const requestId = ++generationRequestIdRef.current;
     /**
      * Send the treatment that produced the *previous* ad image, not the current UI selection.
      * This way the server's image-only revision applies enhancement consistent with what the
      * user is looking at, even if they fiddled with the selector after generating.
      */
+    const selectedPresetLabel = activePreset ? t(activePreset) : "";
+    const revisionPresetForServer = activePreset
+      ? `${activePreset}: ${selectedPresetLabel}`
+      : "";
+    const revisesImage = revisionTarget === "image" || revisionTarget === "both";
+    const previousSourceMode =
+      generatedAd.image_selection?.sourceMode ??
+      imageSourceModeForPhotoChoice(photoPath, usePhotoAsFinal);
+    const sourceModeForRevision: MerchantImageSourceMode =
+      revisesImage && previousSourceMode === "merchant_original"
+        ? "merchant_ai_edit"
+        : revisesImage && previousSourceMode === "deterministic_fallback"
+          ? "ai_generated"
+        : previousSourceMode;
+    const editModeForRevision =
+      sourceModeForRevision === "merchant_ai_edit"
+        ? generatedAd.image_selection?.editMode && generatedAd.image_selection.editMode !== "none"
+          ? generatedAd.image_selection.editMode
+          : imageEditModeForRevisionPreset(activePreset)
+        : "none";
     const treatmentForRevision =
-      lastSentPhotoTreatmentRef.current ?? (photoPath ? photoTreatment : null);
+      sourceModeForRevision === "merchant_ai_edit"
+        ? lastSentPhotoTreatmentRef.current ??
+          photoTreatment ??
+          (editModeForRevision === "clean_background"
+            ? "cleanbg"
+            : editModeForRevision === "touchup"
+              ? "touchup"
+              : "studiopolish")
+        : null;
+    const customEditText = sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom"
+      ? cleanCustomImageEditInstruction(customImageEditInstruction || selectedPresetLabel || revisionFeedback)
+      : "";
+    if (sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom" && !customEditText) {
+      setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
+      return;
+    }
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
+    setRevising(true);
+    setBanner(null);
+    const requestId = ++generationRequestIdRef.current;
     const maxClaimsNum = Number(maxClaims);
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
@@ -1738,20 +2549,30 @@ export default function AiDealScreen() {
         previous_ad: generatedAd,
         revision_target: revisionTarget,
         revision_count: revisionsUsed + 1,
-        ...(activePreset ? { revision_preset: activePreset } : {}),
+        ...(revisionPresetForServer ? { revision_preset: revisionPresetForServer } : {}),
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
-        ...(photoPath ? { photo_path: photoPath, photo_treatment: treatmentForRevision } : {}),
+        image_source_mode: sourceModeForRevision,
+        image_edit_mode: editModeForRevision,
+        ...(editModeForRevision === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
+        ...(photoPath ? { photo_path: photoPath } : {}),
+        ...(treatmentForRevision ? { photo_treatment: treatmentForRevision } : {}),
         ...(offerScheduleSummary ? { offer_schedule_summary: offerScheduleSummary } : {}),
         ...(Number.isFinite(maxClaimsNum) && maxClaimsNum > 0 ? { quantity_limit: maxClaimsNum } : {}),
         redemption_limit: redemptionLimitSummary,
+        creative: buildCreativeRequestPayload(),
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
-      setGeneratedAd(normalizeGeneratedAdDisplayCopy(ad));
+      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      setGeneratedAd(normalizedAd);
+      rememberImageVersion(normalizedAd, "revision");
       if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");
       setActivePreset(null);
+      setComposedStyleIndex(0);
+      setComposedEditIntent(null);
+      setApprovedComposedPresentationHash(null);
       setAdAccepted(false);
       aiDraftBaselineRef.current = null;
     } catch (err: unknown) {
@@ -1767,24 +2588,115 @@ export default function AiDealScreen() {
     }
   }
 
+  function invalidateAcceptedAdDraft() {
+    if (!adAccepted && !approvedComposedPresentationHash && !approvedLocalizationApprovalHash) return;
+    setAdAccepted(false);
+    setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+  }
+
   function acceptAd() {
     if (!generatedAd) return;
+    if (composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
+      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+        screen: "create_ai",
+        reason: "composite_qa_block",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
+      });
+      setBanner({
+        message: t("createAi.compositeQaBlocked", {
+          defaultValue: "This ad layout needs a safer preview before publishing. Try another style or change the photo.",
+        }),
+        tone: "warning",
+      });
+      return;
+    }
+    if (selectedComposedScreenshotQaRequired) {
+      trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+        screen: "create_ai",
+        reason: "screenshot_qa_required",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+        locale_screenshot_qa_trigger_locales: selectedLocaleScreenshotQaTriggerLocales.join(","),
+      });
+      setBanner({
+        message: t("createAi.compositeScreenshotQaRequired", {
+          defaultValue: "This ad needs visual review before it can be approved. Try another style or use the split layout.",
+        }),
+        tone: "warning",
+      });
+      return;
+    }
+    if (automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
+      if (!selectedLocalizationApproval?.approved) {
+        trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
+          screen: "create_ai",
+          reason: "localization_approval_blocked",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          localization_reason_codes: selectedLocalizationApproval?.reasonCodes.join(",") ?? "missing_result",
+        });
+        setBanner({
+          message: t("createAi.localizationApprovalBlocked", {
+            defaultValue:
+              "The language versions need a safer verified preview before publishing. Try generating again or use the fallback ad.",
+          }),
+          tone: "warning",
+        });
+        return;
+      }
+    }
     applyAdToDraft(generatedAd);
+    setApprovedComposedPresentationHash(composedAdPreviewEnabled ? selectedComposedPresentationHash : null);
+    setApprovedLocalizationApprovalHash(
+      automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable && selectedLocalizationApproval?.approved
+        ? selectedLocalizationApproval.approval.approvalHash
+        : null,
+    );
     setAdAccepted(true);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
+    if (composedAdPreviewEnabled) {
+      const approvedAt = Date.now();
+      trackEvent(AiAdsEvents.COMPOSED_APPROVED, {
+        screen: "create_ai",
+        selected_template_id: selectedComposedPresentation.templateId,
+        alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
+        merchant_style_override_used: composedStyleIndex > 0,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_repair_count: selectedComposedCompositeQa.repairCodes.length,
+        screenshot_qa_required: selectedComposedScreenshotQaRequired,
+        time_to_approval_ms: composedPreviewShownAtRef.current ? approvedAt - composedPreviewShownAtRef.current : null,
+      });
+    }
     trackEvent(AiAdsEvents.AD_SELECTED, {
       screen: "create_ai",
       creative_lane: "single",
       regeneration_attempt: revisionsUsed,
     });
-    // Scroll to draft editor
     setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 200);
+      scrollToDraftEditor();
+    }, 220);
   }
 
   function useFallbackTemplateAd() {
+    if (!canUseFallbackTemplateForOutcome(lastGenerationOutcomeKind)) {
+      setBanner({
+        message: t("createAi.fallbackTemplateUnavailable", {
+          defaultValue: "A fallback template is not available for this issue. Fix the message above, then try again.",
+        }),
+        tone: "warning",
+      });
+      return;
+    }
     const fallbackPosterPath = generatedAd?.poster_storage_path ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
     if (!hasImageSource) {
@@ -1819,12 +2731,22 @@ export default function AiDealScreen() {
           photo_treatment: generatedAd?.poster_storage_path ? generatedAd.photo_treatment ?? null : null,
         }
       : fallbackBaseAd;
-    if (!fallbackPosterPath) setUsePhotoAsFinal(true);
+    if (!fallbackPosterPath) {
+      setUsePhotoAsFinal(true);
+      setMerchantOriginalWarningAcknowledged(false);
+    }
+    adGenerationStartedAtRef.current = Date.now();
+    composedPreviewShownAtRef.current = null;
+    lastComposedPreviewTelemetryHashRef.current = null;
     setGeneratedAd(fallbackAd);
+    setComposedStyleIndex(0);
+    setComposedEditIntent(null);
+    setApprovedComposedPresentationHash(null);
+    rememberImageVersion(fallbackAd, "fallback");
     applyAdToDraft(fallbackAd);
-    setAdAccepted(true);
+    setAdAccepted(!composedExactPresentationApprovalEnabled);
     setManualDraftUnlocked(true);
-    setLastGenerationError(null);
+    clearGenerationErrorState();
     setPublishStatus("idle");
     setPublishStatusMessage(null);
     setBanner({
@@ -1835,8 +2757,8 @@ export default function AiDealScreen() {
     });
     trackEvent("owner_fallback_template_used", { businessId, hasPhoto: Boolean(photoPath || photoUri || posterUrl) });
     setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 200);
+      scrollToAdReview();
+    }, 260);
   }
 
   function showPublishError(message: string, tone: "error" | "warning" = "error") {
@@ -1870,32 +2792,11 @@ export default function AiDealScreen() {
     return supabase.from("deals").update(payload).eq("id", editingDealId).eq("business_id", businessId);
   }
 
-  async function insertDealsWithCompatibility(rows: Record<string, unknown>[]) {
-    let payload = rows;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const result = await supabase.from("deals").insert(payload).select("id");
-      if (!result.error) return result;
-      if (isMissingDealLocationColumn(result.error) && payload.some((row) => "location_id" in row)) {
-        payload = payload.map(omitDealLocationId);
-        continue;
-      }
-      if (
-        isMissingDealEligibilityColumn(result.error) &&
-        payload.some((row) => DEAL_ELIGIBILITY_DEAL_COLUMN_KEYS.some((key) => key in row))
-      ) {
-        payload = payload.map(omitDealEligibilityColumns);
-        continue;
-      }
-      return result;
-    }
-    return supabase.from("deals").insert(payload).select("id");
-  }
-
   async function publishDeal() {
     if (publishInFlightRef.current) return;
     setPublishStatusMessage(null);
     if (!canPublish) {
-      const message = t("createAi.publishMissingBody");
+      const message = publishReadiness.reasonMessage || t("createAi.publishMissingBody");
       setPublishStatus("missing");
       setBanner({ message, tone: "error" });
       return;
@@ -1920,20 +2821,11 @@ export default function AiDealScreen() {
       return;
     }
 
-    // composedDescription includes the CTA — used ONLY for the quality + strong-deal
-    // guards below, so an offer phrase that happens to live only in the CTA (e.g.
-    // "Get one free") still satisfies validation.
-    if (offerContract) {
-      const mechanicsValidation = validateAiCopyAgainstOffer(
-        {
-          headline: title,
-          short_description: promoLine || description,
-          push_notification: generatedAd?.push_notification || title,
-          social_caption: generatedAd?.social_caption,
-          terms_summary: description,
-        },
-        offerContract,
-      );
+    // Validate the locked offer mechanics that will be published. Marketing fields can
+    // repeat the same valid line in preview/draft state, which is a copy-quality issue
+    // but not a terms-change failure.
+    if (offerContract && offerDefinition) {
+      const mechanicsValidation = validateAiCopyAgainstOffer(buildPublishMechanicsValidationCopy(offerDefinition), offerContract);
       if (!mechanicsValidation.valid) {
         const message = t("createAi.offerMechanicsInvalid", {
           defaultValue: "The ad copy changes the offer terms. Keep the required purchase, free item, discount, and location exactly as shown in the locked offer.",
@@ -1980,6 +2872,92 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errEndAfterStart"));
       return;
     }
+    if (!editingDealId && !offerDefinition) {
+      showPublishError(t("createAi.errPublishFailed"));
+      return;
+    }
+    if (usePhotoAsFinal && !merchantOriginalWarningAcknowledged) {
+      showPublishError(t("createAi.errOriginalPhotoAckRequired"), "warning");
+      return;
+    }
+    if (!editingDealId && composedExactPresentationApprovalEnabled) {
+      if (!adAccepted || !composedPresentationApprovalMatches) {
+        trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+          screen: "create_ai",
+          reason: "approval_required",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          approved_presentation_hash: approvedComposedPresentationHash,
+        });
+        showPublishError(
+          t("createAi.errPresentationApprovalRequired", {
+            defaultValue: "Approve the exact ad preview again before publishing.",
+          }),
+          "warning",
+        );
+        return;
+      }
+    }
+    if (!editingDealId && automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable) {
+      const localizationApprovalMatches =
+        selectedLocalizationApproval?.approved === true &&
+        approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash;
+      if (!adAccepted || !localizationApprovalMatches) {
+        trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+          screen: "create_ai",
+          reason: "localization_approval_required",
+          selected_template_id: selectedComposedPresentation.templateId,
+          presentation_hash: selectedComposedPresentationHash,
+          approved_localization_hash: approvedLocalizationApprovalHash,
+          localization_approval_hash: selectedLocalizationApproval?.approved
+            ? selectedLocalizationApproval.approval.approvalHash
+            : null,
+          localization_reason_codes: selectedLocalizationApproval?.reasonCodes.join(",") ?? "missing_result",
+        });
+        showPublishError(
+          t("createAi.errLocalizationApprovalRequired", {
+            defaultValue: "Approve the exact multilingual preview again before publishing.",
+          }),
+          "warning",
+        );
+        return;
+      }
+    }
+    if (!editingDealId && composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
+      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+        screen: "create_ai",
+        reason: "composite_qa_block",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_reason_codes: selectedComposedCompositeQa.hardFailReasons.join(","),
+      });
+      showPublishError(
+        t("createAi.errCompositeQaBlocked", {
+          defaultValue: "This ad preview failed layout checks. Try another style or change the photo.",
+        }),
+        "warning",
+      );
+      return;
+    }
+    if (!editingDealId && selectedComposedScreenshotQaRequired) {
+      trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
+        screen: "create_ai",
+        reason: "screenshot_qa_required",
+        selected_template_id: selectedComposedPresentation.templateId,
+        presentation_hash: selectedComposedPresentationHash,
+        composite_qa_decision: selectedComposedCompositeQa.decision,
+        composite_qa_trigger_codes: selectedComposedCompositeQa.screenshotQaTriggerCodes.join(","),
+        locale_screenshot_qa_trigger_locales: selectedLocaleScreenshotQaTriggerLocales.join(","),
+      });
+      showPublishError(
+        t("createAi.errCompositeScreenshotQaRequired", {
+          defaultValue: "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
+        }),
+        "warning",
+      );
+      return;
+    }
 
     publishInFlightRef.current = true;
     setPublishing(true);
@@ -2004,6 +2982,47 @@ export default function AiDealScreen() {
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
+      const adForPublishSpec = generatedAdForPublishSpec({
+        ad: generatedAd,
+        finalStoragePath,
+        uploadedPhotoStoragePath: userPhotoStoragePath,
+        usePhotoAsFinal,
+        merchantOriginalWarningAcknowledged,
+      });
+      const posterForPublishSpec =
+        creativeFormat === "poster_v1" && offerDefinition
+          ? buildPosterSpecFromOfferDefinition({
+              definition: offerDefinition,
+              enabled: true,
+              templateId: selectedPosterTemplateId,
+              sourceAssetPath: finalStoragePath,
+              renderedAssetPath: null,
+              headline: title,
+              subline: promoLine,
+              businessCategory: businessContextForAi.category,
+              compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
+            })
+          : null;
+      const adForPublishSpecWithPoster =
+        adForPublishSpec && posterForPublishSpec
+          ? {
+              ...adForPublishSpec,
+              poster: posterForPublishSpec,
+            }
+          : adForPublishSpec;
+      const composedCardPublishSpec = composedAdPreviewEnabled
+        ? {
+            presentation: selectedComposedPresentation,
+            presentationHash: selectedComposedPresentationHash,
+            selectedTemplateId: selectedComposedPresentation.templateId,
+            alternateTemplateIds: composedPresentationOptions
+              .filter((spec) => spec.templateId !== selectedComposedPresentation.templateId)
+              .map((spec) => spec.templateId),
+            merchantStyleOverrideUsed: composedStyleIndex > 0,
+            compositeQa: selectedComposedCompositeQa,
+            screenshotQa: selectedComposedScreenshotQaSnapshot,
+          }
+        : null;
       const allowTextOnlyPoster =
         generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
       if (!posterForPublish && !allowTextOnlyPoster) {
@@ -2012,19 +3031,25 @@ export default function AiDealScreen() {
         }));
         return;
       }
-      const sourceLocaleForPublish = editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
+      const sourceLocaleForPublish = localizedOwnerUiEnabled
+        ? dealOutputLang
+        : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
-      const translations = await translateDealCopy({
-        business_id: businessId,
+      const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinition, {
         title: title.trim(),
         description: listingDescription.trim(),
+      });
+      const translations = await translateDealCopy({
+        business_id: businessId,
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: sourceLocaleForPublish,
       });
 
       const baseRow = {
         business_id: businessId,
-        title: title.trim(),
-        description: listingDescription.trim(),
+        title: displayCopy.title,
+        description: displayCopy.description,
         source_locale: translations.source_locale,
         title_en: translations.title_en,
         title_es: translations.title_es,
@@ -2056,30 +3081,27 @@ export default function AiDealScreen() {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
         const rows = locTargets.map((lid) => ({ ...baseRow, location_id: lid }));
-        const canUseVersionedPublish = OFFER_VERSION_PUBLISH_ENABLED && offerDefinition !== null;
-        let dealsOut: { id: string; shouldNotify: boolean }[] = [];
-        if (canUseVersionedPublish) {
-          const versionedResult = await publishOfferVersionedDeal({
-            business_id: businessId,
-            offer_definition: offerDefinition,
-            deal_rows: rows,
-            idempotency_key:
-              publishIdempotencyKeyRef.current ??
-              (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
-            ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, generatedAd),
-          });
-          dealsOut = versionedResult.deals.map((row) => ({
-            id: row.deal_id,
-            shouldNotify: row.idempotency_replayed !== true,
-          }));
-        } else {
-          const insertResult = await insertDealsWithCompatibility(rows);
-          const { data, error } = insertResult;
-          if (error) throw error;
-          dealsOut = (data ?? [])
-            .filter((row): row is { id: string } => typeof row?.id === "string")
-            .map((row) => ({ id: row.id, shouldNotify: true }));
-        }
+        if (!offerDefinition) throw new Error("Missing offer definition for versioned publish.");
+        const versionedResult = await publishOfferVersionedDeal({
+          business_id: businessId,
+          offer_definition: offerDefinition,
+          deal_rows: rows,
+          idempotency_key:
+            publishIdempotencyKeyRef.current ??
+            (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
+          ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpecWithPoster, {
+            composedCard: composedCardPublishSpec,
+            localizationApproval:
+              selectedLocalizationApproval?.approved &&
+              approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash
+                ? selectedLocalizationApproval.approval
+                : null,
+          }),
+        });
+        const dealsOut = versionedResult.deals.map((row) => ({
+          id: row.deal_id,
+          shouldNotify: row.idempotency_replayed !== true,
+        }));
         for (const row of dealsOut) {
           if (row.id && row.shouldNotify) {
             void notifyDealPublished(row.id);
@@ -2100,6 +3122,11 @@ export default function AiDealScreen() {
         trackEvent(AiAdsEvents.PUBLISHED_WITH_AI_DRAFT, {
           screen: "create_ai",
           draft_edited: edited,
+          composed_preview_enabled: composedAdPreviewEnabled,
+          selected_template_id: composedAdPreviewEnabled ? selectedComposedPresentation.templateId : null,
+          merchant_style_override_used: composedAdPreviewEnabled ? composedStyleIndex > 0 : null,
+          composite_qa_decision: composedAdPreviewEnabled ? selectedComposedCompositeQa.decision : null,
+          composite_qa_repair_count: composedAdPreviewEnabled ? selectedComposedCompositeQa.repairCodes.length : null,
         });
       }
 
@@ -2121,9 +3148,13 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(savedPosterPath);
         setPosterUrl(savedPosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
+        setMerchantOriginalWarningAcknowledged(false);
         setGeneratedAd(null);
+        setImageVersions([]);
         setAdAccepted(false);
+        setApprovedComposedPresentationHash(null);
         aiDraftBaselineRef.current = null;
         setEditDirtyBaseline(
           buildDealFormDirtySnapshot({
@@ -2159,28 +3190,7 @@ export default function AiDealScreen() {
       router.replace("/(tabs)/dashboard");
     } catch (err: unknown) {
       setAllowPostPublishNavigation(false);
-      let detail = "";
-      if (err instanceof Error) {
-        const m = err.message.toLowerCase();
-        if (
-          m.includes("must be at least 40") ||
-          m.includes("give something free") ||
-          m.includes("strong deal")
-        ) {
-          // Server strong-deal guardrail rejected the copy (it can be stricter than
-          // the client mirror for some phrasings). Show the actionable guidance
-          // instead of a bare "Publish failed" with no reason.
-          detail = t("dealQuality.strongDealMessage");
-        } else if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) {
-          detail = t("createAi.errPublishPermission");
-        } else if (m.includes("duplicate") || m.includes("unique")) {
-          detail = t("createAi.errPublishDuplicate");
-        } else if (m.includes("storage") || m.includes("upload")) {
-          detail = t("createAi.errPublishPhoto");
-        } else if (m.includes("network") || m.includes("fetch")) {
-          detail = t("createAi.errPublishNetwork");
-        }
-      }
+      const detail = publishErrorDetail(err);
       const message = detail
         ? `${t("createAi.errPublishFailed")} ${detail}`
         : t("createAi.errPublishFailed");
@@ -2280,6 +3290,206 @@ export default function AiDealScreen() {
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
     : usePhotoAsFinal ? selectedPhotoUri : null;
+  const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
+  const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
+  const currentAdStoragePath = imageVersionStoragePath(generatedAd);
+  const selectedPosterTemplateId: PosterTemplateId = offerDefinition
+    ? choosePosterTemplateForOffer(posterStyle, offerDefinition, businessContextForAi.category)
+    : posterStyle === "fresh" || posterStyle === "bold" || posterStyle === "premium"
+      ? posterStyle
+      : "fresh";
+  const generatedPosterSpec = generatedAd?.poster?.enabled ? (generatedAd.poster as PosterSpecV1) : null;
+  const fallbackPosterSpec =
+    creativeFormat === "poster_v1" && offerDefinition
+      ? (buildPosterSpecFromOfferDefinition({
+          definition: offerDefinition,
+          enabled: true,
+          templateId: selectedPosterTemplateId,
+          sourceAssetPath: currentAdStoragePath ?? originalStoragePath,
+          renderedAssetPath: null,
+          headline: generatedAd?.headline ?? title,
+          subline: generatedAd?.short_description ?? promoLine,
+          businessCategory: businessContextForAi.category,
+          compositionPlan: generatedAd?.item_research?.description ?? null,
+        }) as PosterSpecV1)
+      : null;
+  const effectivePosterSpec = fallbackPosterSpec ?? generatedPosterSpec;
+  const showPosterPreview =
+    Boolean(generatedAd && effectivePosterSpec) &&
+    (previewFormat === "poster_v1" || creativeFormat === "poster_v1");
+  const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
+  const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
+  const composedAdPreviewEnabled =
+    isAiV4ComposedAdCardEnabled() ||
+    isAiV4SharedRendererEnabled() ||
+    isAiV4AuthoritativeOfferCardEnabled();
+  const composedPresentationResolverEnabled = composedAdPreviewEnabled && isAiV4PresentationResolverEnabled();
+  const composedMinimalInputEnabled = composedAdPreviewEnabled && isAiV4MinimalInputFlowEnabled();
+  const composedInstantStyleAlternatesEnabled = composedAdPreviewEnabled && isAiV4InstantStyleAlternatesEnabled();
+  const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
+  const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
+  const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
+  const ownerLanguagePreviewAvailable =
+    localizedOwnerUiEnabled && Boolean(offerDefinition && generatedAd?.localization_bundle);
+  const localePresentationOverridesEnabled =
+    ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
+  const localeScreenshotQaEnabled =
+    ownerLanguagePreviewAvailable && isAiV5LocaleScreenshotQaEnabled();
+  const activeMerchantPreviewLocale = ownerLanguagePreviewAvailable
+    ? merchantPreviewLocale ?? generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale
+    : effectiveDraftSourceLocale;
+  const ownerLanguagePreview = buildOwnerLanguagePreview({
+    generatedAd,
+    offerDefinition,
+    sourceLocale: generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale,
+    previewLocale: activeMerchantPreviewLocale,
+    localizedPreviewEnabled: ownerLanguagePreviewAvailable,
+    fallbackOfferLine: generatedAd?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
+    fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
+    fallbackCtaLabel: ctaText,
+  });
+  const composedOfferFacts = ownerLanguagePreview.offerFacts;
+  const composedCopy = ownerLanguagePreview.copy;
+  const composedMerchant = buildMerchantIdentity({
+    businessName,
+    locationName: businessProfile?.location,
+    addressLine: businessProfile?.address ?? businessProfile?.location ?? null,
+  });
+  const composedLiveState = {
+    status: "live" as const,
+    statusLabel: t("dealStatus.live"),
+    quantityRemainingLabel: `${t("createAi.maxClaimsLabel")} ${maxClaims}`.trim(),
+    timeRemainingLabel: displayScheduleSummary,
+    claimAvailable: true,
+  };
+  const composedImageSourceType: AdImageSourceType = adImageUri
+    ? imageSourceTypeFromGeneratedAd(generatedAd) === "deterministic_fallback"
+      ? "merchant_original"
+      : imageSourceTypeFromGeneratedAd(generatedAd)
+    : "deterministic_fallback";
+  const composedImageQa = sourceAwareQaFromSelectionQa(
+    generatedAd?.image_selection?.qa,
+    composedImageSourceType,
+    Boolean(adImageUri),
+  );
+  const composedImageSafeZones = buildImageSafeZoneResult({
+    hasImage: Boolean(adImageUri),
+    imageSourceType: composedImageSourceType,
+    imageQa: composedImageQa,
+    cropSuitabilityScore: cropSuitabilityScoreForQa(composedImageQa),
+  });
+  const composedBasePresentation = buildDefaultAdPresentationSpec({
+    imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
+    imageSourceType: composedImageSourceType,
+    templateId: "split_offer_panel",
+    themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+    resolutionReasonCodes: adImageUri ? ["MERCHANT_PREVIEW_IMAGE"] : ["MERCHANT_PREVIEW_FALLBACK"],
+  });
+  const composedPresentationResolution = composedPresentationResolverEnabled
+    ? resolveAdPresentation({
+        approvedCopy: composedCopy,
+        lockedOfferContent: composedOfferFacts,
+        merchantIdentity: composedMerchant,
+        imageQa: composedImageQa,
+        imageSafeZones: composedImageSafeZones,
+        creativeStrategy: generatedAd?.item_research?.description ?? generatedAd?.headline ?? hintText,
+        liveStateCapabilities: {
+          supportsQuantityRemaining: true,
+          supportsTimeRemaining: true,
+        },
+        targetSurface: "merchant_preview",
+        imageAssetId: currentAdStoragePath ?? originalStoragePath ?? adImageUri ?? null,
+        imageSourceType: composedImageSourceType,
+        themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+      })
+    : null;
+  const composedPresentationOptions = composedPresentationResolution
+    ? [composedPresentationResolution.recommended, ...composedPresentationResolution.alternates]
+    : [composedBasePresentation];
+  const selectedBaseComposedPresentation =
+    composedPresentationOptions[Math.min(composedStyleIndex, Math.max(0, composedPresentationOptions.length - 1))] ??
+    composedBasePresentation;
+  const selectedLocalePresentationResolution =
+    localePresentationOverridesEnabled && generatedAd?.localization_bundle
+      ? resolveLocalePresentationOverrides({
+          basePresentation: selectedBaseComposedPresentation,
+          localizationBundle: generatedAd.localization_bundle,
+          merchantIdentity: composedMerchant,
+        })
+      : null;
+  const selectedComposedPresentation =
+    selectedLocalePresentationResolution?.presentation ?? selectedBaseComposedPresentation;
+  const selectedComposedPresentationHash = createAdPresentationHash({
+    presentation: selectedComposedPresentation,
+    offerFacts: composedOfferFacts,
+    copy: composedCopy,
+  });
+  const selectedComposedCompositeQa = runDeterministicAdCompositeQa({
+    offerFacts: composedOfferFacts,
+    merchant: composedMerchant,
+    copy: composedCopy,
+    presentation: selectedComposedPresentation,
+    liveState: composedLiveState,
+    surface: "merchant_preview",
+    imageUri: adImageUri,
+    selectedImageAssetId: currentAdStoragePath ?? originalStoragePath ?? selectedComposedPresentation.imageAssetId,
+    imageSafeZoneConfidence: composedImageSafeZones.confidence,
+  });
+  const selectedComposedScreenshotQaSnapshot = buildComposedScreenshotQaSnapshot(
+    selectedComposedCompositeQa,
+    composedScreenshotQaEnabled,
+  );
+  const selectedLocaleScreenshotQaTriggerLocales =
+    localeScreenshotQaEnabled ? selectedLocalePresentationResolution?.screenshotQaTriggerLocales ?? [] : [];
+  const selectedLocaleScreenshotQaRequired = selectedLocaleScreenshotQaTriggerLocales.length > 0;
+  const selectedComposedScreenshotQaRequired =
+    selectedComposedScreenshotQaSnapshot.required || selectedLocaleScreenshotQaRequired;
+  const selectedLocalizationApproval =
+    automaticLocalizationApprovalEnabled &&
+    ownerLanguagePreviewAvailable &&
+    offerDefinition &&
+    generatedAd?.localization_bundle
+      ? buildVerifiedAdLocalizationApproval({
+          bundle: generatedAd.localization_bundle,
+          offerDefinition,
+          presentationHash: selectedComposedPresentationHash,
+          selectedImageAssetId: selectedComposedPresentation.imageAssetId,
+          providerStatus: generatedAd.localization_status ?? null,
+          localePresentationOverrides: selectedComposedPresentation.localeOverrides ?? null,
+          screenshotQaRequired: selectedComposedScreenshotQaRequired,
+        })
+      : null;
+  const composedPresentationApprovalMatches =
+    approvedComposedPresentationHash === selectedComposedPresentationHash &&
+    selectedComposedCompositeQa.decision !== "block" &&
+    selectedComposedCompositeQa.decision !== "unavailable" &&
+    !selectedComposedScreenshotQaRequired;
+  const canTryComposedStyle = composedInstantStyleAlternatesEnabled && composedPresentationOptions.length > 1;
+  const showComposedRevisePanel = !adAccepted && (!composedMinimalInputEnabled || composedEditIntent === "words");
+  const canCompareImages = Boolean(
+    selectedPhotoUri &&
+      adImageUri &&
+      originalImageVersion &&
+      originalStoragePath &&
+      currentAdStoragePath &&
+      originalStoragePath !== currentAdStoragePath,
+  );
+  const restorableImageVersions = imageVersions.filter((entry) => entry.id !== currentImageVersionId);
+  const imageVersionLabel = (entry: ImageVersionEntry, index: number) => {
+    if (entry.kind === "original") {
+      return t("createAi.imageCompareOriginal", { defaultValue: "Original photo" });
+    }
+    if (entry.kind === "revision") {
+      return t("createAi.imageVersionRevision", {
+        number: index + 1,
+        defaultValue: `Revision ${index + 1}`,
+      });
+    }
+    if (entry.kind === "fallback") {
+      return t("createAi.imageVersionFallback", { defaultValue: "Fallback image" });
+    }
+    return t("createAi.imageVersionGenerated", { defaultValue: "Generated image" });
+  };
   const revisionsLeft = Math.max(0, SOFT_REVISION_CAP - revisionsUsed);
   const revisionsLeftLabel =
     revisionsLeft === 0
@@ -2298,7 +3508,8 @@ export default function AiDealScreen() {
       ? imagePresetKeys
       : revisionTarget === "copy"
         ? COPY_PRESET_KEYS
-        : [...COPY_PRESET_KEYS, ...imagePresetKeys];
+        : BOTH_PRESET_KEYS_COMPACT;
+  const canReviseAd = revisionsLeft > 0 && !revising && !generating;
   const targetLabel: Record<RevisionTarget, string> = {
     copy: t("createAi.reviseTargetCopy"),
     image: t("createAi.reviseTargetImage"),
@@ -2342,6 +3553,48 @@ export default function AiDealScreen() {
     setIosSchedulePicker(null);
   }
 
+  const ownerLanguagePreviewControls = ownerLanguagePreviewAvailable ? (
+    <View style={{ padding: 12, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 8 }}>
+      <Text style={{ fontWeight: "800", color: theme.text }}>
+        {t("createAi.previewLanguageTitle", { defaultValue: "Preview language" })}
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+        {t("createAi.localizedApprovalDisclosure", {
+          sourceLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.sourceLocale].productLabel,
+          previewLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.locale].productLabel,
+          defaultValue:
+            "This preview changes only the customer-facing language. The deal mechanics, image, schedule, and inventory stay tied to the same approved offer.",
+        })}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {SUPPORTED_LOCALES.map((locale) => {
+          const active = ownerLanguagePreview.locale === locale;
+          return (
+            <Pressable
+              key={locale}
+              onPress={() => setMerchantPreviewLocale(locale)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? theme.primary : theme.border,
+                backgroundColor: active ? PrimaryTint.surface : theme.surface,
+              }}
+            >
+              <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
+                {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  ) : null;
+
   return (
     <KeyboardScreen style={{ backgroundColor: theme.background }}>
       <ScrollView
@@ -2352,7 +3605,7 @@ export default function AiDealScreen() {
         contentContainerStyle={{
           paddingTop: top,
           paddingHorizontal: horizontal,
-          paddingBottom: scrollBottom,
+          paddingBottom: scrollBottom + Spacing.xxxl,
         }}
       >
         <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
@@ -2362,6 +3615,54 @@ export default function AiDealScreen() {
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
+        {localizedOwnerUiEnabled ? (
+          <View
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              gap: 8,
+            }}
+          >
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>
+              {t("createAi.sourceLanguageTitle", { defaultValue: "Ad source language" })}
+            </Text>
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.sourceLanguageHelp", {
+                defaultValue: "Changing the app language will not change this draft. Pick the language Twofer should write the source ad in.",
+              })}
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {SUPPORTED_LOCALES.map((locale) => {
+                const active = effectiveDraftSourceLocale === locale;
+                return (
+                  <Pressable
+                    key={locale}
+                    onPress={() => chooseDraftSourceLocale(locale)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: active ? theme.primary : theme.border,
+                      backgroundColor: active ? PrimaryTint.surface : theme.surfaceMuted,
+                    }}
+                  >
+                    <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
+                      {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
         {pendingRecoveredDraft ? (
           <View
             style={{
@@ -2423,6 +3724,29 @@ export default function AiDealScreen() {
                 <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
               </View>
             </View>
+            <Text style={{ marginTop: 8, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.photoSkipHint")}
+            </Text>
+            {!selectedPhotoUri && !photoStepCollapsed ? (
+              <Pressable
+                onPress={skipPhotoToDescription}
+                accessibilityRole="button"
+                accessibilityLabel={t("createAi.skipPhoto", { defaultValue: "Skip photo" })}
+                style={{
+                  minHeight: 44,
+                  marginTop: 6,
+                  alignSelf: "flex-start",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>
+                  {t("createAi.skipPhoto", { defaultValue: "Skip photo" })}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={18} color={theme.accentText} />
+              </Pressable>
+            ) : null}
 
             {selectedPhotoUri ? (
               <Image
@@ -2430,7 +3754,7 @@ export default function AiDealScreen() {
                 style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
                 contentFit="cover"
               />
-            ) : (
+            ) : photoStepCollapsed ? null : (
               <View style={{ marginTop: 12 }}>
                 <View style={{ height: 260, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1.5, borderColor: theme.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
                   <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
@@ -2477,32 +3801,68 @@ export default function AiDealScreen() {
                     onPress={() => {
                       const nextUseAsFinal = !usePhotoAsFinal;
                       setUsePhotoAsFinal(nextUseAsFinal);
+                      setMerchantOriginalWarningAcknowledged(false);
                       if (nextUseAsFinal) {
+                        setUseCustomImageEdit(false);
                         if (generatedAd) resetGenerationState();
                         setManualDraftUnlocked(true);
                       }
                     }}
                   />
+                  {usePhotoAsFinal ? (
+                    <Pressable
+                      onPress={() => setMerchantOriginalWarningAcknowledged((value) => !value)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: merchantOriginalWarningAcknowledged }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        padding: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: merchantOriginalWarningAcknowledged ? theme.primary : theme.border,
+                        backgroundColor: colorScheme === "dark" ? theme.surface : "#fff",
+                      }}
+                    >
+                      <MaterialIcons
+                        name={merchantOriginalWarningAcknowledged ? "check-box" : "check-box-outline-blank"}
+                        size={22}
+                        color={merchantOriginalWarningAcknowledged ? theme.primary : theme.mutedText}
+                      />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, lineHeight: 18 }}>
+                          {t("createAi.originalPhotoAckLabel")}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                          {t("createAi.originalPhotoAckHelper")}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 6, color: theme.text }}>{t("createAi.photoPolishTitle")}</Text>
                 <Text style={{ opacity: 0.7, fontSize: 12, marginBottom: 8, color: theme.text }}>
                   {t("createAi.photoPolishHelp")}
                 </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {PHOTO_TREATMENT_OPTIONS.map((opt) => {
-                    const selected = photoTreatment === opt.key;
+                    const selected = !useCustomImageEdit && photoTreatment === opt.key;
                     return (
                       <Pressable
                         key={opt.key}
                         onPress={() => {
-                          if (opt.key === photoTreatment) return;
+                          if (!useCustomImageEdit && opt.key === photoTreatment) return;
+                          setUseCustomImageEdit(false);
                           setPhotoTreatment(opt.key);
                           // Stale-ad guard: changing the treatment after generating means the
                           // displayed ad no longer reflects the chosen polish.
                           if (generatedAd) resetGenerationState();
                         }}
                         style={{
-                          flex: 1,
+                          flexGrow: 1,
+                          flexBasis: "47%",
+                          minWidth: 130,
                           paddingVertical: 10,
                           paddingHorizontal: 8,
                           borderRadius: 12,
@@ -2520,28 +3880,90 @@ export default function AiDealScreen() {
                       </Pressable>
                     );
                   })}
+                  <Pressable
+                    onPress={() => {
+                      if (!useCustomImageEdit) {
+                        setUseCustomImageEdit(true);
+                        if (generatedAd) resetGenerationState();
+                      }
+                      requestAnimationFrame(() => customImageEditInputRef.current?.focus());
+                    }}
+                    style={{
+                      flexGrow: 1,
+                      flexBasis: "47%",
+                      minWidth: 130,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      borderRadius: 12,
+                      backgroundColor: useCustomImageEdit ? theme.primary : theme.surfaceMuted,
+                      borderWidth: useCustomImageEdit ? 0 : 1,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700", fontSize: 13, color: useCustomImageEdit ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], textAlign: "center" }}>
+                      {t("createAi.treatmentCustomLabel")}
+                    </Text>
+                    <Text style={{ marginTop: 2, fontSize: 11, color: useCustomImageEdit ? theme.primaryText : theme.mutedText, textAlign: "center" }}>
+                      {t("createAi.treatmentCustomHelper")}
+                    </Text>
+                  </Pressable>
                 </View>
+                {useCustomImageEdit && !usePhotoAsFinal ? (
+                  <TextInput
+                    ref={customImageEditInputRef}
+                    value={customImageEditInstruction}
+                    onChangeText={(text) => {
+                      setCustomImageEditInstruction(text);
+                      if (generatedAd) resetGenerationState();
+                    }}
+                    placeholder={t("createAi.customImageEditPlaceholder")}
+                    placeholderTextColor={theme.mutedText}
+                    inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
+                    maxLength={400}
+                    multiline
+                    style={{
+                      marginTop: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 12,
+                      padding: 12,
+                      minHeight: 54,
+                      backgroundColor: theme.surface,
+                      color: theme.text,
+                      fontSize: 13,
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
 
-            <View style={{ marginTop: 16 }}>
+            <View
+              onLayout={(e) => {
+                descriptionSectionYRef.current = e.nativeEvent.layout.y;
+              }}
+              style={{ marginTop: 12 }}
+            >
               <StepBadge n={2} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.fewWords")}</Text>
+            <Text style={{ marginTop: 8, fontWeight: "700", color: theme.text }}>{t("createAi.dealDescriptionLabel")}</Text>
+            <Text style={{ marginTop: 3, color: theme.mutedText, fontSize: 12, lineHeight: 16 }} numberOfLines={2}>
+              {selectedPhotoUri ? t("createAi.dealDescriptionHelpWithPhoto") : t("createAi.dealDescriptionHelpNoPhoto")}
+            </Text>
             <View style={{ marginTop: 6 }}>
               <TextInput
+                ref={hintInputRef}
                 value={hintText}
-                onChangeText={setHintText}
-                placeholder={t("createAi.hintPlaceholder")}
+                onChangeText={handleHintTextChange}
+                placeholder={selectedPhotoUri ? t("createAi.hintPlaceholder") : t("createAi.hintPlaceholderNoPhoto")}
                 placeholderTextColor={theme.mutedText}
                 multiline
                 style={{
                   borderWidth: 1,
                   borderColor: isRecording ? theme.danger : theme.border,
                   borderRadius: 14,
-                  padding: 14,
-                  paddingRight: Platform.OS !== "web" ? 56 : 14,
-                  minHeight: 56,
+                  padding: 12,
+                  paddingRight: Platform.OS !== "web" ? 54 : 12,
+                  minHeight: 52,
                   backgroundColor: theme.surface,
                   color: theme.text,
                 }}
@@ -2561,7 +3983,7 @@ export default function AiDealScreen() {
               ) : null}
             </View>
 
-            <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.priceOptional")}</Text>
+            <Text style={{ marginTop: 8, color: theme.text }}>{t("createAi.priceOptional")}</Text>
             <TextInput
               value={price}
               onChangeText={(value) => setPrice(sanitizeDecimalInput(value))}
@@ -2570,26 +3992,40 @@ export default function AiDealScreen() {
               returnKeyType="done"
               placeholder={t("createAi.placeholderPrice")}
               placeholderTextColor={theme.mutedText}
-              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, marginTop: 5, color: theme.text, backgroundColor: theme.surface }}
             />
 
             <DealEligibilityForm
               value={eligibilityForm}
-              onChange={setEligibilityForm}
+              onChange={handleEligibilityFormChange}
               t={t}
               theme={theme}
               colorScheme={colorScheme}
               inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
               result={eligibilityResult}
+              compact
             />
 
+            {eligibilityResult.eligible ? (
+              <>
             <View
-              onLayout={(e) => setScheduleSectionY(e.nativeEvent.layout.y)}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                scheduleSectionYRef.current = y;
+                setScheduleSectionY(y);
+              }}
               style={{ marginTop: 16 }}
             >
               <StepBadge n={3} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.validity")}</Text>
+            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>
+              {t("createAi.scheduleTitle", { defaultValue: "Schedule" })}
+            </Text>
+            <Text style={{ marginTop: 4, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+              {t("createAi.scheduleHelp", {
+                defaultValue: "Choose when customers can claim this deal. Run it once or repeat it weekly.",
+              })}
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
@@ -2836,12 +4272,30 @@ export default function AiDealScreen() {
 
             <Pressable
               onPress={() => setClaimSettingsOpen((v) => !v)}
-              style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: claimSettingsOpen }}
+              accessibilityLabel={t("createAi.claimSettingsHeader")}
+              style={{ marginTop: 12, gap: 4 }}
             >
-              <Text style={{ fontWeight: "700", color: theme.text }}>{t("createAi.claimSettingsHeader")}</Text>
-              <Text style={{ fontSize: 12, opacity: 0.5, color: theme.text }}>
-                {claimSettingsOpen ? "▲" : `${maxClaims} claims, ${cutoffMins} min ▼`}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Text style={{ flex: 1, fontWeight: "700", color: theme.text }}>
+                  {t("createAi.claimSettingsHeader")}
+                </Text>
+                <Text style={{ fontSize: 12, opacity: 0.55, color: theme.text }}>
+                  {claimSettingsOpen
+                    ? t("createAi.collapseSettings", { defaultValue: "Hide" })
+                    : t("createAi.expandSettings", { defaultValue: "Show" })}
+                </Text>
+              </View>
+              {!claimSettingsOpen ? (
+                <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+                  {t("createAi.claimSettingsSummary", {
+                    maxClaims,
+                    cutoffMins,
+                    defaultValue: "{{maxClaims}} claims max, {{cutoffMins}} min cutoff",
+                  })}
+                </Text>
+              ) : null}
             </Pressable>
             {claimSettingsOpen ? (
               <>
@@ -2870,25 +4324,133 @@ export default function AiDealScreen() {
               </>
             ) : null}
 
+            <View style={{ marginTop: 18, gap: 10 }}>
+              <Text style={{ fontWeight: "800", color: theme.text }}>
+                {t("createAi.adFormatTitle", { defaultValue: "Ad format" })}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {([
+                  {
+                    key: "standard_card" as const,
+                    label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }),
+                    icon: "view-agenda" as const,
+                  },
+                  {
+                    key: "poster_v1" as const,
+                    label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }),
+                    icon: "crop-portrait" as const,
+                  },
+                ]).map((option) => {
+                  const selected = creativeFormat === option.key;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => selectCreativeFormat(option.key)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingVertical: 9,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: selected ? theme.primary : theme.border,
+                        backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <MaterialIcons
+                        name={option.icon}
+                        size={18}
+                        color={selected ? theme.accentText : theme.mutedText}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
+                        style={{ fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {creativeFormat === "poster_v1" ? (
+                <>
+                  <Text style={{ fontWeight: "800", color: theme.text, marginTop: 2 }}>
+                    {t("createAi.posterStyleTitle", { defaultValue: "Poster style" })}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {POSTER_STYLE_CHOICES.map((styleChoice) => {
+                      const selected = posterStyle === styleChoice;
+                      const label =
+                        styleChoice === "auto"
+                          ? t("createAi.posterStyleAuto", { defaultValue: "Auto" })
+                          : styleChoice === "fresh"
+                            ? t("createAi.posterStyleFresh", { defaultValue: "Fresh" })
+                            : styleChoice === "bold"
+                              ? t("createAi.posterStyleBold", { defaultValue: "Bold" })
+                              : t("createAi.posterStylePremium", { defaultValue: "Premium" });
+                      return (
+                        <Pressable
+                          key={styleChoice}
+                          onPress={() => selectPosterStyle(styleChoice)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={{
+                            minHeight: 38,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: selected ? theme.primary : theme.border,
+                            backgroundColor: selected ? theme.primary : theme.surfaceMuted,
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: selected ? theme.primaryText : theme.text,
+                              fontWeight: "800",
+                              fontSize: 12,
+                            }}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+            </View>
+
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
             ) : null}
 
-            <View style={{ marginTop: 16, gap: 10 }}>
+            <View
+              onLayout={(e) => {
+                generationSectionYRef.current = e.nativeEvent.layout.y;
+              }}
+              style={{ marginTop: 16, gap: 10 }}
+            >
               {quota ? (
                 <Text style={{ fontSize: 12, opacity: 0.5, textAlign: "center", color: theme.text }}>
                   {t("createAi.quotaRemaining", { remaining: quota.remaining, limit: quota.limit })}
                 </Text>
               ) : null}
               {generating ? (
-                <DancingPenguinProgressCard
+                <PrimaryButton
                   title={t("createAi.generateWorking")}
-                  message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
-                  hint={t("createAi.generatingHint")}
-                  cancelLabel={t("createAi.cancel")}
-                  onCancel={cancelGeneration}
-                  theme={theme}
-                  testID="ai-draft-penguin-progress"
+                  onPress={() => {}}
+                  disabled
                 />
               ) : (
                 <PrimaryButton
@@ -2908,56 +4470,353 @@ export default function AiDealScreen() {
               ) : null}
             </View>
 
-            {lastGenerationError && !generating ? (
+            {generationRecovery && !generating ? (
               <View style={{ marginTop: 16, padding: 14, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                 {/* Header is the ACTUAL failure reason (cooldown / monthly cap / copy
                     failure / timeout / ownership), not a generic "couldn't generate"
                     line — so the cause is visible instead of hidden. */}
-                <Text style={{ fontWeight: "700", color: theme.text }}>{lastGenerationError}</Text>
+                <Text style={{ fontWeight: "700", color: theme.text }}>{generationRecovery.title}</Text>
                 <Text style={{ opacity: 0.8, lineHeight: 20, color: theme.text }}>
-                  {t("createAi.fallbackTemplateBody", {
-                    defaultValue: "AI image generation had trouble, so we made a clean fallback ad. You can publish this now or try AI again.",
-                  })}
+                  {generationRecovery.body}
                 </Text>
-                <PrimaryButton
-                  title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
-                  onPress={useFallbackTemplateAd}
-                />
-                <SecondaryButton
-                  title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
-                  onPress={() => {
-                    setManualDraftUnlocked(true);
-                    setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
-                  }}
-                />
+                {generationRecovery.showFallbackAction ? (
+                  <PrimaryButton
+                    title={t("createAi.useFallbackTemplate", { defaultValue: "Use fallback template" })}
+                    onPress={useFallbackTemplateAd}
+                  />
+                ) : null}
+                {generationRecovery.showManualAction ? (
+                  <SecondaryButton
+                    title={t("createAi.editFallbackDetails", { defaultValue: "Edit details" })}
+                    onPress={() => {
+                      setManualDraftUnlocked(true);
+                      setBanner({ message: t("createAi.manualDraftBanner"), tone: "info" });
+                      scrollToDraftEditor();
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
+              </>
+            ) : (
+              <View
+                style={{
+                  marginTop: 16,
+                  padding: 14,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceMuted,
+                  gap: 8,
+                }}
+              >
+                <StepBadge n={3} total={3} t={t} />
+                <Text style={{ fontWeight: "800", color: theme.text }}>
+                  {t("dealEligibility.invalidTitle", { defaultValue: "Not eligible yet" })}
+                </Text>
+                <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 19 }}>
+                  {eligibilityResult.message ??
+                    t("dealEligibility.invalidBody", {
+                      defaultValue: "Finish the required offer rules before choosing schedule and generating an ad.",
+                    })}
+                </Text>
+              </View>
+            )}
 
-            {/* Single ad preview — text rendered natively over the image, not baked in */}
+            {/* Single ad preview - text rendered natively below the image, not baked in. */}
             {generatedAd ? (
-              <View style={{ marginTop: 22, gap: 14 }}>
+              <View
+                onLayout={(e) => {
+                  adReviewSectionYRef.current = e.nativeEvent.layout.y;
+                }}
+                style={{ marginTop: 22, gap: 14 }}
+              >
                 <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
 
-                <GeneratedAdPreviewCard
-                  imageUri={adImageUri}
-                  businessName={businessName}
-                  headline={generatedAd.headline}
-                  body={generatedAd.subheadline}
-                  offerLine={generatedAd.locked_offer_line || offerContract?.canonicalOfferLine}
-                  termsLine={generatedAd.locked_terms_line || offerContract?.canonicalShortTerms}
-                  cta={generatedAd.cta}
-                  scheduleSummary={displayScheduleSummary}
-                  maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                  maxClaimsValue={maxClaims}
-                  termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                  termsHelper={t("createAi.lockedTermsHelper", {
-                    defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                  })}
-                  noImageLabel={t("createAi.noImage")}
-                  addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                  theme={theme}
-                  darkMode={colorScheme === "dark"}
-                />
+                {effectivePosterSpec ? (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {([
+                      { key: "standard_card" as const, label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }) },
+                      { key: "poster_v1" as const, label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }) },
+                    ]).map((tab) => {
+                      const selected = previewFormat === tab.key;
+                      return (
+                        <Pressable
+                          key={tab.key}
+                          onPress={() => setPreviewFormat(tab.key)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 9,
+                            paddingHorizontal: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: selected ? theme.primary : theme.border,
+                            backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.78}
+                            style={{ textAlign: "center", fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
+                          >
+                            {tab.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {showPosterPreview && effectivePosterSpec ? (
+                  <>
+                    <View
+                      style={{
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surface,
+                        padding: 10,
+                      }}
+                    >
+                      <AdPosterCanvas
+                        spec={effectivePosterSpec}
+                        imageUri={adImageUri ?? selectedPhotoUri}
+                        templateId={selectedPosterTemplateId}
+                      />
+                    </View>
+                    <View
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surfaceMuted,
+                        gap: 7,
+                      }}
+                    >
+                      <Text style={{ fontWeight: "800", color: theme.text }}>
+                        {t("createAi.lockedDetailsTitle", { defaultValue: "Deal details" })}
+                      </Text>
+                      <Text style={{ color: theme.text, fontWeight: "800" }}>
+                        {ownerLanguagePreview.offerLine}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {ownerLanguagePreview.termsLine}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {t("createAi.scheduleLabel")} {displayScheduleSummary}
+                      </Text>
+                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
+                        {t("createAi.maxClaimsLabel")} {maxClaims}
+                      </Text>
+                    </View>
+                    <SecondaryButton
+                      title={t("createAi.useStandardCard", { defaultValue: "Use standard card" })}
+                      onPress={() => selectCreativeFormat("standard_card")}
+                    />
+                    {ownerLanguagePreviewControls}
+                  </>
+                ) : composedAdPreviewEnabled ? (
+                  <>
+                    <ComposedPreviewTelemetryBeacon
+                      generatedAdPresent={Boolean(generatedAd)}
+                      presentation={selectedComposedPresentation}
+                      presentationHash={selectedComposedPresentationHash}
+                      presentationOptionsCount={composedPresentationOptions.length}
+                      imageSafeZoneConfidence={composedImageSafeZones.confidence}
+                      compositeQa={selectedComposedCompositeQa}
+                      screenshotQaRequired={selectedComposedScreenshotQaRequired}
+                      generationStartedAtRef={adGenerationStartedAtRef}
+                      previewShownAtRef={composedPreviewShownAtRef}
+                      lastHashRef={lastComposedPreviewTelemetryHashRef}
+                    />
+                    <GeneratedAdPreviewCard
+                      imageUri={adImageUri}
+                      businessName={businessName}
+                      headline={ownerLanguagePreview.headline}
+                      body={ownerLanguagePreview.body}
+                      imageAltText={ownerLanguagePreview.imageAltText}
+                      offerLine={ownerLanguagePreview.offerLine}
+                      termsLine={ownerLanguagePreview.termsLine}
+                      cta={ownerLanguagePreview.cta}
+                      scheduleSummary={displayScheduleSummary}
+                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                      maxClaimsValue={maxClaims}
+                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                      termsHelper={t("createAi.lockedTermsHelper", {
+                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                      })}
+                      noImageLabel={t("createAi.noImage")}
+                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                      theme={theme}
+                      darkMode={colorScheme === "dark"}
+                    />
+                    {ownerLanguagePreviewControls}
+                    {composedMinimalInputEnabled ? (
+                      <View style={{ gap: 8 }}>
+                        <SecondaryButton
+                          title={t("createAi.composedChangePhoto", { defaultValue: "Change photo" })}
+                          onPress={() => {
+                            setComposedEditIntent(null);
+                            scrollRef.current?.scrollTo({ y: 0, animated: true });
+                          }}
+                        />
+                        <SecondaryButton
+                          title={t("createAi.composedChangeWords", { defaultValue: "Change words" })}
+                          onPress={() => {
+                            setComposedEditIntent("words");
+                            setRevisionTarget("copy");
+                            setActivePreset(null);
+                            setTimeout(() => {
+                              scrollRef.current?.scrollToEnd({ animated: true });
+                            }, 80);
+                          }}
+                        />
+                        <SecondaryButton
+                          title={t("createAi.composedTryAnotherStyle", { defaultValue: "Try another style" })}
+                          onPress={() => {
+                            const nextStyleIndex = (composedStyleIndex + 1) % composedPresentationOptions.length;
+                            const nextPresentation = composedPresentationOptions[nextStyleIndex];
+                            const nextPresentationHash = createAdPresentationHash({
+                              presentation: nextPresentation,
+                              offerFacts: composedOfferFacts,
+                              copy: composedCopy,
+                            });
+                            trackEvent(AiAdsEvents.COMPOSED_STYLE_CHANGED, {
+                              screen: "create_ai",
+                              previous_template_id: selectedComposedPresentation.templateId,
+                              selected_template_id: nextPresentation.templateId,
+                              alternate_template_count: Math.max(0, composedPresentationOptions.length - 1),
+                              merchant_style_override_used: nextStyleIndex > 0,
+                              previous_presentation_hash: selectedComposedPresentationHash,
+                              presentation_hash: nextPresentationHash,
+                            });
+                            setComposedStyleIndex(nextStyleIndex);
+                            setComposedEditIntent(null);
+                            setAdAccepted(false);
+                            setApprovedComposedPresentationHash(null);
+                            setPublishStatus("idle");
+                            setPublishStatusMessage(null);
+                            aiDraftBaselineRef.current = null;
+                          }}
+                          disabled={!canTryComposedStyle}
+                        />
+                      </View>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <GeneratedAdPreviewCard
+                      imageUri={adImageUri}
+                      businessName={businessName}
+                      headline={ownerLanguagePreview.headline}
+                      body={ownerLanguagePreview.body}
+                      imageAltText={ownerLanguagePreview.imageAltText}
+                      offerLine={ownerLanguagePreview.offerLine}
+                      termsLine={ownerLanguagePreview.termsLine}
+                      cta={ownerLanguagePreview.cta}
+                      scheduleSummary={displayScheduleSummary}
+                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                      maxClaimsValue={maxClaims}
+                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                      termsHelper={t("createAi.lockedTermsHelper", {
+                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                      })}
+                      noImageLabel={t("createAi.noImage")}
+                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                      theme={theme}
+                      darkMode={colorScheme === "dark"}
+                    />
+                    {ownerLanguagePreviewControls}
+                  </>
+                )}
+
+                {canCompareImages && originalImageVersion ? (
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.imageCompareTitle", { defaultValue: "Compare images" })}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Image source={{ uri: selectedPhotoUri! }} style={{ height: 140, width: "100%", borderRadius: 10 }} contentFit="cover" />
+                        <Text style={{ marginTop: 6, fontSize: 12, fontWeight: "700", color: theme.mutedText }} numberOfLines={1}>
+                          {t("createAi.imageCompareOriginal", { defaultValue: "Original photo" })}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Image source={{ uri: adImageUri! }} style={{ height: 140, width: "100%", borderRadius: 10 }} contentFit="cover" />
+                        <Text style={{ marginTop: 6, fontSize: 12, fontWeight: "700", color: theme.mutedText }} numberOfLines={1}>
+                          {t("createAi.imageCompareCurrent", { defaultValue: "Current ad image" })}
+                        </Text>
+                      </View>
+                    </View>
+                    <SecondaryButton
+                      title={t("createAi.imageRestoreOriginal", { defaultValue: "Restore original photo" })}
+                      onPress={() => restoreImageVersion(originalImageVersion)}
+                    />
+                  </View>
+                ) : null}
+
+                {restorableImageVersions.length > 0 ? (
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.imageVersionsTitle", { defaultValue: "Earlier image versions" })}
+                    </Text>
+                    {restorableImageVersions.map((entry, index) => {
+                      const storagePath = imageVersionStoragePath(entry.ad);
+                      if (!storagePath) return null;
+                      const versionUri = buildPublicDealPhotoUrl(storagePath);
+                      if (!versionUri) return null;
+                      return (
+                        <View
+                          key={entry.id}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                            paddingVertical: 8,
+                            borderTopWidth: index === 0 ? 0 : 1,
+                            borderTopColor: theme.border,
+                          }}
+                        >
+                          <Image source={{ uri: versionUri }} style={{ width: 72, height: 72, borderRadius: 10 }} contentFit="cover" />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontWeight: "700", color: theme.text }} numberOfLines={1}>
+                              {imageVersionLabel(entry, index)}
+                            </Text>
+                            <Text style={{ marginTop: 2, fontSize: 12, color: theme.mutedText }} numberOfLines={1}>
+                              {entry.kind === "original"
+                                ? t("createAi.imageCompareOriginal", { defaultValue: "Original photo" })
+                                : entry.ad.photo_source === "uploaded_enhanced"
+                                  ? t("createAi.imageVersionEdited", { defaultValue: "AI-edited photo" })
+                                  : t("createAi.imageVersionGenerated", { defaultValue: "Generated image" })}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => restoreImageVersion(entry)}
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 10,
+                              borderRadius: 999,
+                              backgroundColor: theme.surface,
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                            }}
+                          >
+                            <Text style={{ fontWeight: "800", fontSize: 12, color: theme.text }} numberOfLines={1}>
+                              {t("createAi.imageRestoreVersion", { defaultValue: "Restore" })}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
 
                 {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
                   <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>
@@ -2981,86 +4840,149 @@ export default function AiDealScreen() {
                 )}
 
                 {/* Revise panel */}
-                {!adAccepted ? (
-                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 12 }}>
+                {showComposedRevisePanel ? (
+                  <View style={{ padding: 14, borderRadius: 12, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
+                      <Text style={{ fontWeight: "800", fontSize: 14, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
                       <Text style={{ fontSize: 12, color: theme.mutedText }}>{revisionsLeftLabel}</Text>
                     </View>
 
-                    {/* Target toggle */}
-                    <View style={{ flexDirection: "row", gap: 6 }}>
-                      {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
-                        const selected = revisionTarget === target;
-                        return (
-                          <Pressable
-                            key={target}
-                            onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
-                            style={{
-                              flex: 1,
-                              paddingVertical: 8,
-                              borderRadius: 999,
-                              backgroundColor: selected ? theme.primary : theme.surface,
-                              borderWidth: 1,
-                              borderColor: selected ? theme.primary : theme.border,
-                            }}
-                          >
-                            <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
-                              {targetLabel[target]}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                    {revisionsLeft === 0 ? (
+                      <View style={{ padding: 12, borderRadius: 10, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
+                        <Text style={{ color: theme.mutedText, lineHeight: 19 }}>
+                          {t("createAi.reviseLimitBody")}
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        {composedMinimalInputEnabled ? (
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                            {[
+                              {
+                                label: t("createAi.composedWordIntentClearer", { defaultValue: "Clearer" }),
+                                presetKey: "createAi.revisePresetSimpler",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentWarmer", { defaultValue: "Warmer" }),
+                                presetKey: "createAi.revisePresetPremium",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentEnergetic", { defaultValue: "More energy" }),
+                                presetKey: "createAi.revisePresetPunchier",
+                              },
+                              {
+                                label: t("createAi.composedWordIntentLocal", { defaultValue: "More local" }),
+                                presetKey: "createAi.revisePresetItem",
+                              },
+                            ].map(({ label, presetKey }) => {
+                              const selected = activePreset === presetKey;
+                              return (
+                                <Pressable
+                                  key={label}
+                                  disabled={!canReviseAd}
+                                  onPress={() => {
+                                    setRevisionTarget("copy");
+                                    setActivePreset(selected ? null : presetKey);
+                                  }}
+                                  style={{
+                                    paddingVertical: 7,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 999,
+                                    backgroundColor: selected ? theme.primary : theme.surface,
+                                    borderWidth: 1,
+                                    borderColor: selected ? theme.primary : theme.border,
+                                    opacity: canReviseAd ? 1 : 0.5,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: "800", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>
+                                    {label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
 
-                    {/* Presets */}
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {presetKeysForTarget.map((presetKey) => {
-                        const presetText = t(presetKey);
-                        const selected = activePreset === presetText;
-                        return (
-                          <Pressable
-                            key={presetKey}
-                            onPress={() => setActivePreset(selected ? null : presetText)}
-                            style={{
-                              paddingVertical: 6,
-                              paddingHorizontal: 12,
-                              borderRadius: 999,
-                              backgroundColor: selected ? theme.primary : theme.surface,
-                              borderWidth: 1,
-                              borderColor: selected ? theme.primary : theme.border,
-                            }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                        {!composedMinimalInputEnabled ? (
+                          <View style={{ flexDirection: "row", gap: 6 }}>
+                            {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
+                              const selected = revisionTarget === target;
+                              return (
+                                <Pressable
+                                  key={target}
+                                  disabled={!canReviseAd}
+                                  onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
+                                  style={{
+                                    flex: 1,
+                                    paddingVertical: 8,
+                                    borderRadius: 999,
+                                    backgroundColor: selected ? theme.primary : theme.surface,
+                                    borderWidth: 1,
+                                    borderColor: selected ? theme.primary : theme.border,
+                                    opacity: canReviseAd ? 1 : 0.5,
+                                  }}
+                                >
+                                  <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
+                                    {targetLabel[target]}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
 
-                    {/* Free-text feedback */}
-                    <TextInput
-                      value={revisionFeedback}
-                      onChangeText={setRevisionFeedback}
-                      placeholder={t("createAi.reviseFeedbackPlaceholder")}
-                      placeholderTextColor={theme.mutedText}
-                      multiline
-                      style={{
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 12,
-                        padding: 12,
-                        minHeight: 50,
-                        backgroundColor: theme.surface,
-                        color: theme.text,
-                        fontSize: 14,
-                      }}
-                    />
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                          {presetKeysForTarget.map((presetKey) => {
+                            const presetText = t(presetKey);
+                            const selected = activePreset === presetKey;
+                            return (
+                              <Pressable
+                                key={presetKey}
+                                disabled={!canReviseAd}
+                                onPress={() => setActivePreset(selected ? null : presetKey)}
+                                style={{
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 999,
+                                  backgroundColor: selected ? theme.primary : theme.surface,
+                                  borderWidth: 1,
+                                  borderColor: selected ? theme.primary : theme.border,
+                                  opacity: canReviseAd ? 1 : 0.5,
+                                }}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
 
-                    <SecondaryButton
-                      title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}
-                      onPress={() => void reviseAd()}
-                      disabled={revising || generating || revisionsUsed >= SOFT_REVISION_CAP}
-                    />
+                        <TextInput
+                          value={revisionFeedback}
+                          onChangeText={setRevisionFeedback}
+                          placeholder={t("createAi.reviseFeedbackPlaceholder")}
+                          placeholderTextColor={theme.mutedText}
+                          multiline
+                          editable={canReviseAd}
+                          style={{
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                            borderRadius: 10,
+                            padding: 12,
+                            minHeight: 48,
+                            backgroundColor: theme.surface,
+                            color: theme.text,
+                            fontSize: 14,
+                            opacity: canReviseAd ? 1 : 0.6,
+                          }}
+                        />
+
+                        <SecondaryButton
+                          title={revising ? t("createAi.reviseButtonBusy") : t("createAi.reviseButton")}
+                          onPress={() => void reviseAd()}
+                          disabled={!canReviseAd}
+                        />
+                      </>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -3068,7 +4990,11 @@ export default function AiDealScreen() {
 
             {/* Draft editor — appears once user accepts the ad or starts a manual draft */}
             {showDraftEditor ? (
-              <>
+              <View
+                onLayout={(e) => {
+                  draftEditorSectionYRef.current = e.nativeEvent.layout.y;
+                }}
+              >
                 <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
                 <View
                   style={{
@@ -3101,57 +5027,67 @@ export default function AiDealScreen() {
                 </View>
 
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
-                <TextInput value={title} onChangeText={setTitle} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editSubheadline")}</Text>
-                <TextInput value={promoLine} onChangeText={setPromoLine} placeholder={t("createAi.subheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={promoLine} onChangeText={(value) => { setPromoLine(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.subheadlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editCta")}</Text>
-                <TextInput value={ctaText} onChangeText={setCtaText} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={ctaText} onChangeText={(value) => { setCtaText(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.ctaPlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
                 <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.editDetails")}</Text>
-                <TextInput value={description} onChangeText={setDescription} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
+                <TextInput value={description} onChangeText={(value) => { setDescription(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.detailsPlaceholder")} placeholderTextColor={theme.mutedText} multiline style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, minHeight: 90, color: theme.text, backgroundColor: theme.surface }} />
 
                 <View style={{ marginTop: 16, gap: 8 }}>
-                  <View
-                    style={{
-                      padding: 14,
-                      borderRadius: 16,
-                      backgroundColor: publishStatusCard.backgroundColor,
-                      borderWidth: 1,
-                      borderColor: publishStatusCard.borderColor,
-                      flexDirection: "row",
-                      gap: 10,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <MaterialIcons name={publishStatusCard.icon} size={22} color={publishStatusCard.titleColor} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
-                        {publishStatusCard.title}
-                      </Text>
-                      <Text style={{ marginTop: 4, color: theme.mutedText, lineHeight: 19 }}>
-                        {publishStatusCard.body}
-                      </Text>
+                  {displayedPublishStatus !== "ready" ? (
+                    <View
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        backgroundColor: publishStatusCard.backgroundColor,
+                        borderWidth: 1,
+                        borderColor: publishStatusCard.borderColor,
+                        flexDirection: "row",
+                        gap: 10,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <MaterialIcons name={publishStatusCard.icon} size={20} color={publishStatusCard.titleColor} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: "800", color: publishStatusCard.titleColor }}>
+                          {publishStatusCard.title}
+                        </Text>
+                        <Text style={{ marginTop: 3, color: theme.mutedText, lineHeight: 18 }}>
+                          {publishStatusCard.body}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <PrimaryButton
-                    title={
-                      displayedPublishStatus === "publishing"
-                        ? t("createAi.publishing")
-                        : displayedPublishStatus === "success"
-                          ? editingDealId
-                            ? t("createAi.publishUpdateSuccessTitle")
-                            : t("createAi.publishSuccessTitle")
-                          : editingDealId ? t("createAi.saveDealChanges") : t("createAi.publishDeal")
-                    }
-                    onPress={() => void publishDeal()}
-                    disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
-                  />
+                  ) : null}
+                  {displayedPublishStatus === "missing" ? (
+                    <SecondaryButton
+                      title={publishReadiness.buttonLabel}
+                      onPress={() => {}}
+                      disabled
+                    />
+                  ) : (
+                    <PrimaryButton
+                      title={
+                        displayedPublishStatus === "publishing"
+                          ? t("createAi.publishing")
+                          : displayedPublishStatus === "success"
+                            ? editingDealId
+                              ? t("createAi.publishUpdateSuccessTitle")
+                              : t("createAi.publishSuccessTitle")
+                            : publishReadiness.buttonLabel
+                      }
+                      onPress={() => void publishDeal()}
+                      disabled={displayedPublishStatus === "publishing" || displayedPublishStatus === "success"}
+                    />
+                  )}
                   <SecondaryButton
                     title={savingTemplate ? t("createAi.savingTemplate") : t("createAi.saveTemplate")}
                     onPress={() => void saveTemplate()}
-                    disabled={savingTemplate}
+                    disabled={savingTemplate || !canPublish}
                   />
                 </View>
-              </>
+              </View>
             ) : null}
           </>
         )}

@@ -10,6 +10,13 @@ import {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
+import {
+  decodeCachedRole,
+  encodeCachedRole,
+  isLegacyCachedRole,
+  TAB_MODE_ASYNC_KEY,
+  type CachedTabModeRole,
+} from "@/lib/tab-mode-cache";
 
 /**
  * Hard role split (spec section 4, item 2): the account role is picked once at
@@ -17,29 +24,40 @@ import { useAuthSession } from "@/components/providers/auth-session-provider";
  * mirrors that stored role for routing — there is no in-app switching.
  */
 
-/** Local cache of the last resolved role so cold boots route without a network read. */
-export const TAB_MODE_ASYNC_KEY = "twoforone_tab_mode_v2";
+export { TAB_MODE_ASYNC_KEY } from "@/lib/tab-mode-cache";
 
-export type TabMode = "customer" | "business";
+export type TabMode = CachedTabModeRole;
 
 type TabModeContextValue = {
   /** Resolved account role; defaults to "customer" until known. */
   mode: TabMode;
   /** Set after login/signup once the role is resolved, so routing doesn't wait for the remote fetch. */
-  adoptRole: (role: TabMode) => Promise<void>;
+  adoptRole: (role: TabMode, userId?: string) => Promise<void>;
   ready: boolean;
 };
 
 const TabModeContext = createContext<TabModeContextValue | null>(null);
 
-async function loadCachedRole(): Promise<TabMode | null> {
+async function loadCachedRole(userId: string): Promise<TabMode | null> {
   try {
     const cached = await AsyncStorage.getItem(TAB_MODE_ASYNC_KEY);
-    if (cached === "business" || cached === "customer") return cached;
+    const scopedRole = decodeCachedRole(cached, userId);
+    if (scopedRole) return scopedRole;
+    if (isLegacyCachedRole(cached)) {
+      await AsyncStorage.removeItem(TAB_MODE_ASYNC_KEY);
+    }
   } catch {
     /* noop */
   }
   return null;
+}
+
+async function saveCachedRole(userId: string, role: TabMode): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, encodeCachedRole(userId, role));
+  } catch {
+    /* cache only; the stored profile role remains authoritative */
+  }
 }
 
 export async function clearCachedRole(): Promise<void> {
@@ -58,63 +76,59 @@ export function TabModeProvider({ children }: { children: ReactNode }) {
   const localChangeEpochRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const cached = await loadCachedRole();
-      if (!cancelled && cached && localChangeEpochRef.current === 0) {
-        setModeState(cached);
-      }
-      if (!cancelled) setReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Signed out: revert to the default so the next account starts clean.
-  useEffect(() => {
-    if (authLoading || session?.user) return;
-    setModeState("customer");
-  }, [authLoading, session?.user]);
-
-  // Signed in: resolve the permanent role from the profile (with derive fallback).
-  useEffect(() => {
-    if (authLoading) return;
     const user = session?.user;
-    if (!user) return;
-    if ((user.app_metadata as Record<string, unknown> | undefined)?.app_role === "redeemer") {
-      setModeState("business");
+    if (authLoading) {
+      setReady(false);
+      return;
+    }
+    if (!user) {
+      setModeState("customer");
       setReady(true);
       return;
     }
+
     let cancelled = false;
     const epochAtStart = localChangeEpochRef.current;
+    setReady(false);
+
     void (async () => {
+      if ((user.app_metadata as Record<string, unknown> | undefined)?.app_role === "redeemer") {
+        if (!cancelled && localChangeEpochRef.current === epochAtStart) {
+          setModeState("business");
+          setReady(true);
+          await saveCachedRole(user.id, "business");
+        }
+        return;
+      }
+
+      const cached = await loadCachedRole(user.id);
+      if (!cancelled && cached && localChangeEpochRef.current === epochAtStart) {
+        setModeState(cached);
+        setReady(true);
+      }
+
       const { resolveRoleForUser } = await import("@/lib/profiles-role");
       const role = await resolveRoleForUser(user);
       if (cancelled || localChangeEpochRef.current !== epochAtStart) return;
       setModeState(role);
-      try {
-        await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, role);
-      } catch {
-        /* noop */
-      }
+      setReady(true);
+      await saveCachedRole(user.id, role);
     })();
     return () => {
       cancelled = true;
     };
   }, [authLoading, session?.user]);
 
-  const adoptRole = useCallback(async (role: TabMode) => {
-    localChangeEpochRef.current += 1;
-    setModeState(role);
-    setReady(true);
-    try {
-      await AsyncStorage.setItem(TAB_MODE_ASYNC_KEY, role);
-    } catch {
-      /* cache only; the stored profile role remains authoritative */
-    }
-  }, []);
+  const adoptRole = useCallback(
+    async (role: TabMode, userId?: string) => {
+      localChangeEpochRef.current += 1;
+      setModeState(role);
+      setReady(true);
+      const cacheUserId = userId ?? session?.user?.id;
+      if (cacheUserId) await saveCachedRole(cacheUserId, role);
+    },
+    [session?.user?.id],
+  );
 
   const value = useMemo(() => ({ mode, adoptRole, ready }), [mode, adoptRole, ready]);
 

@@ -1,9 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
-import { buildPosterImagePrompt, tryGeneratePosterPngWithTelemetry } from "../_shared/dalle-image.ts";
-import { calculateAiCost, logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
@@ -11,9 +14,6 @@ const PROMPT_VERSION = Deno.env.get("AI_COMPOSE_PROMPT_VERSION")?.trim() || "v1"
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const DEFAULT_COOLDOWN_SEC = SHARED_COOLDOWN;
 const DEFAULT_DEDUP_SEC = Number(Deno.env.get("AI_DEDUP_WINDOW_SECONDS") ?? "600");
-
-/** Compose + vision JSON uses OPENAI_MODEL from Edge secrets (allowlisted in _shared). */
-const MODEL = resolveOpenAiChatModel();
 
 /** Voice transcription (Whisper). */
 const WHISPER_MODEL = Deno.env.get("OPENAI_WHISPER_MODEL")?.trim() || "whisper-1";
@@ -26,6 +26,55 @@ const OFFER_TYPES = [
   "free_add_on_with_purchase",
   "simple_bundle_offer",
 ] as const;
+
+const COMPOSE_OFFER_SCHEMA = {
+  name: "compose_offer",
+  strict: false,
+  schema: {
+    type: "object",
+    properties: {
+      detected_items: { type: "array", items: { type: "string" } },
+      confidence: { type: "number" },
+      low_confidence: { type: "boolean" },
+      recommendation_reason: { type: "string" },
+      recommended_offer: {
+        type: "object",
+        properties: {
+          offer_type: { type: "string" },
+          item_name: { type: "string" },
+          display_offer: { type: "string" },
+        },
+        required: ["offer_type"],
+        additionalProperties: true,
+      },
+      ad_variants: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            variant_id: { type: "string" },
+            headline_en: { type: "string" },
+            headline_es: { type: "string" },
+            headline_ko: { type: "string" },
+            subheadline_en: { type: "string" },
+            subheadline_es: { type: "string" },
+            subheadline_ko: { type: "string" },
+            cta_en: { type: "string" },
+            cta_es: { type: "string" },
+            cta_ko: { type: "string" },
+            style_label: { type: "string" },
+            rationale: { type: "string" },
+            visual_direction: { type: "string" },
+          },
+          required: ["variant_id"],
+          additionalProperties: true,
+        },
+      },
+    },
+    required: ["recommended_offer", "ad_variants"],
+    additionalProperties: true,
+  },
+} as const;
 
 type AiCostContext = {
   admin: any;
@@ -40,8 +89,10 @@ async function logComposeCost(
     feature: string;
     model: string;
     endpoint: string;
+    provider?: string;
     usage?: AiUsageInput | null;
     audioSeconds?: number;
+    estimatedCostUsd?: number;
     openaiRequestId?: string | null;
     responseId?: string | null;
     success?: boolean;
@@ -55,6 +106,33 @@ async function logComposeCost(
     requestGroupId: ctx.requestGroupId,
     ...input,
   });
+}
+
+function providerAttemptsCalledAi(attempts: readonly ProviderAttempt[]): boolean {
+  return attempts.length > 0;
+}
+
+function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
+  return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
+}
+
+async function logComposeProviderAttempts(params: {
+  ctx: AiCostContext;
+  attempts: readonly ProviderAttempt[];
+}): Promise<void> {
+  for (const attempt of params.attempts) {
+    await logComposeCost(params.ctx, {
+      feature: "compose_offer",
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      estimatedCostUsd: attempt.estimatedCostUsd,
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? null,
+      errorMessage: attempt.errorClass ?? null,
+    });
+  }
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -79,6 +157,18 @@ function normalizePrompt(parts: (string | null | undefined)[]): string {
     .slice(0, 8000);
 }
 
+function parseComposeImageInput(imageBase64: string): { bytes: Uint8Array; mimeType: string } | null {
+  const mimeType = imageBase64.startsWith("data:")
+    ? imageBase64.split(";")[0].replace("data:", "").trim() || "image/jpeg"
+    : "image/jpeg";
+  const encoded = imageBase64.includes(",") ? imageBase64.split(",")[1] ?? "" : imageBase64;
+  try {
+    const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+    return bytes.length > 0 ? { bytes, mimeType } : null;
+  } catch {
+    return null;
+  }
+}
 
 function estimateAudioSecondsFromBase64(base64Audio: string): number {
   const rawChars = base64Audio.includes(",") ? base64Audio.split(",").at(-1) ?? "" : base64Audio;
@@ -103,8 +193,7 @@ async function transcribeAudio(openAiKey: string, base64Audio: string): Promise<
     body: form,
   });
   if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Whisper failed: ${t.slice(0, 200)}`);
+    throw new Error(`Whisper provider request failed with HTTP_${res.status}.`);
   }
   const j = await res.json();
   return {
@@ -131,6 +220,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
   const userClient = createClient(supabaseUrl, supabaseServiceKey, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
@@ -221,16 +311,32 @@ serve(async (req) => {
     const generate_poster_image = body.generate_poster_image === true;
 
     if (transcribeOnly) {
-      if (!openAiKey) {
-        return new Response(
-          JSON.stringify({ ok: true, transcript: promptTextRaw || "oat milk latte special — freshly pulled" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
       if (!audioBase64 || audioBase64.length > 700_000) {
         return new Response(
           JSON.stringify({ error: "Record a short voice note and try again.", error_code: "INVALID_INPUT" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (!openAiKey) {
+        const th = await sha256Hex(audioBase64.slice(0, 4000));
+        await admin.from("ai_generation_logs").insert({
+          business_id,
+          user_id: user.id,
+          request_type: "voice_transcribe",
+          input_mode: "voice",
+          request_hash: th,
+          prompt_version: PROMPT_VERSION,
+          model: WHISPER_MODEL,
+          success: false,
+          failure_reason: "OPENAI_KEY_MISSING",
+          openai_called: false,
+        });
+        return new Response(
+          JSON.stringify({
+            error: "Voice transcription is temporarily unavailable. Please contact support.",
+            error_code: "OPENAI_KEY_MISSING",
+          }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       const transcribeCooldownMs = 15_000;
@@ -291,7 +397,7 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       } catch (e) {
-        console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error", err: String(e) }));
+        console.log(JSON.stringify({ tag: "ai_compose", event: "whisper_error" }));
         await logComposeCost(costContext, {
           feature: "voice_transcription",
           model: WHISPER_MODEL,
@@ -299,11 +405,11 @@ serve(async (req) => {
           audioSeconds,
           success: false,
           errorCode: "TRANSCRIPTION_FAILED",
-          errorMessage: String(e).slice(0, 500),
+          errorMessage: "Whisper provider request failed.",
         });
         return new Response(
           JSON.stringify({
-            error: e instanceof Error ? e.message : "Voice transcription failed.",
+            error: "Voice transcription failed.",
             error_code: "TRANSCRIPTION_FAILED",
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -332,6 +438,42 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    const imageInput = hasImage ? parseComposeImageInput(imageBase64) : null;
+    if (hasImage && !imageInput) {
+      return new Response(
+        JSON.stringify({ error: "Image could not be read. Try a different photo.", error_code: "INVALID_INPUT" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let providerConfig;
+    try {
+      providerConfig = resolveAiTextProviderConfig();
+    } catch {
+      console.log(JSON.stringify({
+        tag: "ai_compose",
+        event: "text_provider_config_error",
+        errorCode: "AI_TEXT_CONFIG_INVALID",
+      }));
+      return new Response(
+        JSON.stringify({
+          error: "AI compose is temporarily unavailable. Please contact support.",
+          error_code: "AI_TEXT_CONFIG_INVALID",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const routerCanUseGemini =
+      providerConfig.routerEnabled &&
+      Boolean(geminiApiKey?.trim()) &&
+      (
+        providerConfig.primaryProvider === "gemini" ||
+        (providerConfig.fallbackEnabled && providerConfig.fallbackProvider === "gemini")
+      );
+    const configuredComposeModel =
+      providerConfig.primaryProvider === "gemini" ? providerConfig.geminiTextModel : providerConfig.openAiModel;
 
     const input_mode = hasImage && hasText ? "mixed" : hasImage ? "image_only" : "text_only";
     const request_hash = await sha256Hex(
@@ -371,7 +513,7 @@ serve(async (req) => {
         voice_transcript: voiceTranscriptIn || null,
         request_hash,
         prompt_version: PROMPT_VERSION,
-        model: MODEL,
+        model: configuredComposeModel,
         success: true,
         duplicate_blocked: true,
         duplicate_of_log_id: dupOf,
@@ -470,73 +612,32 @@ serve(async (req) => {
       );
     }
 
-    if (!openAiKey) {
-      // No API key: return quality template response for all users
-      const rawInput2 = (promptTextRaw || voiceTranscriptIn || "").toLowerCase();
-      const demoHasImage2 = imageBase64.length > 0;
-      const demoHasText2 = (promptTextRaw + voiceTranscriptIn).trim().length > 0;
-
-      type CI2 = { item: string; offerType: string; display: string };
-      const itemMap2: [RegExp, CI2][] = [
-        [/oat\s*milk\s*latte|latte/i, { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte and get one free" }],
-        [/cortado|espresso/i, { item: "vanilla cortado", offerType: "bogo_same_item", display: "Buy one vanilla cortado and get one free" }],
-        [/cold\s*brew|iced/i, { item: "single-origin cold brew", offerType: "bogo_same_item", display: "Buy one cold brew and get one free" }],
-        [/matcha|green\s*tea/i, { item: "matcha latte", offerType: "bogo_same_item", display: "Buy one matcha latte and get one free" }],
-        [/croissant/i, { item: "butter croissant", offerType: "bogo_same_item", display: "Buy one butter croissant and get one free" }],
-        [/muffin|blueberry/i, { item: "blueberry muffin", offerType: "bogo_same_item", display: "Buy one blueberry muffin and get one free" }],
-        [/pastry|baked/i, { item: "pastry", offerType: "bogo_same_item", display: "Buy one pastry and get one free" }],
-        [/combo|pair|\+|and a|with a/i, { item: "latte + pastry", offerType: "free_add_on_with_purchase", display: "Buy a latte and get a free pastry" }],
-      ];
-      let matched2: CI2 = { item: "oat milk latte", offerType: "bogo_same_item", display: "Buy one oat milk latte and get one free" };
-      for (const [rx, ci] of itemMap2) { if (rx.test(rawInput2)) { matched2 = ci; break; } }
-
-      const bizName = typeof body.business_name === "string" ? body.business_name : "your business";
-      const fallbackResult = {
-        detected_items: [matched2.item],
-        confidence: 0.92,
-        low_confidence: false,
-        recommendation_reason: `A quality buy-one-get-one ${matched2.item} offer highlights your craft and brings new faces through the door.`,
-        recommended_offer: { offer_type: matched2.offerType, item_name: matched2.item, display_offer: matched2.display },
-        ad_variants: [
-          {
-            variant_id: "A",
-            headline_en: `Handcrafted ${matched2.item}, doubled`, headline_es: `${matched2.item} artesanal, por partida doble`, headline_ko: `\uC815\uC131 \uB2F4\uC740 ${matched2.item} 1+1`,
-            subheadline_en: `Every ${matched2.item} is made fresh with single-origin beans and real ingredients. Now enjoy two for the price of one.`,
-            subheadline_es: `Cada ${matched2.item} se prepara con ingredientes reales. Dos por el precio de uno.`,
-            subheadline_ko: `\uC2F1\uAE00 \uC624\uB9AC\uC9C4 \uC6D0\uB450\uC640 \uC2E0\uC120\uD55C \uC7AC\uB8CC\uB85C \uB9CC\uB4E0 ${matched2.item}. \uD558\uB098 \uAC00\uACA9\uC5D0 \uB458.`,
-            cta_en: "Taste the craft", cta_es: "Prueba la calidad", cta_ko: "\uC7A5\uC778\uC758 \uB9DB \uACBD\uD5D8\uD558\uAE30",
-            style_label: "Quality-led",
-            rationale: "Leads with craftsmanship to position the deal as a premium experience.",
-            visual_direction: "Tight crop on product texture, natural light, minimal text overlay.",
-          },
-          {
-            variant_id: "B",
-            headline_en: `Made with care at ${bizName}`, headline_es: `Hecho con cari\u00F1o en ${bizName}`, headline_ko: `${bizName}\uC758 \uC815\uC131`,
-            subheadline_en: `Small-batch, no shortcuts. Bring a friend and share two ${matched2.item}s \u2014 second one's on us.`,
-            subheadline_es: `Lotes peque\u00F1os, sin atajos. El segundo ${matched2.item} va por la casa.`,
-            subheadline_ko: `\uC18C\uB7C9 \uC0DD\uC0B0, \uD0C0\uD611 \uC5C6\uB294 \uB9DB. \uB450 \uBC88\uC9F8 ${matched2.item}\uB294 \uBB34\uB8CC.`,
-            cta_en: "Visit us today", cta_es: "Vis\u00EDtanos hoy", cta_ko: "\uC624\uB298 \uBC29\uBB38\uD558\uC138\uC694",
-            style_label: "Artisan warmth",
-            rationale: "Combines craft messaging with neighborly warmth.",
-            visual_direction: "Warm caf\u00E9 interior, barista at work, soft golden hour light.",
-          },
-          {
-            variant_id: "C",
-            headline_en: `Two for one \u2014 real ingredients, real craft`, headline_es: `Dos por uno \u2014 ingredientes reales`, headline_ko: `1+1 \u2014 \uC9C4\uC9DC \uC7AC\uB8CC, \uC9C4\uC9DC \uC815\uC131`,
-            subheadline_en: `We don't cut corners on our ${matched2.item}. Twice the reason to stop by.`,
-            subheadline_es: `No escatimamos en nuestro ${matched2.item}. El doble de razones para visitarnos.`,
-            subheadline_ko: `${matched2.item}\uC5D0\uB294 \uD0C0\uD611\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBC29\uBB38\uD560 \uC774\uC720\uAC00 \uB450 \uBC30.`,
-            cta_en: "Discover the difference", cta_es: "Descubre la diferencia", cta_ko: "\uCC28\uC774\uB97C \uB290\uAEF4\uBCF4\uC138\uC694",
-            style_label: "Premium simplicity",
-            rationale: "Clean, confident tone that trusts the product quality.",
-            visual_direction: "Clean layout, single product hero shot, restrained serif typography.",
-          },
-        ],
-        input_type: demoHasImage2 && demoHasText2 ? "mixed" : demoHasImage2 ? "image_only" : "text_only",
-      };
+    if (!openAiKey && !routerCanUseGemini) {
+      await admin.from("ai_generation_logs").insert({
+        business_id,
+        user_id: user.id,
+        request_type: "compose_offer",
+        input_mode,
+        prompt_text: combinedText || null,
+        voice_transcript: voiceTranscriptIn || null,
+        request_hash,
+        prompt_version: PROMPT_VERSION,
+        model: configuredComposeModel,
+        success: false,
+        failure_reason: "OPENAI_KEY_MISSING",
+        openai_called: false,
+        response_payload: {
+          result_source: "unavailable",
+          reason: "OPENAI_KEY_MISSING",
+        },
+      });
       return new Response(
-        JSON.stringify({ ok: true, duplicate_cached: false, result: fallbackResult, poster_storage_path: null, quota: { used: 0, limit: 30, remaining: 30 } }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          error: "AI compose is temporarily unavailable. Please contact support.",
+          error_code: "OPENAI_KEY_MISSING",
+          quota: { used, limit, remaining: Math.max(0, limit - used) },
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -548,29 +649,27 @@ serve(async (req) => {
     };
 
     const systemPrompt = [
-      "You help local cafés and small businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
+      "You help local businesses draft ONE promotional offer and TWO short ad variants for the same offer.",
       `Allowed offer_type values only: ${OFFER_TYPES.join(", ")}.`,
       "",
-      "VOICE & TONE — this is advertising for independent, craft-focused businesses:",
-      "- Write like the owner's best marketer — warm, confident, never corporate or salesy.",
-      "- Lead with what makes the product special: ingredients, process, freshness, care.",
-      "- Use sensory language: \"hand-pulled\", \"small-batch\", \"stone-ground\", \"freshly baked\", \"single-origin\".",
-      "- The deal should feel like a generous invitation from a craftsperson, not a clearance sale.",
+      "VOICE & TONE:",
+      "- Write in plain, specific local-business language.",
+      "- Use only product, service, ingredient, location, and business details supplied in the request, image, or verified business profile.",
+      "- Do not invent freshness, quality, ingredient, craft, health, popularity, discount, schedule, or availability claims.",
+      "- Keep the deal mechanics clearer than the persuasion.",
       "- Avoid generic ad-speak: no \"best deal ever\", \"amazing offer\", \"you won't believe\", \"act now\", \"don't miss out\".",
-      "- Avoid exclamation marks. Confidence doesn't shout.",
-      "- Variant A should lead with craft/quality. Variant B should lead with neighborly warmth.",
+      "- Avoid exclamation marks.",
+      "- Variant A should lead with offer clarity. Variant B should lead with a natural customer moment.",
       "",
       "SHORTHAND INTERPRETATION — very important:",
       "- 'item1 + item2' (two items joined by +) always means: buy item1, get item2 FREE.",
-      "  Example: 'coffee + muffin' → 'Buy a coffee and get a free muffin'.",
-      "  Example: 'latte + cookie' → 'Buy a latte and get a free cookie'.",
+      "  Display it as: 'Buy [required item] and get [reward item] free'.",
       "  Use offer_type 'free_add_on_with_purchase' for these.",
       "- A single item with no offer context → recommend a same-item buy-one-get-one offer (internal offer_type bogo_same_item).",
       "",
       "MISSPELLING HANDLING — very important:",
-      "- Owners type quickly and make typos. Infer the correct item from context.",
-      "  Example: 'cofee' → coffee, 'mufin' → muffin, 'latt' → latte, 'espreso' → espresso.",
-      "- If a word is unrecognisable, use your best guess and set low_confidence: true.",
+      "- Correct obvious typos only when context is clear.",
+      "- Preserve the owner's item or service names when unsure and set low_confidence: true.",
       "",
       "DEAL QUALITY — every output MUST qualify as a strong deal:",
       "- Always output a deal that is either: (a) something FREE, (b) buy one, get one free, or (c) 40%+ off.",
@@ -591,54 +690,38 @@ serve(async (req) => {
       "- recommended_offer: offer_type, item_name, display_offer (short plain sentence describing the deal clearly).",
     ].join("\n");
 
-    const userParts: unknown[] = [];
-    userParts.push({
-      type: "text",
-      text: [
-        `Business: ${biz.name}. Category: ${biz.category ?? "n/a"}. Location: ${biz.location}.`,
-        biz.short_description ? `About: ${biz.short_description}` : "",
-        combinedText ? `Owner request:\n${combinedText}` : "No text request; infer from image only.",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    });
-    if (hasImage) {
-      const mime = imageBase64.startsWith("data:") ? imageBase64.split(";")[0].replace("data:", "") : "image/jpeg";
-      const b64 = imageBase64.includes(",") ? imageBase64.split(",")[1]! : imageBase64;
-      userParts.push({
-        type: "image_url",
-        image_url: { url: `data:${mime};base64,${b64}` },
-      });
-    }
+    const userPrompt = [
+      `Business: ${biz.name}. Category: ${biz.category ?? "n/a"}. Location: ${biz.location}.`,
+      biz.short_description ? `About: ${biz.short_description}` : "",
+      combinedText ? `Owner request:\n${combinedText}` : "No text request; infer from image only.",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userParts },
-        ],
-        ...chatCompletionTuning(MODEL, { maxTokens: 1200, temperature: 0.7 }),
-      }),
-    });
-
-    if (!openAiRes.ok) {
-      const errText = await openAiRes.text();
-      await logComposeCost(costContext, {
-        feature: "compose_offer",
-        model: MODEL,
-        endpoint: "chat.completions",
-        openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
-        success: false,
-        errorCode: `HTTP_${openAiRes.status}`,
-        errorMessage: errText.slice(0, 500),
+    let generation;
+    try {
+      generation = await generateStructuredText<typeof COMPOSE_OFFER_SCHEMA, Record<string, unknown>>({
+        operation: "compose_offer",
+        systemPrompt,
+        userPrompt,
+        imageInputs: imageInput ? [imageInput] : undefined,
+        jsonSchema: COMPOSE_OFFER_SCHEMA,
+        maxOutputTokens: 1200,
+        timeoutMs: 12_000,
+        generationRunId: costContext.requestGroupId,
+        promptVersion: PROMPT_VERSION,
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: openAiKey,
+        geminiApiKey,
+        admin,
+        config: providerConfig,
       });
+      await logComposeProviderAttempts({ ctx: costContext, attempts: generation.attempts });
+    } catch (err) {
+      const attempts = (err as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+      await logComposeProviderAttempts({ ctx: costContext, attempts });
+      const usageAttempt = representativeAttempt(attempts);
       await admin.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
@@ -647,68 +730,33 @@ serve(async (req) => {
         prompt_text: combinedText || null,
         request_hash,
         prompt_version: PROMPT_VERSION,
-        model: MODEL,
+        model: usageAttempt?.model ?? configuredComposeModel,
         success: false,
-        failure_reason: `OPENAI_${openAiRes.status}`,
-        openai_called: true,
+        failure_reason:
+          (err as { errorCode?: string; errorClass?: string })?.errorCode ??
+          (err as { errorClass?: string })?.errorClass ??
+          "AI_GENERATION_FAILED",
+        openai_called: providerAttemptsCalledAi(attempts),
+        input_token_count: usageAttempt?.inputTokens ?? null,
+        output_token_count: usageAttempt?.outputTokens ?? null,
+        estimated_cost_usd: usageAttempt?.estimatedCostUsd ?? null,
       });
       return new Response(
         JSON.stringify({
           error: "AI service error. Try again shortly.",
-          error_code: "OPENAI_ERROR",
+          error_code: "AI_GENERATION_FAILED",
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const completion = await openAiRes.json();
-    await logComposeCost(costContext, {
-      feature: "compose_offer",
-      model: MODEL,
-      endpoint: "chat.completions",
-      usage: completion?.usage ?? null,
-      openaiRequestId: openAiRequestIdFromHeaders(openAiRes.headers),
-      responseId: typeof completion?.id === "string" ? completion.id : null,
-      success: true,
-    });
-    const content = completion?.choices?.[0]?.message?.content;
-    const usage = completion?.usage ?? {};
-    const inTok = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
-    const outTok = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null;
-    const estCost = calculateAiCost({
-      model: MODEL,
-      endpoint: "chat.completions",
-      usage,
-    }).estimated_cost_usd;
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = typeof content === "string" ? JSON.parse(content) : {};
-    } catch {
-      await admin.from("ai_generation_logs").insert({
-        business_id,
-        user_id: user.id,
-        request_type: "compose_offer",
-        input_mode,
-        prompt_text: combinedText || null,
-        request_hash,
-        prompt_version: PROMPT_VERSION,
-        model: MODEL,
-        success: false,
-        failure_reason: "PARSE_ERROR",
-        openai_called: true,
-        input_token_count: inTok,
-        output_token_count: outTok,
-        estimated_cost_usd: estCost,
-      });
-      return new Response(
-        JSON.stringify({
-          error: "Could not parse AI response. Try again.",
-          error_code: "PARSE_ERROR",
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const parsed = generation.value && typeof generation.value === "object"
+      ? generation.value as Record<string, unknown>
+      : {};
+    const usageAttempt = representativeAttempt(generation.attempts);
+    const inTok = usageAttempt?.inputTokens ?? null;
+    const outTok = usageAttempt?.outputTokens ?? null;
+    const estCost = usageAttempt?.estimatedCostUsd ?? null;
 
     const variants = parsed.ad_variants;
     const offer = parsed.recommended_offer as Record<string, unknown> | undefined;
@@ -721,10 +769,10 @@ serve(async (req) => {
         prompt_text: combinedText || null,
         request_hash,
         prompt_version: PROMPT_VERSION,
-        model: MODEL,
+        model: generation.model,
         success: false,
         failure_reason: "INVALID_AI_SHAPE",
-        openai_called: true,
+        openai_called: providerAttemptsCalledAi(generation.attempts),
         input_token_count: inTok,
         output_token_count: outTok,
         estimated_cost_usd: estCost,
@@ -743,59 +791,10 @@ serve(async (req) => {
     const offerType = String(offer.offer_type);
     const logPayload = { ...parsed, input_type: input_mode } as Record<string, unknown>;
 
-    let poster_storage_path: string | null = null;
-    let poster_image_unavailable = false;
-    if (generate_poster_image && !hasImage && hasText) {
-      const v0 = variants[0] as Record<string, unknown>;
-      const headline = String(v0.headline_en ?? "");
-      const sub = String(v0.subheadline_en ?? "");
-      const displayOffer = String(offer.display_offer ?? "");
-      const visualDirection = String(v0.visual_direction ?? "");
-      const imgPrompt = buildPosterImagePrompt({
-        businessName: String(biz.name ?? ""),
-        displayOffer,
-        headline: headline || displayOffer,
-        sub,
-        visualDirection,
-      });
-      const posterResult = await tryGeneratePosterPngWithTelemetry(openAiKey, imgPrompt);
-      for (const attempt of posterResult.attempts) {
-        await logComposeCost(costContext, {
-          feature: "poster_image_generation",
-          model: attempt.model,
-          endpoint: attempt.endpoint,
-          usage: attempt.usage,
-          openaiRequestId: attempt.openaiRequestId,
-          responseId: attempt.responseId,
-          success: attempt.success,
-          errorCode: attempt.errorCode,
-          errorMessage: attempt.errorMessage,
-        });
-      }
-      const png = posterResult.bytes;
-      if (png && png.length > 100) {
-        const storagePath = `${business_id}/ai_poster_${Date.now()}.png`;
-        const { error: upErr } = await admin.storage.from("deal-photos").upload(storagePath, png, {
-          contentType: "image/png",
-          upsert: false,
-        });
-        if (!upErr) {
-          poster_storage_path = storagePath;
-          logPayload.poster_storage_path = storagePath;
-        } else {
-          poster_image_unavailable = true;
-          console.log(
-            JSON.stringify({
-              tag: "ai_compose",
-              event: "poster_upload_failed",
-              err: String(upErr.message ?? upErr),
-            }),
-          );
-        }
-      } else {
-        poster_image_unavailable = true;
-      }
-      logPayload.poster_image_unavailable = poster_image_unavailable;
+    const poster_storage_path: string | null = null;
+    if (generate_poster_image) {
+      logPayload.poster_image_unavailable = true;
+      logPayload.poster_disabled_reason = "native_text_rendering_required";
     }
 
     await admin.from("ai_generation_logs").insert({
@@ -807,9 +806,9 @@ serve(async (req) => {
       voice_transcript: voiceTranscriptIn || null,
       request_hash,
       prompt_version: PROMPT_VERSION,
-      model: MODEL,
+      model: generation.model,
       success: true,
-      openai_called: true,
+      openai_called: providerAttemptsCalledAi(generation.attempts),
       low_confidence: low,
       recommended_offer_type: offerType,
       input_token_count: inTok,
@@ -829,9 +828,8 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", err: msg }));
+  } catch {
+    console.error(JSON.stringify({ tag: "ai_compose", event: "unhandled_error", errorCode: "INTERNAL" }));
     return new Response(
       JSON.stringify({
         error: "We couldn't compose that offer right now. Please try again.",

@@ -64,6 +64,11 @@ const USD_PRECISION = 6;
 // Central internal pricing config. Values can be updated in one place when the
 // provider pricing page changes; stored ledger rows keep the historical estimate.
 export const OPENAI_MODEL_PRICING: Record<string, ModelPricing> = {
+  "gpt-5.5": {
+    textInputPer1M: 2.5,
+    textCachedInputPer1M: 0.25,
+    textOutputPer1M: 15,
+  },
   "gpt-5.4-mini": {
     textInputPer1M: 0.75,
     textCachedInputPer1M: 0.075,
@@ -259,7 +264,7 @@ export async function logAiCost(admin: any, input: AiCostLogInput): Promise<void
         event: "insert_failed",
         feature: input.feature,
         endpoint: input.endpoint,
-        err: String(error.message ?? error).slice(0, 200),
+        errorCode: "AI_COST_LEDGER_INSERT_FAILED",
       }),
     );
   }

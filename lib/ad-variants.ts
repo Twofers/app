@@ -10,6 +10,10 @@ import {
   canonicalOfferSentence,
   type OfferDefinitionV1,
 } from "./offer-definition";
+import type { AdImageSelection } from "./merchant-image-selection";
+import type { AdLocalizationBundle } from "./ad-localization-schema";
+import type { SupportedLocale } from "./supported-locales";
+import type { PosterDraftV1 } from "./poster/posterTypes";
 
 export type PhotoTreatment = "touchup" | "cleanbg" | "studiopolish";
 
@@ -41,6 +45,24 @@ export type GeneratedAd = {
   photo_source?: "uploaded_original" | "uploaded_enhanced" | "generated" | "stock" | "copy_only" | "fallback_template";
   /** Which enhancement was applied (only meaningful when photo_source = "uploaded_enhanced"). */
   photo_treatment?: PhotoTreatment | null;
+  /** Canonical selected image source, QA decision, and lineage metadata. */
+  image_selection?: AdImageSelection | null;
+  /** Verified source plus target-language persuasive copy bundle, when multilingual generation is enabled. */
+  localization_bundle?: AdLocalizationBundle | null;
+  localization_status?: {
+    source_locale: SupportedLocale;
+    localization_bundle_hash: string;
+    deterministic_fallback_locales: SupportedLocale[];
+    transcreation_provider: string;
+    transcreation_model: string;
+    transcreation_skipped_reason?: string | null;
+    semantic_qa_provider: string;
+    semantic_qa_model: string;
+    semantic_qa_skipped_reason?: string | null;
+    repair_target_locales: SupportedLocale[];
+  } | null;
+  /** Optional native-rendered production poster draft. The offer lines remain deterministic. */
+  poster?: PosterDraftV1 | null;
 };
 
 export type BusinessContextPayload = {

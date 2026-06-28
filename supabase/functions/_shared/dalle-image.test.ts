@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+
+const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "dalle-image.ts"), "utf8");
 
 describe("buildPhotoAdImagePrompt", () => {
   it("allows the hosted generate model secret to select gpt-image-2", async () => {
@@ -37,5 +41,51 @@ describe("buildPhotoAdImagePrompt", () => {
     expect(prompt).toMatch(/Do not show only one item/i);
     expect(prompt).toMatch(/no text/i);
     expect(prompt).toMatch(/logos/i);
+    expect(prompt).toMatch(/center-safe area/i);
+    expect(prompt).toMatch(/native offer text overlays/i);
+  });
+
+  it("can request vertical poster-ready framing while keeping images text-free", async () => {
+    Object.defineProperty(globalThis, "Deno", {
+      configurable: true,
+      value: { env: { get: () => "gpt-image-1" } },
+    });
+    const cacheBust = `./dalle-image.ts?poster=${Date.now()}`;
+    const { buildPhotoAdImagePrompt } = await import(cacheBust);
+
+    const prompt = buildPhotoAdImagePrompt({
+      itemName: "latte",
+      businessName: "Test Cafe",
+      aspectRatio: "4:5",
+    });
+
+    expect(prompt).toMatch(/Vertical 4:5 poster-ready framing/i);
+    expect(prompt).toMatch(/Absolutely no text/i);
+  });
+});
+
+describe("OpenAI image provider failure telemetry source guard", () => {
+  it("does not log or store raw upstream response bodies", () => {
+    expect(source).toMatch(/event:\s*"image_gen_http"/);
+    expect(source).toMatch(/event:\s*"enhance_http"/);
+    expect(source).toMatch(/OpenAI image generation failed with/);
+    expect(source).toMatch(/OpenAI image edit failed with/);
+    expect(source).toMatch(/OpenAI image generation failed before a usable response was returned/);
+    expect(source).toMatch(/OpenAI image edit failed before a usable response was returned/);
+    expect(source).not.toMatch(/body:\s*errBody/);
+    expect(source).not.toMatch(/err:\s*String\(e\)/);
+    expect(source).not.toMatch(/errorMessage:\s*String\(e\)\.slice/);
+    expect(source).not.toMatch(/errorMessage:\s*errBody\.slice/);
+    expect(source).not.toMatch(/await res\.text\(\)/);
+  });
+});
+
+describe("OpenAI image edit custom instruction source guard", () => {
+  it("appends bounded custom edit instructions without dropping preset guardrails", () => {
+    expect(source).toMatch(/function treatmentPrompt\(treatment: PhotoTreatment, customEditInstruction\?: string\)/);
+    expect(source).toMatch(/Merchant bounded custom edit instruction/);
+    expect(source).toMatch(/Do not add text, prices, discounts, coupons, QR codes, logos/);
+    expect(source).toMatch(/Do not remove, replace, or materially change the paid item/);
+    expect(source).toMatch(/form\.append\("prompt", treatmentPrompt\(treatment, params\.customEditInstruction\)\)/);
   });
 });

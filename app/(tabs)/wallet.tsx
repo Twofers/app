@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable as NativePressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
@@ -32,13 +32,28 @@ import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
-import { localizedDealTitle } from "@/lib/deal-localization";
+import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
-import { isShareDealEnabled } from "@/lib/runtime-env";
+import {
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+  isShareDealEnabled,
+} from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
 import { clearWalletClaimToken, getWalletClaimToken } from "@/lib/wallet-claim-token-cache";
+import { supportedLocaleOrDefault } from "@/lib/supported-locales";
 
 type ClaimRow = {
   id: string;
@@ -51,7 +66,7 @@ type ClaimRow = {
   claim_status: string | null;
   redeem_method: string | null;
   grace_period_minutes: number | null;
-  deals: {
+  deals: (DealStructuredDisplayFields & {
     id: string;
     business_id: string;
     title: string | null;
@@ -62,7 +77,9 @@ type ClaimRow = {
     title_ko: string | null;
     poster_url: string | null;
     poster_storage_path?: string | null;
+    start_time?: string | null;
     end_time: string;
+    max_claims?: number | null;
     price: number | null;
     timezone: string | null;
     businesses: {
@@ -73,8 +90,13 @@ type ClaimRow = {
       longitude: number | string | null;
       is_demo?: boolean | null;
     } | null;
-  } | null;
+  }) | null;
 };
+
+const WALLET_CLAIMS_BASE_SELECT =
+  "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,start_time,end_time,max_claims,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))";
+const WALLET_CLAIMS_SELECT =
+  `id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,start_time,end_time,max_claims,price,timezone,${DEAL_STRUCTURED_DISPLAY_COLUMNS},businesses(name,address,location,latitude,longitude,is_demo))`;
 
 type BeginPayload = {
   server_now: string;
@@ -141,6 +163,53 @@ export default function WalletScreen() {
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const shareDealEnabled = isShareDealEnabled();
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocale] = useState<string | null>(null);
+  const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
+    () => new Map(),
+  );
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
+  const resolvedDealDisplayLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: null,
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
+
+  useFocusEffect(
+    useCallback(() => {
+      void i18n.language;
+      let cancelled = false;
+      void getCustomerPreferredDealLocale().then((locale) => {
+        if (!cancelled) setCustomerPreferredDealLocale(locale);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [i18n.language]),
+  );
+
+  useEffect(() => {
+    if (!customerLocaleResolutionEnabled || claims.length === 0) {
+      setCustomerDealLocalizationsByDealId(new Map());
+      return;
+    }
+    const dealIds = claims.map((claim) => claim.deals?.id ?? claim.deal_id).filter(Boolean);
+    let cancelled = false;
+    void fetchCustomerDealLocalizations(dealIds, resolvedDealDisplayLocale.locale).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalizationsByDealId(localizations);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [claims, customerLocaleResolutionEnabled, resolvedDealDisplayLocale.locale]);
 
   const loadClaims = useCallback(async () => {
     if (!userId) {
@@ -152,22 +221,32 @@ export default function WalletScreen() {
     setLoadFailed(false);
     try {
       await finalizeStaleRedeems();
-      const { data, error } = await supabase
+      const enrichedClaimsResult = await supabase
         .from("deal_claims")
-        .select(
-          "id,token,short_code,expires_at,redeemed_at,created_at,deal_id,claim_status,redeem_method,grace_period_minutes,deals(id,business_id,title,is_demo,source_locale,title_en,title_es,title_ko,poster_url,poster_storage_path,end_time,price,timezone,businesses(name,address,location,latitude,longitude,is_demo))",
-        )
+        .select(WALLET_CLAIMS_SELECT)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(120);
+      let claimsData: unknown = enrichedClaimsResult.data;
+      let claimsError = enrichedClaimsResult.error;
+      if (isMissingStructuredDisplayColumnError(enrichedClaimsResult.error)) {
+        const baseClaimsResult = await supabase
+          .from("deal_claims")
+          .select(WALLET_CLAIMS_BASE_SELECT)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(120);
+        claimsData = baseClaimsResult.data;
+        claimsError = baseClaimsResult.error;
+      }
 
-      if (error) {
-        logPostgrestError("wallet deal_claims", error);
+      if (claimsError) {
+        logPostgrestError("wallet deal_claims", claimsError);
         setLoadFailed(true);
         setClaims([]);
         return;
       }
-      const rows = (data ?? []) as unknown as ClaimRow[];
+      const rows = (claimsData ?? []) as ClaimRow[];
       const rowsWithCachedTokens = await Promise.all(
         rows.map(async (row) => {
           const ended =
@@ -358,10 +437,23 @@ export default function WalletScreen() {
     }
   }
 
+  function dealDisplayTitle(row: ClaimRow) {
+    if (!row.deals) return t("consumerWallet.dealFallback");
+    const localizedDisplay = buildLocalizedDealDisplay({
+      deal: {
+        ...row.deals,
+        customer_deal_localization: customerDealLocalizationsByDealId.get(row.deals.id) ?? null,
+      },
+      locale: resolvedDealDisplayLocale.locale,
+      localeResolutionSource: resolvedDealDisplayLocale.source,
+      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      fallbackLanguage: i18n.language,
+    });
+    return localizedDisplay.title || t("consumerWallet.dealFallback");
+  }
+
   function dealTitle(row: ClaimRow) {
-    return row.deals
-      ? localizedDealTitle(row.deals, i18n.language) || t("consumerWallet.dealFallback")
-      : t("consumerWallet.dealFallback");
+    return dealDisplayTitle(row);
   }
 
   function businessName(row: ClaimRow) {

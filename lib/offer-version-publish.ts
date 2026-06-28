@@ -1,9 +1,17 @@
 import type { GeneratedAd } from "./ad-variants";
+import type { AiDealCopyVariant } from "./deal-offer-contract";
+import {
+  buildOfferVersionLocalizationSnapshot,
+  type OfferVersionPublishLocalizationSnapshot,
+} from "./ad-localization-storage";
+import type { AdLocalizationApprovalSnapshot } from "./ad-localization-approval";
 import {
   buildAdSpecV1,
   type AdSpecV1,
   type AdSpecSource,
 } from "./ad-spec";
+import { shouldRunCompositeScreenshotQa, type AdCompositeQaResult } from "./ad-composite-qa";
+import type { AdPresentationSpec } from "./ad-presentation-spec";
 import type { OfferDefinitionV1 } from "./offer-definition";
 import { EDGE_FN_TIMEOUT_DEFAULT_MS } from "@/constants/timing";
 
@@ -11,7 +19,26 @@ export type OfferVersionPublishDealRow = Record<string, unknown> & {
   business_id: string;
 };
 
-export type OfferVersionPublishAdSpec = AdSpecV1;
+export type OfferVersionPublishComposedCardSpec = {
+  presentation: AdPresentationSpec;
+  presentationHash: string;
+  selectedTemplateId: AdPresentationSpec["templateId"];
+  alternateTemplateIds: AdPresentationSpec["templateId"][];
+  merchantStyleOverrideUsed: boolean;
+  compositeQa: AdCompositeQaResult;
+  screenshotQa: OfferVersionPublishScreenshotQaSnapshot;
+};
+
+export type OfferVersionPublishScreenshotQaSnapshot = {
+  required: boolean;
+  triggerCodes: string[];
+  decision: "not_run" | "pass" | "block" | "unavailable";
+};
+
+export type OfferVersionPublishAdSpec = AdSpecV1 & {
+  composedCard?: OfferVersionPublishComposedCardSpec | null;
+  localization?: OfferVersionPublishLocalizationSnapshot | null;
+};
 
 export type PublishOfferVersionedDealBody = {
   business_id: string;
@@ -31,7 +58,57 @@ export type PublishOfferVersionedDealResult = {
   }>;
 };
 
+export type AuthoritativeDealDisplayCopy = {
+  title: string;
+  description: string;
+};
+
+export type PublishMechanicsValidationCopy = Pick<
+  AiDealCopyVariant,
+  "headline" | "short_description" | "push_notification"
+> & {
+  terms_summary: string;
+};
+
 type ErrorWithCode = Error & { code?: string };
+
+function cleanDisplayText(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+export function buildAuthoritativeDealDisplayCopy(
+  offerDefinition: OfferDefinitionV1 | null | undefined,
+  fallback: AuthoritativeDealDisplayCopy,
+): AuthoritativeDealDisplayCopy {
+  const fallbackTitle = cleanDisplayText(fallback.title);
+  const fallbackDescription = cleanDisplayText(fallback.description);
+  if (!offerDefinition) return { title: fallbackTitle, description: fallbackDescription };
+
+  const title =
+    cleanDisplayText(offerDefinition.canonicalOfferLine) ||
+    cleanDisplayText(offerDefinition.canonicalOfferSentence) ||
+    fallbackTitle;
+  const description =
+    cleanDisplayText(offerDefinition.disclosureLine) ||
+    cleanDisplayText(offerDefinition.canonicalTermsLine) ||
+    fallbackDescription;
+
+  return { title, description };
+}
+
+export function buildPublishMechanicsValidationCopy(
+  offerDefinition: OfferDefinitionV1,
+): PublishMechanicsValidationCopy {
+  const lockedOffer = cleanDisplayText(offerDefinition.canonicalOfferLine);
+  const supportLine = "Redeem at the participating location during the offer window.";
+
+  return {
+    headline: lockedOffer,
+    short_description: supportLine,
+    push_notification: lockedOffer,
+    terms_summary: lockedOffer,
+  };
+}
 
 function throwInvokeError(message: string, code?: string): never {
   const err = new Error(message) as ErrorWithCode;
@@ -73,16 +150,46 @@ export function createPublishIdempotencyKey(scope: "create_ai" | "create_quick")
   return `${scope}:${id}`;
 }
 
+export function buildComposedScreenshotQaSnapshot(
+  compositeQa: AdCompositeQaResult,
+  screenshotQaEnabled: boolean,
+): OfferVersionPublishScreenshotQaSnapshot {
+  return {
+    required: screenshotQaEnabled && shouldRunCompositeScreenshotQa(compositeQa),
+    triggerCodes: [...new Set(compositeQa.screenshotQaTriggerCodes)],
+    decision: "not_run",
+  };
+}
+
 export function buildOfferVersionPublishAdSpec(
   source: AdSpecSource,
   offerDefinition: OfferDefinitionV1,
   generatedAd: GeneratedAd | null | undefined,
+  options?: {
+    composedCard?: OfferVersionPublishComposedCardSpec | null;
+    localization?: OfferVersionPublishLocalizationSnapshot | null;
+    localizationApproval?: AdLocalizationApprovalSnapshot | null;
+  },
 ): OfferVersionPublishAdSpec {
-  return buildAdSpecV1({
+  const spec = buildAdSpecV1({
     source,
     offerDefinition,
     generatedAd,
+    selectedLanguage: generatedAd?.localization_bundle?.sourceLocale,
   });
+  const localization = options?.localization ?? buildOfferVersionLocalizationSnapshot({
+    bundle: generatedAd?.localization_bundle ?? null,
+    offerDefinition,
+    providerStatus: generatedAd?.localization_status ?? null,
+    localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
+    approval: options?.localizationApproval ?? null,
+  });
+  if (!options?.composedCard && !localization) return spec;
+  return {
+    ...spec,
+    ...(options?.composedCard ? { composedCard: options.composedCard } : {}),
+    ...(localization ? { localization } : {}),
+  };
 }
 
 export async function publishOfferVersionedDeal(

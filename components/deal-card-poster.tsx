@@ -1,4 +1,4 @@
-import { Pressable, Text, useWindowDimensions, View, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { Image } from "expo-image";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import Reanimated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -60,11 +60,8 @@ export function DealCardPoster({
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const { height: windowHeight } = useWindowDimensions();
   const minuteTick = useMinuteTick();
 
-  // Hero image — DoorDash style
-  const imageHeight = Math.round(Math.max(280, windowHeight * 0.48));
   const favoriteScale = useSharedValue(1);
   const favoriteAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: favoriteScale.value }] }));
 
@@ -107,7 +104,7 @@ export function DealCardPoster({
         {posterUrl ? (
           <Image
             source={{ uri: posterUrl }}
-            style={{ height: imageHeight, width: "100%" }}
+            style={{ aspectRatio: 1, width: "100%" }}
             contentFit="cover"
             transition={300}
             placeholder={{ blurhash: "LKG8wh~qIU%M_3xut7RjD%ofWBt7" }}
@@ -116,7 +113,8 @@ export function DealCardPoster({
         ) : (
           <View
             style={{
-              height: imageHeight,
+              aspectRatio: 1,
+              width: "100%",
               backgroundColor: theme.surfaceMuted,
               alignItems: "center",
               justifyContent: "center",

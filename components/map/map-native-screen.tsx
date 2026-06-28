@@ -16,7 +16,17 @@ import { isDealActiveNow } from "@/lib/deal-time";
 import { getConsumerPreferences, milesToKm, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
 import { resolveConsumerCoordinates } from "@/lib/consumer-location";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
-import { localizedDealTitle } from "@/lib/deal-localization";
+import { getCustomerPreferredDealLocale, getDeviceDealLocale } from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
 import { buildMapCameraFitSignature, buildMapFitCoordinates } from "@/lib/map-camera-fit";
 import {
@@ -36,10 +46,15 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { LiveDealHaloCircles, useLiveDealPulse } from "@/components/map/live-deal-halo";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
+import {
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+} from "@/lib/runtime-env";
+import { supportedLocaleOrDefault } from "@/lib/supported-locales";
 
 type AppTheme = typeof Colors.light;
 
-type DealLite = {
+type DealLite = DealStructuredDisplayFields & {
   id: string;
   title: string | null;
   is_demo?: boolean | null;
@@ -61,6 +76,10 @@ type DealLite = {
   window_end_minutes: number | null;
   timezone: string | null;
 };
+
+const MAP_DEALS_BASE_SELECT =
+  "id,title,is_demo,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone";
+const MAP_DEALS_SELECT = `${MAP_DEALS_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 function safeRegion(center: { lat: number; lng: number }, latitudeDelta: number, longitudeDelta: number): Region {
   const lat = Math.min(90, Math.max(-90, center.lat));
@@ -143,14 +162,24 @@ async function fetchMapDataPayload(t: (key: string) => string): Promise<MapDataP
   const dealPageSize = 200;
   let dealOffset = 0;
   while (true) {
-    const { data: dz, error: ed } = await supabase
+    const enrichedDealResult = await supabase
       .from("deals")
-      .select(
-        "id,title,is_demo,source_locale,title_en,title_es,title_ko,description,poster_url,poster_storage_path,price,max_claims,business_id,end_time,start_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone",
-      )
+      .select(MAP_DEALS_SELECT)
       .eq("is_active", true)
       .gte("end_time", new Date().toISOString())
       .range(dealOffset, dealOffset + dealPageSize - 1);
+    let dz: unknown = enrichedDealResult.data;
+    let ed = enrichedDealResult.error;
+    if (isMissingStructuredDisplayColumnError(enrichedDealResult.error)) {
+      const baseDealResult = await supabase
+        .from("deals")
+        .select(MAP_DEALS_BASE_SELECT)
+        .eq("is_active", true)
+        .gte("end_time", new Date().toISOString())
+        .range(dealOffset, dealOffset + dealPageSize - 1);
+      dz = baseDealResult.data;
+      ed = baseDealResult.error;
+    }
     if (ed) {
       logPostgrestError("map screen deals", ed);
       // Keep existing deals on transient failures.
@@ -217,9 +246,9 @@ function renderMapCanvas({
   mapReady,
   loading,
   t,
-  language,
   selectedBusiness,
   previewDeal,
+  previewDealTitle,
   previewPosterUri,
   theme,
   colorScheme,
@@ -242,9 +271,9 @@ function renderMapCanvas({
   mapReady: boolean;
   loading: boolean;
   t: (key: string) => string;
-  language: string;
   selectedBusiness: MarkerWithLive | null;
   previewDeal: DealLite | null;
+  previewDealTitle: string | null;
   previewPosterUri: string | null;
   theme: AppTheme;
   colorScheme: "light" | "dark";
@@ -404,7 +433,7 @@ function renderMapCanvas({
                 {selectedBusiness.name}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 19, fontWeight: "800", lineHeight: 24, color: theme.text }}>
-                {previewDeal ? localizedDealTitle(previewDeal, language) || selectedBusiness.name : selectedBusiness.name}
+                {previewDeal ? previewDealTitle || selectedBusiness.name : selectedBusiness.name}
               </Text>
               {typeof previewDeal?.price === "number" ? (
                 <Text style={{ marginTop: 6, fontSize: 18, fontWeight: "800", color: theme.accentText }}>
@@ -693,6 +722,8 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const theme = Colors[colorScheme];
   const androidMapsOk =
     Platform.OS !== "android" || Boolean(Constants.expoConfig?.extra?.androidMapsKeyConfigured);
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
   const [mode, setMode] = useState<"all" | "live">("all");
   const [businesses, setBusinesses] = useState<MappableBusiness[]>([]);
   const [deals, setDeals] = useState<DealLite[]>([]);
@@ -707,11 +738,28 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const [usingDefaultArea, setUsingDefaultArea] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocale] = useState<string | null>(null);
+  const [customerDealLocalizationsByDealId, setCustomerDealLocalizationsByDealId] = useState<Map<string, CustomerDealLocalization>>(
+    () => new Map(),
+  );
   const mapRef = useRef<MapView>(null);
   const businessListRef = useRef<FlatList<MarkerWithLive>>(null);
   const lastCameraFitSignatureRef = useRef<string | null>(null);
   const lastMarkerPressAtRef = useRef(0);
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
   const livePulse = useLiveDealPulse();
+  const resolvedDealDisplayLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: null,
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
 
   const onMapBackgroundPress = useCallback((action: string | undefined) => {
     if (shouldIgnoreMapPressAfterMarkerPress(lastMarkerPressAtRef.current, Date.now())) return;
@@ -751,12 +799,42 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const lastMapLoadRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      void i18n.language;
+      let cancelled = false;
+      void getCustomerPreferredDealLocale().then((locale) => {
+        if (!cancelled) setCustomerPreferredDealLocale(locale);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [i18n.language]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
       const now = Date.now();
       if (now - lastMapLoadRef.current < 15_000) return;
       lastMapLoadRef.current = now;
       void loadMapData();
     }, [loadMapData]),
   );
+
+  useEffect(() => {
+    if (!customerLocaleResolutionEnabled || deals.length === 0) {
+      setCustomerDealLocalizationsByDealId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealLocalizations(
+      deals.map((deal) => deal.id),
+      resolvedDealDisplayLocale.locale,
+    ).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalizationsByDealId(localizations);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerLocaleResolutionEnabled, deals, resolvedDealDisplayLocale.locale]);
 
   const liveByBusiness = useMemo(() => {
     return deriveLiveBusinessIds(
@@ -797,6 +875,36 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const showUserLocationDot = showDeviceBlueDot && !!userPos;
   const previewPosterUri =
     previewDeal ? resolveDealPosterDisplayUri(previewDeal.poster_url, previewDeal.poster_storage_path) : null;
+  const previewDealTitle = useMemo(() => {
+    if (!previewDeal) return null;
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...previewDeal,
+        customer_deal_localization: customerDealLocalizationsByDealId.get(previewDeal.id) ?? null,
+        businesses: selectedBusiness
+          ? {
+              name: selectedBusiness.name,
+              location: selectedBusiness.location,
+              address: null,
+            }
+          : null,
+      },
+      locale: resolvedDealDisplayLocale.locale,
+      localeResolutionSource: resolvedDealDisplayLocale.source,
+      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      fallbackLanguage: i18n.language,
+    });
+    return display.title || null;
+  }, [
+    customerDealLocalizationsByDealId,
+    customerLocaleResolutionEnabled,
+    i18n.language,
+    localizedOfferRendererEnabled,
+    previewDeal,
+    resolvedDealDisplayLocale.locale,
+    resolvedDealDisplayLocale.source,
+    selectedBusiness,
+  ]);
   const subtitleText = mode === "live" ? t("consumerMap.subtitleLive") : t("consumerMap.subtitleAll");
   const showDefaultAreaNotice = !loading && androidMapsOk && usingDefaultArea;
   const mapCanvas = renderMapCanvas({
@@ -818,9 +926,9 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
     mapReady,
     loading,
     t,
-    language: i18n.language,
     selectedBusiness,
     previewDeal,
+    previewDealTitle,
     previewPosterUri,
     theme,
     colorScheme,

@@ -6,6 +6,11 @@ import type {
   GeneratedAd,
   PhotoTreatment,
 } from "./ad-variants";
+import type { PosterStyleChoice } from "./poster/posterTypes";
+import type {
+  MerchantImageEditMode,
+  MerchantImageSourceMode,
+} from "./merchant-image-selection";
 import type { DealEligibilityInput } from "./deal-eligibility";
 import {
   normalizeBusinessLookupResults,
@@ -572,65 +577,6 @@ export async function aiGenerateDealCopy(body: {
   }
 }
 
-export type AiCreateDealResult = {
-  deal_id: string;
-  title: string;
-  description: string;
-  promo_line: string;
-  poster_url: string;
-};
-
-/**
- * Legacy one-shot: AI + insert deal (Edge: `ai-create-deal`).
- * Stores a signed URL in `poster_url` (may expire); prefer the main AI ads → publish flow for production.
- */
-export async function aiCreateDeal(body: {
-  business_id: string;
-  photo_path: string;
-  hint_text: string;
-  price?: number | null;
-  end_time: string;
-  max_claims: number;
-  claim_cutoff_buffer_minutes?: number;
-}): Promise<AiCreateDealResult> {
-  const { data, error } = await supabase.functions.invoke("ai-create-deal", {
-    body: {
-      business_id: body.business_id,
-      photo_path: body.photo_path,
-      hint_text: body.hint_text,
-      price: body.price ?? undefined,
-      end_time: body.end_time,
-      max_claims: body.max_claims,
-      claim_cutoff_buffer_minutes: body.claim_cutoff_buffer_minutes ?? 15,
-    },
-    timeout: EDGE_FUNCTION_TIMEOUT_AI_MS,
-  });
-
-  if (error) {
-    throw new Error(parseFunctionError(error));
-  }
-  if (data && typeof data === "object" && "error" in data) {
-    throw new Error(String((data as { error?: string }).error ?? "Server returned an error"));
-  }
-  const d = data as Partial<AiCreateDealResult>;
-  if (
-    typeof d.deal_id !== "string" ||
-    typeof d.title !== "string" ||
-    typeof d.description !== "string" ||
-    typeof d.promo_line !== "string" ||
-    typeof d.poster_url !== "string"
-  ) {
-    throw new Error("Unexpected response from ai-create-deal.");
-  }
-  return {
-    deal_id: d.deal_id,
-    title: d.title,
-    description: d.description,
-    promo_line: d.promo_line,
-    poster_url: d.poster_url,
-  };
-}
-
 export type AiExtractMenuItem = {
   name: string;
   category?: string;
@@ -643,7 +589,7 @@ export type AiExtractMenuResult = {
   ok: true;
   items: AiExtractMenuItem[];
   low_legibility: boolean;
-  extraction_source?: "openai" | "synthetic_fallback";
+  extraction_source?: "openai" | "provider_router" | "synthetic_fallback";
   menu_notes: string;
 };
 
@@ -691,12 +637,30 @@ export type AiGenerateAdRequest = {
   output_language: string;
   request_group_id?: string;
   image_mode?: "generate";
+  image_source_mode?: MerchantImageSourceMode;
+  image_edit_mode?: MerchantImageEditMode;
+  custom_image_edit_instruction?: string;
+  merchant_image_warning_override_acknowledged?: boolean;
   deal_eligibility?: DealEligibilityInput;
   photo_path?: string;
   photo_treatment?: PhotoTreatment | null;
   offer_schedule_summary?: string;
   quantity_limit?: number | null;
   redemption_limit?: string;
+  creative?: {
+    requested_format?: "standard_card" | "poster_v1";
+    poster?: {
+      enabled?: boolean;
+      style?: PosterStyleChoice;
+      aspect_ratio?: "4:5";
+      text_policy?: {
+        no_app_brand_token?: boolean;
+        no_cta?: boolean;
+        no_scarcity?: boolean;
+        center_text?: boolean;
+      };
+    };
+  };
 };
 
 export type AiReviseAdRequest = AiGenerateAdRequest & {
@@ -744,12 +708,19 @@ export async function aiGenerateAd(body: AiGenerateAdRequest): Promise<AiGenerat
     output_language: body.output_language,
     ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
     ...(body.image_mode ? { image_mode: body.image_mode } : {}),
+    ...(body.image_source_mode ? { image_source_mode: body.image_source_mode } : {}),
+    ...(body.image_edit_mode ? { image_edit_mode: body.image_edit_mode } : {}),
+    ...(body.custom_image_edit_instruction ? { custom_image_edit_instruction: body.custom_image_edit_instruction } : {}),
+    ...(body.merchant_image_warning_override_acknowledged
+      ? { merchant_image_warning_override_acknowledged: true }
+      : {}),
     ...(body.deal_eligibility ? { deal_eligibility: body.deal_eligibility } : {}),
     ...(body.photo_path ? { photo_path: body.photo_path } : {}),
     ...(body.photo_treatment ? { photo_treatment: body.photo_treatment } : {}),
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
     ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
     ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
+    ...(body.creative ? { creative: body.creative } : {}),
   });
 }
 
@@ -761,6 +732,12 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     business_context: body.business_context,
     output_language: body.output_language,
     ...(body.request_group_id ? { request_group_id: body.request_group_id } : {}),
+    ...(body.image_source_mode ? { image_source_mode: body.image_source_mode } : {}),
+    ...(body.image_edit_mode ? { image_edit_mode: body.image_edit_mode } : {}),
+    ...(body.custom_image_edit_instruction ? { custom_image_edit_instruction: body.custom_image_edit_instruction } : {}),
+    ...(body.merchant_image_warning_override_acknowledged
+      ? { merchant_image_warning_override_acknowledged: true }
+      : {}),
     previous_ad: body.previous_ad,
     revision_target: body.revision_target,
     revision_count: body.revision_count,
@@ -772,6 +749,7 @@ export async function aiReviseAd(body: AiReviseAdRequest): Promise<AiGenerateAdR
     ...(body.offer_schedule_summary ? { offer_schedule_summary: body.offer_schedule_summary } : {}),
     ...(body.quantity_limit != null ? { quantity_limit: body.quantity_limit } : {}),
     ...(body.redemption_limit ? { redemption_limit: body.redemption_limit } : {}),
+    ...(body.creative ? { creative: body.creative } : {}),
   });
 }
 

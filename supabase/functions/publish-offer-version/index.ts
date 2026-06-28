@@ -10,6 +10,9 @@ import {
   businessVerificationRequiredResponseBody,
   getUnverifiedLocationFromDealRows,
 } from "../_shared/business-verification.ts";
+import { validateExactLocalizationApprovalPayload } from "../_shared/localization-approval-validation.ts";
+import { validatePosterSpecV1 } from "../../../lib/poster/posterAdSpec.ts";
+import type { OfferDefinitionV1 } from "../../../lib/offer-definition.ts";
 
 type PublishOfferVersionBody = {
   business_id?: unknown;
@@ -34,10 +37,60 @@ type OfferDefinitionPayload = {
 
 type AdSpecPayload = {
   adSpecVersion?: unknown;
+  creative_format?: unknown;
+  poster?: unknown;
   rendererVersion?: unknown;
   templateVersion?: unknown;
   channels?: unknown;
   offer?: unknown;
+  composedCard?: unknown;
+  localization?: unknown;
+};
+
+type ComposedCardPayload = {
+  presentation?: unknown;
+  presentationHash?: unknown;
+  selectedTemplateId?: unknown;
+  alternateTemplateIds?: unknown;
+  merchantStyleOverrideUsed?: unknown;
+  compositeQa?: unknown;
+  screenshotQa?: unknown;
+};
+
+type ComposedPresentationPayload = {
+  specVersion?: unknown;
+  templateId?: unknown;
+  themeId?: unknown;
+  imageAssetId?: unknown;
+  imageSourceType?: unknown;
+  textPanel?: unknown;
+  textZone?: unknown;
+  rendererVersion?: unknown;
+};
+
+type CompositeQaPayload = {
+  decision?: unknown;
+  hardFailReasons?: unknown;
+};
+
+type ScreenshotQaPayload = {
+  required?: unknown;
+  decision?: unknown;
+};
+
+type LocalizationPayload = {
+  schemaVersion?: unknown;
+  sourceLocale?: unknown;
+  enabledLocales?: unknown;
+  sourceCreativeHash?: unknown;
+  localizationBundleHash?: unknown;
+  deterministicFallbackLocales?: unknown;
+  localeRendererVersion?: unknown;
+  localizedTermSnapshot?: unknown;
+  translationQaSummary?: unknown;
+  localePresentationOverrides?: unknown;
+  approval?: unknown;
+  localizations?: unknown;
 };
 
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
@@ -67,6 +120,50 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => cleanText(item).length > 0);
+}
+
+function cleanStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => cleanText(item)).filter(Boolean)
+    : [];
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function recordKeys(value: unknown): string[] {
+  return Object.keys(recordValue(value) ?? {});
+}
+
+function translationQaRollup(value: unknown): Record<string, string> {
+  const summary = recordValue(value);
+  if (!summary) return {};
+  const out: Record<string, string> = {};
+  for (const [locale, rawQa] of Object.entries(summary)) {
+    const qa = recordValue(rawQa);
+    if (!qa) continue;
+    const status = cleanText(qa.translationStatus);
+    const decision = cleanText(qa.qaDecision);
+    out[locale] = [status, decision].filter(Boolean).join(":") || "unknown";
+  }
+  return out;
+}
+
+function isExactPresentationApprovalRequired(): boolean {
+  return Deno.env.get("AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED") === "true";
+}
+
+function isCompositeScreenshotQaRequired(): boolean {
+  return Deno.env.get("AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED") === "true";
+}
+
+function isExactLocalizationApprovalRequired(): boolean {
+  return Deno.env.get("AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED") === "true";
+}
+
 function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -90,14 +187,36 @@ function validateOfferDefinitionPayload(value: unknown): { valid: boolean; reaso
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 
-function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: string[] } {
+function validateAdSpecPayload(value: unknown, offerDefinition: unknown): { valid: boolean; reasonCodes: string[] } {
   const reasonCodes: string[] = [];
-  if (value == null) return { valid: true, reasonCodes };
+  if (value == null) {
+    if (isExactPresentationApprovalRequired()) {
+      reasonCodes.push("MISSING_COMPOSED_CARD_APPROVAL");
+    }
+    if (isExactLocalizationApprovalRequired()) {
+      reasonCodes.push("MISSING_LOCALIZATION_APPROVAL");
+    }
+    return { valid: reasonCodes.length === 0, reasonCodes };
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { valid: false, reasonCodes: ["NOT_OBJECT"] };
   }
   const spec = value as AdSpecPayload;
   if (spec.adSpecVersion !== 1) reasonCodes.push("INVALID_AD_SPEC_VERSION");
+  const creativeFormat = cleanText(spec.creative_format) || "standard_card";
+  if (creativeFormat !== "standard_card" && creativeFormat !== "poster_v1") {
+    reasonCodes.push("INVALID_CREATIVE_FORMAT");
+  }
+  if (creativeFormat === "poster_v1" || spec.poster != null) {
+    const businessId = cleanText((offerDefinition as OfferDefinitionPayload | null)?.merchantId);
+    const posterValidation = validatePosterSpecV1(spec.poster, {
+      offerDefinition: offerDefinition as OfferDefinitionV1,
+      businessId,
+    });
+    if (!posterValidation.valid) {
+      reasonCodes.push(...posterValidation.reasonCodes);
+    }
+  }
   if (!cleanText(spec.rendererVersion)) reasonCodes.push("MISSING_RENDERER_VERSION");
   if (!cleanText(spec.templateVersion)) reasonCodes.push("MISSING_TEMPLATE_VERSION");
   if (!spec.offer || typeof spec.offer !== "object" || Array.isArray(spec.offer)) {
@@ -106,7 +225,138 @@ function validateAdSpecPayload(value: unknown): { valid: boolean; reasonCodes: s
   if (!spec.channels || typeof spec.channels !== "object" || Array.isArray(spec.channels)) {
     reasonCodes.push("MISSING_CHANNELS");
   }
+  if (spec.composedCard != null) {
+    reasonCodes.push(...validateComposedCardPayload(spec.composedCard));
+  } else if (isExactPresentationApprovalRequired()) {
+    reasonCodes.push("MISSING_COMPOSED_CARD_APPROVAL");
+  }
+  if (spec.localization != null) {
+    reasonCodes.push(...validateLocalizationPayload(spec.localization));
+  } else if (isExactLocalizationApprovalRequired()) {
+    reasonCodes.push("MISSING_LOCALIZATION_APPROVAL");
+  }
+  if (isExactLocalizationApprovalRequired()) {
+    reasonCodes.push(...validateExactLocalizationApprovalPayload({
+      localization: spec.localization,
+      composedCard: spec.composedCard,
+      offerDefinition,
+      exactRequired: true,
+    }));
+  }
   return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
+}
+
+function validateLocalizationPayload(value: unknown): string[] {
+  const reasonCodes: string[] = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return ["LOCALIZATION_NOT_OBJECT"];
+  }
+  const localization = value as LocalizationPayload;
+  if (localization.schemaVersion !== 1) reasonCodes.push("INVALID_LOCALIZATION_SCHEMA_VERSION");
+  const sourceLocale = cleanText(localization.sourceLocale);
+  if (!["en-US", "es-US", "ko-KR"].includes(sourceLocale)) reasonCodes.push("INVALID_LOCALIZATION_SOURCE_LOCALE");
+  if (!isStringArray(localization.enabledLocales)) {
+    reasonCodes.push("INVALID_LOCALIZATION_ENABLED_LOCALES");
+  }
+  if (!/^adsrc_[0-9a-f]{8}$/i.test(cleanText(localization.sourceCreativeHash))) {
+    reasonCodes.push("INVALID_SOURCE_CREATIVE_HASH");
+  }
+  if (!/^adloc_[0-9a-f]{8}$/i.test(cleanText(localization.localizationBundleHash))) {
+    reasonCodes.push("INVALID_LOCALIZATION_BUNDLE_HASH");
+  }
+  if (!isStringArray(localization.deterministicFallbackLocales)) {
+    reasonCodes.push("INVALID_DETERMINISTIC_FALLBACK_LOCALES");
+  }
+  if (!cleanText(localization.localeRendererVersion)) reasonCodes.push("MISSING_LOCALE_RENDERER_VERSION");
+  if (!localization.localizedTermSnapshot || typeof localization.localizedTermSnapshot !== "object" || Array.isArray(localization.localizedTermSnapshot)) {
+    reasonCodes.push("INVALID_LOCALIZED_TERM_SNAPSHOT");
+  }
+  if (!localization.translationQaSummary || typeof localization.translationQaSummary !== "object" || Array.isArray(localization.translationQaSummary)) {
+    reasonCodes.push("INVALID_TRANSLATION_QA_SUMMARY");
+  }
+  if (!localization.localizations || typeof localization.localizations !== "object" || Array.isArray(localization.localizations)) {
+    reasonCodes.push("INVALID_AD_LOCALIZATIONS");
+    return reasonCodes;
+  }
+  const localizations = localization.localizations as Record<string, unknown>;
+  const enabledLocales = isStringArray(localization.enabledLocales) ? localization.enabledLocales : [];
+  for (const locale of enabledLocales) {
+    if (!localizations[locale]) reasonCodes.push("MISSING_AD_LOCALIZATION");
+  }
+  for (const [locale, row] of Object.entries(localizations)) {
+    if (!["en-US", "es-US", "ko-KR"].includes(locale)) reasonCodes.push("UNSUPPORTED_AD_LOCALIZATION_LOCALE");
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      reasonCodes.push("INVALID_AD_LOCALIZATION_ROW");
+      continue;
+    }
+    const record = row as Record<string, unknown>;
+    if ("exactOfferLine" in record || "termsLine" in record) {
+      reasonCodes.push("AD_LOCALIZATION_EXACT_OFFER_FIELDS_NOT_ALLOWED");
+    }
+    if (!cleanText(record.headline)) reasonCodes.push("MISSING_AD_LOCALIZATION_HEADLINE");
+    if (!cleanText(record.imageAltText)) reasonCodes.push("MISSING_AD_LOCALIZATION_ALT_TEXT");
+    if (!/^adlocrow_[0-9a-f]{8}$/i.test(cleanText(record.localizationHash))) {
+      reasonCodes.push("INVALID_AD_LOCALIZATION_HASH");
+    }
+    if (!Array.isArray(record.qaReasonCodes)) reasonCodes.push("INVALID_AD_LOCALIZATION_QA_REASONS");
+  }
+  return reasonCodes;
+}
+
+function validateComposedCardPayload(value: unknown): string[] {
+  const reasonCodes: string[] = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return ["COMPOSED_CARD_NOT_OBJECT"];
+  }
+  const composed = value as ComposedCardPayload;
+  const presentation = composed.presentation as ComposedPresentationPayload | null;
+  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+    reasonCodes.push("MISSING_PRESENTATION_SPEC");
+  } else {
+    if (!cleanText(presentation.specVersion)) reasonCodes.push("MISSING_PRESENTATION_SPEC_VERSION");
+    if (!cleanText(presentation.rendererVersion)) reasonCodes.push("MISSING_PRESENTATION_RENDERER_VERSION");
+    if (!cleanText(presentation.templateId)) reasonCodes.push("MISSING_SELECTED_TEMPLATE");
+    if (!cleanText(presentation.themeId)) reasonCodes.push("MISSING_PRESENTATION_THEME");
+    if (!cleanText(presentation.imageAssetId)) reasonCodes.push("MISSING_PRESENTATION_IMAGE_ASSET");
+    if (!cleanText(presentation.imageSourceType)) reasonCodes.push("MISSING_PRESENTATION_IMAGE_SOURCE");
+    if (!cleanText(presentation.textPanel)) reasonCodes.push("MISSING_PRESENTATION_TEXT_PANEL");
+    if (!cleanText(presentation.textZone)) reasonCodes.push("MISSING_PRESENTATION_TEXT_ZONE");
+    if (cleanText(composed.selectedTemplateId) && cleanText(composed.selectedTemplateId) !== cleanText(presentation.templateId)) {
+      reasonCodes.push("SELECTED_TEMPLATE_MISMATCH");
+    }
+  }
+  const presentationHash = cleanText(composed.presentationHash);
+  if (!/^adp_[0-9a-f]{16}$/i.test(presentationHash)) {
+    reasonCodes.push("INVALID_PRESENTATION_HASH");
+  }
+  if (!Array.isArray(composed.alternateTemplateIds)) {
+    reasonCodes.push("INVALID_ALTERNATE_TEMPLATES");
+  }
+  if (typeof composed.merchantStyleOverrideUsed !== "boolean") {
+    reasonCodes.push("INVALID_STYLE_OVERRIDE_FLAG");
+  }
+  const compositeQa = composed.compositeQa as CompositeQaPayload | null;
+  if (!compositeQa || typeof compositeQa !== "object" || Array.isArray(compositeQa)) {
+    reasonCodes.push("MISSING_COMPOSITE_QA");
+  } else {
+    const decision = cleanText(compositeQa.decision);
+    if (!["pass", "repair", "block", "unavailable"].includes(decision)) {
+      reasonCodes.push("INVALID_COMPOSITE_QA_DECISION");
+    }
+    if (decision === "block" || decision === "unavailable") {
+      reasonCodes.push("BLOCKED_COMPOSITE_QA");
+    }
+    if (!Array.isArray(compositeQa.hardFailReasons)) {
+      reasonCodes.push("INVALID_COMPOSITE_QA_REASONS");
+    }
+  }
+  const screenshotQa = composed.screenshotQa as ScreenshotQaPayload | null;
+  if (!screenshotQa || typeof screenshotQa !== "object" || Array.isArray(screenshotQa)) {
+    reasonCodes.push("MISSING_SCREENSHOT_QA");
+  } else if (isCompositeScreenshotQaRequired() && screenshotQa.required === true && screenshotQa.decision !== "pass") {
+    reasonCodes.push("SCREENSHOT_QA_REQUIRED");
+  }
+  return reasonCodes;
 }
 
 serve(async (req) => {
@@ -204,7 +454,7 @@ serve(async (req) => {
       body.ad_spec && typeof body.ad_spec === "object" && !Array.isArray(body.ad_spec)
         ? body.ad_spec
         : null;
-    const adSpecValidation = validateAdSpecPayload(adSpec);
+    const adSpecValidation = validateAdSpecPayload(adSpec, offerDefinition);
     if (!adSpecValidation.valid) {
       return jsonResponse(
         req,
@@ -260,7 +510,47 @@ serve(async (req) => {
       rendererVersion?: unknown;
       templateVersion?: unknown;
       source?: unknown;
+      composedCard?: {
+        presentationHash?: unknown;
+        selectedTemplateId?: unknown;
+        alternateTemplateIds?: unknown;
+        merchantStyleOverrideUsed?: unknown;
+        compositeQa?: { decision?: unknown; repairCodes?: unknown; hardFailReasons?: unknown };
+        screenshotQa?: { required?: unknown; decision?: unknown; triggerCodes?: unknown };
+      };
+      localization?: {
+        sourceLocale?: unknown;
+        enabledLocales?: unknown;
+        sourceCreativeHash?: unknown;
+        localizationBundleHash?: unknown;
+        deterministicFallbackLocales?: unknown;
+        localeRendererVersion?: unknown;
+        localePresentationOverrides?: unknown;
+        translationQaSummary?: unknown;
+        semanticQaSummary?: {
+          provider?: unknown;
+          model?: unknown;
+          skippedReason?: unknown;
+          repairTargetLocales?: unknown;
+        };
+        approval?: {
+          approvalHash?: unknown;
+          policyVersion?: unknown;
+          reviewPolicyVersion?: unknown;
+          localizedTermSnapshotHash?: unknown;
+          localePresentationOverridesHash?: unknown;
+          localizationRowHashes?: unknown;
+        };
+        localizations?: unknown;
+      };
     } | null;
+    const composedForContext = adSpecForContext?.composedCard;
+    const localizationForContext = adSpecForContext?.localization;
+    const enabledLocalizationLocales = cleanStringArray(localizationForContext?.enabledLocales);
+    const deterministicFallbackLocales = cleanStringArray(localizationForContext?.deterministicFallbackLocales);
+    const repairTargetLocales = cleanStringArray(localizationForContext?.semanticQaSummary?.repairTargetLocales);
+    const localePresentationOverrideLocales = recordKeys(localizationForContext?.localePresentationOverrides);
+    const localizationRowLocales = recordKeys(localizationForContext?.localizations);
     try {
       await admin.from("app_analytics_events").insert({
         event_name: "ai_ad_versioned_publish",
@@ -276,6 +566,82 @@ serve(async (req) => {
           template_version:
             typeof adSpecForContext?.templateVersion === "string" ? adSpecForContext.templateVersion : null,
           source: typeof adSpecForContext?.source === "string" ? adSpecForContext.source : null,
+          composed_presentation_hash:
+            typeof composedForContext?.presentationHash === "string" ? composedForContext.presentationHash : null,
+          selected_template_id:
+            typeof composedForContext?.selectedTemplateId === "string" ? composedForContext.selectedTemplateId : null,
+          alternate_template_count: Array.isArray(composedForContext?.alternateTemplateIds)
+            ? composedForContext.alternateTemplateIds.length
+            : 0,
+          merchant_style_override_used:
+            typeof composedForContext?.merchantStyleOverrideUsed === "boolean"
+              ? composedForContext.merchantStyleOverrideUsed
+              : false,
+          composite_qa_decision:
+            typeof composedForContext?.compositeQa?.decision === "string" ? composedForContext.compositeQa.decision : null,
+          composite_qa_repair_count: Array.isArray(composedForContext?.compositeQa?.repairCodes)
+            ? composedForContext.compositeQa.repairCodes.length
+            : 0,
+          screenshot_qa_required:
+            typeof composedForContext?.screenshotQa?.required === "boolean" ? composedForContext.screenshotQa.required : false,
+          screenshot_qa_decision:
+            typeof composedForContext?.screenshotQa?.decision === "string" ? composedForContext.screenshotQa.decision : null,
+          localization_present: Boolean(localizationForContext),
+          localization_source_locale:
+            typeof localizationForContext?.sourceLocale === "string" ? localizationForContext.sourceLocale : null,
+          localization_enabled_locales: enabledLocalizationLocales.join(","),
+          localization_enabled_locale_count: enabledLocalizationLocales.length,
+          localization_source_creative_hash:
+            typeof localizationForContext?.sourceCreativeHash === "string" ? localizationForContext.sourceCreativeHash : null,
+          localization_bundle_hash:
+            typeof localizationForContext?.localizationBundleHash === "string" ? localizationForContext.localizationBundleHash : null,
+          localization_locale_renderer_version:
+            typeof localizationForContext?.localeRendererVersion === "string" ? localizationForContext.localeRendererVersion : null,
+          deterministic_localization_fallback_locales: deterministicFallbackLocales.join(","),
+          deterministic_localization_fallback_count: deterministicFallbackLocales.length,
+          translation_qa_decision_by_locale: translationQaRollup(localizationForContext?.translationQaSummary),
+          semantic_qa_provider:
+            typeof localizationForContext?.semanticQaSummary?.provider === "string"
+              ? localizationForContext.semanticQaSummary.provider
+              : null,
+          semantic_qa_model:
+            typeof localizationForContext?.semanticQaSummary?.model === "string"
+              ? localizationForContext.semanticQaSummary.model
+              : null,
+          semantic_qa_skipped_reason:
+            typeof localizationForContext?.semanticQaSummary?.skippedReason === "string"
+              ? localizationForContext.semanticQaSummary.skippedReason
+              : null,
+          translation_repair_target_locales: repairTargetLocales.join(","),
+          translation_repair_target_locale_count: repairTargetLocales.length,
+          locale_template_override_locales: localePresentationOverrideLocales.join(","),
+          locale_template_override_count: localePresentationOverrideLocales.length,
+          localization_row_locales: localizationRowLocales.join(","),
+          localization_row_count: localizationRowLocales.length,
+          localization_approval_present: Boolean(localizationForContext?.approval),
+          localization_approval_hash:
+            typeof localizationForContext?.approval?.approvalHash === "string"
+              ? localizationForContext.approval.approvalHash
+              : null,
+          localization_approval_policy_version:
+            typeof localizationForContext?.approval?.policyVersion === "string"
+              ? localizationForContext.approval.policyVersion
+              : null,
+          localization_review_policy_version:
+            typeof localizationForContext?.approval?.reviewPolicyVersion === "string"
+              ? localizationForContext.approval.reviewPolicyVersion
+              : null,
+          localized_term_snapshot_hash:
+            typeof localizationForContext?.approval?.localizedTermSnapshotHash === "string"
+              ? localizationForContext.approval.localizedTermSnapshotHash
+              : null,
+          locale_presentation_overrides_hash:
+            typeof localizationForContext?.approval?.localePresentationOverridesHash === "string"
+              ? localizationForContext.approval.localePresentationOverridesHash
+              : null,
+          localization_approved_row_hash_locales: recordKeys(
+            localizationForContext?.approval?.localizationRowHashes,
+          ).join(","),
         },
       });
     } catch (err) {

@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** Visual rhythm — use these instead of one-off magic numbers. */
@@ -17,19 +18,45 @@ type ScreenInsets = {
   bottom: number;
 };
 
-/**
- * Tab screens are laid out **above** the bottom tab bar; the bar already clears the home indicator.
- * Adding `safe area bottom + fixed tab height` here double-counted insets and diverged on Android
- * edge-to-edge / Expo Go vs native release. Use modest scroll padding only.
- */
-const TAB_SCREEN_SCROLL_EXTRA = Spacing.xxxl * 2 + Spacing.md;
+export const TAB_BAR_BASE_HEIGHT = 64;
+export const TAB_BAR_ANDROID_BOTTOM_FLOOR = Spacing.sm;
+export const ANDROID_BOTTOM_VISIBILITY_FLOOR = 168;
+const TAB_BAR_IOS_BOTTOM_FLOOR = 6;
+export const STACK_ANDROID_BOTTOM_FLOOR = ANDROID_BOTTOM_VISIBILITY_FLOOR;
+const STACK_DEFAULT_BOTTOM_FLOOR = Spacing.lg;
 
-export function getScreenLayoutMetrics(insets: ScreenInsets, variant: ScreenVariant = "tab") {
+export type TabBarPlatform = "android" | "ios" | "default";
+
+export function getTabBarMetrics(insets: ScreenInsets, platform: TabBarPlatform = "default") {
+  const bottomOffset =
+    platform === "android" && insets.bottom < ANDROID_BOTTOM_VISIBILITY_FLOOR
+      ? ANDROID_BOTTOM_VISIBILITY_FLOOR - insets.bottom
+      : 0;
+  const bottomFloor =
+    platform === "android" ? TAB_BAR_ANDROID_BOTTOM_FLOOR : platform === "ios" ? TAB_BAR_IOS_BOTTOM_FLOOR : Spacing.sm;
+  const bottomPadding = Math.max(insets.bottom, bottomFloor);
+  const height = TAB_BAR_BASE_HEIGHT + bottomPadding + bottomOffset;
+  return {
+    bottomOffset,
+    bottomPadding,
+    height,
+    screenScrollBottom: height + Spacing.lg,
+    screenListBottom: height + Spacing.xl,
+  };
+}
+
+export function getScreenLayoutMetrics(
+  insets: ScreenInsets,
+  variant: ScreenVariant = "tab",
+  platform: TabBarPlatform = "default",
+) {
   // Floor the stack-screen bottom inset: on Android edge-to-edge dev clients
   // insets.bottom can report 0, which let bottom CTAs (e.g. the AI ads
   // publish button) sit against the home indicator / nav bar.
-  const bottomInset =
-    variant === "tab" ? TAB_SCREEN_SCROLL_EXTRA : Math.max(insets.bottom, Spacing.lg) + Spacing.xl;
+  const tabBarMetrics = variant === "tab" ? getTabBarMetrics(insets, platform) : null;
+  const stackBottomFloor = platform === "android" ? STACK_ANDROID_BOTTOM_FLOOR : STACK_DEFAULT_BOTTOM_FLOOR;
+  const bottomInset = tabBarMetrics?.screenScrollBottom ?? Math.max(insets.bottom, stackBottomFloor) + Spacing.xxxl;
+  const listBottom = tabBarMetrics?.screenListBottom ?? bottomInset + Spacing.lg;
 
   return {
     insets,
@@ -37,9 +64,23 @@ export function getScreenLayoutMetrics(insets: ScreenInsets, variant: ScreenVari
     top: insets.top + Spacing.md,
     horizontal: Spacing.lg,
     /** ScrollView / non-list content. */
-    scrollBottom: bottomInset + Spacing.md,
+    scrollBottom: variant === "tab" ? bottomInset : bottomInset + Spacing.md,
     /** FlatList contentContainerStyle.paddingBottom. */
-    listBottom: bottomInset + Spacing.lg,
+    listBottom,
+  };
+}
+
+export function getStackFooterMetrics(insets: ScreenInsets, platform: TabBarPlatform = "default") {
+  const bottom = Math.max(
+    insets.bottom,
+    platform === "android" ? STACK_ANDROID_BOTTOM_FLOOR : STACK_DEFAULT_BOTTOM_FLOOR,
+  );
+  const minHeight = 76;
+
+  return {
+    bottom,
+    minHeight,
+    scrollPadding: bottom + minHeight + Spacing.xl,
   };
 }
 
@@ -48,5 +89,7 @@ export function getBottomSheetBottomPadding(insets: ScreenInsets) {
 }
 
 export function useScreenInsets(variant: ScreenVariant = "tab") {
-  return getScreenLayoutMetrics(useSafeAreaInsets(), variant);
+  const platform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  return getScreenLayoutMetrics(useSafeAreaInsets(), variant, platform);
 }

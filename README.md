@@ -42,7 +42,8 @@ The **Create → AI ad ideas** flow calls the Supabase Edge Function `ai-generat
 1. Set secrets (Supabase project → Edge Functions → Secrets):
 
    - `OPENAI_API_KEY` (required)
-   - `OPENAI_AD_MODEL` (optional, default `gpt-4o-mini` — use a cheaper/faster model when you want)
+   - `OPENAI_MODEL` (optional, default `gpt-5.4-mini`; values are allowlisted server-side)
+   - `GEMINI_API_KEY` (optional; required only for Gemini fallback, judging, or image paths when their hosted flags are enabled)
 
 2. Deploy the function:
 

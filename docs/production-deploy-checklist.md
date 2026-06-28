@@ -2,7 +2,7 @@
 
 Use this after merging to `main` and before pointing pilot traffic at a **hosted** Supabase project and a **production** EAS build. Do not paste real secrets into tickets or this file.
 
-For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge coverage detail, see `docs/edge-function-checklist.md`.
+For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge coverage detail, see `docs/edge-function-checklist.md`. For multilingual release approval, use `docs/localization/multilingual-deals-production-approval-runbook.md`.
 
 ---
 
@@ -18,6 +18,12 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260704120000_business_logo_storage.sql` | `businesses.logo_url` + `business-logos` bucket + RLS for owner upload / public read. |
 | `20260706130000_deal_photo_owner_upload_policies.sql` | `deal-photos` owner-scoped upload/update policies for AI + publishing. |
 | `20260707120000_business_menu_item_sizes.sql` | Menu item `size_options` for scan → offer flows. |
+| `20260723120000_offer_versions_foundation.sql` | Immutable offer/ad version storage used by versioned publish and claims. |
+| `20260724120000_offer_version_publish_rpc.sql` | Publish RPC foundation for versioned offer/ad specs. |
+| `20260728120000_ad_localization_storage.sql` | Service-role localization storage and offer-version localization metadata. |
+| `20260728123000_customer_deal_localization_projection.sql` | Customer-safe localization projection RPC; no direct app-role access to `ad_localizations`. |
+| `20260730120000_deals_owner_delete_ended.sql` | Allows owners to delete their own ended deals from My offers. |
+| `20260730121000_customer_deal_poster_spec_projection.sql` | Customer-safe native poster spec projection RPC; no direct app-role access to `offer_versions`. |
 
 **Also verify:**
 
@@ -55,8 +61,9 @@ supabase functions deploy <function-name>
 - `finalize-stale-redeems`
 - `delete-user-account`
 - `ingest-analytics-event`
+- `publish-offer-version`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`
-- `ai-create-deal` (legacy; still keep behavior sane if enabled)
+- `ai-create-deal` (legacy disabled endpoint; should return HTTP 410)
 - Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
 
 After deploy, hit each critical path once from a dedicated smoke/test account (claim, redeem, AI create). Demo content may remain visible for testers, but do not rely on a shared demo login.
@@ -76,8 +83,19 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 
 **Optional / model tuning:**
 
-- `OPENAI_MODEL` / `OPENAI_AD_MODEL` / team-specific chat model vars (see `supabase/functions/_shared/openai-chat-model.ts` and docs)
+- `OPENAI_MODEL` (optional; default `gpt-5.4-mini`, allowlisted in `supabase/functions/_shared/openai-chat-model.ts`)
 - `OPENAI_WHISPER_MODEL` (voice in `ai-compose-offer`, if used)
+- `GEMINI_API_KEY` (required only when Gemini text fallback, judging, vision QA, or image generation is enabled)
+- `GEMINI_TEXT_MODEL` and `GEMINI_JUDGE_MODEL` (optional; default `gemini-3.5-flash`)
+- `AI_V3_PROVIDER_ROUTER_ENABLED`, `AI_TEXT_PRIMARY_PROVIDER`, `AI_TEXT_FALLBACK_ENABLED`, and `AI_TEXT_FALLBACK_PROVIDER` (shared text router/fallback controls; keep `AI_TEXT_FALLBACK_ENABLED=false` in production until the public privacy/subprocessor update is deployed)
+- `AI_TEXT_PRIMARY_TIMEOUT_MS`, `AI_TEXT_FALLBACK_TIMEOUT_MS`, `AI_TRANSIENT_RETRY_MAX`, and `AI_RETRY_AFTER_FULL_TIMEOUT` (shared text timeout/retry tuning)
+- `AI_CIRCUIT_BREAKER_ENABLED` (requires the circuit-breaker migration before production activation)
+- `AI_V3_INDEPENDENT_JUDGE_ENABLED` (Gemini independent candidate judging)
+- `AI_VISION_FALLBACK_ENABLED`, `AI_VISION_FALLBACK_PROVIDER`, `AI_VISION_PRIMARY_TIMEOUT_MS`, `AI_VISION_FALLBACK_TIMEOUT_MS`, and `AI_STOCK_QA_CANDIDATE_LIMIT` (ad image QA fallback/tuning)
+- `AI_V3_COST_BUDGET_ENABLED`, `AI_TEXT_COST_SOFT_LIMIT_USD`, `AI_TEXT_COST_HARD_LIMIT_USD`, `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD`, and `AI_REVISION_COST_HARD_LIMIT_USD` (AI cost-budget guardrails)
+- `OPENAI_IMAGE_MODEL_DEFAULT`, `OPENAI_IMAGE_MODEL_GENERATE`, and `OPENAI_IMAGE_MODEL_EDIT` (OpenAI image model overrides; default `gpt-image-1`)
+- `AI_IMAGE_PROVIDER`, `AI_IMAGE_FALLBACK_PROVIDER`, `AI_IMAGE_GEMINI_ENABLED`, `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ESTIMATED_COST_1K_USD`, `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED`, and `AI_IMAGE_STOCK_FALLBACK_ENABLED` (ad-image provider/fallback controls)
+- Multilingual flags: keep `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED`, `AI_V5_TRANSLATION_QA_ENABLED`, `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED`, and `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` off until the production approval runbook gates pass.
 
 **Menu extraction (preview / explicit opt-in only):**
 
@@ -131,7 +149,8 @@ Run against **hosted** Supabase + production-like env (can reuse scenarios from 
 - **Stripe / billing:** `PILOT_DISABLE_BILLING_GATE` in app may extend trials for pilot; confirm billing Edge functions and webhooks match your go-live plan before turning enforcement on.
 - **Google Places:** Without `GOOGLE_PLACES_API_KEY`, lookup may fall back to OpenAI-only or error — confirm messaging matches product expectations.
 - **AI quotas / cost:** `ai_generation_logs` and any monthly caps — verify limits in Dashboard and owner-facing copy.
-- **Push / deep links:** `send-deal-push`, email confirmation redirects — test on real devices.
+- **Push / deep links:** `send-deal-push`, scheduled deal release pushes, and email confirmation redirects — test on real devices.
+- **Multilingual rollout:** U.S. Spanish and Korean broad production remain blocked until named reviewers, native sign-off, Korean counter approval, and real-device screenshot QA are recorded.
 - **Migration order:** A single failed migration on prod leaves schema half-applied; always verify last applied migration name and error logs.
 - **Metro / CI:** Local “Unable to deserialize cloned data” Metro cache warnings are environmental; use `npx expo start -c` if bundler misbehaves (not a server deploy issue).
 

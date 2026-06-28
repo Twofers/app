@@ -98,7 +98,7 @@ export async function aiComposeOfferGenerate(body: {
   business_id: string;
   prompt_text?: string;
   image_base64?: string;
-  /** When true and request is text-only, edge function generates a poster via OpenAI Images and uploads it. */
+  /** Deprecated: legacy poster generation is disabled so critical text stays rendered natively. */
   generate_poster_image?: boolean;
 }): Promise<AiComposeSuccess> {
   const { data, error } = await supabase.functions.invoke("ai-compose-offer", {

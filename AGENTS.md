@@ -1,91 +1,114 @@
 # Agent instructions for the TWOFER repo
 
-Save this file at the repo root. Claude Code reads CLAUDE.md automatically each session. Codex reads AGENTS.md. Keep an identical copy under both names so whichever agent runs picks it up.
+Save this file at the repo root. Claude Code reads `CLAUDE.md` automatically each session. Codex reads `AGENTS.md`. Keep the two files identical so whichever agent runs gets the same rules.
 
-## What you are working from
+## Current source of truth
 
-The single source of truth is `twofer-developer-handoff-spec.md` at the repo root. Read it before doing anything, especially sections 1 through 5: locked decisions, current build and submission state, reference identifiers, confirmed former open items, and the working rules. Sections 6 through 29 are the full product spec, organized by area.
+The codebase is ahead of the old root handoff spec. Use the actual code as the source of truth. If docs conflict with code, code wins and you must report the conflict instead of silently following stale instructions.
 
-If anything in the spec conflicts with the actual code, the code wins. Report the conflict instead of silently following the doc.
+Start each task with a read-only audit of the files and docs that apply to that task:
 
-Older handoff, plan, audit, and status documents have been moved to the `outdated/` folder. Do not work from them. Treat them as history only.
+- Current app/runtime shape: `docs/release-audit/current-state.md`
+- Deploy and environment state: `docs/deployment-notes.md`, `docs/production-deploy-checklist.md`, `docs/deployment-command-plan.md`
+- AI ad and AI Deal Studio state: `docs/ai-ad-current-state.md`, `docs/dev/AI_DEAL_STUDIO_DEV_APK_SETUP.md`, `docs/dev/AI_DEAL_STUDIO_SUPABASE_DEV_SETUP.md`, `docs/dev/AI_STUDIO_EDGE_FUNCTION_DEV_DEPLOY.md`
+- Localization rollout: `docs/localization/multilingual-deals-production-approval-runbook.md` and the PR notes under `docs/localization/`
+- Release/beta checks: `docs/beta-release-checklist.md`
+- Historical baseline only: `twofer-developer-handoff-spec.md`. Sections 1 through 5 remain useful for product intent and hard gates, but it is not current enough to override code or newer docs.
 
-## Locked v1 decisions (spec section 1)
+Older handoff, plan, audit, and status documents under `outdated/` are history only. Do not work from them unless Dan explicitly asks for archaeology.
 
-These are settled. Do not reopen, redesign around, or ask about them.
+## Current app state as of 2026-06-25
 
-- Email and password sign-in only. No Sign in with Apple, no social login, no guest or anonymous browsing.
-- Birthday is optional, not required.
-- Location uses a 5-digit ZIP only. No ZIP+4.
-- Age rating is 13+ (infrequent possible alcohol references in deals).
-- iPad support is off. `ios.supportsTablet` is false. iPhone only.
-- Share Deal ships in v1 on both iOS and Android.
-- v1 is a free pilot. No ads. No data sold.
-- All paid surfaces are fully hidden behind `PAID_BILLING_ENABLED=false`. Nothing billing, pricing, upgrade, paywall, checkout, or subscription related is reachable in v1.
-- Pilot businesses are capped to one location.
+- Stack: Expo SDK 54, React Native 0.81, React 19, TypeScript, Expo Router, Supabase Postgres/RLS/Storage/Edge Functions.
+- App version is `1.0.0`; Android `versionCode` is currently 25 in `app.json`.
+- Production package and bundle id remain `com.unvmex2.twoforone`.
+- A dev AI Studio Android variant exists: app name `Twofer Dev`, package `com.unvmex2.twoforone.dev`, enabled by `TWOFER_APP_VARIANT=ai-studio-dev` or `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`.
+- The current branch may contain active AI Deal Studio foundation work and local QA/store artifacts. Never delete untracked artifacts, screenshots, APKs, reports, or docs without asking.
+- Share Deal is controlled by `EXPO_PUBLIC_ENABLE_SHARE_DEAL`, configured in `eas.json`, and read through `lib/runtime-env.ts`.
+- Billing surfaces are currently enabled in code with `PAID_BILLING_ENABLED = true`; pilot enforcement is bypassed with `PILOT_DISABLE_BILLING_GATE = true`. Do not rely on old instructions that say billing is fully hidden behind `false`.
+- AI Deal Studio dev publishing must stay disabled with `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`; dev builds must use a separate Supabase development project, not production.
+- AI create paths are versioned/native-renderer oriented. The legacy `ai-create-deal` endpoint is intentionally disabled and should return HTTP 410.
+- English, Spanish, and Korean are active localization targets. Any new user-facing copy must go through localization files.
 
-## Former open items — all decided by Dan on 2026-06-10 (spec section 4)
+## Locked product decisions still in force
 
-These are settled; full detail is in spec section 4. Do not reopen them. Items 2 and 4 are now implemented in code, but still have remaining Supabase-side deploy or migration steps called out below.
+Do not reopen these unless Dan explicitly changes them:
 
-1. The public support email is `support@twoferapp.com` everywhere. The live privacy policy still shows `twoferadmin@gmail.com`; fixing that is a website-repo task, not a mobile-repo task.
-2. Hard Shopper/Business role split per account, enforced app-level only: the role is picked once at signup, stored in `profiles.role`, login shows no picker and routes by the stored role, and existing accounts derive their permanent role from data (owns a `businesses` row -> Business, otherwise Customer). The soft switchable `profiles.app_tab_mode`, Settings role switch, and demo code paths are gone. Migration `20260711120000_profiles_role.sql` is written but not applied, the affected edge functions still need a redeploy, and the Supabase demo account teardown remains hard-gated.
-3. The Share Deal feature flag is `EXPO_PUBLIC_ENABLE_SHARE_DEAL`, set in `eas.json` and read only in `lib/runtime-env.ts`.
-4. AI usage limits: 30 generations per month per AI feature, and 2 regenerations per deal creation. This is implemented in code (`ai-generate-deal-copy`, shared AI limits, client soft cap, and ad-variant server cap), but the changed edge functions have not been redeployed yet, so production still serves the old caps until that deploy happens.
-5. AI Compose voice audio is processed ephemerally and never stored; only the text transcript is retained in `ai_generation_logs`.
-6. Email confirmation stays on. Supabase auth email was verified on 2026-06-13: custom SMTP is enabled through Resend (`smtp.resend.com`) from `support@twoferapp.com`, Confirm email is on, the app redirect allow-list is set, and the auth email send rate limit is 30/hour. Do not expose SMTP credentials. App code handles confirmed, unconfirmed, and existing-account signup paths.
+- Email/password sign-in only. No Sign in with Apple, social login, guest browsing, or anonymous browsing.
+- Birthday is optional; location uses a 5-digit ZIP only.
+- Age rating is 13+.
+- iPad support is off; iPhone only for iOS.
+- Share Deal ships in v1 on iOS and Android.
+- v1/pilot has no ads and no data selling.
+- Pilot businesses are capped to one location unless the current billing/location work explicitly changes that flow.
+- Public support email is `support@twoferapp.com`.
+- Hard Shopper/Business role split: role is picked at signup, stored in `profiles.role`, and login routes by stored/derived role. Do not reintroduce soft role switching.
+- AI Compose voice audio is processed ephemerally and is not stored; only transcript/log metadata may be retained.
+- Email confirmation stays on.
 
 ## How to work
 
-1. Do one scoped task at a time. State which task you are on and your plan in one line before you start. Do not jump ahead.
-2. Diagnose before building. Run a read-only audit and surface all issues before writing any fix. Review the whole fix set for interactions and regressions before applying anything.
-3. Make the smallest possible change per task — one concern per commit. Commit locally only.
-4. After each change, validate: `npx tsc --noEmit`, a Metro bundle probe, the test suite, and lint. When fixing an iOS-only bug, preserve existing Android behavior, and the reverse.
-5. Show Dan the diff and the check results, then wait for approval before the next task.
-6. Explain what you are doing in plain language. Dan builds with AI assistance and is not a traditional engineer. Flag anything risky before you do it.
+1. Do one scoped task at a time. State the task and the plan in one line before you start.
+2. Diagnose before building. Run a read-only audit and surface the issues you found before writing a fix.
+3. Make the smallest useful change for the task. Avoid opportunistic refactors.
+4. Preserve unrelated user or generated changes. This repo often has local QA artifacts and active work in progress.
+5. Commit locally only when Dan asks for a commit. Never push.
+6. Explain risky findings in plain language. Dan builds with AI assistance and is not a traditional engineer.
 
-## Hard gates — stop and get explicit approval before any of these (spec section 5)
+## Hard gates
 
-- Building any release (iOS or Android).
-- Submitting to TestFlight, App Store, or Play.
-- Pushing, merging, tagging, or resetting any branch.
+Stop and get explicit approval before any of these:
+
+- Building any release or production-like iOS/Android build.
+- Submitting to TestFlight, App Store, or Google Play.
+- Pushing, merging, tagging, resetting, or force-moving branches.
 - Deploying the website.
-- Changing version or build numbers.
-- Changing the bundle id, package id, or signing.
-- Applying any Supabase migration.
-- Exposing or printing any secret: Supabase keys, the APNs .p8 key, the App Store Connect API key, push tokens, auth tokens, distribution certificates, provisioning profiles, full google-services.json contents, QR tokens, claim codes, or redemption codes.
-  - Local QA screenshot exception: when Dan explicitly asks for app screenshots, screenshots saved only under local `artifacts/` folders may include in-app QR codes, QR tokens, claim codes, or redemption codes so the screen can be visually reviewed. Do not transcribe those values into chat, terminal output, docs, commits, PRs, or public artifacts; do not push them; redact or delete them before any external sharing.
+- Changing version numbers, build numbers, bundle id, package id, app signing, keystores, or provisioning.
+- Applying Supabase migrations or running `supabase db push`.
+- Deploying Supabase Edge Functions to a hosted project.
+- Changing production Supabase secrets, Stripe secrets, App Store Connect credentials, APNs credentials, Google services configuration, or EAS credentials.
+- Exposing or printing any secret, auth token, push token, QR token, claim code, redemption code, API key, distribution certificate, provisioning profile, or full `google-services.json` contents.
 
-## Standing rules
+Local QA screenshot exception: when Dan explicitly asks for app screenshots, screenshots saved only under local `artifacts/` or QA folders may include in-app QR codes, QR tokens, claim codes, or redemption codes so screens can be reviewed. Do not transcribe those values into chat, terminal output, docs, commits, PRs, or public artifacts; do not push them.
 
-1. Work on a dedicated branch off a named safety checkpoint, as the spec directs. Creating local branches is fine; pushing, merging, tagging, or resetting is a hard gate above. Keep the working tree clean at each checkpoint.
-2. Do not delete the untracked local QA and docs artifacts, or anything in `outdated/`, without asking.
-3. Do not claim the app is production or store ready.
-4. After applying any migration that touches RLS policies or policy helper functions, immediately run `node scripts/probe-rls-smoke.mjs`. SQL-editor checks bypass RLS, so they cannot catch signed-in user lockouts.
+## Validation expectations
 
-## AI promotional-copy rules
+For code changes, run the checks that match the risk:
+
+- Baseline: `npm run typecheck`, `npm run lint`, `npm test`.
+- Edge functions: `npm run typecheck:functions` plus focused function/source tests.
+- AI promotional-copy or prompt changes: baseline checks plus `npm run copy:evaluate`; update fixtures and regression tests.
+- Billing/location/claim/RLS-sensitive work: run focused tests and the relevant gate scripts. After applying any migration that touches RLS policies or policy helper functions, immediately run `node scripts/probe-rls-smoke.mjs`.
+- Release-candidate work: follow `docs/beta-release-checklist.md`.
+- Metro/bundle probe: use an Expo/Metro probe appropriate to the changed surface; do not start a long-running server and leave it running.
+
+If you cannot run a required check, say exactly why.
+
+## Environment facts
+
+- This is a Windows machine. You cannot build or sign iOS locally. iOS builds run on EAS cloud, and iOS device testing runs through TestFlight on a real iPhone.
+- There is no local Supabase. Do not start one or assume one exists.
+- Supabase production actions are hard-gated. Local SQL files may be edited, but applying them is not allowed without approval.
+- When Dan explicitly requests local Android emulator QA, agents may use the emulator and local debug/dev-client Android commands such as `expo run:android`. Do not use `subst` or junction workarounds.
+- Preserve EAS cloud credits. Prefer local Android/debug validation where possible, but do not build release artifacts without approval.
+- For AI Studio dev APK work, follow `docs/dev/AI_DEAL_STUDIO_DEV_APK_SETUP.md` and keep the dev package separate from production.
+
+## AI and offer rules
 
 - Deal facts are authoritative; creativity must never alter them.
 - Headlines must explain the customer action and reward naturally.
 - Do not solve copy-quality bugs with example-specific string replacements.
 - Every prompt change requires fixture updates and regression tests.
 - AI output must pass validation and have a deterministic fallback.
-- Run lint, type checking, unit tests, and the copy evaluation suite before completing changes.
+- Provider failures must not expose raw upstream response bodies or secrets.
+- Generated images must not bake critical offer text, QR codes, logos, or private data into pixels unless the current native-renderer spec explicitly allows it.
 
-## Environment facts
+## Out of scope for agents
 
-- This is a Windows machine. You cannot build or sign an iOS app locally here. All iOS builds run on EAS cloud, and all iOS device testing runs through TestFlight on a real iPhone.
-- The stack is Expo SDK 54, React Native, TypeScript, and Expo Router, with Supabase (Postgres and row level security, Deno edge functions, Storage).
-- There is no local Supabase. Do not start one or assume one exists.
-- When Dan explicitly requests local Android emulator QA, agents may start an Android emulator and use local debug/dev-client Android commands such as `expo run:android` for testing and screenshots. Do not use `subst` or junction workarounds.
-- Preserve the single remaining EAS cloud credit. Prefer local Android builds where possible.
-
-## Out of scope for you
-
-You cannot do these. Draft what you can, then hand them to Dan:
+Draft instructions or text for Dan, but do not perform these directly:
 
 - Apple Developer Program enrollment.
-- App Store Connect and Play Console forms. Draft the exact text; Dan pastes it.
-- Store screenshots from a real device or iOS simulator. Local Android emulator QA screenshots are allowed only when Dan explicitly requests local Android QA.
-- TestFlight install and on-device testing.
-- Approving builds and submissions.
+- App Store Connect and Play Console forms.
+- Store screenshots from a real iOS device or iOS simulator.
+- TestFlight install and on-device iPhone testing.
+- Approval of builds, submissions, migrations, or deployments.

@@ -1,18 +1,22 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { calculateAiCost, logAiCost, normalizeAiUsage } from "./ai-costs.ts";
 
+const source = readFileSync(join(process.cwd(), "supabase", "functions", "_shared", "ai-costs.ts"), "utf8");
+
 describe("calculateAiCost", () => {
   it("calculates text-only ad cost", () => {
     const cost = calculateAiCost({
-      model: "gpt-5.4-mini",
+      model: "gpt-5.5",
       endpoint: "chat.completions",
       usage: { prompt_tokens: 1000, completion_tokens: 500 },
     });
 
     expect(cost.input_tokens).toBe(1000);
     expect(cost.output_tokens).toBe(500);
-    expect(cost.estimated_cost_usd).toBe(0.003);
+    expect(cost.estimated_cost_usd).toBe(0.01);
     expect(cost.warnings).toEqual([]);
   });
 
@@ -149,5 +153,10 @@ describe("calculateAiCost", () => {
     expect(inserts[0]?.row.model).toBe("gemini-3.1-flash-image");
     expect(inserts[0]?.row.estimated_cost_usd).toBe(0.067);
     expect(inserts[0]?.row.error_message).toBeNull();
+  });
+
+  it("does not log raw ledger insert exception text", () => {
+    expect(source).toMatch(/AI_COST_LEDGER_INSERT_FAILED/);
+    expect(source).not.toMatch(/err:\s*String\(error\.message \?\? error\)\.slice/);
   });
 });

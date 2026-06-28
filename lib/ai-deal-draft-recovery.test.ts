@@ -21,7 +21,9 @@ describe("AI deal draft recovery", () => {
         photoPath: null,
         posterUrl: null,
         photoTreatment: "studiopolish",
+        customImageEditInstruction: "",
         usePhotoAsFinal: false,
+        merchantOriginalWarningAcknowledged: false,
         hintText: "",
         price: "",
         title: "",
@@ -52,7 +54,9 @@ describe("AI deal draft recovery", () => {
       photoPath: "biz-1/reference.jpg",
       posterUrl: "https://example.test/poster.jpg",
       photoTreatment: "cleanbg",
+      customImageEditInstruction: "  Warm up the lighting   and remove crumbs.  ",
       usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: true,
       hintText: "BOGO latte",
       price: "5",
       title: "BOGO Iced Latte",
@@ -85,6 +89,8 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.title).toBe("Buy one iced latte and get one free");
     expect(parsed?.generatedAd?.headline).toBe("Buy one iced latte and get one free");
     expect(parsed?.photoPath).toBe("biz-1/reference.jpg");
+    expect(parsed?.customImageEditInstruction).toBe("Warm up the lighting and remove crumbs.");
+    expect(parsed?.merchantOriginalWarningAcknowledged).toBe(true);
     expect(parsed?.generatedAd?.poster_storage_path).toBe("biz-1/generated.jpg");
     expect(parsed?.daysOfWeek).toEqual([1, 5]);
     expect(parsed?.adAccepted).toBe(true);

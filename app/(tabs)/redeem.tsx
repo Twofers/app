@@ -58,7 +58,7 @@ export default function RedeemScanner() {
   const { isUnlocked, markUnlocked, setPinEnabled } = useOwnerRedemptionSecurity();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
+  const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" | "warning" } | null>(null);
   const [ownerSecurity, setOwnerSecurity] = useState<OwnerRedemptionSecurityStatus | null>(null);
   const [ownerSecurityLoading, setOwnerSecurityLoading] = useState(false);
   const [ownerSecurityError, setOwnerSecurityError] = useState<string | null>(null);
@@ -68,6 +68,7 @@ export default function RedeemScanner() {
   const [cameraPermissionRequesting, setCameraPermissionRequesting] = useState(false);
   const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
   const [mode, setMode] = useState<RedeemMode>("scan");
+  const [scannerActive, setScannerActive] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [processing, setProcessing] = useState(false);
   const processingRef = useRef(false);
@@ -88,12 +89,18 @@ export default function RedeemScanner() {
       setOwnerSecurity(status);
       setPinEnabled(businessId, status.enabled);
     } catch (err) {
-      setOwnerSecurity(null);
-      setOwnerSecurityError(
-        err instanceof Error
-          ? err.message
-          : t("redemptionMode.ownerPinLoadFailed", { defaultValue: "Could not load owner redemption PIN settings." }),
-      );
+      const fallback = t("redemptionMode.ownerPinLoadFailed", {
+        defaultValue: "Could not load owner redemption PIN settings.",
+      });
+      const raw = err instanceof Error ? err.message : fallback;
+      if (/requested function was not found|function was not found/i.test(raw)) {
+        setOwnerSecurity({ enabled: false, hasPin: false, lockedUntil: null });
+        setPinEnabled(businessId, false);
+        setBanner({ message: fallback, tone: "warning" });
+      } else {
+        setOwnerSecurity(null);
+        setOwnerSecurityError(fallback);
+      }
     } finally {
       setOwnerSecurityLoading(false);
     }
@@ -105,6 +112,7 @@ export default function RedeemScanner() {
       setSuccess(null);
       setBanner(null);
       setScanned(false);
+      setScannerActive(false);
       processingRef.current = false;
       return () => setOwnerPinInput("");
     }, []),
@@ -119,6 +127,9 @@ export default function RedeemScanner() {
   useEffect(() => {
     setBanner(null);
     setScanned(false);
+    if (mode === "manual") {
+      setScannerActive(false);
+    }
   }, [mode]);
 
   async function unlockOwnerRedeem() {
@@ -501,46 +512,85 @@ export default function RedeemScanner() {
             </View>
           ) : (
             <>
-              <View
-                style={{
-                  borderRadius: 18,
-                  overflow: "hidden",
-                  backgroundColor: "#000",
-                  height: cameraBlockHeight,
-                }}
-              >
-                <CameraView
-                  style={{ height: "100%", width: "100%" }}
-                  facing="back"
-                  onBarcodeScanned={scanned || processing ? undefined : (result) => void onScan(result.data)}
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                />
-                {processing ? (
+              {!scannerActive ? (
+                <View
+                  style={{
+                    gap: Spacing.md,
+                    borderRadius: Radii.lg,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.surface,
+                    padding: Spacing.lg,
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16 }}>
+                    {t("redeem.modeScan")}
+                  </Text>
+                  <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>
+                    {t("redeem.scanPrimaryHint")}
+                  </Text>
+                  <PrimaryButton
+                    title={t("redeem.modeScan")}
+                    onPress={() => {
+                      setScanned(false);
+                      setScannerActive(true);
+                    }}
+                    disabled={processing}
+                  />
+                  <SecondaryButton
+                    title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
+                    onPress={() => setMode("manual")}
+                    disabled={processing}
+                  />
+                </View>
+              ) : (
+                <>
                   <View
                     style={{
-                      position: "absolute",
-                      inset: 0,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "rgba(0,0,0,0.5)",
+                      borderRadius: 18,
+                      overflow: "hidden",
+                      backgroundColor: "#000",
+                      height: cameraBlockHeight,
                     }}
                   >
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={{ color: "#fff", marginTop: 8 }}>{t("redeem.redeeming")}</Text>
+                    <CameraView
+                      style={{ height: "100%", width: "100%" }}
+                      facing="back"
+                      onBarcodeScanned={scanned || processing ? undefined : (result) => void onScan(result.data)}
+                      barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                    />
+                    {processing ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        <ActivityIndicator size="large" color="#fff" />
+                        <Text style={{ color: "#fff", marginTop: 8 }}>{t("redeem.redeeming")}</Text>
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
-              <Pressable
-                onPress={() => setScanned(false)}
-                style={{
-                  marginTop: Spacing.sm,
-                  paddingVertical: Spacing.md,
-                  borderRadius: 12,
-                  backgroundColor: theme.surfaceMuted,
-                }}
-              >
-                <Text style={{ textAlign: "center", fontWeight: "700", color: theme.text }}>{t("redeem.scanNext")}</Text>
-              </Pressable>
+                  <Pressable
+                    onPress={() => setScanned(false)}
+                    style={{
+                      marginTop: Spacing.sm,
+                      paddingVertical: Spacing.md,
+                      borderRadius: 12,
+                      backgroundColor: theme.surfaceMuted,
+                    }}
+                  >
+                    <Text style={{ textAlign: "center", fontWeight: "700", color: theme.text }}>{t("redeem.scanNext")}</Text>
+                  </Pressable>
+                  <SecondaryButton
+                    title={t("redeem.manualFallbackCta", { defaultValue: "Enter ticket code instead" })}
+                    onPress={() => setMode("manual")}
+                  />
+                </>
+              )}
             </>
           )}
         </View>

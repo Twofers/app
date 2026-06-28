@@ -10,7 +10,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -26,8 +27,9 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
-import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -526,7 +528,7 @@ export default function BusinessDashboard() {
   const router = useRouter();
   const { top, horizontal, listBottom } = useScreenInsets("tab");
   const { mode, ready: modeReady } = useTabMode();
-  const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionStatus, trialEndsAt } = useBusiness();
+  const { isLoggedIn, businessId, businessName, businessProfile, loading, subscriptionTier } = useBusiness();
   const { confirm, confirmModal } = useBrandedConfirm();
 
   const [banner, setBanner] = useState<string | null>(null);
@@ -536,6 +538,7 @@ export default function BusinessDashboard() {
   const [deals, setDeals] = useState<DealRow[]>([]);
   const [endingDealId, setEndingDealId] = useState<string | null>(null);
   const [pausingDealId, setPausingDealId] = useState<string | null>(null);
+  const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
   const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
   const [dealsHasMore, setDealsHasMore] = useState(false);
@@ -562,20 +565,26 @@ export default function BusinessDashboard() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [exportingAnalytics, setExportingAnalytics] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const dashboardFocused = useIsFocused();
 
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const primary = theme.primary;
 
+  const {
+    blocked: billingGateBlocked,
+    loading: billingGateLoading,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+  });
+
   const billingBlocked = Boolean(
     PAID_BILLING_ENABLED &&
       businessId &&
-      !canCreateDeal({
-        isLoggedIn,
-        subscriptionStatus,
-        trialEndsAt,
-        bypass: false,
-      }),
+      !billingGateLoading &&
+      billingGateBlocked,
   );
 
   const loadMetrics = useCallback(async () => {
@@ -745,19 +754,30 @@ export default function BusinessDashboard() {
     }, [businessId, loadMetrics, t]),
   );
 
-  // Show walkthrough for first-time business owners
+  // Show walkthrough only while the dashboard tab is focused.
   const WALKTHROUGH_KEY = "twoforone_walkthrough_complete";
+  useFocusEffect(
+    useCallback(() => {
+      if (!businessId) return;
+      let cancelled = false;
+      void (async () => {
+        const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
+        if (!cancelled && !done) {
+          setShowWalkthrough(true);
+        }
+      })();
+      return () => {
+        cancelled = true;
+        setShowWalkthrough(false);
+      };
+    }, [businessId]),
+  );
+
   useEffect(() => {
-    if (!businessId) return;
-    let cancelled = false;
-    (async () => {
-      const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
-      if (!cancelled && !done) {
-        setShowWalkthrough(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [businessId]);
+    if (!dashboardFocused && showWalkthrough) {
+      setShowWalkthrough(false);
+    }
+  }, [dashboardFocused, showWalkthrough]);
 
   const dismissWalkthrough = useCallback(async () => {
     setShowWalkthrough(false);
@@ -962,6 +982,49 @@ export default function BusinessDashboard() {
     }
   }
 
+  function deleteOldDeal(deal: DealRow) {
+    if (!businessId || deletingDealId || !canDeleteOldDeal(deal)) return;
+    const title = displayDealTitle(deal);
+    confirm({
+      iconName: "delete",
+      title: t("offersDashboard.deleteOldDealConfirmTitle", {
+        defaultValue: "Delete old deal?",
+      }),
+      message: t("offersDashboard.deleteOldDealConfirmBody", {
+        defaultValue:
+          "This removes {{title}} from My offers and deletes its dashboard history. This cannot be undone.",
+        title,
+      }),
+      confirmLabel: t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" }),
+      onConfirm: () => void doDeleteOldDeal(deal.id),
+      cancelLabel: t("commonUi.cancel"),
+    });
+  }
+
+  async function doDeleteOldDeal(dealId: string) {
+    if (!businessId) return;
+    setDeletingDealId(dealId);
+    setBanner(null);
+    try {
+      const { error } = await supabase
+        .from("deals")
+        .delete()
+        .eq("id", dealId)
+        .eq("business_id", businessId)
+        .lte("end_time", new Date().toISOString());
+      if (error) throw error;
+      await loadMetrics();
+    } catch (err: unknown) {
+      const msg = friendlyDashboardError(
+        err,
+        t("offersDashboard.errDeleteOldDeal", { defaultValue: "Could not delete this old deal." }),
+      );
+      setBanner(msg);
+    } finally {
+      setDeletingDealId(null);
+    }
+  }
+
   async function generateFlyer(deal: DealRow) {
     if (generatingFlyerId) return;
     setGeneratingFlyerId(deal.id);
@@ -1007,6 +1070,11 @@ export default function BusinessDashboard() {
 
   function isDealPaused(item: DealRow): boolean {
     return !item.is_active && new Date(item.end_time) > new Date();
+  }
+
+  function canDeleteOldDeal(item: DealRow): boolean {
+    const endMs = new Date(item.end_time).getTime();
+    return dealScheduleStatus(item) === "ended" && Number.isFinite(endMs) && endMs <= Date.now();
   }
 
   function statusBadgeLabel(status: MerchantDealScheduleStatus, item?: DealRow): string {
@@ -1134,6 +1202,7 @@ export default function BusinessDashboard() {
   const listTop = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+        {banner ? <Banner message={banner} tone="error" onRetry={() => void loadMetrics()} /> : null}
         <CardShell>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
             <View style={{ flex: 1 }}>
@@ -1230,7 +1299,7 @@ export default function BusinessDashboard() {
           />
         </CardShell>
         {billingBlocked ? (
-          <Pressable onPress={() => router.push("/(tabs)/billing")} accessibilityRole="button">
+          <Pressable onPress={() => router.push("/(tabs)/account/billing" as Href)} accessibilityRole="button">
             <CardShell variant="muted">
               <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
                 {t("offersDashboard.billingHintShort")}
@@ -1354,6 +1423,8 @@ export default function BusinessDashboard() {
       engagementSnapshot,
       dashboardNextActionTitle,
       handleDashboardNextAction,
+      banner,
+      loadMetrics,
     ],
   );
 
@@ -1546,12 +1617,15 @@ export default function BusinessDashboard() {
   const dashboardSubtitle = businessName
     ? `${t("businessDashboard.welcomeBack")} ${businessName}\n${t("offersDashboard.subtitle")}`
     : t("offersDashboard.subtitle");
+  const dashboardInitialLoadFailed = Boolean(
+    banner && !loadingMetrics && lastUpdatedAt === null && deals.length === 0,
+  );
 
   return (
     <AppErrorBoundary>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <WelcomeWalkthrough
-        visible={showWalkthrough}
+        visible={showWalkthrough && dashboardFocused}
         onDismiss={dismissWalkthrough}
         businessCategory={businessProfile?.category ?? null}
         businessName={businessName}
@@ -1571,11 +1645,36 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
-          {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
           {publishSuccessBanner ? <Banner message={publishSuccessBanner} tone="success" /> : null}
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={4} />
+          ) : dashboardInitialLoadFailed ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: Spacing.md, paddingBottom: listBottom + Spacing.xxxl * 3, flexGrow: 1 }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+            >
+              <CardShell>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}>
+                  {t("offersDashboard.errLoadDashboard")}
+                </Text>
+                <Text style={{ marginTop: Spacing.sm, fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
+                  {t("offersDashboard.lastUpdatedPending")}
+                </Text>
+                <SecondaryButton
+                  title={t("commonUi.tryAgain")}
+                  onPress={() => void loadMetrics()}
+                  style={{ marginTop: Spacing.md }}
+                />
+                <PrimaryButton
+                  title={t("offersDashboard.createFirstDeal")}
+                  onPress={() => router.push("/create/ai")}
+                  style={{ marginTop: Spacing.sm }}
+                />
+              </CardShell>
+            </ScrollView>
           ) : (
             <FlatList
               style={{ flex: 1 }}
@@ -1584,7 +1683,7 @@ export default function BusinessDashboard() {
               ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
-              contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
+              contentContainerStyle={{ paddingBottom: listBottom + Spacing.xxxl * 3, flexGrow: 1 }}
               onEndReachedThreshold={0.35}
               onEndReached={() => void loadMoreDeals()}
               ListFooterComponent={
@@ -1782,6 +1881,18 @@ export default function BusinessDashboard() {
                             title={t("offersDashboard.runAgainCta")}
                             onPress={() => duplicateDeal(item)}
                           />
+                        ) : null}
+                        {canDeleteOldDeal(item) ? (
+                          deletingDealId === item.id ? (
+                            <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                              <ActivityIndicator color={theme.danger} />
+                            </View>
+                          ) : (
+                            <EndEarlyButton
+                              title={t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" })}
+                              onPress={() => deleteOldDeal(item)}
+                            />
+                          )
                         ) : null}
                       </View>
                     </CardShell>
@@ -2050,6 +2161,22 @@ export default function BusinessDashboard() {
                       const id = dealManageFor.id;
                       setDealManageFor(null);
                       endDealEarly(id);
+                    }}
+                  />
+                )
+              ) : null}
+              {canDeleteOldDeal(dealManageFor) ? (
+                deletingDealId === dealManageFor.id ? (
+                  <View style={{ padding: Spacing.md, alignItems: "center" }}>
+                    <ActivityIndicator color={theme.danger} />
+                  </View>
+                ) : (
+                  <EndEarlyButton
+                    title={t("offersDashboard.deleteOldDeal", { defaultValue: "Delete old deal" })}
+                    onPress={() => {
+                      const deal = dealManageFor;
+                      setDealManageFor(null);
+                      deleteOldDeal(deal);
                     }}
                   />
                 )

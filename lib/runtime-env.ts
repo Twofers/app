@@ -8,13 +8,27 @@ import Constants from "expo-constants";
 export type AppExtra = {
   gitCommit?: string | null;
   easBuildProfile?: string | null;
+  appVariant?: string | null;
+  androidPackage?: string | null;
+  productionSupabaseHost?: string | null;
+  aiStudioDevPublishingDisabled?: boolean;
 };
+
+export const PRODUCTION_ANDROID_PACKAGE = "com.unvmex2.twoforone";
+export const AI_STUDIO_DEV_ANDROID_PACKAGE = "com.unvmex2.twoforone.dev";
+export const AI_STUDIO_DEV_VARIANT = "ai-studio-dev";
+export const DEFAULT_PRODUCTION_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
 
 export function getAppExtra(): AppExtra {
   const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
   return {
     gitCommit: typeof extra?.gitCommit === "string" ? extra.gitCommit : null,
     easBuildProfile: typeof extra?.easBuildProfile === "string" ? extra.easBuildProfile : null,
+    appVariant: typeof extra?.appVariant === "string" ? extra.appVariant : null,
+    androidPackage: typeof extra?.androidPackage === "string" ? extra.androidPackage : Constants.expoConfig?.android?.package ?? null,
+    productionSupabaseHost:
+      typeof extra?.productionSupabaseHost === "string" ? extra.productionSupabaseHost : DEFAULT_PRODUCTION_SUPABASE_HOST,
+    aiStudioDevPublishingDisabled: extra?.aiStudioDevPublishingDisabled === true,
   };
 }
 
@@ -67,6 +81,41 @@ export function getSupabaseUrlForDisplay(): string {
   }
 }
 
+export function getConfiguredSupabaseHost(): string | null {
+  const u = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+  if (!u) return null;
+  try {
+    return new URL(u).host;
+  } catch {
+    return null;
+  }
+}
+
+export function getAndroidPackageName(): string {
+  return getAppExtra().androidPackage ?? Constants.expoConfig?.android?.package ?? "unknown";
+}
+
+export function isAiStudioDevAppVariant(): boolean {
+  const extra = getAppExtra();
+  return extra.appVariant === AI_STUDIO_DEV_VARIANT || getAndroidPackageName() === AI_STUDIO_DEV_ANDROID_PACKAGE;
+}
+
+export function isProductionAppPackage(): boolean {
+  return getAndroidPackageName() === PRODUCTION_ANDROID_PACKAGE;
+}
+
+export function isProductionSupabaseUrlConfigured(): boolean {
+  return getConfiguredSupabaseHost() === (getAppExtra().productionSupabaseHost ?? DEFAULT_PRODUCTION_SUPABASE_HOST);
+}
+
+export function getAiStudioDevStartupGuardError(): string | null {
+  if (!isAiStudioDevAppVariant()) return null;
+  if (isProductionSupabaseUrlConfigured()) {
+    return "Twofer Dev cannot start with the production Supabase project configured. Set EXPO_PUBLIC_SUPABASE_URL to the separate development project.";
+  }
+  return null;
+}
+
 export function isSupabaseConfigured(): boolean {
   const u = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   const k = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -84,24 +133,55 @@ export function getPublicEnvSnapshot(): Record<string, string> {
     EXPO_PUBLIC_SUPPORT_URL: process.env.EXPO_PUBLIC_SUPPORT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_DELETE_ACCOUNT_URL: process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL?.trim() ?? "(default)",
     EXPO_PUBLIC_ENABLE_SHARE_DEAL: process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL ?? "(unset)",
-    EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK:
-      process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK ?? "(unset)",
-    EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH:
-      process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH ?? "(unset)",
-    EXPO_PUBLIC_AI_AD_PIPELINE_V3: process.env.EXPO_PUBLIC_AI_AD_PIPELINE_V3 ?? "(unset)",
-    EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY: process.env.EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY ?? "(unset)",
-    EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT:
-      process.env.EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT: process.env.EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT: process.env.EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT ?? "(unset)",
-    EXPO_PUBLIC_TWOFER_STOCK_LIBRARY: process.env.EXPO_PUBLIC_TWOFER_STOCK_LIBRARY ?? "(unset)",
-    EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE: process.env.EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE ?? "(unset)",
-    EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS: process.env.EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS ?? "(unset)",
-    EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES: process.env.EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES ?? "(unset)",
-    EXPO_PUBLIC_PENGUIN_DEAL_LOADER: process.env.EXPO_PUBLIC_PENGUIN_DEAL_LOADER ?? "(unset)",
-    EXPO_PUBLIC_AD_JOB_ASYNC_STATUS: process.env.EXPO_PUBLIC_AD_JOB_ASYNC_STATUS ?? "(unset)",
-    EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT:
-      process.env.EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT ?? "(unset)",
+    EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV ?? "(unset)",
+    EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING ?? "(unset)",
+    EXPO_PUBLIC_APP_VARIANT: process.env.EXPO_PUBLIC_APP_VARIANT ?? "(unset)",
+    androidPackage: getAndroidPackageName(),
+    appVariant: getAppExtra().appVariant ?? "(unset)",
+    AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED ?? "(unset)",
+    AI_V4_SHARED_RENDERER_ENABLED: process.env.AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED ?? "(unset)",
+    AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED: process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED ?? "(unset)",
+    AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED: process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED ?? "(unset)",
+    AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED: process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED ?? "(unset)",
+    AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED: process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED ?? "(unset)",
+    AI_V4_COMPOSITE_QA_ENABLED: process.env.AI_V4_COMPOSITE_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED ?? "(unset)",
+    AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED ?? "(unset)",
+    AI_V5_MULTILINGUAL_FOUNDATION_ENABLED: process.env.AI_V5_MULTILINGUAL_FOUNDATION_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED ?? "(unset)",
+    AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED: process.env.AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED ?? "(unset)",
+    AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED: process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED ?? "(unset)",
+    AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED ?? "(unset)",
+    AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED ?? "(unset)",
+    AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED ?? "(unset)",
+    AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED: process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED ?? "(unset)",
+    AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED: process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED ?? "(unset)",
+    AI_V5_TRANSLATION_QA_ENABLED: process.env.AI_V5_TRANSLATION_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED ?? "(unset)",
+    AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED: process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED ?? "(unset)",
+    AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED ?? "(unset)",
+    AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED: process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED ?? "(unset)",
+    AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
+    EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED: process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED ?? "(unset)",
     EXPO_PUBLIC_SHOW_DEBUG_PANEL: process.env.EXPO_PUBLIC_SHOW_DEBUG_PANEL?.trim() ?? "(unset)",
     EXPO_PUBLIC_DEBUG_BOOT_LOG: process.env.EXPO_PUBLIC_DEBUG_BOOT_LOG?.trim() ?? "(unset)",
     EXPO_PUBLIC_PREVIEW_MATCHES_DEV: process.env.EXPO_PUBLIC_PREVIEW_MATCHES_DEV?.trim() ?? "(unset)",
@@ -116,60 +196,108 @@ export function isShareDealEnabled(): boolean {
   return process.env.EXPO_PUBLIC_ENABLE_SHARE_DEAL === "true";
 }
 
-export function isOfferDefinitionFallbackEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK === "true";
+export function isAiDealStudioDevEnabled(): boolean {
+  return (
+    isAiStudioDevAppVariant() &&
+    !isProductionAppPackage() &&
+    process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV === "true"
+  );
 }
 
-export function isOfferVersionPublishEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_OFFER_VERSION_PUBLISH === "true";
+export function isAiStudioPublishingDisabled(): boolean {
+  return process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING === "true";
 }
 
-export function isAiAdPipelineV3Enabled(): boolean {
-  return process.env.EXPO_PUBLIC_AI_AD_PIPELINE_V3 === "true";
+export function canLoadAiDealStudioDevRoutes(): boolean {
+  return isAiDealStudioDevEnabled() && isAiStudioPublishingDisabled() && !isProductionAppPackage();
 }
 
-export function isBusinessMediaLibraryEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_BUSINESS_MEDIA_LIBRARY === "true";
+export function isAiV4ComposedAdCardEnabled(): boolean {
+  return process.env.AI_V4_COMPOSED_AD_CARD_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED === "true";
 }
 
-export function isBusinessSetupAutoWebsiteImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_BUSINESS_SETUP_AUTO_WEBSITE_IMPORT === "true";
+export function isAiV4SharedRendererEnabled(): boolean {
+  return process.env.AI_V4_SHARED_RENDERER_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED === "true";
 }
 
-export function isInstagramMediaImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_INSTAGRAM_MEDIA_IMPORT === "true";
+export function isAiV4AuthoritativeOfferCardEnabled(): boolean {
+  return process.env.AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED === "true";
 }
 
-export function isFacebookMediaImportEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_FACEBOOK_MEDIA_IMPORT === "true";
+export function isAiV4PresentationResolverEnabled(): boolean {
+  return process.env.AI_V4_PRESENTATION_RESOLVER_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED === "true";
 }
 
-export function isTwoferStockLibraryEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_TWOFER_STOCK_LIBRARY === "true";
+export function isAiV4MinimalInputFlowEnabled(): boolean {
+  return process.env.AI_V4_MINIMAL_INPUT_FLOW_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED === "true";
 }
 
-export function isStrictAiCopyStyleGateEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_STRICT_AI_COPY_STYLE_GATE === "true";
+export function isAiV4InstantStyleAlternatesEnabled(): boolean {
+  return process.env.AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED === "true";
 }
 
-export function isThreeCreativeConceptsEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_THREE_CREATIVE_CONCEPTS === "true";
+export function isAiV4CompositeQaEnabled(): boolean {
+  return process.env.AI_V4_COMPOSITE_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED === "true";
 }
 
-export function isDeterministicAdTemplatesEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_DETERMINISTIC_AD_TEMPLATES === "true";
+export function isAiV4CompositeScreenshotQaEnabled(): boolean {
+  return process.env.AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_COMPOSITE_SCREENSHOT_QA_ENABLED === "true";
 }
 
-export function isPenguinDealLoaderEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_PENGUIN_DEAL_LOADER === "true";
+export function isAiV4ExactPresentationApprovalEnabled(): boolean {
+  return process.env.AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED === "true";
 }
 
-export function isAdJobAsyncStatusEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_AD_JOB_ASYNC_STATUS === "true";
+export function isAiV5MultilingualFoundationEnabled(): boolean {
+  return process.env.AI_V5_MULTILINGUAL_FOUNDATION_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_MULTILINGUAL_FOUNDATION_ENABLED === "true";
 }
 
-export function isStrictNoPhotoGenerationInvariantEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_STRICT_NO_PHOTO_GENERATION_INVARIANT === "true";
+export function isAiV5LocalizedOfferRendererEnabled(): boolean {
+  return process.env.AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OFFER_RENDERER_ENABLED === "true";
+}
+
+export function isAiV5KoreanCounterRegistryEnabled(): boolean {
+  return process.env.AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_KOREAN_COUNTER_REGISTRY_ENABLED === "true";
+}
+
+export function isAiV5LocalizedOwnerUiEnabled(): boolean {
+  return process.env.AI_V5_LOCALIZED_OWNER_UI_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALIZED_OWNER_UI_ENABLED === "true";
+}
+
+export function isAiV5CustomerLocaleResolutionEnabled(): boolean {
+  return process.env.AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_CUSTOMER_LOCALE_RESOLUTION_ENABLED === "true";
+}
+
+export function isAiV5DealLanguageSwitchEnabled(): boolean {
+  return process.env.AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_DEAL_LANGUAGE_SWITCH_ENABLED === "true";
+}
+
+export function isAiV5SourceLocaleCreativeEnabled(): boolean {
+  return process.env.AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_SOURCE_LOCALE_CREATIVE_ENABLED === "true";
+}
+
+export function isAiV5PersuasiveTranscreationEnabled(): boolean {
+  return process.env.AI_V5_PERSUASIVE_TRANSCRATION_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_PERSUASIVE_TRANSCRATION_ENABLED === "true";
+}
+
+export function isAiV5TranslationQaEnabled(): boolean {
+  return process.env.AI_V5_TRANSLATION_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_TRANSLATION_QA_ENABLED === "true";
+}
+
+export function isAiV5DeterministicLanguageFallbackEnabled(): boolean {
+  return process.env.AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED === "true";
+}
+
+export function isAiV5LocalePresentationOverridesEnabled(): boolean {
+  return process.env.AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALE_PRESENTATION_OVERRIDES_ENABLED === "true";
+}
+
+export function isAiV5LocaleScreenshotQaEnabled(): boolean {
+  return process.env.AI_V5_LOCALE_SCREENSHOT_QA_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_LOCALE_SCREENSHOT_QA_ENABLED === "true";
+}
+
+export function isAiV5AutomaticVerifiedBundleApprovalEnabled(): boolean {
+  return process.env.AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true" || process.env.EXPO_PUBLIC_AI_V5_AUTOMATIC_VERIFIED_BUNDLE_APPROVAL_ENABLED === "true";
 }
 
 export function isDebugPanelEnabled(): boolean {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Linking, ScrollView, Text, TextInput, View } from "react-native";
-import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { useScreenInsets, Spacing } from "@/lib/screen-layout";
 import { useRouter, type Href } from "expo-router";
 import { requestNotificationPermissionsSafe } from "@/lib/expo-notifications-support";
 import { BrandedSwitch } from "@/components/ui/branded-switch";
@@ -10,21 +10,22 @@ import {
 } from "@/lib/push-token";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../../lib/supabase";
-import { getAlertsEnabled, setAlertsEnabled } from "../../lib/notifications";
-import { useBusiness } from "../../hooks/use-business";
-import { Banner } from "../../components/ui/banner";
+import { supabase } from "@/lib/supabase";
+import { getAlertsEnabled, setAlertsEnabled } from "@/lib/notifications";
+import { useBusiness } from "@/hooks/use-business";
+import { Banner } from "@/components/ui/banner";
 import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
-import { PrimaryButton } from "../../components/ui/primary-button";
-import { SecondaryButton } from "../../components/ui/secondary-button";
-import type { AppLocale } from "../../lib/i18n/config";
-import { setUiLocalePreference } from "../../lib/locale/ui-locale-storage";
-import { useTabMode } from "../../lib/tab-mode";
-import { LegalExternalLinks } from "../../components/legal-external-links";
-import { deleteUserAccount } from "../../lib/functions";
-import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "../../lib/legal-urls";
-import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
+import { PrimaryButton } from "@/components/ui/primary-button";
+import { SecondaryButton } from "@/components/ui/secondary-button";
+import type { AppLocale } from "@/lib/i18n/config";
+import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
+import { useTabMode } from "@/lib/tab-mode";
+import { LegalExternalLinks } from "@/components/legal-external-links";
+import { deleteUserAccount } from "@/lib/functions";
+import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { Colors, Gray, PrimaryTint, Radii } from "@/constants/theme";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -728,6 +729,7 @@ export default function AccountScreen() {
   async function chooseAppLocale(locale: AppLocale) {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
+    await setCustomerPreferredDealLocaleFromAppLanguage(locale);
     await i18n.changeLanguage(locale);
     setBanner({ message: t("account.languageSaved"), tone: "success" });
   }
@@ -803,9 +805,11 @@ export default function AccountScreen() {
           ) : null}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontWeight: "700" }}>{label}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", lineHeight: 19 }} numberOfLines={2}>
+            {label}
+          </Text>
           {helper ? (
-            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 3 }}>
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 2 }} numberOfLines={3}>
               {helper}
             </Text>
           ) : null}
@@ -850,7 +854,10 @@ export default function AccountScreen() {
         <ScrollView
           ref={scrollRef}
           style={{ marginTop: Spacing.lg, flex: 1 }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom + (businessProfileDirty ? 112 : 0) }}
+          contentContainerStyle={{
+            gap: Spacing.md,
+            paddingBottom: scrollBottom + Spacing.xxxl * 3 + (businessProfileDirty ? 112 : 0),
+          }}
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
@@ -942,7 +949,7 @@ export default function AccountScreen() {
 
           {PAID_BILLING_ENABLED && tabMode === "business" && businessId ? (
             <Pressable
-              onPress={() => router.push("/(tabs)/billing" as Href)}
+              onPress={() => router.push("/(tabs)/account/billing" as Href)}
               accessibilityRole="button"
             >
               <CardShell variant="elevated">
@@ -977,31 +984,33 @@ export default function AccountScreen() {
 
           <ThemePreferenceSelector />
 
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <View>
-              <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
-              <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
+          {tabMode !== "business" ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: Radii.lg,
+                padding: Spacing.md,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View>
+                <Text style={{ fontWeight: "700" }}>{t("account.dealAlertsTitle")}</Text>
+                <Text style={{ opacity: 0.7, marginTop: 4 }}>{t("account.dealAlertsSubtitle")}</Text>
+              </View>
+              <BrandedSwitch
+                value={alertsEnabled}
+                onValueChange={toggleAlerts}
+                disabled={alertsLoading}
+                accessibilityRole="switch"
+                accessibilityLabel={t("account.dealAlertsTitle")}
+                accessibilityHint={t("account.dealAlertsA11yHint")}
+                accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
+              />
             </View>
-            <BrandedSwitch
-              value={alertsEnabled}
-              onValueChange={toggleAlerts}
-              disabled={alertsLoading}
-              accessibilityRole="switch"
-              accessibilityLabel={t("account.dealAlertsTitle")}
-              accessibilityHint={t("account.dealAlertsA11yHint")}
-              accessibilityState={getSwitchAccessibilityState(alertsEnabled, alertsLoading)}
-            />
-          </View>
+          ) : null}
 
           {bizClaimNotif !== null ? (
             <View
@@ -1045,7 +1054,7 @@ export default function AccountScreen() {
               <Text style={{ fontWeight: "700" }}>
                 {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
               </Text>
-              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }} numberOfLines={3}>
                 {t("account.repeatPolicyHelp", {
                   defaultValue:
                     "Use this if your goal is to bring in new customers instead of giving the same customer a deal every day.",

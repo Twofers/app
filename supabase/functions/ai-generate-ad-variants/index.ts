@@ -14,7 +14,7 @@
  */
 
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning, isGpt5FamilyModel } from "../_shared/openai-chat-model.ts";
+import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
 import {
   buildPhotoAdImagePrompt,
@@ -29,11 +29,18 @@ import {
   generateGeminiAdImageWithTelemetry,
   resolveAiImageProviderConfig,
   type AiImageProvider,
+  type AiImageAspectRatio,
   type AiImageProviderConfig,
   type AiImageStylePreset,
   type GeminiImageAttempt,
 } from "../_shared/ai-image-provider.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
+import { resolveGeminiTextModel } from "../_shared/gemini-text-provider.ts";
 import { shouldSkipWebSearchForMenuItem } from "../_shared/ai-web-search-gate.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -61,9 +68,27 @@ import {
   buildRequiredVisualItems,
   generateValidatedDealCopy,
   parseAiDealCopyVariants,
+  validateAiCopyAgainstOffer,
+  type AiDealCopyVariant,
   type AiDealCopySource,
   type DealOfferContract,
 } from "../../../lib/deal-offer-contract.ts";
+import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
+import {
+  CANDIDATE_JUDGE_PROMPT_VERSION,
+  applyJudgeScoresToCandidates,
+  buildCandidateJudgePrompt,
+  normalizeCandidateJudgeResult,
+  rankCandidatesDeterministically,
+  type CandidateJudgeResult,
+} from "../../../lib/candidate-judge.ts";
+import { buildCategoryAdPlaybookPromptBlock } from "../../../lib/category-ad-playbooks.ts";
+import {
+  buildMerchantCreativeProfile,
+  buildMerchantCreativeProfilePromptBlock,
+  type MerchantCreativeProfile,
+} from "../../../lib/merchant-creative-profile.ts";
 import {
   dealEligibilityErrorPayload,
   validateDealEligibility,
@@ -71,11 +96,50 @@ import {
 } from "../../../lib/deal-eligibility.ts";
 import {
   QUICK_DEAL_IMAGE_QA_SCHEMA,
-  buildQuickDealImageQaPrompt,
+  buildAdImageQaPrompt,
   buildQuickDealImageRegenerationPrompt,
   normalizeQuickDealImageQaResult,
+  normalizeSourceAwareImageQaResult,
+  shouldFailClosedForImageQa,
+  unavailableSourceAwareImageQaResult,
+  type AdImageQaDecision,
+  type AdImageQaSourceType,
   type QuickDealImageQaResult,
+  type SourceAwareImageQaResult,
 } from "../../../lib/quick-deal-image-qa.ts";
+import {
+  buildAdImageSelection,
+  imageEditModeFromPhotoTreatment,
+  imageSourceModeFromPhotoSource,
+  normalizeMerchantImageEditMode,
+  normalizeMerchantImageSourceMode,
+  photoTreatmentFromImageEditMode,
+  type AdImageSelection,
+  type MerchantImageEditMode,
+  type MerchantImageSourceMode,
+} from "../../../lib/merchant-image-selection.ts";
+import { validateMerchantImageEditInstruction } from "../../../lib/merchant-image-edit-policy.ts";
+import {
+  buildOfferDefinitionV1FromContract,
+  type OfferDefinitionV1,
+} from "../../../lib/offer-definition.ts";
+import {
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from "../../../lib/supported-locales.ts";
+import {
+  buildPosterSpecFromOfferDefinition,
+  choosePosterTemplateForOffer,
+} from "../../../lib/poster/posterCopy.ts";
+import type { PosterDraftV1, PosterStyleChoice } from "../../../lib/poster/posterTypes.ts";
+import type {
+  AdLocalizationBundle,
+} from "../../../lib/ad-localization-schema.ts";
+import {
+  adLocalizationOfferFactsFromDefinition,
+  generateVerifiedAdLocalizationBundle,
+  type VerifiedAdLocalizationBundleResult,
+} from "../_shared/ai-localization-provider.ts";
 
 // Static anchors so Supabase's remote bundler includes the npm packages that
 // `_shared/ai-image-provider.ts` imports lazily when Gemini returns JPEG bytes.
@@ -86,6 +150,21 @@ const CHAT_MODEL = resolveOpenAiChatModel();
 const RESEARCH_MODEL = "gpt-4o-search-preview";
 const DEFAULT_MONTHLY = DEFAULT_MONTHLY_LIMIT;
 const COOLDOWN_SEC = DEFAULT_COOLDOWN_SEC;
+const ITEM_RESEARCH_PROMPT_VERSION = "AI_ITEM_RESEARCH_V1";
+const ITEM_RESEARCH_SCHEMA = {
+  name: "item_research",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      item_name: { type: "string" },
+      description: { type: "string" },
+      is_familiar: { type: "boolean" },
+    },
+    required: ["item_name", "description", "is_familiar"],
+    additionalProperties: false,
+  },
+} as const;
 
 /** Included revision allowance. Extra image-affecting revisions must reserve a deal credit. */
 const MAX_REVISION_COUNT = INCLUDED_IMAGE_REVISIONS;
@@ -124,6 +203,24 @@ type SingleAd = {
   photo_treatment: PhotoTreatment | null;
   /** Storage path in deal-photos bucket; null if image production failed. */
   poster_storage_path: string | null;
+  /** Canonical image source choice, QA decision, and lineage. */
+  image_selection?: AdImageSelection | null;
+  /** Optional native-rendered poster draft. */
+  poster?: PosterDraftV1 | null;
+  /** Verified source plus target-language persuasive copy bundle, when PR3 multilingual flags are enabled. */
+  localization_bundle?: AdLocalizationBundle | null;
+  localization_status?: {
+    source_locale: SupportedLocale;
+    localization_bundle_hash: string;
+    deterministic_fallback_locales: SupportedLocale[];
+    transcreation_provider: string;
+    transcreation_model: string;
+    transcreation_skipped_reason?: string | null;
+    semantic_qa_provider: string;
+    semantic_qa_model: string;
+    semantic_qa_skipped_reason?: string | null;
+    repair_target_locales: SupportedLocale[];
+  } | null;
 };
 
 function utcMonthStartIso(): string {
@@ -174,12 +271,13 @@ function dealNotEligibleForAiResponse(
  */
 async function researchMenuItem(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   itemHint: string;
   businessName: string;
   businessLocation: string;
   costContext?: AiCostContext;
 }): Promise<ItemResearch> {
-  const { openAiKey, itemHint, businessName, businessLocation, costContext } = params;
+  const { openAiKey, geminiApiKey, itemHint, businessName, businessLocation, costContext } = params;
   const cleanHint = itemHint.trim().slice(0, 400);
   if (!cleanHint) {
     return { item_name: "", description: "", is_familiar: false };
@@ -205,6 +303,7 @@ async function researchMenuItem(params: {
   // Stage 1a: use the standard model first; common cafe items do not need live lookup.
   const fallbackResult = await callResearchModel({
     openAiKey,
+    geminiApiKey,
     model: CHAT_MODEL,
     prompt,
     cleanHint,
@@ -218,6 +317,7 @@ async function researchMenuItem(params: {
   // Stage 1b: use search only for unfamiliar, ambiguous, local, or branded items.
   const webSearchResult = await callResearchModel({
     openAiKey,
+    geminiApiKey,
     model: RESEARCH_MODEL,
     prompt,
     cleanHint,
@@ -230,15 +330,86 @@ async function researchMenuItem(params: {
   return { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function parsePosterStyle(value: unknown): PosterStyleChoice {
+  return value === "fresh" || value === "bold" || value === "premium" || value === "auto" ? value : "auto";
+}
+
+function parseCreativeRequest(value: unknown): {
+  requestedFormat: "standard_card" | "poster_v1";
+  posterEnabled: boolean;
+  posterStyle: PosterStyleChoice;
+  imageAspectRatio: AiImageAspectRatio;
+} {
+  const creative = recordValue(value);
+  const poster = recordValue(creative?.poster);
+  const requestedFormat =
+    creative?.requested_format === "poster_v1" || poster?.enabled === true ? "poster_v1" : "standard_card";
+  const posterEnabled = requestedFormat === "poster_v1" && poster?.enabled !== false;
+  return {
+    requestedFormat: posterEnabled ? "poster_v1" : "standard_card",
+    posterEnabled,
+    posterStyle: parsePosterStyle(poster?.style),
+    imageAspectRatio: posterEnabled ? "4:5" : "1:1",
+  };
+}
+
+function normalizeItemResearch(value: Partial<ItemResearch>, cleanHint: string): ItemResearch {
+  return {
+    item_name: clip(typeof value.item_name === "string" ? value.item_name : cleanHint, 80),
+    description: clip(typeof value.description === "string" ? value.description : "", 280),
+    is_familiar: value.is_familiar === true,
+  };
+}
+
 async function callResearchModel(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   model: string;
   prompt: string;
   cleanHint: string;
   isWebSearch: boolean;
   costContext?: AiCostContext;
 }): Promise<ItemResearch | null> {
-  const { openAiKey, model, prompt, cleanHint, isWebSearch, costContext } = params;
+  const { openAiKey, geminiApiKey, model, prompt, cleanHint, isWebSearch, costContext } = params;
+  if (!isWebSearch) {
+    try {
+      const result = await generateStructuredText<typeof ITEM_RESEARCH_SCHEMA, ItemResearch>({
+        operation: "merchant_context",
+        systemPrompt: "Identify a menu item for local-business ad generation. Return only grounded JSON.",
+        userPrompt: prompt,
+        jsonSchema: ITEM_RESEARCH_SCHEMA,
+        maxOutputTokens: 220,
+        timeoutMs: 12_000,
+        generationRunId: costContext?.requestGroupId ?? crypto.randomUUID(),
+        promptVersion: ITEM_RESEARCH_PROMPT_VERSION,
+        reasoningLevel: "low",
+      }, {
+        openAiApiKey: openAiKey,
+        geminiApiKey,
+        admin: costContext?.admin,
+        config: resolveAiTextProviderConfig(),
+      });
+      if (costContext) await logTextProviderAttempts(costContext, "ad_research", result.attempts);
+      return normalizeItemResearch(result.value, cleanHint);
+    } catch (e) {
+      const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+      if (costContext) await logTextProviderAttempts(costContext, "ad_research", attempts);
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "research_router_error",
+          model,
+          errorCode: (e as { errorCode?: string })?.errorCode ?? "AI_RESEARCH_FAILED",
+        }),
+      );
+      return null;
+    }
+  }
+
   try {
     // gpt-4o-search-preview rejects temperature; standard chat models accept it.
     // chatCompletionTuning also maps the token/temperature params correctly for the
@@ -301,19 +472,15 @@ async function callResearchModel(params: {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]) as Partial<ItemResearch>;
-    return {
-      item_name: clip(typeof parsed.item_name === "string" ? parsed.item_name : cleanHint, 80),
-      description: clip(typeof parsed.description === "string" ? parsed.description : "", 280),
-      is_familiar: parsed.is_familiar === true,
-    };
-  } catch (e) {
+    return normalizeItemResearch(parsed, cleanHint);
+  } catch {
     console.log(
       JSON.stringify({
         tag: "ai_ads_v2",
         event: "research_error",
         model,
         isWebSearch,
-        err: String(e).slice(0, 200),
+        errorCode: "FETCH_ERROR",
       }),
     );
     await logAdCost(costContext ?? null, {
@@ -323,7 +490,7 @@ async function callResearchModel(params: {
       webSearchCalls: isWebSearch ? 1 : 0,
       success: false,
       errorCode: "FETCH_ERROR",
-      errorMessage: String(e).slice(0, 500),
+      errorMessage: "Ad research failed before a usable response was returned.",
     });
     return null;
   }
@@ -333,6 +500,7 @@ async function callResearchModel(params: {
 
 async function generateCopy(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   itemHint: string;
   research: ItemResearch;
   businessName: string;
@@ -346,9 +514,23 @@ async function generateCopy(params: {
   revisionFeedback?: string;
   previousAd?: SingleAd;
   costContext: AiCostContext;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & { fallback_reason?: string; generator_version?: string; copy_latency_ms?: number }> {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+  fallback_reason?: string;
+  generator_version?: string;
+  copy_latency_ms?: number;
+  provider_attempts?: ProviderAttempt[];
+  provider?: string;
+  model?: string;
+  provider_fallback_used?: boolean;
+  provider_fallback_reason?: string;
+  copy_quality?: CopyQualityTelemetry[];
+  judge_attempts?: ProviderAttempt[];
+  judge_provider?: string;
+  judge_model?: string;
+}> {
   const {
     openAiKey,
+    geminiApiKey,
     itemHint,
     research,
     businessName,
@@ -368,6 +550,26 @@ async function generateCopy(params: {
   const isRevision = previousAd !== undefined;
 
   const copyStartedAt = Date.now();
+  const providerAttempts: ProviderAttempt[] = [];
+  const copyQuality: CopyQualityTelemetry[] = [];
+  const judgeAttempts: ProviderAttempt[] = [];
+  let copyProvider: string | undefined;
+  let copyModel: string | undefined;
+  let judgeProvider: string | undefined;
+  let judgeModel: string | undefined;
+  let providerFallbackUsed = false;
+  let providerFallbackReason: string | undefined;
+  const merchantProfile = buildMerchantCreativeProfile({
+    businessId: offerContract.businessId,
+    businessName,
+    category: businessContext.category,
+    tone: businessContext.tone,
+    location: businessContext.location,
+    address: businessContext.address,
+    description: businessContext.description,
+    itemHint,
+    research,
+  });
   const selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
@@ -385,61 +587,74 @@ async function generateCopy(params: {
         previousAd,
         offerContract,
         validationFeedback,
+        merchantCreativeProfile: merchantProfile,
       });
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openAiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: CHAT_MODEL,
-          response_format: { type: "json_schema", json_schema: jsonSchema },
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userText },
-          ],
-          ...chatCompletionTuning(CHAT_MODEL, {
-            maxTokens: 650,
-            temperature: isRevision ? 0.7 : 0.6,
-          }),
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        await logAdCost(costContext, {
-          feature: "ad_copy",
-          model: CHAT_MODEL,
-          endpoint: "chat.completions",
-          openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-          success: false,
-          errorCode: `HTTP_${res.status}`,
-          errorMessage: body.slice(0, 500),
-        });
-        throw new Error(`OPENAI_COPY_${res.status}: ${body.slice(0, 200)}`);
-      }
-      const json = await res.json();
-      await logAdCost(costContext, {
-        feature: "ad_copy",
-        model: CHAT_MODEL,
-        endpoint: "chat.completions",
-        usage: json?.usage ?? null,
-        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-        responseId: typeof json?.id === "string" ? json.id : null,
-        success: true,
-      });
-      const content = json?.choices?.[0]?.message?.content ?? "";
+      let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
       try {
-        return parseAiDealCopyVariants(typeof content === "string" ? content : "{}");
+        result = await generateStructuredText<typeof jsonSchema>({
+          operation: isRevision ? "copy_revision" : attemptNumber === 1 ? "creative_candidates" : "creative_repair",
+          systemPrompt: system,
+          userPrompt: userText,
+          jsonSchema,
+          maxOutputTokens: 1400,
+          timeoutMs: 12_000,
+          generationRunId: costContext.requestGroupId,
+          promptVersion: AD_COPY_PROMPT_VERSION,
+          reasoningLevel: "medium",
+        }, {
+          openAiApiKey: openAiKey,
+          geminiApiKey,
+          admin: costContext.admin,
+          config: resolveAiTextProviderConfig(),
+          isRevision,
+        });
       } catch (e) {
+        const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+        providerAttempts.push(...attempts);
+        await logTextProviderAttempts(costContext, "ad_copy", attempts);
+        if ((e as { errorClass?: string })?.errorClass === "provider_output_invalid") {
+          return [];
+        }
+        throw e;
+      }
+
+      providerAttempts.push(...result.attempts);
+      await logTextProviderAttempts(costContext, "ad_copy", result.attempts);
+      copyProvider = result.provider;
+      copyModel = result.model;
+      providerFallbackUsed = providerFallbackUsed || result.fallbackUsed;
+      providerFallbackReason = result.fallbackReason ?? providerFallbackReason;
+      const content = JSON.stringify(result.value);
+      try {
+        const variants = parseAiDealCopyVariants(content);
+        const creativeBrief = result.value && typeof result.value === "object"
+          ? (result.value as { creativeBrief?: unknown }).creativeBrief
+          : null;
+        const prepared = await prepareCopyCandidates({
+          variants,
+          creativeBrief,
+          attemptNumber,
+          generationProvider: result.provider,
+          openAiKey,
+          geminiApiKey,
+          businessContext,
+          merchantProfile,
+          offerContract,
+          costContext,
+        });
+        copyQuality.push(prepared.telemetry);
+        judgeAttempts.push(...prepared.judgeAttempts);
+        judgeProvider = prepared.judgeProvider ?? judgeProvider;
+        judgeModel = prepared.judgeModel ?? judgeModel;
+        return prepared.variants;
+      } catch {
         console.log(
           JSON.stringify({
             tag: "ai_ads_v2",
             event: "copy_parse_error",
             attemptNumber,
-            err: String(e).slice(0, 200),
+            errorCode: "COPY_PREPARATION_FAILED",
           }),
         );
         return [];
@@ -478,6 +693,15 @@ async function generateCopy(params: {
     fallback_reason: selected.fallback_reason,
     generator_version: selected.generator_version,
     copy_latency_ms: copyLatencyMs,
+    provider_attempts: providerAttempts,
+    provider: copyProvider,
+    model: copyModel,
+    provider_fallback_used: providerFallbackUsed,
+    provider_fallback_reason: providerFallbackReason,
+    copy_quality: copyQuality,
+    judge_attempts: judgeAttempts,
+    judge_provider: judgeProvider,
+    judge_model: judgeModel,
     cta: defaultCta(outputLanguage),
   };
 }
@@ -490,6 +714,38 @@ function defaultCta(lang: OutputLanguage): string {
 
 // ─── Stage 3: image ────────────────────────────────────────────────────────
 
+type CopyQualityTelemetry = {
+  attempt_number: 1 | 2;
+  creative_brief?: unknown;
+  style_gate_rejected: Array<{
+    candidate_id: string;
+    reasons: string[];
+  }>;
+  diversity: {
+    checked: boolean;
+    ok: boolean;
+    hard_failures: Array<{ code: string; candidate_ids: string[]; score?: number }>;
+    warnings: Array<{ code: string; candidate_ids: string[]; score?: number }>;
+  };
+  preliminary_scores: Array<{
+    candidate_id: string;
+    strategy_id: string | null;
+    score: number;
+  }>;
+  judge: {
+    enabled: boolean;
+    used: boolean;
+    skipped_reason: string | null;
+    provider: string | null;
+    model: string | null;
+    pass: boolean | null;
+    winner_candidate_id: string | null;
+    ranked_candidate_ids: string[];
+    hard_failures: Array<{ candidate_id: string; code: string }>;
+    feedback: string[];
+  };
+};
+
 type SupabaseClient = SupabaseClientBase<any, "public", "public", any, any>;
 type AdQuota = { used: number; limit: number; remaining: number };
 
@@ -499,6 +755,127 @@ type AiCostContext = {
   ownerUserId: string;
   requestGroupId: string;
 };
+
+function envFlag(name: string, fallback = false): boolean {
+  const raw = Deno.env.get(name);
+  if (raw == null || raw === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(raw.trim());
+}
+
+function outputLanguageToSupportedLocale(lang: OutputLanguage): SupportedLocale {
+  if (lang === "es") return "es-US";
+  if (lang === "ko") return "ko-KR";
+  return "en-US";
+}
+
+function shouldBuildLocalizationBundle(): boolean {
+  return envFlag("AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED", false) ||
+    envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false);
+}
+
+function uniqueCleanText(values: readonly unknown[], max = 20): string[] {
+  const out: string[] = [];
+  for (const value of values) {
+    const clean = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+    if (!clean || out.some((existing) => existing.toLowerCase() === clean.toLowerCase())) continue;
+    out.push(clean.slice(0, 160));
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function protectedTermsForLocalization(definition: OfferDefinitionV1): string[] {
+  return uniqueCleanText([
+    definition.merchantName,
+    definition.locationName,
+    ...definition.qualifyingItems.map((item) => item.displayName),
+    ...definition.reward.displayNames,
+  ]);
+}
+
+function localizationImageAltText(params: {
+  businessName: string;
+  headline: string;
+  offerLine: string;
+}): string {
+  return clip(
+    [
+      params.businessName,
+      params.headline || params.offerLine,
+      "deal image",
+    ].filter(Boolean).join(" - "),
+    140,
+  );
+}
+
+function envNumber(name: string, fallback: number): number {
+  const raw = Number(Deno.env.get(name));
+  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+}
+
+function candidateId(candidate: AiDealCopyVariant, index: number): string {
+  return candidate.candidate_id || `candidate_${index + 1}`;
+}
+
+function styleGateCopy(candidate: AiDealCopyVariant) {
+  return {
+    displayHook: candidate.headline,
+    supportingLine: candidate.short_description,
+    cta: candidate.cta ?? "Claim deal",
+    pushTitle: candidate.push_title ?? candidate.headline,
+    pushBody: candidate.push_body ?? candidate.push_notification,
+    socialCaption: candidate.social_caption ?? "",
+  };
+}
+
+function offerFactsForJudge(contract: DealOfferContract): string {
+  return [
+    `Deal type: ${contract.dealType}`,
+    `Locked offer line: ${contract.canonicalOfferLine}`,
+    contract.requiredPurchase
+      ? `Customer buys ${contract.requiredPurchase.quantity} ${contract.requiredPurchase.itemName}.`
+      : "",
+    contract.freeReward
+      ? `Customer gets ${contract.freeReward.quantity} ${contract.freeReward.itemName} free.`
+      : "",
+    contract.singleItemDiscount
+      ? `Customer gets ${contract.singleItemDiscount.discountPercent}% off one ${contract.singleItemDiscount.itemName}.`
+      : "",
+    `Terms are app-rendered metadata: ${contract.canonicalShortTerms}`,
+  ].filter(Boolean).join("\n");
+}
+
+function seededShuffle<T>(items: readonly T[], seed: string): T[] {
+  let hash = 2166136261;
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return [...items]
+    .map((item, index) => {
+      hash ^= index + 0x9e3779b9;
+      hash = Math.imul(hash, 16777619);
+      return { item, sort: hash >>> 0 };
+    })
+    .sort((left, right) => left.sort - right.sort)
+    .map(({ item }) => item);
+}
+
+function makeJudgeConfig() {
+  const base = resolveAiTextProviderConfig();
+  return {
+    ...base,
+    routerEnabled: true,
+    primaryProvider: "gemini" as const,
+    fallbackEnabled: false,
+    fallbackProvider: "openai" as const,
+    geminiTextModel: resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL"),
+    primaryTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+    fallbackTimeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+    transientRetryMax: 0,
+    retryAfterFullTimeout: false,
+  };
+}
 
 async function logAdCost(
   ctx: AiCostContext | null,
@@ -565,21 +942,315 @@ async function logGeminiImageAttempts(
   }
 }
 
+async function logTextProviderAttempts(
+  ctx: AiCostContext,
+  feature: string,
+  attempts: readonly ProviderAttempt[],
+): Promise<void> {
+  for (const attempt of attempts) {
+    await logAdCost(ctx, {
+      feature,
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      estimatedCostUsd: attempt.estimatedCostUsd,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? null,
+      errorMessage: attempt.errorClass ?? null,
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      responseId: null,
+    });
+  }
+}
+
+async function prepareCopyCandidates(params: {
+  variants: AiDealCopyVariant[];
+  creativeBrief: unknown;
+  attemptNumber: 1 | 2;
+  generationProvider?: string;
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  businessContext: BusinessContext;
+  merchantProfile: MerchantCreativeProfile;
+  offerContract: DealOfferContract;
+  costContext: AiCostContext;
+}): Promise<{
+  variants: AiDealCopyVariant[];
+  telemetry: CopyQualityTelemetry;
+  judgeAttempts: ProviderAttempt[];
+  judgeProvider?: string;
+  judgeModel?: string;
+}> {
+  const telemetry: CopyQualityTelemetry = {
+    attempt_number: params.attemptNumber,
+    creative_brief: params.creativeBrief,
+    style_gate_rejected: [],
+    diversity: {
+      checked: false,
+      ok: true,
+      hard_failures: [],
+      warnings: [],
+    },
+    preliminary_scores: [],
+    judge: {
+      enabled: envFlag("AI_V3_INDEPENDENT_JUDGE_ENABLED", false),
+      used: false,
+      skipped_reason: null,
+      provider: null,
+      model: null,
+      pass: null,
+      winner_candidate_id: null,
+      ranked_candidate_ids: [],
+      hard_failures: [],
+      feedback: [],
+    },
+  };
+
+  const styleSafe = params.variants.filter((variant, index) => {
+    const gate = evaluateAdCopyStyleGate({
+      copy: styleGateCopy(variant),
+      provenance: {
+        displayHook: "ai_generated",
+        supportingLine: "ai_generated",
+        cta: "ai_generated",
+        pushTitle: "ai_generated",
+        pushBody: "ai_generated",
+        socialCaption: "ai_generated",
+      },
+      requiredSpecificTerms: params.offerContract.aiRules.mustUseExactItemNames,
+    });
+    if (gate.ok) return true;
+    telemetry.style_gate_rejected.push({
+      candidate_id: candidateId(variant, index),
+      reasons: [...new Set(gate.failures.flatMap((failure) => failure.reasons))],
+    });
+    return false;
+  });
+
+  const hasStrategyMetadata = styleSafe.some((variant) => variant.strategy_id);
+  if (hasStrategyMetadata) {
+    const diversity = checkAdCandidateDiversity(styleSafe);
+    telemetry.diversity = {
+      checked: true,
+      ok: diversity.ok,
+      hard_failures: diversity.hardFailures.map((issue) => ({
+        code: issue.code,
+        candidate_ids: issue.candidateIds,
+        ...(typeof issue.score === "number" ? { score: issue.score } : {}),
+      })),
+      warnings: diversity.warnings.map((issue) => ({
+        code: issue.code,
+        candidate_ids: issue.candidateIds,
+        ...(typeof issue.score === "number" ? { score: issue.score } : {}),
+      })),
+    };
+    if (!diversity.ok) {
+      return { variants: [], telemetry, judgeAttempts: [] };
+    }
+  }
+
+  const ranked = rankCandidatesDeterministically(styleSafe, params.offerContract, params.merchantProfile);
+  telemetry.preliminary_scores = ranked.map((variant, index) => ({
+    candidate_id: candidateId(variant, index),
+    strategy_id: variant.strategy_id ?? null,
+    score: variant.preliminary_score ?? 0,
+  }));
+
+  if (!telemetry.judge.enabled) {
+    telemetry.judge.skipped_reason = "feature_flag_disabled";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+  if (params.generationProvider === "gemini") {
+    telemetry.judge.skipped_reason = "same_provider_fallback";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+  if (!params.geminiApiKey) {
+    telemetry.judge.skipped_reason = "gemini_api_key_missing";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+
+  const judgeCandidates = ranked
+    .filter((variant) => validateAiCopyAgainstOffer(variant, params.offerContract).valid)
+    .slice(0, 3);
+  if (judgeCandidates.length < 2) {
+    telemetry.judge.skipped_reason = "fewer_than_two_valid_candidates";
+    return { variants: ranked, telemetry, judgeAttempts: [] };
+  }
+
+  const shuffled = seededShuffle(judgeCandidates, `${params.costContext.requestGroupId}:${params.attemptNumber}`);
+  const { system, userText, jsonSchema } = buildCandidateJudgePrompt({
+    offerFacts: offerFactsForJudge(params.offerContract),
+    categoryPlaybookBlock: buildCategoryAdPlaybookPromptBlock(params.businessContext.category),
+    merchantProfileBlock: buildMerchantCreativeProfilePromptBlock(params.merchantProfile),
+    creativeBrief: params.creativeBrief,
+    candidates: shuffled,
+  });
+
+  try {
+    const result = await generateStructuredText<typeof jsonSchema, CandidateJudgeResult>({
+      operation: "candidate_judge",
+      systemPrompt: system,
+      userPrompt: userText,
+      jsonSchema,
+      maxOutputTokens: 560,
+      timeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
+      generationRunId: params.costContext.requestGroupId,
+      promptVersion: CANDIDATE_JUDGE_PROMPT_VERSION,
+      reasoningLevel: "medium",
+    }, {
+      openAiApiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
+      admin: params.costContext.admin,
+      config: makeJudgeConfig(),
+    });
+    await logTextProviderAttempts(params.costContext, "candidate_judge", result.attempts);
+    const judge = normalizeCandidateJudgeResult(result.value);
+    telemetry.judge.used = judge !== null;
+    telemetry.judge.provider = result.provider;
+    telemetry.judge.model = result.model;
+    telemetry.judge.pass = judge?.pass ?? false;
+    telemetry.judge.winner_candidate_id = judge?.winnerCandidateId ?? null;
+    telemetry.judge.ranked_candidate_ids = judge?.rankedCandidateIds ?? [];
+    telemetry.judge.hard_failures = judge?.hardFailReasons.map((reason) => ({
+      candidate_id: reason.candidateId,
+      code: reason.code,
+    })) ?? [];
+    telemetry.judge.feedback = judge?.conciseFeedback ?? [];
+    if (!judge) {
+      telemetry.judge.skipped_reason = "judge_output_invalid";
+      return {
+        variants: ranked,
+        telemetry,
+        judgeAttempts: result.attempts,
+        judgeProvider: result.provider,
+        judgeModel: result.model,
+      };
+    }
+    return {
+      variants: applyJudgeScoresToCandidates(ranked, judge),
+      telemetry,
+      judgeAttempts: result.attempts,
+      judgeProvider: result.provider,
+      judgeModel: result.model,
+    };
+  } catch (e) {
+    const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+    await logTextProviderAttempts(params.costContext, "candidate_judge", attempts);
+    telemetry.judge.skipped_reason = "judge_unavailable";
+    telemetry.judge.feedback = ["Candidate judge unavailable."];
+    return { variants: ranked, telemetry, judgeAttempts: attempts };
+  }
+}
+
 type ImageQaTelemetry = {
   checked: boolean;
   attempts: number;
   missingItems: string[];
   regenerated: boolean;
   unavailable: boolean;
+  sourceType: AdImageQaSourceType;
+  decision: AdImageQaDecision;
+  hardFailReasons: string[];
+  warningCodes: string[];
+  merchantOverrideAllowed: boolean;
+  merchantOverrideAcknowledged: boolean;
+  sourceAware: SourceAwareImageQaResult | null;
 };
 
-function skippedImageQaTelemetry(): ImageQaTelemetry {
+function imageQaTelemetryFromSourceAware(
+  sourceAware: SourceAwareImageQaResult,
+  attempts = 0,
+  regenerated = false,
+): ImageQaTelemetry {
   return {
-    checked: false,
-    attempts: 0,
-    missingItems: [],
-    regenerated: false,
-    unavailable: false,
+    checked: sourceAware.checked,
+    attempts,
+    missingItems: sourceAware.missingItems,
+    regenerated,
+    unavailable: !sourceAware.available,
+    sourceType: sourceAware.sourceType,
+    decision: sourceAware.decision,
+    hardFailReasons: sourceAware.hardFailReasons,
+    warningCodes: sourceAware.warningCodes,
+    merchantOverrideAllowed: sourceAware.merchantOverrideAllowed,
+    merchantOverrideAcknowledged: sourceAware.merchantOverrideAcknowledged,
+    sourceAware,
+  };
+}
+
+function skippedImageQaTelemetry(sourceType: AdImageQaSourceType = "deterministic_fallback"): ImageQaTelemetry {
+  return imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: { 
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        has_crop_or_overlay_risk: false,
+        forbidden_elements: [],
+        crop_or_overlay_issues: [],
+        notes: "Image QA not required for this source.",
+      },
+      requiredVisualItems: [],
+      sourceType,
+    }),
+  );
+}
+
+function originalPhotoQaTelemetry(merchantOverrideAcknowledged: boolean): ImageQaTelemetry {
+  return imageQaTelemetryFromSourceAware(
+    unavailableSourceAwareImageQaResult({
+      sourceType: "merchant_original",
+      merchantOverrideAcknowledged,
+    }),
+  );
+}
+
+function producedImageSelection(params: {
+  image: ProducedImageBase;
+  sourcePhotoPath: string | null;
+  editMode: MerchantImageEditMode;
+  selectedAt?: string;
+}): AdImageSelection {
+  return buildAdImageSelection({
+    photoSource: params.image.source,
+    editMode: params.editMode,
+    sourcePhotoPath: params.sourcePhotoPath,
+    selectedStoragePath: params.image.posterStoragePath,
+    provider: params.image.provider,
+    model: params.image.model,
+    promptVersion: params.image.prompt ? "image_prompt_v3" : null,
+    qa: {
+      checked: params.image.qa.checked,
+      sourceType: imageSourceModeFromPhotoSource(params.image.source),
+      decision: params.image.qa.decision,
+      hardFailReasons: params.image.qa.hardFailReasons,
+      warningCodes: params.image.qa.warningCodes,
+      missingItems: params.image.qa.missingItems,
+      unavailable: params.image.qa.unavailable,
+      merchantOverrideAllowed: params.image.qa.merchantOverrideAllowed,
+      merchantOverrideAcknowledged: params.image.qa.merchantOverrideAcknowledged,
+    },
+  });
+}
+
+function withImageSelection(
+  image: ProducedImageBase,
+  params: {
+    sourcePhotoPath: string | null;
+    editMode: MerchantImageEditMode;
+  },
+): ProducedImage {
+  return {
+    ...image,
+    selection: producedImageSelection({
+      image,
+      sourcePhotoPath: params.sourcePhotoPath,
+      editMode: params.editMode,
+    }),
   };
 }
 
@@ -601,22 +1272,6 @@ async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<
   };
 }
 
-function extractResponseOutputText(data: unknown): string | null {
-  const out = (data as { output?: unknown[] })?.output;
-  if (!Array.isArray(out)) return null;
-  for (const item of out) {
-    if (!item || typeof item !== "object") continue;
-    const message = item as { type?: string; content?: unknown[] };
-    if (message.type !== "message" || !Array.isArray(message.content)) continue;
-    for (const part of message.content) {
-      if (!part || typeof part !== "object") continue;
-      const textPart = part as { type?: string; text?: string };
-      if (textPart.type === "output_text" && typeof textPart.text === "string") return textPart.text;
-    }
-  }
-  return null;
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -625,6 +1280,42 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+function geminiVisionQaFallbackEnabled(): boolean {
+  if (!envFlag("AI_VISION_FALLBACK_ENABLED", false)) return false;
+  const provider = (Deno.env.get("AI_VISION_FALLBACK_PROVIDER") ?? "gemini").trim().toLowerCase();
+  return provider === "gemini";
+}
+
+function makeImageQaConfig() {
+  let fallbackEnabled = geminiVisionQaFallbackEnabled();
+  let geminiTextModel = "gemini";
+  if (fallbackEnabled) {
+    try {
+      geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
+    } catch {
+      fallbackEnabled = false;
+      console.log(JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "gemini_image_qa_config_error",
+        errorCode: "AI_TEXT_CONFIG_INVALID",
+      }));
+    }
+  }
+  return {
+    routerEnabled: true,
+    primaryProvider: "openai" as const,
+    fallbackEnabled,
+    fallbackProvider: "gemini" as const,
+    circuitBreakerEnabled: false,
+    openAiModel: CHAT_MODEL,
+    geminiTextModel,
+    primaryTimeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
+    fallbackTimeoutMs: envNumber("AI_VISION_FALLBACK_TIMEOUT_MS", 14_000),
+    transientRetryMax: 0,
+    retryAfterFullTimeout: false,
+  };
 }
 
 function imageStylePresetFromRevision(params: {
@@ -640,6 +1331,45 @@ function imageStylePresetFromRevision(params: {
     return "playful-twofer";
   }
   return "realistic-local-ad";
+}
+
+function imageRevisionInstruction(params: {
+  revisionPreset?: string;
+  revisionFeedback?: string;
+}): string | undefined {
+  const raw = `${params.revisionPreset ?? ""} ${params.revisionFeedback ?? ""}`
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 500);
+  if (!raw) return undefined;
+  const text = raw.toLowerCase();
+  const directives: string[] = [];
+  if (text.includes("revisepresettryanotherimage") || /\btry another|different image|new image\b/.test(text)) {
+    directives.push("Create a clearly different composition from the previous image while preserving the same required offer item identities.");
+  }
+  if (text.includes("revisepresetgenangle") || /\bdifferent angle|another angle\b/.test(text)) {
+    directives.push("Change the camera angle and product placement; do not reuse the same framing.");
+  }
+  if (text.includes("revisepresetgenbrighter") || text.includes("revisepresetphotobrighter") || /\bbrighter|cleaner|vibrant\b/.test(text)) {
+    directives.push("Make the image brighter, cleaner, and higher contrast with natural daylight.");
+  }
+  if (text.includes("revisepresetgenmoodier") || /\bmoodier|editorial|premium\b/.test(text)) {
+    directives.push("Make the image more premium and editorial with richer lighting and a more deliberate product-photo composition.");
+  }
+  if (text.includes("revisepresetphotocrop") || /\btighter crop|closer crop|crop\b/.test(text)) {
+    directives.push("Use a noticeably tighter crop while keeping the full required item visible and away from unsafe edges.");
+  }
+  if (text.includes("revisepresetphotobg") || /\bdifferent background|background\b/.test(text)) {
+    directives.push("Replace the background with a visibly different clean cafe surface or backdrop.");
+  }
+  if (directives.length === 0) {
+    directives.push(`Apply this merchant image revision as style, lighting, crop, composition, or background guidance only: ${raw}`);
+  }
+  return [
+    ...directives,
+    "Do not add text, prices, discounts, QR codes, logos, watermarks, people, characters, or unrelated props.",
+    "Do not change the offer item identities or invent extra offer items.",
+  ].join(" ");
 }
 
 function requiredOfferItems(contract: DealOfferContract): { paidItem?: string; freeItem?: string } {
@@ -694,10 +1424,10 @@ function detectedItemText(value: unknown): string {
     .toLowerCase();
 }
 
-async function findStockImageFallback(params: {
+async function findStockImageFallbacks(params: {
   admin: SupabaseClient;
   requiredVisualItems: readonly string[];
-}): Promise<string | null> {
+}): Promise<string[]> {
   try {
     const { data, error } = await params.admin
       .from("business_media_assets")
@@ -709,7 +1439,7 @@ async function findStockImageFallback(params: {
       .eq("commercial_ad_use_allowed", true)
       .order("quality_score", { ascending: false })
       .limit(25);
-    if (error || !Array.isArray(data)) return null;
+    if (error || !Array.isArray(data)) return [];
     const required = params.requiredVisualItems.map((item) => item.trim().toLowerCase()).filter(Boolean);
     const ranked = data
       .map((row) => {
@@ -722,92 +1452,160 @@ async function findStockImageFallback(params: {
       })
       .filter((row) => row.storagePath)
       .sort((left, right) => right.score - left.score);
-    return ranked[0]?.storagePath ?? null;
+    return ranked.map((row) => row.storagePath);
   } catch {
-    return null;
+    return [];
   }
 }
 
 async function inspectGeneratedImageForOffer(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   imageBytes: Uint8Array;
   requiredVisualItems: readonly string[];
   costContext: AiCostContext;
+  sourceType?: AdImageQaSourceType;
 }): Promise<QuickDealImageQaResult | null> {
   const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
-  if (requiredVisualItems.length === 0) return null;
-
   try {
-    const imageUrl = `data:image/png;base64,${bytesToBase64(params.imageBytes)}`;
-    const responsesBody = {
-      model: CHAT_MODEL,
-      ...(isGpt5FamilyModel(CHAT_MODEL) ? {} : { temperature: 0.1 }),
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: buildQuickDealImageQaPrompt(requiredVisualItems) },
-            { type: "input_image", image_url: imageUrl, detail: "low" },
-          ],
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: QUICK_DEAL_IMAGE_QA_SCHEMA.name,
-          strict: QUICK_DEAL_IMAGE_QA_SCHEMA.strict,
-          schema: QUICK_DEAL_IMAGE_QA_SCHEMA.schema,
-        },
+    const result = await generateStructuredText<typeof QUICK_DEAL_IMAGE_QA_SCHEMA, QuickDealImageQaResult>(
+      {
+        operation: "image_qa",
+        systemPrompt: "You are Twofer's image quality inspector. Return JSON only.",
+        userPrompt: buildAdImageQaPrompt({
+          sourceType: params.sourceType ?? "ai_generated",
+          requiredVisualItems,
+        }),
+        jsonSchema: QUICK_DEAL_IMAGE_QA_SCHEMA,
+        imageInputs: [{ bytes: params.imageBytes, mimeType: "image/png" }],
+        maxOutputTokens: 900,
+        timeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
+        generationRunId: params.costContext.requestGroupId,
+        promptVersion: "AI_IMAGE_QA_V1",
+        reasoningLevel: "medium",
       },
-    };
-
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.openAiKey}`,
-        "Content-Type": "application/json",
+      {
+        openAiApiKey: params.openAiKey,
+        geminiApiKey: params.geminiApiKey,
+        admin: params.costContext.admin,
+        config: makeImageQaConfig(),
       },
-      body: JSON.stringify(responsesBody),
-      signal: AbortSignal.timeout(25_000),
-    });
-    if (!res.ok) {
-      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_http", status: res.status }));
-      await logAdCost(params.costContext, {
-        feature: "image_qa",
-        model: CHAT_MODEL,
-        endpoint: "responses",
-        openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-        success: false,
-        errorCode: `HTTP_${res.status}`,
-        errorMessage: `Image QA failed with HTTP ${res.status}.`,
-      });
-      return null;
-    }
-    const json = await res.json();
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      model: CHAT_MODEL,
-      endpoint: "responses",
-      usage: json?.usage ?? null,
-      openaiRequestId: openAiRequestIdFromHeaders(res.headers),
-      responseId: typeof json?.id === "string" ? json.id : null,
-      success: true,
-    });
-    const text = extractResponseOutputText(json);
-    if (!text) return null;
-    return normalizeQuickDealImageQaResult(JSON.parse(text), requiredVisualItems);
+    );
+    await logTextProviderAttempts(params.costContext, "image_qa", result.attempts);
+    return normalizeQuickDealImageQaResult(result.value, requiredVisualItems);
   } catch (e) {
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", err: String(e).slice(0, 200) }));
-    await logAdCost(params.costContext, {
-      feature: "image_qa",
-      model: CHAT_MODEL,
-      endpoint: "responses",
-      success: false,
-      errorCode: "FETCH_ERROR",
-      errorMessage: String(e).slice(0, 500),
-    });
+    const attempts = (e as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+    await logTextProviderAttempts(params.costContext, "image_qa", attempts);
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "image_qa_error", errorCode: "AI_IMAGE_QA_UNAVAILABLE" }));
     return null;
   }
+}
+
+async function sourceAwareQaForImageBytes(params: {
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+  sourceType: AdImageQaSourceType;
+  merchantOverrideAcknowledged?: boolean;
+}): Promise<SourceAwareImageQaResult> {
+  const requiredVisualItems = params.requiredVisualItems.filter((item) => item.trim().length > 0);
+  const raw = await inspectGeneratedImageForOffer({
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    imageBytes: params.imageBytes,
+    requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: params.sourceType,
+  });
+  return normalizeSourceAwareImageQaResult({
+    raw,
+    requiredVisualItems,
+    sourceType: params.sourceType,
+    merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+  });
+}
+
+async function fetchApprovedStockImageBytes(params: {
+  admin: SupabaseClient;
+  stockPath: string;
+}): Promise<Uint8Array | null> {
+  const { data: signed, error: signedErr } = await params.admin.storage
+    .from("deal-photos")
+    .createSignedUrl(params.stockPath, 60 * 60);
+  if (signedErr || !signed?.signedUrl) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_signed_url_failed",
+        err: signedErr?.message?.slice(0, 200),
+      }),
+    );
+    return null;
+  }
+
+  try {
+    const fetched = await fetch(signed.signedUrl);
+    if (!fetched.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: "stock_fetch_failed", status: fetched.status }));
+      return null;
+    }
+    return new Uint8Array(await fetched.arrayBuffer());
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "stock_fetch_error", errorCode: "FETCH_ERROR" }));
+    return null;
+  }
+}
+
+async function qaApprovedStockFallback(params: {
+  admin: SupabaseClient;
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  stockPath: string;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+}): Promise<ImageQaTelemetry | null> {
+  const imageBytes = await fetchApprovedStockImageBytes({
+    admin: params.admin,
+    stockPath: params.stockPath,
+  });
+  if (!imageBytes) {
+    const sourceAware = unavailableSourceAwareImageQaResult({ sourceType: "approved_stock" });
+    const telemetry = imageQaTelemetryFromSourceAware(sourceAware, 0);
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_image_qa_blocked",
+        decision: telemetry.decision,
+        hardFailReasons: telemetry.hardFailReasons,
+      }),
+    );
+    return null;
+  }
+
+  const sourceAware = await sourceAwareQaForImageBytes({
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    imageBytes,
+    requiredVisualItems: params.requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: "approved_stock",
+  });
+  const telemetry = imageQaTelemetryFromSourceAware(sourceAware, 1);
+  if (shouldFailClosedForImageQa(sourceAware)) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "stock_image_qa_blocked",
+        decision: telemetry.decision,
+        hardFailReasons: telemetry.hardFailReasons.slice(0, 8),
+        missingItems: telemetry.missingItems.slice(0, 8),
+      }),
+    );
+    return null;
+  }
+  return telemetry;
 }
 
 type OpenAiProducedImage = {
@@ -818,14 +1616,19 @@ type OpenAiProducedImage = {
   qa: ImageQaTelemetry;
 };
 
-type ProducedImage = OpenAiProducedImage & {
+type ProducedImageBase = OpenAiProducedImage & {
   provider: AiImageProvider;
   model: string | null;
   estimatedCostUsd: number;
 };
 
+type ProducedImage = ProducedImageBase & {
+  selection: AdImageSelection;
+};
+
 async function produceImageOpenAiOnly(params: {
   openAiKey: string;
+  geminiApiKey?: string | null;
   admin: SupabaseClient;
   userClient: SupabaseClient;
   businessId: string;
@@ -835,10 +1638,17 @@ async function produceImageOpenAiOnly(params: {
   itemHint: string;
   businessName: string;
   offerContract: DealOfferContract;
+  imageEditMode: MerchantImageEditMode;
+  customImageEditInstruction?: string;
+  merchantOverrideAcknowledged: boolean;
+  revisionPreset?: string;
+  revisionFeedback?: string;
   costContext: AiCostContext;
+  imageAspectRatio: AiImageAspectRatio;
 }): Promise<OpenAiProducedImage> {
   const {
     openAiKey,
+    geminiApiKey,
     admin,
     userClient,
     businessId,
@@ -848,12 +1658,14 @@ async function produceImageOpenAiOnly(params: {
     itemHint,
     businessName,
     offerContract,
+    merchantOverrideAcknowledged,
     costContext,
   } = params;
 
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
-  const skippedQa = skippedImageQaTelemetry();
+  const requiredVisualItems = buildRequiredVisualItems(offerContract);
+  const originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
 
   // Path A — owner uploaded a photo
   if (photoPath) {
@@ -865,7 +1677,7 @@ async function produceImageOpenAiOnly(params: {
         source: "uploaded_original",
         treatment: null,
         prompt: null,
-        qa: skippedQa,
+        qa: originalQa,
       };
     }
 
@@ -880,7 +1692,7 @@ async function produceImageOpenAiOnly(params: {
           err: signedErr?.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
 
     let imageBytes: Uint8Array;
@@ -888,27 +1700,48 @@ async function produceImageOpenAiOnly(params: {
     try {
       const fetched = await fetch(signed.signedUrl);
       if (!fetched.ok) {
-        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
       }
       imageMime = fetched.headers.get("content-type") || "image/png";
       imageBytes = new Uint8Array(await fetched.arrayBuffer());
     } catch {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
 
+    // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
     const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
       openAiKey,
       imageBytes,
       imageMime,
       treatment: photoTreatment,
+      customEditInstruction: [
+        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+        imageRevisionInstruction({
+          revisionPreset: params.revisionPreset,
+          revisionFeedback: params.revisionFeedback,
+        }),
+      ].filter(Boolean).join(" "),
     });
     await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
     const enhanced = enhancedResult.bytes;
 
     if (!enhanced) {
       // Enhancement failed — fall back to the original photo so the user still gets an ad
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
+
+    const editQa = await sourceAwareQaForImageBytes({
+      openAiKey,
+      geminiApiKey,
+      imageBytes: enhanced,
+      requiredVisualItems,
+      costContext,
+      sourceType: "merchant_ai_edit",
+    });
+    if (shouldFailClosedForImageQa(editQa)) {
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
+    }
+    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
     const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
     const { error: upErr } = await admin.storage
@@ -922,13 +1755,12 @@ async function produceImageOpenAiOnly(params: {
           err: upErr.message?.slice(0, 200),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: skippedQa };
+      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
-    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: skippedQa };
+    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
-  const requiredVisualItems = buildRequiredVisualItems(offerContract);
   const itemName = requiredVisualItems.length > 0
     ? requiredVisualItems.join(" and ")
     : research.item_name || itemHint || "menu item";
@@ -937,17 +1769,34 @@ async function produceImageOpenAiOnly(params: {
     itemDescription: research.is_familiar ? research.description : "",
     businessName,
     requiredVisualItems,
+    visualRevisionInstruction: imageRevisionInstruction({
+      revisionPreset: params.revisionPreset,
+      revisionFeedback: params.revisionFeedback,
+    }),
+    aspectRatio: params.imageAspectRatio === "4:5" ? "4:5" : "1:1",
   });
   let imageGeneration = await generatePhotoAdImageWithTelemetry(openAiKey, prompt);
   await logImageAttempts(costContext, "image_generation", imageGeneration.attempts);
   let png = imageGeneration.bytes;
-  const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 0,
-    attempts: 0,
-    missingItems: [],
-    regenerated: false,
-    unavailable: false,
-  };
+  const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: {
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        has_crop_or_overlay_risk: false,
+        forbidden_elements: [],
+        crop_or_overlay_issues: [],
+        notes: requiredVisualItems.length > 0 ? "Image QA pending." : "No required visual items for this offer.",
+      },
+      requiredVisualItems: [],
+      sourceType: "ai_generated",
+    }),
+  );
   if (!png) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
@@ -955,15 +1804,35 @@ async function produceImageOpenAiOnly(params: {
   if (requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey,
+      geminiApiKey,
       imageBytes: png,
       requiredVisualItems,
       costContext,
+      sourceType: "ai_generated",
     });
     qa.attempts = 1;
     if (!firstQa) {
-      qa.unavailable = true;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+          1,
+          qa.regenerated,
+        ),
+      );
     } else if (!firstQa.all_required_items_present) {
-      qa.missingItems = firstQa.missing_items;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
@@ -984,22 +1853,54 @@ async function produceImageOpenAiOnly(params: {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey,
+          geminiApiKey,
           imageBytes: retryPng,
           requiredVisualItems,
           costContext,
+          sourceType: "ai_generated",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          qa.unavailable = true;
-          png = retryPng;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+              2,
+              true,
+            ),
+          );
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
-          qa.missingItems = retryQa.missing_items;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: retryQa,
+                requiredVisualItems,
+                sourceType: "ai_generated",
+              }),
+              2,
+              true,
+            ),
+          );
           png = retryPng;
         }
       }
+    } else {
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
     }
   }
-  if (qa.missingItems.length > 0 && !qa.unavailable) {
+  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
     return { posterStoragePath: null, source: "generated", treatment: null, prompt, qa };
   }
   const generatedPath = `${businessId}/ai_ad_generated_${ts}_${rand}.png`;
@@ -1019,7 +1920,7 @@ async function produceImageOpenAiOnly(params: {
   return { posterStoragePath: generatedPath, source: "generated", treatment: null, prompt, qa };
 }
 
-function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImage {
+function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImageBase {
   const usedOpenAiImage =
     result.source === "uploaded_enhanced" || result.source === "generated" || result.posterStoragePath === null;
   return {
@@ -1032,40 +1933,66 @@ function withOpenAiImageMetadata(result: OpenAiProducedImage): ProducedImage {
 
 async function produceFallbackImage(params: {
   admin: SupabaseClient;
+  openAiKey: string;
+  geminiApiKey?: string | null;
   prompt: string | null;
-  qa: ImageQaTelemetry;
   requiredVisualItems: readonly string[];
   imageProviderConfig: AiImageProviderConfig;
+  costContext: AiCostContext;
+  sourcePhotoPath?: string | null;
+  editMode?: MerchantImageEditMode;
 }): Promise<ProducedImage> {
   if (params.imageProviderConfig.stockFallbackEnabled) {
-    const stockPath = await findStockImageFallback({
+    const stockPaths = await findStockImageFallbacks({
       admin: params.admin,
       requiredVisualItems: params.requiredVisualItems,
     });
-    if (stockPath) {
-      return {
-        posterStoragePath: stockPath,
-        source: "stock",
-        treatment: null,
-        prompt: params.prompt,
-        qa: params.qa,
-        provider: "stock",
-        model: null,
-        estimatedCostUsd: 0,
-      };
+    const maxStockQaCandidates = Math.max(1, Math.min(envNumber("AI_STOCK_QA_CANDIDATE_LIMIT", 3), 10));
+    for (const stockPath of stockPaths.slice(0, maxStockQaCandidates)) {
+      const stockQa = await qaApprovedStockFallback({
+        admin: params.admin,
+        openAiKey: params.openAiKey,
+        geminiApiKey: params.geminiApiKey,
+        stockPath,
+        requiredVisualItems: params.requiredVisualItems,
+        costContext: params.costContext,
+      });
+      if (!stockQa) continue;
+      return withImageSelection(
+        {
+          posterStoragePath: stockPath,
+          source: "stock",
+          treatment: null,
+          prompt: params.prompt,
+          qa: stockQa,
+          provider: "stock",
+          model: null,
+          estimatedCostUsd: 0,
+        },
+        {
+          sourcePhotoPath: params.sourcePhotoPath ?? null,
+          editMode: params.editMode ?? "none",
+        },
+      );
     }
   }
 
-  return {
-    posterStoragePath: null,
-    source: "copy_only",
-    treatment: null,
-    prompt: params.prompt,
-    qa: params.qa,
-    provider: "none",
-    model: null,
-    estimatedCostUsd: 0,
-  };
+  return withImageSelection(
+    {
+      posterStoragePath: null,
+      source: "copy_only",
+      treatment: null,
+      prompt: params.prompt,
+      qa: skippedImageQaTelemetry("deterministic_fallback"),
+      provider: "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    {
+      sourcePhotoPath: params.sourcePhotoPath ?? null,
+      editMode: params.editMode ?? "none",
+    },
+  );
 }
 
 async function produceImage(params: {
@@ -1081,36 +2008,87 @@ async function produceImage(params: {
   businessName: string;
   businessCategory?: string;
   offerContract: DealOfferContract;
+  imageSourceMode: MerchantImageSourceMode;
+  imageEditMode: MerchantImageEditMode;
+  customImageEditInstruction?: string;
+  merchantOverrideAcknowledged: boolean;
   revisionPreset?: string;
   revisionFeedback?: string;
   imageProviderConfig: AiImageProviderConfig;
   costContext: AiCostContext;
+  imageAspectRatio: AiImageAspectRatio;
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
-  const originalUploadedPhoto = (): ProducedImage => ({
-    posterStoragePath: params.photoPath,
-    source: "uploaded_original",
-    treatment: null,
-    prompt: null,
-    qa: skippedImageQaTelemetry(),
-    provider: "none",
-    model: null,
-    estimatedCostUsd: 0,
-  });
+  const originalUploadedPhoto = (): ProducedImage => withImageSelection(
+    {
+      posterStoragePath: params.photoPath,
+      source: "uploaded_original",
+      treatment: null,
+      prompt: null,
+      qa: originalPhotoQaTelemetry(params.merchantOverrideAcknowledged),
+      provider: "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    {
+      sourcePhotoPath: params.photoPath,
+      editMode: "none",
+    },
+  );
   const openAiFallback = async (): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
     const withMetadata = withOpenAiImageMetadata(result);
     if (withMetadata.posterStoragePath || withMetadata.source === "uploaded_original") {
-      return withMetadata;
+      return withImageSelection(withMetadata, {
+        sourcePhotoPath: params.photoPath,
+        editMode: withMetadata.source === "uploaded_enhanced" ? params.imageEditMode : "none",
+      });
     }
     return produceFallbackImage({
       admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       prompt: withMetadata.prompt,
-      qa: withMetadata.qa,
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
+      sourcePhotoPath: params.photoPath,
+      editMode: params.imageEditMode,
     });
   };
+
+  if (params.imageSourceMode === "approved_stock") {
+    return produceFallbackImage({
+      admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
+      prompt: null,
+      requiredVisualItems,
+      imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
+      sourcePhotoPath: null,
+      editMode: "none",
+    });
+  }
+
+  if (params.imageSourceMode === "deterministic_fallback") {
+    return withImageSelection(
+      {
+        posterStoragePath: null,
+        source: "copy_only",
+        treatment: null,
+        prompt: null,
+        qa: skippedImageQaTelemetry("deterministic_fallback"),
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: null,
+        editMode: "none",
+      },
+    );
+  }
 
   if (params.imageProviderConfig.primaryProvider === "openai") {
     return openAiFallback();
@@ -1119,24 +2097,34 @@ async function produceImage(params: {
   if (params.imageProviderConfig.primaryProvider === "stock") {
     return produceFallbackImage({
       admin: params.admin,
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       prompt: null,
-      qa: skippedImageQaTelemetry(),
       requiredVisualItems,
       imageProviderConfig: params.imageProviderConfig,
+      costContext: params.costContext,
+      sourcePhotoPath: params.photoPath,
+      editMode: params.imageEditMode,
     });
   }
 
   if (params.imageProviderConfig.primaryProvider === "none") {
-    return {
-      posterStoragePath: null,
-      source: "copy_only",
-      treatment: null,
-      prompt: null,
-      qa: skippedImageQaTelemetry(),
-      provider: "none",
-      model: null,
-      estimatedCostUsd: 0,
-    };
+    return withImageSelection(
+      {
+        posterStoragePath: null,
+        source: "copy_only",
+        treatment: null,
+        prompt: null,
+        qa: skippedImageQaTelemetry("deterministic_fallback"),
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: params.imageEditMode,
+      },
+    );
   }
 
   const useOpenAiFallback = params.imageProviderConfig.fallbackProvider === "openai";
@@ -1148,6 +2136,10 @@ async function produceImage(params: {
     revisionFeedback: params.revisionFeedback,
     photoTreatment: params.photoTreatment,
   });
+  const revisionImageInstruction = imageRevisionInstruction({
+    revisionPreset: params.revisionPreset,
+    revisionFeedback: params.revisionFeedback,
+  });
   const prompt = buildGeminiAdImagePrompt({
     businessId: params.businessId,
     businessName: params.businessName,
@@ -1157,8 +2149,9 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
+    customEditInstruction: revisionImageInstruction,
     stylePreset,
-    aspectRatio: "1:1",
+    aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
   });
 
@@ -1170,7 +2163,6 @@ async function produceImage(params: {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
 
-    const skippedQa = skippedImageQaTelemetry();
     const { data: signed, error: signedErr } = await params.userClient.storage
       .from("deal-photos")
       .createSignedUrl(params.photoPath, 60 * 60);
@@ -1210,15 +2202,19 @@ async function produceImage(params: {
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      customEditInstruction: [
+        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+        revisionImageInstruction,
+      ].filter(Boolean).join(" "),
       stylePreset,
-      aspectRatio: "1:1",
+      aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
     });
     const gemini = await generateGeminiAdImageWithTelemetry({
       apiKey: params.geminiApiKey,
       model: params.imageProviderConfig.geminiModel,
       prompt: photoPrompt,
-      aspectRatio: "1:1",
+      aspectRatio: params.imageAspectRatio,
       imageSize: "1K",
       estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
@@ -1228,6 +2224,19 @@ async function produceImage(params: {
     if (!gemini.bytes) {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
+
+    const editQa = await sourceAwareQaForImageBytes({
+      openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
+      imageBytes: gemini.bytes,
+      requiredVisualItems,
+      costContext: params.costContext,
+      sourceType: "merchant_ai_edit",
+    });
+    if (shouldFailClosedForImageQa(editQa)) {
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+    }
+    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
     const enhancedPath = await uploadGeneratedBytes({
       admin: params.admin,
@@ -1241,23 +2250,29 @@ async function produceImage(params: {
     if (!enhancedPath) {
       return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
     }
-    return {
-      posterStoragePath: enhancedPath,
-      source: "uploaded_enhanced",
-      treatment: params.photoTreatment,
-      prompt: gemini.prompt,
-      qa: skippedQa,
-      provider: "gemini",
-      model: gemini.model,
-      estimatedCostUsd: gemini.estimatedCostUsd,
-    };
+    return withImageSelection(
+      {
+        posterStoragePath: enhancedPath,
+        source: "uploaded_enhanced",
+        treatment: params.photoTreatment,
+        prompt: gemini.prompt,
+        qa: editQaTelemetry,
+        provider: "gemini",
+        model: gemini.model,
+        estimatedCostUsd: gemini.estimatedCostUsd,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: params.imageEditMode,
+      },
+    );
   }
 
   const gemini = await generateGeminiAdImageWithTelemetry({
     apiKey: params.geminiApiKey,
     model: params.imageProviderConfig.geminiModel,
     prompt,
-    aspectRatio: "1:1",
+    aspectRatio: params.imageAspectRatio,
     imageSize: "1K",
     estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
   });
@@ -1266,26 +2281,60 @@ async function produceImage(params: {
   let imageMimeType = gemini.mimeType;
   let imagePrompt = gemini.prompt;
   let estimatedCostUsd = gemini.estimatedCostUsd;
-  const qa: ImageQaTelemetry = {
-    checked: requiredVisualItems.length > 0,
-    attempts: 0,
-    missingItems: [],
-    regenerated: gemini.attempts.some((attempt) => attempt.retry && attempt.success),
-    unavailable: false,
-  };
+  const qa: ImageQaTelemetry = imageQaTelemetryFromSourceAware(
+    normalizeSourceAwareImageQaResult({
+      raw: {
+        all_required_items_present: true,
+        items: [],
+        missing_items: [],
+        has_readable_text: false,
+        has_forbidden_logo_or_brand: false,
+        has_qr_code: false,
+        has_unrelated_mascot_or_animal: false,
+        has_crop_or_overlay_risk: false,
+        forbidden_elements: [],
+        crop_or_overlay_issues: [],
+        notes: requiredVisualItems.length > 0 ? "Image QA pending." : "No required visual items for this offer.",
+      },
+      requiredVisualItems: [],
+      sourceType: "ai_generated",
+    }),
+    0,
+    gemini.attempts.some((attempt) => attempt.retry && attempt.success),
+  );
 
   if (imageBytes && requiredVisualItems.length > 0) {
     const firstQa = await inspectGeneratedImageForOffer({
       openAiKey: params.openAiKey,
+      geminiApiKey: params.geminiApiKey,
       imageBytes,
       requiredVisualItems,
       costContext: params.costContext,
+      sourceType: "ai_generated",
     });
     qa.attempts = 1;
     if (!firstQa) {
-      qa.unavailable = true;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+          1,
+          qa.regenerated,
+        ),
+      );
     } else if (!firstQa.all_required_items_present) {
-      qa.missingItems = firstQa.missing_items;
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
@@ -1303,7 +2352,7 @@ async function produceImage(params: {
         apiKey: params.geminiApiKey,
         model: params.imageProviderConfig.geminiModel,
         prompt: retryPrompt,
-        aspectRatio: "1:1",
+        aspectRatio: params.imageAspectRatio,
         imageSize: "1K",
         estimatedCostUsd: params.imageProviderConfig.geminiEstimatedCost1KUsd,
         retryOnFailure: false,
@@ -1313,28 +2362,57 @@ async function produceImage(params: {
         qa.regenerated = true;
         const retryQa = await inspectGeneratedImageForOffer({
           openAiKey: params.openAiKey,
+          geminiApiKey: params.geminiApiKey,
           imageBytes: retryGeneration.bytes,
           requiredVisualItems,
           costContext: params.costContext,
+          sourceType: "ai_generated",
         });
         qa.attempts = 2;
         if (!retryQa) {
-          qa.unavailable = true;
-          imageBytes = retryGeneration.bytes;
-          imageMimeType = retryGeneration.mimeType;
-          imagePrompt = retryGeneration.prompt;
-          estimatedCostUsd += retryGeneration.estimatedCostUsd;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              unavailableSourceAwareImageQaResult({ sourceType: "ai_generated" }),
+              2,
+              true,
+            ),
+          );
         } else if (retryQa.all_required_items_present || retryQa.missing_items.length < firstQa.missing_items.length) {
-          qa.missingItems = retryQa.missing_items;
+          Object.assign(
+            qa,
+            imageQaTelemetryFromSourceAware(
+              normalizeSourceAwareImageQaResult({
+                raw: retryQa,
+                requiredVisualItems,
+                sourceType: "ai_generated",
+              }),
+              2,
+              true,
+            ),
+          );
           imageBytes = retryGeneration.bytes;
           imageMimeType = retryGeneration.mimeType;
           imagePrompt = retryGeneration.prompt;
           estimatedCostUsd += retryGeneration.estimatedCostUsd;
         }
       }
+    } else {
+      Object.assign(
+        qa,
+        imageQaTelemetryFromSourceAware(
+          normalizeSourceAwareImageQaResult({
+            raw: firstQa,
+            requiredVisualItems,
+            sourceType: "ai_generated",
+          }),
+          1,
+          qa.regenerated,
+        ),
+      );
     }
   }
-  if (qa.missingItems.length > 0 && !qa.unavailable) {
+  if (qa.unavailable || qa.hardFailReasons.length > 0 || (qa.missingItems.length > 0 && !qa.unavailable)) {
     imageBytes = null;
     imageMimeType = null;
   }
@@ -1350,16 +2428,22 @@ async function produceImage(params: {
       rand,
     });
     if (generatedPath) {
-      return {
-        posterStoragePath: generatedPath,
-        source: "generated",
-        treatment: null,
-        prompt: imagePrompt,
-        qa,
-        provider: "gemini",
-        model: gemini.model,
-        estimatedCostUsd,
-      };
+      return withImageSelection(
+        {
+          posterStoragePath: generatedPath,
+          source: "generated",
+          treatment: null,
+          prompt: imagePrompt,
+          qa,
+          provider: "gemini",
+          model: gemini.model,
+          estimatedCostUsd,
+        },
+        {
+          sourcePhotoPath: null,
+          editMode: "none",
+        },
+      );
     }
   }
 
@@ -1372,10 +2456,14 @@ async function produceImage(params: {
 
   return produceFallbackImage({
     admin: params.admin,
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
     prompt,
-    qa,
     requiredVisualItems,
     imageProviderConfig: params.imageProviderConfig,
+    costContext: params.costContext,
+    sourcePhotoPath: params.photoPath,
+    editMode: params.imageEditMode,
   });
 }
 
@@ -1443,17 +2531,125 @@ function copyRepairAttemptCount(source: AiDealCopySource | undefined): number {
   return 0;
 }
 
+function providerAttemptTelemetry(attempt: ProviderAttempt) {
+  return {
+    provider: attempt.provider,
+    model: attempt.model,
+    operation: attempt.operation,
+    success: attempt.success,
+    latency_ms: attempt.latencyMs,
+    error_class: attempt.errorClass ?? null,
+    error_code: attempt.errorCode ?? null,
+    input_tokens: attempt.inputTokens ?? null,
+    cached_input_tokens: attempt.cachedInputTokens ?? null,
+    reasoning_tokens: attempt.reasoningTokens ?? null,
+    output_tokens: attempt.outputTokens ?? null,
+    estimated_cost_usd: attempt.estimatedCostUsd ?? null,
+  };
+}
+
+function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null) {
+  if (!result) return { enabled: false };
+  const repairEntries = Object.entries(result.repairs);
+  const qaReviewTelemetry = (qa: VerifiedAdLocalizationBundleResult["semanticQa"]) => ({
+    provider: qa.provider,
+    model: qa.model,
+    prompt_version: qa.promptVersion,
+    fallback_used: qa.fallbackUsed,
+    fallback_reason: qa.fallbackReason ?? null,
+    skipped_reason: qa.skippedReason ?? null,
+    attempts: qa.attempts.map(providerAttemptTelemetry),
+    decisions_by_locale: Object.fromEntries(
+      Object.entries(qa.reviews).map(([locale, review]) => [
+        locale,
+        review
+          ? {
+              decision: review.decision,
+              hard_fail_reasons: review.hardFailReasons,
+              scores: review.scores,
+              feedback_count: review.conciseFeedback.length,
+            }
+          : null,
+      ]),
+    ),
+  });
+  return {
+    enabled: true,
+    source_locale: result.bundle.sourceLocale,
+    source_creative_hash: result.bundle.sourceCreativeHash,
+    localization_bundle_hash: result.bundle.localizationBundleHash,
+    deterministic_fallback_locales: result.bundle.deterministicFallbackLocales,
+    transcreation: {
+      provider: result.transcreation.provider,
+      model: result.transcreation.model,
+      prompt_version: result.transcreation.promptVersion,
+      fallback_used: result.transcreation.fallbackUsed,
+      fallback_reason: result.transcreation.fallbackReason ?? null,
+      skipped_reason: result.transcreation.skippedReason ?? null,
+      attempts: result.transcreation.attempts.map(providerAttemptTelemetry),
+    },
+    deterministic_qa: Object.fromEntries(
+      Object.entries(result.deterministicQa).map(([locale, qa]) => [
+        locale,
+        qa
+          ? {
+              decision: qa.decision,
+              hard_fail_reasons: qa.hardFailReasons,
+              scores: qa.scores,
+              feedback_count: qa.conciseFeedback.length,
+            }
+          : null,
+        ]),
+    ),
+    semantic_qa: qaReviewTelemetry(result.semanticQa),
+    repaired_semantic_qa: qaReviewTelemetry(result.repairedSemanticQa),
+    repairs: {
+      target_locales: result.repairTargetLocales,
+      count: repairEntries.length,
+      by_locale: Object.fromEntries(
+        repairEntries.map(([locale, repair]) => [
+          locale,
+          repair
+            ? {
+                provider: repair.provider,
+                model: repair.model,
+                prompt_version: repair.promptVersion,
+                fallback_used: repair.fallbackUsed,
+                fallback_reason: repair.fallbackReason ?? null,
+                skipped_reason: repair.skippedReason ?? null,
+                attempts: repair.attempts.map(providerAttemptTelemetry),
+              }
+            : null,
+        ]),
+      ),
+    },
+  };
+}
+
 function buildGenerationTelemetry(params: {
   offerContract: DealOfferContract;
   copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
     fallback_reason?: string;
     generator_version?: string;
     copy_latency_ms?: number;
+    provider_attempts?: ProviderAttempt[];
+    provider?: string;
+    model?: string;
+    provider_fallback_used?: boolean;
+    provider_fallback_reason?: string;
+    copy_quality?: CopyQualityTelemetry[];
+    judge_attempts?: ProviderAttempt[];
+    judge_provider?: string;
+    judge_model?: string;
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
+  totalLatencyMs: number;
+  localizationResult?: VerifiedAdLocalizationBundleResult | null;
+  posterDraft?: PosterDraftV1 | null;
+  requestedCreativeFormat?: "standard_card" | "poster_v1";
 }) {
-  const { offerContract, copy, imageResult, productionSuccess } = params;
+  const { offerContract, copy, imageResult, productionSuccess, totalLatencyMs } = params;
   const validationRuleIds = copy.validation_reason_codes ?? [];
   const repairAttempts = copyRepairAttemptCount(copy.copy_source);
   const deterministicFallbackUsed = copy.copy_source === "DETERMINISTIC_FALLBACK";
@@ -1466,6 +2662,7 @@ function buildGenerationTelemetry(params: {
   return {
     events,
     success: productionSuccess,
+    total_latency_ms: totalLatencyMs,
     structured_offer: offerTelemetry(offerContract),
     generated: {
       headline: copy.headline,
@@ -1479,7 +2676,20 @@ function buildGenerationTelemetry(params: {
       model: imageResult.model,
       estimated_cost_usd: imageResult.estimatedCostUsd,
       produced_image: imageResult.posterStoragePath !== null,
+      requested_aspect_ratio: params.posterDraft?.aspect_ratio ?? "1:1",
     },
+    poster: params.posterDraft
+      ? {
+          requested_format: params.requestedCreativeFormat ?? "poster_v1",
+          template_id: params.posterDraft.template_id,
+          aspect_ratio: params.posterDraft.aspect_ratio,
+          policy_passed: params.posterDraft.policy.passed,
+          policy_reason_codes: params.posterDraft.policy.reasonCodes,
+          rendered_asset_path: params.posterDraft.rendered_asset_path,
+        }
+      : { requested_format: params.requestedCreativeFormat ?? "standard_card" },
+    image_selection: imageResult.selection,
+    image_lineage: imageResult.selection.lineage,
     required_visual_items: buildRequiredVisualItems(offerContract),
     validation_rule_ids: validationRuleIds,
     repair_attempts: repairAttempts,
@@ -1492,7 +2702,19 @@ function buildGenerationTelemetry(params: {
       latency_ms: copy.copy_latency_ms ?? null,
       fallback_reason: copy.fallback_reason ?? null,
       validation_failure_count: validationRuleIds.length,
+      provider: copy.provider ?? null,
+      model: copy.model ?? null,
+      provider_fallback_used: copy.provider_fallback_used ?? false,
+      provider_fallback_reason: copy.provider_fallback_reason ?? null,
+      quality: copy.copy_quality ?? [],
+      judge: {
+        provider: copy.judge_provider ?? null,
+        model: copy.judge_model ?? null,
+        attempts: (copy.judge_attempts ?? []).map(providerAttemptTelemetry),
+      },
+      provider_attempts: (copy.provider_attempts ?? []).map(providerAttemptTelemetry),
     },
+    localization: localizationTelemetry(params.localizationResult ?? null),
     image_qa: imageResult.qa,
   };
 }
@@ -1500,6 +2722,7 @@ function buildGenerationTelemetry(params: {
 // ─── HTTP handler ──────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const requestStartedAtMs = Date.now();
   const corsHeaders = getCorsHeaders(req);
   let adminForCreditRelease: SupabaseClient | null = null;
   let chargeableRevisionCredit: ChargeableImageRevisionReservation | null = null;
@@ -1510,12 +2733,13 @@ Deno.serve(async (req) => {
     chargeableRevisionCredit = null;
     try {
       await releaseChargeableImageRevisionCredit(adminForCreditRelease as any, reservation, reason);
-    } catch (e) {
+    } catch {
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
           event: "deal_credit_release_failed",
-          err: String(e).slice(0, 200),
+          reason,
+          errorCode: "DEAL_CREDIT_RELEASE_FAILED",
         }),
       );
     }
@@ -1586,6 +2810,56 @@ Deno.serve(async (req) => {
       VALID_PHOTO_TREATMENTS.has(photoTreatmentRaw as PhotoTreatment)
         ? (photoTreatmentRaw as PhotoTreatment)
         : null;
+    const fallbackSourceMode: MerchantImageSourceMode = photoPath
+      ? photoTreatment
+        ? "merchant_ai_edit"
+        : "merchant_original"
+      : "ai_generated";
+    const requestedImageSourceMode = normalizeMerchantImageSourceMode(body.image_source_mode, fallbackSourceMode);
+    const imageSourceMode =
+      !photoPath && (requestedImageSourceMode === "merchant_original" || requestedImageSourceMode === "merchant_ai_edit")
+        ? "ai_generated"
+        : requestedImageSourceMode;
+    const imageEditMode = normalizeMerchantImageEditMode(
+      body.image_edit_mode,
+      imageEditModeFromPhotoTreatment(photoTreatment),
+    );
+    const customEditInstruction = validateMerchantImageEditInstruction(body.custom_image_edit_instruction);
+    if (imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom" && !customEditInstruction.instruction) {
+      return new Response(
+        JSON.stringify({
+          error: "Describe the custom image edit you want, or choose a preset polish option.",
+          error_code: "IMAGE_EDIT_INSTRUCTION_REQUIRED",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom" && !customEditInstruction.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "Custom image edit instructions cannot change offer facts, add text/logos/QR codes, or introduce unrelated elements.",
+          error_code: "IMAGE_EDIT_INSTRUCTION_REJECTED",
+          reason_codes: customEditInstruction.reasonCodes,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const merchantImageWarningOverrideAcknowledged =
+      body.merchant_image_warning_override_acknowledged === true;
+    const effectivePhotoPath =
+      imageSourceMode === "merchant_original" || imageSourceMode === "merchant_ai_edit"
+        ? photoPath
+        : "";
+    const effectivePhotoTreatment =
+      imageSourceMode === "merchant_ai_edit"
+        ? imageEditMode === "custom"
+          ? "studiopolish"
+          : photoTreatmentFromImageEditMode(imageEditMode) ?? photoTreatment
+        : null;
+    const customImageEditInstruction =
+      imageSourceMode === "merchant_ai_edit" && imageEditMode === "custom"
+        ? customEditInstruction.instruction
+        : undefined;
 
     const businessContext: BusinessContext =
       body.business_context && typeof body.business_context === "object" && !Array.isArray(body.business_context)
@@ -1619,6 +2893,7 @@ Deno.serve(async (req) => {
         : crypto.randomUUID();
 
     const previousAdRaw = body.previous_ad;
+    const creativeRequest = parseCreativeRequest(body.creative);
     const revisionTargetRaw = typeof body.revision_target === "string"
       ? body.revision_target.trim().toLowerCase()
       : "";
@@ -1829,6 +3104,7 @@ Deno.serve(async (req) => {
     } else {
       research = await researchMenuItem({
         openAiKey,
+        geminiApiKey,
         itemHint: sourceHint,
         businessName,
         businessLocation: businessContext.location ?? "",
@@ -1840,6 +3116,15 @@ Deno.serve(async (req) => {
       fallback_reason?: string;
       generator_version?: string;
       copy_latency_ms?: number;
+      provider_attempts?: ProviderAttempt[];
+      provider?: string;
+      model?: string;
+      provider_fallback_used?: boolean;
+      provider_fallback_reason?: string;
+      copy_quality?: CopyQualityTelemetry[];
+      judge_attempts?: ProviderAttempt[];
+      judge_provider?: string;
+      judge_model?: string;
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
@@ -1862,6 +3147,7 @@ Deno.serve(async (req) => {
       try {
         copy = await generateCopy({
           openAiKey,
+          geminiApiKey,
           itemHint: sourceHint,
           research,
           businessName,
@@ -1876,9 +3162,9 @@ Deno.serve(async (req) => {
           previousAd: previousAd ?? undefined,
           costContext,
         });
-      } catch (e) {
+      } catch {
         console.log(
-          JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", err: String(e).slice(0, 300) }),
+          JSON.stringify({ tag: "ai_ads_v2", event: "copy_error", errorCode: "COPY_FAILED" }),
         );
         await admin.from("ai_generation_logs").insert({
           business_id: businessId,
@@ -1889,11 +3175,12 @@ Deno.serve(async (req) => {
           prompt_version: AD_COPY_PROMPT_VERSION,
           model: CHAT_MODEL,
           success: false,
-          failure_reason: String(e).slice(0, 100),
+          failure_reason: "COPY_FAILED",
           openai_called: true,
           response_payload: {
             events: ["quick_deal_ai_generation_failed"],
             stage: "copy",
+            total_latency_ms: Date.now() - requestStartedAtMs,
             structured_offer: offerTelemetry(offerContract),
           },
         });
@@ -1909,16 +3196,24 @@ Deno.serve(async (req) => {
     if (isRevision && previousAd && revisionTarget === "copy" && previousAd.poster_storage_path) {
       // Copy-only revision: keep the existing image. If there is no existing image,
       // fall through to image generation because every deal must have an image.
-      imageResult = {
-        posterStoragePath: previousAd.poster_storage_path ?? null,
-        source: previousAd.photo_source === "copy_only" ? "generated" : previousAd.photo_source,
-        treatment: previousAd.photo_treatment,
-        prompt: null,
-        qa: skippedImageQaTelemetry(),
-        provider: previousAd.photo_source === "stock" ? "stock" : "none",
-        model: null,
-        estimatedCostUsd: 0,
-      };
+      imageResult = withImageSelection(
+        {
+          posterStoragePath: previousAd.poster_storage_path ?? null,
+          source: previousAd.photo_source === "copy_only" ? "generated" : previousAd.photo_source,
+          treatment: previousAd.photo_treatment,
+          prompt: null,
+          qa: previousAd.photo_source === "uploaded_original"
+            ? originalPhotoQaTelemetry(previousAd.image_selection?.qa.merchantOverrideAcknowledged === true)
+            : skippedImageQaTelemetry(imageSourceModeFromPhotoSource(previousAd.photo_source)),
+          provider: previousAd.photo_source === "stock" ? "stock" : "none",
+          model: null,
+          estimatedCostUsd: 0,
+        },
+        {
+          sourcePhotoPath: previousAd.image_selection?.sourcePhotoPath ?? (effectivePhotoPath || null),
+          editMode: previousAd.image_selection?.editMode ?? imageEditModeFromPhotoTreatment(previousAd.photo_treatment),
+        },
+      );
     } else {
       imageResult = await produceImage({
         openAiKey,
@@ -1926,8 +3221,12 @@ Deno.serve(async (req) => {
         admin,
         userClient,
         businessId,
-        photoPath: photoPath || null,
-        photoTreatment,
+        photoPath: effectivePhotoPath || null,
+        photoTreatment: effectivePhotoTreatment,
+        imageSourceMode,
+        imageEditMode,
+        customImageEditInstruction,
+        merchantOverrideAcknowledged: merchantImageWarningOverrideAcknowledged,
         research,
         itemHint: sourceHint,
         businessName,
@@ -1937,7 +3236,94 @@ Deno.serve(async (req) => {
         revisionFeedback: revisionFeedback || undefined,
         imageProviderConfig,
         costContext,
+        imageAspectRatio: creativeRequest.imageAspectRatio,
       });
+    }
+
+    const sourceLocale = outputLanguageToSupportedLocale(outputLanguage);
+    const offerDefinition = buildOfferDefinitionV1FromContract(offerContract, {
+      dealEligibility: eligibilityInput!,
+      redemptionLimit,
+      schedule: {
+        mode: "summary_only",
+        summary: offerScheduleSummary,
+      },
+      sourceAssetIds: imageResult.posterStoragePath ? [imageResult.posterStoragePath] : [],
+    });
+    const posterDraft = creativeRequest.posterEnabled
+      ? buildPosterSpecFromOfferDefinition({
+          definition: offerDefinition,
+          enabled: true,
+          templateId: choosePosterTemplateForOffer(
+            creativeRequest.posterStyle,
+            offerDefinition,
+            businessContext.category,
+          ),
+          sourceAssetPath: imageResult.posterStoragePath,
+          renderedAssetPath: null,
+          headline: copy.headline,
+          subline: copy.short_description || copy.subheadline,
+          businessCategory: businessContext.category,
+          compositionPlan: imageResult.prompt,
+        })
+      : null;
+    let localizationResult: VerifiedAdLocalizationBundleResult | null = null;
+    if (shouldBuildLocalizationBundle()) {
+      const merchantProfile = buildMerchantCreativeProfile({
+        businessId,
+        businessName,
+        category: businessContext.category,
+        tone: businessContext.tone,
+        location: businessContext.location,
+        address: businessContext.address,
+        description: businessContext.description,
+        itemHint: sourceHint,
+        research,
+      });
+      localizationResult = await generateVerifiedAdLocalizationBundle({
+        request: {
+          adVersionId: `draft:${requestGroupId}`,
+          sourceLocale,
+          targetLocales: [...SUPPORTED_LOCALES],
+          sourceCreative: {
+            strategy: copy.copy_source ?? null,
+            headline: copy.headline,
+            supportingCopy: copy.short_description || copy.subheadline,
+            imageAltText: localizationImageAltText({
+              businessName,
+              headline: copy.headline,
+              offerLine: offerDefinition.canonicalOfferLine,
+            }),
+          },
+          creativeBrief: {
+            targetCustomerMoment: "",
+            exactCustomerHook: offerDefinition.canonicalOfferLine,
+            desiredFeeling: "",
+            naturalLanguageDirection: "",
+          },
+          offerFacts: adLocalizationOfferFactsFromDefinition(offerDefinition),
+          protectedTerms: protectedTermsForLocalization(offerDefinition),
+          localizedTerms: [],
+          merchantProfile,
+          generationRunId: requestGroupId,
+        },
+        offerDefinition,
+        deps: {
+          openAiApiKey: openAiKey,
+          geminiApiKey,
+          admin,
+          config: resolveAiTextProviderConfig(),
+        },
+        providerEnabled: envFlag("AI_V5_PERSUASIVE_TRANSCRATION_ENABLED", false),
+        repairEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+        semanticQaEnabled: envFlag("AI_V5_TRANSLATION_QA_ENABLED", false),
+      });
+      await logTextProviderAttempts(costContext, "ad_localization_transcreation", localizationResult.transcreation.attempts);
+      await logTextProviderAttempts(costContext, "ad_localization_translation_qa", localizationResult.semanticQa.attempts);
+      await logTextProviderAttempts(costContext, "ad_localization_repaired_translation_qa", localizationResult.repairedSemanticQa.attempts);
+      for (const repair of Object.values(localizationResult.repairs)) {
+        if (repair) await logTextProviderAttempts(costContext, "ad_localization_repair", repair.attempts);
+      }
     }
 
     const ad: SingleAd = {
@@ -1958,6 +3344,23 @@ Deno.serve(async (req) => {
       photo_source: imageResult.source,
       photo_treatment: imageResult.treatment,
       poster_storage_path: imageResult.posterStoragePath,
+      image_selection: imageResult.selection,
+      poster: posterDraft,
+      localization_bundle: localizationResult?.bundle ?? null,
+      localization_status: localizationResult
+        ? {
+            source_locale: localizationResult.bundle.sourceLocale,
+            localization_bundle_hash: localizationResult.bundle.localizationBundleHash,
+            deterministic_fallback_locales: localizationResult.bundle.deterministicFallbackLocales,
+            transcreation_provider: localizationResult.transcreation.provider,
+            transcreation_model: localizationResult.transcreation.model,
+            transcreation_skipped_reason: localizationResult.transcreation.skippedReason ?? null,
+            semantic_qa_provider: localizationResult.semanticQa.provider,
+            semantic_qa_model: localizationResult.semanticQa.model,
+            semantic_qa_skipped_reason: localizationResult.semanticQa.skippedReason ?? null,
+            repair_target_locales: localizationResult.repairTargetLocales,
+          }
+        : null,
     };
 
     /**
@@ -1974,15 +3377,28 @@ Deno.serve(async (req) => {
       input_mode: photoPath ? "photo" : "text",
       request_hash: `v3:${derivedRevisionCount}:${imageResult.source}:${imageResult.provider}`,
       prompt_version: AD_COPY_PROMPT_VERSION,
-      model: CHAT_MODEL,
+      model: copy.model ?? CHAT_MODEL,
       success: productionSuccess,
       failure_reason: productionSuccess ? null : "IMAGE_NULL",
-      openai_called: true,
+      openai_called:
+        (copy.provider_attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.transcreation.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.semanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        (localizationResult?.repairedSemanticQa.attempts ?? []).some((attempt) => attempt.provider === "openai") ||
+        Object.values(localizationResult?.repairs ?? {}).some((repair) =>
+          (repair?.attempts ?? []).some((attempt) => attempt.provider === "openai")
+        ) ||
+        imageResult.provider === "openai" ||
+        !isRevision,
       response_payload: buildGenerationTelemetry({
         offerContract,
         copy,
         imageResult,
         productionSuccess,
+        totalLatencyMs: Date.now() - requestStartedAtMs,
+        localizationResult,
+        posterDraft,
+        requestedCreativeFormat: creativeRequest.requestedFormat,
       }),
     });
 
@@ -2016,9 +3432,9 @@ Deno.serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch {
     await releaseReservedChargeableRevision("server_error");
-    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", err: String(e).slice(0, 400) }));
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: "fatal", errorCode: "SERVER_ERROR" }));
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -2057,6 +3473,32 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       : "",
     220,
   );
+  const posterStoragePath =
+    typeof raw.poster_storage_path === "string" && raw.poster_storage_path.length > 0
+      ? raw.poster_storage_path
+      : null;
+  const rawImageSelection =
+    raw.image_selection && typeof raw.image_selection === "object" && !Array.isArray(raw.image_selection)
+      ? (raw.image_selection as AdImageSelection)
+      : null;
+  const imageSelection = rawImageSelection ?? producedImageSelection({
+    image: {
+      posterStoragePath,
+      source: photoSource,
+      treatment: photoTreatment,
+      prompt: null,
+      qa: photoSource === "uploaded_original"
+        ? originalPhotoQaTelemetry(false)
+        : skippedImageQaTelemetry(imageSourceModeFromPhotoSource(photoSource)),
+      provider: photoSource === "stock" ? "stock" : "none",
+      model: null,
+      estimatedCostUsd: 0,
+    },
+    sourcePhotoPath: photoSource === "uploaded_original" || photoSource === "uploaded_enhanced"
+      ? posterStoragePath
+      : null,
+    editMode: imageEditModeFromPhotoTreatment(photoTreatment),
+  });
 
   return {
     headline: clip(typeof raw.headline === "string" ? raw.headline : "", 70),
@@ -2098,9 +3540,8 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     },
     photo_source: photoSource,
     photo_treatment: photoTreatment,
-    poster_storage_path:
-      typeof raw.poster_storage_path === "string" && raw.poster_storage_path.length > 0
-        ? raw.poster_storage_path
-        : null,
+    poster_storage_path: posterStoragePath,
+    image_selection: imageSelection,
+    poster: recordValue(raw.poster) as PosterDraftV1 | null,
   };
 }

@@ -16,8 +16,10 @@ import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { PAID_BILLING_ENABLED, canCreateDeal } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { getTabBarMetrics, type TabBarPlatform } from "@/lib/screen-layout";
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
 import { isRedeemerSession } from "@/lib/redemption-mode";
 import {
@@ -29,8 +31,14 @@ import type { TabMode } from "@/lib/tab-mode";
 
 type TabIconName = ComponentProps<typeof IconSymbol>["name"];
 
+const TAB_ICON_SIZE = 32;
+
 function createTabIconRenderer(name: TabIconName) {
-  const TabIconRenderer = ({ color }: { color: string }) => <IconSymbol size={28} name={name} color={color} />;
+  const TabIconRenderer = ({ color }: { color: string }) => (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <IconSymbol size={TAB_ICON_SIZE} name={name} color={color} />
+    </View>
+  );
   TabIconRenderer.displayName = `TabIcon(${name})`;
   return TabIconRenderer;
 }
@@ -42,7 +50,6 @@ const renderSettingsTabIcon = createTabIconRenderer("gearshape.fill");
 const renderCreateTabIcon = createTabIconRenderer("plus.circle.fill");
 const renderRedeemTabIcon = createTabIconRenderer("qrcode.viewfinder");
 const renderDashboardTabIcon = createTabIconRenderer("chart.bar.fill");
-const renderBillingTabIcon = createTabIconRenderer("heart.fill");
 const renderAccountTabIcon = createTabIconRenderer("person.crop.circle.fill");
 const renderHapticTabBarButton = (props: ComponentProps<typeof HapticTab>) => <HapticTab {...props} />;
 
@@ -122,7 +129,9 @@ export default function TabLayout() {
   const { mode } = useTabMode();
   const business = useBusiness();
   const ownerPinLocked = useOwnerPinLockedForBusiness(mode, business.businessId);
-  const androidTabBottomPadding = Math.max(insets.bottom, 8);
+  const tabBarPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const tabBarMetrics = getTabBarMetrics(insets, tabBarPlatform);
 
   /**
    * Hide tabs from the bar without removing them from the navigator.
@@ -147,20 +156,24 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: renderHapticTabBarButton,
           tabBarAllowFontScaling: false,
-          tabBarLabelStyle: { fontSize: 11, lineHeight: 13, fontWeight: "700" },
+          tabBarLabelStyle: { fontSize: 12, lineHeight: 15, fontWeight: "700", letterSpacing: 0 },
+          tabBarIconStyle: {
+            width: 36,
+            height: 36,
+            marginTop: 2,
+            marginBottom: 0,
+          },
           tabBarItemStyle: {
-            paddingTop: Platform.OS === "android" ? 4 : 2,
-            paddingBottom: Platform.OS === "android" ? 4 : 2,
+            height: 64,
+            minHeight: 64,
+            paddingTop: 4,
+            paddingBottom: 4,
           },
           tabBarStyle: {
             backgroundColor: theme.background,
-            ...(Platform.OS === "android"
-              ? {
-                  minHeight: 64 + androidTabBottomPadding,
-                  paddingTop: 4,
-                  paddingBottom: androidTabBottomPadding,
-                }
-              : {}),
+            height: tabBarMetrics.height,
+            paddingTop: 6,
+            paddingBottom: tabBarMetrics.bottomPadding + tabBarMetrics.bottomOffset,
           },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
@@ -171,6 +184,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: t('tabs.home'),
+            tabBarAccessibilityLabel: t("tabs.home"),
             tabBarIcon: renderHomeTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -179,6 +193,7 @@ export default function TabLayout() {
           name="map"
           options={{
             title: t('tabs.map'),
+            tabBarAccessibilityLabel: t("tabs.map"),
             tabBarIcon: renderMapTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -187,6 +202,7 @@ export default function TabLayout() {
           name="wallet"
           options={{
             title: t('tabs.wallet'),
+            tabBarAccessibilityLabel: t("tabs.wallet"),
             tabBarIcon: renderWalletTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -195,6 +211,7 @@ export default function TabLayout() {
           name="settings"
           options={{
             title: t('tabs.settings'),
+            tabBarAccessibilityLabel: t("tabs.settings"),
             tabBarIcon: renderSettingsTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -203,6 +220,7 @@ export default function TabLayout() {
           name="create"
           options={{
             title: t('tabs.create'),
+            tabBarAccessibilityLabel: t("tabs.create"),
             tabBarIcon: renderCreateTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
@@ -211,6 +229,7 @@ export default function TabLayout() {
           name="redeem"
           options={{
             title: t('tabs.redeem'),
+            tabBarAccessibilityLabel: t("tabs.redeem"),
             tabBarIcon: renderRedeemTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
@@ -219,29 +238,25 @@ export default function TabLayout() {
           name="dashboard"
           options={{
             title: t('tabs.dashboard'),
+            tabBarAccessibilityLabel: t("tabs.dashboard"),
             tabBarIcon: renderDashboardTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
         <Tabs.Screen
-          name="billing"
-          options={{
-            title: t("tabs.billing"),
-            tabBarIcon: renderBillingTabIcon,
-            ...hideWhen(mode === "customer" || !PAID_BILLING_ENABLED || ownerPinLocked),
-          }}
-        />
-        <Tabs.Screen
-          name="account"
+          name="account/index"
           options={{
             title: t('tabs.account'),
+            tabBarAccessibilityLabel: t("tabs.account"),
             tabBarIcon: renderAccountTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
         />
-        {/* FIX: billing/manage is a sub-route pushed from billing.tsx.
-            Without href:null, Expo Router auto-discovers it as a visible 5th
-            tab showing the raw route name "billing/manage". */}
+        <Tabs.Screen name="account/billing" options={{ href: null }} />
+        <Tabs.Screen name="account/billing/manage" options={{ href: null }} />
+        {/* Legacy billing routes redirect into Account. Keep them hidden so
+            old deep links never become tab-bar items. */}
+        <Tabs.Screen name="billing" options={{ href: null }} />
         <Tabs.Screen name="billing/manage" options={{ href: null }} />
         <Tabs.Screen name="auth" options={{ href: null }} />
       </Tabs>
@@ -258,7 +273,7 @@ function TabModeRedirect({
 }) {
   const { session } = useAuthSession();
   const { mode, ready } = useTabMode();
-  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading: billingLoading } = business;
+  const { isLoggedIn, businessId, subscriptionTier, loading: businessLoading } = business;
   const segments = useSegments() as string[];
   const router = useRouter();
   const params = useGlobalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -275,25 +290,33 @@ function TabModeRedirect({
     e2e: browserE2EParam ?? String(params.e2e ?? ""),
     isDev: __DEV__,
   });
+  const { blocked: billingBlocked, loading: locationBillingLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+    bypass: forceBypass,
+  });
+  const billingLoading = businessLoading || locationBillingLoading;
   const businessBillingBlocked =
     PAID_BILLING_ENABLED &&
     mode === "business" &&
     !billingLoading &&
-    !canCreateDeal({
-      isLoggedIn,
-      subscriptionStatus,
-      trialEndsAt,
-      bypass: forceBypass,
-    });
+    billingBlocked;
 
   const tab = useMemo(() => {
     return deriveTabFromSegments(segments.map(String));
   }, [segments]);
 
   const currentPath = useMemo(() => {
-    if (tab === null) return segments.join("/");
-    return tab === "index" ? "/(tabs)" : `/(tabs)/${tab}`;
-  }, [tab, segments]);
+    const tabsIdx = segments.map(String).indexOf("(tabs)");
+    if (tabsIdx === -1) return segments.join("/");
+    const tabPath = segments
+      .slice(tabsIdx + 1)
+      .map(String)
+      .filter(Boolean)
+      .join("/");
+    return !tabPath || tabPath === "index" ? "/(tabs)" : `/(tabs)/${tabPath}`;
+  }, [segments]);
 
   useEffect(() => {
     if (!ready || mode !== "business" || forceBypass || ownerPinLocked) {

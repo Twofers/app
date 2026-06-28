@@ -9,6 +9,7 @@ import {
   canonicalizeOfferItem,
   deterministicFallbackCopy,
   generateValidatedDealCopy,
+  parseAiDealCopyVariants,
   validateAiCopyAgainstOffer,
   type AiDealCopyVariant,
   type DealOfferContract,
@@ -290,6 +291,7 @@ describe("validateAiCopyAgainstOffer", () => {
   it("rejects buy-one-get-something-free copy that becomes generic BOGO", () => {
     for (const invalidText of [
       "Buy a coffee and bagel, get one free.",
+      "B.O.G.O. coffee and bagels.",
       "BOGO coffee and bagels.",
       "Buy coffee + bagel and get one free.",
       "Buy both and get one free.",
@@ -401,6 +403,90 @@ describe("validateAiCopyAgainstOffer", () => {
     }), coffeeBagelContract).reasonCodes).toContain("FORBIDDEN_AI_PHRASE");
     expect(validateAiCopyAgainstOffer(copyText("Buy a coffee and get two free bagels"), coffeeBagelContract).valid)
       .toBe(false);
+  });
+
+  it("parses all five creative lanes and preserves scoring metadata", () => {
+    const variants = parseAiDealCopyVariants(JSON.stringify({
+      creativeBrief: { exactCustomerHook: "breakfast is included" },
+      variants: [
+        {
+          candidateId: "lane_1",
+          strategyId: "value_clarity",
+          strategyReason: "Lead with the exchange.",
+          headlineAlternative: "Coffee gets the bagel",
+          description: "Buy a coffee and the bagel is on us.",
+          pushTitle: "Coffee + bagel",
+          pushBody: "Buy a coffee and get a free bagel.",
+          socialCaption: "Buy a coffee and get a free bagel.",
+          cta: "Claim deal",
+          imageBrief: "Coffee and bagel on a cafe table.",
+          merchantSpecificContextLimited: false,
+          preliminaryScore: 82,
+          judgeScore: 110,
+        },
+        {
+          candidateId: "lane_2",
+          strategyId: "social_or_occasion",
+          strategyReason: "Use the morning routine.",
+          headlineAlternative: "Bring breakfast to the break",
+          description: "Buy a coffee and the bagel is on us.",
+          pushTitle: "Breakfast is included",
+          pushBody: "Claim coffee and get a free bagel.",
+          socialCaption: "Coffee run plus a free bagel.",
+          cta: "Claim deal",
+          imageBrief: "Two breakfast items on a table.",
+          merchantSpecificContextLimited: false,
+        },
+        {
+          candidateId: "lane_3",
+          strategyId: "product_desire",
+          strategyReason: "Make the item concrete.",
+          headlineAlternative: "Coffee plus a bakery-case bagel",
+          description: "Buy a coffee and the bagel is on us.",
+          pushTitle: "Coffee and bagel",
+          pushBody: "Buy a coffee and claim the bagel free.",
+          socialCaption: "Coffee plus a free bagel.",
+          cta: "Claim deal",
+          imageBrief: "Coffee beside an accurate bagel.",
+          merchantSpecificContextLimited: false,
+        },
+        {
+          candidateId: "lane_4",
+          strategyId: "local_discovery",
+          strategyReason: "Invite a visit.",
+          headlineAlternative: "Try Cedar Street with breakfast",
+          description: "Buy a coffee and the bagel is on us.",
+          pushTitle: "Try the coffee deal",
+          pushBody: "Buy a coffee and get a free bagel.",
+          socialCaption: "Stop by for coffee and a free bagel.",
+          cta: "Claim deal",
+          imageBrief: "Cafe table with coffee and bagel.",
+          merchantSpecificContextLimited: false,
+        },
+        {
+          candidateId: "lane_5",
+          strategyId: "merchant_specific",
+          strategyReason: "Use the coffee-run habit.",
+          headlineAlternative: "Your coffee run gets breakfast",
+          description: "Buy a coffee and the bagel is on us.",
+          pushTitle: "Coffee run bonus",
+          pushBody: "Buy a coffee and get a free bagel.",
+          socialCaption: "Coffee run, bagel included.",
+          cta: "Claim deal",
+          imageBrief: "Coffee run breakfast pairing.",
+          merchantSpecificContextLimited: false,
+        },
+      ],
+    }));
+
+    expect(variants).toHaveLength(5);
+    expect(variants[0]).toMatchObject({
+      candidate_id: "lane_1",
+      strategy_id: "value_clarity",
+      preliminary_score: 82,
+      judge_score: 110,
+      cta: "Claim deal",
+    });
   });
 });
 

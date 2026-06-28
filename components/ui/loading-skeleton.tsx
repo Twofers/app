@@ -1,4 +1,4 @@
-import { useWindowDimensions, View, type DimensionValue } from "react-native";
+import { View, type DimensionValue } from "react-native";
 import { Spacing } from "@/lib/screen-layout";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -10,9 +10,6 @@ type LoadingSkeletonProps = {
 export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const { height: windowHeight } = useWindowDimensions();
-  const imageHeight = Math.round(Math.max(280, windowHeight * 0.48));
-  const cardHeight = Math.round(Math.min(860, Math.max(640, imageHeight + 320)));
 
   const block = (height: number, width: DimensionValue, radius = 12) => (
     <View style={{ height, width, borderRadius: radius, backgroundColor: theme.border }} />
@@ -27,13 +24,12 @@ export function LoadingSkeleton({ rows = 3 }: LoadingSkeletonProps) {
             borderRadius: Radii.lg,
             backgroundColor: theme.surface,
             overflow: "hidden",
-            height: cardHeight,
             borderWidth: 1,
             borderColor: theme.border,
           }}
         >
           {/* Poster */}
-          <View style={{ height: imageHeight, width: "100%", backgroundColor: theme.surfaceMuted }} />
+          <View style={{ aspectRatio: 1, width: "100%", backgroundColor: theme.surfaceMuted }} />
 
           {/* Content */}
           <View style={{ padding: Spacing.xxl, gap: Spacing.md }}>

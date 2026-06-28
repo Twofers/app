@@ -1,7 +1,7 @@
 export type AiImageProvider = "gemini" | "openai" | "stock" | "none";
 
 export type AiImageStylePreset = "realistic-local-ad" | "premium-cafe" | "playful-twofer";
-export type AiImageAspectRatio = "1:1" | "4:3" | "16:9";
+export type AiImageAspectRatio = "1:1" | "4:3" | "16:9" | "4:5";
 export type AiImageSize = "1K" | "2K";
 
 export type AiImageReference = {
@@ -31,6 +31,7 @@ export type GenerateAdImageInput = {
   dealType?: string;
   ownerPhotoUrl?: string | null;
   referenceImages?: AiImageReference[];
+  customEditInstruction?: string;
   stylePreset: AiImageStylePreset;
   aspectRatio: AiImageAspectRatio;
   imageSize: AiImageSize;
@@ -157,7 +158,19 @@ function offerMechanics(input: GenerateAdImageInput): string {
   const free = cleanText(input.freeItem, 120);
   if (paid && free && paid.toLowerCase() !== free.toLowerCase()) return `Buy ${paid}, get ${free} free.`;
   if (paid && free) return `Buy one ${paid}, get one ${free} free.`;
-  return cleanText(input.offerDescription, 180) || cleanText(input.offerTitle, 180) || "Twofer local BOGO deal.";
+  return cleanText(input.offerDescription, 180) || cleanText(input.offerTitle, 180) || "local BOGO deal.";
+}
+
+function customEditInstruction(input: GenerateAdImageInput): string {
+  const instruction = cleanText(input.customEditInstruction, 400);
+  if (!instruction) return "";
+  return [
+    "Merchant bounded custom edit instruction:",
+    instruction,
+    "Apply this only as styling, composition, lighting, crop, cleanup, or background guidance.",
+    "Do not add text, prices, discounts, coupons, QR codes, logos, fake brands, people, characters, or extra offer items.",
+    "Do not remove, replace, or materially change the paid item, free item, item count, product identity, or offer meaning.",
+  ].join(" ");
 }
 
 export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
@@ -166,10 +179,15 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
   const paid = cleanText(input.paidItem, 120);
   const free = cleanText(input.freeItem, 120);
   const visualItems = [...new Set([paid, free].filter(Boolean))];
+  const framing =
+    input.aspectRatio === "4:5"
+      ? "Use vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      : "Use a composition that works as a square mobile feed image.";
   const referenceInstruction =
     input.referenceImages && input.referenceImages.length > 0
       ? "Use the supplied owner photo as visual reference. Preserve the real product identity and improve only composition, lighting, crop, and background."
       : "Create the product-focused visual from the offer facts only.";
+  const customInstruction = customEditInstruction(input);
 
   return [
     "Create a realistic, professional local business advertising image for a mobile deal app.",
@@ -180,14 +198,17 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
     "Ad context: The image will be used inside a mobile local-deal card.",
     visualItems.length > 0 ? `Required visible items: ${visualItems.join(", ")}.` : "",
     referenceInstruction,
+    customInstruction,
     "",
     "Image requirements:",
     "- Show the actual paid item and free item clearly if they are visually distinct.",
     "- Make the food or drink look real, appetizing, and professionally photographed.",
     "- Use natural lighting and a local business marketing style.",
     "- Avoid the glossy, fake, over-rendered AI look.",
+    "- Keep every required item fully inside the center-safe area and away from crop edges.",
     "- Leave clean visual space near the top or bottom for the app to overlay the exact offer text later.",
-    "- Use a composition that works as a square mobile feed image.",
+    "- Keep the top and bottom overlay zones calm enough for native text contrast.",
+    `- ${framing}`,
     "- The generated image must be text-free: no words, letters, numbers, discount copy, business names, app names, menu boards, signs, labels, stickers, or watermarks.",
     "- Do not add readable text.",
     "- Do not add coupons.",
@@ -212,7 +233,7 @@ export function buildGeminiAdImagePrompt(input: GenerateAdImageInput): string {
 
 export function buildSimplifiedGeminiImagePrompt(basePrompt: string): string {
   return [
-    "Create a simple realistic square food-and-drink product photo for a local cafe mobile deal card.",
+    "Create a simple realistic food-and-drink product photo for a local cafe mobile deal card.",
     "Show only the required offer items from the original prompt as clear main subjects.",
     "Natural light, clean table, professional but realistic.",
     "No readable text, no logos, no people, no hands, no QR codes, no prices, no signs.",
@@ -377,15 +398,15 @@ async function attemptGeminiImageGeneration(params: {
     );
 
     if (!res.ok) {
-      const errorText = await res.text();
+      const errorCode = normalizeGeminiErrorCode(res.status);
       return {
         bytes: null,
         mimeType: null,
         attempt: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
-          errorCode: normalizeGeminiErrorCode(res.status),
-          errorMessage: errorText.slice(0, 500),
+          errorCode,
+          errorMessage: `Gemini image generation failed with ${errorCode}.`,
         },
       };
     }
@@ -409,7 +430,7 @@ async function attemptGeminiImageGeneration(params: {
     let normalizedImage: { bytes: Uint8Array; mimeType: "image/png"; converted: boolean };
     try {
       normalizedImage = await normalizeGeminiImageToPng(base64ToBytes(imagePart.data), imageMimeType);
-    } catch (error) {
+    } catch {
       return {
         bytes: null,
         mimeType: null,
@@ -417,7 +438,7 @@ async function attemptGeminiImageGeneration(params: {
           ...attemptBase,
           latencyMs: Date.now() - startedAt,
           errorCode: "PNG_CONVERSION_FAILED",
-          errorMessage: String(error).slice(0, 500),
+          errorMessage: "Gemini image output could not be converted to PNG.",
         },
       };
     }
@@ -431,7 +452,7 @@ async function attemptGeminiImageGeneration(params: {
         mimeType: normalizedImage.mimeType,
       },
     };
-  } catch (error) {
+  } catch {
     return {
       bytes: null,
       mimeType: null,
@@ -439,7 +460,7 @@ async function attemptGeminiImageGeneration(params: {
         ...attemptBase,
         latencyMs: Date.now() - startedAt,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(error).slice(0, 500),
+        errorMessage: "Gemini image generation failed before a usable response was returned.",
       },
     };
   }

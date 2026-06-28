@@ -45,7 +45,9 @@ export function resolveTabModeRedirectTarget({
     if (BUSINESS_TABS.has(tab)) {
       if (forceBypass || checkingProfile || businessProfileComplete === null) return null;
       if (!businessProfileComplete) return safeReturn("/business-setup");
-      if (businessBillingBlocked && tab !== "billing") return safeReturn("/(tabs)/billing?reason=reactivate");
+      if (businessBillingBlocked && tab !== "billing") {
+        return safeReturn("/(tabs)/account/billing?reason=reactivate");
+      }
     }
     return null;
   }

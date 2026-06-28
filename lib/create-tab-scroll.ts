@@ -1,4 +1,4 @@
-export const CREATE_TAB_EXPANDED_BOTTOM_GAP = 24;
+export const CREATE_TAB_EXPANDED_BOTTOM_GAP = 176;
 export const CREATE_TAB_EXPAND_SCROLL_OFFSET = 16;
 
 export function getCreateTabScrollBottom(baseScrollBottom: number): number {

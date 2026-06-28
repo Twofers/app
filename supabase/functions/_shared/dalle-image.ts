@@ -55,13 +55,6 @@ function requestIdFromHeaders(headers: Headers): string | null {
   return headers.get("x-request-id") ?? headers.get("openai-request-id");
 }
 
-function errorCodeFromJson(value: unknown): string | null {
-  const err = value && typeof value === "object" ? (value as { error?: unknown }).error : null;
-  if (!err || typeof err !== "object") return null;
-  const code = (err as { code?: unknown; type?: unknown }).code ?? (err as { type?: unknown }).type;
-  return typeof code === "string" ? code.slice(0, 80) : null;
-}
-
 function imageResponseMetadata(json: unknown): {
   usage: Record<string, unknown> | null;
   responseId: string | null;
@@ -161,10 +154,16 @@ export function buildPhotoAdImagePrompt(params: {
   itemDescription?: string;
   businessName?: string;
   requiredVisualItems?: readonly string[];
+  visualRevisionInstruction?: string;
+  aspectRatio?: "1:1" | "4:5";
 }): string {
-  const { itemName, itemDescription, businessName, requiredVisualItems } = params;
+  const { itemName, itemDescription, businessName, requiredVisualItems, visualRevisionInstruction } = params;
   const esc = (s: string) => s.replace(/"/g, "'").trim();
   const visualItems = [...new Set((requiredVisualItems ?? []).map(esc).filter(Boolean))];
+  const framing =
+    params.aspectRatio === "4:5"
+      ? "Vertical 4:5 poster-ready framing with the product centered and calm native-text overlay space."
+      : "Square 1:1 framing.";
   return [
     visualItems.length > 1
       ? `Required offer items: ${visualItems.join(", ")}. Show all required items together as equally important main subjects. Do not show only one item.`
@@ -172,12 +171,15 @@ export function buildPhotoAdImagePrompt(params: {
     `Editorial food photography — photoreal ${esc(itemName)} as the single hero subject.`,
     itemDescription ? `Description: ${esc(itemDescription)}.` : "",
     businessName ? `For an independent cafe called ${esc(businessName)}.` : "",
+    visualRevisionInstruction ? `Revision direction: ${esc(visualRevisionInstruction)}.` : "",
     "Natural soft daylight, realistic textures and cast shadows, true-to-life proportions, high fine detail, clean composition, shallow depth of field.",
     "Cafe surface backdrop — light wood, marble, or matte ceramic — uncluttered.",
     "Honest, appetizing, magazine-quality — not stocky, not illustrated, not a CGI render.",
-    "Absolutely no text, logos, labels, signage, banners, overlays, or QR codes.",
+    "Keep every required item fully inside the center-safe area and away from crop edges.",
+    "Leave clean visual space near the top or bottom for native offer text overlays; keep those zones calm enough for contrast.",
+    "Absolutely no text, letters, numbers, prices, coupons, discount copy, menu boards, signage, banners, overlays, QR codes, barcodes, logos, fake logos, brand marks, watermarks, mascots, cartoon characters, animals, or unrelated prop characters.",
     "No human faces, no hands holding the item.",
-    "Square 1:1 framing.",
+    framing,
   ]
     .filter(Boolean)
     .join(" ")
@@ -251,28 +253,22 @@ async function attemptImageGeneration(
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
-      const errBody = await res.text();
-      let errJson: unknown = null;
-      try {
-        errJson = JSON.parse(errBody);
-      } catch {
-        /* response was not JSON */
-      }
+      const errorCode = `HTTP_${res.status}`;
       console.log(
         JSON.stringify({
           tag: logTag,
           event: "image_gen_http",
           model,
           status: res.status,
-          body: errBody.slice(0, 800),
+          errorCode,
         }),
       );
       return {
         bytes: null,
         attempts: [{
           ...attemptBase,
-          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
-          errorMessage: errBody.slice(0, 500),
+          errorCode,
+          errorMessage: `OpenAI image generation failed with ${errorCode}.`,
         }],
       };
     }
@@ -288,14 +284,14 @@ async function attemptImageGeneration(
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch (e) {
-    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, err: String(e) }));
+  } catch {
+    console.log(JSON.stringify({ tag: logTag, event: "image_gen_error", model, errorCode: "FETCH_ERROR" }));
     return {
       bytes: null,
       attempts: [{
         ...attemptBase,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(e).slice(0, 500),
+        errorMessage: "OpenAI image generation failed before a usable response was returned.",
       }],
     };
   }
@@ -387,6 +383,24 @@ const TREATMENT_PROMPTS: Record<PhotoTreatment, string> = {
     "Backdrop: clean cafe surface (light wood, marble, or matte ceramic). Photoreal textures. No text, logos, watermarks, or people.",
 };
 
+function cleanCustomEditInstruction(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 400) : "";
+}
+
+function treatmentPrompt(treatment: PhotoTreatment, customEditInstruction?: string): string {
+  const custom = cleanCustomEditInstruction(customEditInstruction);
+  if (!custom) return TREATMENT_PROMPTS[treatment];
+  return [
+    TREATMENT_PROMPTS[treatment],
+    "",
+    "Merchant bounded custom edit instruction:",
+    custom,
+    "Apply this only as styling, composition, lighting, crop, cleanup, or background guidance.",
+    "Do not add text, prices, discounts, coupons, QR codes, logos, fake brands, people, characters, hands, or extra offer items.",
+    "Do not remove, replace, or materially change the paid item, free item, item count, product identity, or offer meaning.",
+  ].join("\n");
+}
+
 function normalizeEditMime(mime: string): string {
   return mime.toLowerCase().split(";")[0].trim();
 }
@@ -434,6 +448,7 @@ export async function enhanceUploadedPhoto(params: {
   imageBytes: Uint8Array;
   imageMime: string;
   treatment: PhotoTreatment;
+  customEditInstruction?: string;
   logTag?: string;
 }): Promise<Uint8Array | null> {
   const result = await enhanceUploadedPhotoWithTelemetry(params);
@@ -445,6 +460,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
   imageBytes: Uint8Array;
   imageMime: string;
   treatment: PhotoTreatment;
+  customEditInstruction?: string;
   logTag?: string;
 }): Promise<OpenAiImageResult> {
   const { openAiKey, imageBytes, imageMime, treatment, logTag = "ai_ads_v2_enhance" } = params;
@@ -475,7 +491,7 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     const model = RESOLVED_IMAGE_EDIT_MODEL;
     const form = new FormData();
     form.append("model", model);
-    form.append("prompt", TREATMENT_PROMPTS[treatment]);
+    form.append("prompt", treatmentPrompt(treatment, params.customEditInstruction));
     form.append("size", "1024x1024");
     form.append("quality", "high");
     form.append("output_format", "png");
@@ -494,28 +510,22 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
     });
     attemptBase.openaiRequestId = requestIdFromHeaders(res.headers);
     if (!res.ok) {
-      const errBody = await res.text();
-      let errJson: unknown = null;
-      try {
-        errJson = JSON.parse(errBody);
-      } catch {
-        /* response was not JSON */
-      }
+      const errorCode = `HTTP_${res.status}`;
       console.log(
         JSON.stringify({
           tag: logTag,
           event: "enhance_http",
           treatment,
           status: res.status,
-          body: errBody.slice(0, 800),
+          errorCode,
         }),
       );
       return {
         bytes: null,
         attempts: [{
           ...attemptBase,
-          errorCode: errorCodeFromJson(errJson) ?? `HTTP_${res.status}`,
-          errorMessage: errBody.slice(0, 500),
+          errorCode,
+          errorMessage: `OpenAI image edit failed with ${errorCode}.`,
         }],
       };
     }
@@ -531,16 +541,16 @@ export async function enhanceUploadedPhotoWithTelemetry(params: {
         errorMessage: decoded.bytes ? null : "OpenAI response did not include image data.",
       }],
     };
-  } catch (e) {
+  } catch {
     console.log(
-      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, err: String(e) }),
+      JSON.stringify({ tag: logTag, event: "enhance_error", treatment, errorCode: "FETCH_ERROR" }),
     );
     return {
       bytes: null,
       attempts: [{
         ...attemptBase,
         errorCode: "FETCH_ERROR",
-        errorMessage: String(e).slice(0, 500),
+        errorMessage: "OpenAI image edit failed before a usable response was returned.",
       }],
     };
   }

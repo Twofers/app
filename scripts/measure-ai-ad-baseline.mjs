@@ -127,9 +127,46 @@ function countBy(rows, pick) {
   return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function latestValue(values) {
+  return values.length > 0 ? values[values.length - 1] : null;
+}
+
 function dollars(value) {
   const n = Number(value || 0);
   return Number(n.toFixed(6));
+}
+
+function calibrationStatus(value, threshold, direction = "max") {
+  const n = numberOrNull(value);
+  if (n === null) return "needs_data";
+  if (direction === "min") return n < threshold ? "review" : "ok";
+  return n > threshold ? "review" : "ok";
+}
+
+function calibrationCheck({ metric, value, threshold, direction = "max", note }) {
+  return {
+    metric,
+    value: numberOrNull(value),
+    review_threshold: threshold,
+    direction,
+    status: calibrationStatus(value, threshold, direction),
+    note,
+  };
+}
+
+function attemptLatencySummary(attempts) {
+  const latencies = attempts
+    .map((attempt) => numberOrNull(attempt?.latency_ms ?? attempt?.latencyMs))
+    .filter((value) => value !== null);
+  return {
+    sample_count: latencies.length,
+    p50: percentile(latencies, 50),
+    p95: percentile(latencies, 95),
+  };
 }
 
 const logParams = {
@@ -153,8 +190,26 @@ const [{ rows: logs, truncated: logsTruncated }, { rows: costs, truncated: costs
 ]);
 
 const logsWithCopy = logs.filter((row) => jsonPath(row.response_payload, ["copy"]));
+const copyProviderAttempts = logsWithCopy.flatMap((row) =>
+  arrayValue(jsonPath(row.response_payload, ["copy", "provider_attempts"])),
+);
+const copyProviderFallbackRows = logsWithCopy.filter(
+  (row) => jsonPath(row.response_payload, ["copy", "provider_fallback_used"]) === true,
+);
+const copyQualityEntries = logsWithCopy.flatMap((row) =>
+  arrayValue(jsonPath(row.response_payload, ["copy", "quality"])),
+);
+const latestCopyQualityEntries = logsWithCopy
+  .map((row) => latestValue(arrayValue(jsonPath(row.response_payload, ["copy", "quality"]))))
+  .filter(Boolean);
+const judgeAttempts = logsWithCopy.flatMap((row) =>
+  arrayValue(jsonPath(row.response_payload, ["copy", "judge", "attempts"])),
+);
 const copyLatencies = logs
   .map((row) => numberOrNull(jsonPath(row.response_payload, ["copy", "latency_ms"])))
+  .filter((value) => value !== null);
+const totalLatencies = logs
+  .map((row) => numberOrNull(jsonPath(row.response_payload, ["total_latency_ms"])))
   .filter((value) => value !== null);
 const fallbackLogs = logs.filter((row) => {
   const payload = row.response_payload || {};
@@ -175,6 +230,21 @@ const imageFailureLogs = logs.filter((row) => {
   const produced = jsonPath(row.response_payload, ["image_generation", "produced_image"]);
   return source && produced === false;
 });
+const imageQaRows = logs.filter((row) => jsonPath(row.response_payload, ["image_qa"]));
+const imageQaWarnings = imageQaRows.filter((row) => arrayValue(jsonPath(row.response_payload, ["image_qa", "warningCodes"])).length > 0);
+const imageQaHardFails = imageQaRows.filter((row) =>
+  arrayValue(jsonPath(row.response_payload, ["image_qa", "hardFailReasons"])).length > 0
+);
+const imageQaUnavailable = imageQaRows.filter((row) => jsonPath(row.response_payload, ["image_qa", "unavailable"]) === true);
+const imageQaOverrideAllowed = imageQaRows.filter(
+  (row) => jsonPath(row.response_payload, ["image_qa", "merchantOverrideAllowed"]) === true,
+);
+const imageQaOverrideAcknowledged = imageQaRows.filter(
+  (row) => jsonPath(row.response_payload, ["image_qa", "merchantOverrideAcknowledged"]) === true,
+);
+const imageQaMissingItems = imageQaRows.filter((row) =>
+  arrayValue(jsonPath(row.response_payload, ["image_qa", "missingItems"])).length > 0
+);
 
 const costByRequestGroup = new Map();
 for (const row of costs) {
@@ -234,6 +304,13 @@ const summary = {
     min: copyLatencies.length ? Math.min(...copyLatencies) : null,
     max: copyLatencies.length ? Math.max(...copyLatencies) : null,
   },
+  total_latency_ms: {
+    sample_count: totalLatencies.length,
+    p50: percentile(totalLatencies, 50),
+    p95: percentile(totalLatencies, 95),
+    min: totalLatencies.length ? Math.min(...totalLatencies) : null,
+    max: totalLatencies.length ? Math.max(...totalLatencies) : null,
+  },
   copy_quality: {
     rows_with_copy_payload: logsWithCopy.length,
     deterministic_fallback_rows: fallbackLogs.length,
@@ -243,11 +320,76 @@ const summary = {
     validation_failed_rows: validationFailedLogs.length,
     validation_failed_rate: rate(validationFailedLogs.length, logsWithCopy.length),
     copy_source_counts: countBy(logsWithCopy, (row) => jsonPath(row.response_payload, ["copy", "source"])),
+    provider_fallback_rows: copyProviderFallbackRows.length,
+    provider_fallback_rate: rate(copyProviderFallbackRows.length, logsWithCopy.length),
+    provider_fallback_reasons: countBy(copyProviderFallbackRows, (row) =>
+      jsonPath(row.response_payload, ["copy", "provider_fallback_reason"])
+    ),
+  },
+  copy_provider_attempts: {
+    total_attempt_rows: copyProviderAttempts.length,
+    successful_attempt_rows: copyProviderAttempts.filter((attempt) => attempt?.success === true).length,
+    failed_attempt_rows: copyProviderAttempts.filter((attempt) => attempt?.success === false).length,
+    by_provider: countBy(copyProviderAttempts, (attempt) => attempt?.provider),
+    by_model: countBy(copyProviderAttempts, (attempt) => attempt?.model),
+    by_operation: countBy(copyProviderAttempts, (attempt) => attempt?.operation),
+    by_error_class: countBy(
+      copyProviderAttempts.filter((attempt) => attempt?.success === false),
+      (attempt) => attempt?.error_class ?? attempt?.errorClass,
+    ),
+    latency_ms: attemptLatencySummary(copyProviderAttempts),
+  },
+  candidate_judge: {
+    quality_entries: copyQualityEntries.length,
+    latest_quality_entries: latestCopyQualityEntries.length,
+    latest_used_rows: latestCopyQualityEntries.filter((entry) => jsonPath(entry, ["judge", "used"]) === true).length,
+    latest_enabled_rows: latestCopyQualityEntries.filter((entry) => jsonPath(entry, ["judge", "enabled"]) === true).length,
+    latest_pass_rows: latestCopyQualityEntries.filter((entry) => jsonPath(entry, ["judge", "pass"]) === true).length,
+    latest_hard_failure_rows: latestCopyQualityEntries.filter(
+      (entry) => arrayValue(jsonPath(entry, ["judge", "hard_failures"])).length > 0,
+    ).length,
+    skipped_reasons: countBy(copyQualityEntries, (entry) => jsonPath(entry, ["judge", "skipped_reason"])),
+    provider_counts: countBy(latestCopyQualityEntries, (entry) => jsonPath(entry, ["judge", "provider"])),
+    model_counts: countBy(latestCopyQualityEntries, (entry) => jsonPath(entry, ["judge", "model"])),
+    attempt_rows: judgeAttempts.length,
+    successful_attempt_rows: judgeAttempts.filter((attempt) => attempt?.success === true).length,
+    failed_attempt_rows: judgeAttempts.filter((attempt) => attempt?.success === false).length,
+    attempt_error_classes: countBy(
+      judgeAttempts.filter((attempt) => attempt?.success === false),
+      (attempt) => attempt?.error_class ?? attempt?.errorClass,
+    ),
+    attempt_latency_ms: attemptLatencySummary(judgeAttempts),
   },
   image_generation: {
     source_counts: countBy(logs, (row) => jsonPath(row.response_payload, ["image_generation", "source"])),
+    provider_counts: countBy(logs, (row) => jsonPath(row.response_payload, ["image_generation", "provider"])),
+    model_counts: countBy(logs, (row) => jsonPath(row.response_payload, ["image_generation", "model"])),
+    selection_source_mode_counts: countBy(logs, (row) => jsonPath(row.response_payload, ["image_selection", "sourceMode"])),
+    selection_edit_mode_counts: countBy(logs, (row) => jsonPath(row.response_payload, ["image_selection", "editMode"])),
     failed_image_rows: imageFailureLogs.length,
     failed_image_rate: rate(imageFailureLogs.length, logsWithCopy.length),
+  },
+  image_qa: {
+    rows_with_image_qa: imageQaRows.length,
+    checked_rows: imageQaRows.filter((row) => jsonPath(row.response_payload, ["image_qa", "checked"]) === true).length,
+    unavailable_rows: imageQaUnavailable.length,
+    unavailable_rate: rate(imageQaUnavailable.length, imageQaRows.length),
+    hard_fail_rows: imageQaHardFails.length,
+    warning_rows: imageQaWarnings.length,
+    missing_required_item_rows: imageQaMissingItems.length,
+    override_allowed_rows: imageQaOverrideAllowed.length,
+    override_acknowledged_rows: imageQaOverrideAcknowledged.length,
+    override_acknowledgement_rate: rate(imageQaOverrideAcknowledged.length, imageQaOverrideAllowed.length),
+    decision_counts: countBy(imageQaRows, (row) => jsonPath(row.response_payload, ["image_qa", "decision"])),
+    source_type_counts: countBy(imageQaRows, (row) => jsonPath(row.response_payload, ["image_qa", "sourceType"])),
+    warning_code_counts: countBy(
+      imageQaRows.flatMap((row) => arrayValue(jsonPath(row.response_payload, ["image_qa", "warningCodes"]))),
+      (value) => value,
+    ),
+    hard_fail_reason_counts: countBy(
+      imageQaRows.flatMap((row) => arrayValue(jsonPath(row.response_payload, ["image_qa", "hardFailReasons"]))),
+      (value) => value,
+    ),
   },
   ai_costs: {
     provider_call_rows: costs.length,
@@ -265,14 +407,129 @@ const summary = {
     by_model: countBy(costs, (row) => row.model),
   },
   known_gaps: [
-    "Total end-to-end generation duration is not persisted as a first-class field; copy latency is measured, but total p50/p95 is not.",
     "ai_generation_logs does not store request_group_id, so cost rows and generation log rows are aggregated separately.",
     "Publish conversion and no-edit publish rate cannot be computed reliably until generation/ad ids are written to deals or publish_events.",
   ],
 };
 
+const judgeHardFailureRate = rate(
+  summary.candidate_judge.latest_hard_failure_rows,
+  summary.candidate_judge.latest_quality_entries,
+);
+const imageQaHardFailRate = rate(summary.image_qa.hard_fail_rows, summary.image_qa.rows_with_image_qa);
+
+summary.calibration_watchlist = {
+  source: "baseline_runner_default_review_bands",
+  warning_mode_only: true,
+  note:
+    "These review bands are internal dashboard defaults, not automatic product gates. Calibrate them from real non-publishing output before enabling or tightening production controls.",
+  checks: [
+    calibrationCheck({
+      metric: "copy_latency_p95_ms",
+      value: summary.copy_latency_ms.p95,
+      threshold: 14_000,
+      note: "Compare against merchant wait tolerance and provider timeout settings.",
+    }),
+    calibrationCheck({
+      metric: "total_generation_latency_p95_ms",
+      value: summary.total_latency_ms.p95,
+      threshold: 45_000,
+      note: "Review full start-to-preview wait time across research, copy, image generation, and QA.",
+    }),
+    calibrationCheck({
+      metric: "deterministic_copy_fallback_rate",
+      value: summary.copy_quality.deterministic_fallback_rate,
+      threshold: 0.15,
+      note: "High fallback can mean prompt, validation, or provider reliability needs tuning.",
+    }),
+    calibrationCheck({
+      metric: "provider_fallback_rate",
+      value: summary.copy_quality.provider_fallback_rate,
+      threshold: 0.25,
+      note: "High OpenAI-to-Gemini fallback can indicate quota, circuit, timeout, or configuration trouble.",
+    }),
+    calibrationCheck({
+      metric: "judge_hard_failure_rate",
+      value: judgeHardFailureRate,
+      threshold: 0.2,
+      note: "Review failed candidate themes before changing prompts or judge criteria.",
+    }),
+    calibrationCheck({
+      metric: "image_qa_unavailable_rate",
+      value: summary.image_qa.unavailable_rate,
+      threshold: 0.05,
+      note: "Generated and AI-edited images should stay closed when QA is unavailable.",
+    }),
+    calibrationCheck({
+      metric: "image_qa_hard_fail_rate",
+      value: imageQaHardFailRate,
+      threshold: 0.1,
+      note: "Investigate repeated missing-item, misleading-offer, identity, text, or QR failures.",
+    }),
+    calibrationCheck({
+      metric: "failed_or_retried_provider_call_rate",
+      value: summary.ai_costs.failed_or_retried_call_rate,
+      threshold: 0.15,
+      note: "Includes failed provider calls and retries recorded in the cost ledger.",
+    }),
+    calibrationCheck({
+      metric: "p95_cost_per_request_group_usd",
+      value: summary.ai_costs.p95_cost_per_request_group_usd,
+      threshold: 0.5,
+      note: "Default hard budget guard is 0.50 USD unless hosted env overrides it.",
+    }),
+    {
+      metric: "candidate_diversity_warning_thresholds",
+      value: "headline_jaccard>=0.65, body_jaccard>=0.75",
+      review_threshold: "warning_only",
+      direction: "n/a",
+      status: "warning_only_calibration",
+      note: "Do not hard-reject solely on these warning thresholds during the first release.",
+    },
+    {
+      metric: "image_aesthetic_thresholds",
+      value: "warning_mode",
+      review_threshold: "product_decision_required_before_blocking",
+      direction: "n/a",
+      status: "warning_only_calibration",
+      note: "Never turn an aesthetic warning on an unmodified merchant upload into a hard block without a separate product decision.",
+    },
+  ],
+  next_steps: [
+    "Run representative non-publishing generations with final hosted config.",
+    "Review dashboard rows with Dan before tightening warning thresholds.",
+    "Record failures and improve merchant context, prompts, creative briefs, or thresholds before enabling the next slice.",
+  ],
+};
+
 function ensureParent(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
+function formatCounts(counts) {
+  const entries = Object.entries(counts || {});
+  if (entries.length === 0) return "- none";
+  return entries.map(([key, value]) => `- ${key}: ${value}`).join("\n");
+}
+
+function formatCalibrationValue(value) {
+  if (value === null || value === undefined) return "n/a";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(4);
+  return String(value).replace(/\|/g, "/");
+}
+
+function formatCalibrationChecks(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) return "- none";
+  const rows = checks.map((check) =>
+    `| ${formatCalibrationValue(check.metric)} | ${formatCalibrationValue(check.value)} | ${formatCalibrationValue(
+      check.review_threshold,
+    )} | ${formatCalibrationValue(check.status)} | ${formatCalibrationValue(check.note)} |`,
+  );
+  return [
+    "| Metric | Value | Review threshold | Status | Note |",
+    "|---|---:|---:|---|---|",
+    ...rows,
+  ].join("\n");
 }
 
 function toMarkdown(data) {
@@ -286,9 +543,48 @@ Window: ${data.window.start_at} to ${data.window.end_at} (${data.window.days} da
 - Total ad log rows: ${data.ai_ad_generation.total_log_rows}
 - Success rate: ${data.ai_ad_generation.success_rate ?? "n/a"}
 - Failure rate: ${data.ai_ad_generation.failure_rate ?? "n/a"}
+- Total latency p50 / p95: ${data.total_latency_ms.p50 ?? "n/a"} ms / ${data.total_latency_ms.p95 ?? "n/a"} ms
 - Copy latency p50 / p95: ${data.copy_latency_ms.p50 ?? "n/a"} ms / ${data.copy_latency_ms.p95 ?? "n/a"} ms
 - Deterministic fallback rate: ${data.copy_quality.deterministic_fallback_rate ?? "n/a"}
+- Provider fallback rate: ${data.copy_quality.provider_fallback_rate ?? "n/a"}
 - Image failure rate: ${data.image_generation.failed_image_rate ?? "n/a"}
+
+## Calibration Watchlist
+
+${data.calibration_watchlist?.note ?? "Review bands unavailable."}
+
+${formatCalibrationChecks(data.calibration_watchlist?.checks)}
+
+Next steps:
+
+${(data.calibration_watchlist?.next_steps ?? []).map((step) => `- ${step}`).join("\n") || "- none"}
+
+### Copy Provider Attempts
+
+- Attempt rows: ${data.copy_provider_attempts.total_attempt_rows}
+- Successful / failed attempts: ${data.copy_provider_attempts.successful_attempt_rows} / ${data.copy_provider_attempts.failed_attempt_rows}
+- Attempt latency p50 / p95: ${data.copy_provider_attempts.latency_ms.p50 ?? "n/a"} ms / ${data.copy_provider_attempts.latency_ms.p95 ?? "n/a"} ms
+
+Provider fallback reasons:
+
+${formatCounts(data.copy_quality.provider_fallback_reasons)}
+
+Copy providers:
+
+${formatCounts(data.copy_provider_attempts.by_provider)}
+
+### Candidate Judge
+
+- Latest quality entries: ${data.candidate_judge.latest_quality_entries}
+- Judge enabled / used rows: ${data.candidate_judge.latest_enabled_rows} / ${data.candidate_judge.latest_used_rows}
+- Judge pass rows: ${data.candidate_judge.latest_pass_rows}
+- Judge hard-failure rows: ${data.candidate_judge.latest_hard_failure_rows}
+- Judge attempt rows: ${data.candidate_judge.attempt_rows}
+- Judge attempt latency p50 / p95: ${data.candidate_judge.attempt_latency_ms.p50 ?? "n/a"} ms / ${data.candidate_judge.attempt_latency_ms.p95 ?? "n/a"} ms
+
+Judge skipped reasons:
+
+${formatCounts(data.candidate_judge.skipped_reasons)}
 
 ## Cost
 
@@ -306,6 +602,29 @@ Window: ${data.window.start_at} to ${data.window.end_at} (${data.window.days} da
     data.ai_costs.p95_cost_per_request_group_usd === null ? "n/a" : `$${data.ai_costs.p95_cost_per_request_group_usd}`
   }
 - Failed/retried provider call rate: ${data.ai_costs.failed_or_retried_call_rate ?? "n/a"}
+
+## Image QA
+
+- Rows with image QA: ${data.image_qa.rows_with_image_qa}
+- Checked rows: ${data.image_qa.checked_rows}
+- Unavailable rows / rate: ${data.image_qa.unavailable_rows} / ${data.image_qa.unavailable_rate ?? "n/a"}
+- Hard-fail rows: ${data.image_qa.hard_fail_rows}
+- Warning rows: ${data.image_qa.warning_rows}
+- Missing required item rows: ${data.image_qa.missing_required_item_rows}
+- Merchant override allowed / acknowledged: ${data.image_qa.override_allowed_rows} / ${data.image_qa.override_acknowledged_rows}
+- Merchant override acknowledgement rate: ${data.image_qa.override_acknowledgement_rate ?? "n/a"}
+
+Image QA decisions:
+
+${formatCounts(data.image_qa.decision_counts)}
+
+Image source modes:
+
+${formatCounts(data.image_generation.selection_source_mode_counts)}
+
+Image edit modes:
+
+${formatCounts(data.image_generation.selection_edit_mode_counts)}
 
 ## Known Gaps
 

@@ -132,7 +132,7 @@ describe("resolveTabModeRedirectTarget", () => {
     ).toBe("/(tabs)/settings");
   });
 
-  it("redirects blocked business tabs to billing", () => {
+  it("redirects blocked business tabs to billing under account", () => {
     expect(
       resolveTabModeRedirectTarget({
         mode: "business",
@@ -143,7 +143,7 @@ describe("resolveTabModeRedirectTarget", () => {
         businessProfileComplete: true,
         businessBillingBlocked: true,
       }),
-    ).toBe("/(tabs)/billing?reason=reactivate");
+    ).toBe("/(tabs)/account/billing?reason=reactivate");
   });
 
   it("returns null (no redirect) when tab is null (non-tabs route)", () => {
@@ -160,7 +160,7 @@ describe("resolveTabModeRedirectTarget", () => {
     ).toBeNull();
   });
 
-  it("does not redirect away from billing when blocked", () => {
+  it("does not redirect away from legacy billing when blocked", () => {
     expect(
       resolveTabModeRedirectTarget({
         mode: "business",
@@ -172,5 +172,19 @@ describe("resolveTabModeRedirectTarget", () => {
         businessBillingBlocked: true,
       }),
     ).toBeNull();
+  });
+
+  it("adds the reactivation reason when account billing is opened while blocked", () => {
+    expect(
+      resolveTabModeRedirectTarget({
+        mode: "business",
+        tab: "account",
+        currentPath: "/(tabs)/account/billing",
+        forceBypass: false,
+        checkingProfile: false,
+        businessProfileComplete: true,
+        businessBillingBlocked: true,
+      }),
+    ).toBe("/(tabs)/account/billing?reason=reactivate");
   });
 });

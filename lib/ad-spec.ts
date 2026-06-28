@@ -1,12 +1,16 @@
 import type { GeneratedAd } from "./ad-variants";
 import { DEAL_COPY_LIMITS } from "./deal-offer-contract";
+import type { AdImageSelection } from "./merchant-image-selection";
 import type { OfferDefinitionV1 } from "./offer-definition";
+import { supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales";
+import { parsePosterSpecV1, validatePosterSpecV1 } from "./poster/posterAdSpec";
+import type { AdCreativeFormat, PosterSpecV1 } from "./poster/posterTypes";
 
 export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
 export const AD_SPEC_TEMPLATE_VERSION = "twofer-safe-templates-v1";
 export const AD_SPEC_V3_RENDERER_VERSION = "twofer-native-ad-renderer-v3";
 export const AD_SPEC_V3_MEDIA_SELECTION_VERSION = "twofer-media-selection-v1";
-export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V3";
+export const AD_SPEC_V3_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V4";
 
 export type AdSpecSource = "create_ai" | "create_quick";
 
@@ -26,6 +30,7 @@ export type AdSpecVisual = {
   posterStoragePath: string | null;
   sourceAssetIds: string[];
   treatment: GeneratedAd["photo_treatment"] | null;
+  imageSelection?: AdImageSelection | null;
 };
 
 export type AdSpecChannelSlot = {
@@ -48,6 +53,9 @@ export type AdSpecChannelSlot = {
 
 export type AdSpecV1 = {
   adSpecVersion: 1;
+  creative_format: AdCreativeFormat;
+  selected_language: SupportedLocale;
+  poster?: PosterSpecV1 | null;
   rendererVersion: typeof AD_SPEC_RENDERER_VERSION;
   templateVersion: typeof AD_SPEC_TEMPLATE_VERSION;
   source: AdSpecSource;
@@ -145,6 +153,9 @@ export type AdSpecV3Visual = {
 
 export type AdSpecV3 = {
   version: "3";
+  creative_format: AdCreativeFormat;
+  selected_language: SupportedLocale;
+  poster?: PosterSpecV1 | null;
   source: AdSpecSource;
   offerDefinitionVersion: 1;
   offerDefinitionId: string;
@@ -281,6 +292,7 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
       posterStoragePath,
       sourceAssetIds: definition.sourceAssetIds,
       treatment: generatedAd?.photo_treatment ?? null,
+      imageSelection: generatedAd?.image_selection ?? null,
     };
   }
   if (definition.sourceAssetIds.length > 0) {
@@ -289,6 +301,7 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
       posterStoragePath: null,
       sourceAssetIds: definition.sourceAssetIds,
       treatment: null,
+      imageSelection: generatedAd?.image_selection ?? null,
     };
   }
   return {
@@ -296,7 +309,13 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
     posterStoragePath: null,
     sourceAssetIds: [],
     treatment: null,
+    imageSelection: generatedAd?.image_selection ?? null,
   };
+}
+
+function posterSpecForAd(generatedAd?: GeneratedAd | null): PosterSpecV1 | null {
+  if (!generatedAd?.poster?.enabled) return null;
+  return parsePosterSpecV1(generatedAd.poster);
 }
 
 function buildSlot(params: {
@@ -337,8 +356,10 @@ export function buildAdSpecV1(params: {
   source: AdSpecSource;
   offerDefinition: OfferDefinitionV1;
   generatedAd?: GeneratedAd | null;
+  selectedLanguage?: SupportedLocale | string | null;
 }): AdSpecV1 {
   const { offerDefinition, generatedAd } = params;
+  const poster = posterSpecForAd(generatedAd);
   const visual = visualFor(offerDefinition, generatedAd);
   const headline = clip(
     firstText([generatedAd?.headline, offerDefinition.canonicalOfferLine], offerDefinition.canonicalOfferSentence),
@@ -374,6 +395,9 @@ export function buildAdSpecV1(params: {
 
   return {
     adSpecVersion: 1,
+    creative_format: poster ? "poster_v1" : "standard_card",
+    selected_language: supportedLocaleOrDefault(params.selectedLanguage ?? "en-US"),
+    ...(poster ? { poster } : {}),
     rendererVersion: AD_SPEC_RENDERER_VERSION,
     templateVersion: AD_SPEC_TEMPLATE_VERSION,
     source: params.source,
@@ -423,6 +447,12 @@ export function validateAdSpecV1(value: unknown): AdSpecValidationResult {
   }
   const spec = value as Partial<AdSpecV1>;
   if (spec.adSpecVersion !== 1) reasonCodes.push("INVALID_SCHEMA_VERSION");
+  const creativeFormat = spec.creative_format ?? "standard_card";
+  if (creativeFormat !== "standard_card" && creativeFormat !== "poster_v1") reasonCodes.push("INVALID_CREATIVE_FORMAT");
+  if (creativeFormat === "poster_v1") {
+    const posterValidation = validatePosterSpecV1(spec.poster);
+    if (!posterValidation.valid) reasonCodes.push(...posterValidation.reasonCodes);
+  }
   if (spec.rendererVersion !== AD_SPEC_RENDERER_VERSION) reasonCodes.push("INVALID_RENDERER_VERSION");
   if (spec.templateVersion !== AD_SPEC_TEMPLATE_VERSION) reasonCodes.push("INVALID_TEMPLATE_VERSION");
   if (!spec.offer || !cleanText(spec.offer.canonicalOfferSentence)) reasonCodes.push("MISSING_CANONICAL_OFFER");
@@ -450,6 +480,7 @@ export function validateAdSpecV1(value: unknown): AdSpecValidationResult {
 
 export function buildAdSpecV3(params: BuildAdSpecV3Params): AdSpecV3 {
   const { offerDefinition, generatedAd } = params;
+  const poster = posterSpecForAd(generatedAd);
   const baseProvenance = generatedAdCopyProvenance(generatedAd);
   const displayHook = clip(
     firstText([generatedAd?.headline, offerDefinition.canonicalOfferLine], offerDefinition.canonicalOfferLine),
@@ -476,6 +507,9 @@ export function buildAdSpecV3(params: BuildAdSpecV3Params): AdSpecV3 {
 
   return {
     version: "3",
+    creative_format: poster ? "poster_v1" : "standard_card",
+    selected_language: supportedLocaleOrDefault(generatedAd?.localization_bundle?.sourceLocale ?? "en-US"),
+    ...(poster ? { poster } : {}),
     source: params.source,
     offerDefinitionVersion: 1,
     offerDefinitionId: offerDefinitionStableId(offerDefinition),
@@ -534,6 +568,12 @@ export function validateAdSpecV3(value: unknown): AdSpecValidationResult {
   }
   const spec = value as Partial<AdSpecV3>;
   if (spec.version !== "3") reasonCodes.push("INVALID_SCHEMA_VERSION");
+  const creativeFormat = spec.creative_format ?? "standard_card";
+  if (creativeFormat !== "standard_card" && creativeFormat !== "poster_v1") reasonCodes.push("INVALID_CREATIVE_FORMAT");
+  if (creativeFormat === "poster_v1") {
+    const posterValidation = validatePosterSpecV1(spec.poster);
+    if (!posterValidation.valid) reasonCodes.push(...posterValidation.reasonCodes);
+  }
   if (!cleanText(spec.businessId)) reasonCodes.push("MISSING_BUSINESS_ID");
   if (!cleanText(spec.offerDefinitionId)) reasonCodes.push("MISSING_OFFER_DEFINITION_ID");
   if (!spec.creative || typeof spec.creative !== "object") {

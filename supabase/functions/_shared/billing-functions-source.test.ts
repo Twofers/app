@@ -125,7 +125,6 @@ describe("billing edge function safety", () => {
 
   it("blocks suspended locations in server-owned deal action functions", () => {
     for (const name of [
-      "ai-create-deal",
       "ai-generate-ad-variants",
       "claim-deal",
       "publish-offer-version",
@@ -138,7 +137,7 @@ describe("billing edge function safety", () => {
   });
 
   it("checks business verification before live publish-style actions when the server gate is enabled", () => {
-    for (const name of ["ai-create-deal", "publish-offer-version", "send-deal-push"]) {
+    for (const name of ["publish-offer-version", "send-deal-push"]) {
       const source = readFunction(name);
       expect(source).toMatch(/business-verification/);
       expect(source).toMatch(/businessVerificationRequiredResponseBody/);

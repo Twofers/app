@@ -1,15 +1,104 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
-import { logAiCost, openAiRequestIdFromHeaders } from "../_shared/ai-costs.ts";
+import { logAiCost } from "../_shared/ai-costs.ts";
+import {
+  generateStructuredText,
+  resolveAiTextProviderConfig,
+  type ProviderAttempt,
+} from "../_shared/ai-text-provider.ts";
 
 type Suggestion = {
   icon: string;
   title: string;
   body: string;
 };
+
+type SuggestionResult = {
+  suggestions: Suggestion[];
+};
+
+const PROMPT_VERSION = "deal_suggestions_provider_router_v1";
+
+const DEAL_SUGGESTIONS_SCHEMA = {
+  name: "deal_suggestions",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      suggestions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            icon: { type: "string" },
+            title: { type: "string" },
+            body: { type: "string" },
+          },
+          required: ["icon", "title", "body"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["suggestions"],
+    additionalProperties: false,
+  },
+} as const;
+
+function normalizeSuggestionResult(value: unknown): SuggestionResult | null {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const suggestions = Array.isArray(record.suggestions) ? record.suggestions : [];
+  const normalized = suggestions
+    .map((item): Suggestion | null => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const icon = typeof row.icon === "string" ? row.icon.trim() : "";
+      const title = typeof row.title === "string" ? row.title.trim() : "";
+      const body = typeof row.body === "string" ? row.body.trim() : "";
+      if (!icon || !title || !body) return null;
+      return {
+        icon: icon.slice(0, 16),
+        title: title.slice(0, 40),
+        body: body.slice(0, 120),
+      };
+    })
+    .filter((item): item is Suggestion => item !== null)
+    .slice(0, 3);
+  return normalized.length > 0 ? { suggestions: normalized } : null;
+}
+
+async function logDealSuggestionProviderAttempts(params: {
+  admin: any;
+  businessId: string;
+  ownerUserId: string;
+  requestGroupId: string;
+  attempts: readonly ProviderAttempt[];
+}) {
+  for (const attempt of params.attempts) {
+    await logAiCost(params.admin, {
+      businessId: params.businessId,
+      ownerUserId: params.ownerUserId,
+      requestGroupId: params.requestGroupId,
+      feature: "deal_suggestions",
+      provider: attempt.provider,
+      model: attempt.model,
+      endpoint: attempt.provider === "gemini" ? "models.generateContent" : "chat.completions",
+      estimatedCostUsd: attempt.estimatedCostUsd,
+      openaiRequestId: attempt.provider === "openai" ? attempt.requestId ?? null : null,
+      success: attempt.success,
+      errorCode: attempt.errorCode ?? attempt.errorClass ?? null,
+      errorMessage: attempt.errorClass ?? null,
+    });
+  }
+}
+
+function providerAttemptsCalledOpenAi(attempts: readonly ProviderAttempt[]): boolean {
+  return attempts.some((attempt) => attempt.provider === "openai");
+}
+
+function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
+  return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
+}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -32,6 +121,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
@@ -91,18 +181,39 @@ serve(async (req) => {
       );
     }
 
-    if (!openAiKey) {
-      const ms2 = 500 + Math.floor(Math.random() * 400);
-      await new Promise((r) => setTimeout(r, ms2));
-      const biz2 = typeof business_name === "string" && business_name.trim() ? business_name.trim() : "your business";
-      const titles2 = Array.isArray(top_deal_titles) ? (top_deal_titles as string[]) : [];
-      const fallbackSuggestions: Suggestion[] = [
-        { icon: "\u2615", title: "Expand your lineup", body: `Your top deal${titles2[0] ? ` ("${titles2[0]}")` : ""} is driving claims at ${biz2}. Consider adding a variant to capture a wider audience.` },
-        { icon: "\uD83D\uDCC8", title: "Weekend pastry pairing", body: `Try a Saturday morning pastry + drink bundle to capture weekend brunch traffic at ${biz2}.` },
-        { icon: "\uD83C\uDF1F", title: "Tell your origin story", body: `Customers at ${biz2} connect with craft. Add a line about your sourcing or process \u2014 it builds trust and repeat visits.` },
-      ];
-      return new Response(JSON.stringify({ suggestions: fallbackSuggestions }), {
-        status: 200,
+    let providerConfig;
+    try {
+      providerConfig = resolveAiTextProviderConfig();
+    } catch {
+      console.log(JSON.stringify({
+        tag: "ai_deal_suggestions",
+        event: "text_provider_config_error",
+        errorCode: "AI_TEXT_CONFIG_INVALID",
+      }));
+      return new Response(JSON.stringify({
+        error: "AI insights are temporarily unavailable. Please try again later.",
+        error_code: "AI_TEXT_CONFIG_INVALID",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const routerCanUseGemini =
+      providerConfig.routerEnabled &&
+      Boolean(geminiApiKey?.trim()) &&
+      (
+        providerConfig.primaryProvider === "gemini" ||
+        (providerConfig.fallbackEnabled && providerConfig.fallbackProvider === "gemini")
+      );
+
+    if (!openAiKey && !routerCanUseGemini) {
+      console.log(JSON.stringify({ tag: "ai_deal_suggestions", event: "openai_not_configured" }));
+      return new Response(JSON.stringify({
+        error: "AI insights are temporarily unavailable. Please try again later.",
+        error_code: "OPENAI_NOT_CONFIGURED",
+      }), {
+        status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -134,7 +245,6 @@ serve(async (req) => {
       );
     }
 
-    const CHAT_MODEL = resolveOpenAiChatModel();
     const requestGroupId = crypto.randomUUID();
 
     // Build context summary for the prompt
@@ -158,140 +268,104 @@ serve(async (req) => {
     }
 
     const systemPrompt = [
-      "You are a marketing strategist for independent cafés and local food businesses on a deals app called Twofer.",
+      "You are a marketing strategist for independent local businesses on a deals app called Twofer.",
       "Given their recent deal performance data, generate 2-3 short, actionable suggestions.",
       "",
       "APPROACH:",
-      "- Think like a craft-focused brand consultant, not a generic marketing bot.",
-      "- Suggestions should help the owner highlight what makes their business special — ingredients, process, sourcing, freshness.",
+      "- Think like a practical local-business advisor, not a generic marketing bot.",
+      "- Suggestions should help the owner highlight verified strengths from the supplied business and deal data.",
       "- Be specific and data-driven: reference actual numbers, days, or deal names from the data.",
-      "- Frame suggestions around quality and craft: \"Your buy-one-get-one cold brew offer is strong — try a cortado variant\" not \"Try more deals\".",
-      "- If claims are low on certain days, suggest targeted quality deals for those days.",
+      "- Frame suggestions around offer clarity, timing, product fit, and customer behavior.",
+      "- Do not invent ingredients, sourcing, freshness, craft, health, popularity, or availability claims.",
+      "- If claims are low on certain days, suggest targeted deals for those days.",
       "- If a deal is performing well, suggest expanding that product line or pairing it with something complementary.",
-      "- One suggestion should always encourage storytelling: origin stories, process details, or ingredient highlights that build customer loyalty.",
+      "- One suggestion may encourage owner storytelling only when the supplied data supports a real detail to share.",
       "",
       "FORMAT:",
       "- Keep each title under 40 chars and each body under 120 chars.",
       "- For icon, use a single relevant emoji.",
-      "- Return JSON only: an array of objects with icon, title, body.",
+      "- Return JSON only: an object with a suggestions array of objects with icon, title, body.",
     ].join("\n");
 
-    const aiBody = {
-      model: CHAT_MODEL,
-      response_format: {
-        type: "json_schema" as const,
-        json_schema: {
-          name: "deal_suggestions",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              suggestions: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    icon: { type: "string" },
-                    title: { type: "string" },
-                    body: { type: "string" },
-                  },
-                  required: ["icon", "title", "body"],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ["suggestions"],
-            additionalProperties: false,
-          },
-        },
-      },
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: contextLines.length > 0
-            ? contextLines.join("\n")
-            : "New business with no deals yet. Suggest starting offers.",
-        },
-      ],
-      ...chatCompletionTuning(CHAT_MODEL, { maxTokens: 1024 }),
-    };
+    const userPrompt = contextLines.length > 0
+      ? contextLines.join("\n")
+      : "New business with no deals yet. Suggest starting offers.";
 
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(aiBody),
-    });
-
-    if (!aiRes.ok) {
-      const text = await aiRes.text();
-      await logAiCost(supabase, {
+    let generation;
+    try {
+      generation = await generateStructuredText<typeof DEAL_SUGGESTIONS_SCHEMA, SuggestionResult>({
+        operation: "merchant_context",
+        systemPrompt,
+        userPrompt,
+        jsonSchema: DEAL_SUGGESTIONS_SCHEMA,
+        maxOutputTokens: 1024,
+        timeoutMs: 12_000,
+        generationRunId: requestGroupId,
+        promptVersion: PROMPT_VERSION,
+        reasoningLevel: "medium",
+      }, {
+        openAiApiKey: openAiKey,
+        geminiApiKey,
+        admin: supabase,
+        config: providerConfig,
+      });
+      await logDealSuggestionProviderAttempts({
+        admin: supabase,
         businessId: business_id,
         ownerUserId: user.id,
         requestGroupId,
-        feature: "deal_suggestions",
-        model: CHAT_MODEL,
-        endpoint: "chat.completions",
-        openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
-        success: false,
-        errorCode: `HTTP_${aiRes.status}`,
-        errorMessage: text.slice(0, 500),
+        attempts: generation.attempts,
       });
+    } catch (err) {
+      const attempts = (err as { attempts?: ProviderAttempt[] })?.attempts ?? [];
+      await logDealSuggestionProviderAttempts({
+        admin: supabase,
+        businessId: business_id,
+        ownerUserId: user.id,
+        requestGroupId,
+        attempts,
+      });
+      const usageAttempt = representativeAttempt(attempts);
       void supabase.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
         request_type: "deal_suggestions",
-        request_hash: `deal_suggestions:api_error`,
+        request_hash: "deal_suggestions:api_error",
         input_mode: "text",
-        model: CHAT_MODEL,
+        model: usageAttempt?.model ?? providerConfig.openAiModel,
         success: false,
-        failure_reason: "API_ERROR",
-        openai_called: true,
+        failure_reason:
+          (err as { errorCode?: string; errorClass?: string })?.errorCode ??
+          (err as { errorClass?: string })?.errorClass ??
+          "AI_GENERATION_FAILED",
+        openai_called: providerAttemptsCalledOpenAi(attempts),
+        input_token_count: usageAttempt?.inputTokens ?? null,
+        output_token_count: usageAttempt?.outputTokens ?? null,
       });
       return new Response(
-        JSON.stringify({ error: "AI generation failed.", details: text }),
+        JSON.stringify({ error: "AI generation failed.", error_code: "AI_GENERATION_FAILED" }),
         {
-          status: 500,
+          status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
     }
 
-    const aiJson = await aiRes.json();
-    await logAiCost(supabase, {
-      businessId: business_id,
-      ownerUserId: user.id,
-      requestGroupId,
-      feature: "deal_suggestions",
-      model: CHAT_MODEL,
-      endpoint: "chat.completions",
-      usage: aiJson?.usage ?? null,
-      openaiRequestId: openAiRequestIdFromHeaders(aiRes.headers),
-      responseId: typeof aiJson?.id === "string" ? aiJson.id : null,
-      success: true,
-    });
-    const usage = aiJson?.usage;
-    const content = aiJson?.choices?.[0]?.message?.content ?? "";
-
-    let result: { suggestions: Suggestion[] };
-    try {
-      result = JSON.parse(content);
-    } catch {
+    const result = normalizeSuggestionResult(generation.value);
+    const usageAttempt = representativeAttempt(generation.attempts);
+    if (!result) {
       void supabase.from("ai_generation_logs").insert({
         business_id,
         user_id: user.id,
         request_type: "deal_suggestions",
         request_hash: "deal_suggestions:parse_error",
         input_mode: "text",
-        model: CHAT_MODEL,
+        model: generation.model,
         success: false,
         failure_reason: "PARSE_ERROR",
-        openai_called: true,
-        input_token_count: usage?.prompt_tokens ?? null,
-        output_token_count: usage?.completion_tokens ?? null,
+        openai_called: providerAttemptsCalledOpenAi(generation.attempts),
+        input_token_count: usageAttempt?.inputTokens ?? null,
+        output_token_count: usageAttempt?.outputTokens ?? null,
       });
       return new Response(
         JSON.stringify({ error: "AI response was invalid." }),
@@ -309,18 +383,18 @@ serve(async (req) => {
       request_type: "deal_suggestions",
       request_hash: `deal_suggestions:${new Date().toISOString().slice(0, 10)}`,
       input_mode: "text",
-      model: CHAT_MODEL,
+      model: generation.model,
       success: true,
-      openai_called: true,
-      input_token_count: usage?.prompt_tokens ?? null,
-      output_token_count: usage?.completion_tokens ?? null,
+      openai_called: providerAttemptsCalledOpenAi(generation.attempts),
+      input_token_count: usageAttempt?.inputTokens ?? null,
+      output_token_count: usageAttempt?.outputTokens ?? null,
     });
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (_err) {
+  } catch {
     return new Response(
       JSON.stringify({ error: "Server error" }),
       {

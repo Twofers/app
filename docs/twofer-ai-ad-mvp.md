@@ -75,7 +75,7 @@ Use as QA rows in a spreadsheet; judge **correctness** (BOGO, times, price, item
 | Inputs | Typed + 1 image |
 | Concurrent generations | One at a time (UI disabled while loading) |
 | Free-tier regenerations | **Max 2** per draft (enforced client + server) |
-| Model | `gpt-4o-mini` default; `OPENAI_AD_MODEL` override |
+| Model | `gpt-5.4-mini` default; optional `OPENAI_MODEL` override through the shared server allowlist |
 | Logging | Token usage logged per request (function logs) |
 
 ---

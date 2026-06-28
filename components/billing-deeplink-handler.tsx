@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as Linking from "expo-linking";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { runWhenBridgeSettled } from "@/lib/run-when-bridge-settled";
@@ -16,11 +16,15 @@ function parseBillingDeepLink(url: string | null): { checkout?: BillingCheckout 
   // - twoforone://billing?checkout=success
   // - twoforone:///billing?checkout=success
   // - twoforone://tabs/billing?checkout=success
+  // - twoforone://tabs/account/billing?checkout=success
   const hasBillingTarget =
     lower.includes("://billing") ||
     lower.includes(":///billing") ||
     lower.includes("://tabs/billing") ||
-    lower.includes("/tabs/billing");
+    lower.includes("/tabs/billing") ||
+    lower.includes("://tabs/account/billing") ||
+    lower.includes("/tabs/account/billing") ||
+    lower.includes("/account/billing");
 
   if (!hasBillingTarget) return null;
 
@@ -52,9 +56,9 @@ export function BillingDeepLinkHandler() {
       const data = parseBillingDeepLink(url);
       if (!data) return;
       router.replace({
-        pathname: "/(tabs)/billing",
+        pathname: "/(tabs)/account/billing",
         params: data.checkout ? { checkout: data.checkout } : {},
-      });
+      } as unknown as Href);
     }
 
     const sub = Linking.addEventListener("url", ({ url }) => navigate(url));

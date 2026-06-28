@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
+import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallback-visual";
 
 type GeneratedAdPreviewCardTheme = {
   surface: string;
@@ -18,6 +19,7 @@ export type GeneratedAdPreviewCardProps = {
   businessName?: string | null;
   headline: string;
   body: string;
+  imageAltText?: string | null;
   offerLine?: string | null;
   termsLine?: string | null;
   cta: string;
@@ -27,6 +29,7 @@ export type GeneratedAdPreviewCardProps = {
   termsLabel: string;
   termsHelper: string;
   noImageLabel: string;
+  fallbackVisualLabel?: string | null;
   addressLine?: string | null;
   theme: GeneratedAdPreviewCardTheme;
   darkMode: boolean;
@@ -41,6 +44,7 @@ export function GeneratedAdPreviewCard({
   businessName,
   headline,
   body,
+  imageAltText,
   offerLine,
   termsLine,
   cta,
@@ -50,15 +54,23 @@ export function GeneratedAdPreviewCard({
   termsLabel,
   termsHelper,
   noImageLabel,
+  fallbackVisualLabel,
   addressLine,
   theme,
   darkMode,
 }: GeneratedAdPreviewCardProps) {
   const cleanBusiness = clean(businessName);
+  const cleanImageAltText = clean(imageAltText);
   const cleanOffer = clean(offerLine);
   const cleanTerms = clean(termsLine);
   const cleanBody = clean(body);
   const cleanAddress = clean(addressLine);
+  const fallbackVisual = buildDeterministicAdFallbackVisual({
+    businessName,
+    headline,
+    offerLine,
+  });
+  const fallbackLabel = clean(fallbackVisualLabel) || noImageLabel;
 
   return (
     <View
@@ -77,54 +89,73 @@ export function GeneratedAdPreviewCard({
             source={{ uri: imageUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            accessibilityLabel={headline}
+            accessibilityLabel={cleanImageAltText || headline}
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.noImage, { backgroundColor: theme.surfaceMuted }]}>
-            <Text style={{ color: theme.mutedText }}>{noImageLabel}</Text>
+          <View style={StyleSheet.absoluteFill}>
+            <LinearGradient
+              colors={fallbackVisual.palette.background}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.fallbackPattern} pointerEvents="none">
+              <View style={[styles.fallbackStripe, styles.fallbackStripeOne]} />
+              <View style={[styles.fallbackStripe, styles.fallbackStripeTwo]} />
+              <View style={[styles.fallbackBlock, styles.fallbackBlockOne]} />
+              <View style={[styles.fallbackBlock, styles.fallbackBlockTwo]} />
+            </View>
+            <View style={styles.fallbackArt}>
+              <View
+                style={[
+                  styles.fallbackMark,
+                  { backgroundColor: fallbackVisual.palette.markBackground },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={[styles.fallbackMarkText, { color: fallbackVisual.palette.markText }]}
+                >
+                  {fallbackVisual.initials}
+                </Text>
+              </View>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                style={[styles.fallbackLabel, { color: fallbackVisual.palette.accent }]}
+              >
+                {fallbackLabel}
+              </Text>
+            </View>
           </View>
         )}
 
-        <LinearGradient
-          colors={darkMode
-            ? ["rgba(0,0,0,0.08)", "rgba(0,0,0,0.78)"]
-            : ["rgba(0,0,0,0.02)", "rgba(0,0,0,0.68)"]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <View style={styles.heroTopRow}>
-          <View style={[styles.brandBadge, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.brandBadgeText, { color: theme.primaryText }]}>Twofer</Text>
-          </View>
-          {cleanBusiness ? (
-            <View style={styles.businessBadge}>
-              <Text numberOfLines={1} style={styles.businessBadgeText}>
-                {cleanBusiness}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.heroCopy}>
-          {cleanOffer ? (
-            <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
-              <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
-                {cleanOffer}
-              </Text>
-            </View>
-          ) : null}
-          <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.headline}>
-            {headline}
-          </Text>
-          {cleanBody ? (
-            <Text numberOfLines={3} style={styles.body}>
-              {cleanBody}
-            </Text>
-          ) : null}
-        </View>
       </View>
 
       <View style={styles.footer}>
+        {cleanBusiness ? (
+          <Text numberOfLines={1} style={[styles.businessName, { color: theme.mutedText }]}>
+            {cleanBusiness}
+          </Text>
+        ) : null}
+        {cleanOffer ? (
+          <View style={[styles.offerBadge, { backgroundColor: theme.primary }]}>
+            <Text numberOfLines={2} style={[styles.offerBadgeText, { color: theme.primaryText }]}>
+              {cleanOffer}
+            </Text>
+          </View>
+        ) : null}
+        <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.78} style={[styles.headline, { color: theme.text }]}>
+          {headline}
+        </Text>
+        {cleanBody ? (
+          <Text numberOfLines={3} style={[styles.body, { color: theme.mutedText }]}>
+            {cleanBody}
+          </Text>
+        ) : null}
         <View style={styles.chipRow}>
           <View style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
             <Text numberOfLines={1} style={[styles.chipText, { color: theme.text }]}>
@@ -174,48 +205,83 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   hero: {
-    height: 360,
+    height: 260,
     justifyContent: "space-between",
     overflow: "hidden",
   },
-  noImage: {
+  fallbackPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.34,
+  },
+  fallbackStripe: {
+    position: "absolute",
+    height: 58,
+    width: "125%",
+    left: "-10%",
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    transform: [{ rotate: "-16deg" }],
+  },
+  fallbackStripeOne: {
+    top: 82,
+  },
+  fallbackStripeTwo: {
+    top: 190,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  fallbackBlock: {
+    position: "absolute",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.34)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  fallbackBlockOne: {
+    width: 92,
+    height: 92,
+    right: 22,
+    top: 58,
+    transform: [{ rotate: "9deg" }],
+  },
+  fallbackBlockTwo: {
+    width: 58,
+    height: 58,
+    left: 28,
+    top: 184,
+    transform: [{ rotate: "-11deg" }],
+  },
+  fallbackArt: {
+    position: "absolute",
+    top: 82,
+    left: 18,
+    right: 18,
+    alignItems: "center",
+    gap: 10,
+  },
+  fallbackMark: {
+    width: 88,
+    height: 88,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  brandBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  brandBadgeText: {
-    fontSize: 12,
+  fallbackMarkText: {
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: "900",
     letterSpacing: 0,
   },
-  businessBadge: {
-    flex: 1,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.42)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  businessBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "800",
+  fallbackLabel: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
     letterSpacing: 0,
-  },
-  heroCopy: {
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingBottom: 20,
+    textTransform: "uppercase",
   },
   offerBadge: {
     alignSelf: "flex-start",
@@ -224,6 +290,12 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     maxWidth: "100%",
   },
+  businessName: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
   offerBadgeText: {
     fontSize: 13,
     fontWeight: "900",
@@ -231,17 +303,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   headline: {
-    color: "#fff",
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "900",
-    lineHeight: 37,
+    lineHeight: 29,
     letterSpacing: 0,
   },
   body: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    lineHeight: 22,
+    lineHeight: 21,
     letterSpacing: 0,
   },
   footer: {

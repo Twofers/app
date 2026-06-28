@@ -1,13 +1,14 @@
 import { Redirect, type Href, useLocalSearchParams } from "expo-router";
 import { Stack } from "expo-router";
-import React, { useMemo } from "react";
+import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { useBusiness } from "@/hooks/use-business";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { PAID_BILLING_ENABLED, canCreateDeal, isBillingBypassEnabled } from "@/lib/billing/access";
+import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
 
 export default function CreateLayout() {
   const params = useLocalSearchParams<{ skipSetup?: string; e2e?: string }>();
@@ -17,18 +18,15 @@ export default function CreateLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
 
-  const { isLoggedIn, subscriptionStatus, trialEndsAt, loading } = useBusiness();
+  const { isLoggedIn, businessId, subscriptionTier, loading: businessLoading } = useBusiness();
+  const { blocked, loading: billingLoading } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+    bypass,
+  });
 
-  const blocked = useMemo(
-    () =>
-      !canCreateDeal({
-        isLoggedIn,
-        subscriptionStatus,
-        trialEndsAt,
-        bypass,
-      }),
-    [bypass, isLoggedIn, subscriptionStatus, trialEndsAt],
-  );
+  const loading = businessLoading || billingLoading;
 
   if (loading) {
     return (
@@ -43,7 +41,7 @@ export default function CreateLayout() {
       <Redirect
         href={
           PAID_BILLING_ENABLED
-            ? ({ pathname: "/(tabs)/billing", params: { reason: "reactivate" } } as unknown as Href)
+            ? ({ pathname: "/(tabs)/account/billing", params: { reason: "reactivate" } } as unknown as Href)
             : "/(tabs)/account"
         }
       />
@@ -62,10 +60,11 @@ export default function CreateLayout() {
         headerTitleStyle: { color: theme.text, fontWeight: "700" },
       }}
     >
-      <Stack.Screen name="quick" options={{ title: t('createQuick.titleScreen') }} />
+      <Stack.Screen name="quick" options={{ title: t('createAi.titleScreen') }} />
       <Stack.Screen name="ai" options={{ title: t('createAi.titleScreen') }} />
       <Stack.Screen name="ai-compose" options={{ title: t('aiCompose.title') }} />
       <Stack.Screen name="reuse" options={{ title: t('reuseHub.title') }} />
+      <Stack.Screen name="menu" options={{ title: t("createHub.menuTitle") }} />
       <Stack.Screen name="menu-scan" options={{ title: t('menuScan.title') }} />
       <Stack.Screen name="menu-manager" options={{ title: t('menuManager.title') }} />
       <Stack.Screen name="menu-offer" options={{ title: t('menuOffer.title') }} />

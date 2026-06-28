@@ -1,4 +1,25 @@
-import type { AdSpecV3TextField, AdSpecV3TextProvenance } from "./ad-spec";
+import {
+  AD_COPY_AI_TONE_PATTERNS,
+  AD_COPY_FORBIDDEN_PATTERNS,
+  AD_COPY_GENERIC_PHRASE_PATTERNS,
+  AD_COPY_HYPE_WORD_PATTERN,
+  AD_COPY_LOCAL_CLICHE_PATTERNS,
+} from "./ad-language-policy.ts";
+
+export type AdSpecV3TextField =
+  | "displayHook"
+  | "offerLine"
+  | "supportingLine"
+  | "cta"
+  | "pushTitle"
+  | "pushBody"
+  | "socialCaption";
+
+export type AdSpecV3TextProvenance =
+  | "ai_generated"
+  | "deterministic"
+  | "merchant_typed"
+  | "merchant_edited";
 
 export type AdCopyStyleGateReason =
   | "FORBIDDEN_AI_PHRASE"
@@ -48,61 +69,6 @@ const AI_CHECKED_FIELDS: AdSpecV3TextField[] = [
   "socialCaption",
 ];
 
-const GENERIC_MARKETING_PATTERNS = [
-  /\blimited[- ]time offer\b/i,
-  /\blimited[- ]time local offer\b/i,
-  /\bdon'?t miss out\b/i,
-  /\bact now\b/i,
-  /\btreat yourself\b/i,
-  /\bspecial deal\b/i,
-  /\bexclusive deal\b/i,
-  /\bexclusive offer\b/i,
-  /\bperfect for (?:any|every|your)\b/i,
-];
-
-const AI_TONE_PATTERNS = [
-  /\belevate your\b/i,
-  /\belevate your experience\b/i,
-  /\bunlock (?:a|the|your)\b/i,
-  /\bunlock savings\b/i,
-  /\bexperience (?:a|an|the) (?:perfect|ultimate|unforgettable)\b/i,
-  /\bunforgettable\b.{0,30}\bexperience\b/i,
-  /\bsavor (?:the|a|our)\b/i,
-  /\bsavor the flavo?r\b/i,
-  /\bindulge in\b/i,
-  /\bperfectly paired\b/i,
-  /\bcrafted to perfection\b/i,
-];
-
-const FORBIDDEN_AI_COPY_PATTERNS = [
-  /\bqualifying\s+purchase\b/i,
-  /\bqualifying\b.{0,48}\bpurchase\b/i,
-  /\bincluded\s+after\b/i,
-  /\bunlock\s+savings\b/i,
-  /\belevate\s+your\s+experience\b/i,
-  /\btreat\s+yourself\s+to\b/i,
-  /\bindulge\s+in\b/i,
-  /\blimited[- ]time\s+local\s+offer\b/i,
-  /\bdon'?t\s+miss\s+out\b/i,
-  /\bact\s+now\b/i,
-  /\bexclusive\s+deal\b/i,
-  /\bsavor\s+the\s+flavo?r\b/i,
-  /\bperfectly\s+paired\b/i,
-  /\bAI-generated\b/i,
-  /\bthis\s+offer\s+allows\s+you\s+to\b/i,
-  /\bcustomers\s+can\s+enjoy\b/i,
-  /\bpromotion\s+applies\s+to\b/i,
-  /\bterms\s+and\s+conditions\s+apply\b/i,
-];
-
-const LOCAL_CLICHE_PATTERNS = [
-  /\blocal favorite\b/i,
-  /\bneighbou?rhood gem\b/i,
-  /\bhidden gem\b/i,
-  /\bmade with love\b/i,
-];
-
-const HYPE_WORD_RE = /\b(amazing|best|delicious|fantastic|incredible|irresistible|mouthwatering|ultimate)\b/i;
 const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 
 function cleanText(value: string | null | undefined): string {
@@ -130,11 +96,11 @@ function shouldBypassStyleGate(provenance: AdSpecV3TextProvenance): boolean {
 function reasonsForField(text: string, requiredSpecificTerms: string[] | undefined): AdCopyStyleGateReason[] {
   const reasons: AdCopyStyleGateReason[] = [];
   if (!text) return reasons;
-  if (hasAnyPattern(text, FORBIDDEN_AI_COPY_PATTERNS)) reasons.push("FORBIDDEN_AI_PHRASE");
-  if (hasAnyPattern(text, GENERIC_MARKETING_PATTERNS)) reasons.push("GENERIC_MARKETING_PHRASE");
-  if (hasAnyPattern(text, AI_TONE_PATTERNS)) reasons.push("AI_TONE_PHRASE");
-  if (hasAnyPattern(text, LOCAL_CLICHE_PATTERNS)) reasons.push("VAGUE_LOCAL_CLICHE");
-  if (HYPE_WORD_RE.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
+  if (hasAnyPattern(text, [...AD_COPY_FORBIDDEN_PATTERNS])) reasons.push("FORBIDDEN_AI_PHRASE");
+  if (hasAnyPattern(text, [...AD_COPY_GENERIC_PHRASE_PATTERNS])) reasons.push("GENERIC_MARKETING_PHRASE");
+  if (hasAnyPattern(text, [...AD_COPY_AI_TONE_PATTERNS])) reasons.push("AI_TONE_PHRASE");
+  if (hasAnyPattern(text, [...AD_COPY_LOCAL_CLICHE_PATTERNS])) reasons.push("VAGUE_LOCAL_CLICHE");
+  if (AD_COPY_HYPE_WORD_PATTERN.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
     reasons.push("HYPE_WITHOUT_SPECIFICITY");
   }
   if ((text.match(/!/g) ?? []).length > 1) reasons.push("TOO_MANY_EXCLAMATIONS");

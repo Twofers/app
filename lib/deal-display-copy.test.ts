@@ -60,7 +60,7 @@ describe("getDealDisplayTitle", () => {
         item_description: "Croissants",
         discount_percent: 40,
       }),
-    ).toBe("40% off croissants");
+    ).toBe("Get 40% off one croissant");
   });
 
   it("uses structured fields over legacy mechanical titles", () => {
@@ -71,6 +71,67 @@ describe("getDealDisplayTitle", () => {
         item_description: "Iced Americano",
       }),
     ).toBe("Buy one iced Americano and get one free");
+  });
+
+  it("uses locked offer lines ahead of AI or localized prose", () => {
+    expect(
+      getDealDisplayTitle({
+        title: "Chef's surprise",
+        locked_offer_line: "Buy two Fancy Tacos and get one free",
+      }),
+    ).toBe("Buy two Fancy Tacos and get one free");
+  });
+
+  it("formats same-item offers from structured quantities", () => {
+    expect(
+      getDealDisplayTitle({
+        title: "Morning deal",
+        deal_type: "BUY_ONE_GET_ONE_FREE",
+        required_purchase_quantity: 2,
+        free_item_quantity: 1,
+        required_item_description: "Muffin",
+      }),
+    ).toBe("Buy two muffins and get one free");
+  });
+
+  it("formats reward-item offers from structured quantities", () => {
+    expect(
+      getDealDisplayTitle({
+        title: "Breakfast combo",
+        deal_type: "BUY_ONE_GET_SOMETHING_FREE",
+        required_purchase_quantity: 1,
+        free_item_quantity: 2,
+        required_item_description: "Egg sandwich",
+        free_item_description: "Coffee",
+      }),
+    ).toBe("Buy an egg sandwich and get two free coffees");
+  });
+
+  it("formats percent-off offers from structured facts", () => {
+    expect(
+      getDealDisplayTitle({
+        title: "Weekend special",
+        deal_type: "PERCENT_OFF_SINGLE_ITEM",
+        discount_percent: 25,
+        item_description: "Croissant",
+      }),
+    ).toBe("Get 25% off one croissant");
+  });
+
+  it("reads locked offer and terms from ad specs when supplied", () => {
+    const deal = {
+      title: "AI hook",
+      description: "AI body",
+      ad_spec: {
+        terms: {
+          lockedOfferLine: "Buy a latte and get a free cookie",
+          summary: "Limit one claim per customer.",
+        },
+      },
+    };
+
+    expect(getDealDisplayTitle(deal, deal.title)).toBe("Buy a latte and get a free cookie");
+    expect(getDealDisplayDescription(deal, deal.description, deal.title)).toBe("Limit one claim per customer.");
   });
 
   it("uses the same-item fallback when the item is missing", () => {
@@ -93,5 +154,15 @@ describe("getDealDisplayDescription", () => {
     const deal = { title: "Same-Item Iced Americano BOGO" };
 
     expect(getDealDisplayDescription(deal, "Medium size only.", deal.title)).toBe("Medium size only.");
+  });
+
+  it("uses locked terms instead of generated description prose", () => {
+    const deal = {
+      title: "Neighbor special",
+      locked_offer_line: "Buy one latte and get one free",
+      locked_terms_line: "Limit one claim per customer.",
+    };
+
+    expect(getDealDisplayDescription(deal, "A cozy reason to stop in.", deal.title)).toBe("Limit one claim per customer.");
   });
 });

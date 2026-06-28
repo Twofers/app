@@ -64,6 +64,18 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("amazing deal");
   });
 
+  it("includes the category playbook, merchant profile, creative brief, and five lane instructions", () => {
+    expect(basePrompt.system).toContain("Write one positive creative brief and exactly five");
+    expect(basePrompt.system).toContain("CATEGORY PLAYBOOK");
+    expect(basePrompt.system).toContain("coffee_cafe");
+    expect(basePrompt.system).toContain("MERCHANT CREATIVE PROFILE");
+    expect(basePrompt.system).toContain("Merchant-specific context limited: false");
+    expect(basePrompt.system).toContain("value_clarity");
+    expect(basePrompt.system).toContain("merchant_specific");
+    expect(basePrompt.userText).toContain("Create exactly one candidate for each strategy ID");
+    expect(basePrompt.userText).toContain("The creativeBrief must explain");
+  });
+
   it("includes good and bad examples", () => {
     expect(basePrompt.system).toContain("Bad headlineAlternative");
     expect(basePrompt.system).toContain("Egg sandwich with free coffee");
@@ -88,10 +100,25 @@ describe("buildAdCopyPrompt", () => {
 
   it("requires the structured output schema", () => {
     const schema = basePrompt.jsonSchema.schema;
-    expect(schema.required).toEqual(["variants"]);
-    expect(Object.keys(schema.properties)).toEqual(["variants"]);
+    expect(schema.required).toEqual(["creativeBrief", "variants"]);
+    expect(Object.keys(schema.properties)).toEqual(["variants", "creativeBrief"]);
+    expect(schema.properties.variants.minItems).toBe(5);
+    expect(schema.properties.variants.maxItems).toBe(5);
     const item = schema.properties.variants.items;
-    expect(item.required).toEqual(["headlineAlternative", "description", "pushTitle", "pushBody", "socialCaption"]);
+    expect(item.required).toEqual([
+      "candidateId",
+      "strategyId",
+      "strategyReason",
+      "headlineAlternative",
+      "description",
+      "pushTitle",
+      "pushBody",
+      "socialCaption",
+      "cta",
+      "imageBrief",
+      "merchantSpecificContextLimited",
+    ]);
+    expect(schema.properties.creativeBrief.required).toContain("targetCustomerMoment");
   });
 
   it("tells the model not to invent missing facts", () => {
@@ -108,6 +135,61 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.userText).toContain("Deterministic canonical headline: Buy a coffee and get a free bagel");
     expect(basePrompt.userText).toContain("Buy coffee, bagel is on us");
     expect(basePrompt.userText).toContain("Claim a free bagel with a qualifying coffee purchase");
+  });
+
+  it("adds source-locale policy and protected terms for Spanish source creative", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Compra un latte y recibe una galleta gratis", "latte"),
+      outputLanguage: "es",
+      businessName: "Cedar Bean",
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "latte",
+        requiredItemRetailValueCents: 600,
+        freeItemQuantity: 1,
+        freeItemDescription: "cookie",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.system).toContain("SOURCE-LANGUAGE CREATIVE POLICY");
+    expect(prompt.system).toContain("Source locale: es-US");
+    expect(prompt.system).toContain("Write all creativeBrief and candidate output fields in U.S. Spanish");
+    expect(prompt.system).toContain("Do not use literal English word order");
+    expect(prompt.system).toContain("2x1");
+    expect(prompt.system).toContain("Cedar Bean");
+    expect(prompt.system).toContain("latte");
+    expect(prompt.system).toContain("cookie");
+  });
+
+  it("adds Korean source creative safety around counters, shorthand, and protected terms", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("라떼를 사면 쿠키 무료", "latte"),
+      outputLanguage: "ko",
+      businessName: "Cedar Bean",
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "latte",
+        requiredItemRetailValueCents: 600,
+        freeItemQuantity: 1,
+        freeItemDescription: "cookie",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.system).toContain("Source locale: ko-KR");
+    expect(prompt.system).toContain("Write all creativeBrief and candidate output fields in Korean");
+    expect(prompt.system).toContain("Do not infer Korean counters");
+    expect(prompt.system).toContain("1+1");
+    expect(prompt.system).toContain("Cedar Bean");
+    expect(prompt.system).toContain("latte");
+    expect(prompt.system).toContain("cookie");
   });
 
   it("requires plain English for same-item buy-one-get-one offers", () => {

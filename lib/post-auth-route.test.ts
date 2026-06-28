@@ -38,6 +38,7 @@ describe("consumerSafeHrefFromNext", () => {
     expect(consumerSafeHrefFromNext("/(tabs)/create")).toBe("/(tabs)");
     expect(consumerSafeHrefFromNext("/(tabs)/dashboard")).toBe("/(tabs)");
     expect(consumerSafeHrefFromNext("/(tabs)/billing")).toBe("/(tabs)");
+    expect(consumerSafeHrefFromNext("/(tabs)/account/billing")).toBe("/(tabs)");
   });
 
   it("allows consumer deep links after login", () => {
@@ -72,5 +73,12 @@ describe("resolvePostAuthReplaceHref", () => {
       resolvePostAuthReplaceHref({ role: "customer", nextParam: "/(tabs)/dashboard" }),
     ).resolves.toBe("/(tabs)");
     expect(h.getBusinessProfileAccessForCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("preserves billing-under-account deep links for complete business accounts", async () => {
+    await expect(
+      resolvePostAuthReplaceHref({ role: "business", nextParam: "/(tabs)/account/billing?checkout=success" }),
+    ).resolves.toBe("/(tabs)/account/billing?checkout=success");
+    expect(h.getBusinessProfileAccessForCurrentUser).toHaveBeenCalledTimes(1);
   });
 });

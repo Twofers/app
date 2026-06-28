@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Platform, ScrollView, Text, useWindowDimensions, View } from "react-native";
-import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { getStackFooterMetrics, useScreenInsets, Spacing, type TabBarPlatform } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -10,27 +10,61 @@ import { claimDeal } from "../../lib/functions";
 import { buildClaimDealTelemetry } from "../../lib/claim-telemetry";
 import { trackAppAnalyticsEvent } from "../../lib/app-analytics";
 import { Banner } from "../../components/ui/banner";
+import { ComposedAdCard } from "@/components/composed-ad-card/ComposedAdCard";
 import { PrimaryButton } from "../../components/ui/primary-button";
 import { SecondaryButton } from "../../components/ui/secondary-button";
 import { ScreenHeader } from "../../components/ui/screen-header";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
-import { Colors, Radii } from "../../constants/theme";
+import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
-import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
+import {
+  getCustomerPreferredDealLocale,
+  getDeviceDealLocale,
+  setCustomerPreferredDealLocale,
+} from "@/lib/customer-deal-locale-storage";
+import {
+  fetchCustomerDealLocalizations,
+  type CustomerDealLocalization,
+} from "@/lib/customer-deal-localizations";
+import {
+  fetchCustomerDealPosterSpecs,
+  type CustomerDealPosterSpec,
+} from "@/lib/customer-deal-poster-specs";
+import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  DEAL_STRUCTURED_DISPLAY_COLUMNS,
+  isMissingStructuredDisplayColumnError,
+  type DealStructuredDisplayFields,
+} from "@/lib/deal-feed-schema";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { ReportSheet } from "@/components/report-sheet";
 import { hasDirectionsTarget, openDirectionsToTarget } from "@/lib/directions";
 import { submitBusinessReport, type BusinessReportReason } from "@/lib/reports";
-import { isShareDealEnabled } from "@/lib/runtime-env";
+import {
+  isAiV4SharedRendererEnabled,
+  isAiV5CustomerLocaleResolutionEnabled,
+  isAiV5DealLanguageSwitchEnabled,
+  isAiV5LocalizedOfferRendererEnabled,
+  isShareDealEnabled,
+} from "@/lib/runtime-env";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_DETAIL_EXPLANATION, DEMO_OFFER_LABEL, isDemoOffer } from "@/lib/demo-content";
 import { getDealDetailActionState } from "@/lib/deal-action-state";
+import { buildDefaultAdPresentationSpec } from "@/lib/ad-presentation-spec";
+import { buildApprovedAdCopy, buildMerchantIdentity } from "@/lib/ad-render-content";
+import { renderAuthoritativeOfferFromDeal } from "@/lib/authoritative-offer-renderer";
+import {
+  SUPPORTED_LOCALES,
+  SUPPORTED_LOCALE_METADATA,
+  supportedLocaleOrDefault,
+  type SupportedLocale,
+} from "@/lib/supported-locales";
 
-type Deal = {
+type Deal = DealStructuredDisplayFields & {
   id: string;
   title: string | null;
   description: string | null;
@@ -64,6 +98,10 @@ type Deal = {
   window_end_minutes?: number | null;
   timezone?: string | null;
 };
+
+const DEAL_DETAIL_BASE_SELECT =
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)";
+const DEAL_DETAIL_SELECT = `${DEAL_DETAIL_BASE_SELECT},${DEAL_STRUCTURED_DISPLAY_COLUMNS}`;
 
 type ActiveClaim = {
   id?: string;
@@ -133,7 +171,16 @@ export default function DealDetail() {
   const [reportVisible, setReportVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [customerDealLocalization, setCustomerDealLocalization] = useState<CustomerDealLocalization | null>(null);
+  const [customerDealPosterSpec, setCustomerDealPosterSpec] = useState<CustomerDealPosterSpec | null>(null);
   const shareDealEnabled = isShareDealEnabled();
+  const composedCustomerRendererEnabled = isAiV4SharedRendererEnabled();
+  const customerLocaleResolutionEnabled = isAiV5CustomerLocaleResolutionEnabled();
+  const dealLanguageSwitchEnabled = isAiV5DealLanguageSwitchEnabled();
+  const localizedOfferRendererEnabled = isAiV5LocalizedOfferRendererEnabled();
+  const [customerPreferredDealLocale, setCustomerPreferredDealLocaleState] = useState<SupportedLocale | null>(null);
+  const [selectedDealLocale, setSelectedDealLocale] = useState<SupportedLocale | null>(null);
+  const deviceDealLocaleRef = useRef(getDeviceDealLocale());
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -159,6 +206,35 @@ export default function DealDetail() {
     });
     return () => sub.remove();
   }, [goBack, qrVisible, reportVisible]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getCustomerPreferredDealLocale().then((locale) => {
+      if (!cancelled) setCustomerPreferredDealLocaleState(locale);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language]);
+
+  function handleDealLanguageSelect(locale: SupportedLocale) {
+    const previous = selectedDealLocale ?? customerPreferredDealLocale;
+    setSelectedDealLocale(locale);
+    setCustomerPreferredDealLocaleState(locale);
+    void setCustomerPreferredDealLocale(locale);
+    if (deal?.id) {
+      trackAppAnalyticsEvent({
+        event_name: "deal_language_switched",
+        deal_id: deal.id,
+        business_id: deal.business_id,
+        context: {
+          previous_locale: previous ?? null,
+          customer_render_locale: locale,
+          locale_resolution_source: "customer_preference",
+        },
+      });
+    }
+  }
 
   function renderBackAction() {
     return (
@@ -244,20 +320,29 @@ export default function DealDetail() {
     }
     setLoadStatus("loading");
     setBanner(null);
-    const { data, error } = await supabase
+    const enrichedResult = await supabase
       .from("deals")
-      .select(
-        "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,end_time,start_time,is_demo,poster_url,poster_storage_path,business_id,price,claim_cutoff_buffer_minutes,max_claims,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,businesses(name,address,location,latitude,longitude,is_demo)",
-      )
+      .select(DEAL_DETAIL_SELECT)
       .eq("id", id)
       .single();
-    if (error) {
+    let dealDataResult: unknown = enrichedResult.data;
+    let dealError = enrichedResult.error;
+    if (isMissingStructuredDisplayColumnError(enrichedResult.error)) {
+      const baseResult = await supabase
+        .from("deals")
+        .select(DEAL_DETAIL_BASE_SELECT)
+        .eq("id", id)
+        .single();
+      dealDataResult = baseResult.data;
+      dealError = baseResult.error;
+    }
+    if (dealError) {
       setDeal(null);
-      setBanner(translateKnownApiMessage(error.message, t));
+      setBanner(translateKnownApiMessage(dealError.message, t));
       setLoadStatus("failed");
       return;
     }
-    const dealData = data as unknown as Deal;
+    const dealData = dealDataResult as Deal;
     setDeal(dealData);
     setLoadStatus("ready");
     await loadClaimCount(dealData.id);
@@ -301,17 +386,70 @@ export default function DealDetail() {
     return () => { cancelled = true; };
   }, [deal?.id, loadActiveClaimForDeal, userId]);
 
+  useEffect(() => {
+    if (!deal?.id || !customerLocaleResolutionEnabled) {
+      setCustomerDealLocalization(null);
+      return;
+    }
+    const resolvedLocale = resolveDealDisplayLocale({
+      customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+      appLanguage: i18n.language,
+      deviceLanguage: deviceDealLocaleRef.current,
+      adSourceLocale: deal.source_locale,
+    });
+    let cancelled = false;
+    void fetchCustomerDealLocalizations([deal.id], resolvedLocale.locale).then((localizations) => {
+      if (!cancelled) setCustomerDealLocalization(localizations.get(deal.id) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    customerLocaleResolutionEnabled,
+    customerPreferredDealLocale,
+    deal?.id,
+    deal?.source_locale,
+    i18n.language,
+    selectedDealLocale,
+  ]);
+
+  useEffect(() => {
+    if (!deal?.id || !composedCustomerRendererEnabled) {
+      setCustomerDealPosterSpec(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomerDealPosterSpecs([deal.id]).then((posterSpecs) => {
+      if (!cancelled) setCustomerDealPosterSpec(posterSpecs.get(deal.id) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [composedCustomerRendererEnabled, deal?.id]);
+
   // MVP open tracking: count once per loaded deal detail view.
   useEffect(() => {
     if (!deal?.id || !deal.business_id) return;
     if (openedDealIdRef.current === deal.id) return;
     openedDealIdRef.current = deal.id;
+    const openedLocale = customerLocaleResolutionEnabled
+      ? resolveDealDisplayLocale({
+          customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+          appLanguage: i18n.language,
+          deviceLanguage: deviceDealLocaleRef.current,
+          adSourceLocale: deal.source_locale,
+        })
+      : null;
     trackAppAnalyticsEvent({
       event_name: "deal_opened",
       deal_id: deal.id,
       business_id: deal.business_id,
+      context: {
+        customer_render_locale: openedLocale?.locale ?? null,
+        locale_resolution_source: openedLocale?.source ?? null,
+      },
     });
-  }, [deal?.id, deal?.business_id]);
+  }, [customerLocaleResolutionEnabled, customerPreferredDealLocale, deal?.business_id, deal?.id, deal?.source_locale, i18n.language, selectedDealLocale]);
 
   async function doClaim() {
     try {
@@ -390,6 +528,30 @@ export default function DealDetail() {
     }
   }
 
+  function currentDealDisplayTitle() {
+    if (!deal) return t("dealDetail.dealFallback");
+    const resolvedLocale = customerLocaleResolutionEnabled
+      ? resolveDealDisplayLocale({
+          customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+          appLanguage: i18n.language,
+          deviceLanguage: deviceDealLocaleRef.current,
+          adSourceLocale: deal.source_locale,
+        })
+      : {
+          locale: supportedLocaleOrDefault(i18n.language),
+          source: "app_language" as const,
+          enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+        };
+    const display = buildLocalizedDealDisplay({
+      deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
+      locale: resolvedLocale.locale,
+      localeResolutionSource: resolvedLocale.source,
+      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      fallbackLanguage: i18n.language,
+    });
+    return display.title || t("dealDetail.dealFallback");
+  }
+
   async function handleShare() {
     if (!shareDealEnabled) return;
     if (!deal || isSharing) return;
@@ -405,7 +567,7 @@ export default function DealDetail() {
       const code = await getOrCreateShareCode(deal.id);
       const copy = buildShareCopy({
         shareCode: code,
-        dealTitle: localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback"),
+        dealTitle: currentDealDisplayTitle(),
         businessName: deal.businesses?.name ?? t("dealDetail.localBusiness"),
         t,
       });
@@ -506,16 +668,36 @@ export default function DealDetail() {
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
   const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
-  const displayTitle = localizedDealTitle(deal, i18n.language) || t("dealDetail.dealFallback");
-  const displayDescription = localizedDealDescription(deal, i18n.language);
+  const resolvedDisplayLocale = customerLocaleResolutionEnabled
+    ? resolveDealDisplayLocale({
+        customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
+        appLanguage: i18n.language,
+        deviceLanguage: deviceDealLocaleRef.current,
+        adSourceLocale: deal.source_locale,
+      })
+    : {
+        locale: supportedLocaleOrDefault(i18n.language),
+        source: "app_language" as const,
+        enabledLocales: [supportedLocaleOrDefault(i18n.language)],
+      };
+  const localizedDisplay = buildLocalizedDealDisplay({
+    deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
+    locale: resolvedDisplayLocale.locale,
+    localeResolutionSource: resolvedDisplayLocale.source,
+    useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+    fallbackLanguage: i18n.language,
+  });
+  const displayTitle = localizedDisplay.title || t("dealDetail.dealFallback");
+  const displayDescription = localizedDisplay.description;
   const actionState = getDealDetailActionState({
     hasActiveClaim: Boolean(activeClaim),
     isClaiming,
     unavailableLabel: claimBlockedLabel,
   });
   const canShareDeal = shareDealEnabled && !dealIsDemo && actionState.kind !== "unavailable";
-  const stickyBottom = Math.max(insets.bottom, Spacing.lg);
-  const stickyBarHeight = 76;
+  const footerPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const stickyFooter = getStackFooterMetrics(insets, footerPlatform);
   const ctaLabel =
     actionState.kind === "active_claimed"
       ? t("dealDetail.viewYourDeal", { defaultValue: "View your deal" })
@@ -531,6 +713,54 @@ export default function DealDetail() {
   const biz = deal.businesses;
   const addressLine = biz?.address?.trim() || biz?.location?.trim() || null;
   const directionsAvailable = hasDirectionsTarget(biz);
+  const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
+  const validitySummary = formatValiditySummary(deal, {
+    lang: i18n.language,
+    endsVerb: t("commonUi.dealEndsVerb"),
+    t,
+    showTimeZone: false,
+  });
+  const detailScarcityLabel =
+    claimsCountReliable && remaining >= 1 && remaining <= 5
+      ? remaining === 1
+        ? t("consumerHome.onlyOneLeft")
+        : t("consumerHome.onlyNLeft", { count: remaining })
+      : null;
+  const composedOfferFacts = localizedDisplay.lockedOfferContent ?? renderAuthoritativeOfferFromDeal(deal, {
+    title: displayTitle,
+    description: displayDescription,
+  });
+  const composedSupportingCopy = localizedDisplay.localizedCreative?.supportingCopy || displayDescription;
+  const composedPresentation = buildDefaultAdPresentationSpec({
+    imageAssetId: deal.poster_storage_path ?? posterUri ?? null,
+    imageSourceType: posterUri ? "merchant_original" : "deterministic_fallback",
+    templateId: "split_offer_panel",
+    themeId: colorScheme === "dark" ? "dark_neutral" : "light_neutral",
+    resolutionReasonCodes: posterUri ? ["DEAL_DETAIL_IMAGE"] : ["DEAL_DETAIL_FALLBACK"],
+  });
+  const composedCopy = buildApprovedAdCopy({
+    headline: displayTitle,
+    supportingCopy: composedSupportingCopy,
+    ctaLabel,
+    fallbackHeadline: composedOfferFacts.primaryOfferLine,
+  });
+  const composedMerchant = buildMerchantIdentity({
+    businessName: deal.businesses?.name,
+    locationName: deal.businesses?.location,
+    addressLine,
+  });
+  const composedLiveState = {
+    status:
+      actionState.kind === "active_claimed"
+        ? ("claimed" as const)
+        : actionState.kind === "unavailable"
+          ? ("unavailable" as const)
+          : ("live" as const),
+    statusLabel: actionState.kind === "unavailable" ? actionState.statusLabel : actionState.kind === "active_claimed" ? t("dealStatus.claimed") : t("dealStatus.live"),
+    quantityRemainingLabel: detailScarcityLabel,
+    timeRemainingLabel: actionState.kind === "unavailable" ? null : validitySummary,
+    claimAvailable: !ctaDisabled && !dealIsDemo,
+  };
 
   return (
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
@@ -588,34 +818,93 @@ export default function DealDetail() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: scrollBottom + stickyBarHeight + stickyBottom }}
+        contentContainerStyle={{
+          paddingBottom: composedCustomerRendererEnabled ? scrollBottom + Spacing.xl : stickyFooter.scrollPadding,
+        }}
       >
-        <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
-          {displayTitle}
-        </Text>
-        {(() => {
-          const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
-          return posterUri ? (
-            <Image
-              source={{ uri: posterUri }}
-              style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg, marginTop: Spacing.lg }}
-              contentFit="cover"
-            />
-          ) : (
-            <View
-              style={{
-                height: heroHeight,
-                borderRadius: Radii.lg,
-                marginTop: Spacing.lg,
-                backgroundColor: theme.surfaceMuted,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
-            </View>
-          );
-        })()}
+        {composedCustomerRendererEnabled ? (
+          <ComposedAdCard
+            imageUri={posterUri}
+            posterSpec={customerDealPosterSpec?.posterSpec ?? null}
+            offerFacts={composedOfferFacts}
+            merchant={composedMerchant}
+            copy={composedCopy}
+            presentation={composedPresentation}
+            liveState={composedLiveState}
+            surface="deal_detail"
+            fallbackVisualLabel={t("dealDetail.noImage")}
+            onPrimaryAction={() => void ctaPress()}
+          />
+        ) : (
+          <>
+            <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+              {displayTitle}
+            </Text>
+            {posterUri ? (
+              <Image
+                source={{ uri: posterUri }}
+                style={{ height: heroHeight, width: "100%", borderRadius: Radii.lg, marginTop: Spacing.lg }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  height: heroHeight,
+                  borderRadius: Radii.lg,
+                  marginTop: Spacing.lg,
+                  backgroundColor: theme.surfaceMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {dealLanguageSwitchEnabled ? (
+          <View
+            style={{
+              marginTop: Spacing.md,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: Spacing.xs,
+            }}
+          >
+            {SUPPORTED_LOCALES.map((locale) => {
+              const active = resolvedDisplayLocale.locale === locale;
+              return (
+                <Pressable
+                  key={locale}
+                  onPress={() => handleDealLanguageSelect(locale)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: Radii.pill,
+                    borderWidth: 1,
+                    borderColor: active ? theme.primary : theme.border,
+                    backgroundColor: active ? PrimaryTint.surface : theme.surfaceMuted,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? theme.accentText : theme.text,
+                      fontSize: 13,
+                      fontWeight: "800",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {SUPPORTED_LOCALE_METADATA[locale].productLabel}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View style={{ marginTop: Spacing.lg }}>
           <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "800", color: theme.text }}>
@@ -670,12 +959,7 @@ export default function DealDetail() {
             {t("dealDetail.claimsAvailable", { count: remaining })}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
-            {formatValiditySummary(deal, {
-              lang: i18n.language,
-              endsVerb: t("commonUi.dealEndsVerb"),
-              t,
-              showTimeZone: false,
-            })}
+            {validitySummary}
           </Text>
           <Text style={{ opacity: 0.78, marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: theme.text }}>
             {deal.claim_cutoff_buffer_minutes > 0
@@ -699,26 +983,28 @@ export default function DealDetail() {
         </Pressable>
       </ScrollView>
 
-      <View
-        style={{
-          position: "absolute",
-          left: horizontal,
-          right: horizontal,
-          bottom: stickyBottom,
-          minHeight: stickyBarHeight,
-          justifyContent: "center",
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.sm,
-          backgroundColor: theme.background,
-        }}
-      >
-        <PrimaryButton
-          title={ctaLabel}
-          onPress={() => void ctaPress()}
-          disabled={ctaDisabled || dealIsDemo}
-          style={ctaDisabled ? { backgroundColor: theme.surfaceMuted } : undefined}
-        />
-      </View>
+      {!composedCustomerRendererEnabled ? (
+        <View
+          style={{
+            position: "absolute",
+            left: horizontal,
+            right: horizontal,
+            bottom: stickyFooter.bottom,
+            minHeight: stickyFooter.minHeight,
+            justifyContent: "center",
+            paddingTop: Spacing.sm,
+            paddingBottom: Spacing.sm,
+            backgroundColor: theme.background,
+          }}
+        >
+          <PrimaryButton
+            title={ctaLabel}
+            onPress={() => void ctaPress()}
+            disabled={ctaDisabled || dealIsDemo}
+            style={ctaDisabled ? { backgroundColor: theme.surfaceMuted } : undefined}
+          />
+        </View>
+      ) : null}
 
       <ReportSheet
         visible={reportVisible}

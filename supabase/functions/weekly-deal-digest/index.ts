@@ -69,6 +69,7 @@ serve(async (req) => {
       .select("id, business_id, created_at, businesses(latitude, longitude)")
       .eq("is_active", true)
       .gte("created_at", sinceIso)
+      .lte("start_time", nowIso)
       .gte("end_time", nowIso)
       .limit(5000);
     if (dealErr) {

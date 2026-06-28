@@ -2,7 +2,7 @@
 
 Command-by-command verification for moving from code readiness to **deployment readiness**. This doc does not deploy anything by itself.
 
-**Related:** [production-deploy-checklist.md](./production-deploy-checklist.md), [deployment-notes.md](./deployment-notes.md), [release-candidate-status.md](./release-candidate-status.md), [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md).
+**Related:** [production-deploy-checklist.md](./production-deploy-checklist.md), [deployment-notes.md](./deployment-notes.md), [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md), [multilingual-deals-production-approval-runbook.md](./localization/multilingual-deals-production-approval-runbook.md).
 
 **Legend**
 
@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (58 files, strict filename / timestamp order)
+### 2.1 Full local set (99 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -81,7 +81,7 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 41. `20260703120004_timezone_validation.sql`
 42. `20260703120005_claim_race_guards.sql`
 43. `20260704120000_business_logo_storage.sql`
-44. `20260704120000_enable_deals_realtime.sql`
+44. `20260704120001_enable_deals_realtime.sql`
 45. `20260704130000_enforce_max_claims_atomic.sql`
 46. `20260705120000_businesses_pii_column_grants.sql`
 47. `20260705120002_deal_claims_unique_active.sql`
@@ -96,21 +96,84 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 56. `20260706120000_business_invite_gate.sql`
 57. `20260706130000_deal_photo_owner_upload_policies.sql`
 58. `20260707120000_business_menu_item_sizes.sql`
+59. `20260707130000_align_strong_deal_guard_with_client.sql`
+60. `20260708120000_deal_viewed_daily_idempotency.sql`
+61. `20260708130000_nearby_geo_rpcs.sql`
+62. `20260708140000_consumer_deal_alerts_enabled.sql`
+63. `20260708150000_weekly_digest_cron.sql`
+64. `20260710120000_deal_shares.sql`
+65. `20260711120000_profiles_role.sql`
+66. `20260712120000_redemption_mode_staff_sessions.sql`
+67. `20260713120000_business_claim_notifications.sql`
+68. `20260714120000_fix_purge_user_data_columns.sql`
+69. `20260715120000_share_lookup_hardening.sql`
+70. `20260716120000_deal_claim_counts_rpc.sql`
+71. `20260717120000_fix_is_redeemer_session_null_safe.sql`
+72. `20260718120000_deal_source_locale_and_english_translation.sql`
+73. `20260719120000_demo_content_marker.sql`
+74. `20260720120000_cedar_bean_claimable_qa_deal.sql`
+75. `20260721120000_deal_wallet_redemption_rules.sql`
+76. `20260722120000_ai_generation_cost_ledger.sql`
+77. `20260723120000_offer_versions_foundation.sql`
+78. `20260724120000_offer_version_publish_rpc.sql`
+79. `20260724121000_offer_version_claim_redemption_binding.sql`
+80. `20260725120000_ad_generation_media_library.sql`
+81. `20260725121000_business_media_import_jobs.sql`
+82. `20260726120000_location_billing_entitlements.sql`
+83. `20260726123000_deal_credit_consumption_helpers.sql`
+84. `20260726124000_deal_credit_reservation_sweep_schedule.sql`
+85. `20260726125000_deal_suspension_write_guards.sql`
+86. `20260726130000_trial_ending_reminder_events.sql`
+87. `20260726131000_introductory_refund_requests.sql`
+88. `20260726132000_business_trial_identity_controls.sql`
+89. `20260726133000_business_publish_verification_controls.sql`
+90. `20260726134000_pause_recurring_deals_on_billing_suspension.sql`
+91. `20260726135000_trial_ending_reminder_cron_schedule.sql`
+92. `20260726136000_admin_trial_identity_reuse_guard.sql`
+93. `20260727120000_ai_provider_circuit_breakers.sql`
+94. `20260728120000_ad_localization_storage.sql`
+95. `20260728123000_customer_deal_localization_projection.sql`
+96. `20260729120000_deal_release_push_events.sql`
+97. `20260729121000_deal_release_push_cron_schedule.sql`
+98. `20260730120000_deals_owner_delete_ended.sql`
+99. `20260730121000_customer_deal_poster_spec_projection.sql`
 
 ### 2.2 Latest migration
 
-**`20260707120000_business_menu_item_sizes.sql`**
+**`20260730121000_customer_deal_poster_spec_projection.sql`**
 
-### 2.3 Duplicate timestamp warning
+### 2.3 Multilingual rollout migrations
 
-Two files share the prefix **`20260704120000`**:
+The multilingual approval path depends on the hosted project being current through the migration chain above, including:
 
-- `20260704120000_business_logo_storage.sql` (runs **first** — `business_` before `enable_` lexicographically)
-- `20260704120000_enable_deals_realtime.sql`
+- `20260728120000_ad_localization_storage.sql`
+- `20260728123000_customer_deal_localization_projection.sql`
 
-Order is stable but duplicate prefixes are an operational footgun; prefer unique timestamps for new migrations.
+The projection migration exposes the customer-safe `customer_deal_localizations(p_deal_ids uuid[], p_locale text)` RPC. It must not grant direct app-role access to `ad_localizations`. See [multilingual-deals-production-approval-runbook.md](./localization/multilingual-deals-production-approval-runbook.md) before asking Dan to approve these migrations.
 
-### 2.4 Command to apply migrations (do not run without explicit approval)
+### 2.4 Deal release push scheduling migrations
+
+The customer release-push path depends on applying these in order:
+
+- `20260729120000_deal_release_push_events.sql`
+- `20260729121000_deal_release_push_cron_schedule.sql`
+
+The second migration schedules a five-minute `pg_cron` job that posts to the hosted `send-deal-push` function with a Vault-backed secret. Applying either migration is production-changing and requires explicit approval; after the RLS/idempotency table migration is applied, run `node scripts/probe-rls-smoke.mjs`.
+
+### 2.5 Ended-deal cleanup and poster projection migrations
+
+The current local chain also includes these later migrations:
+
+- `20260730120000_deals_owner_delete_ended.sql`
+- `20260730121000_customer_deal_poster_spec_projection.sql`
+
+These add owner deletion for ended deals and expose customer-safe native poster specs for active published deals. Applying either migration is production-changing and requires explicit approval; after applying the poster projection migration, include the customer poster spec RPC in hosted read-only smoke.
+
+### 2.6 Duplicate timestamp check
+
+No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
+
+### 2.7 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
@@ -165,6 +228,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 
 | Function |
 |----------|
+| `activate-redemption-mode` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |
@@ -181,26 +245,40 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `complete-visual-redeem` |
 | `deal-link` |
 | `delete-user-account` |
+| `exit-redemption-mode` |
 | `finalize-stale-redeems` |
 | `ingest-analytics-event` |
+| `manage-redemption-devices` |
+| `owner-redemption-security` |
+| `publish-offer-version` |
 | `redeem-token` |
+| `release-claim` |
 | `send-deal-push` |
+| `send-trial-ending-reminders` |
 | `simulate-subscribe` |
+| `staff-redemption` |
+| `stripe-cancel-paid-subscription` |
+| `stripe-cancel-trial-subscription` |
 | `stripe-create-checkout-session` |
 | `stripe-customer-portal-session` |
+| `stripe-expire-pending-checkout` |
+| `stripe-request-introductory-refund` |
 | `stripe-webhook` |
+| `weekly-deal-digest` |
 
-**Note:** `docs/deployment-notes.md` may mention `ai-refine-ad-copy`; that folder is **not** in this repo. Deploy only what exists above.
+**Note:** deploy only function folders that exist above and are present in `supabase/config.toml`.
 
 **Shared code:** `supabase/functions/_shared/` is bundled with functions; redeploy functions after changing `_shared/`.
 
 ### 4.2 Pilot-critical subset (non-exhaustive)
 
-- **Wallet / redeem:** `claim-deal`, `redeem-token`, `begin-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (and `cancel-visual-redeem` if still referenced)
+- **Wallet / redeem:** `claim-deal`, `redeem-token`, `release-claim`, `begin-visual-redeem`, `complete-visual-redeem`, `finalize-stale-redeems` (and `cancel-visual-redeem` if still referenced)
+- **Redemption Mode / staff controls:** `activate-redemption-mode`, `exit-redemption-mode`, `staff-redemption`, `manage-redemption-devices`, `owner-redemption-security`
 - **Account / compliance:** `delete-user-account`
-- **Telemetry:** `ingest-analytics-event`
-- **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`, `ai-create-deal` (legacy)
-- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`; treat `simulate-subscribe` as **QA-only**
+- **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
+- **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
+- **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
+- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)
 
@@ -240,17 +318,52 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`. |
+| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.4-mini`, other allowlisted models are explicit overrides. |
 | `OPENAI_WHISPER_MODEL` | Voice path in `ai-compose-offer`. |
+| `GEMINI_API_KEY` | Required only when Gemini text fallback, independent judging, vision QA fallback, or Gemini image generation is enabled. |
+| `GEMINI_TEXT_MODEL` | Gemini structured text model; default `gemini-3.5-flash`. |
+| `GEMINI_JUDGE_MODEL` | Gemini independent-judge model; default `gemini-3.5-flash`. |
+| `AI_V3_PROVIDER_ROUTER_ENABLED` | Enables the shared OpenAI/Gemini text provider router. |
+| `AI_TEXT_PRIMARY_PROVIDER` | Shared text router primary provider; defaults to `openai`. |
+| `AI_TEXT_FALLBACK_ENABLED` | Enables text fallback only when the router is enabled; keep `false` in production until the public privacy/subprocessor update is deployed. |
+| `AI_TEXT_FALLBACK_PROVIDER` | Shared text fallback provider; defaults to `gemini`. |
+| `AI_TEXT_PRIMARY_TIMEOUT_MS` | Shared text primary provider timeout; default `12000`. |
+| `AI_TEXT_FALLBACK_TIMEOUT_MS` | Shared text fallback provider timeout; default `14000`. |
+| `AI_TRANSIENT_RETRY_MAX` | Shared text transient retry count; capped at `1`. |
+| `AI_RETRY_AFTER_FULL_TIMEOUT` | Allows retry after a full primary timeout when explicitly true. |
+| `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks with the router; activate only after the circuit-breaker migration is applied. |
+| `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent judging for ad-variant candidates. |
+| `AI_VISION_FALLBACK_ENABLED` | Enables image QA fallback. |
+| `AI_VISION_FALLBACK_PROVIDER` | Image QA fallback provider; defaults to `gemini`. |
+| `AI_VISION_PRIMARY_TIMEOUT_MS` | Image QA primary timeout; default `25000`. |
+| `AI_VISION_FALLBACK_TIMEOUT_MS` | Image QA fallback timeout; default `14000`. |
+| `AI_STOCK_QA_CANDIDATE_LIMIT` | Ranked stock-candidate QA cap; default `3`, maximum `10`. |
+| `AI_V3_COST_BUDGET_ENABLED` | Enables AI provider cost projection/budget checks. |
+| `AI_TEXT_COST_SOFT_LIMIT_USD` | Text cost soft-limit telemetry threshold; default `0.2`. |
+| `AI_TEXT_COST_HARD_LIMIT_USD` | Per-text-attempt hard projection limit; default `0.5`. |
+| `AI_TOTAL_GENERATION_COST_HARD_LIMIT_USD` | Full generation hard projection limit; default `1`. |
+| `AI_REVISION_COST_HARD_LIMIT_USD` | Revision hard projection limit; default `0.35`. |
 | `OPENAI_IMAGE_MODEL_DEFAULT` | Default for both generate and edit when role-specific vars unset (`_shared/dalle-image.ts`); allowlisted ids only; invalid → `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_GENERATE` | Text-to-image / poster generation (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
 | `OPENAI_IMAGE_MODEL_EDIT` | Uploaded-photo edits (`_shared/dalle-image.ts`); falls back to `OPENAI_IMAGE_MODEL_DEFAULT` then `gpt-image-1`. |
+| `AI_IMAGE_PROVIDER` | Ad-image primary provider; defaults to `openai`, with `gemini` usable only when `AI_IMAGE_GEMINI_ENABLED=true`. |
+| `AI_IMAGE_FALLBACK_PROVIDER` | Ad-image fallback provider; defaults to `openai`. |
+| `AI_IMAGE_GEMINI_ENABLED` | Enables Gemini as an ad-image provider when paired with `GEMINI_API_KEY`. |
+| `GEMINI_IMAGE_MODEL` | Gemini image model; default `gemini-3.1-flash-image`. |
+| `GEMINI_IMAGE_ESTIMATED_COST_1K_USD` | Gemini image cost estimate used in telemetry; default `0.067`. |
+| `AI_IMAGE_OWNER_PHOTO_REFERENCE_ENABLED` | Allows owner photo references in Gemini image generation; default `true`. |
+| `AI_IMAGE_STOCK_FALLBACK_ENABLED` | Allows stock fallback in ad-image provider selection; default `true`. |
 | `AI_COMPOSE_PROMPT_VERSION` | `ai-compose-offer` |
 | `AI_DEDUP_WINDOW_SECONDS` | `ai-compose-offer` |
 | `AI_COPY_MONTHLY_LIMIT` | `ai-generate-deal-copy` |
 | `AI_INSIGHTS_MONTHLY_LIMIT` | `ai-deal-suggestions` |
+| `AI_TRANSLATE_MONTHLY_LIMIT` | `ai-translate-deal` |
 | `AI_MONTHLY_LIMIT` | `_shared/ai-limits.ts` |
 | `AI_COOLDOWN_SECONDS` | `_shared/ai-limits.ts` |
+| `AI_V5_PERSUASIVE_TRANSCRATION_ENABLED` | Enables provider-backed ad transcreation in `ai-generate-ad-variants`; keep off until reviewer and rollout gates pass. |
+| `AI_V5_TRANSLATION_QA_ENABLED` | Enables semantic QA and targeted repair in `ai-generate-ad-variants`; keep off until reviewer and rollout gates pass. |
+| `AI_V5_DETERMINISTIC_LANGUAGE_FALLBACK_ENABLED` | Enables deterministic target-language fallback bundle generation in `ai-generate-ad-variants`. |
+| `AI_V5_EXACT_LOCALIZATION_APPROVAL_ENABLED` | Server-only exact localization approval enforcement in `publish-offer-version`; enable only after migrations, reviewer sign-off, screenshot QA, and deploy approval. |
 
 ### 5.4 Menu extraction safety
 
@@ -428,6 +541,10 @@ From [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md):
 | `npm run lint` | ESLint |
 | `npm test` | Vitest |
 | `npm run typecheck:functions` | Deno check on Edge sources (optional) |
+| `npm run gate:ai-ad` | AI ad release gate |
+| `npm run gate:localization-plan` | Multilingual plan completion evidence audit |
+| `npm run gate:localization-rollout` | Multilingual rollout blocker gate |
+| `npm run dashboard:localization-rollout` | Local multilingual readiness dashboard |
 | `npx supabase projects list` | Confirm account access |
 | `npx supabase migration list` | After `link`; local vs remote migrations |
 | `npx eas whoami` / `npx eas env:list --environment production` | EAS readiness |
@@ -435,7 +552,7 @@ From [pilot-smoke-test-checklist.md](./pilot-smoke-test-checklist.md):
 ### 9.2 Commands to run next (typical order)
 
 1. Repo hygiene: clean working tree, tag candidate commit.
-2. `npm run typecheck`, `npm run lint`, `npm test` (and optional `typecheck:functions`).
+2. `npm run typecheck`, `npm run lint`, `npm test`, `npm run gate:ai-ad`, `npm run gate:localization-plan`, `npm run gate:localization-rollout`, `npm run dashboard:localization-rollout` (and optional `typecheck:functions`).
 3. `npx supabase link` → `npx supabase migration list` → human review → **`db push` only if approved**.
 4. Dashboard: Storage buckets/policies, Auth URLs, Stripe webhook (if used).
 5. Set Edge secrets (names in Section 5) without pasting values into chat.

@@ -62,6 +62,16 @@ describe("translateKnownApiMessage", () => {
     }
   });
 
+  it("masks missing Edge Function infrastructure messages", async () => {
+    for (const lang of ["en", "es", "ko"]) {
+      await i18n.changeLanguage(lang);
+      const t = i18n.t.bind(i18n);
+      const out = translateKnownApiMessage("Requested function was not found", t);
+      expect(out).not.toMatch(/function was not found/i);
+      expect(out).not.toBe("Requested function was not found");
+    }
+  });
+
   it("maps cutoff prefix with interpolated time", async () => {
     await i18n.changeLanguage("en");
     const t = i18n.t.bind(i18n);

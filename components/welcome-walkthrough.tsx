@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Image, Modal, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -161,14 +161,15 @@ export function WelcomeWalkthrough({
   const Entering = direction === "forward" ? FadeInRight : FadeInLeft;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={handleSkip}
-    >
       <View
         style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 20,
+          elevation: 20,
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.55)",
           justifyContent: "center",
@@ -344,6 +345,5 @@ export function WelcomeWalkthrough({
           )}
         </Animated.View>
       </View>
-    </Modal>
   );
 }

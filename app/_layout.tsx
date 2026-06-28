@@ -184,6 +184,7 @@ function RootNavigationStack() {
         <Stack.Screen name="create" options={{ headerShown: false }} />
         <Stack.Screen name="deal/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="business/[id]" options={{ title: t('businessProfile.title') }} />
+        <Stack.Screen name="ai-deal-studio-dev" options={{ title: 'AI Deal Studio' }} />
 
         <Stack.Screen name="deal-analytics/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="debug-diagnostics" options={{ title: t('debugDiagnostics.title') }} />

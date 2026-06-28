@@ -1,16 +1,14 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
+import type { BillingStatus, PurchaseSurface } from "@/lib/billing/entitlements";
+
+/** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
+export const PAID_BILLING_ENABLED = true;
 
 /**
- * V1 App Store pilot is free. Keep paid tiers, checkout, and customer portal
- * code in place for a later release, but make every paid surface unreachable.
+ * While true, billing is visible for checkout testing but does not block setup
+ * or deal creation.
  */
-export const PAID_BILLING_ENABLED = false;
-
-/**
- * While true, trial-end status does not block deal creation: any logged-in
- * business user can keep working during the free pilot.
- */
-export const PILOT_DISABLE_BILLING_GATE = !PAID_BILLING_ENABLED;
+export const PILOT_DISABLE_BILLING_GATE = true;
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {
   if (!__DEV__) return false;
@@ -45,5 +43,40 @@ export function canCreateDeal(params: {
     if (!isTrialExpired(params.trialEndsAt)) return true;
   }
   return false;
+}
+
+function isCurrentOrMissing(endsAt: string | null): boolean {
+  if (!endsAt) return true;
+  return !isTrialExpired(endsAt);
+}
+
+export function canCreateDealWithLocationBilling(params: {
+  isLoggedIn: boolean;
+  status: BillingStatus;
+  purchaseSurface: PurchaseSurface;
+  trialEndsAt: string | null;
+  currentPeriodEndsAt: string | null;
+  bypass?: boolean;
+}): boolean {
+  if (!params.isLoggedIn) return false;
+  if (params.bypass) return true;
+  if (PILOT_DISABLE_BILLING_GATE) return true;
+  if (params.purchaseSurface === "disabled") return true;
+
+  switch (params.status) {
+    case "trial_active":
+    case "admin_trial_active":
+      return isCurrentOrMissing(params.trialEndsAt ?? params.currentPeriodEndsAt);
+    case "trial_canceling":
+      return isCurrentOrMissing(params.trialEndsAt ?? params.currentPeriodEndsAt);
+    case "pro_active":
+    case "paid_active":
+      return true;
+    case "pro_canceling":
+    case "paid_canceling":
+      return isCurrentOrMissing(params.currentPeriodEndsAt);
+    default:
+      return false;
+  }
 }
 

@@ -31,6 +31,11 @@ export const AiAdsEvents = {
   REGENERATE_TAPPED: "ai_ads_regenerate_tapped",
   REGENERATE_LIMIT_HIT: "ai_ads_regenerate_limit_hit",
   AD_SELECTED: "ai_ads_ad_selected",
+  COMPOSED_PREVIEW_SHOWN: "ai_ads_composed_preview_shown",
+  COMPOSED_STYLE_CHANGED: "ai_ads_composed_style_changed",
+  COMPOSED_APPROVED: "ai_ads_composed_approved",
+  COMPOSED_APPROVAL_BLOCKED: "ai_ads_composed_approval_blocked",
+  COMPOSED_PUBLISH_BLOCKED: "ai_ads_composed_publish_blocked",
   FIELDS_EDITED_BEFORE_PUBLISH: "ai_ads_fields_edited_before_publish",
   PUBLISHED_WITH_AI_DRAFT: "ai_ads_published_with_ai_draft",
 } as const;

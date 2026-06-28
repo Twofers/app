@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { PAID_BILLING_ENABLED, PILOT_DISABLE_BILLING_GATE, canCreateDeal, isTrialExpired } from "./access";
+import {
+  PAID_BILLING_ENABLED,
+  PILOT_DISABLE_BILLING_GATE,
+  canCreateDeal,
+  canCreateDealWithLocationBilling,
+  isTrialExpired,
+} from "./access";
 
 describe("isTrialExpired", () => {
   it("returns false for a future trial end", () => {
@@ -21,8 +27,8 @@ describe("isTrialExpired", () => {
 });
 
 describe("canCreateDeal", () => {
-  it("keeps paid billing surfaces disabled for the free pilot", () => {
-    expect(PAID_BILLING_ENABLED).toBe(false);
+  it("keeps paid billing surfaces visible while bypassing enforcement for testing", () => {
+    expect(PAID_BILLING_ENABLED).toBe(true);
     expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
   });
 
@@ -66,9 +72,7 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  // The next two tests document the pilot-flag behavior. When v1.1 ships and
-  // PILOT_DISABLE_BILLING_GATE is flipped to false, both should expect false.
-  it("during pilot: allows past_due (PILOT_DISABLE_BILLING_GATE bypass)", () => {
+  it("allows past_due while the testing billing bypass is enabled", () => {
     expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
     expect(
       canCreateDeal({
@@ -79,13 +83,113 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("during pilot: allows expired trial (PILOT_DISABLE_BILLING_GATE bypass)", () => {
+  it("allows expired trials while the testing billing bypass is enabled", () => {
     expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: "2000-01-01T00:00:00.000Z",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("canCreateDealWithLocationBilling", () => {
+  it("blocks unauthenticated callers", () => {
+    expect(
+      canCreateDealWithLocationBilling({
+        isLoggedIn: false,
+        status: "paid_active",
+        purchaseSurface: "in_app_link",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("allows active and canceling paid subscriptions", () => {
+    for (const status of ["pro_active", "paid_active", "pro_canceling", "paid_canceling"] as const) {
+      expect(
+        canCreateDealWithLocationBilling({
+          isLoggedIn: true,
+          status,
+          purchaseSurface: "in_app_link",
+          trialEndsAt: null,
+          currentPeriodEndsAt: "2999-01-01T00:00:00.000Z",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("allows active trial states with current access", () => {
+    for (const status of ["trial_active", "trial_canceling", "admin_trial_active"] as const) {
+      expect(
+        canCreateDealWithLocationBilling({
+          isLoggedIn: true,
+          status,
+          purchaseSurface: "in_app_link",
+          trialEndsAt: "2999-01-01T00:00:00.000Z",
+          currentPeriodEndsAt: null,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("allows deal creation when runtime billing purchases are disabled", () => {
+    expect(
+      canCreateDealWithLocationBilling({
+        isLoggedIn: true,
+        status: "trial_eligible",
+        purchaseSurface: "disabled",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("allows pending, eligible, credit-limited, and suspended states while the testing billing bypass is enabled", () => {
+    for (const status of [
+      "trial_eligible",
+      "trial_checkout_pending",
+      "trial_credit_limit_reached",
+      "trial_expired_suspended",
+      "payment_failed_suspended",
+      "canceled_suspended",
+    ] as const) {
+      expect(
+        canCreateDealWithLocationBilling({
+          isLoggedIn: true,
+          status,
+          purchaseSurface: "in_app_link",
+          trialEndsAt: "2999-01-01T00:00:00.000Z",
+          currentPeriodEndsAt: "2999-01-01T00:00:00.000Z",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("allows expired canceling periods while the testing billing bypass is enabled", () => {
+    expect(
+      canCreateDealWithLocationBilling({
+        isLoggedIn: true,
+        status: "paid_canceling",
+        purchaseSurface: "in_app_link",
+        trialEndsAt: null,
+        currentPeriodEndsAt: "2000-01-01T00:00:00.000Z",
+      }),
+    ).toBe(true);
+  });
+
+  it("allows the development billing bypass", () => {
+    expect(
+      canCreateDealWithLocationBilling({
+        isLoggedIn: true,
+        status: "payment_failed_suspended",
+        purchaseSurface: "in_app_link",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+        bypass: true,
       }),
     ).toBe(true);
   });
