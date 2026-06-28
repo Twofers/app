@@ -17,6 +17,7 @@ import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { getTabBarMetrics, type TabBarPlatform } from "@/lib/screen-layout";
 import { useBusiness } from "@/hooks/use-business";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { useOwnerRedemptionSecurity } from "@/components/providers/owner-redemption-security-provider";
@@ -33,7 +34,11 @@ type TabIconName = ComponentProps<typeof IconSymbol>["name"];
 const TAB_ICON_SIZE = 32;
 
 function createTabIconRenderer(name: TabIconName) {
-  const TabIconRenderer = ({ color }: { color: string }) => <IconSymbol size={TAB_ICON_SIZE} name={name} color={color} />;
+  const TabIconRenderer = ({ color }: { color: string }) => (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <IconSymbol size={TAB_ICON_SIZE} name={name} color={color} />
+    </View>
+  );
   TabIconRenderer.displayName = `TabIcon(${name})`;
   return TabIconRenderer;
 }
@@ -124,7 +129,9 @@ export default function TabLayout() {
   const { mode } = useTabMode();
   const business = useBusiness();
   const ownerPinLocked = useOwnerPinLockedForBusiness(mode, business.businessId);
-  const tabBarBottomPadding = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 6);
+  const tabBarPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const tabBarMetrics = getTabBarMetrics(insets, tabBarPlatform);
 
   /**
    * Hide tabs from the bar without removing them from the navigator.
@@ -149,16 +156,24 @@ export default function TabLayout() {
           headerShown: false,
           tabBarButton: renderHapticTabBarButton,
           tabBarAllowFontScaling: false,
-          tabBarLabelStyle: { fontSize: 13, lineHeight: 16, fontWeight: "700", letterSpacing: 0 },
+          tabBarLabelStyle: { fontSize: 12, lineHeight: 15, fontWeight: "700", letterSpacing: 0 },
+          tabBarIconStyle: {
+            width: 36,
+            height: 36,
+            marginTop: 2,
+            marginBottom: 0,
+          },
           tabBarItemStyle: {
+            height: 64,
+            minHeight: 64,
             paddingTop: 4,
             paddingBottom: 4,
           },
           tabBarStyle: {
             backgroundColor: theme.background,
-            minHeight: 64 + tabBarBottomPadding,
+            height: tabBarMetrics.height,
             paddingTop: 6,
-            paddingBottom: tabBarBottomPadding,
+            paddingBottom: tabBarMetrics.bottomPadding + tabBarMetrics.bottomOffset,
           },
           tabBarHideOnKeyboard: true,
           sceneStyle: { backgroundColor: theme.background },
@@ -169,6 +184,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: t('tabs.home'),
+            tabBarAccessibilityLabel: t("tabs.home"),
             tabBarIcon: renderHomeTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -177,6 +193,7 @@ export default function TabLayout() {
           name="map"
           options={{
             title: t('tabs.map'),
+            tabBarAccessibilityLabel: t("tabs.map"),
             tabBarIcon: renderMapTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -185,6 +202,7 @@ export default function TabLayout() {
           name="wallet"
           options={{
             title: t('tabs.wallet'),
+            tabBarAccessibilityLabel: t("tabs.wallet"),
             tabBarIcon: renderWalletTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -193,6 +211,7 @@ export default function TabLayout() {
           name="settings"
           options={{
             title: t('tabs.settings'),
+            tabBarAccessibilityLabel: t("tabs.settings"),
             tabBarIcon: renderSettingsTabIcon,
             ...hideWhen(mode === 'business'),
           }}
@@ -201,6 +220,7 @@ export default function TabLayout() {
           name="create"
           options={{
             title: t('tabs.create'),
+            tabBarAccessibilityLabel: t("tabs.create"),
             tabBarIcon: renderCreateTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
@@ -209,6 +229,7 @@ export default function TabLayout() {
           name="redeem"
           options={{
             title: t('tabs.redeem'),
+            tabBarAccessibilityLabel: t("tabs.redeem"),
             tabBarIcon: renderRedeemTabIcon,
             ...hideWhen(mode === 'customer'),
           }}
@@ -217,6 +238,7 @@ export default function TabLayout() {
           name="dashboard"
           options={{
             title: t('tabs.dashboard'),
+            tabBarAccessibilityLabel: t("tabs.dashboard"),
             tabBarIcon: renderDashboardTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}
@@ -225,6 +247,7 @@ export default function TabLayout() {
           name="account/index"
           options={{
             title: t('tabs.account'),
+            tabBarAccessibilityLabel: t("tabs.account"),
             tabBarIcon: renderAccountTabIcon,
             ...hideWhen(mode === 'customer' || ownerPinLocked),
           }}

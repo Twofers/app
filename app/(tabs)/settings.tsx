@@ -33,6 +33,7 @@ import {
 } from "@/lib/push-token";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -315,6 +316,7 @@ export default function SettingsScreen() {
   async function chooseAppLocale(locale: AppLocale) {
     try {
       await setUiLocalePreference(locale, { manual: true });
+      await setCustomerPreferredDealLocaleFromAppLanguage(locale);
       await i18n.changeLanguage(locale);
     } catch (err: unknown) {
       devWarn("[settings] locale update failed", err);
@@ -457,7 +459,7 @@ export default function SettingsScreen() {
 
       <ScrollView
         style={{ flex: 1, marginTop: Spacing.lg }}
-        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.lg }}
+        contentContainerStyle={{ paddingBottom: scrollBottom + Spacing.xxxl * 3, gap: Spacing.lg }}
         showsVerticalScrollIndicator={false}
         {...FORM_SCROLL_KEYBOARD_PROPS}
       >

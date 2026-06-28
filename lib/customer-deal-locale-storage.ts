@@ -17,6 +17,11 @@ export async function setCustomerPreferredDealLocale(locale: SupportedLocale): P
   await AsyncStorage.setItem(KEY_CUSTOMER_PREFERRED_DEAL_LOCALE, locale);
 }
 
+export async function setCustomerPreferredDealLocaleFromAppLanguage(language: string): Promise<void> {
+  const locale = normalizeSupportedLocale(language);
+  if (locale) await setCustomerPreferredDealLocale(locale);
+}
+
 export function getDeviceDealLocale(): SupportedLocale | null {
   return normalizeSupportedLocale(Localization.getLocales()[0]?.languageTag);
 }

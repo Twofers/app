@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -564,6 +565,7 @@ export default function BusinessDashboard() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [exportingAnalytics, setExportingAnalytics] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const dashboardFocused = useIsFocused();
 
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -752,19 +754,30 @@ export default function BusinessDashboard() {
     }, [businessId, loadMetrics, t]),
   );
 
-  // Show walkthrough for first-time business owners
+  // Show walkthrough only while the dashboard tab is focused.
   const WALKTHROUGH_KEY = "twoforone_walkthrough_complete";
+  useFocusEffect(
+    useCallback(() => {
+      if (!businessId) return;
+      let cancelled = false;
+      void (async () => {
+        const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
+        if (!cancelled && !done) {
+          setShowWalkthrough(true);
+        }
+      })();
+      return () => {
+        cancelled = true;
+        setShowWalkthrough(false);
+      };
+    }, [businessId]),
+  );
+
   useEffect(() => {
-    if (!businessId) return;
-    let cancelled = false;
-    (async () => {
-      const done = await AsyncStorage.getItem(WALKTHROUGH_KEY);
-      if (!cancelled && !done) {
-        setShowWalkthrough(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [businessId]);
+    if (!dashboardFocused && showWalkthrough) {
+      setShowWalkthrough(false);
+    }
+  }, [dashboardFocused, showWalkthrough]);
 
   const dismissWalkthrough = useCallback(async () => {
     setShowWalkthrough(false);
@@ -1189,6 +1202,7 @@ export default function BusinessDashboard() {
   const listTop = useMemo(
     () => (
       <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+        {banner ? <Banner message={banner} tone="error" onRetry={() => void loadMetrics()} /> : null}
         <CardShell>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
             <View style={{ flex: 1 }}>
@@ -1409,6 +1423,8 @@ export default function BusinessDashboard() {
       engagementSnapshot,
       dashboardNextActionTitle,
       handleDashboardNextAction,
+      banner,
+      loadMetrics,
     ],
   );
 
@@ -1601,12 +1617,15 @@ export default function BusinessDashboard() {
   const dashboardSubtitle = businessName
     ? `${t("businessDashboard.welcomeBack")} ${businessName}\n${t("offersDashboard.subtitle")}`
     : t("offersDashboard.subtitle");
+  const dashboardInitialLoadFailed = Boolean(
+    banner && !loadingMetrics && lastUpdatedAt === null && deals.length === 0,
+  );
 
   return (
     <AppErrorBoundary>
     <View style={{ paddingTop: top, paddingHorizontal: horizontal, flex: 1, backgroundColor: theme.background }}>
       <WelcomeWalkthrough
-        visible={showWalkthrough}
+        visible={showWalkthrough && dashboardFocused}
         onDismiss={dismissWalkthrough}
         businessCategory={businessProfile?.category ?? null}
         businessName={businessName}
@@ -1626,11 +1645,36 @@ export default function BusinessDashboard() {
         <Text style={{ marginTop: Spacing.md, opacity: 0.7, color: theme.text }}>{t("offersDashboard.needBusiness")}</Text>
       ) : (
         <View style={{ flex: 1, marginTop: Spacing.xs }}>
-          {banner ? <Banner message={banner} tone="error" onRetry={loadMetrics} /> : null}
           {publishSuccessBanner ? <Banner message={publishSuccessBanner} tone="success" /> : null}
 
           {loadingMetrics ? (
             <LoadingSkeleton rows={4} />
+          ) : dashboardInitialLoadFailed ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: Spacing.md, paddingBottom: listBottom + Spacing.xxxl * 3, flexGrow: 1 }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+            >
+              <CardShell>
+                <Text style={{ fontSize: 20, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}>
+                  {t("offersDashboard.errLoadDashboard")}
+                </Text>
+                <Text style={{ marginTop: Spacing.sm, fontSize: 14, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}>
+                  {t("offersDashboard.lastUpdatedPending")}
+                </Text>
+                <SecondaryButton
+                  title={t("commonUi.tryAgain")}
+                  onPress={() => void loadMetrics()}
+                  style={{ marginTop: Spacing.md }}
+                />
+                <PrimaryButton
+                  title={t("offersDashboard.createFirstDeal")}
+                  onPress={() => router.push("/create/ai")}
+                  style={{ marginTop: Spacing.sm }}
+                />
+              </CardShell>
+            </ScrollView>
           ) : (
             <FlatList
               style={{ flex: 1 }}
@@ -1639,7 +1683,7 @@ export default function BusinessDashboard() {
               ListHeaderComponent={listTop}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
-              contentContainerStyle={{ paddingBottom: listBottom, flexGrow: 1 }}
+              contentContainerStyle={{ paddingBottom: listBottom + Spacing.xxxl * 3, flexGrow: 1 }}
               onEndReachedThreshold={0.35}
               onEndReached={() => void loadMoreDeals()}
               ListFooterComponent={

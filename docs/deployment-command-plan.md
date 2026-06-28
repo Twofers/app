@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (95 files, strict filename / timestamp order)
+### 2.1 Full local set (99 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -135,10 +135,12 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 95. `20260728123000_customer_deal_localization_projection.sql`
 96. `20260729120000_deal_release_push_events.sql`
 97. `20260729121000_deal_release_push_cron_schedule.sql`
+98. `20260730120000_deals_owner_delete_ended.sql`
+99. `20260730121000_customer_deal_poster_spec_projection.sql`
 
 ### 2.2 Latest migration
 
-**`20260729121000_deal_release_push_cron_schedule.sql`**
+**`20260730121000_customer_deal_poster_spec_projection.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -158,11 +160,20 @@ The customer release-push path depends on applying these in order:
 
 The second migration schedules a five-minute `pg_cron` job that posts to the hosted `send-deal-push` function with a Vault-backed secret. Applying either migration is production-changing and requires explicit approval; after the RLS/idempotency table migration is applied, run `node scripts/probe-rls-smoke.mjs`.
 
-### 2.5 Duplicate timestamp check
+### 2.5 Ended-deal cleanup and poster projection migrations
+
+The current local chain also includes these later migrations:
+
+- `20260730120000_deals_owner_delete_ended.sql`
+- `20260730121000_customer_deal_poster_spec_projection.sql`
+
+These add owner deletion for ended deals and expose customer-safe native poster specs for active published deals. Applying either migration is production-changing and requires explicit approval; after applying the poster projection migration, include the customer poster spec RPC in hosted read-only smoke.
+
+### 2.6 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.6 Command to apply migrations (do not run without explicit approval)
+### 2.7 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked

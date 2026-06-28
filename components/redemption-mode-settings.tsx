@@ -28,6 +28,7 @@ import {
   type RedemptionDeviceSummary,
 } from "@/lib/redemption-mode";
 import { Spacing } from "@/lib/screen-layout";
+import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 
 type Props = {
   businessId: string | null;
@@ -54,6 +55,12 @@ function formatDeviceStatus(device: RedemptionDeviceSummary, t: TFunction): stri
   if (device.active) return t("redemptionMode.statusActive", { defaultValue: "Active" });
   if (device.deactivated_at) return t("redemptionMode.statusInactive", { defaultValue: "Inactive" });
   return t("redemptionMode.statusReady", { defaultValue: "Ready" });
+}
+
+function formatLoadError(err: unknown, fallback: string, t: TFunction): string {
+  const raw = err instanceof Error ? err.message : fallback;
+  const translated = translateKnownApiMessage(raw, t);
+  return translated === raw ? fallback : translated;
 }
 
 export function RedemptionModeSettings({ businessId, businessName }: Props) {
@@ -115,8 +122,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       setOwnerSecurity(status);
       setPinEnabled(businessId, status.enabled);
     } catch (err) {
+      const fallback = t("redemptionMode.ownerPinLoadFailed", { defaultValue: "Could not load owner redemption PIN settings." });
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.ownerPinLoadFailed", { defaultValue: "Could not load owner redemption PIN settings." }),
+        message: formatLoadError(err, fallback, t),
         tone: "error",
       });
     } finally {
@@ -130,8 +138,9 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
     try {
       setDevices(await listRedemptionDevices(businessId));
     } catch (err) {
+      const fallback = t("redemptionMode.devicesLoadFailed", { defaultValue: "Could not load redemption devices." });
       setBanner({
-        message: err instanceof Error ? err.message : t("redemptionMode.devicesLoadFailed", { defaultValue: "Could not load redemption devices." }),
+        message: formatLoadError(err, fallback, t),
         tone: "error",
       });
     } finally {

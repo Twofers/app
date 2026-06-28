@@ -42,6 +42,8 @@ type DraftCreative = {
   style_preset: string;
   layout_recommendation: string;
   publishing_disabled: true;
+  poster: PosterCreative;
+  composition_plan: CompositionPlan;
 };
 
 type ImageGenerationResult = {
@@ -57,11 +59,31 @@ type ImageGenerationResult = {
   promptHash: string | null;
 };
 
+type PosterCreative = {
+  kicker: string;
+  headline: string;
+  supportingLine: string;
+  offerLine1: string;
+  offerLine2: string;
+  scarcityLabel: string;
+  timeLabel: string;
+  cta: "";
+};
+
+type CompositionPlan = {
+  template: string;
+  subjectPlacement: string;
+  negativeSpaceRegion: string;
+  cropStrategy: string;
+  backgroundMood: string;
+  contrastRecommendation: string;
+};
+
 const PROMPT_VERSION = "ai_studio_draft_v2";
 const PIPELINE_VERSION = "ai_studio_draft_dev_v1";
 const AI_DEAL_ASSETS_BUCKET = "ai-deal-assets";
 const ALLOWED_STYLES = new Set(["Fresh", "Bold", "Premium", "Sunrise", "Macro"]);
-const DEFAULT_CTA = "Claim on Twofer";
+const DEFAULT_CTA = "";
 const REQUIRED_IMAGE_PROMPT_CLAUSES = [
   "No text.",
   "No letters.",
@@ -78,10 +100,44 @@ const DRAFT_COPY_SCHEMA = {
     properties: {
       headline: { type: "string" },
       supporting_copy: { type: "string" },
+      kicker: { type: "string" },
+      supporting_line: { type: "string" },
+      offer_line_1: { type: "string" },
+      offer_line_2: { type: "string" },
       image_prompt: { type: "string" },
       layout_recommendation: { type: "string" },
+      composition_plan: {
+        type: "object",
+        properties: {
+          template: { type: "string" },
+          subjectPlacement: { type: "string" },
+          negativeSpaceRegion: { type: "string" },
+          cropStrategy: { type: "string" },
+          backgroundMood: { type: "string" },
+          contrastRecommendation: { type: "string" },
+        },
+        required: [
+          "template",
+          "subjectPlacement",
+          "negativeSpaceRegion",
+          "cropStrategy",
+          "backgroundMood",
+          "contrastRecommendation",
+        ],
+        additionalProperties: false,
+      },
     },
-    required: ["headline", "supporting_copy", "image_prompt", "layout_recommendation"],
+    required: [
+      "headline",
+      "supporting_copy",
+      "kicker",
+      "supporting_line",
+      "offer_line_1",
+      "offer_line_2",
+      "image_prompt",
+      "layout_recommendation",
+      "composition_plan",
+    ],
     additionalProperties: false,
   },
 } as const;
@@ -125,11 +181,149 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function posterText(value: unknown, fallback: string, max: number): string {
+  const cleaned = stripPosterBrand(typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "");
+  const base = cleaned || fallback;
+  if (base.length <= max) return base.toUpperCase();
+  const clipped = base.slice(0, max + 1);
+  const lastSpace = clipped.lastIndexOf(" ");
+  const wordSafe = lastSpace >= Math.floor(max * 0.58) ? clipped.slice(0, lastSpace) : base.slice(0, max);
+  return wordSafe.trim().toUpperCase();
+}
+
+function stripPosterBrand(value: string): string {
+  return value.replace(/\btwofer\b/gi, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function productKeyword(productName: string): string {
+  const words = productName
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  return (words[words.length - 1] ?? words[0] ?? "OFFER").toUpperCase().slice(0, 12);
+}
+
+function posterRewardLine(offerTerms: string): string {
+  const normalized = offerTerms.toLowerCase();
+  if (normalized.includes("free coffee")) return "GET FREE COFFEE";
+  if (normalized.includes("coffee")) return "GET COFFEE";
+  if (normalized.includes("free")) return "GET 1 FREE";
+  return "GET 1 MORE";
+}
+
+function formatPosterTimeLabel(start: string | null, end: string | null): string {
+  const startDate = start ? new Date(start) : null;
+  const endDate = end ? new Date(end) : null;
+  if (!startDate || !endDate || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
+    return "TODAY";
+  }
+  const sameDay = startDate.toDateString() === new Date().toDateString();
+  const day = sameDay ? "TODAY" : startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+  const startText = startDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "");
+  const endText = endDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(/\s/g, "");
+  return `${day} | ${startText}-${endText}`.toUpperCase().slice(0, 28);
+}
+
+function fallbackCompositionPlan(stylePreset: string): CompositionPlan {
+  const plans: Record<string, CompositionPlan> = {
+    Fresh: {
+      template: "Fresh",
+      subjectPlacement: "center-lower",
+      negativeSpaceRegion: "upper-left",
+      cropStrategy: "hero-close",
+      backgroundMood: "bright-teal-studio",
+      contrastRecommendation: "light-text",
+    },
+    Bold: {
+      template: "Bold",
+      subjectPlacement: "center",
+      negativeSpaceRegion: "upper-center",
+      cropStrategy: "large-product-cutout",
+      backgroundMood: "split-purple-orange",
+      contrastRecommendation: "light-text",
+    },
+    Premium: {
+      template: "Premium",
+      subjectPlacement: "lower-half",
+      negativeSpaceRegion: "upper-third",
+      cropStrategy: "dramatic-hero",
+      backgroundMood: "dark-cafe-editorial",
+      contrastRecommendation: "warm-light-text",
+    },
+    Sunrise: {
+      template: "Sunrise",
+      subjectPlacement: "lower-60-percent",
+      negativeSpaceRegion: "upper-left",
+      cropStrategy: "morning-hero",
+      backgroundMood: "blue-gold-sunrise",
+      contrastRecommendation: "light-text",
+    },
+    Macro: {
+      template: "Macro",
+      subjectPlacement: "full-canvas",
+      negativeSpaceRegion: "left-center",
+      cropStrategy: "edge-to-edge-close-crop",
+      backgroundMood: "high-contrast-macro",
+      contrastRecommendation: "white-text-with-shadow",
+    },
+  };
+  return plans[stylePreset] ?? plans.Fresh;
+}
+
+function sanitizeCompositionPlan(value: unknown, stylePreset: string): CompositionPlan {
+  const fallback = fallbackCompositionPlan(stylePreset);
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    template: posterText(record.template, fallback.template, 24),
+    subjectPlacement: posterText(record.subjectPlacement, fallback.subjectPlacement, 36),
+    negativeSpaceRegion: posterText(record.negativeSpaceRegion, fallback.negativeSpaceRegion, 36),
+    cropStrategy: posterText(record.cropStrategy, fallback.cropStrategy, 36),
+    backgroundMood: posterText(record.backgroundMood, fallback.backgroundMood, 42),
+    contrastRecommendation: posterText(record.contrastRecommendation, fallback.contrastRecommendation, 42),
+  };
+}
+
+function fallbackPoster(params: {
+  productName: string;
+  offerTerms: string;
+  startTime: string | null;
+  endTime: string | null;
+  quantityLimit: number | null;
+}): PosterCreative {
+  const product = productKeyword(params.productName);
+  return {
+    kicker: "TRY OUR",
+    headline: posterText(`${product} TIME`, "LATTE TIME", 28),
+    supportingLine: "LIMITED-TIME LOCAL DEAL",
+    offerLine1: posterText(`BUY 1 ${product}`, "BUY 1", 18),
+    offerLine2: posterText(posterRewardLine(params.offerTerms), "GET 1 FREE", 20),
+    scarcityLabel: "",
+    timeLabel: formatPosterTimeLabel(params.startTime, params.endTime),
+    cta: DEFAULT_CTA,
+  };
+}
+
+function sanitizePosterCreative(value: Record<string, unknown>, fallback: PosterCreative): PosterCreative {
+  return {
+    kicker: posterText(value.kicker, fallback.kicker, 24),
+    headline: posterText(value.headline, fallback.headline, 28),
+    supportingLine: posterText(value.supporting_line, fallback.supportingLine, 42),
+    offerLine1: posterText(value.offer_line_1, fallback.offerLine1, 18),
+    offerLine2: posterText(value.offer_line_2, fallback.offerLine2, 20),
+    scarcityLabel: "",
+    timeLabel: fallback.timeLabel,
+    cta: DEFAULT_CTA,
+  };
+}
+
 function fallbackDraft(params: {
   productName: string;
   productDescription: string | null;
   offerType: string;
   offerTerms: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  quantityLimit?: number | null;
   stylePreset: string;
 }): DraftCreative {
   const product = params.productName;
@@ -158,6 +352,14 @@ function fallbackDraft(params: {
     style_preset: params.stylePreset,
     layout_recommendation: `${params.stylePreset} product hero with clean overlay-safe negative space.`,
     publishing_disabled: true,
+    poster: fallbackPoster({
+      productName: params.productName,
+      offerTerms: params.offerTerms,
+      startTime: params.startTime ?? null,
+      endTime: params.endTime ?? null,
+      quantityLimit: params.quantityLimit ?? null,
+    }),
+    composition_plan: fallbackCompositionPlan(params.stylePreset),
   };
 }
 
@@ -190,6 +392,32 @@ function sanitizeGeneratedCopy(value: unknown, fallback: string, max: number): s
   return cleaned || fallback;
 }
 
+function buildPosterAwareImagePrompt(params: {
+  basePrompt: string;
+  productName: string;
+  stylePreset: string;
+  compositionPlan: CompositionPlan;
+}): string {
+  return text([
+    params.basePrompt,
+    "",
+    "Poster composition plan for the source image:",
+    `Style preset: ${params.stylePreset}`,
+    `Template: ${params.compositionPlan.template}`,
+    `Subject placement: ${params.compositionPlan.subjectPlacement}`,
+    `Negative-space region: ${params.compositionPlan.negativeSpaceRegion}`,
+    `Crop strategy: ${params.compositionPlan.cropStrategy}`,
+    `Background mood: ${params.compositionPlan.backgroundMood}`,
+    `Contrast recommendation: ${params.compositionPlan.contrastRecommendation}`,
+    "",
+    `Hero product: ${params.productName}.`,
+    "Create one clear commercial hero food or drink image for a finished 4:5 restaurant advertisement.",
+    "The product should occupy approximately 50-65% of the composition when possible.",
+    "Keep deliberate negative space for native headline, offer, and time overlays.",
+    "Do not include words, letters, numbers, logos, signs, labels, badges, prices, menu boards, CTAs, or watermarks.",
+  ].join("\n"), 3000);
+}
+
 function representativeAttempt(attempts: readonly ProviderAttempt[]): ProviderAttempt | null {
   return attempts.find((attempt) => attempt.success) ?? attempts[attempts.length - 1] ?? null;
 }
@@ -217,7 +445,7 @@ function parseDraftInput(body: DraftInput) {
   const requestedStyle = text(body.style_preset, 24) || "Fresh";
   const stylePreset = ALLOWED_STYLES.has(requestedStyle) ? requestedStyle : "Fresh";
   const referenceImagePath = optionalText(body.reference_image_path, 300);
-  const cta = text(body.cta, 80) || DEFAULT_CTA;
+  const cta = DEFAULT_CTA;
 
   const errors: string[] = [];
   if (!businessId) errors.push("business_id is required.");
@@ -259,19 +487,25 @@ async function generateCopyWithTextProvider(params: {
   input: ReturnType<typeof parseDraftInput>["value"];
 }): Promise<{ draft: DraftCreative; attempts: ProviderAttempt[] }> {
   const systemPrompt = [
-    "You write concise, factual advertising draft copy for Twofer local deals.",
+    "You write concise, factual advertising draft copy for local deals.",
     "Return only JSON matching the schema.",
     "Never alter locked offer facts.",
     "Never place offer text, business names, logos, CTAs, times, quantities, prices, letters, numbers, or watermarks in the image prompt.",
   ].join(" ");
   const userPrompt = [
     "Create draft copy for a local deals app creative preview.",
-    "Return headline, supporting_copy, image_prompt, and layout_recommendation.",
-    "The offer facts below are locked. Do not change, reinterpret, round, shorten, translate, or invent product, offer terms, time window, quantity, CTA, price, or business name.",
-    "Headline and supporting_copy may be persuasive, but must preserve the locked facts exactly when mentioned.",
+    "Return poster-sized advertising fields plus image_prompt, layout_recommendation, and composition_plan.",
+    "Poster field limits: kicker max 24 chars, headline max 28 chars, supporting_line max 42 chars, offer_line_1 max 18 chars, offer_line_2 max 20 chars.",
+    "Use short advertising copy. Do not write a full sentence for offer_line_1 or offer_line_2.",
+    "For a BOGO latte offer, prefer lines like BUY 1 LATTE and GET 1 FREE.",
+    "The offer facts below are locked. Do not change, reinterpret, round, shorten, translate, or invent product, offer terms, time window, quantity, price, or business name.",
+    "Never use the word Twofer in any poster field.",
+    "Headline, kicker, supporting_line, and supporting_copy may be persuasive, but must preserve the locked facts exactly when mentioned.",
     "The image_prompt is for a commercial image only. It must not include offer copy or any text to render.",
     "The image_prompt must explicitly include: no text, no letters, no logo, no watermark, negative space for native overlay copy, and 4:5 mobile composition.",
     "Never include the business name, CTA, offer terms, time, quantity, price, letters, numbers, logo, or watermark in the image prompt.",
+    "composition_plan must include template, subjectPlacement, negativeSpaceRegion, cropStrategy, backgroundMood, and contrastRecommendation.",
+    "The image should look campaign-quality: one clear hero product, 50-65% product scale when possible, deliberate negative space, strong lighting, no distracting cafe clutter.",
     `Locked product: ${params.input.productName}`,
     `Description: ${params.input.productDescription ?? "none"}`,
     `Locked offer type: ${params.input.offerType}`,
@@ -279,7 +513,6 @@ async function generateCopyWithTextProvider(params: {
     `Locked start time: ${params.input.startTime}`,
     `Locked end time: ${params.input.endTime}`,
     `Locked quantity limit: ${params.input.quantityLimit}`,
-    `Locked CTA: ${params.input.cta}`,
     `Requested style: ${params.input.stylePreset}`,
   ].join("\n");
 
@@ -306,8 +539,12 @@ async function generateCopyWithTextProvider(params: {
     productDescription: params.input.productDescription,
     offerType: params.input.offerType,
     offerTerms: params.input.offerTerms,
+    startTime: params.input.startTime,
+    endTime: params.input.endTime,
+    quantityLimit: params.input.quantityLimit,
     stylePreset: params.input.stylePreset,
   });
+  const poster = sanitizePosterCreative(parsed, fallback.poster);
   return {
     draft: {
       headline: sanitizeGeneratedCopy(parsed.headline, fallback.headline, 72),
@@ -322,6 +559,8 @@ async function generateCopyWithTextProvider(params: {
         180,
       ),
       publishing_disabled: true,
+      poster,
+      composition_plan: sanitizeCompositionPlan(parsed.composition_plan, params.input.stylePreset),
     },
     attempts: generation.attempts,
   };
@@ -334,6 +573,9 @@ async function generateAndStoreGeminiImage(params: {
   businessId: string;
   requestGroupId: string;
   imagePrompt: string;
+  productName: string;
+  stylePreset: string;
+  compositionPlan: CompositionPlan;
 }): Promise<ImageGenerationResult> {
   const imageConfig = resolveAiImageProviderConfig();
   if (imageConfig.primaryProvider !== "gemini" || !imageConfig.geminiEnabled) {
@@ -354,8 +596,13 @@ async function generateAndStoreGeminiImage(params: {
   const image = await generateGeminiAdImageWithTelemetry({
     apiKey: params.geminiApiKey,
     model: imageConfig.geminiModel,
-    prompt: params.imagePrompt,
-    aspectRatio: "1:1",
+    prompt: buildPosterAwareImagePrompt({
+      basePrompt: params.imagePrompt,
+      productName: params.productName,
+      stylePreset: params.stylePreset,
+      compositionPlan: params.compositionPlan,
+    }),
+    aspectRatio: "4:5",
     imageSize: "1K",
     estimatedCostUsd: imageConfig.geminiEstimatedCost1KUsd,
     retryOnFailure: true,
@@ -484,6 +731,9 @@ serve(async (req) => {
     productDescription: input.productDescription,
     offerType: input.offerType,
     offerTerms: input.offerTerms,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    quantityLimit: input.quantityLimit,
     stylePreset: input.stylePreset,
   });
   let provider = "fallback";
@@ -526,6 +776,9 @@ serve(async (req) => {
     productDescription: input.productDescription,
     offerType: input.offerType,
     offerTerms: input.offerTerms,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    quantityLimit: input.quantityLimit,
     stylePreset: input.stylePreset,
   }).image_prompt);
   let imageResult: ImageGenerationResult = {
@@ -549,6 +802,9 @@ serve(async (req) => {
       businessId: input.businessId,
       requestGroupId,
       imagePrompt: draft.image_prompt,
+      productName: input.productName,
+      stylePreset: input.stylePreset,
+      compositionPlan: draft.composition_plan,
     });
     if (imageResult.success) {
       draft.image_asset_path = imageResult.path;
@@ -606,8 +862,14 @@ serve(async (req) => {
     imagePrompt: draft.image_prompt,
     imageAssetPath: draft.image_asset_path,
     imageSignedUrl: draft.image_signed_url,
+    sourceAssetPath: draft.image_asset_path,
+    sourceAssetSignedUrl: draft.image_signed_url,
+    renderedAssetPath: null,
+    renderedAssetSignedUrl: null,
     stylePreset: draft.style_preset,
     layoutRecommendation: draft.layout_recommendation,
+    poster: draft.poster,
+    compositionPlan: draft.composition_plan,
     lockedOffer: {
       productName: input.productName,
       offerType: input.offerType,
@@ -686,6 +948,8 @@ serve(async (req) => {
       image_provider: imageResult.provider,
       image_model: imageResult.model,
       image_asset_path: draft.image_asset_path,
+      source_asset_path: draft.image_asset_path,
+      rendered_asset_path: null,
       image_prompt_hash: imageResult.promptHash,
       publishing_disabled: true,
     },
@@ -732,6 +996,10 @@ serve(async (req) => {
       creative: adSpec,
       image_asset_path: draft.image_asset_path,
       image_signed_url: draft.image_signed_url,
+      source_asset_path: draft.image_asset_path,
+      source_asset_signed_url: draft.image_signed_url,
+      rendered_asset_path: null,
+      rendered_asset_signed_url: null,
       image_provider: imageResult.provider,
       image_model: imageResult.model,
       image_generation_success: imageResult.success,

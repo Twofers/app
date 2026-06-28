@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 97 migration files and the latest is `20260729121000_deal_release_push_cron_schedule.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 99 migration files and the latest is `20260730121000_customer_deal_poster_spec_projection.sql`.
 
 Read-only compare:
 
@@ -36,6 +36,7 @@ High-signal dependencies:
 - **Offer versions:** `20260723120000_offer_versions_foundation.sql`, `20260724120000_offer_version_publish_rpc.sql`, `20260724121000_offer_version_claim_redemption_binding.sql`.
 - **AI / localization:** `20260722120000_ai_generation_cost_ledger.sql`, `20260727120000_ai_provider_circuit_breakers.sql`, `20260728120000_ad_localization_storage.sql`, `20260728123000_customer_deal_localization_projection.sql`.
 - **Deal release push scheduling:** `20260729120000_deal_release_push_events.sql`, then `20260729121000_deal_release_push_cron_schedule.sql`. These create the service-role-only idempotency table, Vault-backed cron secret verifier, and five-minute dispatcher for due release pushes. Applying them is production-changing and requires explicit approval.
+- **Ended-deal owner cleanup / poster projection:** `20260730120000_deals_owner_delete_ended.sql`, then `20260730121000_customer_deal_poster_spec_projection.sql`. These add owner cleanup for ended deals and a customer-safe native poster spec projection RPC. Applying them is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 

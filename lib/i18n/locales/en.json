@@ -8,7 +8,7 @@
     "wallet": "Wallet",
     "create": "Create",
     "redeem": "Redeem",
-    "dashboard": "My offers",
+    "dashboard": "Offers",
     "billing": "Billing",
     "account": "Account"
   },
@@ -18,7 +18,7 @@
   "dealsBrowse": {
     "categoriesHeading": "Categories",
     "categoryHint": "Use categories to narrow the list.",
-    "searchPlaceholder": "Search deals, businesses, places…",
+    "searchPlaceholder": "Search deals or shops",
     "nearMe": "Near me",
     "nearMeActive": "Near me · on",
     "nearMeCaption": "Sorts nearby deals when your location is available.",
@@ -324,6 +324,14 @@
     "unsavedBody": "You have unsaved deal details. Leave without saving?",
     "discard": "Discard",
     "keepEditing": "Keep editing"
+  },
+  "dealEligibility": {
+    "itemPlaceholder": "Example: croissant",
+    "requiredItemPlaceholder": "Example: latte",
+    "freeItemPlaceholder": "Example: any pastry",
+    "optionalMoneyPlaceholder": "Optional",
+    "invalidTitle": "Not eligible yet",
+    "invalidBody": "Finish the required offer rules before choosing schedule and generating an ad."
   },
   "createQuick": {
     "titleScreen": "Quick deal",

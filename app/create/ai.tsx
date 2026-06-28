@@ -408,7 +408,6 @@ async function fileUriToBase64(uri: string): Promise<string> {
 
 const QUOTA_FOCUS_MIN_MS = 30_000;
 const SOFT_REVISION_CAP = 2;
-const DEFAULT_WEEKDAYS_SORTED_KEY = "1,2,3,4,5";
 
 function createAiRequestGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;
@@ -793,6 +792,8 @@ export default function AiDealScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [photoStepCollapsed, setPhotoStepCollapsed] = useState(false);
+  const pendingDescriptionScrollAfterCollapseRef = useRef(false);
   const [photoTreatment, setPhotoTreatment] = useState<PhotoTreatment>("studiopolish");
   const [useCustomImageEdit, setUseCustomImageEdit] = useState(false);
   const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
@@ -915,6 +916,8 @@ export default function AiDealScreen() {
   const [dealLoadNonce, setDealLoadNonce] = useState(0);
   const [dealEditLoading, setDealEditLoading] = useState(false);
   const [editDirtyBaseline, setEditDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [composeDirtyBaseline, setComposeDirtyBaseline] = useState<DealFormDirtySnapshot | null>(null);
+  const [prefillBaselineReady, setPrefillBaselineReady] = useState(false);
   const [pendingRecoveredDraft, setPendingRecoveredDraft] = useState<AiDealRecoveryDraft | null>(null);
   const draftHydratedRef = useRef(false);
 
@@ -1201,20 +1204,28 @@ export default function AiDealScreen() {
     description.trim().length > 0 ||
     manualDraftUnlocked;
 
-  function scrollToFormY(y: number | null, fallback: "none" | "end" = "none") {
+  const scrollToFormY = useCallback((y: number | null, fallback: "none" | "end" = "none", topOffset: number = Spacing.md) => {
     setTimeout(() => {
       if (y != null) {
-        scrollRef.current?.scrollTo({ y: Math.max(0, y - Spacing.md), animated: true });
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - topOffset), animated: true });
       } else if (fallback === "end") {
         scrollRef.current?.scrollToEnd({ animated: true });
       }
     }, 220);
-  }
+  }, []);
 
-  function scrollToDescriptionStep() {
-    scrollToFormY(descriptionSectionYRef.current);
-    setTimeout(() => hintInputRef.current?.focus(), 520);
-  }
+  const scrollToDescriptionStep = useCallback(() => {
+    scrollToFormY(descriptionSectionYRef.current, "none", Spacing.xs);
+  }, [scrollToFormY]);
+
+  useEffect(() => {
+    if (!photoStepCollapsed || !pendingDescriptionScrollAfterCollapseRef.current) return;
+    const tid = setTimeout(() => {
+      pendingDescriptionScrollAfterCollapseRef.current = false;
+      scrollToDescriptionStep();
+    }, 360);
+    return () => clearTimeout(tid);
+  }, [photoStepCollapsed, scrollToDescriptionStep]);
 
   function scrollToAdReview() {
     scrollToFormY(adReviewSectionYRef.current, "end");
@@ -1258,13 +1269,14 @@ export default function AiDealScreen() {
   }
 
   function skipPhotoToDescription() {
+    pendingDescriptionScrollAfterCollapseRef.current = true;
+    setPhotoStepCollapsed(true);
     setBanner({
       message: t("createAi.photoSkippedBanner", {
         defaultValue: "No photo selected. Describe the deal and Twofer will use those details.",
       }),
       tone: "info",
     });
-    scrollToDescriptionStep();
   }
 
   useEffect(() => {
@@ -1370,6 +1382,27 @@ export default function AiDealScreen() {
   );
 
   useEffect(() => {
+    if (dealIdFromRoute) return;
+    setComposeDirtyBaseline(null);
+    setPrefillBaselineReady(false);
+  }, [dealIdFromRoute, templateId, hasCreatePrefillParams]);
+
+  useEffect(() => {
+    if (dealIdFromRoute || composeDirtyBaseline) return;
+    if (templateId && !templateLoaded) return;
+    if (hasCreatePrefillParams && !prefillBaselineReady) return;
+    setComposeDirtyBaseline(currentDealFormSnapshot);
+  }, [
+    composeDirtyBaseline,
+    currentDealFormSnapshot,
+    dealIdFromRoute,
+    hasCreatePrefillParams,
+    prefillBaselineReady,
+    templateId,
+    templateLoaded,
+  ]);
+
+  useEffect(() => {
     setPublishStatus((current) => {
       if (current === "success" || current === "error") return "idle";
       return current;
@@ -1393,35 +1426,10 @@ export default function AiDealScreen() {
     eligibilityForm,
   ]);
 
-  const composeDirty = useMemo(() => {
-    if (photoUri || hintText.trim() || price.trim()) return true;
-    if (generatedAd != null || adAccepted) return true;
-    if (title.trim() || promoLine.trim() || ctaText.trim() || description.trim()) return true;
-    if (JSON.stringify(eligibilityForm) !== JSON.stringify(createDefaultDealEligibilityFormState())) return true;
-    if (maxClaims !== "50" || cutoffMins !== "15") return true;
-    if (validityMode !== "one-time") return true;
-    if ([...daysOfWeek].sort((a, b) => a - b).join(",") !== DEFAULT_WEEKDAYS_SORTED_KEY) return true;
-    if (manualDraftUnlocked) return true;
-    if (templateLoaded) return true;
-    return false;
-  }, [
-    photoUri,
-    hintText,
-    price,
-    generatedAd,
-    adAccepted,
-    title,
-    promoLine,
-    ctaText,
-    description,
-    eligibilityForm,
-    maxClaims,
-    cutoffMins,
-    validityMode,
-    daysOfWeek,
-    manualDraftUnlocked,
-    templateLoaded,
-  ]);
+  const composeDirty = useMemo(
+    () => isDealFormDirty(composeDirtyBaseline, currentDealFormSnapshot),
+    [composeDirtyBaseline, currentDealFormSnapshot],
+  );
 
   const editFormDirty = useMemo(
     () => isDealFormDirty(editDirtyBaseline, currentDealFormSnapshot),
@@ -1478,6 +1486,7 @@ export default function AiDealScreen() {
     setPhotoUri(null);
     setPhotoPath(draft.photoPath);
     setPosterUrl(draft.posterUrl ?? (draft.photoPath ? buildPublicDealPhotoUrl(draft.photoPath) : null));
+    setPhotoStepCollapsed(false);
     setPhotoTreatment(draft.photoTreatment);
     setCustomImageEditInstruction(draft.customImageEditInstruction);
     setUseCustomImageEdit(Boolean(draft.customImageEditInstruction.trim()));
@@ -1714,6 +1723,7 @@ export default function AiDealScreen() {
         // selector renders empty when editing an existing deal that has a poster.
         setPhotoPath(loadedPhotoPath);
         setPosterUrl(loadedPosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(loadedPhotoPath || loadedPosterUrl));
         setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(loadedMaxClaims);
@@ -1776,6 +1786,7 @@ export default function AiDealScreen() {
   useEffect(() => {
     if (dealIdFromRoute || !templateId || !businessId) return;
     let cancelled = false;
+    setTemplateLoaded(false);
     (async () => {
       const { data, error } = await supabase
         .from("deal_templates")
@@ -1801,6 +1812,7 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(templatePhotoPath ?? null);
         setPosterUrl(templatePosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
         setMerchantOriginalWarningAcknowledged(false);
         setMaxClaims(String(row.max_claims ?? 50));
@@ -1862,7 +1874,10 @@ export default function AiDealScreen() {
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
     const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
-    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) return;
+    if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) {
+      setPrefillBaselineReady(true);
+      return;
+    }
 
     if (pt) setTitle((prev) => prev || pt);
     if (pp) setPromoLine((prev) => prev || pp);
@@ -1939,6 +1954,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.prefillFromHub"), tone: "success" });
       setManualDraftUnlocked(true);
     }
+    setPrefillBaselineReady(true);
   }, [
     templateId, params.prefillTitle, params.prefillPromoLine, params.prefillCta,
     params.prefillDescription, params.prefillHint, params.prefillPrice, params.prefillPosterPath, params.prefillPosterUrl,
@@ -2059,6 +2075,7 @@ export default function AiDealScreen() {
       setPhotoUri(uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      setPhotoStepCollapsed(false);
       setUsePhotoAsFinal(false);
       setMerchantOriginalWarningAcknowledged(false);
       resetGenerationState();
@@ -2085,6 +2102,7 @@ export default function AiDealScreen() {
       setPhotoUri(photo.uri);
       setPosterUrl(null);
       setPhotoPath(null);
+      setPhotoStepCollapsed(false);
       setUsePhotoAsFinal(false);
       setMerchantOriginalWarningAcknowledged(false);
       resetGenerationState();
@@ -3130,6 +3148,7 @@ export default function AiDealScreen() {
         setPhotoUri(null);
         setPhotoPath(savedPosterPath);
         setPosterUrl(savedPosterUrl);
+        setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(savedPosterPath || savedPosterUrl));
         setMerchantOriginalWarningAcknowledged(false);
         setGeneratedAd(null);
@@ -3586,7 +3605,7 @@ export default function AiDealScreen() {
         contentContainerStyle={{
           paddingTop: top,
           paddingHorizontal: horizontal,
-          paddingBottom: scrollBottom,
+          paddingBottom: scrollBottom + Spacing.xxxl,
         }}
       >
         <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
@@ -3708,7 +3727,7 @@ export default function AiDealScreen() {
             <Text style={{ marginTop: 8, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
               {t("createAi.photoSkipHint")}
             </Text>
-            {!selectedPhotoUri ? (
+            {!selectedPhotoUri && !photoStepCollapsed ? (
               <Pressable
                 onPress={skipPhotoToDescription}
                 accessibilityRole="button"
@@ -3735,7 +3754,7 @@ export default function AiDealScreen() {
                 style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
                 contentFit="cover"
               />
-            ) : (
+            ) : photoStepCollapsed ? null : (
               <View style={{ marginTop: 12 }}>
                 <View style={{ height: 260, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1.5, borderColor: theme.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
                   <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
@@ -3922,12 +3941,12 @@ export default function AiDealScreen() {
               onLayout={(e) => {
                 descriptionSectionYRef.current = e.nativeEvent.layout.y;
               }}
-              style={{ marginTop: 16 }}
+              style={{ marginTop: 12 }}
             >
               <StepBadge n={2} total={3} t={t} />
             </View>
-            <Text style={{ marginTop: 10, fontWeight: "700", color: theme.text }}>{t("createAi.dealDescriptionLabel")}</Text>
-            <Text style={{ marginTop: 4, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
+            <Text style={{ marginTop: 8, fontWeight: "700", color: theme.text }}>{t("createAi.dealDescriptionLabel")}</Text>
+            <Text style={{ marginTop: 3, color: theme.mutedText, fontSize: 12, lineHeight: 16 }} numberOfLines={2}>
               {selectedPhotoUri ? t("createAi.dealDescriptionHelpWithPhoto") : t("createAi.dealDescriptionHelpNoPhoto")}
             </Text>
             <View style={{ marginTop: 6 }}>
@@ -3942,9 +3961,9 @@ export default function AiDealScreen() {
                   borderWidth: 1,
                   borderColor: isRecording ? theme.danger : theme.border,
                   borderRadius: 14,
-                  padding: 14,
-                  paddingRight: Platform.OS !== "web" ? 56 : 14,
-                  minHeight: 56,
+                  padding: 12,
+                  paddingRight: Platform.OS !== "web" ? 54 : 12,
+                  minHeight: 52,
                   backgroundColor: theme.surface,
                   color: theme.text,
                 }}
@@ -3964,7 +3983,7 @@ export default function AiDealScreen() {
               ) : null}
             </View>
 
-            <Text style={{ marginTop: 12, color: theme.text }}>{t("createAi.priceOptional")}</Text>
+            <Text style={{ marginTop: 8, color: theme.text }}>{t("createAi.priceOptional")}</Text>
             <TextInput
               value={price}
               onChangeText={(value) => setPrice(sanitizeDecimalInput(value))}
@@ -3973,7 +3992,7 @@ export default function AiDealScreen() {
               returnKeyType="done"
               placeholder={t("createAi.placeholderPrice")}
               placeholderTextColor={theme.mutedText}
-              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, marginTop: 5, color: theme.text, backgroundColor: theme.surface }}
             />
 
             <DealEligibilityForm
@@ -3984,8 +4003,11 @@ export default function AiDealScreen() {
               colorScheme={colorScheme}
               inputAccessoryViewID={IOS_DONE_INPUT_ACCESSORY_ID}
               result={eligibilityResult}
+              compact
             />
 
+            {eligibilityResult.eligible ? (
+              <>
             <View
               onLayout={(e) => {
                 const y = e.nativeEvent.layout.y;
@@ -4475,6 +4497,31 @@ export default function AiDealScreen() {
                 ) : null}
               </View>
             ) : null}
+              </>
+            ) : (
+              <View
+                style={{
+                  marginTop: 16,
+                  padding: 14,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceMuted,
+                  gap: 8,
+                }}
+              >
+                <StepBadge n={3} total={3} t={t} />
+                <Text style={{ fontWeight: "800", color: theme.text }}>
+                  {t("dealEligibility.invalidTitle", { defaultValue: "Not eligible yet" })}
+                </Text>
+                <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 19 }}>
+                  {eligibilityResult.message ??
+                    t("dealEligibility.invalidBody", {
+                      defaultValue: "Finish the required offer rules before choosing schedule and generating an ad.",
+                    })}
+                </Text>
+              </View>
+            )}
 
             {/* Single ad preview - text rendered natively below the image, not baked in. */}
             {generatedAd ? (

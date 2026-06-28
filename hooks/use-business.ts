@@ -31,15 +31,6 @@ export type StripeIds = {
   stripeSubscriptionId: string | null;
 };
 
-type BusinessProfileBilling = {
-  subscription_status?: string | null;
-  subscription_tier?: string | null;
-  trial_ends_at?: string | null;
-  current_period_ends_at?: string | null;
-  stripe_customer_id?: string | null;
-  stripe_subscription_id?: string | null;
-};
-
 function numOrNull(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -133,7 +124,7 @@ export function useBusiness() {
       data
         ? {
             id: data.id,
-            subscription_tier: "pro", // canonical tier lives on business_profiles now
+            subscription_tier: "pro", // location-level billing is the source of truth for current entitlements
             name: data.name,
             contact_name: data.contact_name ?? null,
             business_email: data.business_email ?? null,
@@ -151,57 +142,13 @@ export function useBusiness() {
         : null,
     );
 
-    // Legacy billing fields may still exist on `business_profiles`, but the
-    // location-level entitlement RPC is the source of truth for the new trial
-    // and billing flow. This hook must not create, reset, or extend a trial.
-    const billingSelect = "subscription_status,subscription_tier,trial_ends_at,current_period_ends_at,stripe_customer_id,stripe_subscription_id";
-    let bpRow: BusinessProfileBilling | null = null;
-
-    const { data: byUserRow, error: byUserErr } = await supabase
-      .from("business_profiles")
-      .select(billingSelect)
-      .eq("user_id", uid)
-      .maybeSingle();
-
-    if (!byUserErr) {
-      bpRow = byUserRow as BusinessProfileBilling | null;
-    } else if (byUserErr.code === "PGRST116") {
-      bpRow = null;
-    } else {
-      // Backward compatible fallback: some schemas key by owner_id.
-      const { data: byOwnerRow, error: byOwnerErr } = await supabase
-        .from("business_profiles")
-        .select(billingSelect)
-        .eq("owner_id", uid)
-        .maybeSingle();
-      if (!byOwnerErr) bpRow = byOwnerRow as BusinessProfileBilling | null;
-    }
-
-    const rawStatus = (bpRow?.subscription_status ?? null) || null;
-    const normalizedStatus: SubscriptionStatus =
-      rawStatus === "active" || rawStatus === "trial" || rawStatus === "past_due" || rawStatus === "canceled" ? rawStatus : "canceled";
-    if (rawStatus && normalizedStatus !== rawStatus) {
-      console.warn(`[useBusiness] unrecognized subscription_status "${rawStatus}", treating as "canceled"`);
-    }
-
-    // Keep the existing `subscriptionTier` contract for location limits.
-    const rawTier = (bpRow?.subscription_tier ?? null) || null;
-    const normalizedTier: "pro" | "premium" =
-      rawTier === "premium" ? "premium" : "pro";
-    if (rawTier && rawTier !== "pro" && rawTier !== "premium") {
-      console.warn(`[useBusiness] unrecognized subscription_tier "${rawTier}", treating as "pro"`);
-    }
-
-    setSubscriptionStatus(normalizedStatus);
-    setTrialEndsAt(bpRow?.trial_ends_at ? String(bpRow.trial_ends_at) : null);
-    setCurrentPeriodEndsAt(bpRow?.current_period_ends_at ? String(bpRow.current_period_ends_at) : null);
-    setStripeIds({
-      stripeCustomerId: bpRow?.stripe_customer_id ? String(bpRow.stripe_customer_id) : null,
-      stripeSubscriptionId: bpRow?.stripe_subscription_id ? String(bpRow.stripe_subscription_id) : null,
-    });
-
-    // Update the in-memory business subscription tier too, so downstream logic stays consistent.
-    setBusiness((prev) => (prev ? { ...prev, subscription_tier: normalizedTier } : prev));
+    // Billing state now comes from location-level entitlement RPCs. Some production
+    // schemas do not have legacy billing columns on business_profiles, so this
+    // shared business hook must not select those optional columns.
+    setSubscriptionStatus("trial");
+    setTrialEndsAt(null);
+    setCurrentPeriodEndsAt(null);
+    setStripeIds({ stripeCustomerId: null, stripeSubscriptionId: null });
 
     hasEverFetchedRef.current = true;
     setLoading(false);

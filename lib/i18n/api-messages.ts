@@ -99,6 +99,7 @@ const DB_OR_INFRA_HINTS: { pattern: RegExp; key: string }[] = [
   // Defense-in-depth: never surface the bare Supabase wrapper if a non-2xx
   // edge response slips past a caller's own mapping (e.g. claimDeal/redeemToken).
   { pattern: /edge function returned a non-?2xx status/i, key: "apiErrors.operationFailedTryAgain" },
+  { pattern: /requested function was not found|function was not found/i, key: "apiErrors.operationFailedTryAgain" },
 ];
 
 function looksLikeInternalOrDbMessage(s: string): boolean {

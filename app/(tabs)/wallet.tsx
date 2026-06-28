@@ -185,6 +185,7 @@ export default function WalletScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void i18n.language;
       let cancelled = false;
       void getCustomerPreferredDealLocale().then((locale) => {
         if (!cancelled) setCustomerPreferredDealLocale(locale);
@@ -192,7 +193,7 @@ export default function WalletScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [i18n.language]),
   );
 
   useEffect(() => {

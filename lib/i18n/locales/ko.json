@@ -8,7 +8,7 @@
     "wallet": "지갑",
     "create": "만들기",
     "redeem": "사용",
-    "dashboard": "내 오퍼",
+    "dashboard": "오퍼",
     "billing": "결제",
     "account": "계정"
   },
@@ -18,7 +18,7 @@
   "dealsBrowse": {
     "categoriesHeading": "카테고리",
     "categoryHint": "팁: 계정 → 비즈니스 프로필에서 카테고리를 설정한 매장만 여기 필터 칩으로 표시됩니다.",
-    "searchPlaceholder": "딜, 매장, 지역 검색…",
+    "searchPlaceholder": "딜 또는 매장 검색",
     "nearMe": "내 주변",
     "nearMeActive": "내 주변 · 켜짐",
     "nearMeCaption": "업체가 좌표를 넣으면 GPS로 거리순 정렬하고, 없으면 위치 필드의 시·지역 텍스트로 맞춥니다.",
@@ -324,6 +324,14 @@
     "unsavedBody": "저장하지 않은 딜 내용이 있습니다. 저장하지 않고 나갈까요?",
     "discard": "나가기",
     "keepEditing": "계속 편집"
+  },
+  "dealEligibility": {
+    "itemPlaceholder": "예: 크루아상",
+    "requiredItemPlaceholder": "예: 라떼",
+    "freeItemPlaceholder": "예: 원하는 페이스트리",
+    "optionalMoneyPlaceholder": "선택 사항",
+    "invalidTitle": "아직 조건을 충족하지 않았습니다",
+    "invalidBody": "일정을 선택하고 광고를 생성하기 전에 필수 오퍼 규칙을 완료하세요."
   },
   "createQuick": {
     "titleScreen": "빠른 딜",

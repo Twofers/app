@@ -44,9 +44,10 @@ export default function CreateDeal() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
-  const [moreToolsOpen, setMoreToolsOpen] = useState(true);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const moreToolsYRef = useRef(0);
   const templatesFolderYRef = useRef(0);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -155,7 +156,18 @@ export default function CreateDeal() {
     if (moreToolsOpen) {
       setTemplatesOpen(false);
     }
-    setMoreToolsOpen((current) => !current);
+    setMoreToolsOpen((current) => {
+      const next = !current;
+      if (next) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({
+            y: getExpandedSectionScrollY(moreToolsYRef.current),
+            animated: true,
+          });
+        });
+      }
+      return next;
+    });
   }
 
   function toggleTemplatesFolder() {
@@ -175,6 +187,10 @@ export default function CreateDeal() {
 
   function rememberTemplatesFolderLayout(event: LayoutChangeEvent) {
     templatesFolderYRef.current = event.nativeEvent.layout.y;
+  }
+
+  function rememberMoreToolsLayout(event: LayoutChangeEvent) {
+    moreToolsYRef.current = event.nativeEvent.layout.y;
   }
 
   const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
@@ -234,15 +250,12 @@ export default function CreateDeal() {
         >
           {/* ── New Deal (unified AI builder: photo, voice, or text → review → publish) ── */}
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/create/ai",
-                params: { fromCreateHub: "1" },
-              } as Href)
-            }
+            onPress={() => router.push("/create/ai?fromCreateHub=1" as Href)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t("createHub.newDeal")}. ${t("createHub.newDealSub")}`}
             style={{
               borderRadius: Radii.lg,
-              padding: Spacing.xl,
+              padding: Spacing.lg,
               backgroundColor: theme.primary,
               alignItems: "center",
             }}
@@ -258,9 +271,11 @@ export default function CreateDeal() {
           {/* ── Reuse Past Deal ── */}
           <Pressable
             onPress={() => router.push("/create/reuse")}
+            accessibilityRole="button"
+            accessibilityLabel={`${t("createHub.reuseDeal")}. ${t("createHub.reuseDealSub")}`}
             style={{
               borderRadius: Radii.lg,
-              padding: Spacing.lg,
+              padding: Spacing.md,
               backgroundColor: theme.surface,
               borderWidth: 1.5,
               borderColor: theme.border,
@@ -278,14 +293,24 @@ export default function CreateDeal() {
           {/* ── More Tools ── */}
           <Pressable
             onPress={toggleMoreTools}
+            onLayout={rememberMoreToolsLayout}
             accessibilityRole="button"
             accessibilityState={{ expanded: moreToolsOpen }}
           >
             <CardShell variant="muted">
-              <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
-              <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
-                {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
+                  <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
+                    {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={moreToolsOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                  size={22}
+                  color={theme.icon}
+                />
+              </View>
             </CardShell>
           </Pressable>
 

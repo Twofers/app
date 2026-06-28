@@ -45,9 +45,9 @@ Image generation uses the regular app's Gemini image-provider variables:
 - `GEMINI_IMAGE_MODEL=gemini-3.1-flash-image`
 - `AI_STUDIO_ENABLE_IMAGE_GENERATION=true` only in the separate dev project when Gemini image testing is approved.
 
-The generated AI Studio image is stored only in the private `ai-deal-assets` bucket. The function returns the private storage path plus a short-lived signed preview URL for the dev draft. It does not create a `deals` row and does not call publishing.
+The generated AI Studio source image is stored only in the private `ai-deal-assets` bucket. The function returns `source_asset_path` plus a short-lived signed preview URL for the dev draft. `rendered_asset_path` stays `null` until a later export phase. It does not create a `deals` row and does not call publishing.
 
-The finished Twofer ad preview is rendered deterministically in the dev app from native overlay text. The Gemini image stays text-free; the app overlays the business name, headline, supporting copy, exact offer terms, time window, quantity, CTA, and disabled-publishing state. Rendered ad export/storage is intentionally not part of this phase.
+The finished dev ad preview is rendered deterministically in the dev app from native overlay text. The Gemini image stays text-free; the app overlays the business wordmark/logo, poster headline, offer lines, and compact time window. The poster must not include the word Twofer, a claim CTA, or an availability badge; exact deal details render below the poster instead. Rendered ad export/storage is intentionally not part of this phase.
 
 Configure Gemini image generation for dev only:
 
@@ -126,7 +126,9 @@ Expected Gemini image behavior:
 - `dryRun` is `false`
 - `copy_only` is `false`
 - `image_provider` is `gemini`
-- `image_asset_path` is a private bucket path, not a URL
-- `image_signed_url` is returned only for preview
+- Gemini is requested with a 4:5 image ratio to match the native preview
+- `source_asset_path` is a private bucket path, not a URL
+- `source_asset_signed_url` is returned only for preview
+- `rendered_asset_path` remains `null` in this phase
 - publishing remains disabled
 - `deals` stays `0`

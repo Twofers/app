@@ -28,7 +28,7 @@ import { useTabMode, type TabMode } from "@/lib/tab-mode";
 import { persistRoleForUser, resolveRoleForUser, SIGNUP_ROLE_META_KEY } from "@/lib/profiles-role";
 import { logAuthPath } from "@/lib/auth-path-log";
 import { friendlyAuthError, friendlyAuthMessage, isEmailNotConfirmedError } from "@/lib/auth-error-messages";
-import { Spacing } from "@/lib/screen-layout";
+import { getScreenLayoutMetrics, Spacing, type TabBarPlatform } from "@/lib/screen-layout";
 import { Colors, Controls, Radii } from "@/constants/theme";
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from "@/lib/legal-urls";
 import { Banner } from "@/components/ui/banner";
@@ -37,6 +37,7 @@ import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyb
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
 import i18n, { APP_LOCALES, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
 import { BUSINESS_INVITE_PENDING_META_KEY, isValidBusinessInviteCode } from "@/lib/business-invite";
 
@@ -139,13 +140,13 @@ function RoleCard({
         onBlur={() => setFocused(false)}
         onPressStateChange={setPressed}
         style={{
-          flex: 1,
-          minHeight: 96,
+          height: stacked ? 72 : 64,
+          minHeight: stacked ? 72 : 64,
           borderRadius: Radii.md,
           borderWidth: selected ? 2 : 1,
           borderColor: selected || focused || pressed ? theme.primary : theme.border,
           backgroundColor: pressed && !selected ? theme.surfaceMuted : fill,
-          padding: Spacing.md,
+          padding: Spacing.sm,
           justifyContent: "center",
           opacity: disabled ? 0.6 : 1,
         }}
@@ -156,14 +157,14 @@ function RoleCard({
             alignItems: "center",
             justifyContent: "space-between",
             gap: Spacing.sm,
-            marginBottom: Spacing.xs,
+            marginBottom: 2,
           }}
         >
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.85}
-            style={{ flex: 1, fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }}
+            style={{ flex: 1, fontWeight: "800", fontSize: 14, lineHeight: 18, color: theme.text }}
           >
             {title}
           </Text>
@@ -182,7 +183,11 @@ function RoleCard({
             {selected ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primaryText }} /> : null}
           </View>
         </View>
-        <Text maxFontSizeMultiplier={1.15} style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
+        <Text
+          maxFontSizeMultiplier={1.15}
+          numberOfLines={1}
+          style={{ fontSize: 11, lineHeight: 14, color: theme.mutedText }}
+        >
           {hint}
         </Text>
       </ScalePressable>
@@ -324,7 +329,7 @@ export default function AuthLandingScreen() {
         return;
       }
       const role = await resolveRoleForUser(user);
-      await adoptRole(role);
+      await adoptRole(role, user.id);
       const href = await resolvePostAuthReplaceHref({
         role,
         nextParam: firstQueryString(params.next),
@@ -379,7 +384,7 @@ export default function AuthLandingScreen() {
       }
       const uid = data.session.user.id;
       await persistRoleForUser(uid, signupRole);
-      await adoptRole(signupRole);
+      await adoptRole(signupRole, uid);
       if (signupRole === "customer") {
         router.replace("/(tabs)" as Href);
       } else {
@@ -426,15 +431,21 @@ export default function AuthLandingScreen() {
     defaultValue: "Create simple buy-one-get-one offers and redeem customer tickets.",
   });
   const isSignup = screenMode === "signup";
+  const authInputPadding = isSignup ? Spacing.md : Spacing.lg;
+  const authSubmitBottomGap = isSignup ? Spacing.sm : Spacing.md;
 
   async function chooseLocale(locale: AppLocale) {
     setLangPickerOpen(false);
     await setUiLocalePreference(locale, { manual: true });
+    await setCustomerPreferredDealLocaleFromAppLanguage(locale);
     await i18n.changeLanguage(locale);
   }
 
   const currentLocale: AppLocale =
     APP_LOCALES.find((locale) => i18n.language.startsWith(locale)) ?? "en";
+  const stackPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const authLayout = getScreenLayoutMetrics(insets, "stack", stackPlatform);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -446,23 +457,23 @@ export default function AuthLandingScreen() {
             flexGrow: 1,
             // Minimal top padding keeps the hero high so the form clears the fold.
             paddingTop: Math.max(insets.top, Spacing.xs),
-            paddingBottom: insets.bottom + Spacing.xxxl,
+            paddingBottom: authLayout.scrollBottom + Spacing.xl,
             paddingHorizontal: Spacing.lg,
           }}
         >
-          <View style={{ alignItems: "center", marginBottom: Spacing.md }}>
+          <View style={{ alignItems: "center", marginBottom: isSignup ? Spacing.sm : Spacing.md }}>
             {/* Dedicated auth-logo asset sized for this compact hero. */}
             <Image
               source={require("../assets/images/penguin-auth-512.png")}
-              style={{ width: 72, height: 72 }}
+              style={{ width: isSignup ? 48 : 72, height: isSignup ? 48 : 72 }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
               accessibilityLabel={t("authLanding.heroA11y")}
             />
             <Text
               style={{
-                fontSize: 28,
-                lineHeight: 34,
+                fontSize: isSignup ? 24 : 28,
+                lineHeight: isSignup ? 28 : 34,
                 color: theme.primary,
                 ...(wordmarkFontLoaded
                   ? { fontFamily: "Outfit_700Bold" }
@@ -473,9 +484,9 @@ export default function AuthLandingScreen() {
             </Text>
             <Text
               style={{
-                marginTop: Spacing.xs,
-                fontSize: 14,
-                lineHeight: 20,
+                marginTop: isSignup ? 0 : Spacing.xs,
+                fontSize: isSignup ? 13 : 14,
+                lineHeight: isSignup ? 18 : 20,
                 color: theme.mutedText,
                 textAlign: "center",
               }}
@@ -562,7 +573,7 @@ export default function AuthLandingScreen() {
                   backgroundColor: theme.surfaceMuted,
                   padding: 4,
                   gap: 4,
-                  marginBottom: Spacing.lg,
+                  marginBottom: isSignup ? Spacing.md : Spacing.lg,
                 }}
               >
                 {(["login", "signup"] as const).map((m) => {
@@ -611,7 +622,7 @@ export default function AuthLandingScreen() {
                       fontWeight: "800",
                       fontSize: 16,
                       color: theme.text,
-                      marginBottom: Spacing.sm,
+                      marginBottom: Spacing.xs,
                       textAlign: "center",
                     }}
                   >
@@ -622,7 +633,7 @@ export default function AuthLandingScreen() {
                     style={{
                       flexDirection: stackRoleCards ? "column" : "row",
                       gap: roleCardGap,
-                      marginBottom: Spacing.md,
+                      marginBottom: Spacing.sm,
                     }}
                   >
                     <RoleCard
@@ -680,7 +691,7 @@ export default function AuthLandingScreen() {
                   borderWidth: 1,
                   borderColor: emailError ? theme.danger : focusedField === "email" ? theme.primary : inputBorder,
                   borderRadius: Radii.md,
-                  padding: Spacing.lg,
+                  padding: authInputPadding,
                   fontSize: 16,
                   backgroundColor: inputBg,
                   color: theme.text,
@@ -721,8 +732,8 @@ export default function AuthLandingScreen() {
                     borderWidth: 1,
                     borderColor: pwError ? theme.danger : focusedField === "password" ? theme.primary : inputBorder,
                     borderRadius: Radii.md,
-                    padding: Spacing.lg,
-                    paddingRight: Spacing.lg + 24 + Spacing.md,
+                    padding: authInputPadding,
+                    paddingRight: authInputPadding + 24 + Spacing.md,
                     fontSize: 16,
                     backgroundColor: inputBg,
                     color: theme.text,
@@ -807,7 +818,7 @@ export default function AuthLandingScreen() {
                       borderWidth: 1,
                       borderColor: inviteError ? theme.danger : focusedField === "invite" ? theme.primary : inputBorder,
                       borderRadius: Radii.md,
-                      padding: Spacing.lg,
+                      padding: authInputPadding,
                       fontSize: 16,
                       backgroundColor: inputBg,
                       color: theme.text,
@@ -853,7 +864,7 @@ export default function AuthLandingScreen() {
                   </Text>
                 </Pressable>
               ) : (
-                <View style={{ height: Spacing.lg }} />
+                <View style={{ height: Spacing.sm }} />
               )}
 
               {/* Custom Pressable (not PrimaryButton) only because it renders an
@@ -879,7 +890,7 @@ export default function AuthLandingScreen() {
                   alignItems: "center",
                   flexDirection: "row",
                   gap: Spacing.sm,
-                  marginBottom: Spacing.lg,
+                  marginBottom: authSubmitBottomGap,
                 }}
               >
                 {busy ? <ActivityIndicator color={theme.primaryText} /> : null}
@@ -900,27 +911,39 @@ export default function AuthLandingScreen() {
             </>
           ) : null}
 
-          <Text style={{ fontSize: 12, lineHeight: 18, color: theme.mutedText, textAlign: "center" }} maxFontSizeMultiplier={1.15}>
-            <Trans
-              i18nKey="authLanding.legalFooter"
-              components={{
-                terms: (
-                  <Text
-                    accessibilityRole="link"
-                    style={{ textDecorationLine: "underline" }}
-                    onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
-                  />
-                ),
-                privacy: (
-                  <Text
-                    accessibilityRole="link"
-                    style={{ textDecorationLine: "underline" }}
-                    onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
-                  />
-                ),
-              }}
-            />
-          </Text>
+          <View
+            style={{
+              minHeight: 44,
+              justifyContent: "center",
+              paddingVertical: Spacing.xs,
+              paddingHorizontal: Spacing.sm,
+            }}
+          >
+            <Text
+              style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText, textAlign: "center" }}
+              maxFontSizeMultiplier={1.1}
+            >
+              <Trans
+                i18nKey="authLanding.legalFooter"
+                components={{
+                  terms: (
+                    <Text
+                      accessibilityRole="link"
+                      style={{ textDecorationLine: "underline" }}
+                      onPress={() => void Linking.openURL(TERMS_OF_SERVICE_URL)}
+                    />
+                  ),
+                  privacy: (
+                    <Text
+                      accessibilityRole="link"
+                      style={{ textDecorationLine: "underline" }}
+                      onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+                    />
+                  ),
+                }}
+              />
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardScreen>
 

@@ -1313,6 +1313,7 @@ export default function HomeScreen() {
               autoCorrect={false}
               autoCapitalize="none"
               clearButtonMode="while-editing"
+              maxFontSizeMultiplier={1.15}
               style={{ flex: 1, fontSize: 16, color: theme.text, paddingVertical: 2 }}
             />
           </View>

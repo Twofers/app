@@ -22,6 +22,8 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260724120000_offer_version_publish_rpc.sql` | Publish RPC foundation for versioned offer/ad specs. |
 | `20260728120000_ad_localization_storage.sql` | Service-role localization storage and offer-version localization metadata. |
 | `20260728123000_customer_deal_localization_projection.sql` | Customer-safe localization projection RPC; no direct app-role access to `ad_localizations`. |
+| `20260730120000_deals_owner_delete_ended.sql` | Allows owners to delete their own ended deals from My offers. |
+| `20260730121000_customer_deal_poster_spec_projection.sql` | Customer-safe native poster spec projection RPC; no direct app-role access to `offer_versions`. |
 
 **Also verify:**
 

@@ -20,6 +20,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import type { AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
+import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { useTabMode } from "@/lib/tab-mode";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { deleteUserAccount } from "@/lib/functions";
@@ -728,6 +729,7 @@ export default function AccountScreen() {
   async function chooseAppLocale(locale: AppLocale) {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
+    await setCustomerPreferredDealLocaleFromAppLanguage(locale);
     await i18n.changeLanguage(locale);
     setBanner({ message: t("account.languageSaved"), tone: "success" });
   }
@@ -803,9 +805,11 @@ export default function AccountScreen() {
           ) : null}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontWeight: "700" }}>{label}</Text>
+          <Text style={{ color: theme.text, fontWeight: "800", lineHeight: 19 }} numberOfLines={2}>
+            {label}
+          </Text>
           {helper ? (
-            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 3 }}>
+            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 16, marginTop: 2 }} numberOfLines={3}>
               {helper}
             </Text>
           ) : null}
@@ -850,7 +854,10 @@ export default function AccountScreen() {
         <ScrollView
           ref={scrollRef}
           style={{ marginTop: Spacing.lg, flex: 1 }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: scrollBottom + (businessProfileDirty ? 112 : 0) }}
+          contentContainerStyle={{
+            gap: Spacing.md,
+            paddingBottom: scrollBottom + Spacing.xxxl * 3 + (businessProfileDirty ? 112 : 0),
+          }}
           {...FORM_SCROLL_KEYBOARD_PROPS}
           showsVerticalScrollIndicator={false}
         >
@@ -1047,7 +1054,7 @@ export default function AccountScreen() {
               <Text style={{ fontWeight: "700" }}>
                 {t("account.repeatPolicyTitle", { defaultValue: "Limit repeat customers" })}
               </Text>
-              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }}>
+              <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18 }} numberOfLines={3}>
                 {t("account.repeatPolicyHelp", {
                   defaultValue:
                     "Use this if your goal is to bring in new customers instead of giving the same customer a deal every day.",

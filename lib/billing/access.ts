@@ -5,10 +5,10 @@ import type { BillingStatus, PurchaseSurface } from "@/lib/billing/entitlements"
 export const PAID_BILLING_ENABLED = true;
 
 /**
- * While true, trial-end status does not block deal creation: any logged-in
- * business user can keep working during the free pilot.
+ * While true, billing is visible for checkout testing but does not block setup
+ * or deal creation.
  */
-export const PILOT_DISABLE_BILLING_GATE = !PAID_BILLING_ENABLED;
+export const PILOT_DISABLE_BILLING_GATE = true;
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {
   if (!__DEV__) return false;

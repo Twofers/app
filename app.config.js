@@ -6,6 +6,10 @@ const PRODUCTION_APP_NAME = "Twofer";
 const AI_STUDIO_DEV_APP_NAME = "Twofer Dev";
 const PRODUCTION_SUPABASE_HOST = "kvodhiqhdqnptqovovia.supabase.co";
 const AI_STUDIO_DEV_VARIANT = "ai-studio-dev";
+const EXPO_DEV_CLIENT_PLUGIN = "expo-dev-client";
+const AI_STUDIO_DEV_EAS_PROFILE = "dev-apk-ai-studio";
+const DEV_CLIENT_EAS_PROFILES = new Set(["development", "dev-client-apk", AI_STUDIO_DEV_EAS_PROFILE]);
+const PRODUCTION_LIKE_EAS_PROFILES = new Set(["production", "apk", "preview"]);
 
 function resolveGitCommitShort() {
   const fromEnv =
@@ -21,10 +25,13 @@ function resolveGitCommitShort() {
 }
 
 function isAiStudioDevVariant() {
+  const buildProfile = process.env.EAS_BUILD_PROFILE;
+  if (buildProfile) {
+    return buildProfile === AI_STUDIO_DEV_EAS_PROFILE;
+  }
   return (
     process.env.TWOFER_APP_VARIANT === AI_STUDIO_DEV_VARIANT ||
-    process.env.EXPO_PUBLIC_APP_VARIANT === AI_STUDIO_DEV_VARIANT ||
-    process.env.EAS_BUILD_PROFILE === "dev-apk-ai-studio"
+    process.env.EXPO_PUBLIC_APP_VARIANT === AI_STUDIO_DEV_VARIANT
   );
 }
 
@@ -66,6 +73,43 @@ function resolveAndroidIntentFilters(config, aiStudioDev) {
   ];
 }
 
+function pluginName(plugin) {
+  return Array.isArray(plugin) ? plugin[0] : plugin;
+}
+
+function withoutPlugin(plugins, name) {
+  return plugins.filter((plugin) => pluginName(plugin) !== name);
+}
+
+function withPluginOnce(plugins, plugin) {
+  const name = pluginName(plugin);
+  return plugins.some((existing) => pluginName(existing) === name) ? plugins : [...plugins, plugin];
+}
+
+function shouldIncludeDevClientPlugin(aiStudioDev) {
+  if (aiStudioDev) return true;
+  if (process.env.TWOFER_ENABLE_DEV_CLIENT_PLUGIN === "true") return true;
+  if (process.env.TWOFER_ENABLE_DEV_CLIENT_PLUGIN === "false") return false;
+
+  const buildProfile = process.env.EAS_BUILD_PROFILE;
+  if (buildProfile) {
+    if (PRODUCTION_LIKE_EAS_PROFILES.has(buildProfile)) return false;
+    return DEV_CLIENT_EAS_PROFILES.has(buildProfile);
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
+function resolvePlugins(config, aiStudioDev) {
+  const existing = Array.isArray(config.plugins) ? config.plugins : [];
+  const devClientReady = shouldIncludeDevClientPlugin(aiStudioDev)
+    ? withPluginOnce(existing, EXPO_DEV_CLIENT_PLUGIN)
+    : withoutPlugin(existing, EXPO_DEV_CLIENT_PLUGIN);
+
+  if (!aiStudioDev) return devClientReady;
+  return withPluginOnce(devClientReady, "./plugins/with-android-dev-google-services-skip");
+}
+
 /** Merges env-based EAS project id with static app.json (Expo loads both). */
 module.exports = ({ config }) => {
   const aiStudioDev = isAiStudioDevVariant();
@@ -77,6 +121,7 @@ module.exports = ({ config }) => {
     /** Prebuild: keep New Architecture enabled across native regeneration. */
     newArchEnabled: true,
     name: appName,
+    plugins: resolvePlugins(config, aiStudioDev),
     ios: {
       ...config.ios,
       infoPlist: {
@@ -87,6 +132,7 @@ module.exports = ({ config }) => {
     android: {
       ...config.android,
       package: androidPackage,
+      googleServicesFile: aiStudioDev ? undefined : config.android?.googleServicesFile,
       intentFilters: resolveAndroidIntentFilters(config, aiStudioDev),
       newArchEnabled: true,
       config: {

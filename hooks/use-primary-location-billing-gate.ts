@@ -2,7 +2,11 @@ import { useMemo } from "react";
 
 import { useBusinessLocations, type SubscriptionTier } from "@/hooks/use-business-locations";
 import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
-import { PAID_BILLING_ENABLED, canCreateDealWithLocationBilling } from "@/lib/billing/access";
+import {
+  PAID_BILLING_ENABLED,
+  PILOT_DISABLE_BILLING_GATE,
+  canCreateDealWithLocationBilling,
+} from "@/lib/billing/access";
 
 type BillingGateParams = {
   businessId: string | null;
@@ -17,7 +21,8 @@ export function usePrimaryLocationBillingGate({
   isLoggedIn,
   bypass = false,
 }: BillingGateParams) {
-  const gatedBusinessId = PAID_BILLING_ENABLED ? businessId : null;
+  const enforcementEnabled = PAID_BILLING_ENABLED && !PILOT_DISABLE_BILLING_GATE;
+  const gatedBusinessId = enforcementEnabled ? businessId : null;
   const {
     visibleLocations,
     loading: locationsLoading,
@@ -29,7 +34,7 @@ export function usePrimaryLocationBillingGate({
     loading: summaryLoading,
     error: summaryError,
     refresh,
-  } = useLocationBillingSummary(PAID_BILLING_ENABLED ? primaryLocationId : null);
+  } = useLocationBillingSummary(enforcementEnabled ? primaryLocationId : null);
 
   const blocked = useMemo(
     () =>
@@ -46,7 +51,7 @@ export function usePrimaryLocationBillingGate({
 
   return {
     blocked,
-    loading: PAID_BILLING_ENABLED && (locationsLoading || summaryLoading),
+    loading: enforcementEnabled && (locationsLoading || summaryLoading),
     primaryLocationId,
     summary,
     locationsError,

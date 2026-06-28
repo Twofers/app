@@ -799,6 +799,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
   const lastMapLoadRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      void i18n.language;
       let cancelled = false;
       void getCustomerPreferredDealLocale().then((locale) => {
         if (!cancelled) setCustomerPreferredDealLocale(locale);
@@ -806,7 +807,7 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [i18n.language]),
   );
 
   useFocusEffect(

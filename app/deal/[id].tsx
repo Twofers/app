@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Platform, ScrollView, Text, useWindowDimensions, View } from "react-native";
-import { useScreenInsets, Spacing } from "../../lib/screen-layout";
+import { getStackFooterMetrics, useScreenInsets, Spacing, type TabBarPlatform } from "../../lib/screen-layout";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -695,8 +695,9 @@ export default function DealDetail() {
     unavailableLabel: claimBlockedLabel,
   });
   const canShareDeal = shareDealEnabled && !dealIsDemo && actionState.kind !== "unavailable";
-  const stickyBottom = Math.max(insets.bottom, Spacing.lg);
-  const stickyBarHeight = 76;
+  const footerPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const stickyFooter = getStackFooterMetrics(insets, footerPlatform);
   const ctaLabel =
     actionState.kind === "active_claimed"
       ? t("dealDetail.viewYourDeal", { defaultValue: "View your deal" })
@@ -818,7 +819,7 @@ export default function DealDetail() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          paddingBottom: scrollBottom + (composedCustomerRendererEnabled ? Spacing.xl : stickyBarHeight + stickyBottom),
+          paddingBottom: composedCustomerRendererEnabled ? scrollBottom + Spacing.xl : stickyFooter.scrollPadding,
         }}
       >
         {composedCustomerRendererEnabled ? (
@@ -988,8 +989,8 @@ export default function DealDetail() {
             position: "absolute",
             left: horizontal,
             right: horizontal,
-            bottom: stickyBottom,
-            minHeight: stickyBarHeight,
+            bottom: stickyFooter.bottom,
+            minHeight: stickyFooter.minHeight,
             justifyContent: "center",
             paddingTop: Spacing.sm,
             paddingBottom: Spacing.sm,

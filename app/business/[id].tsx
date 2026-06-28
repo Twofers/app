@@ -181,6 +181,7 @@ export default function BusinessProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void i18n.language;
       let cancelled = false;
       void getCustomerPreferredDealLocale().then((locale) => {
         if (!cancelled) setCustomerPreferredDealLocale(locale);
@@ -188,7 +189,7 @@ export default function BusinessProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [i18n.language]),
   );
 
   useEffect(() => {

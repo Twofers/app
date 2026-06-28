@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { getStackFooterMetrics, useScreenInsets, Spacing, type TabBarPlatform } from "@/lib/screen-layout";
 import { Colors, Gray, Radii } from "@/constants/theme";
 import { useAuthSession } from "@/components/providers/auth-session-provider";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -45,7 +45,12 @@ export default function OnboardingScreen() {
   const C = Colors[colorScheme];
   const selectedSurface = colorScheme === "dark" ? "#3B301F" : "#FFF3E0";
   const unselectedText = colorScheme === "dark" ? C.text : Gray[700];
-  const { top, horizontal, scrollBottom } = useScreenInsets("stack");
+  const { top, horizontal, insets } = useScreenInsets("stack");
+  const footerPlatform: TabBarPlatform =
+    Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
+  const footerMetrics = getStackFooterMetrics(insets, footerPlatform);
+  const { width } = useWindowDimensions();
+  const stackLocationButtons = width < 380;
 
   const [locationMode, setLocationMode] = useState<"gps" | "zip">("gps");
   const [zip, setZip] = useState("");
@@ -215,27 +220,33 @@ export default function OnboardingScreen() {
     }
   }
 
+  const onboardingHeader = (
+    <View style={{ gap: Spacing.sm }}>
+      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: 0, color: C.text }} maxFontSizeMultiplier={1.2}>
+        {step === "setup" ? t("onboarding.locationTitle") : t("onboarding.shopsTitle")}
+      </Text>
+      <Text style={{ fontSize: 15, lineHeight: 22, color: C.mutedText }}>
+        {step === "setup" ? t("onboarding.subtitle") : t("onboarding.shopsSubtitle")}
+      </Text>
+      {hint ? (
+        <Text style={{ color: C.accentText, fontSize: 14, lineHeight: 20 }}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+  const setupActionDisabled = busy || (locationMode === "zip" && !zip.trim());
+
   return (
     <KeyboardScreen>
     <View style={{ flex: 1, paddingTop: top, paddingHorizontal: horizontal, backgroundColor: C.background }}>
-      <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.3, color: C.text }}>
-        {step === "setup" ? t("onboarding.locationTitle") : t("onboarding.shopsTitle")}
-      </Text>
-      <Text style={{ marginTop: Spacing.sm, fontSize: 15, lineHeight: 22, color: C.mutedText }}>
-        {step === "setup" ? t("onboarding.subtitle") : t("onboarding.shopsSubtitle")}
-      </Text>
-
-      {hint ? (
-        <Text style={{ marginTop: Spacing.md, color: C.accentText, fontSize: 14, lineHeight: 20 }}>{hint}</Text>
-      ) : null}
-
       {step === "setup" ? (
+      <>
       <ScrollView
-        style={{ flex: 1, marginTop: Spacing.lg }}
-        contentContainerStyle={{ paddingBottom: scrollBottom + Spacing.xxxl, gap: Spacing.lg }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: footerMetrics.scrollPadding, gap: Spacing.lg }}
         {...FORM_SCROLL_KEYBOARD_PROPS}
         showsVerticalScrollIndicator={false}
       >
+        {onboardingHeader}
         {/* Location mode toggle */}
         <View>
           <Text style={{ fontWeight: "700", marginBottom: 4, color: C.text }}>
@@ -244,11 +255,15 @@ export default function OnboardingScreen() {
           <Text style={{ fontSize: 13, lineHeight: 19, color: C.mutedText, marginBottom: Spacing.sm }}>
             {t("onboarding.locationBody")}
           </Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: stackLocationButtons ? "column" : "row", gap: Spacing.sm }}>
             <Pressable
               onPress={() => { setLocationMode("gps"); setHint(null); }}
               style={{
-                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.pill, alignItems: "center",
+                flex: stackLocationButtons ? undefined : 1,
+                width: stackLocationButtons ? "100%" : undefined,
+                paddingVertical: Spacing.md,
+                borderRadius: Radii.pill,
+                alignItems: "center",
                 backgroundColor: locationMode === "gps" ? C.primary : C.surfaceMuted,
               }}
             >
@@ -265,7 +280,11 @@ export default function OnboardingScreen() {
             <Pressable
               onPress={() => { setLocationMode("zip"); setHint(null); }}
               style={{
-                flex: 1, paddingVertical: Spacing.md, borderRadius: Radii.pill, alignItems: "center",
+                flex: stackLocationButtons ? undefined : 1,
+                width: stackLocationButtons ? "100%" : undefined,
+                paddingVertical: Spacing.md,
+                borderRadius: Radii.pill,
+                alignItems: "center",
                 backgroundColor: locationMode === "zip" ? C.primary : C.surfaceMuted,
               }}
             >
@@ -375,19 +394,35 @@ export default function OnboardingScreen() {
             })}
           </View>
         </View>
-
+      </ScrollView>
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: footerMetrics.bottom,
+          minHeight: footerMetrics.minHeight,
+          justifyContent: "center",
+          backgroundColor: C.background,
+          paddingTop: Spacing.sm,
+          paddingBottom: Spacing.sm,
+        }}
+      >
         <PrimaryButton
           title={busy ? t("consumerProfile.saving") : t("onboarding.getStarted")}
           onPress={() => void handleGetStarted()}
-          disabled={busy || (locationMode === "zip" && !zip.trim())}
+          disabled={setupActionDisabled}
         />
-      </ScrollView>
+      </View>
+      </>
       ) : (
+      <>
       <ScrollView
-        style={{ flex: 1, marginTop: Spacing.lg }}
-        contentContainerStyle={{ paddingBottom: scrollBottom, gap: Spacing.md }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: footerMetrics.scrollPadding, gap: Spacing.md }}
         showsVerticalScrollIndicator={false}
       >
+        {onboardingHeader}
         {loadingShops ? (
           <View style={{ paddingVertical: Spacing.xl, alignItems: "center" }}>
             <ActivityIndicator color={C.primary} />
@@ -423,7 +458,21 @@ export default function OnboardingScreen() {
             );
           })
         )}
-
+      </ScrollView>
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: footerMetrics.bottom,
+          minHeight: footerMetrics.minHeight + 48,
+          justifyContent: "center",
+          backgroundColor: C.background,
+          paddingTop: Spacing.sm,
+          paddingBottom: Spacing.sm,
+          gap: Spacing.xs,
+        }}
+      >
         <PrimaryButton
           title={busy ? t("consumerProfile.saving") : t("onboarding.shopsDone")}
           onPress={() => void handleFinish()}
@@ -436,7 +485,8 @@ export default function OnboardingScreen() {
         >
           <Text style={{ color: C.mutedText, fontWeight: "600" }}>{t("onboarding.shopsSkip")}</Text>
         </Pressable>
-      </ScrollView>
+      </View>
+      </>
       )}
     </View>
     </KeyboardScreen>

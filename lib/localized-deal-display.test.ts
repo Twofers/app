@@ -73,6 +73,49 @@ describe("localized deal display", () => {
     expect(korean.title).not.toBe(spanish.title);
   });
 
+  it("localizes legacy percent-off titles when structured facts are missing", () => {
+    const legacyPercentDeal: LocalizedDealDisplayFields = {
+      ...structuredDeal,
+      title: "Get 40% off one mango lassi",
+      title_en: null,
+      title_es: null,
+      title_ko: null,
+      description: "",
+      description_en: null,
+      description_es: null,
+      description_ko: null,
+      deal_type: null,
+      discount_percent: null,
+      item_description: null,
+      required_purchase_quantity: null,
+      required_item_description: null,
+      free_item_quantity: null,
+      free_item_description: null,
+    };
+
+    const spanish = buildLocalizedDealDisplay({
+      deal: legacyPercentDeal,
+      locale: "es-US",
+      localeResolutionSource: "app_language",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "es",
+    });
+    const korean = buildLocalizedDealDisplay({
+      deal: legacyPercentDeal,
+      locale: "ko-KR",
+      localeResolutionSource: "app_language",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "ko",
+    });
+
+    expect(spanish.source).toBe("localized_offer_renderer");
+    expect(spanish.title).toBe("Recibe 40% de descuento en 1 mango lassi");
+    expect(korean.source).toBe("localized_offer_renderer");
+    expect(korean.title).toContain("40");
+    expect(korean.title).toContain("mango lassi");
+    expect(korean.title).not.toBe("Get 40% off one mango lassi");
+  });
+
   it("prefers approved customer localization rows while retaining exact mechanics", () => {
     const display = buildLocalizedDealDisplay({
       deal: {

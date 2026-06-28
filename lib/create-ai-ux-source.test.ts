@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const createAiSource = readFileSync(join(process.cwd(), "app", "create", "ai.tsx"), "utf8");
 const createHubSource = readFileSync(join(process.cwd(), "app", "(tabs)", "create.tsx"), "utf8");
+const dealEligibilityFormSource = readFileSync(join(process.cwd(), "components", "deal-eligibility-form.tsx"), "utf8");
+const welcomeWalkthroughSource = readFileSync(join(process.cwd(), "components", "welcome-walkthrough.tsx"), "utf8");
 
 function readLocale(locale: "en" | "es" | "ko") {
   return JSON.parse(
@@ -38,6 +40,32 @@ describe("AI create UX source guards", () => {
     expect(createHubSource).toContain("setTemplatesLoadError(t(\"createHub.templatesLoadError\"))");
     expect(createHubSource).toContain("onRetry={() => void loadTemplates()}");
     expect(createHubSource).not.toContain("setBanner({ message: t(\"createHub.templatesLoadError\")");
+  });
+
+  it("waits for the photo step to collapse before scrolling to AI Step 2", () => {
+    expect(createAiSource).toContain("pendingDescriptionScrollAfterCollapseRef");
+    expect(createAiSource).toContain("if (!photoStepCollapsed || !pendingDescriptionScrollAfterCollapseRef.current) return");
+    expect(createAiSource).toContain("scrollToDescriptionStep();");
+    expect(createAiSource).toContain('scrollToFormY(descriptionSectionYRef.current, "none", Spacing.xs)');
+  });
+
+  it("keeps compact offer-rule choices short enough for S10 AI Step 2", () => {
+    expect(createAiSource).toContain("<DealEligibilityForm");
+    expect(createAiSource).toContain("compact");
+    expect(dealEligibilityFormSource).toContain('flexDirection: compact ? "row" : "column"');
+    expect(dealEligibilityFormSource).toContain("minWidth: compact ? 0 : undefined");
+    expect(dealEligibilityFormSource).toContain("flexBasis: compact ? 0 : undefined");
+    expect(dealEligibilityFormSource).toContain("flexShrink: compact ? 1 : undefined");
+    expect(dealEligibilityFormSource).toContain("!compact ? (");
+    expect(dealEligibilityFormSource).toContain("activeTypeHelper");
+    expect(dealEligibilityFormSource).toContain("numberOfLines={1}");
+    expect(dealEligibilityFormSource).not.toContain("numberOfLines={compact ? 3 : undefined}");
+  });
+
+  it("keeps the business walkthrough scoped inside the dashboard screen", () => {
+    expect(welcomeWalkthroughSource).not.toContain("Modal");
+    expect(welcomeWalkthroughSource).toContain('position: "absolute"');
+    expect(welcomeWalkthroughSource).toContain("zIndex: 20");
   });
 
   it("keeps create AI locale keys present in active locales", () => {

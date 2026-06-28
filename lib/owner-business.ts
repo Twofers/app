@@ -31,10 +31,11 @@ export type OwnerBusinessRow = {
   preferred_locale: string | null;
   phone: string | null;
   hours_text: string | null;
+  logo_url: string | null;
 };
 
 const OWNER_BUSINESS_COLUMNS =
-  "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text";
+  "id,name,contact_name,business_email,address,category,tone,location,latitude,longitude,short_description,preferred_locale,phone,hours_text,logo_url";
 
 export type OwnerBusinessResult = {
   row: OwnerBusinessRow | null;

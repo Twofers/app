@@ -8,7 +8,7 @@
     "wallet": "Billetera",
     "create": "Crear",
     "redeem": "Canjear",
-    "dashboard": "Mis ofertas",
+    "dashboard": "Ofertas",
     "billing": "Facturación",
     "account": "Cuenta"
   },
@@ -18,7 +18,7 @@
   "dealsBrowse": {
     "categoriesHeading": "Categorías",
     "categoryHint": "Consejo: los negocios que indican una categoría en Cuenta → perfil del negocio aparecen como filtros aquí.",
-    "searchPlaceholder": "Buscar ofertas, negocios, lugares…",
+    "searchPlaceholder": "Buscar ofertas o negocios",
     "nearMe": "Cerca de mí",
     "nearMeActive": "Cerca · activo",
     "nearMeCaption": "Usa el GPS para ordenar por distancia si el negocio tiene coordenadas; si no, coincide ciudad/región en Ubicación.",
@@ -324,6 +324,14 @@
     "unsavedBody": "Tienes detalles de la oferta sin guardar. ¿Salir sin guardar?",
     "discard": "Descartar",
     "keepEditing": "Seguir editando"
+  },
+  "dealEligibility": {
+    "itemPlaceholder": "Ejemplo: croissant",
+    "requiredItemPlaceholder": "Ejemplo: latte",
+    "freeItemPlaceholder": "Ejemplo: cualquier pastel",
+    "optionalMoneyPlaceholder": "Opcional",
+    "invalidTitle": "Aún no elegible",
+    "invalidBody": "Completa las reglas obligatorias de la oferta antes de elegir el horario y generar un anuncio."
   },
   "createQuick": {
     "titleScreen": "Oferta rápida",

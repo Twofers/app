@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { getAiStudioDevStartupGuardError } from "@/lib/runtime-env";
+import {
+  getNativeSessionItem,
+  removeNativeSessionItem,
+  setNativeSessionItem,
+} from "@/lib/supabase-session-storage";
 
 /** Inlined at bundle time — set the same keys in EAS for `preview` and `production` environment scopes. */
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
@@ -358,7 +363,7 @@ const StorageAdapter = {
       }
     }
     const SecureStore = await getNativeSecureStore();
-    return SecureStore.getItemAsync(key);
+    return getNativeSessionItem(SecureStore, key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
     if (isWeb) {
@@ -375,7 +380,7 @@ const StorageAdapter = {
       return;
     }
     const SecureStore = await getNativeSecureStore();
-    await SecureStore.setItemAsync(key, value);
+    await setNativeSessionItem(SecureStore, key, value);
   },
   removeItem: async (key: string): Promise<void> => {
     if (isWeb) {
@@ -392,7 +397,7 @@ const StorageAdapter = {
       return;
     }
     const SecureStore = await getNativeSecureStore();
-    await SecureStore.deleteItemAsync(key);
+    await removeNativeSessionItem(SecureStore, key);
   },
 };
 

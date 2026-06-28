@@ -27,9 +27,9 @@ describe("isTrialExpired", () => {
 });
 
 describe("canCreateDeal", () => {
-  it("keeps paid billing surfaces enabled for this build", () => {
+  it("keeps paid billing surfaces visible while bypassing enforcement for testing", () => {
     expect(PAID_BILLING_ENABLED).toBe(true);
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
   });
 
   it("blocks unauthenticated callers regardless of any other state", () => {
@@ -72,26 +72,26 @@ describe("canCreateDeal", () => {
     ).toBe(true);
   });
 
-  it("blocks past_due when the pilot billing bypass is disabled", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
+  it("allows past_due while the testing billing bypass is enabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "past_due",
         trialEndsAt: null,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("blocks expired trials when the pilot billing bypass is disabled", () => {
-    expect(PILOT_DISABLE_BILLING_GATE).toBe(false);
+  it("allows expired trials while the testing billing bypass is enabled", () => {
+    expect(PILOT_DISABLE_BILLING_GATE).toBe(true);
     expect(
       canCreateDeal({
         isLoggedIn: true,
         subscriptionStatus: "trial",
         trialEndsAt: "2000-01-01T00:00:00.000Z",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -148,7 +148,7 @@ describe("canCreateDealWithLocationBilling", () => {
     ).toBe(true);
   });
 
-  it("blocks pending, eligible, credit-limited, and suspended states when in-app billing is active", () => {
+  it("allows pending, eligible, credit-limited, and suspended states while the testing billing bypass is enabled", () => {
     for (const status of [
       "trial_eligible",
       "trial_checkout_pending",
@@ -165,11 +165,11 @@ describe("canCreateDealWithLocationBilling", () => {
           trialEndsAt: "2999-01-01T00:00:00.000Z",
           currentPeriodEndsAt: "2999-01-01T00:00:00.000Z",
         }),
-      ).toBe(false);
+      ).toBe(true);
     }
   });
 
-  it("blocks expired canceling periods", () => {
+  it("allows expired canceling periods while the testing billing bypass is enabled", () => {
     expect(
       canCreateDealWithLocationBilling({
         isLoggedIn: true,
@@ -178,7 +178,7 @@ describe("canCreateDealWithLocationBilling", () => {
         trialEndsAt: null,
         currentPeriodEndsAt: "2000-01-01T00:00:00.000Z",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("allows the development billing bypass", () => {

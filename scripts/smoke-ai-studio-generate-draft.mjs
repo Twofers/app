@@ -42,11 +42,13 @@ function assertLockedOffer(draft, expected) {
 }
 
 function assertPrivateAiAsset(draft) {
-  const path = draft?.image_asset_path;
+  const path = draft?.source_asset_path ?? draft?.image_asset_path;
+  const signedUrl = draft?.source_asset_signed_url ?? draft?.image_signed_url;
   assert(typeof path === "string" && path.length > 0, "Gemini image smoke must return a private storage path");
   assert(!/^https?:\/\//i.test(path), "Image asset path must not be a public URL");
   assert(path.includes("/"), "Image asset path should be owner/business scoped");
-  assert(typeof draft?.image_signed_url === "string" && draft.image_signed_url.startsWith("http"), "Image preview must use a signed URL");
+  assert(typeof signedUrl === "string" && signedUrl.startsWith("http"), "Image preview must use a signed URL");
+  assert(draft?.rendered_asset_path === null, "Rendered ad export must stay disabled in this phase");
   assert(draft?.image_provider === "gemini", `Expected Gemini image provider, got ${draft?.image_provider}`);
   assert(draft?.image_generation_success === true, "Gemini image generation did not report success");
 }
@@ -87,7 +89,7 @@ const sampleBody = {
   start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   end_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
   quantity_limit: 5,
-  cta: "Claim on Twofer",
+  cta: "",
   style_preset: "Fresh",
   dry_run: true,
   copy_only: true,
@@ -209,8 +211,9 @@ if (!email || !password || !businessId) {
       creativeId: imageDraft.creative_id,
       imageProvider: imageDraft.image_provider,
       imageModel: imageDraft.image_model,
-      privateAssetPath: imageDraft.image_asset_path,
+      privateAssetPath: imageDraft.source_asset_path ?? imageDraft.image_asset_path,
       signedPreviewReturned: true,
+      renderedAssetPath: imageDraft.rendered_asset_path,
       publishingDisabled: true,
     };
   } else {

@@ -195,11 +195,80 @@ function dealType(value: unknown): "BUY_ONE_GET_ONE_FREE" | "BUY_ONE_GET_SOMETHI
   return null;
 }
 
+function stripTerminalPunctuation(value: string): string {
+  return cleanText(value).replace(/[.!?]+$/g, "").trim();
+}
+
+function inferDealEligibilityFromLegacyTitle(deal: LocalizedDealDisplayFields): {
+  dealType: "PERCENT_OFF_SINGLE_ITEM" | "BUY_ONE_GET_ONE_FREE" | "BUY_ONE_GET_SOMETHING_FREE";
+  appliesTo: string;
+  discountPercent?: number;
+  itemDescription?: string;
+  requiredPurchaseQuantity?: number;
+  requiredItemDescription?: string;
+  freeItemQuantity?: number;
+  freeItemDescription?: string;
+  freeItemDiscountPercent?: number;
+} | null {
+  const rawTitle = cleanText(deal.title) || cleanText(deal.title_en);
+  if (!rawTitle) return null;
+
+  const percentOff = rawTitle.match(/^get\s+(\d{1,3})\s*%\s+off\s+(?:(?:one|1|a|an)\s+)?(.+)$/i);
+  if (percentOff?.[1] && percentOff[2]) {
+    const discountPercent = numeric(percentOff[1]);
+    const itemDescription = stripTerminalPunctuation(percentOff[2]);
+    if (discountPercent != null && discountPercent > 0 && discountPercent <= 100 && itemDescription) {
+      return {
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent,
+        itemDescription,
+      };
+    }
+  }
+
+  const sameItem = rawTitle.match(/^buy\s+(?:(?:one|1|a|an)\s+)?(.+?)(?:,|\s+and)?\s+get\s+(?:one|1)\s+free$/i);
+  if (sameItem?.[1]) {
+    const item = stripTerminalPunctuation(sameItem[1]);
+    if (item) {
+      return {
+        dealType: "BUY_ONE_GET_ONE_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: item,
+        freeItemQuantity: 1,
+        freeItemDescription: item,
+        freeItemDiscountPercent: 100,
+      };
+    }
+  }
+
+  const rewardItem = rawTitle.match(
+    /^buy\s+(?:(?:one|1|a|an)\s+)?(.+?)(?:,|\s+and)?\s+get\s+(?:(?:one|1|a|an)\s+)?(?:free\s+(.+)|(.+?)\s+free)$/i,
+  );
+  const requiredItem = stripTerminalPunctuation(rewardItem?.[1] ?? "");
+  const freeItem = stripTerminalPunctuation(rewardItem?.[2] ?? rewardItem?.[3] ?? "");
+  if (requiredItem && freeItem) {
+    return {
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: requiredItem,
+      freeItemQuantity: 1,
+      freeItemDescription: freeItem,
+      freeItemDiscountPercent: 100,
+    };
+  }
+
+  return null;
+}
+
 export function buildOfferDefinitionFromDealDisplay(
   deal: LocalizedDealDisplayFields | null | undefined,
 ): OfferDefinitionV1 | null {
   if (!deal) return null;
-  const type = dealType(deal.deal_type ?? deal.offer_type ?? deal.type);
+  const inferred = inferDealEligibilityFromLegacyTitle(deal);
+  const type = dealType(deal.deal_type ?? deal.offer_type ?? deal.type) ?? inferred?.dealType ?? null;
   if (!type) return null;
   const businessName = cleanText(deal.businesses?.name) || "Local business";
   const locationName = cleanText(deal.businesses?.location) || cleanText(deal.businesses?.address) || businessName;
@@ -226,14 +295,14 @@ export function buildOfferDefinitionFromDealDisplay(
   };
 
   if (type === "PERCENT_OFF_SINGLE_ITEM") {
-    const item = cleanText(deal.item_description);
-    const discount = numeric(deal.discount_percent);
+    const item = cleanText(deal.item_description) || cleanText(inferred?.itemDescription);
+    const discount = numeric(deal.discount_percent) ?? numeric(inferred?.discountPercent);
     if (!item || discount == null) return null;
     return buildOfferDefinitionV1({
       ...base,
       dealEligibility: {
         dealType: type,
-        appliesTo: cleanText(deal.applies_to) || "SINGLE_ITEM",
+        appliesTo: cleanText(deal.applies_to) || cleanText(inferred?.appliesTo) || "SINGLE_ITEM",
         discountPercent: discount,
         itemDescription: item,
         itemRetailValueCents: numeric(deal.item_retail_value_cents),
@@ -241,21 +310,21 @@ export function buildOfferDefinitionFromDealDisplay(
     });
   }
 
-  const requiredItem = cleanText(deal.required_item_description);
-  const rewardItem = cleanText(deal.free_item_description) || requiredItem;
+  const requiredItem = cleanText(deal.required_item_description) || cleanText(inferred?.requiredItemDescription);
+  const rewardItem = cleanText(deal.free_item_description) || cleanText(inferred?.freeItemDescription) || requiredItem;
   if (!requiredItem || !rewardItem) return null;
   return buildOfferDefinitionV1({
     ...base,
     dealEligibility: {
       dealType: type,
-      appliesTo: cleanText(deal.applies_to) || "SINGLE_ITEM",
-      requiredPurchaseQuantity: positiveInt(deal.required_purchase_quantity) ?? 1,
+      appliesTo: cleanText(deal.applies_to) || cleanText(inferred?.appliesTo) || "SINGLE_ITEM",
+      requiredPurchaseQuantity: positiveInt(deal.required_purchase_quantity) ?? positiveInt(inferred?.requiredPurchaseQuantity) ?? 1,
       requiredItemDescription: requiredItem,
       requiredItemRetailValueCents: numeric(deal.required_item_retail_value_cents),
-      freeItemQuantity: positiveInt(deal.free_item_quantity) ?? 1,
+      freeItemQuantity: positiveInt(deal.free_item_quantity) ?? positiveInt(inferred?.freeItemQuantity) ?? 1,
       freeItemDescription: rewardItem,
       freeItemRetailValueCents: numeric(deal.free_item_retail_value_cents),
-      freeItemDiscountPercent: numeric(deal.free_item_discount_percent) ?? 100,
+      freeItemDiscountPercent: numeric(deal.free_item_discount_percent) ?? numeric(inferred?.freeItemDiscountPercent) ?? 100,
     },
   });
 }
