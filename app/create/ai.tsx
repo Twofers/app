@@ -388,6 +388,28 @@ function buildDisplayScheduleSummary(
   });
 }
 
+function buildPosterScheduleLabel(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  validityMode: "one-time" | "recurring",
+  startTime: Date,
+  endTime: Date,
+  daysOfWeek: number[],
+  windowStart: Date,
+  windowEnd: Date,
+): string {
+  if (validityMode === "one-time") {
+    return `${format(startTime, "MMM d, h:mm a")}-${format(endTime, "h:mm a")}`;
+  }
+  const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
+  const days =
+    sortedDays.length === 7
+      ? t("createAi.posterScheduleDaily", { defaultValue: "Daily" })
+      : sortedDays
+          .map((v) => t(DAY_I18N_KEYS[v] ?? "createAi.dayMon", { defaultValue: SCHEDULE_DAY_BY_VALUE[v] ?? String(v) }))
+          .join(", ");
+  return `${days} ${formatMinutes(minutesFromDate(windowStart))}-${formatMinutes(minutesFromDate(windowEnd))}`;
+}
+
 function buildRedemptionLimitSummary(cutoffMinutes: number): string {
   if (!Number.isFinite(cutoffMinutes) || cutoffMinutes <= 0) {
     return "Claims are available until the deal ends.";
@@ -1003,6 +1025,19 @@ export default function AiDealScreen() {
         i18n.language,
       ),
     [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone, i18n.language],
+  );
+  const posterScheduleLabel = useMemo(
+    () =>
+      buildPosterScheduleLabel(
+        t,
+        validityMode,
+        startTime,
+        endTime,
+        daysOfWeek,
+        windowStart,
+        windowEnd,
+      ),
+    [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd],
   );
 
   const eligibilityInput = useMemo(
@@ -3002,7 +3037,7 @@ export default function AiDealScreen() {
               sourceAssetPath: finalStoragePath,
               renderedAssetPath: null,
               headline: title,
-              subline: promoLine,
+              subline: posterScheduleLabel,
               businessCategory: businessContextForAi.category,
               compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
             })
@@ -3312,7 +3347,7 @@ export default function AiDealScreen() {
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath,
           renderedAssetPath: null,
           headline: generatedAd?.headline ?? title,
-          subline: generatedAd?.short_description ?? promoLine,
+          subline: posterScheduleLabel,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.item_research?.description ?? null,
         }) as PosterSpecV1)
@@ -3333,8 +3368,7 @@ export default function AiDealScreen() {
   const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
   const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
   const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
-  const ownerLanguagePreviewAvailable =
-    localizedOwnerUiEnabled && Boolean(offerDefinition && generatedAd?.localization_bundle);
+  const ownerLanguagePreviewAvailable = false;
   const localePresentationOverridesEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
   const localeScreenshotQaEnabled =
