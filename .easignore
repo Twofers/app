@@ -33,6 +33,7 @@ node_modules/
 .expo/
 .expo-shared/
 .metro-cache/
+.metro-health-check*/
 dist/
 web-build/
 build/
@@ -65,7 +66,10 @@ website-screenshots-*/
 store-assets/
 ai-staging-*/
 ai-test-runs-*/
+ai_deal_studio_png/
+ai_studio_*/
 spanish_play_screenshots_*/
+ux_*/
 TWOFER_AI_*.md
 meeting minutes/
 docs/store-release-prep.md
