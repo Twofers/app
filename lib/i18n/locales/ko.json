@@ -1925,6 +1925,7 @@
     "reviseButton": "광고 수정",
     "reviseButtonBusy": "수정 중...",
     "reviseErrPickSomething": "수정하기 전에 바꿀 내용을 적어 주세요.",
+    "reviseErrUnchanged": "AI가 같은 광고를 반환했습니다. 더 구체적으로 변경 내용을 적어 주세요.",
     "reviseLimitBody": "이 광고의 수정 횟수를 모두 사용했습니다. 아래의 딜 문구를 직접 수정하거나 새 광고를 생성하세요.",
     "scheduleOneTimeFmt": "1회: {{start}} -> {{end}}",
     "scheduleRecurringFmt": "반복: {{days}} · {{start}}-{{end}} ({{timezone}})",

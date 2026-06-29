@@ -118,6 +118,8 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("revisionSuggestionOptions");
     expect(createAiSource).toContain("copyOnlyRevisionTargetForFeedback");
     expect(createAiSource).toContain("from \"../../lib/ai-revision-target\"");
+    expect(createAiSource).toContain("summarizeAiRevisionChange");
+    expect(createAiSource).toContain("error_code: \"REVISION_UNCHANGED\"");
     expect(createAiSource).toContain("const effectiveRevisionTarget = copyOnlyRevisionTargetForFeedback(revisionTarget, revisionFeedbackText)");
     expect(createAiSource).toContain("selected_revision_target: revisionTarget");
     expect(createAiSource).toContain("revision_target: effectiveRevisionTarget");

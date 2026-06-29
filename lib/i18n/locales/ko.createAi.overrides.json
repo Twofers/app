@@ -139,6 +139,7 @@
   "reviseButton": "광고 수정",
   "reviseButtonBusy": "수정 중...",
   "reviseErrPickSomething": "수정하기 전에 바꿀 내용을 적어 주세요.",
+  "reviseErrUnchanged": "AI가 같은 광고를 반환했습니다. 더 구체적으로 변경 내용을 적어 주세요.",
   "scheduleOneTimeFmt": "일회성: {{start}} → {{end}}",
   "scheduleRecurringFmt": "반복: {{days}} · {{start}}–{{end}} ({{timezone}})",
   "noImage": "이미지 없음",

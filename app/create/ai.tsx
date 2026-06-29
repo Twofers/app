@@ -69,6 +69,7 @@ import {
   copyOnlyRevisionTargetForFeedback,
   type AiRevisionTarget,
 } from "../../lib/ai-revision-target";
+import { summarizeAiRevisionChange } from "../../lib/ai-revision-change";
 import { assessDealQuality } from "../../lib/deal-quality";
 import {
   resolveDealFlowLanguage,
@@ -2547,6 +2548,25 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
       const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      const revisionChange = summarizeAiRevisionChange({
+        previousAd: generatedAd,
+        revisedAd: normalizedAd,
+        target: effectiveRevisionTarget,
+      });
+      if (!revisionChange.hasExpectedChange) {
+        setBanner({ message: t("createAi.reviseErrUnchanged"), tone: "info" });
+        if (nextQuota) setQuota(nextQuota);
+        trackEvent(AiAdsEvents.REVISION_FAILED, {
+          screen: "create_ai",
+          revision_target: effectiveRevisionTarget,
+          selected_revision_target: revisionTarget,
+          revision_count: revisionNumber,
+          error_code: "REVISION_UNCHANGED",
+          copy_changed: revisionChange.copyChanged,
+          image_changed: revisionChange.imageChanged,
+        });
+        return;
+      }
       trackEvent(AiAdsEvents.REVISION_SUCCEEDED, {
         screen: "create_ai",
         revision_target: effectiveRevisionTarget,

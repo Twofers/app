@@ -1925,6 +1925,7 @@
     "reviseButton": "Ajustar anuncio",
     "reviseButtonBusy": "Ajustando...",
     "reviseErrPickSomething": "Describe qué cambiar antes de ajustar.",
+    "reviseErrUnchanged": "La IA devolvió el mismo anuncio. Prueba con un cambio más específico.",
     "reviseLimitBody": "No quedan ajustes para este anuncio. Edita el texto de la oferta abajo o genera un anuncio nuevo.",
     "scheduleOneTimeFmt": "Una vez: {{start}} -> {{end}}",
     "scheduleRecurringFmt": "Recurrente: {{days}} · {{start}}-{{end}} ({{timezone}})",

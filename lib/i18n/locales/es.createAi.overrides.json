@@ -139,6 +139,7 @@
   "reviseButton": "Revisar anuncio",
   "reviseButtonBusy": "Revisando...",
   "reviseErrPickSomething": "Describe qué cambiar antes de ajustar.",
+  "reviseErrUnchanged": "La IA devolvió el mismo anuncio. Prueba con un cambio más específico.",
   "scheduleOneTimeFmt": "Única vez: {{start}} → {{end}}",
   "scheduleRecurringFmt": "Recurrente: {{days}} · {{start}}–{{end}} ({{timezone}})",
   "noImage": "Sin imagen",

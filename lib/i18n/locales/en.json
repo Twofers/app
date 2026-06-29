@@ -1227,6 +1227,7 @@
     "reviseButton": "Revise ad",
     "reviseButtonBusy": "Revising...",
     "reviseErrPickSomething": "Describe what to change before revising.",
+    "reviseErrUnchanged": "AI returned the same ad. Try a more specific change.",
     "reviseLimitBody": "No revisions left for this ad. Edit the deal text below, or generate a fresh ad.",
     "scheduleOneTimeFmt": "One-time: {{start}} → {{end}}",
     "scheduleRecurringFmt": "Recurring: {{days}} · {{start}}–{{end}} ({{timezone}})",
