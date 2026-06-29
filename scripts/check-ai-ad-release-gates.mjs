@@ -56,6 +56,15 @@ const checks = [
     ],
   },
   {
+    name: "copy evaluator uses production copy helpers",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /buildCanonicalHeadlineFromFacts/,
+      /buildPosterCopyFromOfferDefinition/,
+      /copyOnlyRevisionTargetForFeedback/,
+    ],
+  },
+  {
     name: "poster copy fixture covers coffee-cookie weak headline",
     file: "fixtures/ai-poster-copy-offers.json",
     patterns: [
