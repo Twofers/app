@@ -662,6 +662,7 @@ async function generateCopy(params: {
           merchantProfile,
           offerContract,
           costContext,
+          creativeFormat,
         });
         copyQuality.push(prepared.telemetry);
         judgeAttempts.push(...prepared.judgeAttempts);
@@ -1280,6 +1281,63 @@ function filterRevisionCandidatesByFeedback(params: {
     .map((entry) => entry.candidate);
 }
 
+function normalizePosterHeadlineText(value: string | null | undefined): string {
+  return typeof value === "string"
+    ? value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9%+\s-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+    : "";
+}
+
+function stripPosterHeadlineFillers(value: string): string {
+  return normalizePosterHeadlineText(value)
+    .replace(/^(?:try\s+our|try\s+the|our|the|a|an|any|one|1)\s+/, "")
+    .replace(/\s+(?:deal|offer|special|promo)$/g, "")
+    .trim();
+}
+
+function posterOfferItemNames(contract: DealOfferContract): string[] {
+  return [
+    contract.requiredPurchase?.itemName,
+    contract.freeReward?.itemName,
+    contract.singleItemDiscount?.itemName,
+  ]
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map(stripPosterHeadlineFillers)
+    .filter(Boolean);
+}
+
+function isPosterItemOnlyHeadline(headline: string, itemName: string): boolean {
+  const cleanHeadline = stripPosterHeadlineFillers(headline);
+  const cleanItem = stripPosterHeadlineFillers(itemName);
+  if (!cleanHeadline || !cleanItem) return false;
+  if (cleanHeadline === cleanItem) return true;
+
+  const headlineWords = cleanHeadline.split(/\s+/).filter((word) => word.length > 1);
+  const itemWords = new Set(cleanItem.split(/\s+/).filter((word) => word.length > 1));
+  return headlineWords.length >= 2 && headlineWords.every((word) => itemWords.has(word));
+}
+
+function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {
+  const headline = normalizePosterHeadlineText(candidate.headline);
+  const reasons: string[] = [];
+  if (!headline) return reasons;
+  if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
+  if (posterOfferItemNames(contract).some((itemName) => isPosterItemOnlyHeadline(headline, itemName))) {
+    reasons.push("POSTER_HEADLINE_ITEM_ONLY");
+  }
+
+  const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
+  if (canonicalOffer && headline === canonicalOffer) {
+    reasons.push("POSTER_HEADLINE_REPEATS_LOCKED_OFFER");
+  }
+  return [...new Set(reasons)];
+}
+
 async function prepareCopyCandidates(params: {
   variants: AiDealCopyVariant[];
   creativeBrief: unknown;
@@ -1291,6 +1349,7 @@ async function prepareCopyCandidates(params: {
   merchantProfile: MerchantCreativeProfile;
   offerContract: DealOfferContract;
   costContext: AiCostContext;
+  creativeFormat: "standard_card" | "poster_v1";
 }): Promise<{
   variants: AiDealCopyVariant[];
   telemetry: CopyQualityTelemetry;
@@ -1336,10 +1395,16 @@ async function prepareCopyCandidates(params: {
       },
       requiredSpecificTerms: params.offerContract.aiRules.mustUseExactItemNames,
     });
-    if (gate.ok) return true;
+    const posterReasons = params.creativeFormat === "poster_v1"
+      ? posterHeadlineGateReasons(variant, params.offerContract)
+      : [];
+    if (gate.ok && posterReasons.length === 0) return true;
     telemetry.style_gate_rejected.push({
       candidate_id: candidateId(variant, index),
-      reasons: [...new Set(gate.failures.flatMap((failure) => failure.reasons))],
+      reasons: [...new Set([
+        ...gate.failures.flatMap((failure) => failure.reasons),
+        ...posterReasons,
+      ])],
     });
     return false;
   });
