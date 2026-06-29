@@ -2577,6 +2577,12 @@ export default function AiDealScreen() {
         selected_variant_index: normalizedAd.selected_variant_index ?? null,
         alternative_count: normalizedAd.copy_alternatives?.length ?? 0,
       });
+      const revisionSuccessKey = revisionChange.copyChanged && revisionChange.imageChanged
+        ? "createAi.reviseSuccessBoth"
+        : revisionChange.imageChanged
+          ? "createAi.reviseSuccessImage"
+          : "createAi.reviseSuccessCopy";
+      setBanner({ message: t(revisionSuccessKey), tone: "success" });
       setGeneratedAd(normalizedAd);
       applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "revision");

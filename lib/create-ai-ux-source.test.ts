@@ -132,6 +132,9 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("AiAdsEvents.REVISION_SUCCEEDED");
     expect(createAiSource).toContain("AiAdsEvents.REVISION_FAILED");
     expect(createAiSource).toContain("feedback_length: revisionFeedbackText.length");
+    expect(createAiSource).toContain("const revisionSuccessKey = revisionChange.copyChanged && revisionChange.imageChanged");
+    expect(createAiSource).toContain("createAi.reviseSuccessCopy");
+    expect(createAiSource).toContain('setBanner({ message: t(revisionSuccessKey), tone: "success" });');
     expect(createAiSource).not.toContain("revision_feedback: revisionFeedbackText,\n        feedback");
   });
 
