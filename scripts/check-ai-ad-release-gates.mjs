@@ -73,6 +73,16 @@ const checks = [
     ],
   },
   {
+    name: "style gate rejects echoed AI hooks",
+    file: "lib/ad-copy-style-gate.ts",
+    patterns: [
+      /BARE_SPECIFIC_TERM/,
+      /WEAK_TRY_OUR_PHRASE/,
+      /isBareSpecificTerm/,
+      /isWeakTryOurPhrase/,
+    ],
+  },
+  {
     name: "versioned publish is idempotent",
     file: "supabase/migrations/20260724120000_offer_version_publish_rpc.sql",
     pattern: /UNIQUE \(business_id, idempotency_key\)[\s\S]+publish_offer_versioned_deal/,
@@ -114,6 +124,11 @@ const commandChecks = [
     name: "AI revision loop tests pass",
     command: process.execPath,
     args: [vitestBin, "run", "lib/ai-revision-target.test.ts", "lib/ai-revision-change.test.ts", "--reporter=dot"],
+  },
+  {
+    name: "AI copy style gate tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ad-copy-style-gate.test.ts", "--reporter=dot"],
   },
 ];
 
