@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,6 +86,14 @@ const checks = [
   },
 ];
 
+const commandChecks = [
+  {
+    name: "copy evaluator passes",
+    command: process.execPath,
+    args: ["scripts/evaluate-ai-promotional-copy.mjs"],
+  },
+];
+
 let failed = 0;
 for (const check of checks) {
   const filePath = path.join(root, check.file);
@@ -94,6 +103,21 @@ for (const check of checks) {
   console.log(`${ok ? "PASS" : "FAIL"} ${check.name}`);
   if (!ok) {
     console.log(`  ${check.file}`);
+    failed += 1;
+  }
+}
+
+for (const check of commandChecks) {
+  const result = spawnSync(check.command, check.args, {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const ok = result.status === 0 && !result.error;
+  console.log(`${ok ? "PASS" : "FAIL"} ${check.name}`);
+  if (!ok) {
+    if (result.stdout) console.log(result.stdout.trim());
+    if (result.stderr) console.error(result.stderr.trim());
+    if (result.error) console.error(result.error.message);
     failed += 1;
   }
 }
