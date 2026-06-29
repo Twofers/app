@@ -140,6 +140,11 @@ function isMechanicalOfferHeadline(value: string): boolean {
   return false;
 }
 
+function isWeakPosterHeroHeadline(value: string): boolean {
+  const text = normalizePosterComparison(value);
+  return /^try\s+(?:our|the)\b/.test(text);
+}
+
 function isBareOfferItemHeadline(value: string, definition: OfferDefinitionV1): boolean {
   const headline = normalizePosterComparison(value);
   if (!headline) return false;
@@ -215,6 +220,7 @@ function posterHeadline(definition: OfferDefinitionV1, requestedHeadline?: strin
   const requested = cleanText(requestedHeadline);
   if (!requested) return fallback;
   if (!scanPosterTextPolicy(requested).passed) return fallback;
+  if (isWeakPosterHeroHeadline(requested)) return fallback;
   if (isMechanicalOfferHeadline(requested)) return fallback;
   if (isBareOfferItemHeadline(requested, definition)) return fallback;
   return requested;

@@ -179,4 +179,26 @@ describe("poster policy", () => {
     expect(copy.offer_line_1).toBe("BUY 1 ANY LARGE COFFEE DRINK");
     expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
   });
+
+  it("does not let Try our become the poster hero", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "Cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Try our cookie and coffee deal",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
+    expect(copy.offer_line_1).toBe("BUY 1 ANY LARGE COFFEE DRINK");
+    expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
+  });
 });
