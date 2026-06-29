@@ -2409,6 +2409,7 @@ export default function AiDealScreen() {
         setUsePhotoAsFinal(false);
       }
       setGeneratedAd(normalizedAd);
+      applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
       setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
@@ -2550,6 +2551,7 @@ export default function AiDealScreen() {
         alternative_count: normalizedAd.copy_alternatives?.length ?? 0,
       });
       setGeneratedAd(normalizedAd);
+      applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "revision");
       if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
@@ -2558,7 +2560,6 @@ export default function AiDealScreen() {
       setComposedEditIntent(null);
       setApprovedComposedPresentationHash(null);
       setAdAccepted(false);
-      aiDraftBaselineRef.current = null;
     } catch (err: unknown) {
       if (requestId !== generationRequestIdRef.current) return;
       const raw = err instanceof Error ? err.message : String(err);
@@ -2610,12 +2611,12 @@ export default function AiDealScreen() {
       })),
     });
     setGeneratedAd(next);
+    applyAdToDraft(next);
     setAdAccepted(false);
     setApprovedComposedPresentationHash(null);
     setApprovedLocalizationApprovalHash(null);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
-    aiDraftBaselineRef.current = null;
     trackEvent(AiAdsEvents.COPY_OPTION_SELECTED, {
       screen: "create_ai",
       option_index: index,

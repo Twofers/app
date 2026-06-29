@@ -127,4 +127,10 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("feedback_length: revisionFeedbackText.length");
     expect(createAiSource).not.toContain("revision_feedback: revisionFeedbackText,\n        feedback");
   });
+
+  it("syncs AI-generated copy into deal details immediately", () => {
+    expect(createAiSource).toMatch(/setGeneratedAd\(normalizedAd\);\s+applyAdToDraft\(normalizedAd\);/);
+    expect(createAiSource).toMatch(/setGeneratedAd\(next\);\s+applyAdToDraft\(next\);/);
+    expect(createAiSource).not.toContain("setGeneratedAd(next);\n    setAdAccepted(false);");
+  });
 });
