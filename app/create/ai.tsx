@@ -2405,9 +2405,31 @@ export default function AiDealScreen() {
     const raw = err instanceof Error ? err.message : String(err);
     const lower = raw.toLowerCase();
     const code = getErrorCode(err);
+    const reasonCodes = Array.isArray((err as { reasonCodes?: unknown } | null)?.reasonCodes)
+      ? ((err as { reasonCodes?: unknown[] }).reasonCodes ?? []).filter(
+          (reason): reason is string => typeof reason === "string" && reason.trim().length > 0,
+        )
+      : [];
 
     if (code === "INVALID_OFFER_DEFINITION") return t("createAi.errPublishInvalidOfferDefinition");
-    if (code === "INVALID_AD_SPEC") return t("createAi.errPublishInvalidAdSpec");
+    if (code === "INVALID_AD_SPEC") {
+      if (reasonCodes.some((reason) => reason.startsWith("POSTER_") || reason === "INVALID_POSTER_SPEC")) {
+        return t("createAi.errPublishInvalidPosterSpec", {
+          defaultValue: "The poster ad preview did not match the locked deal terms. Switch to Standard card or generate the poster again.",
+        });
+      }
+      if (reasonCodes.includes("MISSING_COMPOSED_CARD_APPROVAL")) {
+        return t("createAi.errPublishMissingPreviewApproval", {
+          defaultValue: "Approve the exact ad preview again before publishing.",
+        });
+      }
+      if (reasonCodes.includes("MISSING_LOCALIZATION_APPROVAL")) {
+        return t("createAi.errPublishMissingLocalizationApproval", {
+          defaultValue: "Approve the exact multilingual preview again before publishing.",
+        });
+      }
+      return t("createAi.errPublishInvalidAdSpec");
+    }
     if (code === "PUBLISH_OFFER_VERSION_UNAVAILABLE") return t("createAi.errPublishVersionUnavailable");
     if (code === "LOCATION_BILLING_SUSPENDED") return t("createAi.errPublishBillingSuspended");
     if (code === "BUSINESS_LOCATION_VERIFICATION_REQUIRED") return t("createAi.errPublishVerificationRequired");
@@ -3558,16 +3580,17 @@ export default function AiDealScreen() {
           templateId: selectedPosterTemplateId,
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath,
           renderedAssetPath: null,
-          headline: generatedAd?.headline ?? title,
+          headline: title.trim() || generatedAd?.headline,
           subline: posterScheduleLabel,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.item_research?.description ?? null,
         }) as PosterSpecV1)
       : null;
   const effectivePosterSpec = fallbackPosterSpec ?? generatedPosterSpec;
+  const shouldShowPosterFormat = previewFormat === "poster_v1" || creativeFormat === "poster_v1";
   const showPosterPreview =
-    Boolean(generatedAd && effectivePosterSpec) &&
-    (previewFormat === "poster_v1" || creativeFormat === "poster_v1");
+    Boolean(generatedAd && effectivePosterSpec) && shouldShowPosterFormat;
+  const showDraftPosterPreview = Boolean(effectivePosterSpec) && shouldShowPosterFormat;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
   const composedAdPreviewEnabled =
@@ -5272,27 +5295,50 @@ export default function AiDealScreen() {
                     borderColor: theme.border,
                   }}
                 >
-                  {(() => {
-                    const previewUri = generatedAd?.poster_storage_path
-                      ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                      : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
-                    return previewUri ? (
-                      <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
-                    ) : (
-                      <DraftFallbackVisual
-                        businessName={businessName}
-                        headline={title || promoLine || hintText}
-                        offerLine={promoLine || title || description}
-                        label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                      />
-                    );
-                  })()}
-                  <View style={{ padding: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
-                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
-                    <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                  </View>
+                  {showDraftPosterPreview && effectivePosterSpec ? (
+                    <>
+                      <View style={{ padding: 8, backgroundColor: colorScheme === "dark" ? theme.surfaceElevated : Gray[900] }}>
+                        <AdPosterCanvas
+                          spec={effectivePosterSpec}
+                          imageUri={adImageUri ?? selectedPhotoUri}
+                          templateId={selectedPosterTemplateId}
+                          style={{
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: "rgba(255,255,255,0.16)",
+                          }}
+                        />
+                      </View>
+                      <View style={{ padding: 12 }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{ownerLanguagePreview.offerLine}</Text>
+                        <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{ownerLanguagePreviewDisplayTermsLine}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      {(() => {
+                        const previewUri = generatedAd?.poster_storage_path
+                          ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+                          : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
+                        return previewUri ? (
+                          <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
+                        ) : (
+                          <DraftFallbackVisual
+                            businessName={businessName}
+                            headline={title || promoLine || hintText}
+                            offerLine={promoLine || title || description}
+                            label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                          />
+                        );
+                      })()}
+                      <View style={{ padding: 12 }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
+                        {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
+                        {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
+                        <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>

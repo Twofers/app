@@ -216,6 +216,20 @@ describe("AI create UX source guards", () => {
     expect(posterPreviewSource).toContain("borderColor: \"rgba(255,255,255,0.16)\"");
   });
 
+  it("keeps the accepted deal preview on the selected poster format", () => {
+    const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
+    const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
+    const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
+
+    expect(createAiSource).toContain("const shouldShowPosterFormat = previewFormat === \"poster_v1\" || creativeFormat === \"poster_v1\";");
+    expect(createAiSource).toContain("const showDraftPosterPreview = Boolean(effectivePosterSpec) && shouldShowPosterFormat;");
+    expect(createAiSource).toContain("headline: title.trim() || generatedAd?.headline");
+    expect(acceptedPreviewSource).toContain("showDraftPosterPreview && effectivePosterSpec");
+    expect(acceptedPreviewSource).toContain("<AdPosterCanvas");
+    expect(acceptedPreviewSource).toContain("spec={effectivePosterSpec}");
+    expect(acceptedPreviewSource).toContain("imageUri={adImageUri ?? selectedPhotoUri}");
+  });
+
   it("tracks selected copy alternatives by candidate identity", () => {
     const selectStart = createAiSource.indexOf("function selectCopyOption");
     const selectEnd = createAiSource.indexOf("setGeneratedAd(next);", selectStart);

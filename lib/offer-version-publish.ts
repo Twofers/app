@@ -70,7 +70,7 @@ export type PublishMechanicsValidationCopy = Pick<
   terms_summary: string;
 };
 
-type ErrorWithCode = Error & { code?: string };
+type ErrorWithCode = Error & { code?: string; reasonCodes?: string[] };
 
 function cleanDisplayText(value: string | null | undefined): string {
   return value?.trim().replace(/\s+/g, " ") ?? "";
@@ -110,9 +110,10 @@ export function buildPublishMechanicsValidationCopy(
   };
 }
 
-function throwInvokeError(message: string, code?: string): never {
+function throwInvokeError(message: string, code?: string, reasonCodes?: string[]): never {
   const err = new Error(message) as ErrorWithCode;
   if (code) err.code = code;
+  if (reasonCodes?.length) err.reasonCodes = reasonCodes;
   throw err;
 }
 
@@ -122,16 +123,20 @@ function parsePublishFunctionError(error: unknown): string {
   return "We couldn't publish this offer right now. Please try again.";
 }
 
-async function readInvokeErrorBody(error: unknown): Promise<{ message?: string; code?: string }> {
+async function readInvokeErrorBody(error: unknown): Promise<{ message?: string; code?: string; reasonCodes?: string[] }> {
   const ctx = (error as { context?: unknown } | null)?.context;
   if (typeof Response !== "undefined" && ctx instanceof Response) {
     try {
       const data = await ctx.clone().json();
       if (data && typeof data === "object") {
-        const o = data as { error?: unknown; error_code?: unknown };
+        const o = data as { error?: unknown; error_code?: unknown; reason_codes?: unknown };
+        const reasonCodes = Array.isArray(o.reason_codes)
+          ? o.reason_codes.filter((code): code is string => typeof code === "string" && code.trim().length > 0)
+          : undefined;
         return {
           message: typeof o.error === "string" ? o.error : undefined,
           code: typeof o.error_code === "string" ? o.error_code : undefined,
+          reasonCodes,
         };
       }
     } catch {
@@ -206,7 +211,7 @@ export async function publishOfferVersionedDeal(
   });
   if (error) {
     const fromBody = await readInvokeErrorBody(error);
-    throwInvokeError(fromBody.message ?? parsePublishFunctionError(error), fromBody.code);
+    throwInvokeError(fromBody.message ?? parsePublishFunctionError(error), fromBody.code, fromBody.reasonCodes);
   }
   if (!data || typeof data !== "object" || (data as { ok?: unknown }).ok !== true) {
     throw new Error("Unexpected response from publish-offer-version.");
