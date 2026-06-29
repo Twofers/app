@@ -14,6 +14,7 @@ describe("ai-generate-ad-variants revision source guard", () => {
     expect(source).toContain("requiresHeadlineChange");
     expect(source).toContain("headline_unchanged_for_headline_feedback");
     expect(source).toContain("uses_banned_feedback_term");
+    expect(source).toContain("if (intent.requiresHeadlineChange && !revisionHeadlineChanged(params.selected, params.previousAd)) return true;");
 
     const changedIndex = source.indexOf("const changed = prepared.variants.filter((variant) => hasVisibleRevisionCopyChange(variant, previousAd));");
     const filterIndex = source.indexOf("const feedbackMatched = filterRevisionCandidatesByFeedback({");

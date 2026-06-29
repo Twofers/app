@@ -1247,8 +1247,11 @@ function shouldUseDeterministicRevisionCopyFallback(params: {
   previousAd: SingleAd;
   revisionFeedback?: string;
 }): boolean {
+  if (revisionFeedbackMentionsImageOnly(params.revisionFeedback)) return false;
+  const intent = parseRevisionFeedbackIntent(params.revisionFeedback);
+  if (intent.requiresHeadlineChange && !revisionHeadlineChanged(params.selected, params.previousAd)) return true;
   if (hasVisibleRevisionCopyChange(params.selected, params.previousAd)) return false;
-  return !revisionFeedbackMentionsImageOnly(params.revisionFeedback);
+  return true;
 }
 
 function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
