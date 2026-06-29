@@ -8,7 +8,7 @@ Deployment actions:
 
 - Deployed `ai-generate-ad-variants` to Supabase project `kvodhiqhdqnptqovovia`.
 - Hosted readback after the final deploy showed `ai-generate-ad-variants` active at
-  version `116`.
+  version `117`.
 - Unauthenticated hosted smoke returned HTTP 401 with the expected login-required
   response.
 
@@ -20,10 +20,13 @@ Live secret names changed: none.
 ### Files changed
 
 - `fixtures/ai-revision-feedback-cases.json`
+- `fixtures/ai-promotional-copy-offers.json`
 - `lib/ai-revision-target.ts`
 - `lib/ai-revision-target.test.ts`
 - `lib/ai-revision-fallback-copy.ts`
 - `lib/ai-revision-fallback-copy.test.ts`
+- `lib/deal-offer-contract.ts`
+- `lib/deal-offer-contract.test.ts`
 - `scripts/evaluate-ai-promotional-copy.mjs`
 - `scripts/check-ai-ad-release-gates.mjs`
 - `supabase/functions/ai-generate-ad-variants/index.ts`
@@ -48,12 +51,16 @@ Live secret names changed: none.
   owner-note headlines with compact campaign ideas.
 - The copy evaluator now imports production offer, poster-copy, and revision-routing
   helpers instead of carrying duplicated mirror logic.
+- Canonical fallback copy now treats `any` as a determiner, so offers like
+  `any large coffee drink` render as `Buy any large coffee drink...` instead of
+  `Buy an any large coffee drink...`.
 
 ### Validation
 
 - `npx vitest run lib/ai-revision-target.test.ts lib/ai-revision-fallback-copy.test.ts --reporter=dot`: passed, 2 files and 7 tests.
+- `npx vitest run lib/deal-offer-contract.test.ts --reporter=dot`: passed, 1 file and 21 tests.
 - `npx vitest run supabase/functions/ai-generate-ad-variants/prompt.test.ts --reporter=dot`: passed, 1 file and 12 tests.
-- `npm run copy:evaluate`: passed, 30 copy fixtures valid, 3 poster fixtures valid, 7 revision fixtures valid.
+- `npm run copy:evaluate`: passed, 31 copy fixtures valid, 3 poster fixtures valid, 7 revision fixtures valid.
 - `npm run gate:ai-ad`: passed.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed.
@@ -63,6 +70,11 @@ Live secret names changed: none.
   The smoke used deterministic image fallback, returned HTTP 200, changed the
   headline to `Cookie with your coffee`, kept locked poster offer lines unchanged,
   and returned `REVISION_DETERMINISTIC_FALLBACK`.
+- Hosted deterministic-fallback generation smoke against `kvodhiqhdqnptqovovia`:
+  passed. The smoke returned HTTP 200 with headline and locked offer line
+  `Buy any large coffee drink and get a free cookie of your choice`, poster offer
+  lines `BUY 1 ANY LARGE COFFEE DRINK` and `GET 1 COOKIE OF YOUR CHOICE`, and
+  `photo_source: copy_only`.
 
 ### Unresolved risks
 
