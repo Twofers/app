@@ -116,6 +116,10 @@ describe("AI create UX source guards", () => {
   it("keeps merchant revision comments as a first-class AI input", () => {
     expect(createAiSource).toContain("type RevisionSuggestion");
     expect(createAiSource).toContain("revisionSuggestionOptions");
+    expect(createAiSource).toContain("copyOnlyRevisionTargetForFeedback");
+    expect(createAiSource).toContain("const effectiveRevisionTarget = copyOnlyRevisionTargetForFeedback(revisionTarget, revisionFeedbackText)");
+    expect(createAiSource).toContain("selected_revision_target: revisionTarget");
+    expect(createAiSource).toContain("revision_target: effectiveRevisionTarget");
     expect(createAiSource).toContain("reviseSuggestionTopHeadlineFeedback");
     expect(createAiSource).toContain("applyRevisionSuggestion");
     expect(createAiSource).toContain("setRevisionTarget(suggestion.target)");

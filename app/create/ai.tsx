@@ -575,6 +575,18 @@ type ComposedEditIntent = "words" | null;
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
 
+function copyOnlyRevisionTargetForFeedback(
+  selectedTarget: RevisionTarget,
+  feedback: string,
+): RevisionTarget {
+  if (selectedTarget !== "both") return selectedTarget;
+  const normalized = feedback.trim().toLowerCase();
+  if (!normalized) return selectedTarget;
+  const mentionsImage = /\b(?:image|photo|picture|pic|background|crop|lighting|angle|composition|visual|brighter|darker)\b/.test(normalized);
+  const mentionsCopy = /\b(?:copy|wording|words?|text|headline|title|top|line|shorter|clearer|tone|warmer|premium|direct)\b/.test(normalized);
+  return mentionsCopy && !mentionsImage ? "copy" : selectedTarget;
+}
+
 type ImageVersionEntry = {
   id: string;
   kind: ImageVersionKind;
@@ -2463,12 +2475,13 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
       return;
     }
+    const effectiveRevisionTarget = copyOnlyRevisionTargetForFeedback(revisionTarget, revisionFeedbackText);
     /**
      * Send the treatment that produced the *previous* ad image, not the current UI selection.
      * This way the server's image-only revision applies enhancement consistent with what the
      * user is looking at, even if they fiddled with the selector after generating.
      */
-    const revisesImage = revisionTarget === "image" || revisionTarget === "both";
+    const revisesImage = effectiveRevisionTarget === "image" || effectiveRevisionTarget === "both";
     const previousSourceMode =
       generatedAd.image_selection?.sourceMode ??
       imageSourceModeForPhotoChoice(photoPath, usePhotoAsFinal);
@@ -2511,7 +2524,8 @@ export default function AiDealScreen() {
     const revisionNumber = revisionsUsed + 1;
     trackEvent(AiAdsEvents.REVISION_TAPPED, {
       screen: "create_ai",
-      revision_target: revisionTarget,
+      revision_target: effectiveRevisionTarget,
+      selected_revision_target: revisionTarget,
       revision_count: revisionNumber,
       feedback_length: revisionFeedbackText.length,
       image_source_mode: sourceModeForRevision,
@@ -2525,7 +2539,7 @@ export default function AiDealScreen() {
         request_group_id: aiRequestGroupIdRef.current,
         deal_eligibility: eligibilityInput,
         previous_ad: generatedAd,
-        revision_target: revisionTarget,
+        revision_target: effectiveRevisionTarget,
         revision_count: revisionNumber,
         revision_feedback: revisionFeedbackText,
         image_source_mode: sourceModeForRevision,
@@ -2543,7 +2557,8 @@ export default function AiDealScreen() {
       const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
       trackEvent(AiAdsEvents.REVISION_SUCCEEDED, {
         screen: "create_ai",
-        revision_target: revisionTarget,
+        revision_target: effectiveRevisionTarget,
+        selected_revision_target: revisionTarget,
         revision_count: revisionNumber,
         photo_source: normalizedAd.photo_source ?? "unknown",
         copy_source: normalizedAd.copy_source ?? "unknown",
@@ -2568,7 +2583,8 @@ export default function AiDealScreen() {
       setBanner({ message: friendly, tone: "error" });
       trackEvent(AiAdsEvents.REVISION_FAILED, {
         screen: "create_ai",
-        revision_target: revisionTarget,
+        revision_target: effectiveRevisionTarget,
+        selected_revision_target: revisionTarget,
         revision_count: revisionNumber,
         error_code: code ?? "unknown",
         message_snippet: raw.slice(0, 80),
