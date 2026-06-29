@@ -1743,7 +1743,7 @@
     "refreshLimitReached": "Sin regeneraciones — inicia un nuevo lote o edita abajo.",
     "refreshesLeft": "Regeneraciones restantes: {{remaining}} de {{total}}",
     "generatingHint": "Investigando el articulo, redactando el texto y creando la imagen. Puede tardar hasta 90 segundos.",
-    "generatingHintNoPhoto": "Escribiendo tu anuncio y revisando los detalles de la oferta. Sin foto suele terminar más rápido.",
+    "generatingHintNoPhoto": "Escribiendo tu anuncio y creando una imagen que combine. Puede tardar hasta 90 segundos.",
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "Creando la imagen...",
     "generatingPhaseFinishing": "Almost there — finishing up...",

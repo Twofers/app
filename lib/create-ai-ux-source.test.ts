@@ -113,8 +113,8 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("setUsePhotoAsFinal(false);");
   });
 
-  it("keeps skipped-photo generation on the fast native-rendered fallback path", () => {
-    expect(createAiSource).toContain('if (!photoPath) return "deterministic_fallback";');
+  it("keeps skipped-photo generation on the real image path before fallback", () => {
+    expect(createAiSource).toContain('if (!photoPath) return "ai_generated";');
     expect(createAiSource).toContain("image_source_mode: sentSourceMode");
     expect(createAiSource).toContain("createAi.fallbackVisualLabel");
     expect(createAiSource).toContain('defaultValue: "Local deal"');

@@ -1156,7 +1156,7 @@
     "refreshLimitReached": "You've revised this ad enough times — start fresh with a new offer.",
     "refreshesLeft": "{{remaining}} of {{total}} revisions left",
     "generatingHint": "Writing your ad and preparing the image. This can take up to 90 seconds.",
-    "generatingHintNoPhoto": "Writing your ad and checking the deal details. This usually finishes faster without a photo.",
+    "generatingHintNoPhoto": "Writing your ad and creating a matching image. This can take up to 90 seconds.",
     "generatingPhaseCopy": "Writing your ad...",
     "generatingPhaseImages": "Preparing the image...",
     "generatingPhaseFinishing": "Almost there — finishing up...",

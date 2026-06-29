@@ -644,9 +644,9 @@ function imageSourceModeForPhotoChoice(
   photoPath: string | null,
   usePhotoAsFinal: boolean,
 ): MerchantImageSourceMode {
-  // No-photo drafts must stay fast and reliable: the app renders the ad text
-  // natively, so do not hold the whole generation flow on image synthesis.
-  if (!photoPath) return "deterministic_fallback";
+  // No-photo drafts still need a real visual on the first pass. The server can
+  // fall back to native rendering if every provider/storage image path fails.
+  if (!photoPath) return "ai_generated";
   return usePhotoAsFinal ? "merchant_original" : "merchant_ai_edit";
 }
 

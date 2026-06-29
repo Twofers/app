@@ -1743,7 +1743,7 @@
     "refreshLimitReached": "재생성 완료 — 새 배치를 시작하거나 아래에서 편집하세요.",
     "refreshesLeft": "재생성 남은 횟수: {{remaining}} / {{total}}",
     "generatingHint": "항목을 조사하고 문구와 이미지를 만듭니다. 최대 90초 정도 걸릴 수 있습니다.",
-    "generatingHintNoPhoto": "광고 문구와 딜 세부 정보를 확인하는 중입니다. 사진이 없으면 보통 더 빨리 끝납니다.",
+    "generatingHintNoPhoto": "광고 문구를 작성하고 어울리는 이미지를 만드는 중입니다. 최대 90초 정도 걸릴 수 있습니다.",
     "generatingPhaseCopy": "Crafting your ad copy...",
     "generatingPhaseImages": "이미지 생성 중...",
     "generatingPhaseFinishing": "Almost there — finishing up...",
