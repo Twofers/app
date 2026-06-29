@@ -87,6 +87,17 @@ export function composeListingDescription(promo: string, cta: string, offerDetai
   return [promo.trim(), cta.trim(), offerDetails.trim()].filter(Boolean).join("\n\n");
 }
 
+export function stripAppRenderedTimingMetadata(value: string): string {
+  return value
+    .replace(/\s*Offer window:\s*[\s\S]*?(?=(?:\s*Claims close\b|\s*Limit one claim\b|\s*Redeem only\b|\s*Limited to\b|\s*Schedule:|\s*Max claims:|$))/gi, " ")
+    .replace(/\s*Schedule:\s*[\s\S]*?(?=(?:\s*Max claims:|\s*Limit one claim\b|\s*Redeem only\b|\s*Limited to\b|\s*Claims close\b|$))/gi, " ")
+    .replace(/\s*Claims close\b[^.]*\./gi, " ")
+    .replace(/\s*Max claims:\s*\d+\.?/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+}
+
 function containsMechanicalOfferLanguage(value: string): boolean {
   return /\bBOGO\b|\bSame[-\s]?Item\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b/i.test(value);
 }
@@ -114,7 +125,7 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const shortDescription = (ad.short_description ?? ad.subheadline).trim();
   const termsSummary = ad.terms_summary?.trim() ?? "";
   const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
-  const lockedTermsLine = ad.locked_terms_line?.trim() ?? termsSummary;
+  const lockedTermsLine = stripAppRenderedTimingMetadata(ad.locked_terms_line?.trim() ?? termsSummary);
   const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
   const displayAd = normalizeGeneratedAdDisplayCopy(ad);
   return {

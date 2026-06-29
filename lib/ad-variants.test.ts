@@ -29,6 +29,30 @@ describe("adToDealDraft", () => {
     });
   });
 
+  it("keeps timing metadata out of accepted draft details because the app renders schedule separately", () => {
+    const ad: GeneratedAd = {
+      headline: "Large coffee drink + cookie",
+      subheadline: "A large coffee drink comes with your cookie pick.",
+      short_description: "Buy a large coffee drink and get a free cookie.",
+      cta: "Use this ad",
+      locked_offer_line: "Buy a large coffee drink and get a free cookie of your choice",
+      locked_terms_line:
+        "Redeem only at 123 Dev Smoke St. Limited to 50 available. Offer window: One-time: 6/28/2026, 5:47:46 PM \u2192 6/28/2026, 7:47:46 PM. Claims close 15 minutes before the deal ends. Limit one claim per customer. Schedule: One-time: 6/28/2026, 5:47:46 PM \u2192 6/28/2026, 7:47:46 PM. Max claims: 50",
+    };
+
+    const draft = adToDealDraft(ad, "");
+
+    expect(draft.offer_details).toContain("Buy a large coffee drink and get a free cookie of your choice");
+    expect(draft.offer_details).toContain("Redeem only at 123 Dev Smoke St.");
+    expect(draft.offer_details).toContain("Limited to 50 available.");
+    expect(draft.offer_details).toContain("Limit one claim per customer.");
+    expect(draft.offer_details).not.toContain("Offer window:");
+    expect(draft.offer_details).not.toContain("Claims close");
+    expect(draft.offer_details).not.toContain("Schedule:");
+    expect(draft.offer_details).not.toContain("Max claims:");
+    expect(draft.offer_details).not.toContain("5:47:46 PM");
+  });
+
   it("keeps legacy subheadline behavior for older generated ads", () => {
     const legacyAd: GeneratedAd = {
       headline: "BOGO Cold Brew",

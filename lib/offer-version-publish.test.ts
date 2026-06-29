@@ -351,6 +351,35 @@ describe("offer version publish client helpers", () => {
     expect(JSON.stringify(spec.localization?.localizations)).not.toContain("termsLine");
   });
 
+  it("omits localization metadata when the caller explicitly suppresses it", () => {
+    const definition = buildDefinition();
+    const localizationBundle = buildDeterministicAdLocalizationBundle({
+      sourceLocale: "en-US",
+      sourceCreative: {
+        headline: "Latte run, cookie reward",
+        supportingCopy: "Your afternoon coffee comes with a little extra.",
+        imageAltText: "Latte and cookie on a cafe counter",
+      },
+      offerDefinition: definition,
+      protectedTerms: ["Cedar Bean", "latte"],
+    });
+
+    const spec = buildOfferVersionPublishAdSpec(
+      "create_ai",
+      definition,
+      {
+        headline: "Latte run, cookie reward",
+        subheadline: "Your afternoon coffee comes with a little extra.",
+        short_description: "Your afternoon coffee comes with a little extra.",
+        cta: "Claim deal",
+        localization_bundle: localizationBundle,
+      },
+      { localization: null },
+    );
+
+    expect(spec.localization).toBeUndefined();
+  });
+
   it("builds screenshot QA publish snapshots from deterministic composite triggers", () => {
     const definition = buildDefinition();
     const presentation = buildDefaultAdPresentationSpec({

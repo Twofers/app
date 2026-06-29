@@ -94,6 +94,35 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.generatedAd?.poster_storage_path).toBe("biz-1/generated.jpg");
     expect(parsed?.daysOfWeek).toEqual([1, 5]);
     expect(parsed?.adAccepted).toBe(true);
+    expect(parsed?.creativeFormat).toBe("standard_card");
+    expect(parsed?.previewFormat).toBe("standard_card");
+  });
+
+  it("recovers older poster drafts as poster format when a poster spec is present", () => {
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy coffee and get a cookie",
+      eligibilityForm,
+      maxClaims: "50",
+      cutoffMins: "15",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      generatedAd: {
+        headline: "Buy coffee and get a cookie",
+        poster_storage_path: "biz-1/generated.jpg",
+        poster: {
+          enabled: true,
+        },
+      },
+      adAccepted: true,
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.creativeFormat).toBe("poster_v1");
+    expect(parsed?.previewFormat).toBe("poster_v1");
   });
 
   it("rejects malformed, old, and different-business drafts", () => {

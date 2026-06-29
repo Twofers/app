@@ -177,13 +177,17 @@ export function buildOfferVersionPublishAdSpec(
     generatedAd,
     selectedLanguage: generatedAd?.localization_bundle?.sourceLocale,
   });
-  const localization = options?.localization ?? buildOfferVersionLocalizationSnapshot({
-    bundle: generatedAd?.localization_bundle ?? null,
-    offerDefinition,
-    providerStatus: generatedAd?.localization_status ?? null,
-    localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
-    approval: options?.localizationApproval ?? null,
-  });
+  const hasLocalizationOverride =
+    options != null && Object.prototype.hasOwnProperty.call(options, "localization");
+  const localization = hasLocalizationOverride
+    ? options?.localization ?? null
+    : buildOfferVersionLocalizationSnapshot({
+        bundle: generatedAd?.localization_bundle ?? null,
+        offerDefinition,
+        providerStatus: generatedAd?.localization_status ?? null,
+        localePresentationOverrides: options?.composedCard?.presentation.localeOverrides ?? null,
+        approval: options?.localizationApproval ?? null,
+      });
   if (!options?.composedCard && !localization) return spec;
   return {
     ...spec,

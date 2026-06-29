@@ -78,12 +78,33 @@ describe("AI create UX source guards", () => {
     }
   });
 
-  it("keeps poster styles switchable after generation", () => {
-    expect(createAiSource).toContain("EXPLICIT_POSTER_STYLE_CHOICES");
-    expect(createAiSource).toContain("key={`review-${styleChoice}`}");
-    expect(createAiSource).toContain("selectedPosterTemplateId === styleChoice");
-    expect(createAiSource).toContain('setCreativeFormat("poster_v1")');
-    expect(createAiSource).toContain("invalidateAcceptedAdDraft();");
+  it("keeps poster generation fixed to the premium template", () => {
+    expect(createAiSource).toContain('const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";');
+    expect(createAiSource).toContain("style: FIXED_POSTER_TEMPLATE_ID");
+    expect(createAiSource).toContain("selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID");
+    expect(createAiSource).not.toContain("EXPLICIT_POSTER_STYLE_CHOICES");
+    expect(createAiSource).not.toContain("POSTER_STYLE_CHOICES");
+    expect(createAiSource).not.toContain("selectPosterStyle");
     expect(createAiSource).toContain("posterTryOurLabel");
+  });
+
+  it("keeps generated preview terms from repeating separately rendered schedule metadata", () => {
+    const posterPreviewStart = createAiSource.indexOf("{showPosterPreview");
+    const posterPreviewEnd = createAiSource.indexOf(") : composedAdPreviewEnabled", posterPreviewStart);
+    const posterPreviewSource = createAiSource.slice(posterPreviewStart, posterPreviewEnd);
+    const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
+    const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
+    const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
+
+    expect(createAiSource).toContain("stripAppRenderedTimingMetadata");
+    expect(createAiSource).toContain("ownerLanguagePreviewDisplayTermsLine");
+    expect(createAiSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
+    expect(createAiSource).toContain('const shouldBuildPosterSpec = (creativeFormat === "poster_v1" || previewFormat === "poster_v1");');
+    expect(createAiSource).toContain('const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";');
+    expect(posterPreviewSource).toContain("{ownerLanguagePreviewDisplayTermsLine}");
+    expect(posterPreviewSource).not.toContain("{ownerLanguagePreview.termsLine}");
+    expect(posterPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
+    expect(acceptedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
+    expect(acceptedPreviewSource).not.toContain('{t("createAi.maxClaimsLabel")} {maxClaims}');
   });
 });

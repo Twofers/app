@@ -4,6 +4,8 @@ import { getDealDisplayTitle } from "./deal-display-copy";
 
 export const AI_DEAL_DRAFT_VERSION = 1;
 
+export type AiDealDraftCreativeFormat = "standard_card" | "poster_v1";
+
 export type AiDealRecoveryDraft = {
   version: typeof AI_DEAL_DRAFT_VERSION;
   businessId: string;
@@ -14,6 +16,8 @@ export type AiDealRecoveryDraft = {
   customImageEditInstruction: string;
   usePhotoAsFinal: boolean;
   merchantOriginalWarningAcknowledged: boolean;
+  creativeFormat: AiDealDraftCreativeFormat;
+  previewFormat: AiDealDraftCreativeFormat;
   hintText: string;
   price: string;
   title: string;
@@ -36,10 +40,15 @@ export type AiDealRecoveryDraft = {
   manualDraftUnlocked: boolean;
 };
 
-type DraftCandidate = Omit<AiDealRecoveryDraft, "version" | "businessId" | "updatedAt" | "startTime" | "endTime"> & {
+type DraftCandidate = Omit<
+  AiDealRecoveryDraft,
+  "version" | "businessId" | "updatedAt" | "startTime" | "endTime" | "creativeFormat" | "previewFormat"
+> & {
   businessId: string | null | undefined;
   startTime: Date | string | number;
   endTime: Date | string | number;
+  creativeFormat?: AiDealDraftCreativeFormat | null;
+  previewFormat?: AiDealDraftCreativeFormat | null;
 };
 
 const KEY_PREFIX = "twofer.aiDealDraft.v1.";
@@ -81,6 +90,11 @@ function cleanPhotoTreatment(value: unknown): PhotoTreatment {
   return VALID_PHOTO_TREATMENTS.includes(value as PhotoTreatment) ? (value as PhotoTreatment) : "studiopolish";
 }
 
+function cleanCreativeFormat(value: unknown, generatedAd: GeneratedAd | null): AiDealDraftCreativeFormat {
+  if (value === "standard_card" || value === "poster_v1") return value;
+  return generatedAd?.poster?.enabled ? "poster_v1" : "standard_card";
+}
+
 function cleanIsoDate(value: unknown, fallback: Date): string {
   const date = typeof value === "string" || typeof value === "number" ? new Date(value) : value instanceof Date ? value : fallback;
   return Number.isFinite(date.getTime()) ? date.toISOString() : fallback.toISOString();
@@ -112,6 +126,9 @@ export function hasRecoverableAiDealDraft(draft: AiDealRecoveryDraft): boolean {
 export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryDraft | null {
   const businessId = cleanString(input.businessId).trim();
   if (!businessId) return null;
+  const generatedAd = cleanGeneratedAd(input.generatedAd);
+  const creativeFormat = cleanCreativeFormat(input.creativeFormat, generatedAd);
+  const previewFormat = cleanCreativeFormat(input.previewFormat, generatedAd);
   const now = new Date();
   const fallbackEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
   const draft: AiDealRecoveryDraft = {
@@ -127,6 +144,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
       .slice(0, 400),
     usePhotoAsFinal: input.usePhotoAsFinal === true,
     merchantOriginalWarningAcknowledged: input.merchantOriginalWarningAcknowledged === true,
+    creativeFormat,
+    previewFormat,
     hintText: cleanString(input.hintText),
     price: cleanString(input.price),
     title: cleanDisplayTitle(input.title),
@@ -144,7 +163,7 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     windowEndMinutes: cleanMinute(input.windowEndMinutes, 1020),
     timezone: cleanString(input.timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
     publishLocationIds: cleanStringArray(input.publishLocationIds),
-    generatedAd: cleanGeneratedAd(input.generatedAd),
+    generatedAd,
     adAccepted: input.adAccepted === true,
     manualDraftUnlocked: input.manualDraftUnlocked === true,
   };
@@ -165,6 +184,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       customImageEditInstruction: parsed.customImageEditInstruction ?? "",
       usePhotoAsFinal: parsed.usePhotoAsFinal === true,
       merchantOriginalWarningAcknowledged: parsed.merchantOriginalWarningAcknowledged === true,
+      creativeFormat: parsed.creativeFormat,
+      previewFormat: parsed.previewFormat,
       hintText: parsed.hintText ?? "",
       price: parsed.price ?? "",
       title: parsed.title ?? "",

@@ -59,6 +59,7 @@ import {
   buildFallbackTemplateAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
+  stripAppRenderedTimingMetadata,
   type GeneratedAd,
   type PhotoTreatment,
 } from "../../lib/ad-variants";
@@ -99,14 +100,10 @@ import {
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
-import {
-  buildPosterSpecFromOfferDefinition,
-  choosePosterTemplateForOffer,
-} from "@/lib/poster/posterCopy";
+import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
 import type {
   AdCreativeFormat,
   PosterSpecV1,
-  PosterStyleChoice,
   PosterTemplateId,
 } from "@/lib/poster/posterTypes";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
@@ -141,8 +138,6 @@ import {
   isAiV5LocaleScreenshotQaEnabled,
 } from "@/lib/runtime-env";
 import {
-  SUPPORTED_LOCALES,
-  SUPPORTED_LOCALE_METADATA,
   supportedLocaleOrDefault,
   supportedLocaleToAppLanguage,
   type SupportedLocale,
@@ -205,8 +200,7 @@ type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "
 type CreativeFormat = AdCreativeFormat;
 type PreviewFormat = CreativeFormat;
 
-const POSTER_STYLE_CHOICES: PosterStyleChoice[] = ["auto", "fresh", "bold", "premium"];
-const EXPLICIT_POSTER_STYLE_CHOICES: PosterTemplateId[] = ["fresh", "bold", "premium"];
+const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
 
@@ -478,25 +472,6 @@ function imageEditModeForTreatment(treatment: PhotoTreatment | null): MerchantIm
   return "none";
 }
 
-function imageEditModeForRevisionPreset(presetKey: string | null): MerchantImageEditMode {
-  if (presetKey === "createAi.revisePresetPhotoBg") return "clean_background";
-  if (
-    presetKey === "createAi.revisePresetPhotoCrop" ||
-    presetKey === "createAi.revisePresetGenAngle" ||
-    presetKey === "createAi.revisePresetGenMoodier"
-  ) {
-    return "studio_polish";
-  }
-  if (
-    presetKey === "createAi.revisePresetPhotoBrighter" ||
-    presetKey === "createAi.revisePresetGenBrighter" ||
-    presetKey === "createAi.revisePresetTryAnotherImage"
-  ) {
-    return "touchup";
-  }
-  return "studio_polish";
-}
-
 function imageSourceModeForPhotoChoice(
   photoPath: string | null,
   usePhotoAsFinal: boolean,
@@ -599,36 +574,6 @@ type ImageVersionEntry = {
   ad: GeneratedAd;
   createdAt: string;
 };
-
-const COPY_PRESET_KEYS = [
-  "createAi.revisePresetPunchier",
-  "createAi.revisePresetSimpler",
-  "createAi.revisePresetPremium",
-  "createAi.revisePresetFunnier",
-  "createAi.revisePresetShorter",
-  "createAi.revisePresetSavings",
-  "createAi.revisePresetItem",
-];
-
-const IMAGE_PRESET_KEYS_GENERATED = [
-  "createAi.revisePresetTryAnotherImage",
-  "createAi.revisePresetGenAngle",
-  "createAi.revisePresetGenBrighter",
-  "createAi.revisePresetGenMoodier",
-];
-
-const IMAGE_PRESET_KEYS_PHOTO = [
-  "createAi.revisePresetPhotoBrighter",
-  "createAi.revisePresetPhotoCrop",
-  "createAi.revisePresetPhotoBg",
-];
-
-const BOTH_PRESET_KEYS_COMPACT = [
-  "createAi.revisePresetPunchier",
-  "createAi.revisePresetSimpler",
-  "createAi.revisePresetSavings",
-  "createAi.revisePresetTryAnotherImage",
-];
 
 function imageVersionStoragePath(ad: GeneratedAd | null): string | null {
   return ad?.poster_storage_path ?? ad?.image_selection?.selectedStoragePath ?? null;
@@ -779,7 +724,6 @@ export default function AiDealScreen() {
   const dealOutputLang = localizedOwnerUiEnabled
     ? supportedLocaleToAppLanguage(effectiveDraftSourceLocale)
     : resolveDealFlowLanguage(businessPreferredLocale, i18n.language);
-  const [merchantPreviewLocale, setMerchantPreviewLocale] = useState<SupportedLocale | null>(null);
 
   // Voice input
   const recorder = useAudioRecorder(
@@ -823,7 +767,6 @@ export default function AiDealScreen() {
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
   const [merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged] = useState(false);
   const [creativeFormat, setCreativeFormat] = useState<CreativeFormat>("standard_card");
-  const [posterStyle, setPosterStyle] = useState<PosterStyleChoice>("auto");
   const [previewFormat, setPreviewFormat] = useState<PreviewFormat>("standard_card");
 
   const [hintText, setHintText] = useState("");
@@ -880,7 +823,6 @@ export default function AiDealScreen() {
   const [revisionsUsed, setRevisionsUsed] = useState(0);
   const [revisionTarget, setRevisionTarget] = useState<RevisionTarget>("both");
   const [revisionFeedback, setRevisionFeedback] = useState("");
-  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [composedStyleIndex, setComposedStyleIndex] = useState(0);
   const [composedEditIntent, setComposedEditIntent] = useState<ComposedEditIntent>(null);
   const [approvedComposedPresentationHash, setApprovedComposedPresentationHash] = useState<string | null>(null);
@@ -1528,6 +1470,8 @@ export default function AiDealScreen() {
     setUseCustomImageEdit(Boolean(draft.customImageEditInstruction.trim()));
     setUsePhotoAsFinal(draft.usePhotoAsFinal);
     setMerchantOriginalWarningAcknowledged(draft.merchantOriginalWarningAcknowledged);
+    setCreativeFormat(draft.creativeFormat);
+    setPreviewFormat(draft.previewFormat);
     setHintText(draft.hintText);
     setPrice(draft.price);
     setTitle(draft.title);
@@ -1607,6 +1551,8 @@ export default function AiDealScreen() {
       customImageEditInstruction,
       usePhotoAsFinal,
       merchantOriginalWarningAcknowledged,
+      creativeFormat,
+      previewFormat,
       hintText,
       price,
       title,
@@ -1654,6 +1600,8 @@ export default function AiDealScreen() {
     customImageEditInstruction,
     usePhotoAsFinal,
     merchantOriginalWarningAcknowledged,
+    creativeFormat,
+    previewFormat,
     hintText,
     price,
     title,
@@ -1747,7 +1695,6 @@ export default function AiDealScreen() {
         setPrefillSourceLocale(null);
         if (localizedOwnerUiEnabled) {
           setDraftSourceLocale(loadedDraftSourceLocale);
-          setMerchantPreviewLocale(loadedDraftSourceLocale);
         }
         setTitle(loadedTitle);
         setDescription(loadedDescription);
@@ -1903,7 +1850,6 @@ export default function AiDealScreen() {
     setPrefillSourceLocale(prefillDraftSourceLocale ? supportedLocaleToAppLanguage(prefillDraftSourceLocale) : null);
     if (localizedOwnerUiEnabled && prefillDraftSourceLocale) {
       setDraftSourceLocale(prefillDraftSourceLocale);
-      setMerchantPreviewLocale(prefillDraftSourceLocale);
     }
     const pl = g(params.prefillLocationId).trim();
     const pe = g(params.prefillExtraLocationIds).trim();
@@ -2032,7 +1978,6 @@ export default function AiDealScreen() {
     setAdAccepted(false);
     setRevisionsUsed(0);
     setRevisionFeedback("");
-    setActivePreset(null);
     setComposedStyleIndex(0);
     setComposedEditIntent(null);
     setApprovedComposedPresentationHash(null);
@@ -2051,7 +1996,7 @@ export default function AiDealScreen() {
       requested_format: creativeFormat,
       poster: {
         enabled: creativeFormat === "poster_v1",
-        style: posterStyle,
+        style: FIXED_POSTER_TEMPLATE_ID,
         aspect_ratio: "4:5" as const,
         text_policy: {
           no_app_brand_token: true,
@@ -2069,33 +2014,6 @@ export default function AiDealScreen() {
     setPreviewFormat(next);
     if (generatedAd) invalidateAcceptedAdDraft();
   }
-
-  function selectPosterStyle(next: PosterStyleChoice) {
-    if (next === posterStyle && creativeFormat === "poster_v1" && previewFormat === "poster_v1") return;
-    setPosterStyle(next);
-    setCreativeFormat("poster_v1");
-    setPreviewFormat("poster_v1");
-    if (generatedAd) invalidateAcceptedAdDraft();
-  }
-
-  function chooseDraftSourceLocale(locale: SupportedLocale) {
-    if (!localizedOwnerUiEnabled || locale === effectiveDraftSourceLocale) return;
-    setDraftSourceLocale(locale);
-    setMerchantPreviewLocale(locale);
-    if (generatedAd) resetGenerationState();
-    setBanner({
-      message: t("createAi.sourceLanguageChanged", {
-        language: SUPPORTED_LOCALE_METADATA[locale].productLabel,
-        defaultValue: `Source language set to ${SUPPORTED_LOCALE_METADATA[locale].productLabel}. Generate the ad again for this language.`,
-      }),
-      tone: "info",
-    });
-  }
-
-  useEffect(() => {
-    if (!localizedOwnerUiEnabled) return;
-    setMerchantPreviewLocale((current) => current ?? effectiveDraftSourceLocale);
-  }, [effectiveDraftSourceLocale, localizedOwnerUiEnabled]);
 
   useEffect(() => {
     if (!approvedComposedPresentationHash && approvedLocalizationApprovalHash) {
@@ -2524,7 +2442,7 @@ export default function AiDealScreen() {
       setBanner({ message: t("createAi.errRegenClientLimit"), tone: "info" });
       return;
     }
-    if (!activePreset && !revisionFeedback.trim()) {
+    if (!revisionFeedback.trim()) {
       setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
       return;
     }
@@ -2533,10 +2451,6 @@ export default function AiDealScreen() {
      * This way the server's image-only revision applies enhancement consistent with what the
      * user is looking at, even if they fiddled with the selector after generating.
      */
-    const selectedPresetLabel = activePreset ? t(activePreset) : "";
-    const revisionPresetForServer = activePreset
-      ? `${activePreset}: ${selectedPresetLabel}`
-      : "";
     const revisesImage = revisionTarget === "image" || revisionTarget === "both";
     const previousSourceMode =
       generatedAd.image_selection?.sourceMode ??
@@ -2551,7 +2465,7 @@ export default function AiDealScreen() {
       sourceModeForRevision === "merchant_ai_edit"
         ? generatedAd.image_selection?.editMode && generatedAd.image_selection.editMode !== "none"
           ? generatedAd.image_selection.editMode
-          : imageEditModeForRevisionPreset(activePreset)
+          : "studio_polish"
         : "none";
     const treatmentForRevision =
       sourceModeForRevision === "merchant_ai_edit"
@@ -2564,7 +2478,7 @@ export default function AiDealScreen() {
               : "studiopolish")
         : null;
     const customEditText = sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom"
-      ? cleanCustomImageEditInstruction(customImageEditInstruction || selectedPresetLabel || revisionFeedback)
+      ? cleanCustomImageEditInstruction(customImageEditInstruction || revisionFeedback)
       : "";
     if (sourceModeForRevision === "merchant_ai_edit" && editModeForRevision === "custom" && !customEditText) {
       setBanner({ message: t("createAi.errCustomImageEditRequired"), tone: "info" });
@@ -2588,7 +2502,6 @@ export default function AiDealScreen() {
         previous_ad: generatedAd,
         revision_target: revisionTarget,
         revision_count: revisionsUsed + 1,
-        ...(revisionPresetForServer ? { revision_preset: revisionPresetForServer } : {}),
         ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
         image_source_mode: sourceModeForRevision,
         image_edit_mode: editModeForRevision,
@@ -2608,7 +2521,6 @@ export default function AiDealScreen() {
       if (nextQuota) setQuota(nextQuota);
       setRevisionsUsed((u) => u + 1);
       setRevisionFeedback("");
-      setActivePreset(null);
       setComposedStyleIndex(0);
       setComposedEditIntent(null);
       setApprovedComposedPresentationHash(null);
@@ -3028,8 +2940,9 @@ export default function AiDealScreen() {
         usePhotoAsFinal,
         merchantOriginalWarningAcknowledged,
       });
+      const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
       const posterForPublishSpec =
-        creativeFormat === "poster_v1" && offerDefinition
+        shouldPublishPosterSpec && offerDefinition
           ? buildPosterSpecFromOfferDefinition({
               definition: offerDefinition,
               enabled: true,
@@ -3130,6 +3043,7 @@ export default function AiDealScreen() {
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
           ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpecWithPoster, {
             composedCard: composedCardPublishSpec,
+            localization: ownerLanguagePreviewAvailable ? undefined : null,
             localizationApproval:
               selectedLocalizationApproval?.approved &&
               approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash
@@ -3332,14 +3246,11 @@ export default function AiDealScreen() {
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
-  const selectedPosterTemplateId: PosterTemplateId = offerDefinition
-    ? choosePosterTemplateForOffer(posterStyle, offerDefinition, businessContextForAi.category)
-    : posterStyle === "fresh" || posterStyle === "bold" || posterStyle === "premium"
-      ? posterStyle
-      : "fresh";
+  const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
   const generatedPosterSpec = generatedAd?.poster?.enabled ? (generatedAd.poster as PosterSpecV1) : null;
+  const shouldBuildPosterSpec = (creativeFormat === "poster_v1" || previewFormat === "poster_v1");
   const fallbackPosterSpec =
-    creativeFormat === "poster_v1" && offerDefinition
+    shouldBuildPosterSpec && offerDefinition
       ? (buildPosterSpecFromOfferDefinition({
           definition: offerDefinition,
           enabled: true,
@@ -3373,9 +3284,7 @@ export default function AiDealScreen() {
     ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
   const localeScreenshotQaEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocaleScreenshotQaEnabled();
-  const activeMerchantPreviewLocale = ownerLanguagePreviewAvailable
-    ? merchantPreviewLocale ?? generatedAd?.localization_bundle?.sourceLocale ?? effectiveDraftSourceLocale
-    : effectiveDraftSourceLocale;
+  const activeMerchantPreviewLocale = effectiveDraftSourceLocale;
   const ownerLanguagePreview = buildOwnerLanguagePreview({
     generatedAd,
     offerDefinition,
@@ -3386,6 +3295,7 @@ export default function AiDealScreen() {
     fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
     fallbackCtaLabel: ctaText,
   });
+  const ownerLanguagePreviewDisplayTermsLine = stripAppRenderedTimingMetadata(ownerLanguagePreview.termsLine);
   const composedOfferFacts = ownerLanguagePreview.offerFacts;
   const composedCopy = ownerLanguagePreview.copy;
   const composedMerchant = buildMerchantIdentity({
@@ -3535,18 +3445,6 @@ export default function AiDealScreen() {
       : revisionsLeft === 1
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
-  const imagePresetKeys =
-    generatedAd?.photo_source === "generated" ||
-    generatedAd?.photo_source === "stock" ||
-    generatedAd?.photo_source === "copy_only"
-    ? IMAGE_PRESET_KEYS_GENERATED
-    : IMAGE_PRESET_KEYS_PHOTO;
-  const presetKeysForTarget =
-    revisionTarget === "image"
-      ? imagePresetKeys
-      : revisionTarget === "copy"
-        ? COPY_PRESET_KEYS
-        : BOTH_PRESET_KEYS_COMPACT;
   const canReviseAd = revisionsLeft > 0 && !revising && !generating;
   const targetLabel: Record<RevisionTarget, string> = {
     copy: t("createAi.reviseTargetCopy"),
@@ -3591,48 +3489,6 @@ export default function AiDealScreen() {
     setIosSchedulePicker(null);
   }
 
-  const ownerLanguagePreviewControls = ownerLanguagePreviewAvailable ? (
-    <View style={{ padding: 12, borderRadius: 8, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 8 }}>
-      <Text style={{ fontWeight: "800", color: theme.text }}>
-        {t("createAi.previewLanguageTitle", { defaultValue: "Preview language" })}
-      </Text>
-      <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedText }}>
-        {t("createAi.localizedApprovalDisclosure", {
-          sourceLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.sourceLocale].productLabel,
-          previewLanguage: SUPPORTED_LOCALE_METADATA[ownerLanguagePreview.locale].productLabel,
-          defaultValue:
-            "This preview changes only the customer-facing language. The deal mechanics, image, schedule, and inventory stay tied to the same approved offer.",
-        })}
-      </Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {SUPPORTED_LOCALES.map((locale) => {
-          const active = ownerLanguagePreview.locale === locale;
-          return (
-            <Pressable
-              key={locale}
-              onPress={() => setMerchantPreviewLocale(locale)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: active ? theme.primary : theme.border,
-                backgroundColor: active ? PrimaryTint.surface : theme.surface,
-              }}
-            >
-              <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
-                {SUPPORTED_LOCALE_METADATA[locale].productLabel}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  ) : null;
-
   return (
     <KeyboardScreen style={{ backgroundColor: theme.background }}>
       <ScrollView
@@ -3653,54 +3509,6 @@ export default function AiDealScreen() {
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
-        {localizedOwnerUiEnabled ? (
-          <View
-            style={{
-              marginTop: 14,
-              padding: 12,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-              gap: 8,
-            }}
-          >
-            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>
-              {t("createAi.sourceLanguageTitle", { defaultValue: "Ad source language" })}
-            </Text>
-            <Text style={{ color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
-              {t("createAi.sourceLanguageHelp", {
-                defaultValue: "Changing the app language will not change this draft. Pick the language Twofer should write the source ad in.",
-              })}
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {SUPPORTED_LOCALES.map((locale) => {
-                const active = effectiveDraftSourceLocale === locale;
-                return (
-                  <Pressable
-                    key={locale}
-                    onPress={() => chooseDraftSourceLocale(locale)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={SUPPORTED_LOCALE_METADATA[locale].productLabel}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? theme.primary : theme.border,
-                      backgroundColor: active ? PrimaryTint.surface : theme.surfaceMuted,
-                    }}
-                  >
-                    <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}>
-                      {SUPPORTED_LOCALE_METADATA[locale].productLabel}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
         {pendingRecoveredDraft ? (
           <View
             style={{
@@ -4418,55 +4226,6 @@ export default function AiDealScreen() {
                   );
                 })}
               </View>
-
-              {creativeFormat === "poster_v1" ? (
-                <>
-                  <Text style={{ fontWeight: "800", color: theme.text, marginTop: 2 }}>
-                    {t("createAi.posterStyleTitle", { defaultValue: "Poster style" })}
-                  </Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {POSTER_STYLE_CHOICES.map((styleChoice) => {
-                      const selected = posterStyle === styleChoice;
-                      const label =
-                        styleChoice === "auto"
-                          ? t("createAi.posterStyleAuto", { defaultValue: "Auto" })
-                          : styleChoice === "fresh"
-                            ? t("createAi.posterStyleFresh", { defaultValue: "Fresh" })
-                            : styleChoice === "bold"
-                              ? t("createAi.posterStyleBold", { defaultValue: "Bold" })
-                              : t("createAi.posterStylePremium", { defaultValue: "Premium" });
-                      return (
-                        <Pressable
-                          key={styleChoice}
-                          onPress={() => selectPosterStyle(styleChoice)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          style={{
-                            minHeight: 38,
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: selected ? theme.primary : theme.border,
-                            backgroundColor: selected ? theme.primary : theme.surfaceMuted,
-                          }}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: selected ? theme.primaryText : theme.text,
-                              fontWeight: "800",
-                              fontSize: 12,
-                            }}
-                          >
-                            {label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </>
-              ) : null}
             </View>
 
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
@@ -4610,49 +4369,6 @@ export default function AiDealScreen() {
 
                 {showPosterPreview && effectivePosterSpec ? (
                   <>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      {EXPLICIT_POSTER_STYLE_CHOICES.map((styleChoice) => {
-                        const selected = selectedPosterTemplateId === styleChoice;
-                        const label =
-                          styleChoice === "fresh"
-                            ? t("createAi.posterStyleFresh", { defaultValue: "Fresh" })
-                            : styleChoice === "bold"
-                              ? t("createAi.posterStyleBold", { defaultValue: "Bold" })
-                              : t("createAi.posterStylePremium", { defaultValue: "Premium" });
-                        return (
-                          <Pressable
-                            key={`review-${styleChoice}`}
-                            onPress={() => selectPosterStyle(styleChoice)}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            style={{
-                              flexGrow: 1,
-                              minHeight: 38,
-                              paddingVertical: 8,
-                              paddingHorizontal: 12,
-                              borderRadius: 999,
-                              borderWidth: 1,
-                              borderColor: selected ? theme.primary : theme.border,
-                              backgroundColor: selected ? theme.primary : theme.surfaceMuted,
-                              alignItems: "center",
-                            }}
-                          >
-                            <Text
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                              minimumFontScale={0.82}
-                              style={{
-                                color: selected ? theme.primaryText : theme.text,
-                                fontWeight: "800",
-                                fontSize: 12,
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
                     <View
                       style={{
                         borderRadius: 8,
@@ -4686,20 +4402,13 @@ export default function AiDealScreen() {
                         {ownerLanguagePreview.offerLine}
                       </Text>
                       <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
-                        {ownerLanguagePreview.termsLine}
-                      </Text>
-                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
-                        {t("createAi.scheduleLabel")} {displayScheduleSummary}
-                      </Text>
-                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
-                        {t("createAi.maxClaimsLabel")} {maxClaims}
+                        {ownerLanguagePreviewDisplayTermsLine}
                       </Text>
                     </View>
                     <SecondaryButton
                       title={t("createAi.useStandardCard", { defaultValue: "Use standard card" })}
                       onPress={() => selectCreativeFormat("standard_card")}
                     />
-                    {ownerLanguagePreviewControls}
                   </>
                 ) : composedAdPreviewEnabled ? (
                   <>
@@ -4722,7 +4431,7 @@ export default function AiDealScreen() {
                       body={ownerLanguagePreview.body}
                       imageAltText={ownerLanguagePreview.imageAltText}
                       offerLine={ownerLanguagePreview.offerLine}
-                      termsLine={ownerLanguagePreview.termsLine}
+                      termsLine={ownerLanguagePreviewDisplayTermsLine}
                       cta={ownerLanguagePreview.cta}
                       scheduleSummary={displayScheduleSummary}
                       maxClaimsLabel={t("createAi.maxClaimsLabel")}
@@ -4737,7 +4446,6 @@ export default function AiDealScreen() {
                       theme={theme}
                       darkMode={colorScheme === "dark"}
                     />
-                    {ownerLanguagePreviewControls}
                     {composedMinimalInputEnabled ? (
                       <View style={{ gap: 8 }}>
                         <SecondaryButton
@@ -4752,7 +4460,6 @@ export default function AiDealScreen() {
                           onPress={() => {
                             setComposedEditIntent("words");
                             setRevisionTarget("copy");
-                            setActivePreset(null);
                             setTimeout(() => {
                               scrollRef.current?.scrollToEnd({ animated: true });
                             }, 80);
@@ -4799,7 +4506,7 @@ export default function AiDealScreen() {
                       body={ownerLanguagePreview.body}
                       imageAltText={ownerLanguagePreview.imageAltText}
                       offerLine={ownerLanguagePreview.offerLine}
-                      termsLine={ownerLanguagePreview.termsLine}
+                      termsLine={ownerLanguagePreviewDisplayTermsLine}
                       cta={ownerLanguagePreview.cta}
                       scheduleSummary={displayScheduleSummary}
                       maxClaimsLabel={t("createAi.maxClaimsLabel")}
@@ -4814,7 +4521,6 @@ export default function AiDealScreen() {
                       theme={theme}
                       darkMode={colorScheme === "dark"}
                     />
-                    {ownerLanguagePreviewControls}
                   </>
                 )}
 
@@ -4937,94 +4643,17 @@ export default function AiDealScreen() {
                       </View>
                     ) : (
                       <>
-                        {composedMinimalInputEnabled ? (
-                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                            {[
-                              {
-                                label: t("createAi.composedWordIntentClearer", { defaultValue: "Clearer" }),
-                                presetKey: "createAi.revisePresetSimpler",
-                              },
-                              {
-                                label: t("createAi.composedWordIntentWarmer", { defaultValue: "Warmer" }),
-                                presetKey: "createAi.revisePresetPremium",
-                              },
-                              {
-                                label: t("createAi.composedWordIntentEnergetic", { defaultValue: "More energy" }),
-                                presetKey: "createAi.revisePresetPunchier",
-                              },
-                              {
-                                label: t("createAi.composedWordIntentLocal", { defaultValue: "More local" }),
-                                presetKey: "createAi.revisePresetItem",
-                              },
-                            ].map(({ label, presetKey }) => {
-                              const selected = activePreset === presetKey;
-                              return (
-                                <Pressable
-                                  key={label}
-                                  disabled={!canReviseAd}
-                                  onPress={() => {
-                                    setRevisionTarget("copy");
-                                    setActivePreset(selected ? null : presetKey);
-                                  }}
-                                  style={{
-                                    paddingVertical: 7,
-                                    paddingHorizontal: 12,
-                                    borderRadius: 999,
-                                    backgroundColor: selected ? theme.primary : theme.surface,
-                                    borderWidth: 1,
-                                    borderColor: selected ? theme.primary : theme.border,
-                                    opacity: canReviseAd ? 1 : 0.5,
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 12, fontWeight: "800", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>
-                                    {label}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        ) : null}
-
-                        {!composedMinimalInputEnabled ? (
-                          <View style={{ flexDirection: "row", gap: 6 }}>
-                            {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
-                              const selected = revisionTarget === target;
-                              return (
-                                <Pressable
-                                  key={target}
-                                  disabled={!canReviseAd}
-                                  onPress={() => { setRevisionTarget(target); setActivePreset(null); }}
-                                  style={{
-                                    flex: 1,
-                                    paddingVertical: 8,
-                                    borderRadius: 999,
-                                    backgroundColor: selected ? theme.primary : theme.surface,
-                                    borderWidth: 1,
-                                    borderColor: selected ? theme.primary : theme.border,
-                                    opacity: canReviseAd ? 1 : 0.5,
-                                  }}
-                                >
-                                  <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
-                                    {targetLabel[target]}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        ) : null}
-
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                          {presetKeysForTarget.map((presetKey) => {
-                            const presetText = t(presetKey);
-                            const selected = activePreset === presetKey;
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          {(["copy", "image", "both"] as RevisionTarget[]).map((target) => {
+                            const selected = revisionTarget === target;
                             return (
                               <Pressable
-                                key={presetKey}
+                                key={target}
                                 disabled={!canReviseAd}
-                                onPress={() => setActivePreset(selected ? null : presetKey)}
+                                onPress={() => setRevisionTarget(target)}
                                 style={{
-                                  paddingVertical: 6,
-                                  paddingHorizontal: 10,
+                                  flex: 1,
+                                  paddingVertical: 8,
                                   borderRadius: 999,
                                   backgroundColor: selected ? theme.primary : theme.surface,
                                   borderWidth: 1,
@@ -5032,7 +4661,9 @@ export default function AiDealScreen() {
                                   opacity: canReviseAd ? 1 : 0.5,
                                 }}
                               >
-                                <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700] }}>{presetText}</Text>
+                                <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
+                                  {targetLabel[target]}
+                                </Text>
                               </Pressable>
                             );
                           })}
@@ -5103,8 +4734,6 @@ export default function AiDealScreen() {
                     {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
                     {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
                     <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                    <Text style={{ marginTop: 8, opacity: 0.7, color: theme.text }}>{t("createAi.scheduleLabel")} {displayScheduleSummary}</Text>
-                    <Text style={{ marginTop: 4, opacity: 0.7, color: theme.text }}>{t("createAi.maxClaimsLabel")} {maxClaims}</Text>
                   </View>
                 </View>
 

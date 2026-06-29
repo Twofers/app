@@ -2919,8 +2919,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ownership check — must run before any expensive work
-    const { data: business, error: bizErr } = await userClient
+    // Ownership check — must run before any expensive work. Read the business
+    // row with the admin client, then compare it against the authenticated user;
+    // user-scoped selects cannot reliably read owner_id after column grants/RLS.
+    const { data: business, error: bizErr } = await admin
       .from("businesses")
       .select("id, owner_id, name")
       .eq("id", businessId)
