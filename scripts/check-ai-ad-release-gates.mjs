@@ -83,6 +83,15 @@ const checks = [
     ],
   },
   {
+    name: "deterministic revision fallback rewrites no-op copy",
+    file: "lib/ai-revision-fallback-copy.ts",
+    patterns: [
+      /buildDeterministicRevisionFallbackCopy/,
+      /deterministic_revision_fallback/,
+      /avoidHeadlines/,
+    ],
+  },
+  {
     name: "versioned publish is idempotent",
     file: "supabase/migrations/20260724120000_offer_version_publish_rpc.sql",
     pattern: /UNIQUE \(business_id, idempotency_key\)[\s\S]+publish_offer_versioned_deal/,
@@ -129,6 +138,11 @@ const commandChecks = [
     name: "AI copy style gate tests pass",
     command: process.execPath,
     args: [vitestBin, "run", "lib/ad-copy-style-gate.test.ts", "--reporter=dot"],
+  },
+  {
+    name: "AI deterministic revision fallback tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ai-revision-fallback-copy.test.ts", "--reporter=dot"],
   },
 ];
 

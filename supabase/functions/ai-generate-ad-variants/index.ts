@@ -75,6 +75,7 @@ import {
   type ValidatedDealCopy,
 } from "../../../lib/deal-offer-contract.ts";
 import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
+import { buildDeterministicRevisionFallbackCopy } from "../../../lib/ai-revision-fallback-copy.ts";
 import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
 import {
   CANDIDATE_JUDGE_PROMPT_VERSION,
@@ -589,7 +590,7 @@ async function generateCopy(params: {
     itemHint,
     research,
   });
-  const selected = await generateValidatedDealCopy({
+  let selected = await generateValidatedDealCopy({
     contract: offerContract,
     requestCopy: async ({ attemptNumber, validationFeedback }) => {
       const { system, userText, jsonSchema } = buildAdCopyPrompt({
@@ -724,6 +725,57 @@ async function generateCopy(params: {
       );
     },
   });
+  if (
+    isRevision &&
+    previousAd &&
+    shouldUseDeterministicRevisionCopyFallback({
+      selected,
+      previousAd,
+      revisionFeedback,
+    })
+  ) {
+    const revisionFallback = buildDeterministicRevisionFallbackCopy({
+      contract: offerContract,
+      feedback: revisionFeedback,
+      avoidHeadlines: [
+        previousAd.headline,
+        previousAd.poster?.copy?.headline,
+        selected.headline,
+      ],
+    });
+    const fallbackValidation = validateAiCopyAgainstOffer(revisionFallback, offerContract);
+    if (fallbackValidation.valid && hasVisibleRevisionCopyChange(revisionFallback, previousAd)) {
+      console.log(
+        JSON.stringify({
+          tag: "ai_ads_v2",
+          event: "revision_deterministic_copy_fallback",
+          businessId: offerContract.businessId,
+          previousCopySource: selected.copy_source,
+        }),
+      );
+      selected = {
+        ...selected,
+        ...revisionFallback,
+        push_notification: revisionFallback.push_body || revisionFallback.push_notification,
+        push_body: revisionFallback.push_body || revisionFallback.push_notification,
+        terms_summary: offerContract.canonicalShortTerms,
+        locked_offer_line: offerContract.canonicalOfferLine,
+        locked_terms_line: offerContract.canonicalShortTerms,
+        copy_source: "DETERMINISTIC_FALLBACK" satisfies AiDealCopySource,
+        selected_variant_index: null,
+        validation_reason_codes: [
+          ...new Set([
+            ...selected.validation_reason_codes,
+            "REVISION_DETERMINISTIC_FALLBACK",
+          ]),
+        ],
+        fallback_reason: [
+          selected.fallback_reason,
+          "REVISION_NO_VISIBLE_COPY_CHANGE",
+        ].filter(Boolean).join(","),
+      };
+    }
+  }
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
   const copyAlternatives = buildCopyAlternatives({
@@ -1174,6 +1226,29 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
     wantsPremium: /\b(?:premium|upscale|classy|elevated|polished|less cheap)\b/.test(normalized),
     bannedTerms: extractBannedRevisionTerms(feedback ?? ""),
   };
+}
+
+function revisionFeedbackMentionsImageOnly(feedback: string | undefined): boolean {
+  const normalized = normalizeRevisionCopyText(feedback);
+  if (!normalized) return false;
+  const mentionsImage = /\b(?:image|photo|picture|pic|background|crop|lighting|angle|composition|visual|brighter|darker)\b/.test(normalized);
+  if (!mentionsImage) return false;
+  const intent = parseRevisionFeedbackIntent(feedback);
+  return !intent.requiresHeadlineChange &&
+    !intent.wantsShorter &&
+    !intent.wantsDirect &&
+    !intent.wantsLocal &&
+    !intent.wantsWarmer &&
+    !intent.wantsPremium;
+}
+
+function shouldUseDeterministicRevisionCopyFallback(params: {
+  selected: AiDealCopyVariant;
+  previousAd: SingleAd;
+  revisionFeedback?: string;
+}): boolean {
+  if (hasVisibleRevisionCopyChange(params.selected, params.previousAd)) return false;
+  return !revisionFeedbackMentionsImageOnly(params.revisionFeedback);
 }
 
 function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
