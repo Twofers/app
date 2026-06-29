@@ -65,6 +65,10 @@ import {
   type PhotoTreatment,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
+import {
+  copyOnlyRevisionTargetForFeedback,
+  type AiRevisionTarget,
+} from "../../lib/ai-revision-target";
 import { assessDealQuality } from "../../lib/deal-quality";
 import {
   resolveDealFlowLanguage,
@@ -564,7 +568,7 @@ function generatedAdForPublishSpec(params: {
   };
 }
 
-type RevisionTarget = "copy" | "image" | "both";
+type RevisionTarget = AiRevisionTarget;
 type RevisionSuggestion = {
   key: string;
   target: RevisionTarget;
@@ -574,18 +578,6 @@ type RevisionSuggestion = {
 type ComposedEditIntent = "words" | null;
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
-
-function copyOnlyRevisionTargetForFeedback(
-  selectedTarget: RevisionTarget,
-  feedback: string,
-): RevisionTarget {
-  if (selectedTarget !== "both") return selectedTarget;
-  const normalized = feedback.trim().toLowerCase();
-  if (!normalized) return selectedTarget;
-  const mentionsImage = /\b(?:image|photo|picture|pic|background|crop|lighting|angle|composition|visual|brighter|darker)\b/.test(normalized);
-  const mentionsCopy = /\b(?:copy|wording|words?|text|headline|title|top|line|shorter|clearer|tone|warmer|premium|direct)\b/.test(normalized);
-  return mentionsCopy && !mentionsImage ? "copy" : selectedTarget;
-}
 
 type ImageVersionEntry = {
   id: string;
