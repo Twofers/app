@@ -120,5 +120,11 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("applyRevisionSuggestion");
     expect(createAiSource).toContain("setRevisionTarget(suggestion.target)");
     expect(createAiSource).toContain("setRevisionFeedback(suggestion.feedback)");
+    expect(createAiSource).toContain("AiAdsEvents.REVISION_SUGGESTION_SELECTED");
+    expect(createAiSource).toContain("AiAdsEvents.REVISION_TAPPED");
+    expect(createAiSource).toContain("AiAdsEvents.REVISION_SUCCEEDED");
+    expect(createAiSource).toContain("AiAdsEvents.REVISION_FAILED");
+    expect(createAiSource).toContain("feedback_length: revisionFeedbackText.length");
+    expect(createAiSource).not.toContain("revision_feedback: revisionFeedbackText,\n        feedback");
   });
 });

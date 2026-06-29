@@ -2449,10 +2449,16 @@ export default function AiDealScreen() {
     if (!generatedAd || !businessId) return;
     if (blockIneligibleOffer("revise_ad")) return;
     if (revisionsUsed >= SOFT_REVISION_CAP) {
+      trackEvent(AiAdsEvents.REVISION_LIMIT_HIT, {
+        screen: "create_ai",
+        revision_target: revisionTarget,
+        revision_count: revisionsUsed,
+      });
       setBanner({ message: t("createAi.errRegenClientLimit"), tone: "info" });
       return;
     }
-    if (!revisionFeedback.trim()) {
+    const revisionFeedbackText = revisionFeedback.trim();
+    if (!revisionFeedbackText) {
       setBanner({ message: t("createAi.reviseErrPickSomething"), tone: "info" });
       return;
     }
@@ -2501,6 +2507,14 @@ export default function AiDealScreen() {
     setBanner(null);
     const requestId = ++generationRequestIdRef.current;
     const maxClaimsNum = Number(maxClaims);
+    const revisionNumber = revisionsUsed + 1;
+    trackEvent(AiAdsEvents.REVISION_TAPPED, {
+      screen: "create_ai",
+      revision_target: revisionTarget,
+      revision_count: revisionNumber,
+      feedback_length: revisionFeedbackText.length,
+      image_source_mode: sourceModeForRevision,
+    });
     try {
       const { ad, quota: nextQuota } = await aiReviseAd({
         business_id: businessId,
@@ -2511,8 +2525,8 @@ export default function AiDealScreen() {
         deal_eligibility: eligibilityInput,
         previous_ad: generatedAd,
         revision_target: revisionTarget,
-        revision_count: revisionsUsed + 1,
-        ...(revisionFeedback.trim() ? { revision_feedback: revisionFeedback.trim() } : {}),
+        revision_count: revisionNumber,
+        revision_feedback: revisionFeedbackText,
         image_source_mode: sourceModeForRevision,
         image_edit_mode: editModeForRevision,
         ...(editModeForRevision === "custom" ? { custom_image_edit_instruction: customEditText } : {}),
@@ -2526,6 +2540,15 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
       const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      trackEvent(AiAdsEvents.REVISION_SUCCEEDED, {
+        screen: "create_ai",
+        revision_target: revisionTarget,
+        revision_count: revisionNumber,
+        photo_source: normalizedAd.photo_source ?? "unknown",
+        copy_source: normalizedAd.copy_source ?? "unknown",
+        selected_variant_index: normalizedAd.selected_variant_index ?? null,
+        alternative_count: normalizedAd.copy_alternatives?.length ?? 0,
+      });
       setGeneratedAd(normalizedAd);
       rememberImageVersion(normalizedAd, "revision");
       if (nextQuota) setQuota(nextQuota);
@@ -2542,6 +2565,13 @@ export default function AiDealScreen() {
       const code = getErrorCode(err);
       const friendly = friendlyGenerationError(raw, code);
       setBanner({ message: friendly, tone: "error" });
+      trackEvent(AiAdsEvents.REVISION_FAILED, {
+        screen: "create_ai",
+        revision_target: revisionTarget,
+        revision_count: revisionNumber,
+        error_code: code ?? "unknown",
+        message_snippet: raw.slice(0, 80),
+      });
     } finally {
       if (requestId === generationRequestIdRef.current) {
         setRevising(false);
@@ -3538,6 +3568,12 @@ export default function AiDealScreen() {
   function applyRevisionSuggestion(suggestion: RevisionSuggestion) {
     setRevisionTarget(suggestion.target);
     setRevisionFeedback(suggestion.feedback);
+    trackEvent(AiAdsEvents.REVISION_SUGGESTION_SELECTED, {
+      screen: "create_ai",
+      suggestion_key: suggestion.key,
+      revision_target: suggestion.target,
+      revision_count: revisionsUsed,
+    });
   }
   const iosSchedulePickerTitle =
     iosSchedulePicker === "start"
