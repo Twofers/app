@@ -670,7 +670,12 @@ async function generateCopy(params: {
         latestPreparedVariants = prepared.variants;
         if (!isRevision || !previousAd) return prepared.variants;
         const changed = prepared.variants.filter((variant) => hasVisibleRevisionCopyChange(variant, previousAd));
-        latestPreparedVariants = changed;
+        const feedbackMatched = filterRevisionCandidatesByFeedback({
+          candidates: changed,
+          previousAd,
+          revisionFeedback,
+        });
+        latestPreparedVariants = feedbackMatched;
         if (changed.length === 0) {
           console.log(
             JSON.stringify({
@@ -681,7 +686,17 @@ async function generateCopy(params: {
             }),
           );
         }
-        return changed;
+        if (changed.length > 0 && feedbackMatched.length === 0) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads_v2",
+              event: "revision_feedback_no_candidate_match",
+              attemptNumber,
+              businessId: offerContract.businessId,
+            }),
+          );
+        }
+        return feedbackMatched;
       } catch {
         console.log(
           JSON.stringify({
@@ -1089,6 +1104,180 @@ function hasVisibleRevisionCopyChange(candidate: AiDealCopyVariant, previousAd: 
     (nextDescription.length > 0 && nextDescription !== previousDescription) ||
     (nextPush.length > 0 && nextPush !== previousPush)
   );
+}
+
+type RevisionFeedbackIntent = {
+  active: boolean;
+  requiresHeadlineChange: boolean;
+  wantsShorter: boolean;
+  wantsDirect: boolean;
+  wantsLocal: boolean;
+  wantsWarmer: boolean;
+  wantsPremium: boolean;
+  bannedTerms: string[];
+};
+
+const REVISION_BANNED_TERM_STOPLIST = new Set([
+  "it",
+  "that",
+  "this",
+  "copy",
+  "text",
+  "wording",
+  "headline",
+  "title",
+  "poster",
+  "top part",
+]);
+
+function extractBannedRevisionTerms(feedback: string): string[] {
+  const phrases = new Set<string>();
+  const patterns = [
+    /\b(?:do not|dont|don't)\s+(?:say|use|include|mention|write)\s+"?([^".,;!?]+)"?/gi,
+    /\b(?:remove|avoid|drop)\s+(?:the\s+)?(?:word|phrase|copy|text)?\s*"?([^".,;!?]+)"?/gi,
+    /\b(?:without|no)\s+"?([^".,;!?]{3,60})"?/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of feedback.matchAll(pattern)) {
+      const phrase = normalizeRevisionCopyText(match[1]);
+      if (!phrase || REVISION_BANNED_TERM_STOPLIST.has(phrase)) continue;
+      if (phrase.split(/\s+/).length > 6) continue;
+      phrases.add(phrase);
+    }
+  }
+  return [...phrases].slice(0, 4);
+}
+
+function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeedbackIntent {
+  const normalized = normalizeRevisionCopyText(feedback);
+  if (!normalized) {
+    return {
+      active: false,
+      requiresHeadlineChange: false,
+      wantsShorter: false,
+      wantsDirect: false,
+      wantsLocal: false,
+      wantsWarmer: false,
+      wantsPremium: false,
+      bannedTerms: [],
+    };
+  }
+  return {
+    active: true,
+    requiresHeadlineChange:
+      /\b(?:top|headline|title|opening|main line|poster copy|poster headline|wording)\b/.test(normalized),
+    wantsShorter: /\b(?:shorter|too long|less text|fewer words|trim|tighten|concise)\b/.test(normalized),
+    wantsDirect: /\b(?:clear|plain|direct|simple|make sense|doesn t make sense|real ad|natural|awkward|confusing)\b/.test(normalized),
+    wantsLocal: /\b(?:local|nearby|neighborhood|neighbourhood|regulars|community|around here)\b/.test(normalized),
+    wantsWarmer: /\b(?:warmer|friendlier|friendly|inviting|less cold|more human)\b/.test(normalized),
+    wantsPremium: /\b(?:premium|upscale|classy|elevated|polished|less cheap)\b/.test(normalized),
+    bannedTerms: extractBannedRevisionTerms(feedback ?? ""),
+  };
+}
+
+function revisionHeadlineChanged(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
+  const nextHeadline = normalizeRevisionCopyText(candidate.headline);
+  if (!nextHeadline) return false;
+  const previousHeadlines = [
+    previousAd.headline,
+    previousAd.poster?.copy?.headline,
+  ].map(normalizeRevisionCopyText).filter(Boolean);
+  return !previousHeadlines.includes(nextHeadline);
+}
+
+function revisionCandidateVisibleLength(candidate: AiDealCopyVariant): number {
+  return [
+    candidate.headline,
+    candidate.short_description,
+    candidate.push_body || candidate.push_notification,
+    candidate.social_caption,
+  ].filter(Boolean).join(" ").length;
+}
+
+function revisionPreviousVisibleLength(previousAd: SingleAd): number {
+  return [
+    previousAd.headline,
+    previousAd.short_description || previousAd.subheadline,
+    previousAd.push_notification,
+    previousAd.social_caption,
+  ].filter(Boolean).join(" ").length;
+}
+
+function scoreRevisionFeedbackFit(params: {
+  candidate: AiDealCopyVariant;
+  previousAd: SingleAd;
+  intent: RevisionFeedbackIntent;
+}): { hardFailReasons: string[]; softScore: number } {
+  const { candidate, previousAd, intent } = params;
+  if (!intent.active) return { hardFailReasons: [], softScore: 0 };
+
+  const hardFailReasons: string[] = [];
+  let softScore = 0;
+  const text = normalizeRevisionCopyText([
+    candidate.headline,
+    candidate.short_description,
+    candidate.push_body || candidate.push_notification,
+    candidate.social_caption,
+  ].filter(Boolean).join(" "));
+
+  for (const banned of intent.bannedTerms) {
+    if (banned && text.includes(banned)) hardFailReasons.push("uses_banned_feedback_term");
+  }
+
+  const headlineChanged = revisionHeadlineChanged(candidate, previousAd);
+  if (intent.requiresHeadlineChange && !headlineChanged) {
+    hardFailReasons.push("headline_unchanged_for_headline_feedback");
+  }
+  if (headlineChanged) softScore += 2;
+
+  if (intent.wantsShorter) {
+    const previousLength = revisionPreviousVisibleLength(previousAd);
+    const nextLength = revisionCandidateVisibleLength(candidate);
+    softScore += nextLength <= Math.max(80, previousLength * 0.88) ? 5 : -3;
+  }
+
+  if (intent.wantsDirect) {
+    if (candidate.headline.length <= 58 && candidate.short_description.length <= 145) softScore += 3;
+    if (/[;:]/.test(candidate.headline)) softScore -= 1;
+  }
+
+  if (intent.wantsLocal) {
+    if (candidate.strategy_id === "local_discovery" || candidate.strategy_id === "merchant_specific") softScore += 3;
+    if (/\b(?:local|nearby|neighborhood|regulars|community|around here|on your way)\b/.test(text)) softScore += 1;
+  }
+
+  if (intent.wantsWarmer) {
+    if (/\b(?:you|your|treat|favorite|bring|share|break|stop by|on us)\b/.test(text)) softScore += 2;
+  }
+
+  if (intent.wantsPremium) {
+    if (candidate.strategy_id === "product_desire" || /\b(?:crafted|polished|elevated|signature)\b/.test(text)) softScore += 2;
+    if (/\b(?:cheap|bargain|steal)\b/.test(text)) softScore -= 3;
+  }
+
+  return { hardFailReasons, softScore };
+}
+
+function filterRevisionCandidatesByFeedback(params: {
+  candidates: AiDealCopyVariant[];
+  previousAd: SingleAd;
+  revisionFeedback?: string;
+}): AiDealCopyVariant[] {
+  const intent = parseRevisionFeedbackIntent(params.revisionFeedback);
+  if (!intent.active) return params.candidates;
+
+  const scored = params.candidates.map((candidate) => ({
+    candidate,
+    ...scoreRevisionFeedbackFit({ candidate, previousAd: params.previousAd, intent }),
+  }));
+  const hardPassed = scored.filter((entry) => entry.hardFailReasons.length === 0);
+  if (hardPassed.length === 0) return [];
+
+  const positiveMatches = hardPassed.filter((entry) => entry.softScore > 0);
+  const pool = positiveMatches.length > 0 ? positiveMatches : hardPassed;
+  return pool
+    .sort((left, right) => right.softScore - left.softScore)
+    .map((entry) => entry.candidate);
 }
 
 async function prepareCopyCandidates(params: {
