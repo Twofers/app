@@ -6,8 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const fixturePath = path.join(root, "fixtures", "ai-promotional-copy-offers.json");
 const posterFixturePath = path.join(root, "fixtures", "ai-poster-copy-offers.json");
+const revisionFixturePath = path.join(root, "fixtures", "ai-revision-feedback-cases.json");
 const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 const posterFixtures = JSON.parse(fs.readFileSync(posterFixturePath, "utf8"));
+const revisionFixtures = JSON.parse(fs.readFileSync(revisionFixturePath, "utf8"));
 
 const numberWords = new Map([
   [1, "one"],
@@ -282,6 +284,24 @@ function validatePosterFixture(fixture) {
   return errors;
 }
 
+function routeRevisionTarget(selectedTarget, feedback) {
+  if (selectedTarget !== "both") return selectedTarget;
+  const normalized = clean(feedback).toLowerCase();
+  if (!normalized) return selectedTarget;
+  const mentionsImage = /\b(?:image|photo|picture|pic|background|crop|lighting|angle|composition|visual|brighter|darker)\b/.test(normalized);
+  const mentionsCopy = /\b(?:copy|wording|words?|text|headline|title|top|line|shorter|clearer|tone|warmer|premium|direct)\b/.test(normalized);
+  return mentionsCopy && !mentionsImage ? "copy" : selectedTarget;
+}
+
+function validateRevisionFixture(fixture) {
+  const errors = [];
+  const actualTarget = routeRevisionTarget(fixture.selectedTarget, fixture.feedback);
+  if (actualTarget !== fixture.expectedTarget) {
+    errors.push(`revision_target_mismatch:${actualTarget}`);
+  }
+  return errors;
+}
+
 const rows = fixtures.map((fixture) => {
   const oldText = oldHeadline(fixture);
   const newText = newHeadline(fixture);
@@ -311,6 +331,18 @@ const posterRows = posterFixtures.map((fixture) => {
   };
 });
 const failedPosterRows = posterRows.filter((row) => !row.valid);
+const revisionRows = revisionFixtures.map((fixture) => {
+  const errors = validateRevisionFixture(fixture);
+  return {
+    id: fixture.id,
+    newText: routeRevisionTarget(fixture.selectedTarget, fixture.feedback),
+    valid: errors.length === 0,
+    fallbackUsed: false,
+    characterCount: clean(fixture.feedback).length,
+    errors,
+  };
+});
+const failedRevisionRows = revisionRows.filter((row) => !row.valid);
 console.log("# AI Promotional Copy Evaluation");
 console.log(`fixtures: ${rows.length}`);
 console.log(`valid: ${rows.length - failed.length}`);
@@ -318,6 +350,9 @@ console.log(`invalid: ${failed.length}`);
 console.log(`poster fixtures: ${posterRows.length}`);
 console.log(`poster valid: ${posterRows.length - failedPosterRows.length}`);
 console.log(`poster invalid: ${failedPosterRows.length}`);
+console.log(`revision fixtures: ${revisionRows.length}`);
+console.log(`revision valid: ${revisionRows.length - failedRevisionRows.length}`);
+console.log(`revision invalid: ${failedRevisionRows.length}`);
 console.log("");
 console.log("| id | old output | new output | valid | fallback | chars | changed facts |");
 console.log("|---|---|---|---:|---:|---:|---|");
@@ -340,6 +375,15 @@ if (failedPosterRows.length > 0) {
   console.log("");
   console.log("Poster failures:");
   for (const row of failedPosterRows) {
+    console.log(`- ${row.id}: ${row.errors.join(", ")}`);
+  }
+  process.exitCode = 1;
+}
+
+if (failedRevisionRows.length > 0) {
+  console.log("");
+  console.log("Revision feedback failures:");
+  for (const row of failedRevisionRows) {
     console.log(`- ${row.id}: ${row.errors.join(", ")}`);
   }
   process.exitCode = 1;

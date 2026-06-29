@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const vitestBin = path.join(root, "node_modules", "vitest", "vitest.mjs");
 
 const checks = [
   {
@@ -46,12 +47,29 @@ const checks = [
     ],
   },
   {
+    name: "copy evaluator includes revision feedback regressions",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /ai-revision-feedback-cases\.json/,
+      /revision fixtures:/,
+      /revision_target_mismatch/,
+    ],
+  },
+  {
     name: "poster copy fixture covers coffee-cookie weak headline",
     file: "fixtures/ai-poster-copy-offers.json",
     patterns: [
       /large-coffee-cookie-poster/,
       /Try our any large coffee drink/,
       /COFFEE \+ COOKIE BREAK/,
+    ],
+  },
+  {
+    name: "revision feedback fixture covers top headline comments",
+    file: "fixtures/ai-revision-feedback-cases.json",
+    patterns: [
+      /top part that says try our any large coffee/i,
+      /"expectedTarget": "copy"/,
     ],
   },
   {
@@ -91,6 +109,11 @@ const commandChecks = [
     name: "copy evaluator passes",
     command: process.execPath,
     args: ["scripts/evaluate-ai-promotional-copy.mjs"],
+  },
+  {
+    name: "AI revision loop tests pass",
+    command: process.execPath,
+    args: [vitestBin, "run", "lib/ai-revision-target.test.ts", "lib/ai-revision-change.test.ts", "--reporter=dot"],
   },
 ];
 

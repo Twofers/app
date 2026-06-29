@@ -5,6 +5,7 @@ import { copyOnlyRevisionTargetForFeedback } from "./ai-revision-target";
 describe("copyOnlyRevisionTargetForFeedback", () => {
   it("routes clearly textual comments from both to copy", () => {
     expect(copyOnlyRevisionTargetForFeedback("both", "The top headline does not make sense")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "The top part that says try our any large coffee doesn't make sense")).toBe("copy");
     expect(copyOnlyRevisionTargetForFeedback("both", "Make the wording shorter and warmer")).toBe("copy");
   });
 
