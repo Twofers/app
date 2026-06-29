@@ -4,9 +4,13 @@
 
 Status: Implemented locally on branch `feature/ai-deal-studio-dev-foundation`.
 
-Deployment actions: none in this slice. Hosted behavior for `ai-generate-ad-variants`
-still requires a hard-gated Supabase Edge Function deploy to project
-`kvodhiqhdqnptqovovia`.
+Deployment actions:
+
+- Deployed `ai-generate-ad-variants` to Supabase project `kvodhiqhdqnptqovovia`.
+- Hosted readback after the final deploy showed `ai-generate-ad-variants` active at
+  version `116`.
+- Unauthenticated hosted smoke returned HTTP 401 with the expected login-required
+  response.
 
 Supabase migrations applied: none. The linked project was previously verified up to
 date for migrations; this section adds no schema changes.
@@ -33,6 +37,9 @@ Live secret names changed: none.
   requests.
 - Backend revision intent scoring now uses the same broader intent vocabulary before
   selecting revised candidates.
+- Headline/top/poster feedback now requires an actual headline change before the
+  backend accepts a revision as changed; description-only drift no longer satisfies
+  a top-text revision request.
 - Deterministic revision fallback now responds to generic/appetizing/inviting feedback
   with visibly different locked-fact copy when the model returns no meaningful change.
 - The ad-copy prompt now labels owner notes and revision feedback as context-only
@@ -52,13 +59,17 @@ Live secret names changed: none.
 - `npm run lint`: passed.
 - `npm run typecheck:functions`: passed, 146 Edge Function files checked.
 - `npm test`: passed, 196 files and 1036 tests.
+- Hosted non-publishing revision smoke against `kvodhiqhdqnptqovovia`: passed.
+  The smoke used deterministic image fallback, returned HTTP 200, changed the
+  headline to `Cookie with your coffee`, kept locked poster offer lines unchanged,
+  and returned `REVISION_DETERMINISTIC_FALLBACK`.
 
 ### Unresolved risks
 
-- The hosted production function will not use these revision/prompt improvements until
-  `ai-generate-ad-variants` is deployed to `kvodhiqhdqnptqovovia`.
-- No live non-publishing generation was run in this slice; output quality still needs
-  owner review after deploy with real merchant scenarios.
+- Broader live output quality still needs owner review with real merchant scenarios
+  and actual image paths, not only deterministic image fallback.
+- Local `.env.development.local` still contains an old dev-project URL; hosted smoke
+  scripts must prefer `.env` or explicitly target `kvodhiqhdqnptqovovia`.
 - Existing dirty/untracked local QA and store artifacts remain intentionally untouched.
 
 ### Rollback
