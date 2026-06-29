@@ -1088,7 +1088,6 @@
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "Step {{current}} of {{total}}",
-    "posterTryOurLabel": "Try our",
     "loginPrompt": "Please log in to create deals.",
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",
@@ -1245,6 +1244,9 @@
     "manualDraftBanner": "Manual editor opened. Add a headline and offer details, then publish when it looks right.",
     "pickAdTitle": "Pick an ad",
     "pickAdHelp": "Choose the angle that fits your shop, then edit before publishing.",
+    "copyOptionsTitle": "Copy options",
+    "copyOptionSelected": "Selected",
+    "useThisCopy": "Use this copy",
     "variantPublishedPreview": "Published preview",
     "variantListingBodyLabel": "Full listing text (what shoppers see under your headline)",
     "variantNeedsPhotoForPreview": "Add a photo above to preview your ad with the image.",

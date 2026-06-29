@@ -72,6 +72,7 @@ import {
   type AiDealCopyVariant,
   type AiDealCopySource,
   type DealOfferContract,
+  type ValidatedDealCopy,
 } from "../../../lib/deal-offer-contract.ts";
 import { evaluateAdCopyStyleGate } from "../../../lib/ad-copy-style-gate.ts";
 import { checkAdCandidateDiversity } from "../../../lib/ad-candidate-diversity.ts";
@@ -178,6 +179,19 @@ const VALID_REVISION_TARGETS = new Set(["copy", "image", "both"] as const);
 
 type RevisionTarget = "copy" | "image" | "both";
 
+type AdCopyAlternative = {
+  candidate_id?: string;
+  strategy_id?: string;
+  strategy_reason?: string;
+  variant_index?: number | null;
+  headline: string;
+  short_description: string;
+  push_notification?: string;
+  social_caption?: string;
+  cta?: string;
+  selected?: boolean;
+};
+
 type SingleAd = {
   /** Short, item-forward (≤40 chars). */
   headline: string;
@@ -192,6 +206,7 @@ type SingleAd = {
   copy_source?: AiDealCopySource;
   variant_count?: number;
   selected_variant_index?: number | null;
+  copy_alternatives?: AdCopyAlternative[];
   validation_reason_codes?: string[];
   /** Verb-first action (≤26 chars). */
   cta: string;
@@ -528,6 +543,7 @@ async function generateCopy(params: {
   judge_attempts?: ProviderAttempt[];
   judge_provider?: string;
   judge_model?: string;
+  copy_alternatives?: AdCopyAlternative[];
 }> {
   const {
     openAiKey,
@@ -561,6 +577,7 @@ async function generateCopy(params: {
   let judgeModel: string | undefined;
   let providerFallbackUsed = false;
   let providerFallbackReason: string | undefined;
+  let latestPreparedVariants: AiDealCopyVariant[] = [];
   const merchantProfile = buildMerchantCreativeProfile({
     businessId: offerContract.businessId,
     businessName,
@@ -650,8 +667,10 @@ async function generateCopy(params: {
         judgeAttempts.push(...prepared.judgeAttempts);
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
+        latestPreparedVariants = prepared.variants;
         if (!isRevision || !previousAd) return prepared.variants;
         const changed = prepared.variants.filter((variant) => hasVisibleRevisionCopyChange(variant, previousAd));
+        latestPreparedVariants = changed;
         if (changed.length === 0) {
           console.log(
             JSON.stringify({
@@ -691,6 +710,12 @@ async function generateCopy(params: {
   });
   const copyLatencyMs = Date.now() - copyStartedAt;
   const shortDescription = clip(selected.short_description, DEAL_COPY_LIMITS.description);
+  const copyAlternatives = buildCopyAlternatives({
+    variants: latestPreparedVariants,
+    selected,
+    offerContract,
+    cta: defaultCta(outputLanguage),
+  });
 
   return {
     headline: clip(selected.headline, DEAL_COPY_LIMITS.headline),
@@ -717,8 +742,72 @@ async function generateCopy(params: {
     judge_attempts: judgeAttempts,
     judge_provider: judgeProvider,
     judge_model: judgeModel,
+    copy_alternatives: copyAlternatives,
     cta: defaultCta(outputLanguage),
   };
+}
+
+function cleanForComparison(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
+}
+
+function copyKey(copy: Pick<AiDealCopyVariant, "headline" | "short_description" | "push_notification">): string {
+  return [
+    cleanForComparison(copy.headline),
+    cleanForComparison(copy.short_description),
+    cleanForComparison(copy.push_notification),
+  ].join("|");
+}
+
+function sameCopy(left: AiDealCopyVariant, right: AiDealCopyVariant): boolean {
+  const leftId = typeof left.candidate_id === "string" ? left.candidate_id.trim() : "";
+  const rightId = typeof right.candidate_id === "string" ? right.candidate_id.trim() : "";
+  if (leftId && rightId && leftId === rightId) return true;
+  return copyKey(left) === copyKey(right);
+}
+
+function buildCopyAlternatives(params: {
+  variants: AiDealCopyVariant[];
+  selected: ValidatedDealCopy;
+  offerContract: DealOfferContract;
+  cta: string;
+}): AdCopyAlternative[] {
+  if (params.selected.copy_source === "DETERMINISTIC_FALLBACK") return [];
+
+  const valid: AiDealCopyVariant[] = [];
+  const seen = new Set<string>();
+  const originalIndexes = new Map<string, number>();
+  params.variants.forEach((variant, index) => {
+    const key = copyKey(variant);
+    if (key && !originalIndexes.has(key)) originalIndexes.set(key, index);
+  });
+  for (const variant of params.variants) {
+    if (!validateAiCopyAgainstOffer(variant, params.offerContract).valid) continue;
+    const key = copyKey(variant);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    valid.push(variant);
+  }
+
+  const selectedIndex = valid.findIndex((variant) => sameCopy(variant, params.selected));
+  const ordered = selectedIndex >= 0
+    ? [valid[selectedIndex]!, ...valid.filter((_, index) => index !== selectedIndex)]
+    : [params.selected, ...valid.filter((variant) => !sameCopy(variant, params.selected))];
+
+  const alternatives = ordered.slice(0, 3).map((variant, index) => ({
+    ...(variant.candidate_id ? { candidate_id: clip(variant.candidate_id, 64) } : {}),
+    ...(variant.strategy_id ? { strategy_id: clip(variant.strategy_id, 64) } : {}),
+    ...(variant.strategy_reason ? { strategy_reason: clip(variant.strategy_reason, 180) } : {}),
+    variant_index: originalIndexes.get(copyKey(variant)) ?? (sameCopy(variant, params.selected) ? params.selected.selected_variant_index : index),
+    headline: clip(variant.headline, DEAL_COPY_LIMITS.headline),
+    short_description: clip(variant.short_description, DEAL_COPY_LIMITS.description),
+    push_notification: clip(variant.push_body || variant.push_notification, DEAL_COPY_LIMITS.pushBody),
+    ...(variant.social_caption ? { social_caption: clip(variant.social_caption, DEAL_COPY_LIMITS.socialCaption) } : {}),
+    cta: clip(variant.cta || params.cta, 26),
+    selected: sameCopy(variant, params.selected),
+  }));
+
+  return alternatives.length > 1 ? alternatives : [];
 }
 
 function defaultCta(lang: OutputLanguage): string {
@@ -1566,6 +1655,65 @@ async function sourceAwareQaForImageBytes(params: {
   });
 }
 
+function imageQaBlocksAutomaticSelection(qa: ImageQaTelemetry): boolean {
+  return qa.decision === "block" || qa.hardFailReasons.length > 0;
+}
+
+async function fetchUploadedDealPhotoBytes(params: {
+  userClient: SupabaseClient;
+  photoPath: string;
+  eventName: string;
+}): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  const { data: signed, error: signedErr } = await params.userClient.storage
+    .from("deal-photos")
+    .createSignedUrl(params.photoPath, 60 * 60);
+  if (signedErr || !signed?.signedUrl) {
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: params.eventName,
+        err: signedErr?.message?.slice(0, 200),
+      }),
+    );
+    return null;
+  }
+
+  try {
+    const fetched = await fetch(signed.signedUrl);
+    if (!fetched.ok) {
+      console.log(JSON.stringify({ tag: "ai_ads_v2", event: `${params.eventName}_fetch_failed`, status: fetched.status }));
+      return null;
+    }
+    return {
+      mimeType: fetched.headers.get("content-type") || "image/png",
+      bytes: new Uint8Array(await fetched.arrayBuffer()),
+    };
+  } catch {
+    console.log(JSON.stringify({ tag: "ai_ads_v2", event: `${params.eventName}_fetch_error`, errorCode: "FETCH_ERROR" }));
+    return null;
+  }
+}
+
+async function qaMerchantOriginalPhoto(params: {
+  openAiKey: string;
+  geminiApiKey?: string | null;
+  imageBytes: Uint8Array;
+  requiredVisualItems: readonly string[];
+  costContext: AiCostContext;
+  merchantOverrideAcknowledged: boolean;
+}): Promise<ImageQaTelemetry> {
+  const sourceAware = await sourceAwareQaForImageBytes({
+    openAiKey: params.openAiKey,
+    geminiApiKey: params.geminiApiKey,
+    imageBytes: params.imageBytes,
+    requiredVisualItems: params.requiredVisualItems,
+    costContext: params.costContext,
+    sourceType: "merchant_original",
+    merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+  });
+  return imageQaTelemetryFromSourceAware(sourceAware, 1);
+}
+
 async function fetchApprovedStockImageBytes(params: {
   admin: SupabaseClient;
   stockPath: string;
@@ -1704,99 +1852,104 @@ async function produceImageOpenAiOnly(params: {
   const ts = Date.now();
   const rand = crypto.randomUUID().slice(0, 8);
   const requiredVisualItems = buildRequiredVisualItems(offerContract);
-  const originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
+  let originalQa = originalPhotoQaTelemetry(merchantOverrideAcknowledged);
+  const originalPhotoResult = (): OpenAiProducedImage => ({
+    posterStoragePath: photoPath,
+    source: "uploaded_original",
+    treatment: null,
+    prompt: null,
+    qa: originalQa,
+  });
 
   // Path A — owner uploaded a photo
   if (photoPath) {
+    const uploadedPhoto = await fetchUploadedDealPhotoBytes({
+      userClient,
+      photoPath,
+      eventName: "photo_signed_url_failed",
+    });
+    if (uploadedPhoto) {
+      originalQa = await qaMerchantOriginalPhoto({
+        openAiKey,
+        geminiApiKey,
+        imageBytes: uploadedPhoto.bytes,
+        requiredVisualItems,
+        costContext,
+        merchantOverrideAcknowledged,
+      });
+    }
+
     if (!photoTreatment) {
       // No enhancement: copy the uploaded photo to a stable poster path
       // (the original is already in deal-photos; we just point the ad at it)
-      return {
-        posterStoragePath: photoPath,
-        source: "uploaded_original",
-        treatment: null,
-        prompt: null,
-        qa: originalQa,
-      };
-    }
-
-    const { data: signed, error: signedErr } = await userClient.storage
-      .from("deal-photos")
-      .createSignedUrl(photoPath, 60 * 60);
-    if (signedErr || !signed?.signedUrl) {
+      if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
       console.log(
         JSON.stringify({
           tag: "ai_ads_v2",
-          event: "photo_signed_url_failed",
-          err: signedErr?.message?.slice(0, 200),
+          event: "merchant_original_image_qa_blocked",
+          hardFailReasons: originalQa.hardFailReasons.slice(0, 8),
+          missingItems: originalQa.missingItems.slice(0, 8),
         }),
       );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
+    } else if (!uploadedPhoto) {
+      return originalPhotoResult();
+    } else {
+      const imageBytes = uploadedPhoto.bytes;
+      const imageMime = uploadedPhoto.mimeType;
 
-    let imageBytes: Uint8Array;
-    let imageMime = "image/png";
-    try {
-      const fetched = await fetch(signed.signedUrl);
-      if (!fetched.ok) {
-        return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
+      // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
+      const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
+        openAiKey,
+        imageBytes,
+        imageMime,
+        treatment: photoTreatment,
+        customEditInstruction: [
+          params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
+          imageRevisionInstruction({
+            revisionPreset: params.revisionPreset,
+            revisionFeedback: params.revisionFeedback,
+          }),
+        ].filter(Boolean).join(" "),
+      });
+      await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
+      const enhanced = enhancedResult.bytes;
+
+      if (!enhanced) {
+        // Enhancement failed — fall back to the original photo only if QA did not hard-block it.
+        if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+      } else {
+        const editQa = await sourceAwareQaForImageBytes({
+          openAiKey,
+          geminiApiKey,
+          imageBytes: enhanced,
+          requiredVisualItems,
+          costContext,
+          sourceType: "merchant_ai_edit",
+        });
+        if (shouldFailClosedForImageQa(editQa)) {
+          if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+        } else {
+          const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
+
+          const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
+          const { error: upErr } = await admin.storage
+            .from("deal-photos")
+            .upload(enhancedPath, enhanced, { contentType: "image/png", upsert: false });
+          if (upErr) {
+            console.log(
+              JSON.stringify({
+                tag: "ai_ads_v2",
+                event: "enhanced_upload_err",
+                err: upErr.message?.slice(0, 200),
+              }),
+            );
+            if (!imageQaBlocksAutomaticSelection(originalQa)) return originalPhotoResult();
+          } else {
+            return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
+          }
+        }
       }
-      imageMime = fetched.headers.get("content-type") || "image/png";
-      imageBytes = new Uint8Array(await fetched.arrayBuffer());
-    } catch {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
     }
-
-    // Source guard anchor: customEditInstruction: params.imageEditMode === "custom"
-    const enhancedResult = await enhanceUploadedPhotoWithTelemetry({
-      openAiKey,
-      imageBytes,
-      imageMime,
-      treatment: photoTreatment,
-      customEditInstruction: [
-        params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
-        imageRevisionInstruction({
-          revisionPreset: params.revisionPreset,
-          revisionFeedback: params.revisionFeedback,
-        }),
-      ].filter(Boolean).join(" "),
-    });
-    await logImageAttempts(costContext, "image_edit", enhancedResult.attempts);
-    const enhanced = enhancedResult.bytes;
-
-    if (!enhanced) {
-      // Enhancement failed — fall back to the original photo so the user still gets an ad
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-
-    const editQa = await sourceAwareQaForImageBytes({
-      openAiKey,
-      geminiApiKey,
-      imageBytes: enhanced,
-      requiredVisualItems,
-      costContext,
-      sourceType: "merchant_ai_edit",
-    });
-    if (shouldFailClosedForImageQa(editQa)) {
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-    const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
-
-    const enhancedPath = `${businessId}/ai_ad_enhanced_${photoTreatment}_${ts}_${rand}.png`;
-    const { error: upErr } = await admin.storage
-      .from("deal-photos")
-      .upload(enhancedPath, enhanced, { contentType: "image/png", upsert: false });
-    if (upErr) {
-      console.log(
-        JSON.stringify({
-          tag: "ai_ads_v2",
-          event: "enhanced_upload_err",
-          err: upErr.message?.slice(0, 200),
-        }),
-      );
-      return { posterStoragePath: photoPath, source: "uploaded_original", treatment: null, prompt: null, qa: originalQa };
-    }
-    return { posterStoragePath: enhancedPath, source: "uploaded_enhanced", treatment: photoTreatment, prompt: null, qa: editQaTelemetry };
   }
 
   // Path B — no photo: generate via OpenAI Images (GPT image model)
@@ -2058,22 +2211,64 @@ async function produceImage(params: {
   imageAspectRatio: AiImageAspectRatio;
 }): Promise<ProducedImage> {
   const requiredVisualItems = buildRequiredVisualItems(params.offerContract);
-  const originalUploadedPhoto = (): ProducedImage => withImageSelection(
-    {
-      posterStoragePath: params.photoPath,
-      source: "uploaded_original",
-      treatment: null,
-      prompt: null,
-      qa: originalPhotoQaTelemetry(params.merchantOverrideAcknowledged),
-      provider: "none",
-      model: null,
-      estimatedCostUsd: 0,
-    },
-    {
-      sourcePhotoPath: params.photoPath,
-      editMode: "none",
-    },
-  );
+  const originalUploadedPhoto = async (): Promise<ProducedImage> => {
+    let qa = originalPhotoQaTelemetry(params.merchantOverrideAcknowledged);
+    if (params.photoPath) {
+      const uploadedPhoto = await fetchUploadedDealPhotoBytes({
+        userClient: params.userClient,
+        photoPath: params.photoPath,
+        eventName: "merchant_original_photo_signed_url_failed",
+      });
+      if (uploadedPhoto) {
+        qa = await qaMerchantOriginalPhoto({
+          openAiKey: params.openAiKey,
+          geminiApiKey: params.geminiApiKey,
+          imageBytes: uploadedPhoto.bytes,
+          requiredVisualItems,
+          costContext: params.costContext,
+          merchantOverrideAcknowledged: params.merchantOverrideAcknowledged,
+        });
+      }
+    }
+    return withImageSelection(
+      {
+        posterStoragePath: params.photoPath,
+        source: "uploaded_original",
+        treatment: null,
+        prompt: null,
+        qa,
+        provider: "none",
+        model: null,
+        estimatedCostUsd: 0,
+      },
+      {
+        sourcePhotoPath: params.photoPath,
+        editMode: "none",
+      },
+    );
+  };
+  const generateWithoutSourcePhoto = async (): Promise<ProducedImage> =>
+    produceImage({
+      ...params,
+      photoPath: null,
+      photoTreatment: null,
+      imageSourceMode: "ai_generated",
+      imageEditMode: "none",
+      customImageEditInstruction: undefined,
+    });
+  const originalUploadedPhotoOrFallback = async (): Promise<ProducedImage> => {
+    const original = await originalUploadedPhoto();
+    if (!imageQaBlocksAutomaticSelection(original.qa)) return original;
+    console.log(
+      JSON.stringify({
+        tag: "ai_ads_v2",
+        event: "merchant_original_image_qa_blocked",
+        hardFailReasons: original.qa.hardFailReasons.slice(0, 8),
+        missingItems: original.qa.missingItems.slice(0, 8),
+      }),
+    );
+    return generateWithoutSourcePhoto();
+  };
   const openAiFallback = async (): Promise<ProducedImage> => {
     const result = await produceImageOpenAiOnly(params);
     const withMetadata = withOpenAiImageMetadata(result);
@@ -2196,10 +2391,10 @@ async function produceImage(params: {
 
   if (params.photoPath) {
     if (!params.photoTreatment) {
-      return originalUploadedPhoto();
+      return originalUploadedPhotoOrFallback();
     }
     if (!params.imageProviderConfig.ownerPhotoReferenceEnabled) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const { data: signed, error: signedErr } = await params.userClient.storage
@@ -2213,7 +2408,7 @@ async function produceImage(params: {
           err: signedErr?.message?.slice(0, 200),
         }),
       );
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     let imageBytes: Uint8Array | null = null;
@@ -2228,7 +2423,7 @@ async function produceImage(params: {
       imageBytes = null;
     }
     if (!imageBytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const photoPrompt = buildGeminiAdImagePrompt({
@@ -2261,7 +2456,7 @@ async function produceImage(params: {
     await logGeminiImageAttempts(params.costContext, "image_edit", gemini.attempts);
 
     if (!gemini.bytes) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
 
     const editQa = await sourceAwareQaForImageBytes({
@@ -2273,7 +2468,7 @@ async function produceImage(params: {
       sourceType: "merchant_ai_edit",
     });
     if (shouldFailClosedForImageQa(editQa)) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
     const editQaTelemetry = imageQaTelemetryFromSourceAware(editQa, requiredVisualItems.length > 0 ? 1 : 0);
 
@@ -2287,7 +2482,7 @@ async function produceImage(params: {
       rand,
     });
     if (!enhancedPath) {
-      return useOpenAiFallback ? openAiFallback() : originalUploadedPhoto();
+      return useOpenAiFallback ? openAiFallback() : originalUploadedPhotoOrFallback();
     }
     return withImageSelection(
       {
@@ -2680,6 +2875,7 @@ function buildGenerationTelemetry(params: {
     judge_attempts?: ProviderAttempt[];
     judge_provider?: string;
     judge_model?: string;
+    copy_alternatives?: AdCopyAlternative[];
   };
   imageResult: Awaited<ReturnType<typeof produceImage>>;
   productionSuccess: boolean;
@@ -2745,6 +2941,7 @@ function buildGenerationTelemetry(params: {
       model: copy.model ?? null,
       provider_fallback_used: copy.provider_fallback_used ?? false,
       provider_fallback_reason: copy.provider_fallback_reason ?? null,
+      alternative_count: copy.copy_alternatives?.length ?? 0,
       quality: copy.copy_quality ?? [],
       judge: {
         provider: copy.judge_provider ?? null,
@@ -3166,6 +3363,7 @@ Deno.serve(async (req) => {
       judge_attempts?: ProviderAttempt[];
       judge_provider?: string;
       judge_model?: string;
+      copy_alternatives?: AdCopyAlternative[];
     };
     if (isRevision && previousAd && revisionTarget === "image") {
       // Image-only revision: keep copy
@@ -3181,6 +3379,7 @@ Deno.serve(async (req) => {
         copy_source: previousAd.copy_source,
         variant_count: previousAd.variant_count,
         selected_variant_index: previousAd.selected_variant_index,
+        copy_alternatives: previousAd.copy_alternatives,
         validation_reason_codes: previousAd.validation_reason_codes,
         cta: previousAd.cta,
       };
@@ -3380,6 +3579,7 @@ Deno.serve(async (req) => {
       copy_source: copy.copy_source,
       variant_count: copy.variant_count,
       selected_variant_index: copy.selected_variant_index,
+      copy_alternatives: copy.copy_alternatives,
       validation_reason_codes: copy.validation_reason_codes,
       cta: copy.cta,
       item_research: research,
@@ -3484,6 +3684,42 @@ Deno.serve(async (req) => {
   }
 });
 
+function coerceCopyAlternatives(raw: unknown): AdCopyAlternative[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: AdCopyAlternative[] = [];
+  for (const value of raw) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const option = value as Record<string, unknown>;
+    const headline = clip(typeof option.headline === "string" ? option.headline : "", DEAL_COPY_LIMITS.headline);
+    const shortDescription = clip(
+      typeof option.short_description === "string" ? option.short_description : "",
+      DEAL_COPY_LIMITS.description,
+    );
+    if (!headline || !shortDescription) continue;
+    out.push({
+      ...(typeof option.candidate_id === "string" ? { candidate_id: clip(option.candidate_id, 64) } : {}),
+      ...(typeof option.strategy_id === "string" ? { strategy_id: clip(option.strategy_id, 64) } : {}),
+      ...(typeof option.strategy_reason === "string" ? { strategy_reason: clip(option.strategy_reason, 180) } : {}),
+      variant_index: typeof option.variant_index === "number" && Number.isFinite(option.variant_index)
+        ? Math.max(0, Math.floor(option.variant_index))
+        : out.length,
+      headline,
+      short_description: shortDescription,
+      push_notification: clip(
+        typeof option.push_notification === "string" ? option.push_notification : headline,
+        DEAL_COPY_LIMITS.pushBody,
+      ),
+      ...(typeof option.social_caption === "string"
+        ? { social_caption: clip(option.social_caption, DEAL_COPY_LIMITS.socialCaption) }
+        : {}),
+      ...(typeof option.cta === "string" ? { cta: clip(option.cta, 26) } : {}),
+      ...(typeof option.selected === "boolean" ? { selected: option.selected } : {}),
+    });
+    if (out.length >= 3) break;
+  }
+  return out.length > 1 ? out : undefined;
+}
+
 function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
   const research = (raw.item_research ?? {}) as Partial<ItemResearch>;
   const photoSourceRaw = typeof raw.photo_source === "string" ? raw.photo_source : "generated";
@@ -3571,6 +3807,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       typeof raw.selected_variant_index === "number" && Number.isFinite(raw.selected_variant_index)
         ? Math.max(0, Math.floor(raw.selected_variant_index))
         : null,
+    copy_alternatives: coerceCopyAlternatives(raw.copy_alternatives),
     validation_reason_codes: Array.isArray(raw.validation_reason_codes)
       ? raw.validation_reason_codes.filter((code): code is string => typeof code === "string").slice(0, 12)
       : undefined,

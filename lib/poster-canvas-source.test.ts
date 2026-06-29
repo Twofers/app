@@ -19,6 +19,11 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).not.toMatch(/Claim|Redeem|Only \d+ available|timeLabel|scarcity/i);
   });
 
+  it("moves the generated headline up when no contextual eyebrow is supplied", () => {
+    expect(source).toContain("hasEyebrow");
+    expect(source).toContain("top={hasEyebrow ? 154 : 104}");
+  });
+
   it("keeps the production poster composed as full-bleed templates", () => {
     expect(source).toContain("function PosterBackground");
     expect(source).toContain("ImageBackground");

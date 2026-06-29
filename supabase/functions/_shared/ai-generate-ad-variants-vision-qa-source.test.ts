@@ -104,6 +104,33 @@ describe("ai-generate-ad-variants vision QA source guard", () => {
     expect(fallbackBlock).not.toMatch(/skippedImageQaTelemetry\("approved_stock"\)/);
   });
 
+  it("runs source-aware QA before automatically accepting merchant original photos", () => {
+    const helperIndex = source.indexOf("async function qaMerchantOriginalPhoto(");
+    const openAiOnlyIndex = source.indexOf("async function produceImageOpenAiOnly(");
+    const produceImageIndex = source.indexOf("async function produceImage(");
+
+    expect(helperIndex).toBeGreaterThan(-1);
+    expect(openAiOnlyIndex).toBeGreaterThan(helperIndex);
+    expect(produceImageIndex).toBeGreaterThan(openAiOnlyIndex);
+
+    const helperBlock = source.slice(helperIndex, openAiOnlyIndex);
+    expect(helperBlock).toMatch(/sourceAwareQaForImageBytes/);
+    expect(helperBlock).toMatch(/sourceType:\s*"merchant_original"/);
+    expect(helperBlock).toMatch(/merchantOverrideAcknowledged/);
+
+    const openAiOnlyBlock = source.slice(openAiOnlyIndex, produceImageIndex);
+    expect(openAiOnlyBlock).toMatch(/fetchUploadedDealPhotoBytes/);
+    expect(openAiOnlyBlock).toMatch(/qaMerchantOriginalPhoto/);
+    expect(openAiOnlyBlock).toMatch(/imageQaBlocksAutomaticSelection\(originalQa\)/);
+    expect(openAiOnlyBlock).toMatch(/merchant_original_image_qa_blocked/);
+
+    const produceImageBlock = source.slice(produceImageIndex);
+    expect(produceImageBlock).toMatch(/const originalUploadedPhoto = async/);
+    expect(produceImageBlock).toMatch(/qaMerchantOriginalPhoto/);
+    expect(produceImageBlock).toMatch(/originalUploadedPhotoOrFallback/);
+    expect(produceImageBlock).toMatch(/imageQaBlocksAutomaticSelection\(original\.qa\)/);
+  });
+
   it("keeps vision QA active even when no required visual items are inferred", () => {
     const inspectIndex = source.indexOf("async function inspectGeneratedImageForOffer(");
     const sourceAwareIndex = source.indexOf("async function sourceAwareQaForImageBytes(");

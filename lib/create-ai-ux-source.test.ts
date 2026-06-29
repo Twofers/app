@@ -85,7 +85,7 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("EXPLICIT_POSTER_STYLE_CHOICES");
     expect(createAiSource).not.toContain("POSTER_STYLE_CHOICES");
     expect(createAiSource).not.toContain("selectPosterStyle");
-    expect(createAiSource).toContain("posterTryOurLabel");
+    expect(createAiSource).not.toContain("posterTryOurLabel");
   });
 
   it("keeps generated preview terms from repeating separately rendered schedule metadata", () => {
@@ -106,5 +106,10 @@ describe("AI create UX source guards", () => {
     expect(posterPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(acceptedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(acceptedPreviewSource).not.toContain('{t("createAi.maxClaimsLabel")} {maxClaims}');
+  });
+
+  it("clears original-photo selection when AI returns a generated fallback instead", () => {
+    expect(createAiSource).toContain('sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original"');
+    expect(createAiSource).toContain("setUsePhotoAsFinal(false);");
   });
 });

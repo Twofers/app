@@ -147,6 +147,7 @@ function TopCopyBlock({
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
+  const hasEyebrow = eyebrowLabel.length > 0;
   return (
     <>
       <PosterLine
@@ -174,11 +175,11 @@ function TopCopyBlock({
       ) : null}
       <PosterLine
         value={copy.headline}
-        top={154}
+        top={hasEyebrow ? 154 : 104}
         left={72}
         width={936}
-        size={78}
-        lineHeight={84}
+        size={hasEyebrow ? 78 : 84}
+        lineHeight={hasEyebrow ? 84 : 90}
         color={theme.headline}
         lines={2}
         scale={scale}

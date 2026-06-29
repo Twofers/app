@@ -61,6 +61,7 @@ import {
   normalizeGeneratedAdDisplayCopy,
   stripAppRenderedTimingMetadata,
   type GeneratedAd,
+  type GeneratedAdCopyAlternative,
   type PhotoTreatment,
 } from "../../lib/ad-variants";
 import { AiAdsEvents, trackEvent } from "../../lib/analytics";
@@ -2398,6 +2399,9 @@ export default function AiDealScreen() {
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
       const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      if (sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original") {
+        setUsePhotoAsFinal(false);
+      }
       setGeneratedAd(normalizedAd);
       rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
@@ -2546,6 +2550,42 @@ export default function AiDealScreen() {
     setApprovedLocalizationApprovalHash(null);
     setPublishStatus("idle");
     setPublishStatusMessage(null);
+  }
+
+  function copyOptionMatchesAd(option: GeneratedAdCopyAlternative, ad: GeneratedAd): boolean {
+    return option.headline.trim() === ad.headline.trim() &&
+      option.short_description.trim() === (ad.short_description ?? ad.subheadline).trim();
+  }
+
+  function selectCopyOption(option: GeneratedAdCopyAlternative, index: number) {
+    if (!generatedAd || copyOptionMatchesAd(option, generatedAd)) return;
+    const next = normalizeGeneratedAdDisplayCopy({
+      ...generatedAd,
+      headline: option.headline,
+      subheadline: option.short_description,
+      short_description: option.short_description,
+      push_notification: option.push_notification || option.headline,
+      social_caption: option.social_caption ?? generatedAd.social_caption,
+      cta: option.cta || generatedAd.cta,
+      selected_variant_index: option.variant_index ?? index,
+      copy_alternatives: generatedAd.copy_alternatives?.map((candidate, candidateIndex) => ({
+        ...candidate,
+        selected: candidateIndex === index,
+      })),
+    });
+    setGeneratedAd(next);
+    setAdAccepted(false);
+    setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    aiDraftBaselineRef.current = null;
+    trackEvent(AiAdsEvents.COPY_OPTION_SELECTED, {
+      screen: "create_ai",
+      option_index: index,
+      strategy_id: option.strategy_id ?? "unknown",
+      revision_count: revisionsUsed,
+    });
   }
 
   function acceptAd() {
@@ -3296,6 +3336,10 @@ export default function AiDealScreen() {
     fallbackCtaLabel: ctaText,
   });
   const ownerLanguagePreviewDisplayTermsLine = stripAppRenderedTimingMetadata(ownerLanguagePreview.termsLine);
+  const copyAlternativeOptions = (generatedAd?.copy_alternatives ?? [])
+    .filter((option) => option.headline.trim().length > 0 && option.short_description.trim().length > 0)
+    .slice(0, 3);
+  const showCopyAlternatives = Boolean(generatedAd && copyAlternativeOptions.length > 1);
   const composedOfferFacts = ownerLanguagePreview.offerFacts;
   const composedCopy = ownerLanguagePreview.copy;
   const composedMerchant = buildMerchantIdentity({
@@ -4382,7 +4426,6 @@ export default function AiDealScreen() {
                         spec={effectivePosterSpec}
                         imageUri={adImageUri ?? selectedPhotoUri}
                         templateId={selectedPosterTemplateId}
-                        eyebrowLabel={t("createAi.posterTryOurLabel", { defaultValue: "Try our" })}
                       />
                     </View>
                     <View
@@ -4523,6 +4566,57 @@ export default function AiDealScreen() {
                     />
                   </>
                 )}
+
+                {showCopyAlternatives && generatedAd ? (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>
+                      {t("createAi.copyOptionsTitle", { defaultValue: "Copy options" })}
+                    </Text>
+                    {copyAlternativeOptions.map((option, index) => {
+                      const selected = copyOptionMatchesAd(option, generatedAd);
+                      return (
+                        <Pressable
+                          key={`${option.candidate_id ?? "copy"}-${index}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          onPress={() => selectCopyOption(option, index)}
+                          style={{
+                            borderWidth: 1,
+                            borderColor: selected ? theme.primary : theme.border,
+                            backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                            borderRadius: 8,
+                            padding: 12,
+                            gap: 6,
+                          }}
+                        >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <MaterialIcons
+                              name={selected ? "check-circle" : "radio-button-unchecked"}
+                              size={18}
+                              color={selected ? theme.primary : theme.mutedText}
+                            />
+                            <Text
+                              numberOfLines={2}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.82}
+                              style={{ flex: 1, minWidth: 0, color: theme.text, fontWeight: "800" }}
+                            >
+                              {option.headline}
+                            </Text>
+                          </View>
+                          <Text numberOfLines={2} style={{ color: theme.mutedText, lineHeight: 18 }}>
+                            {option.short_description}
+                          </Text>
+                          <Text style={{ color: selected ? theme.accentText : theme.primary, fontWeight: "800", fontSize: 12 }}>
+                            {selected
+                              ? t("createAi.copyOptionSelected", { defaultValue: "Selected" })
+                              : t("createAi.useThisCopy", { defaultValue: "Use this copy" })}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
 
                 {canCompareImages && originalImageVersion ? (
                   <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>

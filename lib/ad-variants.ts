@@ -23,6 +23,19 @@ export type ItemResearch = {
   is_familiar: boolean;
 };
 
+export type GeneratedAdCopyAlternative = {
+  candidate_id?: string;
+  strategy_id?: string;
+  strategy_reason?: string;
+  variant_index?: number | null;
+  headline: string;
+  short_description: string;
+  push_notification?: string;
+  social_caption?: string;
+  cta?: string;
+  selected?: boolean;
+};
+
 export type GeneratedAd = {
   headline: string;
   subheadline: string;
@@ -35,6 +48,7 @@ export type GeneratedAd = {
   copy_source?: "AI_VALIDATED" | "AI_RETRY_VALIDATED" | "DETERMINISTIC_FALLBACK";
   variant_count?: number;
   selected_variant_index?: number | null;
+  copy_alternatives?: GeneratedAdCopyAlternative[];
   validation_reason_codes?: string[];
   cta: string;
   /** Storage path in deal-photos bucket; null if image production failed. */
@@ -102,6 +116,27 @@ function containsMechanicalOfferLanguage(value: string): boolean {
   return /\bBOGO\b|\bSame[-\s]?Item\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b/i.test(value);
 }
 
+function normalizeCopyAlternatives(ad: GeneratedAd): GeneratedAdCopyAlternative[] | undefined {
+  if (!Array.isArray(ad.copy_alternatives)) return ad.copy_alternatives;
+  const out = ad.copy_alternatives
+    .filter((option): option is GeneratedAdCopyAlternative =>
+      !!option &&
+      typeof option === "object" &&
+      typeof option.headline === "string" &&
+      typeof option.short_description === "string"
+    )
+    .map((option) => ({
+      ...option,
+      headline: getDealDisplayTitle({ title: option.headline }, option.headline),
+      short_description: option.short_description.trim(),
+      push_notification: option.push_notification?.trim(),
+      social_caption: option.social_caption?.trim(),
+      cta: option.cta?.trim(),
+    }))
+    .slice(0, 3);
+  return out.length > 0 ? out : undefined;
+}
+
 export function normalizeGeneratedAdDisplayCopy(ad: GeneratedAd): GeneratedAd {
   const headline = getDealDisplayTitle({ title: ad.headline }, ad.headline);
   const push = ad.push_notification?.trim() ?? "";
@@ -109,6 +144,7 @@ export function normalizeGeneratedAdDisplayCopy(ad: GeneratedAd): GeneratedAd {
     ...ad,
     headline,
     push_notification: push ? (containsMechanicalOfferLanguage(push) ? headline : push) : ad.push_notification,
+    copy_alternatives: normalizeCopyAlternatives(ad),
   };
 }
 

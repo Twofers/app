@@ -1675,7 +1675,6 @@
   "createAi": {
     "titleScreen": "AI ads",
     "stepOfTotal": "Paso {{current}} de {{total}}",
-    "posterTryOurLabel": "Try our",
     "loginPrompt": "Please log in to create deals.",
     "needBusiness": "Create a business to use AI ad ideas.",
     "titleMain": "AI ads for your deal",
@@ -1768,6 +1767,9 @@
     "manualDraftBanner": "Fill in title and description yourself, then publish when ready.",
     "pickAdTitle": "Pick an ad",
     "pickAdHelp": "Value = savings clarity · Neighborhood = local & regulars · Quality = craft and care. Tap \"Use this ad\" to load one into your draft.",
+    "copyOptionsTitle": "Opciones de texto",
+    "copyOptionSelected": "Seleccionado",
+    "useThisCopy": "Usar este texto",
     "variantPublishedPreview": "Vista previa publicada",
     "variantListingBodyLabel": "Texto completo del anuncio (lo que ven los clientes)",
     "variantNeedsPhotoForPreview": "Añade una foto arriba para ver el anuncio con imagen.",
