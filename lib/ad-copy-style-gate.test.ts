@@ -128,6 +128,31 @@ describe("ad copy style gate", () => {
     });
   });
 
+  it("blocks bare product-name headlines and weak try-our echoes", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Any large coffee drink",
+        pushTitle: "Try our any large coffee drink",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["Any large coffee drink", "Cookie of your choice"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "displayHook",
+          reasons: expect.arrayContaining(["BARE_SPECIFIC_TERM"]),
+        }),
+        expect.objectContaining({
+          field: "pushTitle",
+          reasons: expect.arrayContaining(["WEAK_TRY_OUR_PHRASE"]),
+        }),
+      ]),
+    );
+  });
+
   it("selects the first style-safe AI candidate", () => {
     const selection = selectStyleSafeCopyCandidate(
       [
