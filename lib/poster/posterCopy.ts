@@ -127,6 +127,12 @@ function qtyLabel(quantity: number): string {
   return Number.isFinite(quantity) && quantity > 1 ? String(Math.floor(quantity)) : "1";
 }
 
+function posterQuantityItemLine(action: "BUY" | "GET", quantity: number, itemName: string, fallbackItem: string): string {
+  const item = singularItem(itemName || fallbackItem);
+  if (/^any\s+/i.test(item)) return `${action} ${item}`;
+  return `${action} ${qtyLabel(quantity)} ${item || fallbackItem}`;
+}
+
 function lineItem(value: string, maxChars = 22): string {
   return sanitizePosterText(value, { fallback: "LOCAL DEAL", maxChars });
 }
@@ -196,7 +202,6 @@ export function choosePosterTemplateForOffer(
 
 export function buildPosterOfferLinesFromOfferDefinition(definition: OfferDefinitionV1): Pick<PosterCopyV1, "offer_line_1" | "offer_line_2"> {
   const firstItem = singularItem(definition.qualifyingItems[0]?.displayName ?? "");
-  const firstQty = qtyLabel(definition.qualifyingItems[0]?.quantity ?? 1);
   const rewardItem = singularItem(definition.reward.displayNames[0] ?? firstItem);
 
   if (definition.reward.rule === "percent_off_single_item") {
@@ -207,11 +212,11 @@ export function buildPosterOfferLinesFromOfferDefinition(definition: OfferDefini
   }
 
   return {
-    offer_line_1: lineItem(`BUY ${firstQty} ${firstItem || "ITEM"}`, 28),
+    offer_line_1: lineItem(posterQuantityItemLine("BUY", definition.qualifyingItems[0]?.quantity ?? 1, firstItem, "ITEM"), 28),
     offer_line_2:
       definition.reward.rule === "same_item_free"
         ? lineItem(`GET ${qtyLabel(definition.reward.quantity)} FREE`, 22)
-        : lineItem(`GET ${qtyLabel(definition.reward.quantity)} ${rewardItem || "FREE"}`, 28),
+        : lineItem(posterQuantityItemLine("GET", definition.reward.quantity, rewardItem, "FREE"), 28),
   };
 }
 

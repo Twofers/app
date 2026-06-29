@@ -96,11 +96,11 @@ describe("buildAdCopyPrompt", () => {
         headline: "Any large coffee drink",
         short_description: "Buy any large coffee drink and the cookie is on us.",
         push_notification: "Buy any large coffee drink and get a free cookie.",
-        terms_summary: "Purchase 1 any large coffee drink to receive 1 cookie free.",
+        terms_summary: "Purchase any large coffee drink to receive one cookie free.",
         poster: {
           copy: {
             headline: "ANY LARGE COFFEE DRINK",
-            offer_line_1: "BUY 1 ANY LARGE COFFEE DRINK",
+            offer_line_1: "BUY ANY LARGE COFFEE DRINK",
             offer_line_2: "GET 1 COOKIE OF YOUR CHOICE",
             subline: "TODAY",
           },

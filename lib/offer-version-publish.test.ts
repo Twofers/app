@@ -63,7 +63,7 @@ describe("offer version publish client helpers", () => {
     ).toEqual({
       title: "Buy one latte and get one free",
       description:
-        "Purchase 1 latte to receive 1 latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
+        "Purchase one latte to receive one latte free. Redeem only at Main Street. Limited to 20 available. Offer window: Today, 11:30 AM-1:00 PM. Limit one claim per customer.",
     });
   });
 

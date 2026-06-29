@@ -483,6 +483,32 @@ function copyStrategyLabelKey(strategyId: string | null | undefined): { key: str
   }
 }
 
+function copyStrategyReasonKey(strategyId: string | null | undefined): { key: string; defaultValue: string } {
+  switch (strategyId) {
+    case "value_clarity":
+      return { key: "createAi.copyStrategyReasonValueClarity", defaultValue: "Leads with the deal so the value is obvious at a glance." };
+    case "social_or_occasion":
+      return { key: "createAi.copyStrategyReasonSocialOccasion", defaultValue: "Frames the offer around a real customer moment." };
+    case "product_desire":
+      return { key: "createAi.copyStrategyReasonProductDesire", defaultValue: "Makes the item feel worth choosing without changing the offer." };
+    case "local_discovery":
+      return { key: "createAi.copyStrategyReasonLocalDiscovery", defaultValue: "Gives nearby customers a simple reason to stop in." };
+    case "merchant_specific":
+      return { key: "createAi.copyStrategyReasonMerchantSpecific", defaultValue: "Uses what is known about this business without inventing facts." };
+    default:
+      return { key: "createAi.copyStrategyReasonDefault", defaultValue: "A distinct AI-written angle for the same locked offer." };
+  }
+}
+
+function compactReviewText(value: string | null | undefined, max = 150): string | null {
+  const clean = value?.replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  if (clean.length <= max) return clean;
+  const clipped = clean.slice(0, max + 1);
+  const lastSpace = clipped.lastIndexOf(" ");
+  return `${(lastSpace > Math.floor(max * 0.62) ? clipped.slice(0, lastSpace) : clean.slice(0, max)).trim()}...`;
+}
+
 function DraftFallbackVisual({
   businessName,
   headline,
@@ -4710,17 +4736,43 @@ export default function AiDealScreen() {
                     <View
                       style={{
                         borderRadius: 8,
+                        overflow: "hidden",
                         borderWidth: 1,
-                        borderColor: theme.border,
-                        backgroundColor: theme.surface,
-                        padding: 10,
+                        borderColor: colorScheme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(17,24,39,0.12)",
+                        backgroundColor: colorScheme === "dark" ? theme.surfaceElevated : Gray[900],
                       }}
                     >
-                      <AdPosterCanvas
-                        spec={effectivePosterSpec}
-                        imageUri={adImageUri ?? selectedPhotoUri}
-                        templateId={selectedPosterTemplateId}
-                      />
+                      <View style={{ paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                        <Text style={{ color: "#FFFFFF", fontWeight: "900", fontSize: 13, letterSpacing: 0 }} numberOfLines={1}>
+                          {t("createAi.posterPreviewTitle", { defaultValue: "Poster preview" })}
+                        </Text>
+                        <View
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                            backgroundColor: "rgba(255,255,255,0.14)",
+                            borderWidth: 1,
+                            borderColor: "rgba(255,255,255,0.20)",
+                          }}
+                        >
+                          <Text style={{ color: "#FDE68A", fontWeight: "900", fontSize: 11, letterSpacing: 0 }} numberOfLines={1}>
+                            {t("createAi.posterPreviewBadge", { defaultValue: "Poster ad" })}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
+                        <AdPosterCanvas
+                          spec={effectivePosterSpec}
+                          imageUri={adImageUri ?? selectedPhotoUri}
+                          templateId={selectedPosterTemplateId}
+                          style={{
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: "rgba(255,255,255,0.16)",
+                          }}
+                        />
+                      </View>
                     </View>
                     <View
                       style={{
@@ -4862,13 +4914,33 @@ export default function AiDealScreen() {
                 )}
 
                 {showCopyAlternatives && generatedAd ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ fontWeight: "800", color: theme.text }}>
-                      {t("createAi.copyOptionsTitle", { defaultValue: "Copy options" })}
-                    </Text>
+                  <View style={{ gap: 10 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <Text style={{ fontWeight: "900", color: theme.text, fontSize: 16 }}>
+                        {t("createAi.copyOptionsTitle", { defaultValue: "Copy options" })}
+                      </Text>
+                      <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border }}>
+                        <Text style={{ color: theme.mutedText, fontSize: 12, fontWeight: "800" }} numberOfLines={1}>
+                          {t("createAi.copyOptionsCount", {
+                            count: copyAlternativeOptions.length,
+                            defaultValue: "{{count}} angles",
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colorScheme === "dark" ? "rgba(34,197,94,0.12)" : "#ECFDF5", borderWidth: 1, borderColor: colorScheme === "dark" ? "rgba(34,197,94,0.30)" : "#BBF7D0" }}>
+                      <MaterialIcons name="verified" size={14} color={colorScheme === "dark" ? "#86EFAC" : "#15803D"} />
+                      <Text style={{ color: colorScheme === "dark" ? "#BBF7D0" : "#166534", fontSize: 12, fontWeight: "900" }} numberOfLines={1}>
+                        {t("createAi.copyOptionFactsLocked", { defaultValue: "Offer facts locked" })}
+                      </Text>
+                    </View>
                     {copyAlternativeOptions.map((option, index) => {
                       const selected = copyOptionMatchesAd(option, generatedAd);
                       const strategyLabel = copyStrategyLabelKey(option.strategy_id);
+                      const fallbackReason = copyStrategyReasonKey(option.strategy_id);
+                      const strategyReason = compactReviewText(option.strategy_reason) ??
+                        t(fallbackReason.key, { defaultValue: fallbackReason.defaultValue });
+                      const ctaLabel = compactReviewText(option.cta ?? generatedAd.cta, 34);
                       return (
                         <Pressable
                           key={`${option.candidate_id ?? "copy"}-${index}`}
@@ -4881,9 +4953,35 @@ export default function AiDealScreen() {
                             backgroundColor: selected ? PrimaryTint.surface : theme.surface,
                             borderRadius: 8,
                             padding: 12,
-                            gap: 6,
+                            gap: 9,
                           }}
                         >
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: selected ? theme.accentText : theme.mutedText,
+                                fontSize: 11,
+                                lineHeight: 14,
+                                fontWeight: "900",
+                                letterSpacing: 0,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {t("createAi.copyOptionNumber", {
+                                index: index + 1,
+                                count: copyAlternativeOptions.length,
+                                defaultValue: "Option {{index}}/{{count}}",
+                              })}
+                            </Text>
+                            {selected ? (
+                              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: theme.primary }}>
+                                <Text style={{ color: theme.primaryText, fontSize: 11, fontWeight: "900" }} numberOfLines={1}>
+                                  {t("createAi.copyOptionSelected", { defaultValue: "Selected" })}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
                           <Text
                             numberOfLines={1}
                             style={{
@@ -4915,11 +5013,29 @@ export default function AiDealScreen() {
                           <Text numberOfLines={2} style={{ color: theme.mutedText, lineHeight: 18 }}>
                             {option.short_description}
                           </Text>
-                          <Text style={{ color: selected ? theme.accentText : theme.primary, fontWeight: "800", fontSize: 12 }}>
+                          <View style={{ padding: 10, borderRadius: 8, backgroundColor: selected ? theme.surface : theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 3 }}>
+                            <Text style={{ color: theme.mutedText, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0 }} numberOfLines={1}>
+                              {t("createAi.copyOptionReasonLabel", { defaultValue: "Why this angle" })}
+                            </Text>
+                            <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }} numberOfLines={3}>
+                              {strategyReason}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                            {ctaLabel ? (
+                              <Text style={{ flex: 1, minWidth: 0, color: theme.mutedText, fontSize: 12, fontWeight: "800" }} numberOfLines={1}>
+                                {t("createAi.copyOptionCtaLabel", {
+                                  cta: ctaLabel,
+                                  defaultValue: "Button: {{cta}}",
+                                })}
+                              </Text>
+                            ) : <View style={{ flex: 1 }} />}
+                            <Text style={{ color: selected ? theme.accentText : theme.primary, fontWeight: "900", fontSize: 12 }} numberOfLines={1}>
                             {selected
                               ? t("createAi.copyOptionSelected", { defaultValue: "Selected" })
                               : t("createAi.useThisCopy", { defaultValue: "Use this copy" })}
-                          </Text>
+                            </Text>
+                          </View>
                         </Pressable>
                       );
                     })}

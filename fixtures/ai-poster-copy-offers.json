@@ -15,7 +15,7 @@
       "Buy 1 any large coffee drink and get 1 cookie of your choice"
     ],
     "expectedPosterHeadline": "COFFEE + COOKIE BREAK",
-    "expectedOfferLine1": "BUY 1 ANY LARGE COFFEE DRINK",
+    "expectedOfferLine1": "BUY ANY LARGE COFFEE DRINK",
     "expectedOfferLine2": "GET 1 COOKIE OF YOUR CHOICE"
   },
   {

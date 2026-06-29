@@ -127,6 +127,8 @@ function normalizeCopyAlternatives(ad: GeneratedAd): GeneratedAdCopyAlternative[
     )
     .map((option) => ({
       ...option,
+      strategy_id: option.strategy_id?.trim(),
+      strategy_reason: option.strategy_reason?.trim(),
       headline: getDealDisplayTitle({ title: option.headline }, option.headline),
       short_description: option.short_description.trim(),
       push_notification: option.push_notification?.trim(),

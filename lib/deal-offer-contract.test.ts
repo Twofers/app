@@ -89,12 +89,30 @@ describe("buildDealOfferContract", () => {
     });
 
     expect(contract.canonicalOfferLine).toBe("Buy one coffee and get one free");
-    expect(contract.canonicalShortTerms).toContain("Purchase 1 coffee to receive 1 coffee free.");
+    expect(contract.canonicalShortTerms).toContain("Purchase one coffee to receive one coffee free.");
   });
 
   it("builds canonical copy for BUY_ONE_GET_SOMETHING_FREE", () => {
     expect(coffeeBagelContract.canonicalOfferLine).toBe("Buy a coffee and get a free bagel");
-    expect(coffeeBagelContract.canonicalShortTerms).toContain("Purchase 1 coffee to receive 1 bagel free.");
+    expect(coffeeBagelContract.canonicalShortTerms).toContain("Purchase one coffee to receive one bagel free.");
+  });
+
+  it("keeps any-qualified purchase terms natural", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "any large coffee drink",
+      requiredItemRetailValueCents: 599,
+      freeItemQuantity: 1,
+      freeItemDescription: "cookie of your choice",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(contract.canonicalShortTerms).toContain(
+      "Purchase any large coffee drink to receive one cookie of your choice free.",
+    );
   });
 
   it("builds the required golden canonical headlines", () => {

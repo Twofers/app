@@ -104,6 +104,29 @@ describe("normalizeGeneratedAdDisplayCopy", () => {
       "candidate_5",
     ]);
   });
+
+  it("trims copy alternative review metadata", () => {
+    const ad = normalizeGeneratedAdDisplayCopy({
+      headline: "Coffee + cookie",
+      subheadline: "Buy coffee and get a cookie.",
+      cta: "Claim deal",
+      copy_alternatives: [
+        {
+          candidate_id: "candidate_1",
+          strategy_id: " value_clarity ",
+          strategy_reason: "  Leads with the coffee-cookie value.  ",
+          headline: " Coffee + cookie ",
+          short_description: " Buy coffee and get a cookie. ",
+        },
+      ],
+    });
+
+    expect(ad.copy_alternatives?.[0]).toMatchObject({
+      strategy_id: "value_clarity",
+      strategy_reason: "Leads with the coffee-cookie value.",
+      short_description: "Buy coffee and get a cookie.",
+    });
+  });
 });
 
 describe("buildFallbackTemplateAd", () => {

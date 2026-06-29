@@ -196,6 +196,24 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.copyStrategyProductDesire");
     expect(createAiSource).toContain("createAi.copyStrategyLocalDiscovery");
     expect(createAiSource).toContain("createAi.copyStrategyMerchantSpecific");
+    expect(createAiSource).toContain("function copyStrategyReasonKey");
+    expect(createAiSource).toContain("compactReviewText(option.strategy_reason)");
+    expect(createAiSource).toContain("createAi.copyOptionsCount");
+    expect(createAiSource).toContain("createAi.copyOptionFactsLocked");
+    expect(createAiSource).toContain("createAi.copyOptionReasonLabel");
+    expect(createAiSource).toContain("createAi.copyOptionCtaLabel");
+  });
+
+  it("renders poster previews in a polished review frame", () => {
+    const posterPreviewStart = createAiSource.indexOf("{showPosterPreview");
+    const posterPreviewEnd = createAiSource.indexOf(") : composedAdPreviewEnabled", posterPreviewStart);
+    const posterPreviewSource = createAiSource.slice(posterPreviewStart, posterPreviewEnd);
+
+    expect(posterPreviewSource).toContain("createAi.posterPreviewTitle");
+    expect(posterPreviewSource).toContain("createAi.posterPreviewBadge");
+    expect(posterPreviewSource).toContain("overflow: \"hidden\"");
+    expect(posterPreviewSource).toContain("backgroundColor: colorScheme === \"dark\" ? theme.surfaceElevated : Gray[900]");
+    expect(posterPreviewSource).toContain("borderColor: \"rgba(255,255,255,0.16)\"");
   });
 
   it("tracks selected copy alternatives by candidate identity", () => {

@@ -176,7 +176,7 @@ describe("poster policy", () => {
     });
 
     expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
-    expect(copy.offer_line_1).toBe("BUY 1 ANY LARGE COFFEE DRINK");
+    expect(copy.offer_line_1).toBe("BUY ANY LARGE COFFEE DRINK");
     expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
   });
 
@@ -198,7 +198,7 @@ describe("poster policy", () => {
     });
 
     expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
-    expect(copy.offer_line_1).toBe("BUY 1 ANY LARGE COFFEE DRINK");
+    expect(copy.offer_line_1).toBe("BUY ANY LARGE COFFEE DRINK");
     expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
   });
 });

@@ -563,8 +563,10 @@ function canonicalFreeItemTerms(
   const quantity = Number.isFinite(quantityLimit ?? NaN) && (quantityLimit ?? 0) > 0
     ? `Limited to ${Math.floor(quantityLimit!)} available.`
     : "Limited quantity available.";
+  const requiredPhrase = formatCountedItem(requiredQuantity, requiredItem);
+  const freePhrase = formatCountedItem(freeQuantity, freeItem);
   return sentence(
-    `Purchase ${requiredQuantity} ${requiredItem} to receive ${freeQuantity} ${freeItem} free. Redeem only at ${locationName}. ${quantity}`,
+    `Purchase ${requiredPhrase} to receive ${freePhrase} free. Redeem only at ${locationName}. ${quantity}`,
   );
 }
 
