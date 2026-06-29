@@ -54,11 +54,15 @@ Live secret names changed: none.
 - Canonical fallback copy now treats `any` as a determiner, so offers like
   `any large coffee drink` render as `Buy any large coffee drink...` instead of
   `Buy an any large coffee drink...`.
+- The owner revision loop now shows success feedback after AI changes copy, image,
+  or both, and the no-change message tells owners to edit the same comment and try
+  again. This is app code and requires the next mobile build to reach devices.
 
 ### Validation
 
 - `npx vitest run lib/ai-revision-target.test.ts lib/ai-revision-fallback-copy.test.ts --reporter=dot`: passed, 2 files and 7 tests.
 - `npx vitest run lib/deal-offer-contract.test.ts --reporter=dot`: passed, 1 file and 21 tests.
+- `npx vitest run lib/create-ai-ux-source.test.ts lib/ai-revision-change.test.ts lib/ai-revision-target.test.ts --reporter=dot`: passed, 3 files and 20 tests.
 - `npx vitest run supabase/functions/ai-generate-ad-variants/prompt.test.ts --reporter=dot`: passed, 1 file and 12 tests.
 - `npm run copy:evaluate`: passed, 31 copy fixtures valid, 3 poster fixtures valid, 7 revision fixtures valid.
 - `npm run gate:ai-ad`: passed.
