@@ -862,7 +862,7 @@ function buildCopyAlternatives(params: {
     ? [valid[selectedIndex]!, ...valid.filter((_, index) => index !== selectedIndex)]
     : [params.selected, ...valid.filter((variant) => !sameCopy(variant, params.selected))];
 
-  const alternatives = ordered.slice(0, 3).map((variant, index) => ({
+  const alternatives = ordered.slice(0, 5).map((variant, index) => ({
     ...(variant.candidate_id ? { candidate_id: clip(variant.candidate_id, 64) } : {}),
     ...(variant.strategy_id ? { strategy_id: clip(variant.strategy_id, 64) } : {}),
     ...(variant.strategy_reason ? { strategy_reason: clip(variant.strategy_reason, 180) } : {}),
@@ -1531,7 +1531,7 @@ async function prepareCopyCandidates(params: {
 
   const judgeCandidates = ranked
     .filter((variant) => validateAiCopyAgainstOffer(variant, params.offerContract).valid)
-    .slice(0, 3);
+    .slice(0, 5);
   if (judgeCandidates.length < 2) {
     telemetry.judge.skipped_reason = "fewer_than_two_valid_candidates";
     return { variants: ranked, telemetry, judgeAttempts: [] };
@@ -1552,7 +1552,7 @@ async function prepareCopyCandidates(params: {
       systemPrompt: system,
       userPrompt: userText,
       jsonSchema,
-      maxOutputTokens: 560,
+      maxOutputTokens: 780,
       timeoutMs: envNumber("AI_JUDGE_TIMEOUT_MS", 9_000),
       generationRunId: params.costContext.requestGroupId,
       promptVersion: CANDIDATE_JUDGE_PROMPT_VERSION,
@@ -4047,7 +4047,7 @@ function coerceCopyAlternatives(raw: unknown): AdCopyAlternative[] | undefined {
       ...(typeof option.cta === "string" ? { cta: clip(option.cta, 26) } : {}),
       ...(typeof option.selected === "boolean" ? { selected: option.selected } : {}),
     });
-    if (out.length >= 3) break;
+    if (out.length >= 5) break;
   }
   return out.length > 1 ? out : undefined;
 }

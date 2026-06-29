@@ -31,6 +31,22 @@ describe("deal eligibility inference", () => {
     });
   });
 
+  it("infers free reward text when free follows the reward item", () => {
+    const form = inferDealEligibilityFormFromText(
+      "Buy any large coffee drink and get one cookie of your choice free today only.",
+    );
+
+    expect(form).toMatchObject({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "any large coffee drink",
+      freeItemDescription: "cookie of your choice",
+    });
+    expect(validateDealEligibility(dealEligibilityFormToInput(form!))).toMatchObject({
+      eligible: true,
+      eligibilityStatus: "VALID",
+    });
+  });
+
   it("merges inferred text into empty fields without overwriting manual entries", () => {
     const current = {
       ...createDefaultDealEligibilityFormState(),
@@ -44,6 +60,19 @@ describe("deal eligibility inference", () => {
       dealType: "BUY_ONE_GET_ONE_FREE",
       requiredItemDescription: "manual sandwich",
       freeItemDescription: "latte",
+    });
+  });
+
+  it("switches the default discount state to a free-item offer from clear owner text", () => {
+    const current = createDefaultDealEligibilityFormState();
+    const inferred = inferDealEligibilityFormFromText(
+      "Buy any large coffee drink and get one cookie of your choice free today only.",
+    );
+
+    expect(mergeInferredEligibilityForm(current, inferred, { allowDealTypeChange: true })).toMatchObject({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "any large coffee drink",
+      freeItemDescription: "cookie of your choice",
     });
   });
 

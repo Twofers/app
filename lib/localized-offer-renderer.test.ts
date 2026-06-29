@@ -114,6 +114,22 @@ describe("localized offer renderer", () => {
     ]);
   });
 
+  it("renders English any-qualified offer facts without awkward articles", () => {
+    const coffeeCookie = renderLocalizedOfferFromDefinition(definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "any large coffee drink",
+      freeItemDescription: "cookie of your choice",
+    }), { locale: "en-US" });
+    const discount = renderLocalizedOfferFromDefinition(definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      itemDescription: "any croissant",
+      discountPercent: 40,
+    }), { locale: "en-US" });
+
+    expect(coffeeCookie.primaryOfferLine).toBe("Buy any large coffee drink and get a free cookie of your choice");
+    expect(discount.primaryOfferLine).toBe("Get 40% off any croissant");
+  });
+
   it("keeps branded terms unchanged unless a localized name is provided", () => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",

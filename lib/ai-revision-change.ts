@@ -19,7 +19,6 @@ function visibleCopyFingerprint(ad: GeneratedAd): string {
     ad.subheadline,
     ad.cta,
     ad.push_notification,
-    ad.social_caption,
     ad.terms_summary,
     posterCopy?.headline,
     posterCopy?.offer_line_1,

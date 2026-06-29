@@ -153,6 +153,36 @@ describe("ad copy style gate", () => {
     );
   });
 
+  it("blocks awkward article and quantifier grammar in AI-originated coffee offer copy", () => {
+    const result = evaluateAdCopyStyleGate({
+      copy: {
+        displayHook: "Buy an any large coffee drink",
+        supportingLine: "Try our any large coffee drink and get a cookie",
+        pushBody: "Purchase an any large coffee drink to receive one cookie.",
+      },
+      provenance: aiProvenance,
+      requiredSpecificTerms: ["Any large coffee drink", "Cookie of your choice"],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "displayHook",
+          reasons: expect.arrayContaining(["AWKWARD_ARTICLE_QUANTIFIER"]),
+        }),
+        expect.objectContaining({
+          field: "supportingLine",
+          reasons: expect.arrayContaining(["WEAK_TRY_OUR_PHRASE", "AWKWARD_ARTICLE_QUANTIFIER"]),
+        }),
+        expect.objectContaining({
+          field: "pushBody",
+          reasons: expect.arrayContaining(["AWKWARD_ARTICLE_QUANTIFIER"]),
+        }),
+      ]),
+    );
+  });
+
   it("selects the first style-safe AI candidate", () => {
     const selection = selectStyleSafeCopyCandidate(
       [

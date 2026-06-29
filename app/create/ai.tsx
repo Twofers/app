@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -20,6 +21,7 @@ import {
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
@@ -107,6 +109,7 @@ import {
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
 import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
+import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallback-visual";
 import type {
   AdCreativeFormat,
   PosterSpecV1,
@@ -463,6 +466,139 @@ function cleanCustomImageEditInstruction(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").slice(0, 400);
 }
 
+function copyStrategyLabelKey(strategyId: string | null | undefined): { key: string; defaultValue: string } {
+  switch (strategyId) {
+    case "value_clarity":
+      return { key: "createAi.copyStrategyValueClarity", defaultValue: "Value clarity" };
+    case "social_or_occasion":
+      return { key: "createAi.copyStrategySocialOccasion", defaultValue: "Social moment" };
+    case "product_desire":
+      return { key: "createAi.copyStrategyProductDesire", defaultValue: "Product desire" };
+    case "local_discovery":
+      return { key: "createAi.copyStrategyLocalDiscovery", defaultValue: "Local discovery" };
+    case "merchant_specific":
+      return { key: "createAi.copyStrategyMerchantSpecific", defaultValue: "Shop-specific" };
+    default:
+      return { key: "createAi.copyStrategyDefault", defaultValue: "AI angle" };
+  }
+}
+
+function DraftFallbackVisual({
+  businessName,
+  headline,
+  offerLine,
+  label,
+}: {
+  businessName?: string | null;
+  headline?: string | null;
+  offerLine?: string | null;
+  label: string;
+}) {
+  const fallbackVisual = buildDeterministicAdFallbackVisual({
+    businessName,
+    headline,
+    offerLine,
+  });
+
+  return (
+    <View style={{ height: 200, overflow: "hidden" }}>
+      <LinearGradient
+        colors={fallbackVisual.palette.background}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, opacity: 0.32 }}>
+        <View
+          style={{
+            position: "absolute",
+            top: 58,
+            left: "-12%",
+            width: "128%",
+            height: 46,
+            borderRadius: 6,
+            backgroundColor: "rgba(255,255,255,0.18)",
+            transform: [{ rotate: "-15deg" }],
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            top: 142,
+            left: "-10%",
+            width: "125%",
+            height: 42,
+            borderRadius: 6,
+            backgroundColor: "rgba(255,255,255,0.12)",
+            transform: [{ rotate: "-15deg" }],
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            right: 24,
+            top: 36,
+            width: 76,
+            height: 76,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.32)",
+            backgroundColor: "rgba(255,255,255,0.08)",
+            transform: [{ rotate: "8deg" }],
+          }}
+        />
+      </View>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 9 }}>
+        <View
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: fallbackVisual.palette.markBackground,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.16,
+            shadowRadius: 14,
+            elevation: 3,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={{
+              color: fallbackVisual.palette.markText,
+              fontSize: 28,
+              lineHeight: 34,
+              fontWeight: "900",
+              letterSpacing: 0,
+            }}
+          >
+            {fallbackVisual.initials}
+          </Text>
+        </View>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          style={{
+            color: fallbackVisual.palette.accent,
+            fontSize: 12,
+            lineHeight: 16,
+            fontWeight: "900",
+            letterSpacing: 0,
+            textTransform: "uppercase",
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 type PhotoTreatmentOption = { key: PhotoTreatment; labelKey: string; helperKey: string };
 
 const PHOTO_TREATMENT_OPTIONS: readonly PhotoTreatmentOption[] = [
@@ -482,7 +618,9 @@ function imageSourceModeForPhotoChoice(
   photoPath: string | null,
   usePhotoAsFinal: boolean,
 ): MerchantImageSourceMode {
-  if (!photoPath) return "ai_generated";
+  // No-photo drafts must stay fast and reliable: the app renders the ad text
+  // natively, so do not hold the whole generation flow on image synthesis.
+  if (!photoPath) return "deterministic_fallback";
   return usePhotoAsFinal ? "merchant_original" : "merchant_ai_edit";
 }
 
@@ -2628,8 +2766,29 @@ export default function AiDealScreen() {
       option.short_description.trim() === (ad.short_description ?? ad.subheadline).trim();
   }
 
+  function copyOptionsRepresentSameCandidate(
+    candidate: GeneratedAdCopyAlternative,
+    selectedOption: GeneratedAdCopyAlternative,
+  ): boolean {
+    if (candidate.candidate_id && selectedOption.candidate_id) {
+      return candidate.candidate_id === selectedOption.candidate_id;
+    }
+    if (candidate.variant_index != null && selectedOption.variant_index != null) {
+      return candidate.variant_index === selectedOption.variant_index;
+    }
+    return copyOptionMatchesAd(candidate, {
+      headline: selectedOption.headline,
+      subheadline: selectedOption.short_description,
+      short_description: selectedOption.short_description,
+      cta: selectedOption.cta ?? "",
+    });
+  }
+
   function selectCopyOption(option: GeneratedAdCopyAlternative, index: number) {
     if (!generatedAd || copyOptionMatchesAd(option, generatedAd)) return;
+    const selectedCopyAlternativeIndex = generatedAd.copy_alternatives?.findIndex((candidate) =>
+      copyOptionsRepresentSameCandidate(candidate, option),
+    );
     const next = normalizeGeneratedAdDisplayCopy({
       ...generatedAd,
       headline: option.headline,
@@ -2638,10 +2797,15 @@ export default function AiDealScreen() {
       push_notification: option.push_notification || option.headline,
       social_caption: option.social_caption ?? generatedAd.social_caption,
       cta: option.cta || generatedAd.cta,
-      selected_variant_index: option.variant_index ?? index,
-      copy_alternatives: generatedAd.copy_alternatives?.map((candidate, candidateIndex) => ({
+      selected_variant_index:
+        option.variant_index ?? (
+          selectedCopyAlternativeIndex != null && selectedCopyAlternativeIndex >= 0
+            ? selectedCopyAlternativeIndex
+            : index
+        ),
+      copy_alternatives: generatedAd.copy_alternatives?.map((candidate) => ({
         ...candidate,
-        selected: candidateIndex === index,
+        selected: copyOptionsRepresentSameCandidate(candidate, option),
       })),
     });
     setGeneratedAd(next);
@@ -3409,7 +3573,7 @@ export default function AiDealScreen() {
   const ownerLanguagePreviewDisplayTermsLine = stripAppRenderedTimingMetadata(ownerLanguagePreview.termsLine);
   const copyAlternativeOptions = (generatedAd?.copy_alternatives ?? [])
     .filter((option) => option.headline.trim().length > 0 && option.short_description.trim().length > 0)
-    .slice(0, 3);
+    .slice(0, 5);
   const showCopyAlternatives = Boolean(generatedAd && copyAlternativeOptions.length > 1);
   const composedOfferFacts = ownerLanguagePreview.offerFacts;
   const composedCopy = ownerLanguagePreview.copy;
@@ -3561,6 +3725,21 @@ export default function AiDealScreen() {
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
   const canReviseAd = revisionsLeft > 0 && !revising && !generating;
+  const progressRevisionTarget = revisionFeedback.trim()
+    ? copyOnlyRevisionTargetForFeedback(revisionTarget, revisionFeedback)
+    : revisionTarget;
+  const revisionProgressMessageKey =
+    progressRevisionTarget === "copy"
+      ? "createAi.revisingCopyMessage"
+      : progressRevisionTarget === "image"
+        ? "createAi.revisingImageMessage"
+        : "createAi.revisingBothMessage";
+  const revisionProgressHintKey =
+    progressRevisionTarget === "copy"
+      ? "createAi.revisingCopyHint"
+      : progressRevisionTarget === "image"
+        ? "createAi.revisingImageHint"
+        : "createAi.revisingBothHint";
   const targetLabel: Record<RevisionTarget, string> = {
     copy: t("createAi.reviseTargetCopy"),
     image: t("createAi.reviseTargetImage"),
@@ -4599,7 +4778,7 @@ export default function AiDealScreen() {
                         defaultValue: "The offer terms are locked so customers always see the correct deal.",
                       })}
                       noImageLabel={t("createAi.noImage")}
-                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
                       addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
                       theme={theme}
                       darkMode={colorScheme === "dark"}
@@ -4674,7 +4853,7 @@ export default function AiDealScreen() {
                         defaultValue: "The offer terms are locked so customers always see the correct deal.",
                       })}
                       noImageLabel={t("createAi.noImage")}
-                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Twofer fallback" })}
+                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
                       addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
                       theme={theme}
                       darkMode={colorScheme === "dark"}
@@ -4689,6 +4868,7 @@ export default function AiDealScreen() {
                     </Text>
                     {copyAlternativeOptions.map((option, index) => {
                       const selected = copyOptionMatchesAd(option, generatedAd);
+                      const strategyLabel = copyStrategyLabelKey(option.strategy_id);
                       return (
                         <Pressable
                           key={`${option.candidate_id ?? "copy"}-${index}`}
@@ -4704,6 +4884,19 @@ export default function AiDealScreen() {
                             gap: 6,
                           }}
                         >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: selected ? theme.accentText : theme.mutedText,
+                              fontSize: 11,
+                              lineHeight: 14,
+                              fontWeight: "900",
+                              letterSpacing: 0,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {t(strategyLabel.key, { defaultValue: strategyLabel.defaultValue })}
+                          </Text>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                             <MaterialIcons
                               name={selected ? "check-circle" : "radio-button-unchecked"}
@@ -4970,7 +5163,12 @@ export default function AiDealScreen() {
                     return previewUri ? (
                       <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
                     ) : (
-                      <View style={{ height: 200, backgroundColor: theme.surfaceMuted }} />
+                      <DraftFallbackVisual
+                        businessName={businessName}
+                        headline={title || promoLine || hintText}
+                        offerLine={promoLine || title || description}
+                        label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                      />
                     );
                   })()}
                   <View style={{ padding: 12 }}>
@@ -5048,10 +5246,25 @@ export default function AiDealScreen() {
         )}
       </ScrollView>
       <DancingPenguinProgressOverlay
-        visible={generating}
-        title={t("createAi.generateWorking")}
-        message={selectedPhotoUri ? t("createAi.generatingWithPhoto") : t("createAi.generatingNoPhoto")}
-        hint={t("createAi.generatingHint")}
+        visible={generating || revising}
+        title={revising ? t("createAi.revisingWorking") : t("createAi.generateWorking")}
+        message={
+          revising
+            ? t(revisionProgressMessageKey)
+            : selectedPhotoUri
+              ? t("createAi.generatingWithPhoto")
+              : t("createAi.generatingNoPhoto")
+        }
+        hint={
+          revising
+            ? t(revisionProgressHintKey)
+            : selectedPhotoUri
+              ? t("createAi.generatingHint")
+              : t("createAi.generatingHintNoPhoto", {
+                  defaultValue:
+                    "Writing your ad and checking the deal details. This usually finishes faster without a photo.",
+                })
+        }
         cancelLabel={t("createAi.cancel")}
         onCancel={cancelGeneration}
         theme={theme}

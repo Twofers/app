@@ -318,7 +318,7 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.4-mini`, other allowlisted models are explicit overrides. |
+| `OPENAI_MODEL` | Chat model allowlist in `_shared/openai-chat-model.ts`; default `gpt-5.5`, other allowlisted models are explicit overrides. |
 | `OPENAI_WHISPER_MODEL` | Voice path in `ai-compose-offer`. |
 | `GEMINI_API_KEY` | Required only when Gemini text fallback, independent judging, vision QA fallback, or Gemini image generation is enabled. |
 | `GEMINI_TEXT_MODEL` | Gemini structured text model; default `gemini-3.5-flash`. |

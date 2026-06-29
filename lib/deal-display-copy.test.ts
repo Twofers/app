@@ -47,6 +47,20 @@ describe("getDealDisplayTitle", () => {
     ).toBe("Buy a latte and get a free cookie");
   });
 
+  it("does not add articles before any-qualified items", () => {
+    expect(
+      getDealDisplayTitle({
+        deal_type: "BUY_ONE_GET_SOMETHING_FREE",
+        required_item_description: "any large coffee drink",
+        free_item_description: "cookie of your choice",
+      }),
+    ).toBe("Buy any large coffee drink and get a free cookie of your choice");
+
+    expect(getDealDisplayTitle({ title: "Buy any large coffee drink and get a cookie free" })).toBe(
+      "Buy any large coffee drink and get a free cookie",
+    );
+  });
+
   it("rewrites legacy with-free fragments without hard-coding items", () => {
     expect(getDealDisplayTitle({ title: "Egg sandwich with free coffee" })).toBe(
       "Buy an egg sandwich and get a free coffee",
@@ -116,6 +130,16 @@ describe("getDealDisplayTitle", () => {
         item_description: "Croissant",
       }),
     ).toBe("Get 25% off one croissant");
+  });
+
+  it("does not add one before any-qualified discount items", () => {
+    expect(
+      getDealDisplayTitle({
+        deal_type: "PERCENT_OFF_SINGLE_ITEM",
+        discount_percent: 40,
+        item_description: "any croissant",
+      }),
+    ).toBe("Get 40% off any croissant");
   });
 
   it("reads locked offer and terms from ad specs when supplied", () => {

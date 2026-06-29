@@ -113,6 +113,29 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("setUsePhotoAsFinal(false);");
   });
 
+  it("keeps skipped-photo generation on the fast native-rendered fallback path", () => {
+    expect(createAiSource).toContain('if (!photoPath) return "deterministic_fallback";');
+    expect(createAiSource).toContain("image_source_mode: sentSourceMode");
+    expect(createAiSource).toContain("createAi.fallbackVisualLabel");
+    expect(createAiSource).toContain('defaultValue: "Local deal"');
+    expect(createAiSource).toContain("createAi.generatingHintNoPhoto");
+    expect(createAiSource).toMatch(
+      /selectedPhotoUri\s*\?\s*t\("createAi\.generatingHint"\)\s*:\s*t\("createAi\.generatingHintNoPhoto"/,
+    );
+    expect(createAiSource).not.toContain("Twofer fallback");
+  });
+
+  it("keeps no-photo deal preview visually branded instead of blank", () => {
+    const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
+    const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
+    const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
+
+    expect(createAiSource).toContain("function DraftFallbackVisual");
+    expect(createAiSource).toContain("buildDeterministicAdFallbackVisual");
+    expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
+    expect(acceptedPreviewSource).not.toContain("height: 200, backgroundColor: theme.surfaceMuted");
+  });
+
   it("keeps merchant revision comments as a first-class AI input", () => {
     expect(createAiSource).toContain("type RevisionSuggestion");
     expect(createAiSource).toContain("revisionSuggestionOptions");
@@ -134,8 +157,58 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("feedback_length: revisionFeedbackText.length");
     expect(createAiSource).toContain("const revisionSuccessKey = revisionChange.copyChanged && revisionChange.imageChanged");
     expect(createAiSource).toContain("createAi.reviseSuccessCopy");
+    expect(createAiSource).toContain("progressRevisionTarget");
+    expect(createAiSource).toContain("revisionProgressMessageKey");
+    expect(createAiSource).toContain("revisionProgressHintKey");
+    expect(createAiSource).toContain("createAi.revisingCopyHint");
+    expect(createAiSource).toContain("visible={generating || revising}");
     expect(createAiSource).toContain('setBanner({ message: t(revisionSuccessKey), tone: "success" });');
     expect(createAiSource).not.toContain("revision_feedback: revisionFeedbackText,\n        feedback");
+  });
+
+  it("keeps copy-only revisions on the existing no-photo fallback path", () => {
+    const revisionModeStart = createAiSource.indexOf("const revisesImage = effectiveRevisionTarget");
+    const revisionCallStart = createAiSource.indexOf("const { ad, quota: nextQuota } = await aiReviseAd", revisionModeStart);
+    const revisionSource = createAiSource.slice(revisionModeStart, revisionCallStart);
+
+    expect(revisionModeStart).toBeGreaterThan(-1);
+    expect(revisionCallStart).toBeGreaterThan(revisionModeStart);
+    expect(revisionSource).toContain("const revisesImage = effectiveRevisionTarget === \"image\" || effectiveRevisionTarget === \"both\";");
+    expect(revisionSource).toContain("imageSourceModeForPhotoChoice(photoPath, usePhotoAsFinal)");
+    expect(revisionSource).toMatch(
+      /revisesImage && previousSourceMode === "deterministic_fallback"\s+\?\s+"ai_generated"\s+:\s+previousSourceMode;/,
+    );
+    expect(createAiSource).toContain("image_source_mode: sourceModeForRevision");
+  });
+
+  it("surfaces all five AI copy lanes for merchant review", () => {
+    const optionsStart = createAiSource.indexOf("const copyAlternativeOptions =");
+    const optionsEnd = createAiSource.indexOf("const showCopyAlternatives", optionsStart);
+    const optionsBlock = createAiSource.slice(optionsStart, optionsEnd);
+
+    expect(optionsStart).toBeGreaterThan(-1);
+    expect(optionsEnd).toBeGreaterThan(optionsStart);
+    expect(optionsBlock).toContain(".slice(0, 5)");
+    expect(optionsBlock).not.toContain(".slice(0, 3)");
+    expect(createAiSource).toContain("function copyStrategyLabelKey");
+    expect(createAiSource).toContain("createAi.copyStrategyValueClarity");
+    expect(createAiSource).toContain("createAi.copyStrategySocialOccasion");
+    expect(createAiSource).toContain("createAi.copyStrategyProductDesire");
+    expect(createAiSource).toContain("createAi.copyStrategyLocalDiscovery");
+    expect(createAiSource).toContain("createAi.copyStrategyMerchantSpecific");
+  });
+
+  it("tracks selected copy alternatives by candidate identity", () => {
+    const selectStart = createAiSource.indexOf("function selectCopyOption");
+    const selectEnd = createAiSource.indexOf("setGeneratedAd(next);", selectStart);
+    const selectBlock = createAiSource.slice(selectStart, selectEnd);
+
+    expect(createAiSource).toContain("function copyOptionsRepresentSameCandidate");
+    expect(selectStart).toBeGreaterThan(-1);
+    expect(selectEnd).toBeGreaterThan(selectStart);
+    expect(selectBlock).toContain("selectedCopyAlternativeIndex");
+    expect(selectBlock).toContain("copyOptionsRepresentSameCandidate(candidate, option)");
+    expect(selectBlock).not.toContain("candidateIndex === index");
   });
 
   it("syncs AI-generated copy into deal details immediately", () => {

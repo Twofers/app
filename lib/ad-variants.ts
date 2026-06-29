@@ -133,7 +133,7 @@ function normalizeCopyAlternatives(ad: GeneratedAd): GeneratedAdCopyAlternative[
       social_caption: option.social_caption?.trim(),
       cta: option.cta?.trim(),
     }))
-    .slice(0, 3);
+    .slice(0, 5);
   return out.length > 0 ? out : undefined;
 }
 

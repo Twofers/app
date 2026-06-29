@@ -5,12 +5,12 @@
 | Dimension | What to judge |
 |-----------|----------------|
 | **Offer accuracy** | Item(s), discount type, **price** (if any), **time window** match owner note + schedule. No invented “today” unless note says it. |
-| **Lane differentiation** | Can you name which card is **value**, **neighborhood**, **premium** without reading labels? ≥2 cards clearly different? |
+| **Copy angle differentiation** | Are the selected ad and copy alternatives meaningfully different in strategy, such as value clarity, social/occasion, product desire, local discovery, or shop-specific? |
 | **Local / business fit** | Sounds like a real neighborhood spot; not Groupon / corporate; profile (if set) helps **tone** without changing facts. |
 | **Usefulness w/ light edits** | Publishable with small tweaks, not full rewrite. |
 | **Overall quality** | Would you ship this to a real owner? |
 
-**Differentiation pass rule:** If you cannot tell **value vs local vs quality** intent, cap **Lane differentiation** at **2**.
+**Differentiation pass rule:** If the alternatives feel like the same headline paraphrased five ways, cap **Copy angle differentiation** at **2**.
 
 **Offer fail rule:** Any wrong item, price, discount, or schedule → **Offer accuracy ≤ 2** and note why in comments.
 
@@ -83,4 +83,4 @@ Use with [TEST_CASE_INPUTS.md](./TEST_CASE_INPUTS.md).
 - Account profile: empty / filled (describe):  
 - Regeneration attempt: 0 / 1 / 2  
 
-Then score the **three returned ads** (optional: score best card only + note which lane).
+Then score the selected ad and any returned copy alternatives, up to five. Note the visible strategy label when it helps explain the score.

@@ -59,6 +59,7 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("This is an ad, not a legal deal description");
     expect(basePrompt.system).toContain("Owner-provided notes and revision feedback are instructions and context");
     expect(basePrompt.system).toContain("Avoid generic marketing language");
+    expect(basePrompt.system).toContain('Say "Buy any large coffee drink", not "Buy an any large coffee drink"');
     expect(basePrompt.system).toContain("don't miss out");
     expect(basePrompt.system).toContain("qualifying purchase");
     expect(basePrompt.system).toContain("included after");

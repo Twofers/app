@@ -25,4 +25,19 @@ describe("ai-generate-ad-variants revision source guard", () => {
     expect(returnIndex).toBeGreaterThan(filterIndex);
     expect(source).toContain("revision_feedback_no_candidate_match");
   });
+
+  it("keeps deterministic fallback image requests copy-only and provider-free", () => {
+    const deterministicStart = source.indexOf('if (params.imageSourceMode === "deterministic_fallback")');
+    const openAiStart = source.indexOf('if (params.imageProviderConfig.primaryProvider === "openai")', deterministicStart);
+    const deterministicBlock = source.slice(deterministicStart, openAiStart);
+
+    expect(deterministicStart).toBeGreaterThan(-1);
+    expect(openAiStart).toBeGreaterThan(deterministicStart);
+    expect(deterministicBlock).toContain('source: "copy_only"');
+    expect(deterministicBlock).toContain('skippedImageQaTelemetry("deterministic_fallback")');
+    expect(deterministicBlock).toContain('provider: "none"');
+    expect(deterministicBlock).toContain("estimatedCostUsd: 0");
+    expect(deterministicBlock).not.toContain("openAiFallback");
+    expect(deterministicBlock).not.toContain("produceFallbackImage");
+  });
 });

@@ -33,6 +33,16 @@ const contract = contractFor({
   freeItemDiscountPercent: 100,
 });
 
+const coffeeCookieContract = contractFor({
+  dealType: "BUY_ONE_GET_SOMETHING_FREE",
+  appliesTo: "SINGLE_ITEM",
+  requiredPurchaseQuantity: 1,
+  requiredItemDescription: "any large coffee drink",
+  freeItemQuantity: 1,
+  freeItemDescription: "cookie of your choice",
+  freeItemDiscountPercent: 100,
+});
+
 function copy(id: string, overrides: Partial<AiDealCopyVariant>): AiDealCopyVariant {
   return {
     candidate_id: id,
@@ -58,6 +68,25 @@ describe("candidate judge helpers", () => {
     expect(scoreCandidateDeterministically(strong, contract, profile).total)
       .toBeGreaterThan(scoreCandidateDeterministically(generic, contract, profile).total);
     expect(rankCandidatesDeterministically([generic, strong], contract, profile)[0]?.candidate_id).toBe("strong");
+  });
+
+  it("scores weak try-our item headlines below offer-aware headlines", () => {
+    const weak = copy("weak", {
+      headline: "Try our any large coffee drink",
+      short_description: "Buy any large coffee drink and get a cookie of your choice free.",
+      push_notification: "Buy any large coffee drink and get a cookie free.",
+    });
+    const strong = copy("strong", {
+      headline: "Buy a large coffee, get a cookie",
+      short_description: "Buy any large coffee drink and the cookie of your choice is on us.",
+      push_notification: "Claim a large coffee and free cookie today.",
+    });
+    const weakScore = scoreCandidateDeterministically(weak, coffeeCookieContract);
+    const strongScore = scoreCandidateDeterministically(strong, coffeeCookieContract);
+
+    expect(weakScore.details.headlineStrength).toBeLessThan(strongScore.details.headlineStrength);
+    expect(strongScore.total).toBeGreaterThan(weakScore.total);
+    expect(rankCandidatesDeterministically([weak, strong], coffeeCookieContract)[0]?.candidate_id).toBe("strong");
   });
 
   it("applies judge winner and hard-fail signals to candidate scores", () => {

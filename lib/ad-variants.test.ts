@@ -81,6 +81,29 @@ describe("normalizeGeneratedAdDisplayCopy", () => {
     expect(ad.headline).toBe("Buy one cold brew and get one free");
     expect(ad.push_notification).toBe("Buy one cold brew and get one free");
   });
+
+  it("keeps up to five generated copy alternatives", () => {
+    const ad = normalizeGeneratedAdDisplayCopy({
+      headline: "Coffee + cookie",
+      subheadline: "Buy coffee and get a cookie.",
+      cta: "Claim deal",
+      copy_alternatives: Array.from({ length: 6 }, (_, index) => ({
+        candidate_id: `candidate_${index + 1}`,
+        strategy_id: "value_clarity",
+        headline: `Coffee option ${index + 1}`,
+        short_description: `Buy coffee and get a cookie option ${index + 1}.`,
+      })),
+    });
+
+    expect(ad.copy_alternatives).toHaveLength(5);
+    expect(ad.copy_alternatives?.map((option) => option.candidate_id)).toEqual([
+      "candidate_1",
+      "candidate_2",
+      "candidate_3",
+      "candidate_4",
+      "candidate_5",
+    ]);
+  });
 });
 
 describe("buildFallbackTemplateAd", () => {

@@ -39,6 +39,14 @@ describe("summarizeAiRevisionChange", () => {
     }).hasExpectedChange).toBe(true);
   });
 
+  it("does not treat hidden social-caption-only edits as visible copy changes", () => {
+    expect(summarizeAiRevisionChange({
+      previousAd: ad({ social_caption: "Coffee and cookie reward." }),
+      revisedAd: ad({ social_caption: "Your coffee run comes with a cookie." }),
+      target: "copy",
+    }).hasExpectedChange).toBe(false);
+  });
+
   it("counts poster copy changes as visible copy changes", () => {
     const previousAd = ad({
       poster: {

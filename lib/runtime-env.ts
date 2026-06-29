@@ -110,8 +110,8 @@ export function isProductionSupabaseUrlConfigured(): boolean {
 
 export function getAiStudioDevStartupGuardError(): string | null {
   if (!isAiStudioDevAppVariant()) return null;
-  if (isProductionSupabaseUrlConfigured()) {
-    return "Twofer Dev cannot start with the production Supabase project configured. Set EXPO_PUBLIC_SUPABASE_URL to the separate development project.";
+  if (isProductionSupabaseUrlConfigured() && !isAiStudioPublishingDisabled()) {
+    return "Twofer Dev cannot start with the production Supabase project unless AI Studio publishing is disabled.";
   }
   return null;
 }

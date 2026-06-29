@@ -29,6 +29,7 @@ export type AdCopyStyleGateReason =
   | "HYPE_WITHOUT_SPECIFICITY"
   | "BARE_SPECIFIC_TERM"
   | "WEAK_TRY_OUR_PHRASE"
+  | "AWKWARD_ARTICLE_QUANTIFIER"
   | "TOO_MANY_EXCLAMATIONS"
   | "EMOJI_IN_AI_COPY";
 
@@ -110,6 +111,10 @@ function isWeakTryOurPhrase(text: string): boolean {
   return /^try\s+(?:our|the)\b/i.test(text.trim());
 }
 
+function hasAwkwardArticleQuantifier(text: string): boolean {
+  return /\b(?:a|an|the|our|your)\s+any\b/i.test(text);
+}
+
 function shouldBypassStyleGate(provenance: AdSpecV3TextProvenance): boolean {
   return provenance === "merchant_typed" || provenance === "merchant_edited";
 }
@@ -123,6 +128,7 @@ function reasonsForField(text: string, requiredSpecificTerms: string[] | undefin
   if (hasAnyPattern(text, [...AD_COPY_LOCAL_CLICHE_PATTERNS])) reasons.push("VAGUE_LOCAL_CLICHE");
   if (isBareSpecificTerm(text, requiredSpecificTerms)) reasons.push("BARE_SPECIFIC_TERM");
   if (isWeakTryOurPhrase(text)) reasons.push("WEAK_TRY_OUR_PHRASE");
+  if (hasAwkwardArticleQuantifier(text)) reasons.push("AWKWARD_ARTICLE_QUANTIFIER");
   if (AD_COPY_HYPE_WORD_PATTERN.test(text) && !hasSpecificTerm(text, requiredSpecificTerms)) {
     reasons.push("HYPE_WITHOUT_SPECIFICITY");
   }

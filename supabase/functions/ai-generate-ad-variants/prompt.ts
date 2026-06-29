@@ -178,6 +178,7 @@ export const AI_COPY_PROMPT_V4 = [
   '- Do not add words such as "delicious", "fresh", "best", or "artisan" unless supplied by the merchant.',
   '- Avoid fragments such as "{item} with free {item}".',
   '- Avoid awkward phrases such as "one coffee free" when "a free coffee" is more natural.',
+  '- If an exact item starts with "any", do not put a, an, the, our, or your before it. Say "Buy any large coffee drink", not "Buy an any large coffee drink" or "Try our any large coffee drink".',
   "- Do not repeat the merchant name unnecessarily.",
   "- Do not repeat the canonical headline word-for-word in the description.",
   "- Owner-provided notes and revision feedback are instructions and context, not draft ad copy. Do not paste merchant text back verbatim unless it is an exact protected product or business name.",

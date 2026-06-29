@@ -14,6 +14,7 @@ function cleanItem(value: string): string {
   return cleanText(value)
     .replace(/\b(today|tonight|this afternoon|this morning|this evening|only|deal|offer)\b.*$/i, "")
     .replace(/\b(get|and get|with purchase)\b.*$/i, "")
+    .replace(/\s+(?:for\s+)?free$/i, "")
     .replace(/^(a|an|the)\s+/i, "")
     .trim();
 }
@@ -37,13 +38,25 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
     return seeded ? { ...seeded, dealType: "BUY_ONE_GET_ONE_FREE" } : null;
   }
 
+  const purchaseQuantity = "(?:one|1|a|an)";
+  const freeQuantity = "(?:one|1|a|an)";
+
   const buyOneGetFreeItem = source.match(
-    /\bbuy\s+(?:one|1|a|an)\s+(.+?)\s*(?:,|\band\b)?\s*\bget\s+(?:one|1|a|an)?\s*free\s+([^.!?,;]+)/i,
+    new RegExp(
+      `\\bbuy\\s+(?:${purchaseQuantity}\\s+)?(.+?)\\s*(?:,|\\band\\b)?\\s*\\bget\\s+(?:${freeQuantity}\\s+)?free\\s+([^.!?,;]+)`,
+      "i",
+    ),
+  ) ?? source.match(
+    new RegExp(
+      `\\bbuy\\s+(?:${purchaseQuantity}\\s+)?(.+?)\\s*(?:,|\\band\\b)?\\s*\\bget\\s+(?:${freeQuantity}\\s+)?(.+?)\\s+(?:for\\s+)?free\\b(?:\\s+[^.!?,;]*)?`,
+      "i",
+    ),
   );
   if (buyOneGetFreeItem?.[1] && buyOneGetFreeItem[2]) {
     const requiredItem = cleanItem(buyOneGetFreeItem[1]);
     const freeItem = cleanItem(buyOneGetFreeItem[2]);
-    if (requiredItem && freeItem) {
+    const freeItemIsPronoun = /^(?:one|item|same|next|second|another)$/i.test(freeItem);
+    if (requiredItem && freeItem && !freeItemIsPronoun) {
       return {
         ...createDefaultDealEligibilityFormState({
           requiredItemDescription: requiredItem,
@@ -55,7 +68,10 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
   }
 
   const buyOneGetOneFree = source.match(
-    /\bbuy\s+(?:one|1|a|an)\s+(.+?)\s*(?:,|\band\b)?\s*\bget\s+(?:one|1|a|an|the\s+next|the\s+second|another)?\s*(?:same\s+)?(?:one|item)?\s*(?:free|for\s+free)\b/i,
+    new RegExp(
+      `\\bbuy\\s+(?:${purchaseQuantity}\\s+)?(.+?)\\s*(?:,|\\band\\b)?\\s*\\bget\\s+(?:${freeQuantity}|the\\s+next|the\\s+second|another)?\\s*(?:same\\s+)?(?:one|item)?\\s*(?:free|for\\s+free)\\b`,
+      "i",
+    ),
   );
   if (buyOneGetOneFree?.[1]) {
     const seeded = withItemSeed(buyOneGetOneFree[1]);

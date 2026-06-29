@@ -319,7 +319,7 @@ function normalizePlainBuyGetTitle(rawTitle: string): string | null {
     if (normalizeForComparison(item) === normalizeForComparison(freeItem)) {
       return `Buy one ${item} and get one free`;
     }
-    return `Buy ${articleFor(item)} ${item} and get a free ${freeItem}`;
+    return `Buy ${formatPurchasePhrase(1, item)} and get ${formatFreeRewardPhrase(1, freeItem)}`;
   }
   return null;
 }
@@ -391,8 +391,8 @@ function lowerFirst(value: string): string {
   return `${clean.charAt(0).toLowerCase()}${clean.slice(1)}`;
 }
 
-function startsWithArticle(value: string): boolean {
-  return /^(?:a|an|the)\s+/i.test(normalizeWhitespace(value));
+function startsWithDeterminer(value: string): boolean {
+  return /^(?:a|an|any|the)\s+/i.test(normalizeWhitespace(value));
 }
 
 function startsWithQuantityPhrase(value: string): boolean {
@@ -446,7 +446,7 @@ function formatPurchasePhrase(quantity: number, itemName: string): string {
   const item = normalizeNounPhrase(stripMechanicalOfferWords(itemName));
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
     return `${articleFor(item)} ${lowerFirst(item)}`;
   }
   return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
@@ -466,11 +466,18 @@ function formatFreeRewardPhrase(quantity: number, itemName: string): string {
   const item = normalizeNounPhrase(stripMechanicalOfferWords(itemName));
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
     if (looksPluralLike(item)) return `free ${lowerFirst(stripLeadingArticle(item))}`;
     return `a free ${lowerFirst(item)}`;
   }
   return `${numberWord(quantity)} free ${pluralizeItemPhrase(item)}`;
+}
+
+function formatDiscountItemPhrase(itemName: string): string {
+  const item = normalizeNounPhrase(stripMechanicalOfferWords(itemName));
+  if (!item) return "item";
+  if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+  return `one ${lowerFirst(singularizeItemPhrase(item))}`;
 }
 
 function structuredOfferTitle(source: DealDisplayTitleFields): string | null {
@@ -480,7 +487,7 @@ function structuredOfferTitle(source: DealDisplayTitleFields): string | null {
   const discountPercent = discountPercentFromDeal(source, "");
 
   if (/percent|discount|off[-_\s]?single/i.test(typeText) && discountPercent != null && item) {
-    return `Get ${discountPercent}% off one ${lowerFirst(singularizeItemPhrase(normalizeNounPhrase(item)))}`;
+    return `Get ${discountPercent}% off ${formatDiscountItemPhrase(item)}`;
   }
 
   const isDifferentItem = /something[-_\s]?free|different[-_\s]?item|buy[-_\s]?one[-_\s]?get[-_\s]?something/i.test(typeText);
@@ -585,13 +592,13 @@ export function getDealDisplayTitle(deal: DealDisplayTitleFields | null | undefi
   }
 
   if (differentItemOffer && item && freeItem && item !== freeItem) {
-    return `Buy ${articleFor(item)} ${item} and get a free ${freeItem}`;
+    return `Buy ${formatPurchasePhrase(1, item)} and get ${formatFreeRewardPhrase(1, freeItem)}`;
   }
 
   if (withFreeOffer) {
     const purchase = normalizeNounPhrase(withFreeOffer.item);
     const reward = normalizeNounPhrase(withFreeOffer.freeItem);
-    return `Buy ${articleFor(purchase)} ${purchase} and get a free ${reward}`;
+    return `Buy ${formatPurchasePhrase(1, purchase)} and get ${formatFreeRewardPhrase(1, reward)}`;
   }
 
   if (sameItemOffer && item) {

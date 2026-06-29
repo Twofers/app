@@ -7,14 +7,14 @@ Implementation lives in `app/create/ai.tsx`, `lib/ad-variants.ts`, `supabase/fun
 
 ## 1. Definition of done
 
-**Done** when a business owner can: upload one image → type one short offer → generate → get **3 clearly different** ads (value / neighborhood / premium) → choose one → edit if needed → save to draft / publish.
+**Done** when a business owner can: upload or skip an image → type one short offer → generate → get one ready-to-review ad plus up to **5 clearly different** copy options → choose one → revise by typing comments → edit if needed → save to draft / publish.
 
 ### MVP acceptance criteria (checklist)
 
 - [ ] One image upload; one plain-language offer prompt.
-- [ ] Exactly **3** options returned, each with: headline, subheadline, CTA, **creative lane**, rationale, optional visual direction.
+- [ ] Up to **5** copy options returned, each with: headline, subheadline, CTA, **creative lane**, rationale, optional visual direction.
 - [ ] Copy matches **actual offer** (item, discount, price, **time window** when set in the flow).
-- [ ] At least **2 of 3** feel clearly different on first read (differentiation test).
+- [ ] At least **4 of 5** generated lanes feel clearly different on first read when all five alternatives are available.
 - [ ] Owner can edit: headline, subheadline, CTA, offer details, **time window** (scheduling UI).
 - [ ] Owner selects one ad → loads into draft; can publish or save template.
 - [ ] Visible loading state; **manual fallback** if AI fails.
@@ -26,15 +26,17 @@ Voice, autonomous agents, AI-generated images, full profile scraping, dashboard 
 
 ---
 
-## 2. What “different” means (3 lanes)
+## 2. What "different" means (5 lanes)
 
 | Lane | Job | Should sound like |
 |------|-----|-------------------|
-| **Value** | Deal is obvious | Direct, savings, practical |
-| **Neighborhood** | Feels local & human | Warm, routine, community |
-| **Premium** | Product worth trying | Craft, freshness, quality — not pretentious |
+| **Value clarity** | Deal is obvious | Direct, practical, clear exchange |
+| **Social / occasion** | Fits a real customer moment | Routine, break, friend, daypart |
+| **Product desire** | Makes the real item appealing | Specific, sensory only when facts support it |
+| **Local discovery** | Gives a reason to visit or return | Local, human, grounded |
+| **Merchant specific** | Uses verified merchant truth | Signature item, habit, neighborhood, differentiator |
 
-**Differentiation test:** On one read, someone can name which card is “deal,” which is “local,” which is “quality.”
+**Differentiation test:** On one read, someone can name why each option is meaningfully different, not just a paraphrase.
 
 ---
 
@@ -71,11 +73,11 @@ Use as QA rows in a spreadsheet; judge **correctness** (BOGO, times, price, item
 
 | Rule | Target |
 |------|--------|
-| Ads per request | Exactly 3 |
+| Ads per request | One selected ad plus up to 5 copy alternatives |
 | Inputs | Typed + 1 image |
 | Concurrent generations | One at a time (UI disabled while loading) |
 | Free-tier regenerations | **Max 2** per draft (enforced client + server) |
-| Model | `gpt-5.4-mini` default; optional `OPENAI_MODEL` override through the shared server allowlist |
+| Model | `gpt-5.5` default; optional `OPENAI_MODEL` override through the shared server allowlist |
 | Logging | Token usage logged per request (function logs) |
 
 ---
@@ -114,9 +116,9 @@ Keep image + offer note; show title / subheadline / CTA / details fields; save w
 
 ## 10. One-page success / failure
 
-**Succeeds if:** E2E works, 3 lanes distinct, copy matches offer, light edits, fast enough, never blocks manual create.
+**Succeeds if:** E2E works, copy lanes are distinct, copy matches offer, light edits, fast enough, never blocks manual create.
 
-**Pause and fix if:** three similar ads, wrong offer facts, endless regenerate, heavy rewrites, spammy voice, slower than typing.
+**Pause and fix if:** similar copy options, wrong offer facts, endless regenerate, heavy rewrites, spammy voice, slower than typing.
 
 ---
 

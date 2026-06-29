@@ -10,7 +10,10 @@ vi.mock("expo-constants", () => ({
   },
 }));
 
+import Constants from "expo-constants";
 import {
+  canLoadAiDealStudioDevRoutes,
+  getAiStudioDevStartupGuardError,
   getPublicEnvSnapshot,
   isAiV4AuthoritativeOfferCardEnabled,
   isAiV4ComposedAdCardEnabled,
@@ -35,6 +38,60 @@ import {
   isAiV5SourceLocaleCreativeEnabled,
   isAiV5TranslationQaEnabled,
 } from "./runtime-env";
+
+describe("runtime-env AI Studio dev production guard", () => {
+  const previous = {
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV: process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV,
+    EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING: process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING,
+  };
+  const previousExtra = { ...((Constants.expoConfig?.extra as Record<string, unknown> | undefined) ?? {}) };
+  const previousAndroid = Constants.expoConfig?.android ? { ...Constants.expoConfig.android } : undefined;
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    const mutableConstants = Constants as typeof Constants & {
+      expoConfig: NonNullable<typeof Constants.expoConfig>;
+    };
+    mutableConstants.expoConfig.extra = { ...previousExtra };
+    mutableConstants.expoConfig.android = previousAndroid;
+  });
+
+  function configureAiStudioDevWithProductionSupabase() {
+    const mutableConstants = Constants as typeof Constants & {
+      expoConfig: NonNullable<typeof Constants.expoConfig>;
+    };
+    mutableConstants.expoConfig.extra = {
+      appVariant: "ai-studio-dev",
+      androidPackage: "com.unvmex2.twoforone.dev",
+    };
+    mutableConstants.expoConfig.android = { package: "com.unvmex2.twoforone.dev" };
+    process.env.EXPO_PUBLIC_SUPABASE_URL = "https://kvodhiqhdqnptqovovia.supabase.co";
+    process.env.EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV = "true";
+  }
+
+  it("allows the dev package to use production Supabase when publishing is disabled", () => {
+    configureAiStudioDevWithProductionSupabase();
+    process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING = "true";
+
+    expect(getAiStudioDevStartupGuardError()).toBeNull();
+    expect(canLoadAiDealStudioDevRoutes()).toBe(true);
+  });
+
+  it("blocks the dev package on production Supabase when publishing is not disabled", () => {
+    configureAiStudioDevWithProductionSupabase();
+    delete process.env.EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING;
+
+    expect(getAiStudioDevStartupGuardError()).toContain("publishing is disabled");
+    expect(canLoadAiDealStudioDevRoutes()).toBe(false);
+  });
+});
 
 describe("runtime-env retired offer rollout flags", () => {
   const previous = process.env.EXPO_PUBLIC_ENABLE_OFFER_DEFINITION_FALLBACK;

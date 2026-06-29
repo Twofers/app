@@ -15,9 +15,9 @@ function env(values: Record<string, string | undefined>) {
 }
 
 describe("resolveOpenAiChatModel", () => {
-  it("defaults production text generation to gpt-5.4-mini", () => {
-    expect(DEFAULT_OPENAI_MODEL).toBe("gpt-5.4-mini");
-    expect(resolveOpenAiChatModel(env({}))).toBe("gpt-5.4-mini");
+  it("defaults production text generation to gpt-5.5", () => {
+    expect(DEFAULT_OPENAI_MODEL).toBe("gpt-5.5");
+    expect(resolveOpenAiChatModel(env({}))).toBe("gpt-5.5");
   });
 
   it("allows explicit override models", () => {

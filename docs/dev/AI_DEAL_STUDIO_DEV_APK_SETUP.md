@@ -7,18 +7,18 @@ This setup is only for a local Android development APK that installs beside the 
 - Production package stays `com.unvmex2.twoforone`.
 - Dev package is `com.unvmex2.twoforone.dev`.
 - Dev app name is `Twofer Dev`.
-- Do not use the production Supabase project in the dev APK.
+- The active project is production Supabase (`kvodhiqhdqnptqovovia`). The dev APK may use it only while AI Studio publishing is disabled.
 - Do not put Supabase service role keys, OpenAI keys, signing keys, passwords, or keystores in GitHub.
 - AI Studio publishing is disabled with `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`.
 
 ## Local Env File
 
 1. Copy `.env.development.local.example` to `.env.development.local`.
-2. Replace placeholders with the separate Supabase development project public values:
+2. Replace placeholders with the active Supabase project public values:
 
 ```env
-EXPO_PUBLIC_SUPABASE_URL=<DEV_SUPABASE_URL>
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<DEV_SUPABASE_ANON_KEY>
+EXPO_PUBLIC_SUPABASE_URL=https://kvodhiqhdqnptqovovia.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<SUPABASE_ANON_KEY>
 ```
 
 3. Keep these dev flags:
@@ -41,8 +41,8 @@ $env:TWOFER_APP_VARIANT="ai-studio-dev"
 $env:EXPO_PUBLIC_APP_VARIANT="ai-studio-dev"
 $env:EXPO_PUBLIC_ENABLE_AI_DEAL_STUDIO_DEV="true"
 $env:EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING="true"
-$env:EXPO_PUBLIC_SUPABASE_URL="<DEV_SUPABASE_URL>"
-$env:EXPO_PUBLIC_SUPABASE_ANON_KEY="<DEV_SUPABASE_ANON_KEY>"
+$env:EXPO_PUBLIC_SUPABASE_URL="https://kvodhiqhdqnptqovovia.supabase.co"
+$env:EXPO_PUBLIC_SUPABASE_ANON_KEY="<SUPABASE_ANON_KEY>"
 npx expo config --type public
 ```
 
@@ -50,7 +50,7 @@ Confirm:
 
 - `name` is `Twofer Dev`
 - `android.package` is `com.unvmex2.twoforone.dev`
-- no Android intent filter points at `kvodhiqhdqnptqovovia.supabase.co`
+- `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING` is `true`
 
 Production config check:
 
@@ -144,13 +144,13 @@ adb install -r path\to\app.apk
 
 Because the package id differs from production, Android installs `Twofer Dev` beside the Play closed-testing app instead of replacing it.
 
-## Confirm Dev Supabase Host And Disabled Publishing
+## Confirm Supabase Host And Disabled Publishing
 
 Open `Twofer Dev`, sign in with the dev account, then open Diagnostics. Confirm:
 
 - the app name is `Twofer Dev`
 - the package is `com.unvmex2.twoforone.dev`
-- `EXPO_PUBLIC_SUPABASE_URL` displays the dev Supabase host, not `kvodhiqhdqnptqovovia.supabase.co`
+- `EXPO_PUBLIC_SUPABASE_URL` displays `kvodhiqhdqnptqovovia.supabase.co`
 - `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING` is `true`
 - the AI Deal Studio screen shows `Publishing disabled in dev build`
 

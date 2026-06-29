@@ -134,20 +134,134 @@ function limitPosterText(value: string | undefined | null, fallback: string, max
   return sanitizePosterText(value ?? "", { fallback, maxChars: max });
 }
 
-function productKeyword(productName: string | undefined | null) {
-  const words = cleanDisplay(productName, "OFFER")
-    .replace(/[^a-zA-Z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  return (words[words.length - 1] ?? words[0] ?? "OFFER").toUpperCase();
+function normalizePosterWords(value: string | undefined | null): string {
+  return cleanDisplay(value, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9%+\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function posterRewardLine(offerTerms: string | undefined | null) {
-  const normalized = offerTerms?.toLowerCase() ?? "";
-  if (normalized.includes("free coffee")) return "GET FREE COFFEE";
-  if (normalized.includes("coffee")) return "GET COFFEE";
-  if (normalized.includes("free")) return "GET 1 FREE";
+const POSTER_ITEM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "any",
+  "choice",
+  "drink",
+  "hot",
+  "iced",
+  "large",
+  "medium",
+  "of",
+  "one",
+  "regular",
+  "small",
+  "the",
+  "your",
+]);
+
+const POSTER_ITEM_WORDS = [
+  "coffee",
+  "latte",
+  "espresso",
+  "cappuccino",
+  "cookie",
+  "bagel",
+  "sandwich",
+  "muffin",
+  "croissant",
+  "pastry",
+  "scone",
+  "tea",
+  "taco",
+  "dessert",
+  "entree",
+  "pizza",
+  "burger",
+  "salad",
+  "bowl",
+  "smoothie",
+];
+
+function posterItemLabel(value: string | undefined | null): string {
+  const words = normalizePosterWords(value).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const known = POSTER_ITEM_WORDS.find((word) => words.includes(word));
+  if (known) return known === "drink" && words.includes("coffee") ? "coffee" : known;
+  const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  return meaningful.length > 0 ? meaningful.slice(-2).join(" ") : words.slice(0, 2).join(" ");
+}
+
+function productKeyword(productName: string | undefined | null) {
+  return (posterItemLabel(productName) || "offer").toUpperCase().slice(0, 12);
+}
+
+function posterRewardLabel(offerTerms: string | undefined | null, productName: string | undefined | null): string {
+  const freeMatch = offerTerms?.match(/\bfree\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80})/i);
+  const getFreeMatch = offerTerms?.match(/\bget\s+(?:a|an|one|1)?\s*([a-z0-9][a-z0-9\s-]{1,80}?)(?:\s+of your choice)?\s+free\b/i);
+  const freePhrase = (freeMatch?.[1] ?? getFreeMatch?.[1])
+    ?.replace(/\b(?:of your choice|when|with|today|while|for|redeem|only)\b[\s\S]*$/i, "")
+    .replace(/[.,;:!?]+$/g, "")
+    .trim();
+  const reward = posterItemLabel(freePhrase || offerTerms);
+  const product = posterItemLabel(productName);
+  if (reward && reward !== product) return reward.toUpperCase().slice(0, 12);
+  if (/\bfree\b/i.test(offerTerms ?? "")) return "FREE";
+  return "";
+}
+
+function posterRewardLine(offerTerms: string | undefined | null, productName: string | undefined | null) {
+  const reward = posterRewardLabel(offerTerms, productName);
+  if (reward && reward !== "FREE") return `GET 1 ${reward}`;
+  if (reward === "FREE") return "GET 1 FREE";
   return "GET 1 MORE";
+}
+
+function posterHeadlineFromOffer(productName: string | undefined | null, offerTerms: string | undefined | null) {
+  const product = productKeyword(productName);
+  const reward = posterRewardLabel(offerTerms, productName);
+  if (reward && reward !== "FREE" && reward !== product) {
+    const pair = `${product} + ${reward}`;
+    return pair.length <= 22 ? `${pair} BREAK` : pair;
+  }
+  return `${product} BONUS`;
+}
+
+function stripAwkwardAnyDeterminer(value: string): string {
+  return value.replace(/\b(?:a|an|the|our|your)\s+(any\b)/gi, "$1");
+}
+
+function stripPosterFiller(value: string | undefined | null): string {
+  return stripAwkwardAnyDeterminer(cleanDisplay(value, ""))
+    .replace(/^try\s+our\b[:\s-]*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isBareItemHeadline(value: string, label: string): boolean {
+  const normalized = normalizePosterWords(value);
+  const labelWords = new Set(normalizePosterWords(label).split(/\s+/).filter(Boolean));
+  if (!normalized || labelWords.size === 0 || /[+&]/.test(value)) return false;
+  const meaningful = normalized.split(/\s+/).filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  return meaningful.length > 0 && meaningful.every((word) => labelWords.has(word));
+}
+
+function isWeakPosterHeadline(value: string | undefined | null, fallback: PosterCopyV1): boolean {
+  const raw = cleanDisplay(value, "");
+  const cleaned = stripPosterFiller(raw);
+  if (!cleaned) return true;
+  if (/^try\s+our\b/i.test(raw)) return true;
+  const productLabel = normalizePosterWords(fallback.offer_line_1).replace(/^buy\s+\d+\s+/, "");
+  const rewardLabel = normalizePosterWords(fallback.offer_line_2).replace(/^get\s+\d+\s+/, "").replace(/^get\s+/, "");
+  return isBareItemHeadline(cleaned, productLabel) || isBareItemHeadline(cleaned, rewardLabel);
+}
+
+function safePosterHeadline(value: string | undefined | null, fallback: PosterCopyV1): string {
+  return isWeakPosterHeadline(value, fallback)
+    ? fallback.headline
+    : limitPosterText(stripPosterFiller(value), fallback.headline, 28);
 }
 
 function fallbackPosterCopy(draft: NonNullable<DraftResponse["draft"]>, businessName: string): PosterCopyV1 {
@@ -155,9 +269,9 @@ function fallbackPosterCopy(draft: NonNullable<DraftResponse["draft"]>, business
   const product = productKeyword(locked?.productName);
   return {
     business_name: sanitizePosterText(businessName, { fallback: "Local Favorite", maxChars: 34, uppercase: false }),
-    headline: limitPosterText(`${product} TIME`, "LATTE TIME", 28),
+    headline: limitPosterText(posterHeadlineFromOffer(locked?.productName, locked?.offerTerms), "LOCAL DEAL", 28),
     offer_line_1: limitPosterText(`BUY 1 ${product}`, "BUY 1", 28),
-    offer_line_2: limitPosterText(posterRewardLine(locked?.offerTerms), "GET 1 FREE", 28),
+    offer_line_2: limitPosterText(posterRewardLine(locked?.offerTerms, locked?.productName), "GET 1 FREE", 28),
     subline: limitPosterText("LOCAL FAVORITE", "LOCAL FAVORITE", 28),
   };
 }
@@ -167,7 +281,7 @@ function posterCopyFromDraft(draft: NonNullable<DraftResponse["draft"]>, busines
   const poster = draft.creative?.poster;
   return {
     business_name: fallback.business_name,
-    headline: limitPosterText(poster?.headline ?? draft.creative?.headline, fallback.headline, 28),
+    headline: safePosterHeadline(poster?.headline ?? draft.creative?.headline, fallback),
     offer_line_1: limitPosterText(poster?.offerLine1, fallback.offer_line_1, 28),
     offer_line_2: limitPosterText(poster?.offerLine2, fallback.offer_line_2, 28),
     subline: limitPosterText(poster?.subline ?? poster?.supportingLine ?? draft.creative?.supportingCopy, fallback.subline ?? "", 32),
@@ -204,14 +318,11 @@ export default function AiDealStudioDevScreen() {
   const [draft, setDraft] = useState<DraftResponse["draft"] | null>(null);
 
   const guardError = useMemo(() => {
-    if (isProductionSupabaseUrlConfigured()) {
-      return "This build is pointed at the production Supabase host and AI Deal Studio is blocked.";
+    if (!isAiStudioPublishingDisabled()) {
+      return "Publishing must be disabled before AI Deal Studio can load.";
     }
     if (!canLoadAiDealStudioDevRoutes()) {
       return `AI Deal Studio is only available in the dev APK with publishing disabled. Current package: ${getAndroidPackageName()}.`;
-    }
-    if (!isAiStudioPublishingDisabled()) {
-      return "Publishing must be disabled before AI Deal Studio can load.";
     }
     return null;
   }, []);
@@ -370,7 +481,7 @@ export default function AiDealStudioDevScreen() {
 
         {guardError ? <Banner tone="error" message={guardError} /> : null}
         {!guardError && isProductionSupabaseUrlConfigured() ? (
-          <Banner tone="error" message="Supabase points to production. AI Deal Studio is blocked." />
+          <Banner tone="warning" message="Supabase points to production. Publishing remains disabled for this dev build." />
         ) : null}
         {!guardError && !sessionLoading && !session?.user ? (
           <Banner tone="warning" message="Sign in as a dev business owner to generate drafts." />
