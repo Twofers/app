@@ -825,7 +825,10 @@ function containsForbiddenAiPhrase(text: string): boolean {
 }
 
 function hasAdLikeHeadlineHook(headline: string): boolean {
-  return /\b(?:free|on us|save|off)\b/i.test(headline) || /\+\s*free\b/i.test(headline);
+  return (
+    /\b(?:free|on us|save|off|bonus|combo|pairing|pair|break|run|perk|plus)\b/i.test(headline) ||
+    /\+/.test(headline)
+  );
 }
 
 function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCodes: string[]): void {
@@ -837,7 +840,12 @@ function validateGeneralCopyQuality(copy: Partial<AiDealCopyVariant>, reasonCode
 
   if (headline && /[.!?]$/.test(headline)) reasonCodes.push("HEADLINE_TRAILING_PUNCTUATION");
   if (headline && /\bwith\s+(?:a\s+|an\s+|one\s+)?free\b/i.test(headline)) reasonCodes.push("HEADLINE_WITH_FREE_FRAGMENT");
-  if (headline && !/^(?:buy|get|order|save|claim)\b/i.test(headline) && !hasAdLikeHeadlineHook(headline)) {
+  if (
+    headline &&
+    headline.split(/\s+/).filter(Boolean).length < 2 &&
+    !/^(?:buy|get|order|save|claim)\b/i.test(headline) &&
+    !hasAdLikeHeadlineHook(headline)
+  ) {
     reasonCodes.push("HEADLINE_DOES_NOT_START_WITH_ACTION");
   }
   if (containsForbiddenAiPhrase(text)) reasonCodes.push("FORBIDDEN_AI_PHRASE");
@@ -1238,7 +1246,7 @@ function lockCopy(
   const deterministic = buildDeterministicDealChannelCopy(contract);
   return {
     ...clean,
-    headline: deterministic.headline,
+    headline: clean.headline || deterministic.headline,
     push_title: clean.push_title || deterministic.pushTitle,
     push_body: clean.push_body || clean.push_notification || deterministic.pushBody,
     push_notification: clean.push_body || clean.push_notification || deterministic.pushBody,

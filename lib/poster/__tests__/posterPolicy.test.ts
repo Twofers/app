@@ -135,7 +135,7 @@ describe("poster policy", () => {
     expect(copy.subline).toBeUndefined();
   });
 
-  it("uses the locked item name when generated copy repeats offer mechanics", () => {
+  it("uses a poster concept when generated copy repeats offer mechanics", () => {
     const definition = definitionFor({
       dealType: "BUY_ONE_GET_SOMETHING_FREE",
       appliesTo: "SINGLE_ITEM",
@@ -153,8 +153,30 @@ describe("poster policy", () => {
     });
 
     expect(copy.business_name).toBe("Merit Coffee");
-    expect(copy.headline).toBe("BACON AND EGG SANDWICH");
+    expect(copy.headline).toBe("SANDWICH + COFFEE BREAK");
     expect(copy.offer_line_1).toBe("BUY 1 BACON AND EGG SANDWICH");
     expect(copy.offer_line_2).toBe("GET 1 COFFEE");
+  });
+
+  it("does not let a bare long product name become the poster hero", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "Any large coffee drink",
+      freeItemQuantity: 1,
+      freeItemDescription: "Cookie of your choice",
+      freeItemDiscountPercent: 100,
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Any large coffee drink",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
+    expect(copy.offer_line_1).toBe("BUY 1 ANY LARGE COFFEE DRINK");
+    expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
   });
 });

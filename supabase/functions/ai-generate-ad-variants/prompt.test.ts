@@ -85,6 +85,47 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Buy one latte and get one free");
   });
 
+  it("adds poster-specific creative direction and previous poster context for revisions", () => {
+    const prompt = buildAdCopyPrompt({
+      ...basePromptParams("Buy any large coffee drink and get a cookie free", "coffee and cookie"),
+      creativeFormat: "poster_v1",
+      revisionFeedback: "The top part does not make sense. Make it sound like a real ad.",
+      previousAd: {
+        headline: "Any large coffee drink",
+        short_description: "Buy any large coffee drink and the cookie is on us.",
+        push_notification: "Buy any large coffee drink and get a free cookie.",
+        terms_summary: "Purchase 1 any large coffee drink to receive 1 cookie free.",
+        poster: {
+          copy: {
+            headline: "ANY LARGE COFFEE DRINK",
+            offer_line_1: "BUY 1 ANY LARGE COFFEE DRINK",
+            offer_line_2: "GET 1 COOKIE OF YOUR CHOICE",
+            subline: "TODAY",
+          },
+        },
+      },
+      offerContract: contractFor({
+        dealType: "BUY_ONE_GET_SOMETHING_FREE",
+        appliesTo: "SINGLE_ITEM",
+        requiredPurchaseQuantity: 1,
+        requiredItemDescription: "Any large coffee drink",
+        requiredItemRetailValueCents: 500,
+        freeItemQuantity: 1,
+        freeItemDescription: "Cookie of your choice",
+        freeItemRetailValueCents: 300,
+        freeItemDiscountPercent: 100,
+      }),
+    });
+
+    expect(prompt.userText).toContain("Requested ad format: poster_v1");
+    expect(prompt.userText).toContain("POSTER FORMAT DIRECTION");
+    expect(prompt.userText).toContain("not a form-field echo");
+    expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
+    expect(prompt.userText).toContain("revise headlineAlternative first");
+    expect(prompt.system).toContain("Coffee + Cookie Break");
+    expect(prompt.system).toContain("Bad poster headlines are Any large coffee drink");
+  });
+
   it("passes the locked contract while keeping metadata out of generated fields", () => {
     expect(basePrompt.userText).toContain("Customer buys 1 coffee.");
     expect(basePrompt.userText).toContain("Customer gets 1 bagel free.");

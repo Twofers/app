@@ -286,6 +286,12 @@ describe("validateAiCopyAgainstOffer", () => {
       const result = validateAiCopyAgainstOffer(copy({ headline: validText, push_notification: validText }), coffeeBagelContract);
       expect(result.valid, validText).toBe(true);
     }
+    expect(validateAiCopyAgainstOffer(copy({
+      headline: "Coffee run bonus",
+      short_description: "Buy a coffee and the bagel is on us.",
+      push_notification: "Buy a coffee and get a free bagel.",
+      social_caption: "Coffee run bonus: buy a coffee and get a free bagel.",
+    }), coffeeBagelContract).valid).toBe(true);
   });
 
   it("rejects buy-one-get-something-free copy that becomes generic BOGO", () => {
@@ -499,7 +505,7 @@ describe("generateValidatedDealCopy", () => {
       social_caption: "Buy coffee and bagel and get one free.",
     });
     const good = copy({
-      headline: "Buy a coffee and get a free bagel",
+      headline: "Coffee run bonus",
       short_description: "Buy a coffee and the bagel is on us.",
       push_notification: "Claim the coffee deal and get a free bagel.",
       social_caption: "Buy a coffee and get a free bagel at Merit Coffee.",
@@ -515,7 +521,7 @@ describe("generateValidatedDealCopy", () => {
     expect(requestCopy).toHaveBeenCalledTimes(2);
     expect(result.copy_source).toBe("AI_RETRY_VALIDATED");
     expect(result.locked_offer_line).toBe("Buy a coffee and get a free bagel");
-    expect(result.headline).toBe("Buy a coffee and get a free bagel");
+    expect(result.headline).toBe("Coffee run bonus");
     expect(`${result.headline} ${result.short_description} ${result.push_notification}`).not.toMatch(/\bBOGO\b/i);
     expect(result.short_description).not.toMatch(/buy (?:a )?coffee and bagel/i);
   });

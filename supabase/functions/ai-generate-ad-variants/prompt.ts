@@ -37,6 +37,14 @@ export type PreviousAdCopy = {
   subheadline?: string;
   push_notification?: string;
   terms_summary?: string;
+  poster?: {
+    copy?: {
+      headline?: string;
+      offer_line_1?: string;
+      offer_line_2?: string;
+      subline?: string;
+    } | null;
+  } | null;
 };
 
 export type CreativeBrief = {
@@ -66,6 +74,7 @@ export type DealCopyPromptParams = {
   offerContract?: DealOfferContract;
   validationFeedback?: string;
   merchantCreativeProfile?: MerchantCreativeProfile;
+  creativeFormat?: "standard_card" | "poster_v1";
 };
 
 export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V4";
@@ -158,7 +167,7 @@ export const AI_COPY_PROMPT_V4 = [
   "VOICE:",
   "- Write like a sharp local cafe ad: specific, warm, and easy to scan.",
   "- Use clear, everyday American English unless a different output language is requested.",
-  "- Prefer short headlines that either name the exact offer or start with Buy, Get, Order, Save, or Claim.",
+  "- Prefer short headlines that feel like real ad hooks. They may be action-led or concept-led, but the body and push copy must make the exact exchange clear.",
   "- Use sentence case.",
   "- No emojis, all caps, hashtags, markdown, labels, quotation marks, or multiple exclamation marks.",
   "- Do not use exaggerated advertising language.",
@@ -180,7 +189,7 @@ export const AI_COPY_PROMPT_V4 = [
   ...AD_COPY_BANNED_PHRASES.map((phrase) => `- "${phrase}"`),
   "",
   "FIELD RULES:",
-  "- headlineAlternative: short ad headline, target 4-9 words, max 55 characters when exact product names allow it, no trailing period.",
+  "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.",
   "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
@@ -188,7 +197,8 @@ export const AI_COPY_PROMPT_V4 = [
   "- cta: short verb-first action label, max 26 characters.",
   "- imageBrief: short visual idea using only verified offer and merchant facts; no text in image.",
   "- merchantSpecificContextLimited: true only for the merchant_specific lane when verified merchant context is sparse.",
-  "- poster-related copy, if requested by the app, may use only a short headline and optional mood subline. The app/server rebuilds poster offer lines from the locked contract.",
+  "- poster-related headline copy, if requested by the app, must be a compact hero concept based on the whole offer. Do not use the full buy/get sentence, do not use a bare product name, and do not start with Try our because the app renders that eyebrow separately.",
+  "- For poster ads, good headlineAlternative examples are Coffee + Cookie Break, Latte Pairing, Sandwich + Coffee, Morning Bonus, or Cookie Pairing. Bad poster headlines are Any large coffee drink, Buy any large coffee drink and get a free cookie, Try our latte, or Free cookie with coffee.",
   "- Do not put Twofer, Claim, Redeem, Scan, Tap, Get in app, availability counts, time left, coupon codes, QR instructions, or urgency/scarcity in any poster-oriented wording or image idea.",
   "",
   "CREATIVE STRATEGIES:",
@@ -385,6 +395,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     offerContract,
     validationFeedback,
     merchantCreativeProfile,
+    creativeFormat = "standard_card",
   } = params;
 
   const facts: string[] = [];
@@ -413,6 +424,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   if (businessContext.category) facts.push(`Business category: ${businessContext.category.trim()}`);
   if (businessContext.description) facts.push(`Business description: ${businessContext.description.trim()}`);
   if (businessContext.tone) facts.push(`Selected tone, style only: ${businessContext.tone.trim()}`);
+  facts.push(`Requested ad format: ${creativeFormat}`);
   facts.push(`Owner-provided notes and deal terms: ${cleanItemHint || "(not provided)"}`);
   if (cleanResearchName) facts.push(`Product or deal item understood from notes: ${cleanResearchName}`);
   if (cleanResearchDescription) facts.push(`Product description context: ${cleanResearchDescription}`);
@@ -436,10 +448,18 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     revisionBlock.push(`  Short description: ${previousAd.short_description || previousAd.subheadline || ""}`);
     if (previousAd.push_notification) revisionBlock.push(`  Push notification: ${previousAd.push_notification}`);
     if (previousAd.terms_summary) revisionBlock.push(`  Terms summary: ${previousAd.terms_summary}`);
+    if (previousAd.poster?.copy) {
+      revisionBlock.push("  Previous poster copy:");
+      revisionBlock.push(`    Poster headline: ${previousAd.poster.copy.headline ?? ""}`);
+      revisionBlock.push(`    Poster offer line 1: ${previousAd.poster.copy.offer_line_1 ?? ""}`);
+      revisionBlock.push(`    Poster offer line 2: ${previousAd.poster.copy.offer_line_2 ?? ""}`);
+      if (previousAd.poster.copy.subline) revisionBlock.push(`    Poster subline: ${previousAd.poster.copy.subline}`);
+    }
     if (revisionPreset) revisionBlock.push(`Apply this preset adjustment: ${revisionPreset}`);
     if (revisionFeedback) revisionBlock.push(`Apply this user feedback: ${revisionFeedback}`);
     revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
     revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
+    revisionBlock.push("If the merchant mentions the top part, title, headline, wording, or poster copy, revise headlineAlternative first.");
     revisionBlock.push("If the adjustment is about tone, rewrite the framing and word choice while preserving the exact locked offer facts.");
   }
 
@@ -467,6 +487,14 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     "Create exactly one candidate for each strategy ID: value_clarity, social_or_occasion, product_desire, local_discovery, merchant_specific.",
     "The creativeBrief must explain the customer moment, exact hook, verified merchant truth used, offer truth used, desired feeling, natural language direction, visual story, and facts not to invent.",
     "If the request is used for a poster ad, keep the visualStory and imageBrief text-free and leave calm space for native centered text overlays.",
+    ...(creativeFormat === "poster_v1"
+      ? [
+          "POSTER FORMAT DIRECTION:",
+          "- headlineAlternative is the large top poster headline. Make it a real ad concept from the full offer, not a form-field echo.",
+          "- The app will render the exact buy/get mechanics separately, so headlineAlternative should not repeat the full locked offer line.",
+          "- Never output a headlineAlternative that is only the qualifying item, only the reward item, or starts with Try our.",
+        ]
+      : []),
     "Each candidate must have a different opening idea and a different strategy reason. Avoid paraphrasing the same headline five ways.",
     "",
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",

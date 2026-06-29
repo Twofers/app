@@ -43,6 +43,86 @@ function singularItem(value: string): string {
   return cleanText(value).replace(/\s+/g, " ");
 }
 
+const POSTER_ITEM_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "any",
+  "the",
+  "one",
+  "of",
+  "your",
+  "choice",
+  "large",
+  "medium",
+  "small",
+  "regular",
+  "hot",
+  "iced",
+  "ice",
+  "cold",
+  "fresh",
+]);
+
+const POSTER_KNOWN_ITEM_WORDS = [
+  "coffee",
+  "latte",
+  "espresso",
+  "cappuccino",
+  "cookie",
+  "bagel",
+  "sandwich",
+  "muffin",
+  "croissant",
+  "pastry",
+  "scone",
+  "tea",
+  "drink",
+  "taco",
+  "dessert",
+  "entree",
+];
+
+function normalizePosterComparison(value: string): string {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s+%-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function posterItemLabel(value: string): string {
+  const normalized = normalizePosterComparison(value);
+  if (!normalized) return "";
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const known = POSTER_KNOWN_ITEM_WORDS.find((word) => words.includes(word));
+  if (known && !(known === "drink" && words.includes("coffee"))) return known;
+  if (words.includes("coffee")) return "coffee";
+  const meaningful = words.filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  if (meaningful.length === 0) return words.slice(0, 2).join(" ");
+  return meaningful.slice(-2).join(" ");
+}
+
+function posterHeadlineFallback(definition: OfferDefinitionV1): string {
+  const firstItem = posterItemLabel(definition.qualifyingItems[0]?.displayName ?? "");
+  const rewardItem = posterItemLabel(definition.reward.displayNames[0] ?? "");
+
+  if (definition.offerType === "percent_off_single_item") {
+    return firstItem ? `${firstItem} savings` : "local deal";
+  }
+
+  if (definition.reward.rule === "same_item_free") {
+    return firstItem ? `${firstItem} bonus` : "local bonus";
+  }
+
+  if (firstItem && rewardItem) {
+    const pair = `${firstItem} + ${rewardItem}`;
+    return pair.length <= 22 ? `${pair} break` : pair;
+  }
+
+  return firstItem || rewardItem || "local deal";
+}
+
 function qtyLabel(quantity: number): string {
   return Number.isFinite(quantity) && quantity > 1 ? String(Math.floor(quantity)) : "1";
 }
@@ -58,6 +138,26 @@ function isMechanicalOfferHeadline(value: string): boolean {
   if (/\b\d+\s*%\s*off\b/.test(text)) return true;
   if (/\bfree\b/.test(text) && /\bwith\b|\bbuy\b|\bpurchase\b/.test(text)) return true;
   return false;
+}
+
+function isBareOfferItemHeadline(value: string, definition: OfferDefinitionV1): boolean {
+  const headline = normalizePosterComparison(value);
+  if (!headline) return false;
+  const itemNames = [
+    definition.qualifyingItems[0]?.displayName,
+    ...definition.reward.displayNames,
+  ].map((item) => normalizePosterComparison(item ?? "")).filter(Boolean);
+  if (itemNames.some((item) => headline === item)) return true;
+
+  const itemLabels = itemNames.map(posterItemLabel).filter(Boolean);
+  if (itemLabels.some((label) => headline === normalizePosterComparison(label))) return true;
+
+  const words = headline.split(/\s+/).filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
+  const normalizedWords = words.join(" ");
+  return itemLabels.some((label) => {
+    const normalizedLabel = normalizePosterComparison(label);
+    return normalizedWords === normalizedLabel || (words.length <= 3 && words.includes(normalizedLabel));
+  });
 }
 
 export function sanitizePosterBusinessName(
@@ -110,19 +210,13 @@ export function buildPosterOfferLinesFromOfferDefinition(definition: OfferDefini
   };
 }
 
-function headlineFallback(definition: OfferDefinitionV1): string {
-  const item = cleanText(definition.qualifyingItems[0]?.displayName ?? "");
-  const rewardItem = cleanText(definition.reward.displayNames[0] ?? "");
-  if (definition.offerType === "percent_off_single_item") return item || rewardItem || "LOCAL DEAL";
-  return item || rewardItem || "LOCAL DEAL";
-}
-
 function posterHeadline(definition: OfferDefinitionV1, requestedHeadline?: string | null): string {
-  const fallback = headlineFallback(definition);
+  const fallback = posterHeadlineFallback(definition);
   const requested = cleanText(requestedHeadline);
   if (!requested) return fallback;
   if (!scanPosterTextPolicy(requested).passed) return fallback;
   if (isMechanicalOfferHeadline(requested)) return fallback;
+  if (isBareOfferItemHeadline(requested, definition)) return fallback;
   return requested;
 }
 
@@ -138,7 +232,7 @@ export function buildPosterCopyFromOfferDefinition(params: {
   const base: PosterCopyV1 = {
     business_name: businessName,
     headline: sanitizePosterText(headline, {
-      fallback: headlineFallback(params.definition),
+      fallback: posterHeadlineFallback(params.definition),
       maxChars: 32,
     }),
     offer_line_1: lines.offer_line_1,

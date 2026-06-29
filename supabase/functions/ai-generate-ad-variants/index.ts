@@ -513,6 +513,7 @@ async function generateCopy(params: {
   revisionPreset?: string;
   revisionFeedback?: string;
   previousAd?: SingleAd;
+  creativeFormat?: "standard_card" | "poster_v1";
   costContext: AiCostContext;
 }): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
   fallback_reason?: string;
@@ -543,6 +544,7 @@ async function generateCopy(params: {
     revisionPreset,
     revisionFeedback,
     previousAd,
+    creativeFormat = "standard_card",
     costContext,
   } = params;
 
@@ -588,6 +590,7 @@ async function generateCopy(params: {
         offerContract,
         validationFeedback,
         merchantCreativeProfile: merchantProfile,
+        creativeFormat,
       });
 
       let result: Awaited<ReturnType<typeof generateStructuredText<typeof jsonSchema>>>;
@@ -647,7 +650,19 @@ async function generateCopy(params: {
         judgeAttempts.push(...prepared.judgeAttempts);
         judgeProvider = prepared.judgeProvider ?? judgeProvider;
         judgeModel = prepared.judgeModel ?? judgeModel;
-        return prepared.variants;
+        if (!isRevision || !previousAd) return prepared.variants;
+        const changed = prepared.variants.filter((variant) => hasVisibleRevisionCopyChange(variant, previousAd));
+        if (changed.length === 0) {
+          console.log(
+            JSON.stringify({
+              tag: "ai_ads_v2",
+              event: "revision_no_visible_copy_change",
+              attemptNumber,
+              businessId: offerContract.businessId,
+            }),
+          );
+        }
+        return changed;
       } catch {
         console.log(
           JSON.stringify({
@@ -961,6 +976,30 @@ async function logTextProviderAttempts(
       responseId: null,
     });
   }
+}
+
+function normalizeRevisionCopyText(value: string | null | undefined): string {
+  return typeof value === "string"
+    ? value.toLowerCase().replace(/[^a-z0-9%+\s-]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
+}
+
+function hasVisibleRevisionCopyChange(candidate: AiDealCopyVariant, previousAd: SingleAd): boolean {
+  const nextHeadline = normalizeRevisionCopyText(candidate.headline);
+  const nextDescription = normalizeRevisionCopyText(candidate.short_description);
+  const nextPush = normalizeRevisionCopyText(candidate.push_body || candidate.push_notification);
+  const previousHeadlines = [
+    previousAd.headline,
+    previousAd.poster?.copy?.headline,
+  ].map(normalizeRevisionCopyText).filter(Boolean);
+  const previousDescription = normalizeRevisionCopyText(previousAd.short_description || previousAd.subheadline);
+  const previousPush = normalizeRevisionCopyText(previousAd.push_notification);
+
+  return (
+    (nextHeadline.length > 0 && !previousHeadlines.includes(nextHeadline)) ||
+    (nextDescription.length > 0 && nextDescription !== previousDescription) ||
+    (nextPush.length > 0 && nextPush !== previousPush)
+  );
 }
 
 async function prepareCopyCandidates(params: {
@@ -3162,6 +3201,7 @@ Deno.serve(async (req) => {
           revisionPreset: revisionPreset || undefined,
           revisionFeedback: revisionFeedback || undefined,
           previousAd: previousAd ?? undefined,
+          creativeFormat: creativeRequest.requestedFormat,
           costContext,
         });
       } catch {
