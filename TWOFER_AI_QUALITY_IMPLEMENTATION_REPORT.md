@@ -1,5 +1,72 @@
 # Twofer AI Quality Implementation Report
 
+## 2026-06-29 AI revision and poster-copy hardening
+
+Status: Implemented locally on branch `feature/ai-deal-studio-dev-foundation`.
+
+Deployment actions: none in this slice. Hosted behavior for `ai-generate-ad-variants`
+still requires a hard-gated Supabase Edge Function deploy to project
+`kvodhiqhdqnptqovovia`.
+
+Supabase migrations applied: none. The linked project was previously verified up to
+date for migrations; this section adds no schema changes.
+
+Live secret names changed: none.
+
+### Files changed
+
+- `fixtures/ai-revision-feedback-cases.json`
+- `lib/ai-revision-target.ts`
+- `lib/ai-revision-target.test.ts`
+- `lib/ai-revision-fallback-copy.ts`
+- `lib/ai-revision-fallback-copy.test.ts`
+- `scripts/evaluate-ai-promotional-copy.mjs`
+- `scripts/check-ai-ad-release-gates.mjs`
+- `supabase/functions/ai-generate-ad-variants/index.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.ts`
+- `supabase/functions/ai-generate-ad-variants/prompt.test.ts`
+
+### What landed
+
+- Copy-only revision comments now cover more merchant phrasing, including top text,
+  generic copy, copy that reads weird, real-ad/full-offer comments, and inviting tone
+  requests.
+- Backend revision intent scoring now uses the same broader intent vocabulary before
+  selecting revised candidates.
+- Deterministic revision fallback now responds to generic/appetizing/inviting feedback
+  with visibly different locked-fact copy when the model returns no meaningful change.
+- The ad-copy prompt now labels owner notes and revision feedback as context-only
+  instructions, not draft ad copy to paste back.
+- Poster revision prompts now explicitly replace product-field, grammar-fragment, or
+  owner-note headlines with compact campaign ideas.
+- The copy evaluator now imports production offer, poster-copy, and revision-routing
+  helpers instead of carrying duplicated mirror logic.
+
+### Validation
+
+- `npx vitest run lib/ai-revision-target.test.ts lib/ai-revision-fallback-copy.test.ts --reporter=dot`: passed, 2 files and 7 tests.
+- `npx vitest run supabase/functions/ai-generate-ad-variants/prompt.test.ts --reporter=dot`: passed, 1 file and 12 tests.
+- `npm run copy:evaluate`: passed, 30 copy fixtures valid, 3 poster fixtures valid, 7 revision fixtures valid.
+- `npm run gate:ai-ad`: passed.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npm run typecheck:functions`: passed, 146 Edge Function files checked.
+- `npm test`: passed, 196 files and 1036 tests.
+
+### Unresolved risks
+
+- The hosted production function will not use these revision/prompt improvements until
+  `ai-generate-ad-variants` is deployed to `kvodhiqhdqnptqovovia`.
+- No live non-publishing generation was run in this slice; output quality still needs
+  owner review after deploy with real merchant scenarios.
+- Existing dirty/untracked local QA and store artifacts remain intentionally untouched.
+
+### Rollback
+
+Revert the local commits for this section. No migration rollback is required.
+
+---
+
 ## PR 1 - Provider foundation, cost, and resilience
 
 Status: Partially implemented locally on branch `codex/ai-quality-pr1-provider-foundation`.
