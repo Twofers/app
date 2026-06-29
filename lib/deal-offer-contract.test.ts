@@ -136,6 +136,22 @@ describe("buildDealOfferContract", () => {
     expect(buildCanonicalHeadlineFromFacts({
       merchantName: "Cafe",
       buyQuantity: 1,
+      buyItem: "any large coffee drink",
+      rewardQuantity: 1,
+      rewardItem: "cookie of your choice",
+      rewardType: "free",
+    })).toBe("Buy any large coffee drink and get a free cookie of your choice");
+    expect(buildCanonicalHeadlineFromFacts({
+      merchantName: "Cafe",
+      buyQuantity: 1,
+      buyItem: "any latte",
+      rewardQuantity: 1,
+      rewardItem: "any latte",
+      rewardType: "free",
+    })).toBe("Buy any latte and get one free");
+    expect(buildCanonicalHeadlineFromFacts({
+      merchantName: "Cafe",
+      buyQuantity: 1,
       buyItem: "an oat-milk latte",
       rewardQuantity: 1,
       rewardItem: "cookie",

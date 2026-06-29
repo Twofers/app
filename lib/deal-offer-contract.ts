@@ -343,6 +343,10 @@ function startsWithArticle(value: string): boolean {
   return /^(?:a|an|the)\s+/i.test(cleanText(value));
 }
 
+function startsWithDeterminer(value: string): boolean {
+  return /^(?:a|an|any|the)\s+/i.test(cleanText(value));
+}
+
 function stripLeadingArticle(value: string): string {
   return cleanText(value).replace(/^(?:a|an|the)\s+/i, "");
 }
@@ -391,7 +395,7 @@ function formatPurchasePhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return lowerFirst(item);
     return `${articleFor(item)} ${lowerFirst(item)}`;
   }
   return `${numberWord(quantity)} ${pluralizeItemPhrase(item)}`;
@@ -401,6 +405,7 @@ function formatCountedItem(quantity: number, itemName: string): string {
   const item = stripLeadingArticle(itemName);
   if (!item) return "";
   if (quantity === 1) {
+    if (/^any\s+/i.test(item)) return lowerFirst(item);
     if (startsWithQuantityPhrase(item)) return lowerFirst(item);
     return `one ${lowerFirst(item)}`;
   }
@@ -411,7 +416,7 @@ function formatFreeRewardPhrase(quantity: number, itemName: string): string {
   const item = cleanText(itemName);
   if (!item) return "";
   if (quantity === 1) {
-    if (startsWithArticle(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
+    if (startsWithDeterminer(item) || startsWithQuantityPhrase(item)) return `${lowerFirst(item)} free`;
     if (looksPluralLike(item)) return `free ${lowerFirst(stripLeadingArticle(item))}`;
     return `a free ${lowerFirst(item)}`;
   }
