@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const fixturePath = path.join(root, "fixtures", "ai-promotional-copy-offers.json");
+const posterFixturePath = path.join(root, "fixtures", "ai-poster-copy-offers.json");
 const fixtures = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+const posterFixtures = JSON.parse(fs.readFileSync(posterFixturePath, "utf8"));
 
 const numberWords = new Map([
   [1, "one"],
@@ -129,6 +131,157 @@ function validate(fixture, headline) {
   return errors;
 }
 
+const posterStopWords = new Set([
+  "a",
+  "an",
+  "any",
+  "the",
+  "one",
+  "of",
+  "your",
+  "choice",
+  "large",
+  "medium",
+  "small",
+  "regular",
+  "hot",
+  "iced",
+  "ice",
+  "cold",
+  "fresh",
+]);
+
+const posterKnownItemWords = [
+  "coffee",
+  "latte",
+  "espresso",
+  "cappuccino",
+  "cookie",
+  "bagel",
+  "sandwich",
+  "muffin",
+  "croissant",
+  "pastry",
+  "scone",
+  "tea",
+  "drink",
+  "taco",
+  "dessert",
+  "entree",
+];
+
+function normalizePoster(value) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s+%-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function posterItemLabel(value) {
+  const normalized = normalizePoster(value);
+  if (!normalized) return "";
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const known = posterKnownItemWords.find((word) => words.includes(word));
+  if (known && !(known === "drink" && words.includes("coffee"))) return known;
+  if (words.includes("coffee")) return "coffee";
+  const meaningful = words.filter((word) => !posterStopWords.has(word));
+  if (meaningful.length === 0) return words.slice(0, 2).join(" ");
+  return meaningful.slice(-2).join(" ");
+}
+
+function posterHeadlineFallback(fixture) {
+  const firstItem = posterItemLabel(fixture.buyItem);
+  const rewardItem = posterItemLabel(fixture.rewardItem);
+  if (fixture.rewardType === "percent_off") return firstItem ? `${firstItem} savings` : "local deal";
+  if (sameItem(fixture.buyItem, fixture.rewardItem)) return firstItem ? `${firstItem} bonus` : "local bonus";
+  if (firstItem && rewardItem) {
+    const pair = `${firstItem} + ${rewardItem}`;
+    return pair.length <= 22 ? `${pair} break` : pair;
+  }
+  return firstItem || rewardItem || "local deal";
+}
+
+function posterLineItem(value, maxChars = 28) {
+  const text = clean(value);
+  const clamped = text.length <= maxChars
+    ? text
+    : text.split(/\s+/).reduce((out, word) => {
+      const next = out ? `${out} ${word}` : word;
+      return next.length <= maxChars ? next : out;
+    }, "") || text;
+  return clamped.toUpperCase();
+}
+
+function buildPosterOfferLines(fixture) {
+  const firstQty = Number(fixture.buyQuantity) > 1 ? Math.floor(Number(fixture.buyQuantity)) : 1;
+  if (fixture.rewardType === "percent_off") {
+    return {
+      offerLine1: `${Math.round(Number(fixture.rewardValue))}% OFF`,
+      offerLine2: posterLineItem(fixture.buyItem, 24),
+    };
+  }
+  return {
+    offerLine1: posterLineItem(`BUY ${firstQty} ${fixture.buyItem || "ITEM"}`, 28),
+    offerLine2: sameItem(fixture.buyItem, fixture.rewardItem)
+      ? posterLineItem(`GET ${Number(fixture.rewardQuantity) > 1 ? Math.floor(Number(fixture.rewardQuantity)) : 1} FREE`, 22)
+      : posterLineItem(`GET ${Number(fixture.rewardQuantity) > 1 ? Math.floor(Number(fixture.rewardQuantity)) : 1} ${fixture.rewardItem || "FREE"}`, 28),
+  };
+}
+
+function isMechanicalPosterHeadline(value) {
+  const text = clean(value).toLowerCase();
+  if (!text) return false;
+  if (/\bbuy\b/.test(text) && /\bget\b/.test(text)) return true;
+  if (/\b\d+\s*%\s*off\b/.test(text)) return true;
+  if (/\bfree\b/.test(text) && /\bwith\b|\bbuy\b|\bpurchase\b/.test(text)) return true;
+  return false;
+}
+
+function isWeakPosterHero(value) {
+  return /^try\s+(?:our|the)\b/.test(normalizePoster(value));
+}
+
+function isBarePosterItemHeadline(value, fixture) {
+  const headline = normalizePoster(value);
+  if (!headline) return false;
+  const itemNames = [fixture.buyItem, fixture.rewardItem].map(normalizePoster).filter(Boolean);
+  if (itemNames.some((item) => headline === item)) return true;
+  const itemLabels = itemNames.map(posterItemLabel).filter(Boolean);
+  if (itemLabels.some((label) => headline === normalizePoster(label))) return true;
+  const words = headline.split(/\s+/).filter((word) => !posterStopWords.has(word));
+  const normalizedWords = words.join(" ");
+  return itemLabels.some((label) => {
+    const normalizedLabel = normalizePoster(label);
+    return normalizedWords === normalizedLabel || (words.length <= 3 && words.includes(normalizedLabel));
+  });
+}
+
+function buildPosterHeadline(fixture, requestedHeadline) {
+  const fallback = posterHeadlineFallback(fixture);
+  const requested = clean(requestedHeadline);
+  if (!requested) return fallback.toUpperCase();
+  if (isWeakPosterHero(requested)) return fallback.toUpperCase();
+  if (isMechanicalPosterHeadline(requested)) return fallback.toUpperCase();
+  if (isBarePosterItemHeadline(requested, fixture)) return fallback.toUpperCase();
+  return requested.toUpperCase();
+}
+
+function validatePosterFixture(fixture) {
+  const errors = [];
+  const lines = buildPosterOfferLines(fixture);
+  if (lines.offerLine1 !== fixture.expectedOfferLine1) errors.push("offer_line_1_changed");
+  if (lines.offerLine2 !== fixture.expectedOfferLine2) errors.push("offer_line_2_changed");
+  for (const rejected of fixture.rejectedHeadlines ?? []) {
+    const headline = buildPosterHeadline(fixture, rejected);
+    if (headline !== fixture.expectedPosterHeadline) {
+      errors.push(`accepted_weak_headline:${rejected}`);
+    }
+  }
+  return errors;
+}
+
 const rows = fixtures.map((fixture) => {
   const oldText = oldHeadline(fixture);
   const newText = newHeadline(fixture);
@@ -146,10 +299,25 @@ const rows = fixtures.map((fixture) => {
 });
 
 const failed = rows.filter((row) => !row.valid);
+const posterRows = posterFixtures.map((fixture) => {
+  const errors = validatePosterFixture(fixture);
+  return {
+    id: fixture.id,
+    newText: fixture.expectedPosterHeadline,
+    valid: errors.length === 0,
+    fallbackUsed: true,
+    characterCount: fixture.expectedPosterHeadline.length,
+    errors,
+  };
+});
+const failedPosterRows = posterRows.filter((row) => !row.valid);
 console.log("# AI Promotional Copy Evaluation");
 console.log(`fixtures: ${rows.length}`);
 console.log(`valid: ${rows.length - failed.length}`);
 console.log(`invalid: ${failed.length}`);
+console.log(`poster fixtures: ${posterRows.length}`);
+console.log(`poster valid: ${posterRows.length - failedPosterRows.length}`);
+console.log(`poster invalid: ${failedPosterRows.length}`);
 console.log("");
 console.log("| id | old output | new output | valid | fallback | chars | changed facts |");
 console.log("|---|---|---|---:|---:|---:|---|");
@@ -163,6 +331,15 @@ if (failed.length > 0) {
   console.log("");
   console.log("Failures:");
   for (const row of failed) {
+    console.log(`- ${row.id}: ${row.errors.join(", ")}`);
+  }
+  process.exitCode = 1;
+}
+
+if (failedPosterRows.length > 0) {
+  console.log("");
+  console.log("Poster failures:");
+  for (const row of failedPosterRows) {
     console.log(`- ${row.id}: ${row.errors.join(", ")}`);
   }
   process.exitCode = 1;

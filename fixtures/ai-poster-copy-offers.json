@@ -1,0 +1,56 @@
+[
+  {
+    "id": "large-coffee-cookie-poster",
+    "merchantName": "Test Cafe",
+    "businessCategory": "Cafe",
+    "buyQuantity": 1,
+    "buyItem": "Any large coffee drink",
+    "rewardQuantity": 1,
+    "rewardItem": "Cookie of your choice",
+    "rewardType": "free",
+    "rejectedHeadlines": [
+      "Any large coffee drink",
+      "Try our any large coffee drink",
+      "Try our cookie and coffee deal",
+      "Buy 1 any large coffee drink and get 1 cookie of your choice"
+    ],
+    "expectedPosterHeadline": "COFFEE + COOKIE BREAK",
+    "expectedOfferLine1": "BUY 1 ANY LARGE COFFEE DRINK",
+    "expectedOfferLine2": "GET 1 COOKIE OF YOUR CHOICE"
+  },
+  {
+    "id": "latte-same-item-poster",
+    "merchantName": "Cedar & Bean Cafe",
+    "businessCategory": "Cafe",
+    "buyQuantity": 1,
+    "buyItem": "latte",
+    "rewardQuantity": 1,
+    "rewardItem": "latte",
+    "rewardType": "free",
+    "rejectedHeadlines": [
+      "latte",
+      "Try our latte",
+      "Buy 1 latte and get 1 free"
+    ],
+    "expectedPosterHeadline": "LATTE BONUS",
+    "expectedOfferLine1": "BUY 1 LATTE",
+    "expectedOfferLine2": "GET 1 FREE"
+  },
+  {
+    "id": "croissant-percent-off-poster",
+    "merchantName": "Northside Bakehouse",
+    "businessCategory": "Bakery",
+    "buyQuantity": 1,
+    "buyItem": "croissant",
+    "rewardType": "percent_off",
+    "rewardValue": 40,
+    "rejectedHeadlines": [
+      "croissant",
+      "Try the croissant",
+      "40% off croissant"
+    ],
+    "expectedPosterHeadline": "CROISSANT SAVINGS",
+    "expectedOfferLine1": "40% OFF",
+    "expectedOfferLine2": "CROISSANT"
+  }
+]
