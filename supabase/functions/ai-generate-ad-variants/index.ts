@@ -1218,12 +1218,12 @@ function parseRevisionFeedbackIntent(feedback: string | undefined): RevisionFeed
   return {
     active: true,
     requiresHeadlineChange:
-      /\b(?:top|headline|title|opening|main line|poster copy|poster headline|wording)\b/.test(normalized),
+      /\b(?:ad copy|caption|headline|heading|hero|main copy|main line|main message|opening|poster copy|poster headline|poster text|tagline|title|top|top copy|top text|wording)\b/.test(normalized),
     wantsShorter: /\b(?:shorter|too long|less text|fewer words|trim|tighten|concise)\b/.test(normalized),
-    wantsDirect: /\b(?:clear|plain|direct|simple|make sense|doesn t make sense|real ad|natural|awkward|confusing)\b/.test(normalized),
+    wantsDirect: /\b(?:actual ad|awkward|boring|clear|confusing|direct|doesn t make sense|doesn t read right|full offer|generic|make sense|natural|plain|read right|reads weird|real ad|simple|sounds off|whole deal|whole offer)\b/.test(normalized),
     wantsLocal: /\b(?:local|nearby|neighborhood|neighbourhood|regulars|community|around here)\b/.test(normalized),
-    wantsWarmer: /\b(?:warmer|friendlier|friendly|inviting|less cold|more human)\b/.test(normalized),
-    wantsPremium: /\b(?:premium|upscale|classy|elevated|polished|less cheap)\b/.test(normalized),
+    wantsWarmer: /\b(?:appetizing|appealing|friendlier|friendly|inviting|less cold|more human|tasty|warmer)\b/.test(normalized),
+    wantsPremium: /\b(?:premium|professional|upscale|classy|elevated|polished|less cheap)\b/.test(normalized),
     bannedTerms: extractBannedRevisionTerms(feedback ?? ""),
   };
 }

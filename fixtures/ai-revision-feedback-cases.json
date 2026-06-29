@@ -12,6 +12,24 @@
     "expectedTarget": "copy"
   },
   {
+    "id": "top-text-reads-weird",
+    "selectedTarget": "both",
+    "feedback": "The top text reads weird. Make it a real ad from the whole deal.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "generic-copy-read-right",
+    "selectedTarget": "both",
+    "feedback": "This copy feels generic and does not read right.",
+    "expectedTarget": "copy"
+  },
+  {
+    "id": "inviting-less-generic",
+    "selectedTarget": "both",
+    "feedback": "Make it more inviting and less generic.",
+    "expectedTarget": "copy"
+  },
+  {
     "id": "photo-and-headline",
     "selectedTarget": "both",
     "feedback": "Make the photo brighter and fix the headline.",

@@ -7,6 +7,9 @@ describe("copyOnlyRevisionTargetForFeedback", () => {
     expect(copyOnlyRevisionTargetForFeedback("both", "The top headline does not make sense")).toBe("copy");
     expect(copyOnlyRevisionTargetForFeedback("both", "The top part that says try our any large coffee doesn't make sense")).toBe("copy");
     expect(copyOnlyRevisionTargetForFeedback("both", "Make the wording shorter and warmer")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "The top text reads weird. Make it a real ad from the whole deal.")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "This copy feels generic and does not read right.")).toBe("copy");
+    expect(copyOnlyRevisionTargetForFeedback("both", "Make it more inviting and less generic.")).toBe("copy");
   });
 
   it("keeps both when feedback mentions image work too", () => {

@@ -74,6 +74,31 @@ describe("buildDeterministicRevisionFallbackCopy", () => {
     expect(validateAiCopyAgainstOffer(copy, contract)).toMatchObject({ valid: true });
   });
 
+  it("responds to warmer merchant feedback with more inviting locked-fact copy", () => {
+    const contract = contractFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "breakfast sandwich",
+      requiredItemRetailValueCents: 800,
+      freeItemQuantity: 1,
+      freeItemDescription: "small coffee",
+      freeItemRetailValueCents: 300,
+      freeItemDiscountPercent: 100,
+    });
+
+    const copy = buildDeterministicRevisionFallbackCopy({
+      contract,
+      feedback: "This copy feels generic. Make it more appetizing and inviting.",
+      avoidHeadlines: ["Buy a breakfast sandwich and get a free coffee"],
+    });
+
+    expect(copy.headline).toBe("Sandwich comes with a coffee");
+    expect(copy.short_description).toContain("breakfast sandwich");
+    expect(copy.short_description).toContain("small coffee");
+    expect(validateAiCopyAgainstOffer(copy, contract)).toMatchObject({ valid: true });
+  });
+
   it("keeps percent-off mechanics exact", () => {
     const contract = contractFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",

@@ -165,8 +165,8 @@ function freeItemCopy(contract: DealOfferContract): {
 
 function buildHeadlineCandidates(contract: DealOfferContract, feedback?: string | null): string[] {
   const normalizedFeedback = normalize(feedback);
-  const wantsDirect = /\b(?:clear|plain|direct|simple|make sense|real ad|natural|awkward|confusing)\b/.test(normalizedFeedback);
-  const wantsWarmer = /\b(?:warmer|friendlier|friendly|inviting|less cold|more human)\b/.test(normalizedFeedback);
+  const wantsDirect = /\b(?:actual ad|awkward|boring|clear|confusing|direct|doesn t read right|full offer|generic|make sense|natural|plain|read right|reads weird|real ad|simple|sounds off|whole deal|whole offer)\b/.test(normalizedFeedback);
+  const wantsWarmer = /\b(?:appetizing|appealing|friendlier|friendly|inviting|less cold|more human|tasty|warmer)\b/.test(normalizedFeedback);
 
   if (contract.dealType === "PERCENT_OFF_SINGLE_ITEM") {
     const item = contract.singleItemDiscount?.itemName ?? "item";
