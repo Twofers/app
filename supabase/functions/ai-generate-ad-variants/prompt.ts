@@ -180,6 +180,7 @@ export const AI_COPY_PROMPT_V4 = [
   '- Avoid awkward phrases such as "one coffee free" when "a free coffee" is more natural.',
   "- Do not repeat the merchant name unnecessarily.",
   "- Do not repeat the canonical headline word-for-word in the description.",
+  "- Owner-provided notes and revision feedback are instructions and context, not draft ad copy. Do not paste merchant text back verbatim unless it is an exact protected product or business name.",
   "- Do not include street addresses, city/state/ZIP, raw availability dates, exact times, or inventory counts in generated ad fields unless the channel rule explicitly says that fact was supplied.",
   "- Terms, location, schedule, and quantity are app metadata unless the field rule says to use a supplied fact.",
   "- Do not invent missing products.",
@@ -425,7 +426,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
   if (businessContext.description) facts.push(`Business description: ${businessContext.description.trim()}`);
   if (businessContext.tone) facts.push(`Selected tone, style only: ${businessContext.tone.trim()}`);
   facts.push(`Requested ad format: ${creativeFormat}`);
-  facts.push(`Owner-provided notes and deal terms: ${cleanItemHint || "(not provided)"}`);
+  facts.push(`Owner-provided notes, context only, do not paste verbatim: ${cleanItemHint || "(not provided)"}`);
   if (cleanResearchName) facts.push(`Product or deal item understood from notes: ${cleanResearchName}`);
   if (cleanResearchDescription) facts.push(`Product description context: ${cleanResearchDescription}`);
   if (cleanImageDescription) facts.push(`Uploaded image description: ${cleanImageDescription}`);
@@ -457,6 +458,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     }
     if (revisionPreset) revisionBlock.push(`Apply this preset adjustment: ${revisionPreset}`);
     if (revisionFeedback) revisionBlock.push(`Apply this user feedback: ${revisionFeedback}`);
+    revisionBlock.push("Treat preset adjustments and user feedback as instructions, not reusable ad wording.");
     revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
     revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
     revisionBlock.push("If the merchant mentions the top part, title, headline, wording, or poster copy, revise headlineAlternative first.");
@@ -492,6 +494,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
           "POSTER FORMAT DIRECTION:",
           "- headlineAlternative is the large top poster headline. Make it a real ad concept from the full offer, not a form-field echo.",
           "- The app will render the exact buy/get mechanics separately, so headlineAlternative should not repeat the full locked offer line.",
+          "- If the previous poster headline sounds like a product field, grammar fragment, or owner note, replace it with a compact campaign idea.",
           "- Never output a headlineAlternative that is only the qualifying item, only the reward item, or starts with Try our.",
         ]
       : []),

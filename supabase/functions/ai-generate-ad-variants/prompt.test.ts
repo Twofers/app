@@ -57,6 +57,7 @@ describe("buildAdCopyPrompt", () => {
   it("includes anti-generic instructions and banned vague phrases", () => {
     expect(basePrompt.system).toContain("generic image caption");
     expect(basePrompt.system).toContain("This is an ad, not a legal deal description");
+    expect(basePrompt.system).toContain("Owner-provided notes and revision feedback are instructions and context");
     expect(basePrompt.system).toContain("Avoid generic marketing language");
     expect(basePrompt.system).toContain("don't miss out");
     expect(basePrompt.system).toContain("qualifying purchase");
@@ -120,8 +121,10 @@ describe("buildAdCopyPrompt", () => {
     expect(prompt.userText).toContain("Requested ad format: poster_v1");
     expect(prompt.userText).toContain("POSTER FORMAT DIRECTION");
     expect(prompt.userText).toContain("not a form-field echo");
+    expect(prompt.userText).toContain("product field, grammar fragment, or owner note");
     expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
     expect(prompt.userText).toContain("revise headlineAlternative first");
+    expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
     expect(prompt.system).toContain("Coffee + Cookie Break");
     expect(prompt.system).toContain("Bad poster headlines are Any large coffee drink");
   });
@@ -134,6 +137,7 @@ describe("buildAdCopyPrompt", () => {
     expect(basePrompt.system).toContain("Terms, location, schedule, and quantity are app metadata");
     expect(basePrompt.system).not.toContain("Locked terms line:");
     expect(basePrompt.userText).toContain("Do not include business name, address, availability, or quantity");
+    expect(basePrompt.userText).toContain("Owner-provided notes, context only, do not paste verbatim");
     expect(basePrompt.userText).not.toContain("Address context:");
     expect(basePrompt.userText).not.toContain("Time window:");
     expect(basePrompt.userText).not.toContain("Quantity scarcity:");
