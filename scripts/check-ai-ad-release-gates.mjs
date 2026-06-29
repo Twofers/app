@@ -36,6 +36,24 @@ const checks = [
     pattern: /criticalTextRenderedNatively:\s*true[\s\S]+dynamicBindings[\s\S]+remainingClaims/,
   },
   {
+    name: "copy evaluator includes poster headline regressions",
+    file: "scripts/evaluate-ai-promotional-copy.mjs",
+    patterns: [
+      /ai-poster-copy-offers\.json/,
+      /poster fixtures:/,
+      /accepted_weak_headline/,
+    ],
+  },
+  {
+    name: "poster copy fixture covers coffee-cookie weak headline",
+    file: "fixtures/ai-poster-copy-offers.json",
+    patterns: [
+      /large-coffee-cookie-poster/,
+      /Try our any large coffee drink/,
+      /COFFEE \+ COOKIE BREAK/,
+    ],
+  },
+  {
     name: "versioned publish is idempotent",
     file: "supabase/migrations/20260724120000_offer_version_publish_rpc.sql",
     pattern: /UNIQUE \(business_id, idempotency_key\)[\s\S]+publish_offer_versioned_deal/,
