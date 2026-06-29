@@ -565,6 +565,12 @@ function generatedAdForPublishSpec(params: {
 }
 
 type RevisionTarget = "copy" | "image" | "both";
+type RevisionSuggestion = {
+  key: string;
+  target: RevisionTarget;
+  label: string;
+  feedback: string;
+};
 type ComposedEditIntent = "words" | null;
 type IosSchedulePickerTarget = "start" | "end" | "windowStart" | "windowEnd";
 type ImageVersionKind = "generated" | "revision" | "fallback" | "original";
@@ -3495,6 +3501,44 @@ export default function AiDealScreen() {
     image: t("createAi.reviseTargetImage"),
     both: t("createAi.reviseTargetBoth"),
   };
+  const revisionSuggestionOptions: RevisionSuggestion[] = [
+    {
+      key: "top_headline",
+      target: "copy",
+      label: t("createAi.reviseSuggestionTopHeadline", { defaultValue: "Fix top headline" }),
+      feedback: t("createAi.reviseSuggestionTopHeadlineFeedback", {
+        defaultValue: "Change the top headline so it sounds like a real ad based on the full offer.",
+      }),
+    },
+    {
+      key: "shorter",
+      target: "copy",
+      label: t("createAi.reviseSuggestionShorter", { defaultValue: "Make it shorter" }),
+      feedback: t("createAi.reviseSuggestionShorterFeedback", {
+        defaultValue: "Make the copy shorter and clearer without changing the offer.",
+      }),
+    },
+    {
+      key: "warmer",
+      target: "copy",
+      label: t("createAi.reviseSuggestionWarmer", { defaultValue: "Warmer tone" }),
+      feedback: t("createAi.reviseSuggestionWarmerFeedback", {
+        defaultValue: "Make the wording warmer and more inviting while keeping the offer facts exact.",
+      }),
+    },
+    {
+      key: "new_image",
+      target: "image",
+      label: t("createAi.reviseSuggestionNewImage", { defaultValue: "New image angle" }),
+      feedback: t("createAi.reviseSuggestionNewImageFeedback", {
+        defaultValue: "Try a different image angle with cleaner composition and no text in the image.",
+      }),
+    },
+  ];
+  function applyRevisionSuggestion(suggestion: RevisionSuggestion) {
+    setRevisionTarget(suggestion.target);
+    setRevisionFeedback(suggestion.feedback);
+  }
   const iosSchedulePickerTitle =
     iosSchedulePicker === "start"
       ? t("createAi.startTime", { defaultValue: "Start date and time" })
@@ -4757,6 +4801,41 @@ export default function AiDealScreen() {
                               >
                                 <Text style={{ textAlign: "center", fontWeight: "700", color: selected ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontSize: 13 }}>
                                   {targetLabel[target]}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          {revisionSuggestionOptions.map((suggestion) => {
+                            const selected = revisionTarget === suggestion.target && revisionFeedback === suggestion.feedback;
+                            return (
+                              <Pressable
+                                key={suggestion.key}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected }}
+                                disabled={!canReviseAd}
+                                onPress={() => applyRevisionSuggestion(suggestion)}
+                                style={{
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 999,
+                                  backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                                  borderWidth: 1,
+                                  borderColor: selected ? theme.primary : theme.border,
+                                  opacity: canReviseAd ? 1 : 0.55,
+                                }}
+                              >
+                                <Text
+                                  numberOfLines={1}
+                                  style={{
+                                    color: selected ? theme.accentText : theme.text,
+                                    fontWeight: "800",
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  {suggestion.label}
                                 </Text>
                               </Pressable>
                             );

@@ -112,4 +112,13 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain('sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original"');
     expect(createAiSource).toContain("setUsePhotoAsFinal(false);");
   });
+
+  it("keeps merchant revision comments as a first-class AI input", () => {
+    expect(createAiSource).toContain("type RevisionSuggestion");
+    expect(createAiSource).toContain("revisionSuggestionOptions");
+    expect(createAiSource).toContain("reviseSuggestionTopHeadlineFeedback");
+    expect(createAiSource).toContain("applyRevisionSuggestion");
+    expect(createAiSource).toContain("setRevisionTarget(suggestion.target)");
+    expect(createAiSource).toContain("setRevisionFeedback(suggestion.feedback)");
+  });
 });
