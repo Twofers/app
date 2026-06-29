@@ -68,8 +68,8 @@ Live secret names changed: none.
 
 - Broader live output quality still needs owner review with real merchant scenarios
   and actual image paths, not only deterministic image fallback.
-- Local `.env.development.local` still contains an old dev-project URL; hosted smoke
-  scripts must prefer `.env` or explicitly target `kvodhiqhdqnptqovovia`.
+- Local `.env.development.local` was updated after the hosted smoke so local app
+  runs also target `kvodhiqhdqnptqovovia`.
 - Existing dirty/untracked local QA and store artifacts remain intentionally untouched.
 
 ### Rollback
