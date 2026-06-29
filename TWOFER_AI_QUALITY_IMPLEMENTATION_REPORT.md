@@ -75,6 +75,13 @@ Live secret names changed: none.
   `Buy any large coffee drink and get a free cookie of your choice`, poster offer
   lines `BUY 1 ANY LARGE COFFEE DRINK` and `GET 1 COOKIE OF YOUR CHOICE`, and
   `photo_source: copy_only`.
+- AI Edge deploy sweep to `kvodhiqhdqnptqovovia`: passed. Deployed
+  `ai-compose-offer` version `61`, `ai-generate-deal-copy` version `67`,
+  `ai-create-deal` version `63`, `ai-extract-menu` version `54`,
+  `ai-business-lookup` version `54`, `ai-deal-suggestions` version `51`,
+  `ai-translate-deal` version `52`, and `publish-offer-version` version `23`.
+  Unauthenticated smoke checks returned HTTP 401 for active protected AI helpers;
+  `ai-create-deal` returned HTTP 410 with `AI_CREATE_DEAL_LEGACY_DISABLED`.
 
 ### Unresolved risks
 
