@@ -24,8 +24,16 @@ describe("AI create owner language preview source guards", () => {
     expect(source).not.toContain("setMerchantPreviewLocale");
     expect(source).not.toContain("createAi.previewLanguageTitle");
     expect(source).not.toContain("createAi.localizedApprovalDisclosure");
-    expect(source).toContain("localization: ownerLanguagePreviewAvailable ? undefined : null");
     expect(source).toContain("const shouldBindComposedPresentationApproval =");
     expect(source).toContain("automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable");
+  });
+
+  it("keeps manual final-photo publishes compatible with exact localization approval", () => {
+    expect(source).toContain("buildDeterministicAdLocalizationBundle");
+    expect(source).toContain("manualDraftGeneratedAdForPublishSpec");
+    expect(source).toContain("const deterministicLocalizationBundle =");
+    expect(source).toContain("const publishLocalizationApproval =");
+    expect(source).toContain("localizationApproval: localizationApprovalForPublish");
+    expect(source).toContain("...(localizationBundleForPublish ? {} : { localization: null })");
   });
 });

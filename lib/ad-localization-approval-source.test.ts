@@ -15,6 +15,9 @@ describe("AI create localization approval binding source", () => {
     expect(source).toContain("approvedLocalizationApprovalHash");
     expect(source).toMatch(/reason: "localization_approval_blocked"/);
     expect(source).toMatch(/reason: "localization_approval_required"/);
-    expect(source).toMatch(/localizationApproval:\s*[\s\S]*selectedLocalizationApproval\.approval/);
+    expect(source).toContain("const localizationApprovalForPublish =");
+    expect(source).toContain("selectedLocalizationApproval?.approved");
+    expect(source).toContain("publishLocalizationApproval?.approved");
+    expect(source).toContain("localizationApproval: localizationApprovalForPublish");
   });
 });

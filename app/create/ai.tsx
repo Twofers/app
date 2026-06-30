@@ -108,9 +108,10 @@ import {
   buildDealOfferContract,
   validateAiCopyAgainstOffer,
 } from "../../lib/deal-offer-contract";
-import { buildOfferDefinitionV1FromContract } from "../../lib/offer-definition";
+import { buildOfferDefinitionV1FromContract, type OfferDefinitionV1 } from "../../lib/offer-definition";
 import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
 import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallback-visual";
+import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
 import type {
   AdCreativeFormat,
   PosterSpecV1,
@@ -736,6 +737,57 @@ function generatedAdForPublishSpec(params: {
       qa,
     }),
   };
+}
+
+function manualDraftGeneratedAdForPublishSpec(params: {
+  offerDefinition: OfferDefinitionV1;
+  finalStoragePath: string | null;
+  uploadedPhotoStoragePath: string | null;
+  usePhotoAsFinal: boolean;
+  merchantOriginalWarningAcknowledged: boolean;
+  title: string;
+  promoLine: string;
+  ctaText: string;
+  description: string;
+  ownerOfferHint: string;
+  scheduleSummary: string;
+  quantityLimit: number | null;
+}): GeneratedAd | null {
+  if (!params.finalStoragePath) return null;
+  const fallback = buildFallbackTemplateAd({
+    businessName: params.offerDefinition.merchantName,
+    title: params.title,
+    promoLine: params.promoLine,
+    ctaText: params.ctaText,
+    description: params.description,
+    ownerOfferHint: params.ownerOfferHint,
+    lockedOfferLine: params.offerDefinition.canonicalOfferLine,
+    lockedTermsLine: params.offerDefinition.disclosureLine,
+    scheduleSummary: params.scheduleSummary,
+    quantityLimit: params.quantityLimit,
+  });
+  const photoSource = params.usePhotoAsFinal ? "uploaded_original" : "fallback_template";
+  const sourceMode = sourceModeForGeneratedPhotoSource(photoSource);
+  return normalizeGeneratedAdDisplayCopy({
+    ...fallback,
+    headline: params.title.trim() || fallback.headline,
+    subheadline: params.promoLine.trim() || fallback.subheadline,
+    short_description: params.promoLine.trim() || fallback.short_description,
+    cta: params.ctaText.trim() || fallback.cta,
+    terms_summary: params.description.trim() || fallback.terms_summary,
+    poster_storage_path: params.finalStoragePath,
+    photo_source: photoSource,
+    photo_treatment: null,
+    image_selection: buildAdImageSelection({
+      photoSource,
+      editMode: "none",
+      sourcePhotoPath: params.uploadedPhotoStoragePath ?? params.finalStoragePath,
+      selectedStoragePath: params.finalStoragePath,
+      qa: params.usePhotoAsFinal
+        ? originalPhotoSelectionQa(params.merchantOriginalWarningAcknowledged)
+        : defaultSelectionQaForSource(sourceMode),
+    }),
+  });
 }
 
 type RevisionTarget = AiRevisionTarget;
@@ -3252,6 +3304,10 @@ export default function AiDealScreen() {
       const cutoffNum = Number(cutoffMins);
       const start = isRecurring ? new Date() : startTime;
       const end = isRecurring ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : endTime;
+      const sourceLocaleForPublish = localizedOwnerUiEnabled
+        ? dealOutputLang
+        : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
+      const supportedSourceLocaleForPublish = supportedLocaleOrDefault(sourceLocaleForPublish);
 
       const aiPosterPath = generatedAd?.poster_storage_path ?? null;
       const finalStoragePath = resolveCurrentDealPosterStoragePath({
@@ -3263,13 +3319,63 @@ export default function AiDealScreen() {
       const finalPublicPoster = finalStoragePath ? buildPublicDealPhotoUrl(finalStoragePath) : null;
       const explicitPhotoPoster = usePhotoAsFinal ? signedPoster ?? posterUrl ?? null : null;
       const posterForPublish = finalPublicPoster ?? explicitPhotoPoster;
-      const adForPublishSpec = generatedAdForPublishSpec({
+      const baseAdForPublishSpec = generatedAdForPublishSpec({
         ad: generatedAd,
         finalStoragePath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
         usePhotoAsFinal,
         merchantOriginalWarningAcknowledged,
-      });
+      }) ?? (offerDefinition
+        ? manualDraftGeneratedAdForPublishSpec({
+            offerDefinition,
+            finalStoragePath,
+            uploadedPhotoStoragePath: userPhotoStoragePath,
+            usePhotoAsFinal,
+            merchantOriginalWarningAcknowledged,
+            title,
+            promoLine,
+            ctaText,
+            description,
+            ownerOfferHint: hintText,
+            scheduleSummary: displayScheduleSummary,
+            quantityLimit: Number.isFinite(maxClaimsNum) ? maxClaimsNum : null,
+          })
+        : null);
+      const deterministicLocalizationBundle =
+        automaticLocalizationApprovalEnabled &&
+        offerDefinition &&
+        baseAdForPublishSpec &&
+        !baseAdForPublishSpec.localization_bundle
+          ? buildDeterministicAdLocalizationBundle({
+              sourceLocale: supportedSourceLocaleForPublish,
+              sourceCreative: {
+                headline: baseAdForPublishSpec.headline,
+                supportingCopy: baseAdForPublishSpec.short_description ?? baseAdForPublishSpec.subheadline,
+                imageAltText: `${offerDefinition.merchantName} offer image. ${offerDefinition.canonicalOfferSentence}`,
+              },
+              offerDefinition,
+            })
+          : null;
+      const adForPublishSpec = baseAdForPublishSpec
+        ? {
+            ...baseAdForPublishSpec,
+            ...(deterministicLocalizationBundle
+              ? {
+                  localization_bundle: deterministicLocalizationBundle,
+                  localization_status: {
+                    source_locale: deterministicLocalizationBundle.sourceLocale,
+                    localization_bundle_hash: deterministicLocalizationBundle.localizationBundleHash,
+                    deterministic_fallback_locales: deterministicLocalizationBundle.deterministicFallbackLocales,
+                    transcreation_provider: "deterministic",
+                    transcreation_model: "none",
+                    semantic_qa_provider: "deterministic",
+                    semantic_qa_model: "none",
+                    repair_target_locales: [],
+                  },
+                }
+              : {}),
+          }
+        : null;
       const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
       const posterForPublishSpec =
         shouldPublishPosterSpec && offerDefinition
@@ -3292,17 +3398,157 @@ export default function AiDealScreen() {
               poster: posterForPublishSpec,
             }
           : adForPublishSpec;
-      const composedCardPublishSpec = shouldBindComposedPresentationApproval
+      const localizationBundleForPublish = adForPublishSpecWithPoster?.localization_bundle ?? null;
+      const publishOwnerLanguagePreview = buildOwnerLanguagePreview({
+        generatedAd: adForPublishSpecWithPoster,
+        offerDefinition,
+        sourceLocale: localizationBundleForPublish?.sourceLocale ?? supportedSourceLocaleForPublish,
+        previewLocale: supportedSourceLocaleForPublish,
+        localizedPreviewEnabled: Boolean(localizationBundleForPublish),
+        fallbackOfferLine: adForPublishSpecWithPoster?.locked_offer_line || offerContract?.canonicalOfferLine || title || promoLine,
+        fallbackTermsLine: adForPublishSpecWithPoster?.locked_terms_line || offerContract?.canonicalShortTerms || description,
+        fallbackCtaLabel: ctaText,
+      });
+      const publishImageAssetId = finalStoragePath ?? imageVersionStoragePath(adForPublishSpecWithPoster);
+      const publishImageSourceType = adForPublishSpecWithPoster
+        ? imageSourceTypeFromGeneratedAd(adForPublishSpecWithPoster)
+        : posterForPublish
+          ? "merchant_original"
+          : "deterministic_fallback";
+      const publishImageQa = sourceAwareQaFromSelectionQa(
+        adForPublishSpecWithPoster?.image_selection?.qa,
+        publishImageSourceType,
+        Boolean(posterForPublish),
+      );
+      const publishImageSafeZones = buildImageSafeZoneResult({
+        hasImage: Boolean(posterForPublish),
+        imageSourceType: publishImageSourceType,
+        imageQa: publishImageQa,
+        cropSuitabilityScore: cropSuitabilityScoreForQa(publishImageQa),
+      });
+      const publishBaseComposedPresentation: AdPresentationSpec = {
+        ...selectedBaseComposedPresentation,
+        imageAssetId: publishImageAssetId ?? "deterministic-fallback",
+        imageSourceType: publishImageSourceType,
+        resolutionReasonCodes: [
+          ...new Set([
+            ...selectedBaseComposedPresentation.resolutionReasonCodes.filter(
+              (code) => code !== "MERCHANT_PREVIEW_IMAGE" && code !== "MERCHANT_PREVIEW_FALLBACK",
+            ),
+            publishImageAssetId ? "MERCHANT_PUBLISH_IMAGE" : "MERCHANT_PREVIEW_FALLBACK",
+          ]),
+        ],
+      };
+      const publishLocalePresentationResolution =
+        localizationBundleForPublish && isAiV5LocalePresentationOverridesEnabled()
+          ? resolveLocalePresentationOverrides({
+              basePresentation: publishBaseComposedPresentation,
+              localizationBundle: localizationBundleForPublish,
+              merchantIdentity: composedMerchant,
+            })
+          : null;
+      const publishComposedPresentation =
+        publishLocalePresentationResolution?.presentation ?? publishBaseComposedPresentation;
+      const publishComposedPresentationHash = createAdPresentationHash({
+        presentation: publishComposedPresentation,
+        offerFacts: publishOwnerLanguagePreview.offerFacts,
+        copy: publishOwnerLanguagePreview.copy,
+      });
+      const publishComposedCompositeQa = runDeterministicAdCompositeQa({
+        offerFacts: publishOwnerLanguagePreview.offerFacts,
+        merchant: composedMerchant,
+        copy: publishOwnerLanguagePreview.copy,
+        presentation: publishComposedPresentation,
+        liveState: composedLiveState,
+        surface: "merchant_preview",
+        imageUri: posterForPublish,
+        selectedImageAssetId: publishImageAssetId ?? publishComposedPresentation.imageAssetId,
+        imageSafeZoneConfidence: publishImageSafeZones.confidence,
+      });
+      const publishComposedScreenshotQaSnapshot = buildComposedScreenshotQaSnapshot(
+        publishComposedCompositeQa,
+        composedScreenshotQaEnabled,
+      );
+      const publishLocaleScreenshotQaRequired =
+        localizationBundleForPublish &&
+        isAiV5LocaleScreenshotQaEnabled() &&
+        (publishLocalePresentationResolution?.screenshotQaTriggerLocales.length ?? 0) > 0;
+      const publishComposedScreenshotQaRequired =
+        publishComposedScreenshotQaSnapshot.required || Boolean(publishLocaleScreenshotQaRequired);
+      const composedPresentationForPublish = ownerLanguagePreviewAvailable
+        ? selectedComposedPresentation
+        : publishComposedPresentation;
+      const composedPresentationHashForPublish = ownerLanguagePreviewAvailable
+        ? selectedComposedPresentationHash
+        : publishComposedPresentationHash;
+      const composedCompositeQaForPublish = ownerLanguagePreviewAvailable
+        ? selectedComposedCompositeQa
+        : publishComposedCompositeQa;
+      const composedScreenshotQaSnapshotForPublish = ownerLanguagePreviewAvailable
+        ? selectedComposedScreenshotQaSnapshot
+        : publishComposedScreenshotQaSnapshot;
+      const composedScreenshotQaRequiredForPublish = ownerLanguagePreviewAvailable
+        ? selectedComposedScreenshotQaRequired
+        : publishComposedScreenshotQaRequired;
+      if (!editingDealId && composedCompositeQaForPublish.decision === "block") {
+        showPublishError(
+          t("createAi.errCompositeQaBlocked", {
+            defaultValue: "This ad preview failed layout checks. Try another style or change the photo.",
+          }),
+          "warning",
+        );
+        return;
+      }
+      if (!editingDealId && composedScreenshotQaRequiredForPublish) {
+        showPublishError(
+          t("createAi.errCompositeScreenshotQaRequired", {
+            defaultValue: "This ad preview needs visual QA before publishing. Try another style or use a safer layout.",
+          }),
+          "warning",
+        );
+        return;
+      }
+      const publishLocalizationApproval =
+        automaticLocalizationApprovalEnabled && offerDefinition && localizationBundleForPublish
+          ? buildVerifiedAdLocalizationApproval({
+              bundle: localizationBundleForPublish,
+              offerDefinition,
+              presentationHash: composedPresentationHashForPublish,
+              selectedImageAssetId: composedPresentationForPublish.imageAssetId,
+              providerStatus: adForPublishSpecWithPoster?.localization_status ?? null,
+              localePresentationOverrides: composedPresentationForPublish.localeOverrides ?? null,
+              screenshotQaRequired: composedScreenshotQaRequiredForPublish,
+            })
+          : null;
+      const localizationApprovalForPublish = ownerLanguagePreviewAvailable
+        ? selectedLocalizationApproval?.approved &&
+          approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash &&
+          selectedLocalizationApproval.approval.presentationHash === composedPresentationHashForPublish
+          ? selectedLocalizationApproval.approval
+          : null
+        : publishLocalizationApproval?.approved
+          ? publishLocalizationApproval.approval
+          : null;
+      if (automaticLocalizationApprovalEnabled && localizationBundleForPublish && !localizationApprovalForPublish) {
+        showPublishError(
+          t("createAi.errLocalizationApprovalRequired", {
+            defaultValue: "Approve the exact multilingual preview again before publishing.",
+          }),
+          "warning",
+        );
+        return;
+      }
+      const composedCardPublishSpec = shouldBindComposedPresentationApproval || localizationApprovalForPublish
         ? {
-            presentation: selectedComposedPresentation,
-            presentationHash: selectedComposedPresentationHash,
-            selectedTemplateId: selectedComposedPresentation.templateId,
+            presentation: composedPresentationForPublish,
+            presentationHash: composedPresentationHashForPublish,
+            selectedTemplateId: composedPresentationForPublish.templateId,
             alternateTemplateIds: composedPresentationOptions
-              .filter((spec) => spec.templateId !== selectedComposedPresentation.templateId)
+              .filter((spec) => spec.templateId !== composedPresentationForPublish.templateId)
               .map((spec) => spec.templateId),
             merchantStyleOverrideUsed: composedStyleIndex > 0,
-            compositeQa: selectedComposedCompositeQa,
-            screenshotQa: selectedComposedScreenshotQaSnapshot,
+            compositeQa: composedCompositeQaForPublish,
+            screenshotQa: composedScreenshotQaSnapshotForPublish,
           }
         : null;
       const allowTextOnlyPoster =
@@ -3313,9 +3559,6 @@ export default function AiDealScreen() {
         }));
         return;
       }
-      const sourceLocaleForPublish = localizedOwnerUiEnabled
-        ? dealOutputLang
-        : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const eligibilityColumns = dealEligibilityFormToDealColumns(eligibilityForm, eligibilityResult, "LIVE");
       const displayCopy = buildAuthoritativeDealDisplayCopy(offerDefinition, {
         title: title.trim(),
@@ -3393,12 +3636,8 @@ export default function AiDealScreen() {
             (publishIdempotencyKeyRef.current = createPublishIdempotencyKey("create_ai")),
           ad_spec: buildOfferVersionPublishAdSpec("create_ai", offerDefinition, adForPublishSpecWithPoster, {
             composedCard: composedCardPublishSpec,
-            localization: ownerLanguagePreviewAvailable ? undefined : null,
-            localizationApproval:
-              selectedLocalizationApproval?.approved &&
-              approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash
-                ? selectedLocalizationApproval.approval
-                : null,
+            localizationApproval: localizationApprovalForPublish,
+            ...(localizationBundleForPublish ? {} : { localization: null }),
           }),
         });
         const dealsOut = versionedResult.deals.map((row) => ({
