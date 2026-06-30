@@ -20,4 +20,9 @@ describe("AI create localization approval binding source", () => {
     expect(source).toContain("publishLocalizationApproval?.approved");
     expect(source).toContain("localizationApproval: localizationApprovalForPublish");
   });
+
+  it("builds publish approval metadata whenever a localization bundle is present", () => {
+    expect(source).toContain("const publishLocalizationApproval =\n        offerDefinition && localizationBundleForPublish");
+    expect(source).toContain("ownerLanguagePreviewAvailable &&\n    offerDefinition &&\n    generatedAd?.localization_bundle");
+  });
 });

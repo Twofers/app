@@ -3509,7 +3509,7 @@ export default function AiDealScreen() {
         return;
       }
       const publishLocalizationApproval =
-        automaticLocalizationApprovalEnabled && offerDefinition && localizationBundleForPublish
+        offerDefinition && localizationBundleForPublish
           ? buildVerifiedAdLocalizationApproval({
               bundle: localizationBundleForPublish,
               offerDefinition,
@@ -3525,7 +3525,9 @@ export default function AiDealScreen() {
           approvedLocalizationApprovalHash === selectedLocalizationApproval.approval.approvalHash &&
           selectedLocalizationApproval.approval.presentationHash === composedPresentationHashForPublish
           ? selectedLocalizationApproval.approval
-          : null
+          : publishLocalizationApproval?.approved
+            ? publishLocalizationApproval.approval
+            : null
         : publishLocalizationApproval?.approved
           ? publishLocalizationApproval.approval
           : null;
@@ -3994,7 +3996,6 @@ export default function AiDealScreen() {
   const selectedComposedScreenshotQaRequired =
     selectedComposedScreenshotQaSnapshot.required || selectedLocaleScreenshotQaRequired;
   const selectedLocalizationApproval =
-    automaticLocalizationApprovalEnabled &&
     ownerLanguagePreviewAvailable &&
     offerDefinition &&
     generatedAd?.localization_bundle
