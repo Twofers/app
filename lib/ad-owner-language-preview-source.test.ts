@@ -16,12 +16,16 @@ describe("AI create owner language preview source guards", () => {
     expect(source).toMatch(/cta=\{ownerLanguagePreview\.cta\}/);
   });
 
-  it("keeps merchant language preview controls disabled and absent from the screen", () => {
-    expect(source).toContain("const ownerLanguagePreviewAvailable = false;");
+  it("gates merchant language preview data on localized owner UI and a generated bundle", () => {
+    expect(source).toContain("const ownerLanguagePreviewAvailable = Boolean(");
+    expect(source).toContain("localizedOwnerUiEnabled &&");
+    expect(source).toContain("generatedAd?.localization_bundle");
     expect(source).not.toContain("ownerLanguagePreviewControls");
     expect(source).not.toContain("setMerchantPreviewLocale");
     expect(source).not.toContain("createAi.previewLanguageTitle");
     expect(source).not.toContain("createAi.localizedApprovalDisclosure");
     expect(source).toContain("localization: ownerLanguagePreviewAvailable ? undefined : null");
+    expect(source).toContain("const shouldBindComposedPresentationApproval =");
+    expect(source).toContain("automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable");
   });
 });

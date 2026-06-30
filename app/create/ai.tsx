@@ -2933,7 +2933,9 @@ export default function AiDealScreen() {
       }
     }
     applyAdToDraft(generatedAd);
-    setApprovedComposedPresentationHash(composedAdPreviewEnabled ? selectedComposedPresentationHash : null);
+    setApprovedComposedPresentationHash(
+      shouldBindComposedPresentationApproval ? selectedComposedPresentationHash : null,
+    );
     setApprovedLocalizationApprovalHash(
       automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable && selectedLocalizationApproval?.approved
         ? selectedLocalizationApproval.approval.approvalHash
@@ -3290,7 +3292,7 @@ export default function AiDealScreen() {
               poster: posterForPublishSpec,
             }
           : adForPublishSpec;
-      const composedCardPublishSpec = composedAdPreviewEnabled
+      const composedCardPublishSpec = shouldBindComposedPresentationApproval
         ? {
             presentation: selectedComposedPresentation,
             presentationHash: selectedComposedPresentationHash,
@@ -3631,7 +3633,11 @@ export default function AiDealScreen() {
   const composedCompositeQaEnabled = composedAdPreviewEnabled && isAiV4CompositeQaEnabled();
   const composedScreenshotQaEnabled = composedAdPreviewEnabled && isAiV4CompositeScreenshotQaEnabled();
   const composedExactPresentationApprovalEnabled = composedAdPreviewEnabled && isAiV4ExactPresentationApprovalEnabled();
-  const ownerLanguagePreviewAvailable = false;
+  const ownerLanguagePreviewAvailable = Boolean(
+    localizedOwnerUiEnabled &&
+      offerDefinition &&
+      generatedAd?.localization_bundle,
+  );
   const localePresentationOverridesEnabled =
     ownerLanguagePreviewAvailable && isAiV5LocalePresentationOverridesEnabled();
   const localeScreenshotQaEnabled =
@@ -3763,6 +3769,9 @@ export default function AiDealScreen() {
           screenshotQaRequired: selectedComposedScreenshotQaRequired,
         })
       : null;
+  const shouldBindComposedPresentationApproval =
+    composedAdPreviewEnabled ||
+    Boolean(automaticLocalizationApprovalEnabled && ownerLanguagePreviewAvailable);
   const composedPresentationApprovalMatches =
     approvedComposedPresentationHash === selectedComposedPresentationHash &&
     selectedComposedCompositeQa.decision !== "block" &&
