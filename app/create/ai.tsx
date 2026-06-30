@@ -1409,15 +1409,16 @@ export default function AiDealScreen() {
     };
   }, [lastGenerationError, lastGenerationOutcomeKind, t]);
 
+  const hasDraftCopy =
+    title.trim().length > 0 ||
+    promoLine.trim().length > 0 ||
+    ctaText.trim().length > 0 ||
+    description.trim().length > 0;
   const showDraftEditor =
     templateLoaded ||
     editingDealId != null ||
     adAccepted ||
-    title.trim().length > 0 ||
-    promoLine.trim().length > 0 ||
-    ctaText.trim().length > 0 ||
-    description.trim().length > 0 ||
-    manualDraftUnlocked;
+    (!generatedAd && (hasDraftCopy || manualDraftUnlocked));
 
   const scrollToFormY = useCallback((y: number | null, fallback: "none" | "end" = "none", topOffset: number = Spacing.md) => {
     setTimeout(() => {
