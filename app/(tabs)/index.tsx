@@ -60,7 +60,11 @@ import {
   fetchCustomerDealPosterSpecs,
   type CustomerDealPosterSpec,
 } from "@/lib/customer-deal-poster-specs";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_FEED_BASE_SELECT,
   DEAL_FEED_SELECT,
@@ -692,7 +696,10 @@ export default function HomeScreen() {
                 : claimedDeal,
               locale: customerDealLocalizationLocale,
               localeResolutionSource: customerDealLocalizationResolution.source,
-              useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+              useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+                customerDealLocalizationLocale,
+                localizedOfferRendererEnabled,
+              ),
               fallbackLanguage: i18n.language,
             })
           : null;
@@ -730,7 +737,6 @@ export default function HomeScreen() {
       customerDealLocalizationLocale,
       customerDealLocalizationResolution.source,
       customerDealLocalizationsByDealId,
-      customerLocaleResolutionEnabled,
       i18n.language,
       localizedOfferRendererEnabled,
     ],
@@ -940,7 +946,10 @@ export default function HomeScreen() {
           : item,
         locale: resolvedDisplayLocale.locale,
         localeResolutionSource: resolvedDisplayLocale.source,
-        useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+        useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+          resolvedDisplayLocale.locale,
+          localizedOfferRendererEnabled,
+        ),
         fallbackLanguage: i18n.language,
       });
       const offerText = localizedDisplay.title || t("dealDetail.dealFallback");

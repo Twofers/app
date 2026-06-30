@@ -21,7 +21,11 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -891,13 +895,15 @@ export default function MapScreenNative() { // NOSONAR - orchestration screen co
       },
       locale: resolvedDealDisplayLocale.locale,
       localeResolutionSource: resolvedDealDisplayLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedDealDisplayLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return display.title || null;
   }, [
     customerDealLocalizationsByDealId,
-    customerLocaleResolutionEnabled,
     i18n.language,
     localizedOfferRendererEnabled,
     previewDeal,

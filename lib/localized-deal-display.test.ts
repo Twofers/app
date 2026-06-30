@@ -4,6 +4,7 @@ import {
   buildLocalizedDealDisplay,
   buildOfferDefinitionFromDealDisplay,
   resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
   type LocalizedDealDisplayFields,
 } from "./localized-deal-display";
 
@@ -117,6 +118,44 @@ describe("localized deal display", () => {
     expect(korean.title).toContain("\uB9DD\uACE0 \uB77C\uC2DC");
     expect(korean.title).not.toContain("mango lassi");
     expect(korean.title).not.toBe("Get 40% off one mango lassi");
+  });
+
+  it("localizes legacy free-reward titles for non-English customers when the rollout flag is absent", () => {
+    const legacyFreeRewardDeal: LocalizedDealDisplayFields = {
+      ...structuredDeal,
+      title: "Buy a coffee and get a free bagel",
+      title_en: null,
+      title_es: null,
+      title_ko: null,
+      description: "",
+      description_en: null,
+      description_es: null,
+      description_ko: null,
+      deal_type: null,
+      discount_percent: null,
+      item_description: null,
+      required_purchase_quantity: null,
+      required_item_description: null,
+      free_item_quantity: null,
+      free_item_description: null,
+    };
+
+    const korean = buildLocalizedDealDisplay({
+      deal: legacyFreeRewardDeal,
+      locale: "ko-KR",
+      localeResolutionSource: "app_language",
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer("ko-KR", false),
+      fallbackLanguage: "ko",
+    });
+
+    expect(shouldUseCustomerLocalizedOfferRenderer("en-US", false)).toBe(false);
+    expect(shouldUseCustomerLocalizedOfferRenderer("es-US", false)).toBe(true);
+    expect(shouldUseCustomerLocalizedOfferRenderer("ko-KR", false)).toBe(true);
+    expect(korean.source).toBe("localized_offer_renderer");
+    expect(korean.title).toContain("\uCEE4\uD53C");
+    expect(korean.title).toContain("\uBCA0\uC774\uAE00");
+    expect(korean.title).not.toContain("Buy a coffee");
+    expect(korean.title).not.toContain("bagel");
   });
 
   it("prefers approved customer localization rows while retaining exact mechanics", () => {
@@ -328,10 +367,10 @@ describe("localized deal display", () => {
     });
 
     expect(disabled.source).toBe("legacy_localized_fields");
-    expect(disabled.title).toBe("Buy a latte and get a free cookie");
-    expect(disabled.description).toBe("");
+    expect(disabled.title).toBe("Legacy Spanish title");
+    expect(disabled.description).toBe("Legacy Spanish description");
     expect(missingStructuredFacts.source).toBe("legacy_localized_fields");
-    expect(missingStructuredFacts.title).toBe("Legacy spanish title");
+    expect(missingStructuredFacts.title).toBe("Legacy Spanish title");
   });
 
   it("resolves customer display locale without changing the deal identity or inventory", () => {

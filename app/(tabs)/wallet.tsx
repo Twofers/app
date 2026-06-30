@@ -37,7 +37,11 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -446,7 +450,10 @@ export default function WalletScreen() {
       },
       locale: resolvedDealDisplayLocale.locale,
       localeResolutionSource: resolvedDealDisplayLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedDealDisplayLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return localizedDisplay.title || t("consumerWallet.dealFallback");

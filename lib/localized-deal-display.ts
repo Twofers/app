@@ -343,6 +343,10 @@ export function resolveDealDisplayLocale(params: {
   });
 }
 
+export function shouldUseCustomerLocalizedOfferRenderer(locale: SupportedLocale, localizedOfferRendererEnabled: boolean): boolean {
+  return localizedOfferRendererEnabled || locale !== "en-US";
+}
+
 export function buildLocalizedDealDisplay(params: {
   deal: LocalizedDealDisplayFields;
   locale: SupportedLocale;

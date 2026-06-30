@@ -34,7 +34,11 @@ import {
   fetchCustomerDealPosterSpecs,
   type CustomerDealPosterSpec,
 } from "@/lib/customer-deal-poster-specs";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -546,7 +550,10 @@ export default function DealDetail() {
       deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
       locale: resolvedLocale.locale,
       localeResolutionSource: resolvedLocale.source,
-      useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+      useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+        resolvedLocale.locale,
+        localizedOfferRendererEnabled,
+      ),
       fallbackLanguage: i18n.language,
     });
     return display.title || t("dealDetail.dealFallback");
@@ -684,7 +691,10 @@ export default function DealDetail() {
     deal: customerDealLocalization ? { ...deal, customer_deal_localization: customerDealLocalization } : deal,
     locale: resolvedDisplayLocale.locale,
     localeResolutionSource: resolvedDisplayLocale.source,
-    useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+    useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+      resolvedDisplayLocale.locale,
+      localizedOfferRendererEnabled,
+    ),
     fallbackLanguage: i18n.language,
   });
   const displayTitle = localizedDisplay.title || t("dealDetail.dealFallback");

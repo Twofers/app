@@ -5,22 +5,22 @@ const deal = {
   title: "BOGO iced latte",
   title_en: "BOGO iced latte",
   title_es: "Latte helado 2x1",
-  title_ko: "Iced latte 1+1",
+  title_ko: "\uC544\uC774\uC2A4 \uB77C\uB5BC 1+1",
   description: "Buy one iced latte, get one free.",
   description_en: "Buy one iced latte, get one free.",
   description_es: "Compra un latte helado y lleva otro gratis.",
-  description_ko: "Buy one iced latte, get one free.",
+  description_ko: "\uC544\uC774\uC2A4 \uB77C\uB5BC \uD558\uB098\uB97C \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC.",
 };
 
 describe("deal localization", () => {
-  it("uses Spanish deal fields while cleaning legacy shorthand for Spanish language tags", () => {
-    expect(localizedDealTitle(deal, "es-MX")).toBe("Buy one latte helado and get one free");
+  it("uses Spanish deal fields without rewriting them as English offer copy", () => {
+    expect(localizedDealTitle(deal, "es-MX")).toBe("Latte helado 2x1");
     expect(localizedDealDescription(deal, "es-MX")).toBe("Compra un latte helado y lleva otro gratis.");
   });
 
-  it("uses Korean deal fields while cleaning legacy shorthand for Korean language tags", () => {
-    expect(localizedDealTitle(deal, "ko-KR")).toBe("Buy one iced latte and get one free");
-    expect(localizedDealDescription(deal, "ko-KR")).toBe("");
+  it("uses Korean deal fields without rewriting them as English offer copy", () => {
+    expect(localizedDealTitle(deal, "ko-KR")).toBe("\uC544\uC774\uC2A4 \uB77C\uB5BC 1+1");
+    expect(localizedDealDescription(deal, "ko-KR")).toBe("\uC544\uC774\uC2A4 \uB77C\uB5BC \uD558\uB098\uB97C \uC0AC\uBA74 \uD558\uB098 \uBB34\uB8CC.");
   });
 
   it("falls back to the original text when a translation is missing", () => {
@@ -42,10 +42,10 @@ describe("deal localization", () => {
     };
     expect(localizedDealTitle(spanishSourceDeal, "en")).toBe("Buy one iced coffee and get one free");
     expect(localizedDealDescription(spanishSourceDeal, "en")).toBe("");
-    expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Buy one cafe helado and get one free");
+    expect(localizedDealTitle(spanishSourceDeal, "es")).toBe("Cafe helado 2x1");
   });
 
-  it("prefers authoritative locked lines over localized AI fields", () => {
+  it("keeps localized legacy fields ahead of English locked lines", () => {
     const lockedDeal = {
       ...deal,
       title_es: "Oferta creativa",
@@ -54,7 +54,7 @@ describe("deal localization", () => {
       locked_terms_line: "Limit one claim per customer.",
     };
 
-    expect(localizedDealTitle(lockedDeal, "es-MX")).toBe("Buy two muffins and get one free");
-    expect(localizedDealDescription(lockedDeal, "es-MX")).toBe("Limit one claim per customer.");
+    expect(localizedDealTitle(lockedDeal, "es-MX")).toBe("Oferta creativa");
+    expect(localizedDealDescription(lockedDeal, "es-MX")).toBe("Texto promocional generado.");
   });
 });

@@ -22,7 +22,11 @@ import {
   fetchCustomerDealLocalizations,
   type CustomerDealLocalization,
 } from "@/lib/customer-deal-localizations";
-import { buildLocalizedDealDisplay, resolveDealDisplayLocale } from "@/lib/localized-deal-display";
+import {
+  buildLocalizedDealDisplay,
+  resolveDealDisplayLocale,
+  shouldUseCustomerLocalizedOfferRenderer,
+} from "@/lib/localized-deal-display";
 import {
   DEAL_STRUCTURED_DISPLAY_COLUMNS,
   isMissingStructuredDisplayColumnError,
@@ -566,7 +570,10 @@ export default function BusinessProfileScreen() {
                   },
                   locale: resolvedDealDisplayLocale.locale,
                   localeResolutionSource: resolvedDealDisplayLocale.source,
-                  useLocalizedOfferRenderer: customerLocaleResolutionEnabled && localizedOfferRendererEnabled,
+                  useLocalizedOfferRenderer: shouldUseCustomerLocalizedOfferRenderer(
+                    resolvedDealDisplayLocale.locale,
+                    localizedOfferRendererEnabled,
+                  ),
                   fallbackLanguage: i18n.language,
                 });
                 const dealTitle = localizedDisplay.title || t("dealDetail.dealFallback");

@@ -24,6 +24,7 @@ describe("customer localized deal paths", () => {
     for (const path of customerCardPaths) {
       const source = readFileSync(path, "utf8");
       expect(source).not.toMatch(/!customerLocaleResolutionEnabled\s*\|\|\s*!localizedOfferRendererEnabled/);
+      expect(source).not.toMatch(/customerLocaleResolutionEnabled\s*&&\s*localizedOfferRendererEnabled/);
     }
   });
 });
