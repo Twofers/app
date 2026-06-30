@@ -88,10 +88,10 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("posterTryOurLabel");
   });
 
-  it("keeps generated preview terms from repeating separately rendered schedule metadata", () => {
-    const posterPreviewStart = createAiSource.indexOf("{showPosterPreview");
-    const posterPreviewEnd = createAiSource.indexOf(") : composedAdPreviewEnabled", posterPreviewStart);
-    const posterPreviewSource = createAiSource.slice(posterPreviewStart, posterPreviewEnd);
+  it("keeps generated and accepted deal previews from repeating separately rendered schedule metadata", () => {
+    const generatedPreviewStart = createAiSource.indexOf("{generatedAd && !adAccepted ?");
+    const generatedPreviewEnd = createAiSource.indexOf("{showCopyAlternatives", generatedPreviewStart);
+    const generatedPreviewSource = createAiSource.slice(generatedPreviewStart, generatedPreviewEnd);
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
     const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
@@ -99,11 +99,10 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("stripAppRenderedTimingMetadata");
     expect(createAiSource).toContain("ownerLanguagePreviewDisplayTermsLine");
     expect(createAiSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
-    expect(createAiSource).toContain('const shouldBuildPosterSpec = (creativeFormat === "poster_v1" || previewFormat === "poster_v1");');
     expect(createAiSource).toContain('const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";');
-    expect(posterPreviewSource).toContain("{ownerLanguagePreviewDisplayTermsLine}");
-    expect(posterPreviewSource).not.toContain("{ownerLanguagePreview.termsLine}");
-    expect(posterPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
+    expect(generatedPreviewSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
+    expect(generatedPreviewSource).not.toContain("{ownerLanguagePreview.termsLine}");
+    expect(generatedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(acceptedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(acceptedPreviewSource).not.toContain('{t("createAi.maxClaimsLabel")} {maxClaims}');
   });
@@ -204,30 +203,38 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.copyOptionCtaLabel");
   });
 
-  it("renders poster previews in a polished review frame", () => {
-    const posterPreviewStart = createAiSource.indexOf("{showPosterPreview");
-    const posterPreviewEnd = createAiSource.indexOf(") : composedAdPreviewEnabled", posterPreviewStart);
-    const posterPreviewSource = createAiSource.slice(posterPreviewStart, posterPreviewEnd);
+  it("keeps generated deal review focused on one deal preview", () => {
+    const generatedPreviewStart = createAiSource.indexOf("{generatedAd && !adAccepted ?");
+    const generatedPreviewEnd = createAiSource.indexOf("{showCopyAlternatives", generatedPreviewStart);
+    const generatedPreviewSource = createAiSource.slice(generatedPreviewStart, generatedPreviewEnd);
 
-    expect(posterPreviewSource).toContain("createAi.posterPreviewTitle");
-    expect(posterPreviewSource).toContain("createAi.posterPreviewBadge");
-    expect(posterPreviewSource).toContain("overflow: \"hidden\"");
-    expect(posterPreviewSource).toContain("backgroundColor: colorScheme === \"dark\" ? theme.surfaceElevated : Gray[900]");
-    expect(posterPreviewSource).toContain("borderColor: \"rgba(255,255,255,0.16)\"");
+    expect(generatedPreviewSource).toContain("createAi.dealPreview");
+    expect(generatedPreviewSource).toContain("<GeneratedAdPreviewCard");
+    expect(generatedPreviewSource).not.toContain("showPosterPreview");
+    expect(generatedPreviewSource).not.toContain("createAi.posterPreviewTitle");
+    expect(generatedPreviewSource).not.toContain("createAi.posterPreviewBadge");
+    expect(generatedPreviewSource).not.toContain("<AdPosterCanvas");
   });
 
-  it("keeps the accepted deal preview on the selected poster format", () => {
+  it("keeps the accepted deal preview on the customer-style card instead of a poster duplicate", () => {
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
     const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
 
-    expect(createAiSource).toContain("const shouldShowPosterFormat = previewFormat === \"poster_v1\" || creativeFormat === \"poster_v1\";");
-    expect(createAiSource).toContain("const showDraftPosterPreview = Boolean(effectivePosterSpec) && shouldShowPosterFormat;");
-    expect(createAiSource).toContain("headline: title.trim() || generatedAd?.headline");
-    expect(acceptedPreviewSource).toContain("showDraftPosterPreview && effectivePosterSpec");
-    expect(acceptedPreviewSource).toContain("<AdPosterCanvas");
-    expect(acceptedPreviewSource).toContain("spec={effectivePosterSpec}");
-    expect(acceptedPreviewSource).toContain("imageUri={adImageUri ?? selectedPhotoUri}");
+    expect(createAiSource).not.toContain("showDraftPosterPreview");
+    expect(createAiSource).not.toContain("<AdPosterCanvas");
+    expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
+    expect(acceptedPreviewSource).toContain("generatedAd?.poster_storage_path");
+    expect(acceptedPreviewSource).not.toContain("spec={effectivePosterSpec}");
+  });
+
+  it("keeps generated research context out of the owner review UI", () => {
+    const generatedPreviewStart = createAiSource.indexOf("{generatedAd && !adAccepted ?");
+    const generatedPreviewEnd = createAiSource.indexOf("{showDraftEditor", generatedPreviewStart);
+    const generatedReviewSource = createAiSource.slice(generatedPreviewStart, generatedPreviewEnd);
+
+    expect(generatedReviewSource).not.toContain("createAi.researchLabel");
+    expect(generatedReviewSource).not.toContain("generatedAd.item_research?.is_familiar");
   });
 
   it("tracks selected copy alternatives by candidate identity", () => {

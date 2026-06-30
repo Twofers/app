@@ -43,7 +43,6 @@ import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
-import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -114,7 +113,6 @@ import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallb
 import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
 import type {
   AdCreativeFormat,
-  PosterSpecV1,
   PosterTemplateId,
 } from "@/lib/poster/posterTypes";
 import { buildDefaultAdPresentationSpec, type AdImageSourceType, type AdPresentationSpec } from "@/lib/ad-presentation-spec";
@@ -171,6 +169,10 @@ import {
   inferDealEligibilityFormFromText,
   mergeInferredEligibilityForm,
 } from "@/lib/deal-eligibility-inference";
+import {
+  createDefaultOneTimeDealSchedule,
+  createOneTimeDealScheduleFromStart,
+} from "@/lib/deal-schedule-defaults";
 import {
   aiComposeOfferTranscribe,
   fetchAiComposeQuota,
@@ -1007,6 +1009,7 @@ export default function AiDealScreen() {
   const [eligibilityForm, setEligibilityForm] = useState<DealEligibilityFormState>(
     () => createDefaultDealEligibilityFormState(),
   );
+  const lastAutoEligibilityInferenceRef = useRef<DealEligibilityFormState | null>(null);
   const [title, setTitle] = useState("");
   const [promoLine, setPromoLine] = useState("");
   const [ctaText, setCtaText] = useState("");
@@ -1014,8 +1017,9 @@ export default function AiDealScreen() {
   const [maxClaims, setMaxClaims] = useState("50");
   const [cutoffMins, setCutoffMins] = useState("15");
   const [validityMode, setValidityMode] = useState<"one-time" | "recurring">("one-time");
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [initialOneTimeSchedule] = useState(() => createDefaultOneTimeDealSchedule());
+  const [startTime, setStartTime] = useState(() => initialOneTimeSchedule.startTime);
+  const [endTime, setEndTime] = useState(() => initialOneTimeSchedule.endTime);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [androidStartPickerMode, setAndroidStartPickerMode] = useState<"date" | "time">("date");
@@ -1465,18 +1469,28 @@ export default function AiDealScreen() {
     setTimeout(() => scrollToGenerationRecovery(), 120);
   }
 
+  function applyInferredEligibilityFromHint(text: string) {
+    const inferred = inferDealEligibilityFormFromText(text);
+    if (!inferred) {
+      lastAutoEligibilityInferenceRef.current = null;
+      return;
+    }
+    setEligibilityForm((current) =>
+      mergeInferredEligibilityForm(current, inferred, {
+        allowDealTypeChange: true,
+        previousInferred: lastAutoEligibilityInferenceRef.current,
+      }),
+    );
+    lastAutoEligibilityInferenceRef.current = inferred;
+  }
+
   function handleHintTextChange(text: string) {
     setHintText(text);
-    const inferred = inferDealEligibilityFormFromText(text);
-    if (!inferred) return;
-    setEligibilityForm((current) =>
-      mergeInferredEligibilityForm(current, inferred, { allowDealTypeChange: true }),
-    );
+    applyInferredEligibilityFromHint(text);
   }
 
   function handleEligibilityFormChange(next: DealEligibilityFormState) {
-    const inferred = inferDealEligibilityFormFromText(hintText);
-    setEligibilityForm(mergeInferredEligibilityForm(next, inferred));
+    setEligibilityForm(next);
   }
 
   function skipPhotoToDescription() {
@@ -2098,7 +2112,10 @@ export default function AiDealScreen() {
     if (pp) setPromoLine((prev) => prev || pp);
     if (pc) setCtaText((prev) => prev || pc);
     if (pd) setDescription((prev) => prev || pd);
-    if (ph) setHintText((prev) => prev || ph);
+    if (ph) {
+      setHintText((prev) => prev || ph);
+      applyInferredEligibilityFromHint(ph);
+    }
     if (price0) setPrice((prev) => prev || price0);
     if (posterPath) {
       setPhotoPath((prev) => prev || posterPath);
@@ -2241,13 +2258,6 @@ export default function AiDealScreen() {
     };
   }
 
-  function selectCreativeFormat(next: CreativeFormat) {
-    if (next === creativeFormat) return;
-    setCreativeFormat(next);
-    setPreviewFormat(next);
-    if (generatedAd) invalidateAcceptedAdDraft();
-  }
-
   useEffect(() => {
     if (!approvedComposedPresentationHash && approvedLocalizationApprovalHash) {
       setApprovedLocalizationApprovalHash(null);
@@ -2333,7 +2343,9 @@ export default function AiDealScreen() {
         audio_base64: b64,
       });
       if (transcript) {
-        setHintText((prev) => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript));
+        const nextHintText = hintText.trim() ? `${hintText.trim()} ${transcript}` : transcript;
+        setHintText(nextHintText);
+        applyInferredEligibilityFromHint(nextHintText);
         setBanner({ message: t("createAi.transcribeDone"), tone: "success" });
       } else {
         setBanner({ message: t("createAi.transcribeEmpty"), tone: "info" });
@@ -3841,27 +3853,6 @@ export default function AiDealScreen() {
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
   const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
-  const generatedPosterSpec = generatedAd?.poster?.enabled ? (generatedAd.poster as PosterSpecV1) : null;
-  const shouldBuildPosterSpec = (creativeFormat === "poster_v1" || previewFormat === "poster_v1");
-  const fallbackPosterSpec =
-    shouldBuildPosterSpec && offerDefinition
-      ? (buildPosterSpecFromOfferDefinition({
-          definition: offerDefinition,
-          enabled: true,
-          templateId: selectedPosterTemplateId,
-          sourceAssetPath: currentAdStoragePath ?? originalStoragePath,
-          renderedAssetPath: null,
-          headline: title.trim() || generatedAd?.headline,
-          subline: posterScheduleLabel,
-          businessCategory: businessContextForAi.category,
-          compositionPlan: generatedAd?.item_research?.description ?? null,
-        }) as PosterSpecV1)
-      : null;
-  const effectivePosterSpec = fallbackPosterSpec ?? generatedPosterSpec;
-  const shouldShowPosterFormat = previewFormat === "poster_v1" || creativeFormat === "poster_v1";
-  const showPosterPreview =
-    Boolean(generatedAd && effectivePosterSpec) && shouldShowPosterFormat;
-  const showDraftPosterPreview = Boolean(effectivePosterSpec) && shouldShowPosterFormat;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
   const composedAdPreviewEnabled =
@@ -4128,6 +4119,12 @@ export default function AiDealScreen() {
   const iosSchedulePickerMode =
     iosSchedulePicker === "windowStart" || iosSchedulePicker === "windowEnd" ? "time" : "datetime";
 
+  function setOneTimeStartTime(nextStartTime: Date) {
+    const nextSchedule = createOneTimeDealScheduleFromStart(nextStartTime);
+    setStartTime(nextSchedule.startTime);
+    setEndTime(nextSchedule.endTime);
+  }
+
   function openIosSchedulePicker(target: IosSchedulePickerTarget, value: Date) {
     setIosScheduleDraft(value);
     setIosSchedulePicker(target);
@@ -4140,7 +4137,7 @@ export default function AiDealScreen() {
   function confirmIosSchedulePicker() {
     if (!iosSchedulePicker) return;
     if (iosSchedulePicker === "start") {
-      setStartTime(iosScheduleDraft);
+      setOneTimeStartTime(iosScheduleDraft);
     } else if (iosSchedulePicker === "end") {
       setEndTime(iosScheduleDraft);
     } else if (iosSchedulePicker === "windowStart") {
@@ -4601,7 +4598,7 @@ export default function AiDealScreen() {
                           const picked = androidStartDateRef.current ?? startTime;
                           const merged = new Date(picked);
                           merged.setHours(date.getHours(), date.getMinutes(), 0, 0);
-                          setStartTime(merged);
+                          setOneTimeStartTime(merged);
                           setShowStartPicker(false);
                           setAndroidStartPickerMode("date");
                           androidStartDateRef.current = null;
@@ -4612,7 +4609,7 @@ export default function AiDealScreen() {
                     <DateTimePicker
                       value={startTime}
                       mode="datetime"
-                      onChange={(_event, date) => { setShowStartPicker(false); if (date) setStartTime(date); }}
+                      onChange={(_event, date) => { setShowStartPicker(false); if (date) setOneTimeStartTime(date); }}
                     />
                   )
                 ) : null}
@@ -4834,64 +4831,6 @@ export default function AiDealScreen() {
               </>
             ) : null}
 
-            <View style={{ marginTop: 18, gap: 10 }}>
-              <Text style={{ fontWeight: "800", color: theme.text }}>
-                {t("createAi.adFormatTitle", { defaultValue: "Ad format" })}
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {([
-                  {
-                    key: "standard_card" as const,
-                    label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }),
-                    icon: "view-agenda" as const,
-                  },
-                  {
-                    key: "poster_v1" as const,
-                    label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }),
-                    icon: "crop-portrait" as const,
-                  },
-                ]).map((option) => {
-                  const selected = creativeFormat === option.key;
-                  return (
-                    <Pressable
-                      key={option.key}
-                      onPress={() => selectCreativeFormat(option.key)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      style={{
-                        flex: 1,
-                        minHeight: 46,
-                        paddingVertical: 9,
-                        paddingHorizontal: 10,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: selected ? theme.primary : theme.border,
-                        backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <MaterialIcons
-                        name={option.icon}
-                        size={18}
-                        color={selected ? theme.accentText : theme.mutedText}
-                      />
-                      <Text
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.78}
-                        style={{ fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
             {quota && quota.remaining <= 5 && quota.remaining > 0 ? (
               <Banner message={t("createAi.quotaWarning", { remaining: quota.remaining })} tone="info" />
             ) : null}
@@ -4985,121 +4924,16 @@ export default function AiDealScreen() {
             )}
 
             {/* Single ad preview - text rendered natively below the image, not baked in. */}
-            {generatedAd ? (
+            {generatedAd && !adAccepted ? (
               <View
                 onLayout={(e) => {
                   adReviewSectionYRef.current = e.nativeEvent.layout.y;
                 }}
                 style={{ marginTop: 22, gap: 14 }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.yourAd")}</Text>
+                <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.dealPreview")}</Text>
 
-                {effectivePosterSpec ? (
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    {([
-                      { key: "standard_card" as const, label: t("createAi.standardCardFormat", { defaultValue: "Standard card" }) },
-                      { key: "poster_v1" as const, label: t("createAi.posterAdFormat", { defaultValue: "Poster ad" }) },
-                    ]).map((tab) => {
-                      const selected = previewFormat === tab.key;
-                      return (
-                        <Pressable
-                          key={tab.key}
-                          onPress={() => setPreviewFormat(tab.key)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          style={{
-                            flex: 1,
-                            paddingVertical: 9,
-                            paddingHorizontal: 10,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: selected ? theme.primary : theme.border,
-                            backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-                          }}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.78}
-                            style={{ textAlign: "center", fontWeight: "800", color: selected ? theme.accentText : theme.text, fontSize: 13 }}
-                          >
-                            {tab.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-
-                {showPosterPreview && effectivePosterSpec ? (
-                  <>
-                    <View
-                      style={{
-                        borderRadius: 8,
-                        overflow: "hidden",
-                        borderWidth: 1,
-                        borderColor: colorScheme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(17,24,39,0.12)",
-                        backgroundColor: colorScheme === "dark" ? theme.surfaceElevated : Gray[900],
-                      }}
-                    >
-                      <View style={{ paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                        <Text style={{ color: "#FFFFFF", fontWeight: "900", fontSize: 13, letterSpacing: 0 }} numberOfLines={1}>
-                          {t("createAi.posterPreviewTitle", { defaultValue: "Poster preview" })}
-                        </Text>
-                        <View
-                          style={{
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 999,
-                            backgroundColor: "rgba(255,255,255,0.14)",
-                            borderWidth: 1,
-                            borderColor: "rgba(255,255,255,0.20)",
-                          }}
-                        >
-                          <Text style={{ color: "#FDE68A", fontWeight: "900", fontSize: 11, letterSpacing: 0 }} numberOfLines={1}>
-                            {t("createAi.posterPreviewBadge", { defaultValue: "Poster ad" })}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
-                        <AdPosterCanvas
-                          spec={effectivePosterSpec}
-                          imageUri={adImageUri ?? selectedPhotoUri}
-                          templateId={selectedPosterTemplateId}
-                          style={{
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: "rgba(255,255,255,0.16)",
-                          }}
-                        />
-                      </View>
-                    </View>
-                    <View
-                      style={{
-                        padding: 12,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        backgroundColor: theme.surfaceMuted,
-                        gap: 7,
-                      }}
-                    >
-                      <Text style={{ fontWeight: "800", color: theme.text }}>
-                        {t("createAi.lockedDetailsTitle", { defaultValue: "Deal details" })}
-                      </Text>
-                      <Text style={{ color: theme.text, fontWeight: "800" }}>
-                        {ownerLanguagePreview.offerLine}
-                      </Text>
-                      <Text style={{ color: theme.mutedText, lineHeight: 18 }}>
-                        {ownerLanguagePreviewDisplayTermsLine}
-                      </Text>
-                    </View>
-                    <SecondaryButton
-                      title={t("createAi.useStandardCard", { defaultValue: "Use standard card" })}
-                      onPress={() => selectCreativeFormat("standard_card")}
-                    />
-                  </>
-                ) : composedAdPreviewEnabled ? (
+                {composedAdPreviewEnabled ? (
                   <>
                     <ComposedPreviewTelemetryBeacon
                       generatedAdPresent={Boolean(generatedAd)}
@@ -5424,26 +5258,10 @@ export default function AiDealScreen() {
                   </View>
                 ) : null}
 
-                {generatedAd.item_research?.is_familiar && generatedAd.item_research.description ? (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderLeftWidth: 3, borderLeftColor: theme.primary }}>
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: theme.accentText, letterSpacing: 0.5 }}>{t("createAi.researchLabel")}</Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, color: theme.mutedText, lineHeight: 19 }}>
-                      {generatedAd.item_research.description}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* Accept button */}
-                {!adAccepted ? (
-                  <PrimaryButton
-                    title={t("createAi.useThisAd")}
-                    onPress={acceptAd}
-                  />
-                ) : (
-                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme === "dark" ? "rgba(255,159,28,0.14)" : PrimaryTint.surface, borderWidth: 1, borderColor: PrimaryTint.border }}>
-                    <Text style={{ fontWeight: "700", color: theme.accentText }}>{t("createAi.adAccepted")}</Text>
-                  </View>
-                )}
+                <PrimaryButton
+                  title={t("createAi.useThisAd")}
+                  onPress={acceptAd}
+                />
 
                 {/* Revise panel */}
                 {showComposedRevisePanel ? (
@@ -5572,50 +5390,27 @@ export default function AiDealScreen() {
                     borderColor: theme.border,
                   }}
                 >
-                  {showDraftPosterPreview && effectivePosterSpec ? (
-                    <>
-                      <View style={{ padding: 8, backgroundColor: colorScheme === "dark" ? theme.surfaceElevated : Gray[900] }}>
-                        <AdPosterCanvas
-                          spec={effectivePosterSpec}
-                          imageUri={adImageUri ?? selectedPhotoUri}
-                          templateId={selectedPosterTemplateId}
-                          style={{
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: "rgba(255,255,255,0.16)",
-                          }}
-                        />
-                      </View>
-                      <View style={{ padding: 12 }}>
-                        <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{ownerLanguagePreview.offerLine}</Text>
-                        <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{ownerLanguagePreviewDisplayTermsLine}</Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      {(() => {
-                        const previewUri = generatedAd?.poster_storage_path
-                          ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                          : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
-                        return previewUri ? (
-                          <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
-                        ) : (
-                          <DraftFallbackVisual
-                            businessName={businessName}
-                            headline={title || promoLine || hintText}
-                            offerLine={promoLine || title || description}
-                            label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                          />
-                        );
-                      })()}
-                      <View style={{ padding: 12 }}>
-                        <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                        {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
-                        {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
-                        <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                      </View>
-                    </>
-                  )}
+                  {(() => {
+                    const previewUri = generatedAd?.poster_storage_path
+                      ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+                      : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
+                    return previewUri ? (
+                      <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
+                    ) : (
+                      <DraftFallbackVisual
+                        businessName={businessName}
+                        headline={title || promoLine || hintText}
+                        offerLine={promoLine || title || description}
+                        label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                      />
+                    );
+                  })()}
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
+                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
+                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
+                    <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                  </View>
                 </View>
 
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>

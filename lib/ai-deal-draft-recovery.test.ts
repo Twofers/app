@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   aiDealDraftStorageKey,
@@ -10,6 +10,10 @@ import { createDefaultDealEligibilityFormState } from "./deal-eligibility-form";
 const eligibilityForm = createDefaultDealEligibilityFormState();
 
 describe("AI deal draft recovery", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses a business-scoped storage key", () => {
     expect(aiDealDraftStorageKey(" biz-1 ")).toBe("twofer.aiDealDraft.v1.biz-1");
   });
@@ -123,6 +127,22 @@ describe("AI deal draft recovery", () => {
 
     expect(parsed?.creativeFormat).toBe("poster_v1");
     expect(parsed?.previewFormat).toBe("poster_v1");
+  });
+
+  it("defaults missing draft schedule to five minutes from now with a one-hour duration", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T17:20:00.000Z"));
+    const raw = JSON.stringify({
+      version: 1,
+      businessId: "biz-1",
+      title: "Buy coffee and get a cookie",
+      eligibilityForm,
+    });
+
+    const parsed = parseAiDealRecoveryDraft(raw, "biz-1");
+
+    expect(parsed?.startTime).toBe("2026-06-30T17:25:00.000Z");
+    expect(parsed?.endTime).toBe("2026-06-30T18:25:00.000Z");
   });
 
   it("rejects malformed, old, and different-business drafts", () => {

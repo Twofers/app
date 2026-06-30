@@ -1,6 +1,10 @@
 import { normalizeGeneratedAdDisplayCopy, type GeneratedAd, type PhotoTreatment } from "./ad-variants";
 import { createDefaultDealEligibilityFormState, type DealEligibilityFormState } from "./deal-eligibility-form";
 import { getDealDisplayTitle } from "./deal-display-copy";
+import {
+  createDefaultOneTimeDealSchedule,
+  createOneTimeDealScheduleFromStart,
+} from "./deal-schedule-defaults";
 
 export const AI_DEAL_DRAFT_VERSION = 1;
 
@@ -95,9 +99,13 @@ function cleanCreativeFormat(value: unknown, generatedAd: GeneratedAd | null): A
   return generatedAd?.poster?.enabled ? "poster_v1" : "standard_card";
 }
 
-function cleanIsoDate(value: unknown, fallback: Date): string {
+function cleanDate(value: unknown, fallback: Date): Date {
   const date = typeof value === "string" || typeof value === "number" ? new Date(value) : value instanceof Date ? value : fallback;
-  return Number.isFinite(date.getTime()) ? date.toISOString() : fallback.toISOString();
+  return Number.isFinite(date.getTime()) ? date : fallback;
+}
+
+function cleanIsoDate(value: unknown, fallback: Date): string {
+  return cleanDate(value, fallback).toISOString();
 }
 
 function cleanMinute(value: unknown, fallback: number): number {
@@ -130,7 +138,9 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
   const creativeFormat = cleanCreativeFormat(input.creativeFormat, generatedAd);
   const previewFormat = cleanCreativeFormat(input.previewFormat, generatedAd);
   const now = new Date();
-  const fallbackEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const defaultSchedule = createDefaultOneTimeDealSchedule(now);
+  const startTime = cleanDate(input.startTime, defaultSchedule.startTime);
+  const endTime = cleanDate(input.endTime, createOneTimeDealScheduleFromStart(startTime).endTime);
   const draft: AiDealRecoveryDraft = {
     version: AI_DEAL_DRAFT_VERSION,
     businessId,
@@ -156,8 +166,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
     maxClaims: cleanString(input.maxClaims) || "50",
     cutoffMins: cleanString(input.cutoffMins) || "15",
     validityMode: input.validityMode === "recurring" ? "recurring" : "one-time",
-    startTime: cleanIsoDate(input.startTime, now),
-    endTime: cleanIsoDate(input.endTime, fallbackEnd),
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
     daysOfWeek: cleanDays(input.daysOfWeek),
     windowStartMinutes: cleanMinute(input.windowStartMinutes, 540),
     windowEndMinutes: cleanMinute(input.windowEndMinutes, 1020),
@@ -176,6 +186,7 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
     const parsed = JSON.parse(raw) as Partial<AiDealRecoveryDraft>;
     if (parsed.version !== AI_DEAL_DRAFT_VERSION) return null;
     if (parsed.businessId !== businessId) return null;
+    const defaultSchedule = createDefaultOneTimeDealSchedule();
     const draft = buildAiDealRecoveryDraft({
       businessId: parsed.businessId,
       photoPath: parsed.photoPath ?? null,
@@ -196,8 +207,8 @@ export function parseAiDealRecoveryDraft(raw: string | null | undefined, busines
       maxClaims: parsed.maxClaims ?? "50",
       cutoffMins: parsed.cutoffMins ?? "15",
       validityMode: parsed.validityMode === "recurring" ? "recurring" : "one-time",
-      startTime: parsed.startTime ?? new Date().toISOString(),
-      endTime: parsed.endTime ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      startTime: parsed.startTime ?? defaultSchedule.startTime,
+      endTime: parsed.endTime ?? defaultSchedule.endTime,
       daysOfWeek: parsed.daysOfWeek ?? [1, 2, 3, 4, 5],
       windowStartMinutes: parsed.windowStartMinutes ?? 540,
       windowEndMinutes: parsed.windowEndMinutes ?? 1020,
