@@ -145,6 +145,21 @@ describe("localized offer renderer", () => {
     expect(korean.primaryOfferLine).not.toContain("Large coffee");
   });
 
+  it("localizes common composed cafe drink terms in exact offer mechanics", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      requiredItemDescription: "iced latte",
+      freeItemDescription: "cookie",
+    });
+
+    const spanish = renderLocalizedOfferFromDefinition(definition, { locale: "es-US" });
+    const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
+
+    expect(spanish.primaryOfferLine).toBe("Al comprar 1 latte helado, recibes 1 galleta gratis");
+    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uC544\uC774\uC2A4 \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uCFE0\uD0A4 \u00D7 1");
+    expect(korean.primaryOfferLine).not.toContain("iced latte");
+  });
+
   it("keeps branded terms unchanged unless a localized name is provided", () => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",

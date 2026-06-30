@@ -158,6 +158,26 @@ describe("localized deal display", () => {
     expect(korean.title).not.toContain("bagel");
   });
 
+  it("keeps common composed paid items localized in customer deal detail copy", () => {
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        required_item_description: "iced latte",
+        free_item_description: "cookie",
+      },
+      locale: "ko-KR",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    expect(display.source).toBe("localized_offer_renderer");
+    expect(display.title).toContain("\uC544\uC774\uC2A4 \uB77C\uB5BC");
+    expect(display.title).toContain("\uCFE0\uD0A4");
+    expect(display.title).not.toContain("iced latte");
+    expect(display.lockedOfferContent?.primaryOfferLine).toBe(display.title);
+  });
+
   it("prefers approved customer localization rows while retaining exact mechanics", () => {
     const display = buildLocalizedDealDisplay({
       deal: {
