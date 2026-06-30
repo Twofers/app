@@ -1,6 +1,7 @@
 # Multilingual Deals Production Approval Runbook
 
 Date: 2026-06-23
+Updated: 2026-06-29
 
 Scope: this runbook is the local handoff for moving the multilingual deal system from implemented code to a production rollout decision. It does not approve, apply, deploy, build, submit, or enable anything by itself.
 
@@ -10,7 +11,8 @@ Scope: this runbook is the local handoff for moving the multilingual deal system
 - U.S. Spanish (`es-US`) and Korean (`ko-KR`) are available for internal code QA, but broad production is blocked.
 - No Supabase migration has been applied from this multilingual rollout.
 - No Edge Function has been redeployed from this multilingual rollout.
-- No hosted multilingual feature flag has been enabled.
+- Several client-readable `EXPO_PUBLIC_AI_V5_*` flags are now set in `eas.json` production-like profiles for localized rendering/code-path QA. That does **not** mean broad Spanish/Korean production is approved.
+- Server-side hosted flags that trigger provider transcreation, semantic QA, or exact publish approval enforcement still require the migration/deploy/reviewer/screenshot gates below before production activation.
 - Push notifications are intentionally not multilingual in this release.
 
 ## Hard Gates Before Broad Production
@@ -106,7 +108,7 @@ Do not deploy `send-deal-push` to claim multilingual push support. The v1 policy
 
 ## Hosted Feature Flag Order
 
-Keep every flag false until migrations, function deploys, native review, and screenshot QA are complete for the target rollout stage.
+Do not turn server-side hosted rollout flags on until migrations, function deploys, native review, and screenshot QA are complete for the target rollout stage. Current `eas.json` may already set matching `EXPO_PUBLIC_` client aliases for internal QA / production-like builds; those aliases should not be treated as broad-production approval while `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` still fails.
 
 Internal QA may enable selected flags in a non-production environment only after the relevant code and migrations are deployed there:
 

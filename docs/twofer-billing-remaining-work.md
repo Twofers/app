@@ -1,6 +1,6 @@
 # Twofer Billing Remaining Work
 
-Updated: 2026-06-22
+Updated: 2026-06-29
 
 This file tracks what remains after the billing implementation branch was migrated and the Edge Functions were deployed to the linked Supabase project.
 
@@ -9,7 +9,9 @@ This file tracks what remains after the billing implementation branch was migrat
 - Billing migrations were applied to Supabase project `kvodhiqhdqnptqovovia`.
 - Edge Functions were deployed to the same Supabase project.
 - Configured Edge smoke check passed with `npm run gate:edges`.
-- The billing implementation remains hidden from app users while `PAID_BILLING_ENABLED=false`.
+- Billing UI is now enabled in code with `PAID_BILLING_ENABLED=true`.
+- Pilot publish enforcement is bypassed with `PILOT_DISABLE_BILLING_GATE=true`, so owners are not blocked from pilot publishing solely by subscription state.
+- Old docs that say billing is fully hidden by setting `PAID_BILLING_ENABLED` to false are stale.
 
 ## Validation still needed
 
@@ -92,8 +94,9 @@ Run these in Stripe test mode before any paid rollout:
 
 ## App rollout gates
 
-- Keep paid app surfaces hidden while `PAID_BILLING_ENABLED=false`.
-- Do not enable purchase UI until Stripe test-mode QA passes.
+- Do not treat billing as hidden in the current app: `PAID_BILLING_ENABLED=true`.
+- Keep live charging disabled unless Stripe test-mode QA, webhook verification, store-policy review, and the intended pilot/live posture are complete.
+- If a store-review build must be a no-payment pilot, add and verify a build-specific mechanism that hides or disables checkout/subscription paths before submission.
 - Do not enable live Stripe billing until test-mode Checkout, webhook, cancellation, refund, and failed-payment flows pass.
 - Do not change version numbers, build numbers, bundle identifiers, signing, or release settings as part of billing setup.
 - Do not claim the app is production or store ready until real-device QA and store submission tasks are complete.

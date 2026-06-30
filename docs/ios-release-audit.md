@@ -1,10 +1,14 @@
 # iOS Release Audit
 
 Date: 2026-06-16
+Stale-fact refresh: 2026-06-29
 Branch: `release/ios-testflight`
 Safety checkpoint: `a46b6c1` (`Fix Twofer penguin icon and splash assets`)
 
 This audit was prepared from the current repository plus read-only EAS project checks. It does not include real-iPhone TestFlight QA because this Windows workspace cannot run or sign iOS locally and has no physical iPhone attached.
+
+Note: this remains a historical iOS audit. For current rollout state, use
+`docs/store-release-prep.md`, `docs/deployment-notes.md`, and `docs/deployment-command-plan.md`.
 
 ## Release State
 
@@ -22,7 +26,7 @@ This audit was prepared from the current repository plus read-only EAS project c
 | iOS bundle id | `com.unvmex2.twoforone` |
 | iOS build number | EAS remote app versioning reports `11`. `app.json` does not set `ios.buildNumber` because `eas.json` uses `appVersionSource: remote`. |
 | Android package | `com.unvmex2.twoforone` |
-| Android versionCode | Local `app.json` value is `10`; EAS remote app versioning reports `17` and warns the local value is ignored for remote versioning, though it remains visible through `expo-constants`. |
+| Android versionCode | Historical audit value was local `10` / EAS remote `17`. Current local `app.json` value is `31`; EAS remote app versioning still controls production build numbers and may advance past local config. |
 | iPad support | Off: `ios.supportsTablet` is `false`. |
 | App icon | `./assets/images/twofer-icon-1024.png` for iOS and Android. |
 | Splash | `expo-splash-screen` uses `./assets/images/twofer-splash-1024.png`, white background, contain mode. |
@@ -69,7 +73,7 @@ The production build profile adds:
 
 - `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`
 
-The preview profile now uses the production EAS environment and adds preview-only debug flags plus `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`. AI provider keys are not app-bundled EAS variables; AI calls go through Supabase edge functions. No checkout or payment provider key is required for v1 because paid billing is disabled.
+The preview profile uses the production EAS environment and adds preview-only debug flags plus `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`. AI provider keys are not app-bundled EAS variables; AI calls go through Supabase edge functions. Stripe/payment provider keys, if billing is enabled for a build, belong in Supabase Edge Function secrets, not app-bundled EAS public variables.
 
 ## iOS App Config
 
@@ -106,7 +110,7 @@ NEEDS HUMAN QA:
 | Diagnostics | Sanitized app-error telemetry only; no crash SDK found in `package.json`. |
 | Push tokens | Expo push tokens stored in `push_tokens` for notification delivery. |
 | User IDs/device IDs | Supabase user IDs and Expo push tokens are used for app functionality. |
-| Payment/checkout | Paid billing is hidden by `PAID_BILLING_ENABLED=false`; checkout surfaces are not reachable in v1. |
+| Payment/checkout | Current code has `PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true`; checkout/subscription reachability must be verified on the exact review build. Do not rely on older "billing hidden" assumptions. |
 | Privacy manifest file | No checked-in `PrivacyInfo.xcprivacy` file was found, but `ios.privacyManifests` is declared in `app.json` for Expo prebuild. |
 
 ## Platform Search Summary

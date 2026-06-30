@@ -28,6 +28,10 @@ import {
   getWalletClaimToken,
   saveWalletClaimToken,
 } from "./wallet-claim-token-cache";
+import {
+  type DealTranslationLocale,
+  type DealTranslationResult,
+} from "./deal-translation-fallback";
 
 /** Default Edge Function HTTP timeout; forwarded to `supabase.functions.invoke({ timeout })`. */
 export const EDGE_FUNCTION_TIMEOUT_MS = EDGE_FN_TIMEOUT_DEFAULT_MS;
@@ -456,19 +460,7 @@ export async function aiBusinessLookupDetails(body: {
   return result;
 }
 
-/**
- * Fire-and-forget: translate deal title/description into es + ko.
- * Never throws — translations arrive asynchronously.
- */
-export type DealTranslationResult = {
-  source_locale: "en" | "es" | "ko";
-  title_en: string;
-  title_es: string;
-  title_ko: string;
-  description_en: string;
-  description_es: string;
-  description_ko: string;
-};
+export type { DealTranslationResult } from "./deal-translation-fallback";
 
 function parseDealTranslationResult(data: unknown): DealTranslationResult {
   if (!data || typeof data !== "object") {
@@ -506,7 +498,7 @@ export async function translateDealCopy(body: {
   business_id: string;
   title: string;
   description: string;
-  source_locale: "en" | "es" | "ko";
+  source_locale: DealTranslationLocale;
 }): Promise<DealTranslationResult> {
   const { data, error } = await supabase.functions.invoke("ai-translate-deal", {
     body,
@@ -514,7 +506,7 @@ export async function translateDealCopy(body: {
   });
   if (error) {
     const fromBody = await readInvokeErrorBody(error);
-    throw new Error(fromBody.message ?? parseFunctionError(error));
+    throwInvokeError(fromBody.message ?? parseFunctionError(error), fromBody.code ?? getErrorCode(error));
   }
   if (data && typeof data === "object" && "error" in data) {
     throw new Error(String((data as { error?: string }).error ?? "Translation failed."));
@@ -522,7 +514,11 @@ export async function translateDealCopy(body: {
   return parseDealTranslationResult(data);
 }
 
-export async function translateDeal(dealId: string, sourceLocale?: "en" | "es" | "ko"): Promise<void> {
+/**
+ * Fire-and-forget: translate deal title/description into es + ko.
+ * Never throws - translations arrive asynchronously.
+ */
+export async function translateDeal(dealId: string, sourceLocale?: DealTranslationLocale): Promise<void> {
   try {
     const { error } = await supabase.functions.invoke("ai-translate-deal", {
       body: { deal_id: dealId, ...(sourceLocale ? { source_locale: sourceLocale } : {}) },

@@ -51,6 +51,7 @@ import {
   aiGenerateAd,
   aiReviseAd,
   notifyDealPublished,
+  translateDeal,
   translateDealCopy,
   getErrorCode,
   fetchAdGenerationQuota,
@@ -188,6 +189,10 @@ import {
   type MerchantImageEditMode,
   type MerchantImageSourceMode,
 } from "../../lib/merchant-image-selection";
+import {
+  buildDealTranslationFallback,
+  type DealTranslationResult,
+} from "@/lib/deal-translation-fallback";
 
 type TemplateRow = {
   id: string;
@@ -3314,12 +3319,29 @@ export default function AiDealScreen() {
         title: title.trim(),
         description: listingDescription.trim(),
       });
-      const translations = await translateDealCopy({
-        business_id: businessId,
-        title: displayCopy.title,
-        description: displayCopy.description,
-        source_locale: sourceLocaleForPublish,
-      });
+      let translationFallbackUsed = false;
+      let translations: DealTranslationResult;
+      try {
+        translations = await translateDealCopy({
+          business_id: businessId,
+          title: displayCopy.title,
+          description: displayCopy.description,
+          source_locale: sourceLocaleForPublish,
+        });
+      } catch (translationErr) {
+        translationFallbackUsed = true;
+        translations = buildDealTranslationFallback({
+          title: displayCopy.title,
+          description: displayCopy.description,
+          source_locale: sourceLocaleForPublish,
+          offerDefinition,
+        });
+        trackEvent("deal_publish_translation_fallback_used", {
+          businessId,
+          source_locale: sourceLocaleForPublish,
+          error_code: getErrorCode(translationErr) ?? null,
+        });
+      }
 
       const baseRow = {
         business_id: businessId,
@@ -3352,6 +3374,9 @@ export default function AiDealScreen() {
         const updateRow = { ...baseRow, location_id: publishLocationIds[0] ?? null };
         const updateResult = await updateDealWithCompatibility(updateRow);
         if (updateResult.error) throw updateResult.error;
+        if (translationFallbackUsed) {
+          void translateDeal(editingDealId, sourceLocaleForPublish);
+        }
       } else {
         const locTargets =
           publishLocationIds.length > 0 ? publishLocationIds : [null as string | null];
@@ -3379,6 +3404,9 @@ export default function AiDealScreen() {
           shouldNotify: row.idempotency_replayed !== true,
         }));
         for (const row of dealsOut) {
+          if (translationFallbackUsed && row.id) {
+            void translateDeal(row.id, sourceLocaleForPublish);
+          }
           if (row.id && row.shouldNotify) {
             void notifyDealPublished(row.id);
           }
