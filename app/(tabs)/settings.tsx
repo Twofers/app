@@ -31,7 +31,7 @@ import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
   registerPushTokenWithResult,
 } from "@/lib/push-token";
-import type { AppLocale } from "@/lib/i18n/config";
+import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -68,6 +68,7 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
+  const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   const [alertsEnabled, setAlertsEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -638,7 +639,7 @@ export default function SettingsScreen() {
           <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("language.sectionAppHelp")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: Spacing.sm }}>
             {(["en", "es", "ko"] as const).map((loc) => {
-              const active = i18n.language === loc;
+              const active = currentAppLocale === loc;
               return (
                 <Pressable
                   key={loc}

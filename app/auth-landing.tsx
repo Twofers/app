@@ -35,7 +35,7 @@ import { Banner } from "@/components/ui/banner";
 import { LocaleFlag } from "@/components/ui/locale-flag";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { springPressIn, springPressOut, triggerLightHaptic } from "@/lib/press-feedback";
-import i18n, { APP_LOCALES, type AppLocale } from "@/lib/i18n/config";
+import i18n, { APP_LOCALES, appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { getEmailAuthRedirectUrl } from "@/lib/auth-password-recovery";
@@ -441,8 +441,7 @@ export default function AuthLandingScreen() {
     await i18n.changeLanguage(locale);
   }
 
-  const currentLocale: AppLocale =
-    APP_LOCALES.find((locale) => i18n.language.startsWith(locale)) ?? "en";
+  const currentLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   const stackPlatform: TabBarPlatform =
     Platform.OS === "android" ? "android" : Platform.OS === "ios" ? "ios" : "default";
   const authLayout = getScreenLayoutMetrics(insets, "stack", stackPlatform);

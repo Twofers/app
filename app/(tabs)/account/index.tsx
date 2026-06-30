@@ -18,7 +18,7 @@ import { CardShell } from "@/components/ui/card-shell";
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
-import type { AppLocale } from "@/lib/i18n/config";
+import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { useTabMode } from "@/lib/tab-mode";
@@ -130,6 +130,7 @@ export default function AccountScreen() {
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
   const supportEmail = getSupportEmail();
+  const currentAppLocale = appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language);
   const visibleBusinessContactName = businessProfile?.contact_name?.trim() || null;
   const visibleBusinessEmail = businessProfile?.business_email?.trim() || null;
 
@@ -731,7 +732,7 @@ export default function AccountScreen() {
     await setUiLocalePreference(locale, { manual: true });
     await setCustomerPreferredDealLocaleFromAppLanguage(locale);
     await i18n.changeLanguage(locale);
-    setBanner({ message: t("account.languageSaved"), tone: "success" });
+    setBanner({ message: String(i18n.t("account.languageSaved", { lng: locale })), tone: "success" });
   }
 
   function localeChip(label: string, locale: AppLocale, active: boolean, onPress: () => void) {
@@ -976,9 +977,9 @@ export default function AccountScreen() {
             <Text style={{ fontWeight: "700", color: theme.text }}>{t("language.sectionApp")}</Text>
             <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 18 }}>{t("language.sectionAppHelp")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
-              {localeChip(t("language.english"), "en", i18n.language === "en", () => chooseAppLocale("en"))}
-              {localeChip(t("language.spanish"), "es", i18n.language === "es", () => chooseAppLocale("es"))}
-              {localeChip(t("language.korean"), "ko", i18n.language === "ko", () => chooseAppLocale("ko"))}
+              {localeChip(t("language.english"), "en", currentAppLocale === "en", () => chooseAppLocale("en"))}
+              {localeChip(t("language.spanish"), "es", currentAppLocale === "es", () => chooseAppLocale("es"))}
+              {localeChip(t("language.korean"), "ko", currentAppLocale === "ko", () => chooseAppLocale("ko"))}
             </View>
           </View>
 

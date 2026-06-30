@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Localization from "expo-localization";
 import type { AppLocale } from "../i18n/config";
-import { isAppLocale } from "../i18n/config";
+import { appLocaleFromLanguage, isAppLocale } from "../i18n/config";
 
 const KEY_UI_LOCALE = "twoforone.ui_locale";
 const KEY_MANUAL_OVERRIDE = "twoforone.locale_manual_override";
@@ -22,14 +22,23 @@ export function deviceToAppLocale(): AppLocale {
 export async function hydrateUiLocale(): Promise<AppLocale> {
   const manual = await AsyncStorage.getItem(KEY_MANUAL_OVERRIDE);
   const saved = await AsyncStorage.getItem(KEY_UI_LOCALE);
+  const normalizedSaved = appLocaleFromLanguage(saved);
 
   if (manual === "1") {
     if (isAppLocale(saved)) return saved;
+    if (saved && normalizedSaved !== "en") {
+      await AsyncStorage.setItem(KEY_UI_LOCALE, normalizedSaved);
+      return normalizedSaved;
+    }
     await AsyncStorage.removeItem(KEY_MANUAL_OVERRIDE);
   }
 
   if (isAppLocale(saved)) {
     return saved;
+  }
+  if (saved && normalizedSaved !== "en") {
+    await AsyncStorage.setItem(KEY_UI_LOCALE, normalizedSaved);
+    return normalizedSaved;
   }
 
   /** Product default: English on first launch until the user picks a language. */
