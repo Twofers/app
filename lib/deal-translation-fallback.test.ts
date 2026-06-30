@@ -68,11 +68,13 @@ describe("deal translation fallback", () => {
 
     expect(fallback.title_en).toBe("Buy a large coffee drink and get a free cookie");
     expect(fallback.description_en).toBe("Redeem only at Cedar Bean - Irving. Limited to 50 available.");
-    expect(fallback.title_es).toBe("Al comprar 1 large coffee drink, recibes 1 cookie gratis");
+    expect(fallback.title_es).toBe("Al comprar 1 bebida de caf\u00E9 grande, recibes 1 galleta gratis");
     expect(fallback.description_es).toContain("Canjea solo en Cedar Bean - Irving.");
     expect(fallback.description_es).toContain("Hay 50 reclamos disponibles.");
-    expect(fallback.title_ko).toContain("large coffee drink");
-    expect(fallback.title_ko).toContain("cookie");
+    expect(fallback.title_ko).toContain("\uB77C\uC9C0 \uCEE4\uD53C \uC74C\uB8CC");
+    expect(fallback.title_ko).toContain("\uCFE0\uD0A4");
+    expect(fallback.title_ko).not.toContain("large coffee drink");
+    expect(fallback.title_ko).not.toContain("cookie");
     expect(fallback.description_ko).toContain("50");
   });
 });

@@ -66,14 +66,16 @@ describe("ad localization deterministic fallback bundle", () => {
     });
     expect(bundle.localizations["es-US"]).toMatchObject({
       headline: "Oferta local",
-      supportingCopy: "Al comprar 1 latte, recibes 1 cookie gratis",
+      supportingCopy: "Al comprar 1 latte, recibes 1 galleta gratis",
       translationStatus: "deterministic_fallback",
       qaDecision: "unavailable",
       qaReasonCodes: ["DETERMINISTIC_TARGET_FALLBACK"],
     });
     expect(bundle.localizations["ko-KR"].headline).toBe("로컬 딜");
-    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("latte");
-    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("cookie");
+    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("\uB77C\uB5BC");
+    expect(bundle.localizations["ko-KR"].supportingCopy).toContain("\uCFE0\uD0A4");
+    expect(bundle.localizations["ko-KR"].supportingCopy).not.toContain("latte");
+    expect(bundle.localizations["ko-KR"].supportingCopy).not.toContain("cookie");
   });
 
   it("uses stable hashes and changes them when source creative changes", () => {
@@ -115,8 +117,9 @@ describe("ad localization deterministic fallback bundle", () => {
       expect.arrayContaining(["Cedar Bean", "latte", "cookie"]),
     );
     expect(bundle.localizations["es-US"].preservedTerms).toEqual(
-      expect.arrayContaining(["Cedar Bean", "latte", "cookie"]),
+      expect.arrayContaining(["Cedar Bean", "latte"]),
     );
+    expect(bundle.localizations["es-US"].preservedTerms).not.toContain("cookie");
     expect(bundle.localizations["ko-KR"].translationStatus).toBe("source_creative");
   });
 

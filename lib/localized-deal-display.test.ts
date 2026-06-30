@@ -65,11 +65,13 @@ describe("localized deal display", () => {
     });
 
     expect(spanish.source).toBe("localized_offer_renderer");
-    expect(spanish.title).toBe("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(spanish.title).toBe("Al comprar 1 latte, recibes 1 galleta gratis");
     expect(spanish.description).toContain("Hay 25 reclamos disponibles.");
     expect(korean.source).toBe("localized_offer_renderer");
-    expect(korean.title).toContain("latte");
-    expect(korean.title).toContain("cookie");
+    expect(korean.title).toContain("\uB77C\uB5BC");
+    expect(korean.title).toContain("\uCFE0\uD0A4");
+    expect(korean.title).not.toContain("latte");
+    expect(korean.title).not.toContain("cookie");
     expect(korean.title).not.toBe(spanish.title);
   });
 
@@ -109,10 +111,11 @@ describe("localized deal display", () => {
     });
 
     expect(spanish.source).toBe("localized_offer_renderer");
-    expect(spanish.title).toBe("Recibe 40% de descuento en 1 mango lassi");
+    expect(spanish.title).toBe("Recibe 40% de descuento en 1 lassi de mango");
     expect(korean.source).toBe("localized_offer_renderer");
     expect(korean.title).toContain("40");
-    expect(korean.title).toContain("mango lassi");
+    expect(korean.title).toContain("\uB9DD\uACE0 \uB77C\uC2DC");
+    expect(korean.title).not.toContain("mango lassi");
     expect(korean.title).not.toBe("Get 40% off one mango lassi");
   });
 
@@ -145,10 +148,10 @@ describe("localized deal display", () => {
     expect(display.source).toBe("approved_localization_storage");
     expect(display.title).toBe("Tu latte viene con una galleta");
     expect(display.description).toContain("Pide tu latte favorito");
-    expect(display.description).toContain("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(display.description).toContain("Al comprar 1 latte, recibes 1 galleta gratis");
     expect(display.description).toContain("Hay 25 reclamos disponibles.");
     expect(display.localizedCreative?.localizationHash).toBe("adlocrow_12345678");
-    expect(display.lockedOfferContent?.primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 cookie gratis");
+    expect(display.lockedOfferContent?.primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 galleta gratis");
   });
 
   it("uses approved customer localization rows when exact rendering is off or unavailable", () => {
@@ -222,8 +225,10 @@ describe("localized deal display", () => {
     });
 
     expect(display.source).toBe("localized_offer_renderer");
-    expect(display.title).toContain("latte");
-    expect(display.title).toContain("cookie");
+    expect(display.title).toContain("\uB77C\uB5BC");
+    expect(display.title).toContain("\uCFE0\uD0A4");
+    expect(display.title).not.toContain("latte");
+    expect(display.title).not.toContain("cookie");
     expect(display.localizedCreative).toBeUndefined();
   });
 
@@ -294,7 +299,8 @@ describe("localized deal display", () => {
     expect(approved.source).toBe("approved_localization_storage");
     expect(approved.title).toBe("라떼에 쿠키까지");
     expect(approved.description).toContain("Cedar Bean");
-    expect(approved.description).toContain("latte");
+    expect(approved.description).toContain("\uB77C\uB5BC");
+    expect(approved.description).not.toContain("latte");
     expect(tampered.source).toBe("localized_offer_renderer");
   });
 

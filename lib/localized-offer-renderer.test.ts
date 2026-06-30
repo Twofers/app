@@ -80,8 +80,8 @@ describe("localized offer renderer", () => {
 
     expect(bundle["en-US"].primaryOfferLine).toBe("Buy one latte and get one free");
     expect(bundle["es-US"].primaryOfferLine).toBe("Al comprar 1 latte, recibes 1 latte gratis");
-    expect(bundle["ko-KR"].primaryOfferLine).toBe("구매 항목: latte × 1\n추가 혜택: latte × 1");
-    expect(bundle["ko-KR"].compactOfferLine).toBe("구매 항목: latte × 1 · 추가 혜택: latte × 1");
+    expect(bundle["ko-KR"].primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
+    expect(bundle["ko-KR"].compactOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uB5BC \u00D7 1 \u00B7 \uCD94\uAC00 \uD61C\uD0DD: \uB77C\uB5BC \u00D7 1");
     expect(bundle["es-US"].termsLine).toContain("Cedar Bean - Irving");
     expect(bundle["ko-KR"].termsLine).toContain("Cedar Bean - Irving");
   });
@@ -128,6 +128,21 @@ describe("localized offer renderer", () => {
 
     expect(coffeeCookie.primaryOfferLine).toBe("Buy any large coffee drink and get a free cookie of your choice");
     expect(discount.primaryOfferLine).toBe("Get 40% off any croissant");
+  });
+
+  it("localizes generic menu item terms in deterministic non-English offer lines", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_ONE_FREE",
+      requiredItemDescription: "Large coffee",
+      freeItemDescription: "Large coffee",
+    });
+
+    const spanish = renderLocalizedOfferFromDefinition(definition, { locale: "es-US" });
+    const korean = renderLocalizedOfferFromDefinition(definition, { locale: "ko-KR" });
+
+    expect(spanish.primaryOfferLine).toBe("Al comprar 1 caf\u00E9 grande, recibes 1 caf\u00E9 grande gratis");
+    expect(korean.primaryOfferLine).toBe("\uAD6C\uB9E4 \uD56D\uBAA9: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1\n\uCD94\uAC00 \uD61C\uD0DD: \uB77C\uC9C0 \uCEE4\uD53C \u00D7 1");
+    expect(korean.primaryOfferLine).not.toContain("Large coffee");
   });
 
   it("keeps branded terms unchanged unless a localized name is provided", () => {
