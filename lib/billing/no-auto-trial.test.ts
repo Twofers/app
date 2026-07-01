@@ -21,11 +21,16 @@ describe("billing trial start ownership", () => {
     expect(source).not.toMatch(/trial_ends_at/);
   });
 
-  it("does not expose the old no-card owner trial RPC from billing UI", () => {
+  it("does not expose mobile billing checkout or the old no-card owner trial RPC", () => {
     const source = readRepoFile("app/(tabs)/account/billing.tsx");
+    expect(source).toMatch(/Redirect/);
+    expect(source).toMatch(/\/\(tabs\)\/account/);
     expect(source).not.toMatch(/start_location_trial/);
-    expect(source).toMatch(/trial_acknowledged/);
-    expect(source).toMatch(/stripe-expire-pending-checkout/);
+    expect(source).not.toMatch(/trial_acknowledged/);
+    expect(source).not.toMatch(/stripe-expire-pending-checkout/);
+    expect(source).not.toMatch(/stripe-create-checkout-session/);
+    expect(source).not.toMatch(/stripe-customer-portal-session/);
+    expect(source).not.toMatch(/openBrowserAsync/);
   });
 
   it("uses the merchant access helper for create navigation instead of starting trials", () => {

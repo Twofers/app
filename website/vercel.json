@@ -1,0 +1,232 @@
+{
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/s/:path*",
+      "destination": "/s/index.html"
+    },
+    {
+      "source": "/business",
+      "destination": "/business/index.html"
+    },
+    {
+      "source": "/business/",
+      "destination": "/business/index.html"
+    },
+    {
+      "source": "/business/start-trial",
+      "destination": "/business/start-trial/index.html"
+    },
+    {
+      "source": "/business/start-trial/",
+      "destination": "/business/start-trial/index.html"
+    },
+    {
+      "source": "/business/waitlist",
+      "destination": "/business/waitlist/index.html"
+    },
+    {
+      "source": "/business/waitlist/",
+      "destination": "/business/waitlist/index.html"
+    },
+    {
+      "source": "/business/review-pending",
+      "destination": "/business/review-pending/index.html"
+    },
+    {
+      "source": "/business/review-pending/",
+      "destination": "/business/review-pending/index.html"
+    },
+    {
+      "source": "/business/thanks",
+      "destination": "/business/thanks/index.html"
+    },
+    {
+      "source": "/business/thanks/",
+      "destination": "/business/thanks/index.html"
+    },
+    {
+      "source": "/business/billing/start",
+      "destination": "/business/billing/start/index.html"
+    },
+    {
+      "source": "/business/billing/start/",
+      "destination": "/business/billing/start/index.html"
+    },
+    {
+      "source": "/business/billing/success",
+      "destination": "/business/billing/success/index.html"
+    },
+    {
+      "source": "/business/billing/success/",
+      "destination": "/business/billing/success/index.html"
+    },
+    {
+      "source": "/business/billing/cancel",
+      "destination": "/business/billing/cancel/index.html"
+    },
+    {
+      "source": "/business/billing/cancel/",
+      "destination": "/business/billing/cancel/index.html"
+    },
+    {
+      "source": "/business/billing/manage",
+      "destination": "/business/billing/manage/index.html"
+    },
+    {
+      "source": "/business/billing/manage/",
+      "destination": "/business/billing/manage/index.html"
+    },
+    {
+      "source": "/business/billing/add-payment-method",
+      "destination": "/business/billing/add-payment-method/index.html"
+    },
+    {
+      "source": "/business/billing/add-payment-method/",
+      "destination": "/business/billing/add-payment-method/index.html"
+    },
+    {
+      "source": "/business/billing/status",
+      "destination": "/business/billing/status/index.html"
+    },
+    {
+      "source": "/business/billing/status/",
+      "destination": "/business/billing/status/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/admin/login/index.html"
+    },
+    {
+      "source": "/admin/login/",
+      "destination": "/admin/login/index.html"
+    },
+    {
+      "source": "/admin/businesses",
+      "destination": "/admin/businesses/index.html"
+    },
+    {
+      "source": "/admin/businesses/",
+      "destination": "/admin/businesses/index.html"
+    },
+    {
+      "source": "/admin/businesses/new",
+      "destination": "/admin/businesses/new/index.html"
+    },
+    {
+      "source": "/admin/businesses/new/",
+      "destination": "/admin/businesses/new/index.html"
+    },
+    {
+      "source": "/admin/businesses/:businessId",
+      "destination": "/admin/businesses/detail/index.html"
+    },
+    {
+      "source": "/admin/businesses/:businessId/",
+      "destination": "/admin/businesses/detail/index.html"
+    },
+    {
+      "source": "/admin/trial-requests",
+      "destination": "/admin/trial-requests/index.html"
+    },
+    {
+      "source": "/admin/trial-requests/",
+      "destination": "/admin/trial-requests/index.html"
+    },
+    {
+      "source": "/admin/offers",
+      "destination": "/admin/offers/index.html"
+    },
+    {
+      "source": "/admin/offers/",
+      "destination": "/admin/offers/index.html"
+    },
+    {
+      "source": "/admin/billing/events",
+      "destination": "/admin/billing/events/index.html"
+    },
+    {
+      "source": "/admin/billing/events/",
+      "destination": "/admin/billing/events/index.html"
+    },
+    {
+      "source": "/admin/audit-log",
+      "destination": "/admin/audit-log/index.html"
+    },
+    {
+      "source": "/admin/audit-log/",
+      "destination": "/admin/audit-log/index.html"
+    },
+    {
+      "source": "/admin/settings",
+      "destination": "/admin/settings/index.html"
+    },
+    {
+      "source": "/admin/settings/",
+      "destination": "/admin/settings/index.html"
+    },
+    {
+      "source": "/business-terms",
+      "destination": "/business-terms/index.html"
+    },
+    {
+      "source": "/business-terms/",
+      "destination": "/business-terms/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy/index.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms/index.html"
+    },
+    {
+      "source": "/support",
+      "destination": "/support/index.html"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/delete-account/index.html"
+    }
+  ]
+}

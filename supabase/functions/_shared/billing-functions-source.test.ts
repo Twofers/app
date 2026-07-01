@@ -7,37 +7,56 @@ function readFunction(name: string): string {
 }
 
 describe("billing edge function safety", () => {
-  it("gates checkout creation on the server-owned in-app purchase surface", () => {
+  it("creates checkout sessions only through web/admin business billing", () => {
     const source = readFunction("stripe-create-checkout-session");
     expect(source).toMatch(/loadRuntimeBillingConfig/);
-    expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
-    expect(source).toMatch(/user_owns_business_location/);
+    expect(source).toMatch(/config\.purchaseSurface !== "web_only"/);
+    expect(source).toMatch(/business_id/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/business_members/);
+    expect(source).toMatch(/admin_users/);
+    expect(source).toMatch(/billing_tokens/);
+    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/stripe_checkout_sessions/);
+    expect(source).toMatch(/billing_events/);
+    expect(source).toMatch(/\/business\/billing\/success\//);
+    expect(source).toMatch(/\/business\/billing\/cancel\//);
     expect(source).toMatch(/STRIPE_TWOFER_BUSINESS_PRICE_ID/);
-    expect(source).toMatch(/trial_acknowledged/);
-    expect(source).toMatch(/trial_checkout_intents/);
-    expect(source).toMatch(/check_business_location_trial_reuse/);
-    expect(source).toMatch(/TRIAL_LOCATION_ALREADY_USED/);
-    expect(source).toMatch(/TRIAL_LOCATION_REVIEW_REQUIRED/);
-    expect(source).toMatch(/trial_period_days: TRIAL_DAYS/);
+    expect(source).toMatch(/mode: "subscription"/);
     expect(source).toMatch(/payment_method_collection: "always"/);
-    expect(source).toMatch(/entitlementError/);
-    expect(source).toMatch(/trialHistoryError/);
-    expect(source).toMatch(/customerUpdateError/);
-    expect(source).toMatch(/intentUpdateError/);
-    expect(source).toMatch(/pendingEntitlementError/);
     expect(source).not.toMatch(/payment_method_collection: "if_required"/);
+    expect(source).not.toMatch(/user_owns_business_location/);
+    expect(source).not.toMatch(/trial_acknowledged/);
+    expect(source).not.toMatch(/trial_checkout_intents/);
+    expect(source).not.toMatch(/trial_period_days: TRIAL_DAYS/);
     expect(source).not.toMatch(/subscription_tier/);
   });
 
-  it("gates portal creation on location ownership and purchase surface", () => {
+  it("creates portal sessions only for business billing customers", () => {
     const source = readFunction("stripe-customer-portal-session");
     expect(source).toMatch(/loadRuntimeBillingConfig/);
-    expect(source).toMatch(/config\.purchaseSurface !== "in_app_link"/);
-    expect(source).toMatch(/user_owns_business_location/);
-    expect(source).toMatch(/location_id/);
+    expect(source).toMatch(/business_id/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/business_members/);
+    expect(source).toMatch(/admin_users/);
+    expect(source).toMatch(/billing_tokens/);
+    expect(source).toMatch(/customer_portal/);
+    expect(source).toMatch(/stripe_portal_sessions/);
+    expect(source).toMatch(/billing_events/);
+    expect(source).toMatch(/\/business\/billing\/manage\//);
     expect(source).toMatch(/STRIPE_SECRET_KEY/);
     expect(source).toMatch(/stripeSecretKey\.startsWith\("sk_live_"\)/);
     expect(source).toMatch(/config\.billingEnvironment !== "production"/);
+    expect(source).not.toMatch(/user_owns_business_location/);
+    expect(source).not.toMatch(/location_id/);
+  });
+
+  it("keeps checkout redirect handling on website pages only", () => {
+    const source = readFunction("billing-checkout-redirect");
+    expect(source).toMatch(/\/business\/billing\/success\//);
+    expect(source).toMatch(/\/business\/billing\/cancel\//);
+    expect(source).not.toMatch(/twoforone:\/\//);
+    expect(source).not.toMatch(/exp\+/);
   });
 
   it("expires canceled pending checkout sessions without starting trials", () => {
@@ -69,6 +88,19 @@ describe("billing edge function safety", () => {
     expect(source).not.toMatch(/if \(existingPeriod\?\.id\) return/);
     expect(source).toMatch(/event\.type === "customer\.subscription\.updated"/);
     expect(source).not.toMatch(/event\.type === "invoice\.payment_succeeded"\) \{\s*await grantPaidPeriod/);
+  });
+
+  it("syncs business subscriptions from verified Stripe webhooks without intercepting refunds", () => {
+    const source = readFunction("stripe-webhook");
+    expect(source).toMatch(/syncBusinessSubscriptionFromStripe/);
+    expect(source).toMatch(/businessIdForStripeCustomer/);
+    expect(source).toMatch(/business_subscriptions/);
+    expect(source).toMatch(/business_billing_profiles/);
+    expect(source).toMatch(/stripe_checkout_sessions/);
+    expect(source).toMatch(/billing_reminders/);
+    expect(source).toMatch(/event\.type === "invoice\.payment_failed"/);
+    expect(source).toMatch(/appAccessStatus: "past_due_grace"/);
+    expect(source).toMatch(/businessId && !isRefundWebhookEvent\(event\.type\)/);
   });
 
   it("retries failed Stripe provider events without replaying processed duplicates", () => {

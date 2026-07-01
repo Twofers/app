@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (100 files, strict filename / timestamp order)
+### 2.1 Full local set (104 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -138,10 +138,14 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 98. `20260730120000_deals_owner_delete_ended.sql`
 99. `20260730121000_customer_deal_poster_spec_projection.sql`
 100. `20260730123000_business_applications.sql`
+101. `20260730124000_business_onboarding_workflow.sql`
+102. `20260730125000_admin_dashboard_foundation.sql`
+103. `20260730126000_website_app_onboarding_sync.sql`
+104. `20260730127000_stripe_business_billing_reconnection.sql`
 
 ### 2.2 Latest migration
 
-**`20260730123000_business_applications.sql`**
+**`20260730127000_stripe_business_billing_reconnection.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -176,7 +180,7 @@ The current local chain ends with:
 
 - `20260730123000_business_applications.sql`
 
-This adds the web-submitted `business_applications` intake table, indexes, an `updated_at` trigger, and RLS with direct anon/authenticated table access revoked. Public submissions go through `submit-business-application`. Applying this migration is production-changing and requires explicit approval.
+This starts from `20260730123000_business_applications.sql`, adds `20260730124000_business_onboarding_workflow.sql` for deterministic onboarding tier/risk metadata and field-invite placeholders, adds `20260730125000_admin_dashboard_foundation.sql` for the internal admin allowlist, audit log, launch areas, feature flags, and central publish eligibility helper, adds `20260730126000_website_app_onboarding_sync.sql` for website-to-app profile materialization, membership linkage, field sources, revision history, setup checklist, terms acceptance, and app-safe profile update flow, then adds `20260730127000_stripe_business_billing_reconnection.sql` for business billing profiles, subscriptions, billing events, web/admin Stripe session audit tables, sync jobs, reminders, and billing tokens. Public submissions go through `submit-business-application`; admin summary reads go through `admin-dashboard-summary`; app onboarding reads and writes go through `get-business-onboarding-context` and `update-business-profile-section`. Web/admin billing starts through `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, and `stripe-backfill-customers`; mobile app billing remains closed. Applying any of these migrations is production-changing and requires explicit approval.
 
 ### 2.7 Duplicate timestamp check
 
@@ -238,6 +242,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | Function |
 |----------|
 | `activate-redemption-mode` |
+| `admin-dashboard-summary` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |
@@ -245,6 +250,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `ai-extract-menu` |
 | `ai-generate-ad-variants` |
 | `ai-generate-deal-copy` |
+| `ai-studio-generate-draft` |
 | `ai-translate-deal` |
 | `begin-visual-redeem` |
 | `billing-checkout-redirect` |
@@ -256,6 +262,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `delete-user-account` |
 | `exit-redemption-mode` |
 | `finalize-stale-redeems` |
+| `get-business-onboarding-context` |
 | `ingest-analytics-event` |
 | `manage-redemption-devices` |
 | `owner-redemption-security` |
@@ -266,14 +273,17 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `send-trial-ending-reminders` |
 | `simulate-subscribe` |
 | `staff-redemption` |
+| `stripe-backfill-customers` |
 | `stripe-cancel-paid-subscription` |
 | `stripe-cancel-trial-subscription` |
 | `stripe-create-checkout-session` |
 | `stripe-customer-portal-session` |
+| `stripe-ensure-customer` |
 | `stripe-expire-pending-checkout` |
 | `stripe-request-introductory-refund` |
 | `stripe-webhook` |
 | `submit-business-application` |
+| `update-business-profile-section` |
 | `weekly-deal-digest` |
 
 **Note:** deploy only function folders that exist above and are present in `supabase/config.toml`.
@@ -288,8 +298,8 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 - **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
 - **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
 - **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
-- **Web business intake:** `submit-business-application` for the reviewed website access-request form
-- **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
+- **Web business intake/admin sync:** `submit-business-application`, `admin-dashboard-summary`, `get-business-onboarding-context`, and `update-business-profile-section`
+- **Billing (web/admin only if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-backfill-customers`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)
 
@@ -386,8 +396,13 @@ Never paste real secret values into tickets or commits.
 
 | Secret | Notes |
 |--------|--------|
-| `STRIPE_SECRET_KEY` | Checkout, portal, webhook processing. |
+| `STRIPE_SECRET_KEY` | Web/admin checkout, portal, customer sync, controlled backfill, and webhook processing. |
 | `STRIPE_WEBHOOK_SECRET` | Preferred name in code; `STRIPE_WEBHOOK_SIGNING_SECRET` also accepted by `stripe-webhook`. |
+| `STRIPE_PRICE_ID_TWOFER_PRO_MONTHLY` / `STRIPE_TWOFER_BUSINESS_PRICE_ID` | Fallback monthly business price for web/admin Checkout when runtime billing config does not provide a price id. |
+| `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | Optional custom Stripe Customer Portal configuration. |
+| `ENABLE_STRIPE_BACKFILL` | Must be `true` before `stripe-backfill-customers` performs writes; dry-run review does not require it. |
+| `PAST_DUE_GRACE_DAYS` | Optional failed-payment grace window for business subscriptions; defaults to 3. |
+| `SITE_URL` | Optional website base URL for Checkout success/cancel and portal return pages. |
 
 ### 5.6 QA-only gate
 

@@ -1584,6 +1584,7 @@
     "subtitle": "Elige categoría y horario con chips; solo unas pocas líneas a mano.",
     "editTitle": "Editar perfil del negocio",
     "editSubtitle": "Revisa los datos del negocio y guarda los cambios.",
+    "importedWebsiteHint": "Importado desde tu solicitud en el sitio web. Puedes editarlo antes de publicar.",
     "contactName": "Tu nombre",
     "businessEmail": "Email del negocio",
     "businessName": "Nombre del negocio",

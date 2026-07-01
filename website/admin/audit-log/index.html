@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audit Log | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="/styles.css?v=20260701-admin" />
+  </head>
+  <body class="admin-shell">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">T</span><span>Twofer Admin</span></a>
+        <div class="nav-links"><a href="/admin">Overview</a><a href="/admin/businesses">Businesses</a><a href="/admin/trial-requests">Trial Requests</a><a href="/admin/settings">Settings</a></div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Security record</p>
+          <h1>Audit Log</h1>
+          <p class="lede">Every sensitive admin action should be written by server functions. No frontend deletes.</p>
+        </div>
+      </div>
+      <section class="admin-panel">
+        <p class="admin-note">Filter by admin user, business, action type, date range, risk level, billing action, trial action, offer moderation, or security event.</p>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Admin</th><th>Action</th><th>Target</th><th>Business</th><th>Reason</th><th>Created</th></tr></thead>
+            <tbody>
+              <tr><td>admin@example.com</td><td>trial_extended</td><td>business</td><td>--</td><td>Required reason</td><td>--</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

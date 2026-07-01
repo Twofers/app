@@ -11,53 +11,28 @@ export const PAID_BILLING_ENABLED = true;
  */
 export const PILOT_DISABLE_BILLING_GATE = true;
 
-const MOBILE_STRIPE_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE";
-const MOBILE_SUBSCRIPTION_CTA_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA";
-const BUSINESS_SELF_SERVE_MOBILE_FLAG = "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE";
-const MOBILE_PRICING_PAGE_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE";
-const MOBILE_BILLING_LINKS_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS";
-
-function isDevRuntime(): boolean {
-  return typeof __DEV__ !== "undefined" && __DEV__;
-}
-
-function isExplicitlyEnabled(name: string): boolean {
-  return process.env[name] === "true";
-}
-
-function isDevEnabledFlag(name: string): boolean {
-  return isDevRuntime() && isExplicitlyEnabled(name);
-}
-
 export function isMobileStripeEnabled(): boolean {
-  return isDevEnabledFlag(MOBILE_STRIPE_FLAG);
+  return false;
 }
 
 export function isMobileSubscriptionCtaEnabled(): boolean {
-  return isDevEnabledFlag(MOBILE_SUBSCRIPTION_CTA_FLAG);
+  return false;
 }
 
 export function isBusinessSelfServeMobileEnabled(): boolean {
-  return isDevEnabledFlag(BUSINESS_SELF_SERVE_MOBILE_FLAG);
+  return false;
 }
 
 export function isMobilePricingPageEnabled(): boolean {
-  return isDevEnabledFlag(MOBILE_PRICING_PAGE_FLAG);
+  return false;
 }
 
 export function isMobileBillingLinksEnabled(): boolean {
-  return isDevEnabledFlag(MOBILE_BILLING_LINKS_FLAG);
+  return false;
 }
 
 export function isMobilePaidBillingEnabled(): boolean {
-  return (
-    PAID_BILLING_ENABLED &&
-    isMobileStripeEnabled() &&
-    isMobileSubscriptionCtaEnabled() &&
-    isBusinessSelfServeMobileEnabled() &&
-    isMobilePricingPageEnabled() &&
-    isMobileBillingLinksEnabled()
-  );
+  return false;
 }
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Businesses | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="/styles.css?v=20260701-admin" />
+  </head>
+  <body class="admin-shell">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">T</span><span>Twofer Admin</span></a>
+        <div class="nav-links"><a href="/admin">Overview</a><a href="/admin/trial-requests">Trial Requests</a><a href="/admin/offers">Offers</a><a href="/admin/audit-log">Audit</a></div>
+        <div class="nav-actions"><a class="button button-small" href="/admin/businesses/new">New trial</a></div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Business operations</p>
+          <h1>Businesses</h1>
+          <p class="lede">Track status, access level, trial timing, offer activity, risk, and billing signals for every merchant.</p>
+        </div>
+      </div>
+      <section class="admin-grid three">
+        <article class="admin-card"><span>Filters</span><p>Status, access level, launch area, risk, trial ending soon, no offers, no recent activity.</p></article>
+        <article class="admin-card"><span>Safe actions</span><p>Manage, extend, disable, resend invite, add note. All mutations must go through admin Edge Functions.</p></article>
+        <article class="admin-card"><span>Billing boundary</span><p>Stripe and subscription actions stay web/admin-only and never appear in the mobile app.</p></article>
+      </section>
+      <section class="admin-section">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Business</th><th>Location</th><th>Owner</th><th>Status</th><th>Access</th><th>Trial end</th><th>Risk</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr><td>Connect admin summary API</td><td>DFW</td><td>Owner email</td><td><span class="admin-badge warning">Pending</span></td><td>Limited trial</td><td>--</td><td>Medium</td><td>Manage</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

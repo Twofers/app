@@ -396,6 +396,83 @@ export async function notifyDealPublished(dealId: string): Promise<void> {
 
 export type { BusinessLookupResult } from "./business-lookup";
 
+export type BusinessOnboardingContext = {
+  ok: boolean;
+  business: null | {
+    id: string;
+    name: string | null;
+    contact_name?: string | null;
+    business_email?: string | null;
+    public_email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    location?: string | null;
+    category?: string | null;
+    hours_text?: string | null;
+    short_description?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    logo_url?: string | null;
+    status?: string | null;
+    access_level?: string | null;
+    verification_status?: string | null;
+    current_profile_version?: number | null;
+    profile_completion_score?: number | null;
+    website_url?: string | null;
+    instagram_url?: string | null;
+  };
+  contact_channels?: Array<Record<string, unknown>>;
+  slow_hours?: Array<Record<string, unknown>>;
+  promotable_items?: Array<Record<string, unknown>>;
+  setup_checklist?: Array<Record<string, unknown>>;
+  field_sources?: Array<Record<string, unknown>>;
+  terms_acceptances?: Array<Record<string, unknown>>;
+  first_offer_draft?: Record<string, unknown> | null;
+  access_state?: {
+    can_edit_profile?: boolean;
+    can_create_offer_draft?: boolean;
+    can_publish_offer?: boolean;
+    reason_code?: string;
+    friendly_status_message?: string;
+  };
+};
+
+export async function getBusinessOnboardingContext(): Promise<BusinessOnboardingContext> {
+  const { data, error } = await supabase.functions.invoke("get-business-onboarding-context", {
+    body: {},
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throw new Error(fromBody.message ?? parseFunctionError(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    throw new Error(String((data as { error?: string }).error ?? "Could not load business onboarding."));
+  }
+  return data as BusinessOnboardingContext;
+}
+
+export async function updateBusinessProfileSection(body: {
+  business_id: string;
+  section_key: string;
+  profile_version: number;
+  payload: Record<string, unknown>;
+}): Promise<{ ok: boolean; business?: BusinessOnboardingContext["business"]; profile_version?: number; requires_review?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("update-business-profile-section", {
+    body,
+    timeout: EDGE_FUNCTION_TIMEOUT_MS,
+  });
+  if (error) {
+    const fromBody = await readInvokeErrorBody(error);
+    throwInvokeError(fromBody.message ?? parseFunctionError(error), fromBody.code ?? getErrorCode(error));
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    const response = data as { error?: string; error_code?: string };
+    throwInvokeError(response.error ?? "Could not save business profile.", response.error_code);
+  }
+  return data as { ok: boolean; business?: BusinessOnboardingContext["business"]; profile_version?: number; requires_review?: boolean };
+}
+
 /** Look up verified Google Places candidates by business name. */
 export async function aiBusinessLookup(body: {
   business_name: string;

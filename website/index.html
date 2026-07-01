@@ -1,53 +1,280 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Twofer</title>
-    <style>
-      body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      main {
-        flex: 1;
-        padding: 2rem 1.25rem;
-        max-width: 40rem;
-        margin: 0 auto;
-      }
-      footer {
-        border-top: 1px solid #e5e5e5;
-        padding: 1.25rem;
-        text-align: center;
-        font-size: 0.9rem;
-        color: #444;
-      }
-      footer a {
-        color: #2563eb;
-        text-decoration: none;
-        font-weight: 600;
-      }
-      footer a:hover {
-        text-decoration: underline;
-      }
-      footer .sep {
-        margin: 0 0.5rem;
-        color: #bbb;
-      }
-    </style>
+    <title>Twofer - Live Local Specials</title>
+    <meta
+      name="description"
+      content="Twofer helps local businesses create live 2-for-1 and deep-discount specials, publish nearby, and redeem in store by QR code. Testing now in DFW."
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260701-home" />
   </head>
-  <body>
+  <body id="top">
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>Twofer</span>
+        </a>
+        <div class="nav-links">
+          <a href="#app-testing">App Testing</a>
+          <a href="#for-customers">For Customers</a>
+          <a href="#for-businesses">For Businesses</a>
+          <a href="#how-it-works">How It Works</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <span>EN</span>
+            <span>KO</span>
+            <span>ES</span>
+          </div>
+          <a class="button button-small" href="mailto:support@twoferapp.com?subject=Twofer%20iPhone%20TestFlight">
+            Join TestFlight
+          </a>
+        </div>
+      </nav>
+    </header>
+
     <main>
-      <h1>Twofer</h1>
-      <p>Local deals — browse, claim, and redeem.</p>
+      <section id="app-testing" class="hero-band">
+        <div class="hero container">
+          <div class="hero-copy">
+            <p class="status-pill">DFW preview is open</p>
+            <h1>Live local <span>specials</span> for slow hours.</h1>
+            <p class="lede">
+              Twofer is like an on-demand happy hour engine for local businesses: create a 2-for-1
+              or 40%+ off promotion with AI, publish it nearby, and redeem customers in store by QR code.
+            </p>
+            <p class="availability-note">
+              iPhone TestFlight is live; Android and business access are invite-based.
+            </p>
+            <div class="cta-row">
+              <a class="button" href="mailto:support@twoferapp.com?subject=Twofer%20iPhone%20TestFlight">
+                Open iOS TestFlight
+              </a>
+              <a class="button button-dark" href="mailto:support@twoferapp.com?subject=Twofer%20Android%20Access">
+                Request Android Access
+              </a>
+              <a class="button button-dark" href="/business/start-trial">
+                Start Business Trial
+              </a>
+            </div>
+            <div class="flow-note">
+              <strong>Preview the full flow</strong>
+              <span>Browse sample specials, claim one, share it, and see the QR redemption experience before real pilot offers go live.</span>
+            </div>
+          </div>
+
+          <aside class="phone-shell" aria-label="Twofer app preview">
+            <div class="phone-screen">
+              <div class="phone-topline">
+                <div>
+                  <span>Nearby now</span>
+                  <strong>Twofer</strong>
+                </div>
+                <span class="phone-badge">T</span>
+              </div>
+
+              <article class="app-offer-card">
+                <div class="sample-tag">Sample</div>
+                <img
+                  src="https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=900&q=80"
+                  alt="Fresh croissants on a bakery tray"
+                />
+                <div class="offer-card-row">
+                  <strong>Sunrise Bakery</strong>
+                  <span>0.3 mi</span>
+                </div>
+                <p>2-for-1 croissants</p>
+                <small>7:00 - 10:00 AM  |  DFW</small>
+              </article>
+
+              <article class="app-offer-card">
+                <div class="sample-tag">Sample</div>
+                <img
+                  src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80"
+                  alt="Coffee cups on a cafe table"
+                  loading="lazy"
+                />
+                <div class="offer-card-row">
+                  <strong>Corner Cafe</strong>
+                  <span>0.5 mi</span>
+                </div>
+                <p>40% off cold brew</p>
+                <small>2:00 - 5:00 PM  |  DFW</small>
+              </article>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="for-customers" class="section-band light-band">
+        <div class="container customer-grid">
+          <div class="section-copy">
+            <p class="eyebrow">For customers</p>
+            <h2>Discover live local specials before they disappear</h2>
+            <p>
+              Find nearby 2-for-1, free-item, and deep-discount offers, claim from your phone,
+              share with a friend, and redeem in store.
+            </p>
+            <div class="inline-cta">
+              <a class="button" href="mailto:support@twoferapp.com?subject=Twofer%20iPhone%20TestFlight">
+                Join iPhone TestFlight
+              </a>
+              <span>Free for customers during testing.</span>
+            </div>
+          </div>
+
+          <div class="feature-grid customer-features">
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">1</span>
+              <h3>Find Live Specials</h3>
+              <p>See timely offers from local cafes, bakeries, coffee shops, and more.</p>
+            </article>
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">2</span>
+              <h3>Real-Time Updates</h3>
+              <p>Sort by time, distance, availability, and location before the offer expires.</p>
+            </article>
+            <article class="feature-card">
+              <span class="icon-chip" aria-hidden="true">3</span>
+              <h3>Support Local</h3>
+              <p>Try nearby businesses while helping local owners fill slow hours.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="for-businesses" class="section-band">
+        <div class="container business-layout">
+          <div>
+            <div class="section-copy">
+              <p class="eyebrow">For businesses</p>
+              <h2>An on-demand happy hour tool for slow hours</h2>
+              <p>
+                Create 2-for-1, free-item, or 40%+ off specials in under 2 minutes.
+                You control the window, quantity, terms, and when it goes live.
+              </p>
+            </div>
+
+            <div class="business-feature-grid">
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">AI</span>
+                <h3>Generate the Ad</h3>
+                <p>Upload a photo or describe the item; AI drafts clear promotion copy you can edit.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">NC</span>
+                <h3>Reach Nearby Customers</h3>
+                <p>Show timely specials to people already looking nearby.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">CO</span>
+                <h3>Control the Offer</h3>
+                <p>Set the time window, quantity, terms, and pause or publish status.</p>
+              </article>
+              <article class="feature-card">
+                <span class="icon-chip" aria-hidden="true">AC</span>
+                <h3>Access-Code Protected</h3>
+                <p>Business tools stay limited to approved local businesses during testing.</p>
+              </article>
+            </div>
+
+            <div class="business-callout">
+              <div>
+                <strong>Own or manage a local business?</strong>
+                <p>Business accounts require an access code during testing. Contact support@twoferapp.com to request access.</p>
+              </div>
+              <a class="button" href="/business/start-trial">Start Business Trial</a>
+            </div>
+          </div>
+
+          <aside class="promo-photo-card">
+            <img
+              src="https://images.unsplash.com/photo-1521017432531-fbd92d768814?auto=format&fit=crop&w=1200&q=80"
+              alt="Interior of a local cafe"
+              loading="lazy"
+            />
+            <div>
+              <span>AI-assisted promotion setup</span>
+              <strong>Describe the item, review the ad, publish the special</strong>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="section-band dark-band">
+        <div class="container">
+          <h2>How Twofer Works</h2>
+          <div class="step-grid">
+            <article>
+              <span>01</span>
+              <h3>Create a live special</h3>
+              <p>Approved businesses describe an item or upload a photo, then AI drafts editable promotion copy.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Set the controls</h3>
+              <p>Choose the offer type, time window, quantity, and terms before publishing.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Claim and redeem</h3>
+              <p>Nearby customers claim in the app, share with a friend, and redeem in store with a QR code.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-band faq-band">
+        <div class="faq-wrap">
+          <h2>Frequently Asked Questions</h2>
+          <details>
+            <summary>What is Twofer?</summary>
+            <p>Twofer is a live local specials app for customers and an AI-assisted promotion tool for local businesses.</p>
+          </details>
+          <details>
+            <summary>Are the specials real right now?</summary>
+            <p>The current public preview uses sample offers while the DFW pilot opens to approved testers and businesses.</p>
+          </details>
+          <details>
+            <summary>Why do businesses need an access code?</summary>
+            <p>Business tools are reviewed during testing so published specials stay tied to approved local businesses.</p>
+          </details>
+          <details>
+            <summary>What kinds of promotions can businesses create?</summary>
+            <p>Businesses can create 2-for-1, free-item, and deep-discount offers with controlled time windows and quantities.</p>
+          </details>
+          <details>
+            <summary>Is Twofer free for customers?</summary>
+            <p>Yes. Twofer is free for customers during the testing period.</p>
+          </details>
+          <details>
+            <summary>Where is Twofer testing first?</summary>
+            <p>Twofer is previewing first in the Dallas-Fort Worth area.</p>
+          </details>
+        </div>
+      </section>
     </main>
-    <footer>
-      <a href="https://www.twoferapp.com/privacy">Privacy Policy</a>
-      <span class="sep" aria-hidden="true">·</span>
-      <a href="https://www.twoferapp.com/terms">Terms of Service</a>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <a class="brand footer-brand" href="/" aria-label="Twofer home">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>Twofer</span>
+        </a>
+        <p>Live local specials for customers, with AI promotion tools and QR redemption controls for local businesses.</p>
+        <p>Testing now in DFW. Customer access is open; business tools are code-protected.</p>
+        <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>
+        <div class="footer-links">
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="/support">Support</a>
+        </div>
+        <small>&copy; Twofer 2026</small>
+      </div>
     </footer>
+    <a class="back-to-top" href="#top" aria-label="Back to top">^</a>
   </body>
 </html>

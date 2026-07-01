@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Business Trial | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="/styles.css?v=20260701-admin" />
+  </head>
+  <body class="admin-shell">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">T</span><span>Twofer Admin</span></a>
+        <div class="nav-links"><a href="/admin/businesses">Businesses</a><a href="/admin/trial-requests">Trial Requests</a><a href="/admin/audit-log">Audit</a></div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Founder field invite</p>
+          <h1>Create Business Trial</h1>
+          <p class="lede">For businesses met in person. The final save action must call a server function that validates admin role, creates the trial, and writes audit log.</p>
+        </div>
+      </div>
+      <section class="admin-panel">
+        <form class="admin-form">
+          <label>Business name<input autocomplete="organization" /></label>
+          <label>Owner or manager name<input autocomplete="name" /></label>
+          <label>Owner email<input type="email" autocomplete="email" /></label>
+          <label>Phone number<input autocomplete="tel" /></label>
+          <label class="full">Business address<input autocomplete="street-address" /></label>
+          <label>Business type<select><option>Coffee shop</option><option>Cafe</option><option>Bakery</option><option>Restaurant</option><option>Other local business</option></select></label>
+          <label>Launch area<select><option>DFW preview</option><option>Waitlist</option></select></label>
+          <label>Trial length<select><option>90 days</option><option>30 days</option><option>14 days</option></select></label>
+          <label>Access level<select><option>Full trial</option><option>Limited trial</option><option>Pending verification</option></select></label>
+          <label>Initial claim limit<input type="number" min="1" value="25" /></label>
+          <label class="full">Admin notes<textarea></textarea></label>
+        </form>
+        <p class="admin-note">This page intentionally does not generate raw invite tokens in static HTML. Store token hashes only and return one-time links from a server function.</p>
+      </section>
+    </main>
+  </body>
+</html>

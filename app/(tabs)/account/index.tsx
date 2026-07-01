@@ -23,7 +23,7 @@ import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
 import { useTabMode } from "@/lib/tab-mode";
 import { LegalExternalLinks } from "@/components/legal-external-links";
-import { deleteUserAccount } from "@/lib/functions";
+import { deleteUserAccount, updateBusinessProfileSection } from "@/lib/functions";
 import { DELETE_ACCOUNT_URL, openWebsiteUrl } from "@/lib/legal-urls";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
@@ -695,9 +695,11 @@ export default function AccountScreen() {
         hours: hrs,
       } = profileValidation.values;
       const addr = ad;
-      const { error } = await supabase
-        .from("businesses")
-        .update({
+      await updateBusinessProfileSection({
+        business_id: businessId,
+        section_key: "account_profile",
+        profile_version: Number(businessProfile?.current_profile_version ?? 1),
+        payload: {
           name: nm,
           contact_name: cn || null,
           business_email: em || null,
@@ -711,9 +713,8 @@ export default function AccountScreen() {
           preferred_locale: profilePreferredLocale,
           phone: ph || null,
           hours_text: hrs || null,
-        })
-        .eq("id", businessId);
-      if (error) throw error;
+        },
+      });
       await refresh();
       setBanner({ message: t("account.profileSaved"), tone: "success" });
     } catch (e: unknown) {

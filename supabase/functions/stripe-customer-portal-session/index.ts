@@ -10,12 +10,100 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 
+type PortalSource = "admin" | "merchant_web" | "email";
+
 function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   const corsHeaders = getCorsHeaders(req);
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function portalSource(value: unknown): PortalSource {
+  const source = safeGetString(value);
+  return source === "admin" || source === "merchant_web" || source === "email" ? source : "merchant_web";
+}
+
+function safeWebUrl(value: unknown, fallback: string): string {
+  const raw = safeGetString(value);
+  if (!raw) return fallback;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "localhost")) return url.toString();
+  } catch {
+    // fall through
+  }
+  return fallback;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function activeAdminRole(supabase: any, userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("role,is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.is_active ? safeGetString(data.role) : null;
+}
+
+function adminCanOpenPortal(role: string | null): boolean {
+  return role === "owner" || role === "admin" || role === "finance" || role === "support";
+}
+
+async function userCanOpenPortal(supabase: any, businessId: string, userId: string, source: PortalSource): Promise<{
+  ok: boolean;
+  adminRole: string | null;
+}> {
+  const adminRole = await activeAdminRole(supabase, userId);
+  if (source === "admin") return { ok: adminCanOpenPortal(adminRole), adminRole };
+  if (adminRole && adminCanOpenPortal(adminRole)) return { ok: true, adminRole };
+
+  const { data: business, error: businessError } = await supabase
+    .from("businesses")
+    .select("owner_id")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (businessError) throw businessError;
+  if (business?.owner_id === userId) return { ok: true, adminRole: null };
+
+  const { data: member, error: memberError } = await supabase
+    .from("business_members")
+    .select("id,role,status")
+    .eq("business_id", businessId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .in("role", ["owner", "manager"])
+    .maybeSingle();
+  if (memberError) throw memberError;
+  return { ok: Boolean(member?.id), adminRole: null };
+}
+
+async function useBillingToken(supabase: any, businessId: string, rawToken: string | null): Promise<boolean> {
+  if (!rawToken) return false;
+  const tokenHash = await sha256Hex(rawToken);
+  const { data, error } = await supabase
+    .from("billing_tokens")
+    .select("id,max_uses,use_count,expires_at,revoked_at,action")
+    .eq("business_id", businessId)
+    .eq("token_hash", tokenHash)
+    .eq("action", "customer_portal")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.id || data.revoked_at) return false;
+  if (new Date(String(data.expires_at)).getTime() <= Date.now()) return false;
+  if (Number(data.use_count ?? 0) >= Number(data.max_uses ?? 1)) return false;
+  const { error: updateError } = await supabase
+    .from("billing_tokens")
+    .update({ use_count: Number(data.use_count ?? 0) + 1 })
+    .eq("id", data.id);
+  if (updateError) throw updateError;
+  return true;
 }
 
 serve(async (req) => {
@@ -32,88 +120,96 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const authHeader = req.headers.get("Authorization") ?? "";
-
-    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser();
-
-    if (userError || !user) {
-      return jsonResponse(req, { error: "Unauthorized." }, 401);
-    }
-    if (isRedeemerUser(user)) {
-      return forbiddenForRedeemerResponse(corsHeaders);
-    }
+    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeSecretKey) return jsonResponse(req, { error: "Stripe is not configured." }, 500);
 
     let body: Record<string, unknown>;
     try {
       body = await req.json();
     } catch {
-      return jsonResponse(req, { error: "Invalid JSON body" }, 400);
+      return jsonResponse(req, { error: "Invalid JSON body." }, 400);
     }
 
-    const locationId = safeGetString(body.location_id);
-    if (!locationId || !isUuid(locationId)) {
-      return jsonResponse(req, { error: "Missing or invalid location_id." }, 400);
+    const businessId = safeGetString(body.business_id);
+    if (!businessId || !isUuid(businessId)) {
+      return jsonResponse(req, { error: "Missing or invalid business_id." }, 400);
+    }
+
+    const source = portalSource(body.source);
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    let userId: string | null = null;
+    let adminRole: string | null = null;
+    const rawToken = safeGetString(body.billing_token);
+    if (rawToken) {
+      const tokenOk = await useBillingToken(supabaseAdmin, businessId, rawToken);
+      if (!tokenOk) return jsonResponse(req, { error: "Invalid or expired billing link." }, 403);
+    } else {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseUser.auth.getUser();
+      if (userError || !user) return jsonResponse(req, { error: "Unauthorized." }, 401);
+      if (isRedeemerUser(user)) return forbiddenForRedeemerResponse(corsHeaders);
+      userId = user.id;
+      const authz = await userCanOpenPortal(supabaseAdmin, businessId, user.id, source);
+      if (!authz.ok) return jsonResponse(req, { error: "Forbidden." }, 403);
+      adminRole = authz.adminRole;
     }
 
     const config = await loadRuntimeBillingConfig(supabaseAdmin as any);
-    if (config.purchaseSurface !== "in_app_link") {
-      return jsonResponse(
-        req,
-        { error: "Billing portal is not enabled.", error_code: "PURCHASE_SURFACE_DISABLED" },
-        403,
-      );
-    }
-
-    const { data: ownsLocation, error: ownsError } = await supabaseAdmin.rpc("user_owns_business_location", {
-      p_business_location_id: locationId,
-      p_user_id: user.id,
-    });
-    if (ownsError || ownsLocation !== true) {
-      return jsonResponse(req, { error: "Location not found for owner." }, 403);
-    }
-
-    const { data: entitlement, error: entitlementError } = await supabaseAdmin
-      .from("location_entitlements")
-      .select("billing_account_id,billing_accounts(provider_customer_id)")
-      .eq("business_location_id", locationId)
-      .maybeSingle();
-    if (entitlementError) throw entitlementError;
-
-    const stripeCustomerId = safeGetString(
-      (entitlement as any)?.billing_accounts?.provider_customer_id,
-    );
-    if (!stripeCustomerId) {
-      return jsonResponse(req, { error: "Missing Stripe customer id for this location." }, 400);
-    }
-
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeSecretKey) {
-      return jsonResponse(req, { error: "Stripe is not configured." }, 500);
-    }
     if (stripeSecretKey.startsWith("sk_live_") && config.billingEnvironment !== "production") {
       return jsonResponse(req, { error: "Live Stripe mode is not enabled for this environment." }, 500);
     }
+
+    const { data: billingProfile, error: billingError } = await supabaseAdmin
+      .from("business_billing_profiles")
+      .select("stripe_customer_id")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (billingError) throw billingError;
+
+    const stripeCustomerId = safeGetString(billingProfile?.stripe_customer_id);
+    if (!stripeCustomerId) {
+      return jsonResponse(req, { error: "Missing Stripe customer id for this business." }, 400);
+    }
+
+    const siteUrl = (Deno.env.get("SITE_URL") ?? "https://www.twoferapp.com").replace(/\/$/, "");
+    const returnUrl = safeWebUrl(body.return_url, `${siteUrl}/business/billing/manage/`);
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
-
-    const baseSupabaseUrl = supabaseUrl.replace(/\/$/, "");
-    const returnUrl = `${baseSupabaseUrl}/functions/v1/billing-checkout-redirect`;
-
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: returnUrl,
+      configuration: safeGetString(Deno.env.get("STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID")) ?? undefined,
+    });
+
+    await supabaseAdmin.from("stripe_portal_sessions").insert({
+      business_id: businessId,
+      stripe_customer_id: stripeCustomerId,
+      stripe_portal_session_id: portalSession.id,
+      requested_by_user_id: userId,
+      requested_by_admin_user_id: adminRole ? userId : null,
+      source,
+      return_url: returnUrl,
+    });
+
+    await supabaseAdmin.from("billing_events").insert({
+      business_id: businessId,
+      stripe_customer_id: stripeCustomerId,
+      event_source: source === "admin" ? "admin" : "website",
+      event_type: "stripe_portal_session_created",
+      status_after: "portal_created",
+      processing_status: "processed",
+      processed_at: new Date().toISOString(),
     });
 
     return jsonResponse(req, { url: portalSession.url });
   } catch (err) {
-    console.error("[stripe-customer-portal-session] error:", err);
+    console.error("[stripe-customer-portal-session] error:", err instanceof Error ? err.message : String(err));
     return jsonResponse(req, { error: "Failed to create portal session." }, 500);
   }
 });

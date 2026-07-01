@@ -624,6 +624,223 @@ async function syncSubscriptionState(params: {
     .eq("business_location_id", locationId);
 }
 
+function stripeCustomerIdFrom(obj: any, subscription: any): string | null {
+  return safeGetString(obj?.customer) ?? safeGetString(subscription?.customer) ?? safeGetString(obj?.id);
+}
+
+async function businessIdForStripeCustomer(supabase: any, customerId: string | null): Promise<string | null> {
+  if (!customerId) return null;
+  const { data, error } = await supabase
+    .from("business_billing_profiles")
+    .select("business_id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  if (error) throw error;
+  return safeGetString(data?.business_id);
+}
+
+function businessAccessForStripeStatus(status: string, cancelAtPeriodEnd: boolean): {
+  billingStatus: string;
+  appAccessStatus: string;
+} {
+  if (status === "active") return { billingStatus: "active", appAccessStatus: "active" };
+  if (status === "trialing") return { billingStatus: "trialing", appAccessStatus: "trialing" };
+  if (status === "past_due" || status === "unpaid") return { billingStatus: "past_due", appAccessStatus: "past_due_grace" };
+  if (status === "canceled") return { billingStatus: "canceled", appAccessStatus: "canceled" };
+  if (status === "paused") return { billingStatus: "paused", appAccessStatus: "suspended" };
+  if (status === "incomplete_expired") return { billingStatus: "incomplete_expired", appAccessStatus: "expired" };
+  if (status === "incomplete") return { billingStatus: "incomplete", appAccessStatus: "pending" };
+  return cancelAtPeriodEnd ? { billingStatus: "active", appAccessStatus: "active" } : { billingStatus: "none", appAccessStatus: "pending" };
+}
+
+function invoiceSummary(invoice: any): Record<string, unknown> {
+  return compactRecord({
+    last_invoice_id: safeGetString(invoice?.id),
+    last_invoice_url: safeGetString(invoice?.hosted_invoice_url),
+    last_invoice_pdf: safeGetString(invoice?.invoice_pdf),
+    last_invoice_status: safeGetString(invoice?.status),
+    last_invoice_amount_due_cents: typeof invoice?.amount_due === "number" ? invoice.amount_due : null,
+    last_invoice_amount_paid_cents: typeof invoice?.amount_paid === "number" ? invoice.amount_paid : null,
+    last_payment_error: safeGetString(invoice?.last_payment_error?.message),
+  });
+}
+
+async function syncBusinessSubscriptionFromStripe(params: {
+  supabase: any;
+  businessId: string;
+  event: Stripe.Event;
+  subscription: any | null;
+  invoice?: any | null;
+  checkoutSession?: any | null;
+  forcePaymentFailure?: boolean;
+}) {
+  const { supabase, businessId, event, subscription, invoice, checkoutSession } = params;
+  const status = safeGetString(subscription?.status) ?? (params.forcePaymentFailure ? "past_due" : "none");
+  const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
+  const access = businessAccessForStripeStatus(status, cancelAtPeriodEnd);
+  const customerId = stripeCustomerIdFrom(checkoutSession ?? invoice ?? {}, subscription);
+  const subscriptionId = safeGetString(subscription?.id) ?? safeGetString(checkoutSession?.subscription);
+  const priceId = firstSubscriptionPriceId(subscription);
+  const graceDays = Math.max(0, Number(Deno.env.get("PAST_DUE_GRACE_DAYS") ?? "3") || 3);
+  const now = new Date();
+  const graceUntil = params.forcePaymentFailure || access.appAccessStatus === "past_due_grace"
+    ? new Date(now.getTime() + graceDays * 86400000).toISOString()
+    : null;
+
+  const { data: previous } = await supabase
+    .from("business_subscriptions")
+    .select("billing_status,app_access_status")
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  await supabase.from("business_subscriptions").upsert(
+    {
+      business_id: businessId,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscriptionId,
+      stripe_product_id: safeGetString(subscription?.items?.data?.[0]?.price?.product),
+      stripe_price_id: priceId,
+      billing_mode: "web_stripe",
+      billing_status: access.billingStatus,
+      app_access_status: access.appAccessStatus,
+      trial_type: status === "trialing" ? "stripe_trial" : status === "active" ? "paid" : null,
+      trial_start: unixSecondsToIso(subscription?.trial_start),
+      trial_end: unixSecondsToIso(subscription?.trial_end),
+      current_period_start: unixSecondsToIso(subscription?.current_period_start),
+      current_period_end: unixSecondsToIso(subscription?.current_period_end),
+      cancel_at_period_end: cancelAtPeriodEnd,
+      canceled_at: unixSecondsToIso(subscription?.canceled_at),
+      ended_at: unixSecondsToIso(subscription?.ended_at),
+      grace_period_until: graceUntil,
+      past_due_since: access.billingStatus === "past_due" ? now.toISOString() : null,
+      payment_method_status: access.billingStatus === "past_due" ? "failed" : "unknown",
+      ...invoiceSummary(invoice),
+      source: "stripe_webhook",
+      metadata: compactRecord({
+        stripe_event_type: event.type,
+        checkout_session_id: safeGetString(checkoutSession?.id),
+      }),
+      updated_at: now.toISOString(),
+    },
+    { onConflict: "business_id" },
+  );
+
+  if (customerId) {
+    await supabase
+      .from("business_billing_profiles")
+      .update({
+        stripe_customer_id: customerId,
+        stripe_customer_livemode: event.livemode,
+        stripe_sync_status: "synced",
+        stripe_sync_error: null,
+        last_synced_from_stripe_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("business_id", businessId);
+  }
+
+  if (checkoutSession?.id) {
+    await supabase
+      .from("stripe_checkout_sessions")
+      .update({
+        stripe_subscription_id: subscriptionId,
+        status: event.type === "checkout.session.completed" ? "completed" : "opened",
+        completed_at: event.type === "checkout.session.completed" ? now.toISOString() : null,
+        updated_at: now.toISOString(),
+      })
+      .eq("stripe_checkout_session_id", checkoutSession.id);
+  }
+
+  await supabase.from("billing_events").upsert(
+    {
+      business_id: businessId,
+      stripe_event_id: event.id,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscriptionId,
+      stripe_checkout_session_id: safeGetString(checkoutSession?.id),
+      stripe_invoice_id: safeGetString(invoice?.id),
+      stripe_payment_intent_id: stripeReferenceId(invoice?.payment_intent),
+      event_source: "stripe",
+      event_type: event.type,
+      event_created_at: unixSecondsToIso(event.created),
+      status_before: safeGetString(previous?.billing_status),
+      status_after: access.billingStatus,
+      app_access_before: safeGetString(previous?.app_access_status),
+      app_access_after: access.appAccessStatus,
+      processing_status: "processed",
+      raw_event: event,
+      processed_at: now.toISOString(),
+    },
+    { onConflict: "stripe_event_id" },
+  );
+
+  const nextAccessLevel = access.appAccessStatus === "active"
+    ? "paid"
+    : access.appAccessStatus === "trialing"
+      ? "full_trial"
+      : access.appAccessStatus === "trial_limited"
+        ? "limited_trial"
+        : null;
+  if (nextAccessLevel) {
+    await supabase.from("businesses").update({
+      access_level: nextAccessLevel,
+      updated_at: now.toISOString(),
+    }).eq("id", businessId);
+  }
+}
+
+async function syncBusinessCustomerProfileFromStripe(params: {
+  supabase: any;
+  businessId: string;
+  event: Stripe.Event;
+  customer: any;
+}) {
+  const customer = params.customer;
+  const address = customer?.address ?? {};
+  await params.supabase
+    .from("business_billing_profiles")
+    .update({
+      billing_name: safeGetString(customer?.name),
+      billing_email: safeGetString(customer?.email),
+      billing_phone: safeGetString(customer?.phone),
+      billing_address_line1: safeGetString(address.line1),
+      billing_address_line2: safeGetString(address.line2),
+      billing_city: safeGetString(address.city),
+      billing_state: safeGetString(address.state),
+      billing_postal_code: safeGetString(address.postal_code),
+      billing_country: safeGetString(address.country) ?? "US",
+      stripe_sync_status: "synced",
+      last_synced_from_stripe_at: new Date().toISOString(),
+      billing_fields_source: {
+        billing_name: "stripe_portal",
+        billing_email: "stripe_portal",
+        billing_phone: "stripe_portal",
+        billing_address_line1: "stripe_portal",
+        billing_city: "stripe_portal",
+        billing_state: "stripe_portal",
+        billing_postal_code: "stripe_portal",
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", params.businessId);
+
+  await params.supabase.from("billing_events").upsert(
+    {
+      business_id: params.businessId,
+      stripe_event_id: params.event.id,
+      stripe_customer_id: safeGetString(customer?.id),
+      event_source: "stripe",
+      event_type: params.event.type,
+      event_created_at: unixSecondsToIso(params.event.created),
+      status_after: "customer_profile_synced",
+      processing_status: "processed",
+      raw_event: params.event,
+      processed_at: new Date().toISOString(),
+    },
+    { onConflict: "stripe_event_id" },
+  );
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -687,6 +904,61 @@ serve(async (req) => {
   try {
     const metadataLocationId = safeGetString(mergedMetadata.business_location_id);
     const metadataBillingAccountId = safeGetString(mergedMetadata.billing_account_id);
+    const eventCustomerId = stripeCustomerIdFrom(obj, subscription);
+    const metadataBusinessId = safeGetString(mergedMetadata.business_id);
+    const businessId = metadataBusinessId ?? await businessIdForStripeCustomer(supabase, eventCustomerId);
+
+    if (businessId && !isRefundWebhookEvent(event.type)) {
+      if (event.type === "customer.updated") {
+        await syncBusinessCustomerProfileFromStripe({ supabase, businessId, event, customer: obj });
+      } else if (event.type === "checkout.session.completed") {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          checkoutSession: obj,
+        });
+      } else if (
+        event.type === "invoice.paid" ||
+        event.type === "customer.subscription.created" ||
+        event.type === "customer.subscription.updated" ||
+        event.type === "customer.subscription.deleted"
+      ) {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          invoice: event.type === "invoice.paid" ? obj : null,
+        });
+      } else if (event.type === "invoice.payment_failed") {
+        await syncBusinessSubscriptionFromStripe({
+          supabase,
+          businessId,
+          event,
+          subscription,
+          invoice: obj,
+          forcePaymentFailure: true,
+        });
+        await supabase.from("billing_reminders").insert({
+          business_id: businessId,
+          reminder_type: "payment_failed",
+          channel: "email",
+          status: "pending",
+          scheduled_for: new Date().toISOString(),
+          idempotency_key: `payment_failed:${event.id}`,
+          metadata: {
+            stripe_invoice_id: safeGetString(obj?.id),
+            stripe_subscription_id: safeGetString(subscription?.id),
+          },
+        });
+      }
+
+      await markProviderEvent(supabase, providerEvent.id, "processed");
+      return jsonResponse(req, { received: true, business_id: businessId });
+    }
+
     if (isRefundWebhookEvent(event.type)) {
       const refundContext = await recordRefundWebhookDetails({
         supabase,

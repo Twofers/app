@@ -524,6 +524,21 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/submit-business-application/index.ts"
 
+[functions.admin-dashboard-summary]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-dashboard-summary/index.ts"
+
+[functions.get-business-onboarding-context]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-business-onboarding-context/index.ts"
+
+[functions.update-business-profile-section]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update-business-profile-section/index.ts"
+
 [functions.send-deal-push]
 enabled = true
 verify_jwt = false
@@ -568,6 +583,16 @@ entrypoint = "./functions/stripe-create-checkout-session/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/stripe-customer-portal-session/index.ts"
+
+[functions.stripe-ensure-customer]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-ensure-customer/index.ts"
+
+[functions.stripe-backfill-customers]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-backfill-customers/index.ts"
 
 [functions.stripe-expire-pending-checkout]
 enabled = true

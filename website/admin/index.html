@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Dashboard | Twofer</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="/styles.css?v=20260701-admin" />
+  </head>
+  <body class="admin-shell" data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin" aria-label="Twofer admin home">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>Twofer Admin</span>
+        </a>
+        <div class="nav-links">
+          <a href="/admin/businesses">Businesses</a>
+          <a href="/admin/trial-requests">Trial Requests</a>
+          <a href="/admin/offers">Offers</a>
+          <a href="/admin/billing/events">Billing</a>
+          <a href="/admin/audit-log">Audit</a>
+        </div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login">Login</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Internal command center</p>
+          <h1>Admin Dashboard</h1>
+          <p class="lede">Manage reviewed business onboarding, trials, offers, billing signals, and audit activity from one web-only surface.</p>
+        </div>
+        <div class="admin-actions">
+          <a class="button" href="/admin/businesses/new">Create Field Trial</a>
+          <a class="button button-small" href="/admin/trial-requests">Review Requests</a>
+        </div>
+      </div>
+
+      <section class="admin-grid" aria-label="Admin summary">
+        <article class="admin-card"><span>Active businesses</span><strong data-metric="businesses.active">0</strong></article>
+        <article class="admin-card"><span>Pending verification</span><strong data-metric="businesses.pending">0</strong></article>
+        <article class="admin-card"><span>Trialing locations</span><strong data-metric="businesses.trialing">0</strong></article>
+        <article class="admin-card"><span>Trials ending soon</span><strong data-metric="businesses.trialsEndingSoon">0</strong></article>
+        <article class="admin-card"><span>Open trial requests</span><strong data-metric="trialRequests.open">0</strong></article>
+        <article class="admin-card"><span>High-risk requests</span><strong data-metric="trialRequests.highRisk">0</strong></article>
+        <article class="admin-card"><span>Live offers</span><strong data-metric="offers.live">0</strong></article>
+        <article class="admin-card"><span>Needs offer review</span><strong data-metric="offers.needsReview">0</strong></article>
+        <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
+        <article class="admin-card"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
+        <article class="admin-card"><span>Past due locations</span><strong data-metric="billing.pastDue">0</strong></article>
+        <article class="admin-card"><span>Past due businesses</span><strong data-metric="billing.pastDueBusinesses">0</strong></article>
+        <article class="admin-card"><span>Missing Stripe customers</span><strong data-metric="billing.missingCustomers">0</strong></article>
+        <article class="admin-card"><span>Failed admin actions</span><strong data-metric="security.failedActions">0</strong></article>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <div>
+            <h2>Recent Trial Requests</h2>
+            <p>Remote requests are routed through deterministic risk scoring before admin review.</p>
+          </div>
+          <a class="button button-small" href="/admin/trial-requests">Open queue</a>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr><th>Business</th><th>Email</th><th>Status</th><th>Access</th><th>Created</th></tr>
+            </thead>
+            <tbody data-applications-body>
+              <tr><td colspan="5">Connect an active admin session to load requests.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <div>
+            <h2>Audit Activity</h2>
+            <p>Sensitive admin actions are written server-side to an append-only audit log.</p>
+          </div>
+          <a class="button button-small" href="/admin/audit-log">View audit log</a>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr><th>Action</th><th>Target</th><th>Reason</th><th>Type</th><th>Created</th></tr>
+            </thead>
+            <tbody data-audit-body>
+              <tr><td colspan="5">Connect an active admin session to load audit events.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/admin/admin.js?v=20260701-admin"></script>
+  </body>
+</html>

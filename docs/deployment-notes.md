@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 100 migration files and the latest is `20260730123000_business_applications.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 104 migration files and the latest is `20260730127000_stripe_business_billing_reconnection.sql`.
 
 Read-only compare:
 
@@ -29,7 +29,7 @@ npx supabase db push
 High-signal dependencies:
 
 - **Merchant UI:** `20260327120000_launch_visual_redeem_analytics.sql`, `20260328140000_merchant_insights_rpc.sql`.
-- **Billing / Stripe:** `20260601153000_billing_v4_app_config_and_subscription_rls.sql`, `20260601160000_create_subscription_history.sql`, and the July 2026 trial, credits, suspension, and refund migrations.
+- **Billing / Stripe:** `20260601153000_billing_v4_app_config_and_subscription_rls.sql`, `20260601160000_create_subscription_history.sql`, the July 2026 trial, credits, suspension, and refund migrations, and `20260730127000_stripe_business_billing_reconnection.sql`.
 - **Menu / locations:** `20260429120000_business_menu_items.sql`, `20260530120000_business_locations_deal_location.sql`, `20260708130000_nearby_geo_rpcs.sql`.
 - **Realtime / claim safety:** `20260704120001_enable_deals_realtime.sql`, `20260704130000_enforce_max_claims_atomic.sql`, `20260721120000_deal_wallet_redemption_rules.sql`.
 - **Role split:** `20260711120000_profiles_role.sql`.
@@ -37,7 +37,10 @@ High-signal dependencies:
 - **AI / localization:** `20260722120000_ai_generation_cost_ledger.sql`, `20260727120000_ai_provider_circuit_breakers.sql`, `20260728120000_ad_localization_storage.sql`, `20260728123000_customer_deal_localization_projection.sql`.
 - **Deal release push scheduling:** `20260729120000_deal_release_push_events.sql`, then `20260729121000_deal_release_push_cron_schedule.sql`. These create the service-role-only idempotency table, Vault-backed cron secret verifier, and five-minute dispatcher for due release pushes. Applying them is production-changing and requires explicit approval.
 - **Ended-deal owner cleanup / poster projection:** `20260730120000_deals_owner_delete_ended.sql`, then `20260730121000_customer_deal_poster_spec_projection.sql`. These add owner cleanup for ended deals and a customer-safe native poster spec projection RPC. Applying them is production-changing and requires explicit approval.
-- **Business application intake:** `20260730123000_business_applications.sql`. This adds the reviewed website access-request table, indexes, `updated_at` trigger, and RLS-closed client posture. Applying it is production-changing and requires explicit approval.
+- **Business application intake:** `20260730123000_business_applications.sql`, then `20260730124000_business_onboarding_workflow.sql`. These add the reviewed website access-request table, deterministic onboarding tier/risk metadata, field-invite placeholders, indexes, `updated_at` trigger, and RLS-closed client posture. Applying them is production-changing and requires explicit approval.
+- **Admin dashboard foundation:** `20260730125000_admin_dashboard_foundation.sql`. This adds the web/admin allowlist, audit log, admin notes, launch areas, feature flags, system events, business status/access fields, and the central `can_business_publish` helper. Applying it is production-changing and requires explicit approval.
+- **Website-to-app onboarding sync:** `20260730126000_website_app_onboarding_sync.sql`. This links website requests, app owner membership, field-source tracking, revision history, setup checklist, terms acceptance, slow-hour/promotable-item seeds, and the hardened publish helper. Applying it is production-changing and requires explicit approval.
+- **Stripe business billing reconnection:** `20260730127000_stripe_business_billing_reconnection.sql`. This adds business billing profiles, subscriptions, billing events, checkout/portal audit tables, sync jobs, reminders, single-use billing tokens, and a publish helper that reads business subscription state before falling back to legacy location entitlements. Applying it is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -62,6 +65,9 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `ingest-analytics-event` | Append-only client analytics |
 | `deal-link` | Deep-link redirect for deal sharing |
 | `submit-business-application` | Public website business access-request intake |
+| `admin-dashboard-summary` | Internal admin dashboard summary, active-admin checked |
+| `get-business-onboarding-context` | App-safe imported business onboarding context |
+| `update-business-profile-section` | App-safe canonical business profile edits |
 | `send-deal-push` | Push notifications when a deal goes live |
 
 **AI flows:**
@@ -83,10 +89,12 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | Function | Purpose |
 |----------|---------|
 | `billing-pricing` | Read current pricing from `app_config` (no JWT) |
-| `stripe-create-checkout-session` | Start Stripe Checkout for Pro/Premium |
-| `stripe-customer-portal-session` | Open Stripe Customer Portal for plan management |
-| `stripe-webhook` | Receive Stripe events; verifies via `STRIPE_WEBHOOK_SECRET` |
-| `billing-checkout-redirect` | Post-checkout deep-link return into the app |
+| `stripe-create-checkout-session` | Start web/admin Stripe Checkout for a business subscription |
+| `stripe-customer-portal-session` | Open web/admin Stripe Customer Portal for a business |
+| `stripe-ensure-customer` | Admin-only Stripe Customer creation/update for a business |
+| `stripe-backfill-customers` | Admin-only, gated Stripe Customer backfill helper |
+| `stripe-webhook` | Receive Stripe events; verifies via `STRIPE_WEBHOOK_SECRET` and syncs business subscription state |
+| `billing-checkout-redirect` | Post-checkout web redirect to business billing pages |
 | `simulate-subscribe` | **Dev only** — manually advance pilot accounts to `active` for QA |
 
 See `docs/stripe-setup.md` for end-to-end Stripe test-mode bring-up (products, prices, webhook URL, secrets).
@@ -118,8 +126,13 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 |--------|---------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem, `submit-business-application`) | **Yes** |
 | `OPENAI_API_KEY` | OpenAI-backed AI paths, including Whisper voice transcription and OpenAI image generation/editing | **Yes for OpenAI paths** |
-| `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
+| `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-backfill-customers`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |
+| `STRIPE_PRICE_ID_TWOFER_PRO_MONTHLY` / `STRIPE_TWOFER_BUSINESS_PRICE_ID` | Fallback monthly business subscription price for web/admin checkout when runtime config does not provide one | Required if runtime config lacks price ids |
+| `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | Optional Stripe portal configuration id | Optional |
+| `ENABLE_STRIPE_BACKFILL` | Must be `true` before `stripe-backfill-customers` performs writes; dry runs do not require it | Optional / controlled |
+| `PAST_DUE_GRACE_DAYS` | Business subscription failed-payment grace window; defaults to 3 | Optional |
+| `SITE_URL` | Website base URL for Checkout success/cancel and portal return pages | Optional; defaults to `https://www.twoferapp.com` |
 | `OPENAI_MODEL` | Shared OpenAI chat model override; defaults to `gpt-5.5` and fails closed when set outside the allowlist | Optional |
 | `OPENAI_WHISPER_MODEL` | Whisper voice transcription override for `ai-compose-offer` | Optional |
 | `GEMINI_API_KEY` | Gemini text fallback, independent judging, vision QA fallback, and Gemini image generation when the related flags are enabled | Required only for Gemini paths |

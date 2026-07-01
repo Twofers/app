@@ -1,8 +1,10 @@
 # Twofer Billing Remaining Work
 
-Updated: 2026-06-29
+Updated: 2026-07-01
 
 This file tracks what remains after the billing implementation branch was migrated and the Edge Functions were deployed to the linked Supabase project.
+
+Status note: the 2026-07-01 Stripe reconnection adds a new web/admin business billing layer in `20260730127000_stripe_business_billing_reconnection.sql`. Those local changes still require explicit approval before any hosted migration, secret change, or Edge Function deploy. Mobile paid billing remains closed.
 
 ## Completed
 

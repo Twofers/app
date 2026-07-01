@@ -1883,6 +1883,7 @@
     "subtitle": "Choose a category and add your hours. We'll keep it quick.",
     "editTitle": "Edit business profile",
     "editSubtitle": "Review your business details and save any changes.",
+    "importedWebsiteHint": "Imported from your website request. You can edit this before publishing.",
     "contactName": "Your name",
     "businessEmail": "Business email",
     "businessName": "Business name",

@@ -20,7 +20,14 @@ import { fetchOwnerBusiness } from "@/lib/owner-business";
 import { Colors, Radii, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
-import { aiBusinessLookup, aiBusinessLookupDetails, type BusinessLookupResult } from "@/lib/functions";
+import {
+  aiBusinessLookup,
+  aiBusinessLookupDetails,
+  getBusinessOnboardingContext,
+  updateBusinessProfileSection,
+  type BusinessLookupResult,
+  type BusinessOnboardingContext,
+} from "@/lib/functions";
 import { isVerifiedBusinessLookupResult } from "@/lib/business-lookup";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
@@ -94,6 +101,8 @@ export default function BusinessSetupScreen() {
   const [lookupResults, setLookupResults] = useState<BusinessLookupResult[] | null>(null);
   const [verifiedLookupCoords, setVerifiedLookupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [setupMode, setSetupMode] = useState<BusinessSetupMode>("loading");
+  const [onboardingContext, setOnboardingContext] = useState<BusinessOnboardingContext | null>(null);
+  const [importedFromWebsite, setImportedFromWebsite] = useState(false);
   // Gap fix for the invite-code soft gate. `null` while we still don't know,
   // `true` if the user has a row in business_invite_validations (or just earned
   // one by auto-consuming the code stashed at signup), `false` if they reached
@@ -173,6 +182,48 @@ export default function BusinessSetupScreen() {
     let cancelled = false;
     setSetupMode("loading");
     void (async () => {
+      try {
+        const context = await getBusinessOnboardingContext();
+        if (cancelled) return;
+        setOnboardingContext(context);
+        if (context.business) {
+          const row = context.business;
+          setSetupMode("edit");
+          setImportedFromWebsite(
+            Boolean(context.field_sources?.some((source) => source.source === "website_signup" || source.source === "app_login")),
+          );
+          setInviteValidated(true);
+          setBusinessName((prev) => prev || (row.name ?? ""));
+          setAddress((prev) => prev || (row.address ?? row.location ?? ""));
+          setPhone((prev) => prev || (row.phone ?? ""));
+          setShortDescription((prev) => prev || (row.short_description ?? ""));
+          const storedCategory = row.category?.trim();
+          if (storedCategory) {
+            const categoryKey = CATEGORY_KEYS.includes(storedCategory as CategoryKey)
+              ? (storedCategory as CategoryKey)
+              : categoryKeyFromLookup(storedCategory);
+            setCategory((prev) => prev || categoryKey || "other");
+            if (!categoryKey) setCustomCategory((prev) => prev || storedCategory);
+          }
+          const importedSlowHours = context.slow_hours?.[0]?.raw_text;
+          const storedHours = row.hours_text?.trim() || (typeof importedSlowHours === "string" ? importedSlowHours.trim() : "");
+          if (storedHours) {
+            const presetKey = HOURS_PRESET_KEYS.find(
+              (key) => key !== "custom_prompt" && t(`businessSetup.hoursPreset.${key}`) === storedHours,
+            );
+            setHoursPreset((prev) => prev || presetKey || "custom_prompt");
+            if (!presetKey) setCustomHours((prev) => prev || storedHours);
+          }
+          const lat = row.latitude != null ? Number(row.latitude) : NaN;
+          const lng = row.longitude != null ? Number(row.longitude) : NaN;
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setVerifiedLookupCoords((prev) => prev ?? { lat, lng });
+          }
+          return;
+        }
+      } catch (e) {
+        if (__DEV__) console.warn("[business-setup] Onboarding context error:", e);
+      }
       // Owner reads of `businesses` go through get_my_business() — an
       // `owner_id` filter stops working once the PII column-grant migration
       // lands (the helper still falls back to a direct select pre-migration).
@@ -430,7 +481,30 @@ export default function BusinessSetupScreen() {
         latitude: verifiedLookupCoords?.lat ?? null,
         longitude: verifiedLookupCoords?.lng ?? null,
       };
-      const submitCopyKeys = getBusinessSetupCopyKeys(existingBiz ? "edit" : "create", false);
+      const submitCopyKeys = getBusinessSetupCopyKeys(existingBiz || onboardingContext?.business ? "edit" : "create", false);
+      if (onboardingContext?.business) {
+        await updateBusinessProfileSection({
+          business_id: onboardingContext.business.id,
+          section_key: "business_setup",
+          profile_version: Number(onboardingContext.business.current_profile_version ?? 1),
+          payload: bizPayload,
+        });
+        if (logoUri) {
+          const logoUrl = await uploadLogo(onboardingContext.business.id);
+          if (logoUrl) {
+            await supabase
+              .from("businesses")
+              .update({ logo_url: logoUrl })
+              .eq("id", onboardingContext.business.id);
+          }
+        }
+        setBanner({ message: t(submitCopyKeys.successKey), tone: "success" });
+        redirectTimerRef.current = setTimeout(async () => {
+          const pending = await consumePendingDeepLink();
+          router.replace((pending ?? "/(tabs)/dashboard") as Href);
+        }, 250);
+        return;
+      }
       const { data: bizData, error } = existingBiz
         ? await supabase
             .from("businesses")
@@ -536,6 +610,11 @@ export default function BusinessSetupScreen() {
       <Text style={{ marginTop: Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 15, lineHeight: 22, color: theme.text }}>
         {t(copyKeys.subtitleKey)}
       </Text>
+      {importedFromWebsite ? (
+        <Text style={{ marginTop: -Spacing.sm, marginBottom: Spacing.md, opacity: 0.72, fontSize: 13, lineHeight: 18, color: theme.text }}>
+          {t("businessSetup.importedWebsiteHint")}
+        </Text>
+      ) : null}
       {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
 
       <ScrollView

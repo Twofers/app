@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offers | Twofer Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="stylesheet" href="/styles.css?v=20260701-admin" />
+  </head>
+  <body class="admin-shell">
+    <header class="site-header">
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">T</span><span>Twofer Admin</span></a>
+        <div class="nav-links"><a href="/admin">Overview</a><a href="/admin/businesses">Businesses</a><a href="/admin/trial-requests">Trial Requests</a><a href="/admin/audit-log">Audit</a></div>
+      </nav>
+    </header>
+    <main class="admin-main">
+      <div class="admin-title-row">
+        <div>
+          <p class="admin-kicker">Offer moderation</p>
+          <h1>Offers</h1>
+          <p class="lede">Monitor live, draft, scheduled, expired, paused, and policy-risk offers.</p>
+        </div>
+      </div>
+      <section class="admin-grid three">
+        <article class="admin-card"><span>Policy risks</span><p>Alcohol, tobacco, cannabis, weapons, adult products, prescription, counterfeit, discriminatory, bait-and-switch.</p></article>
+        <article class="admin-card"><span>Moderation actions</span><p>Pause, resume, remove, force expire, mark reviewed, send note.</p></article>
+        <article class="admin-card"><span>Publishing gate</span><p>Use <code>can_business_publish</code> before live publish and notification jobs.</p></article>
+      </section>
+      <section class="admin-section">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Offer</th><th>Business</th><th>Status</th><th>Claims</th><th>Redemptions</th><th>AI policy</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td>2-for-1 sample</td><td>Local cafe</td><td><span class="admin-badge">Draft</span></td><td>0</td><td>0</td><td>Pending</td><td>Review</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
