@@ -4,6 +4,7 @@ import {
   type DealEligibilityFormState,
 } from "./deal-eligibility-form";
 import { getDealDisplayTitle } from "./deal-display-copy";
+import { createDefaultOneTimeDealSchedule } from "./deal-schedule-defaults";
 
 export type ReusableDeal = {
   title?: string | null;
@@ -120,6 +121,7 @@ function splitStoredDescription(description: string): { promoLine: string; detai
 
 export type ReuseDealPrefillOptions = {
   resetSchedule?: boolean;
+  now?: Date;
 };
 
 export function buildReuseDealPrefillParams(
@@ -138,6 +140,7 @@ export function buildReuseDealPrefillParams(
 
   if (title) params.prefillTitle = title;
   if (promoLine) params.prefillPromoLine = promoLine;
+  params.prefillCta = "Claim deal";
   if (description) {
     params.prefillHint = description;
     params.prefillDescription = details;
@@ -154,7 +157,10 @@ export function buildReuseDealPrefillParams(
   }
 
   if (options.resetSchedule) {
+    const freshSchedule = createDefaultOneTimeDealSchedule(options.now);
     params.prefillIsRecurring = "0";
+    params.prefillStartTime = freshSchedule.startTime.toISOString();
+    params.prefillEndTime = freshSchedule.endTime.toISOString();
   } else {
     if (deal.is_recurring != null) params.prefillIsRecurring = deal.is_recurring ? "1" : "0";
     if (deal.days_of_week?.length) params.prefillDaysOfWeek = deal.days_of_week.join(",");

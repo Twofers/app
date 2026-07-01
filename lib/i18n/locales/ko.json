@@ -2142,7 +2142,15 @@
     "title": "AI Insights",
     "refresh": "Refresh",
     "loading": "Analyzing your deals...",
-    "noSuggestions": "No suggestions available yet — create a deal first!"
+    "noSuggestions": "No suggestions available yet — create a deal first!",
+    "fallbackFirstDealTitle": "명확한 혜택 하나로 시작하세요",
+    "fallbackFirstDealCategoryBody": "고객이 바로 이해할 수 있는 간단한 보상이 있는 {{category}} 딜을 시도해 보세요.",
+    "fallbackFirstDealBody": "고객 행동과 보상이 명확한 강한 딜 하나를 시도해 보세요.",
+    "fallbackRedeemTitle": "사용 처리를 쉽게 만드세요",
+    "fallbackRedeemBody": "클레임은 있지만 아직 사용 처리가 없습니다. 직원에게 Redeem 탭과 코드를 확인하도록 안내하세요.",
+    "fallbackRepeatTitle": "간단한 테스트를 다시 실행하세요",
+    "fallbackRepeatClaimBody": "이번 주에 {{count}}개의 클레임이 들어왔습니다. 가장 명확한 딜을 재사용하고 일정을 새로 고치세요.",
+    "fallbackRepeatBody": "이전 딜을 새 일정으로 재사용한 뒤 클레임과 사용 처리를 비교하세요."
   },
   "walkthrough": {
     "dashboardTitle": "Your Dashboard",
@@ -2158,7 +2166,25 @@
     "useAiDeal": "Use This Deal Idea",
     "exploreDashboard": "Explore Dashboard First",
     "aiSuggestionLabel": "AI deal idea for you",
-    "aiLoading": "Generating a deal idea for you..."
+    "aiLoading": "Generating a deal idea for you...",
+    "starterDeal": {
+      "cafe": {
+        "title": "음료 하나 구매 시 하나 무료",
+        "hint": "카페나 커피숍을 위한 음료 1+1 딜을 만드세요."
+      },
+      "restaurant": {
+        "title": "메인 메뉴 하나 구매 시 하나 무료",
+        "hint": "지역 식당을 위한 메인 메뉴 1+1 딜을 만드세요."
+      },
+      "retail": {
+        "title": "상품 하나 구매 시 하나 무료",
+        "hint": "지역 매장을 위한 상품 1+1 딜을 만드세요."
+      },
+      "default": {
+        "title": "하나 구매 시 하나 무료",
+        "hint": "첫 방문 고객을 유도할 수 있는 간단한 1+1 딜을 만드세요."
+      }
+    }
   },
   "report": {
     "businessTitle": "이 매장을 신고합니다",

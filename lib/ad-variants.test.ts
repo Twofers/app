@@ -53,6 +53,22 @@ describe("adToDealDraft", () => {
     expect(draft.offer_details).not.toContain("5:47:46 PM");
   });
 
+  it("does not repeat the locked offer when locked terms already start with it", () => {
+    const ad: GeneratedAd = {
+      headline: "Get 40% off one large ice tea",
+      subheadline: "Save 40% on one large ice tea.",
+      short_description: "Save 40% on one large ice tea.",
+      cta: "Claim deal",
+      locked_offer_line: "Get 40% off one large ice tea",
+      locked_terms_line:
+        "Get 40% off one large ice tea. Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
+    };
+
+    expect(adToDealDraft(ad, "").offer_details).toBe(
+      "Get 40% off one large ice tea\nRedeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 50 available.",
+    );
+  });
+
   it("keeps legacy subheadline behavior for older generated ads", () => {
     const legacyAd: GeneratedAd = {
       headline: "BOGO Cold Brew",

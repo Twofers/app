@@ -26,6 +26,50 @@ type AiInsightsCardProps = {
   dealsLaunched: number;
 };
 
+function buildFallbackSuggestions(
+  t: ReturnType<typeof useTranslation>["t"],
+  params: {
+    businessCategory: string | null;
+    weekCounts: number[];
+    totalClaims: number;
+    totalRedeems: number;
+    dealsLaunched: number;
+  },
+): Suggestion[] {
+  const category = params.businessCategory?.trim();
+  const totalWeekClaims = params.weekCounts.reduce((sum, count) => sum + count, 0);
+  if (params.dealsLaunched === 0) {
+    return [
+      {
+        icon: "＋",
+        title: t("aiInsights.fallbackFirstDealTitle"),
+        body: category
+          ? t("aiInsights.fallbackFirstDealCategoryBody", { category })
+          : t("aiInsights.fallbackFirstDealBody"),
+      },
+    ];
+  }
+  if (params.totalClaims > 0 && params.totalRedeems === 0) {
+    return [
+      {
+        icon: "✓",
+        title: t("aiInsights.fallbackRedeemTitle"),
+        body: t("aiInsights.fallbackRedeemBody"),
+      },
+    ];
+  }
+  return [
+    {
+      icon: "↻",
+      title: t("aiInsights.fallbackRepeatTitle"),
+      body:
+        totalWeekClaims > 0
+          ? t("aiInsights.fallbackRepeatClaimBody", { count: totalWeekClaims })
+          : t("aiInsights.fallbackRepeatBody"),
+    },
+  ];
+}
+
 export function AiInsightsCard({
   businessId,
   businessName,
@@ -47,6 +91,13 @@ export function AiInsightsCard({
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const fallbackSuggestions = buildFallbackSuggestions(t, {
+      businessCategory,
+      weekCounts,
+      totalClaims,
+      totalRedeems,
+      dealsLaunched,
+    });
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
         "ai-deal-suggestions",
@@ -66,17 +117,20 @@ export function AiInsightsCard({
       );
 
       if (fnError) {
-        setError(parseFunctionError(fnError));
+        setSuggestions(fallbackSuggestions);
+        setError(null);
         return;
       }
 
       if (data?.suggestions && Array.isArray(data.suggestions)) {
         setSuggestions(data.suggestions);
       } else {
-        setError(t("aiInsights.noSuggestions"));
+        setSuggestions(fallbackSuggestions);
       }
     } catch (err) {
-      setError(parseFunctionError(err));
+      setSuggestions(fallbackSuggestions);
+      const message = parseFunctionError(err);
+      if (!fallbackSuggestions.length) setError(message);
     } finally {
       setLoading(false);
       setFetched(true);

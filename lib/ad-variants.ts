@@ -112,6 +112,19 @@ export function stripAppRenderedTimingMetadata(value: string): string {
     .trim();
 }
 
+function stripDuplicateLeadingLine(value: string, duplicate: string): string {
+  const cleanValue = value.trim();
+  const cleanDuplicate = duplicate.trim();
+  if (!cleanValue || !cleanDuplicate) return cleanValue;
+  const normalizedValue = cleanValue.toLowerCase();
+  const normalizedDuplicate = cleanDuplicate.toLowerCase();
+  if (!normalizedValue.startsWith(normalizedDuplicate)) return cleanValue;
+  return cleanValue
+    .slice(cleanDuplicate.length)
+    .replace(/^[\s.:-]+/, "")
+    .trim();
+}
+
 function containsMechanicalOfferLanguage(value: string): boolean {
   return /\bBOGO\b|\bSame[-\s]?Item\b|\b2\s*[- ]?\s*for\s*[- ]?\s*1\b|\btwo\s+for\s+one\b/i.test(value);
 }
@@ -163,7 +176,8 @@ export function adToDealDraft(ad: GeneratedAd, ownerOfferHint: string): {
   const shortDescription = (ad.short_description ?? ad.subheadline).trim();
   const termsSummary = ad.terms_summary?.trim() ?? "";
   const lockedOfferLine = ad.locked_offer_line?.trim() ?? "";
-  const lockedTermsLine = stripAppRenderedTimingMetadata(ad.locked_terms_line?.trim() ?? termsSummary);
+  const rawLockedTermsLine = stripAppRenderedTimingMetadata(ad.locked_terms_line?.trim() ?? termsSummary);
+  const lockedTermsLine = stripDuplicateLeadingLine(rawLockedTermsLine, lockedOfferLine);
   const offerDetails = [lockedOfferLine, lockedTermsLine].filter(Boolean).join("\n");
   const displayAd = normalizeGeneratedAdDisplayCopy(ad);
   return {

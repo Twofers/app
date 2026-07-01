@@ -33,10 +33,10 @@ describe("getScreenLayoutMetrics", () => {
     const zeroInset = getTabBarMetrics({ top: 0, bottom: 0 }, "android");
     const homeIndicatorInset = getTabBarMetrics({ top: 0, bottom: 34 }, "android");
 
-    expect(zeroInset.height).toBe(TAB_BAR_BASE_HEIGHT + Spacing.sm + ANDROID_BOTTOM_VISIBILITY_FLOOR);
-    expect(zeroInset.bottomOffset).toBe(ANDROID_BOTTOM_VISIBILITY_FLOOR);
-    expect(homeIndicatorInset.height).toBe(TAB_BAR_BASE_HEIGHT + 34 + ANDROID_BOTTOM_VISIBILITY_FLOOR - 34);
-    expect(homeIndicatorInset.bottomOffset).toBe(ANDROID_BOTTOM_VISIBILITY_FLOOR - 34);
+    expect(zeroInset.height).toBe(TAB_BAR_BASE_HEIGHT + Spacing.sm);
+    expect(zeroInset.bottomOffset).toBe(0);
+    expect(homeIndicatorInset.height).toBe(TAB_BAR_BASE_HEIGHT + 34);
+    expect(homeIndicatorInset.bottomOffset).toBe(0);
     expect(getScreenLayoutMetrics({ top: 0, bottom: 34 }, "tab", "android").scrollBottom).toBe(
       homeIndicatorInset.screenScrollBottom,
     );

@@ -176,7 +176,7 @@ export default function ReuseDealScreen() {
   function repeatDeal(row: DealRow) {
     router.push({
       pathname: "/create/ai",
-      params: buildReuseDealPrefillParams(row),
+      params: buildReuseDealPrefillParams(row, { resetSchedule: true }),
     } as Href);
   }
 

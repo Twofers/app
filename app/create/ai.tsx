@@ -924,6 +924,8 @@ export default function AiDealScreen() {
     prefillWindowStartMin?: string;
     prefillWindowEndMin?: string;
     prefillTimezone?: string;
+    prefillStartTime?: string;
+    prefillEndTime?: string;
     prefillMaxClaims?: string;
     prefillCutoffMins?: string;
     prefillSourceLocale?: string;
@@ -1148,6 +1150,8 @@ export default function AiDealScreen() {
         g(params.prefillWindowStartMin).trim() ||
         g(params.prefillWindowEndMin).trim() ||
         g(params.prefillTimezone).trim() ||
+        g(params.prefillStartTime).trim() ||
+        g(params.prefillEndTime).trim() ||
         g(params.prefillMaxClaims).trim() ||
         g(params.prefillCutoffMins).trim(),
     );
@@ -1168,6 +1172,8 @@ export default function AiDealScreen() {
     params.prefillWindowStartMin,
     params.prefillWindowEndMin,
     params.prefillTimezone,
+    params.prefillStartTime,
+    params.prefillEndTime,
     params.prefillMaxClaims,
     params.prefillCutoffMins,
   ]);
@@ -2103,7 +2109,12 @@ export default function AiDealScreen() {
     const pe = g(params.prefillExtraLocationIds).trim();
     const locIds = [pl, ...pe.split(",").map((s) => s.trim()).filter(Boolean)].filter(Boolean);
     if (locIds.length) setPublishLocationIds(locIds);
-    const hasSchedulePrefill = g(params.prefillIsRecurring) || g(params.prefillDaysOfWeek) || g(params.prefillMaxClaims);
+    const hasSchedulePrefill =
+      g(params.prefillIsRecurring) ||
+      g(params.prefillDaysOfWeek) ||
+      g(params.prefillStartTime) ||
+      g(params.prefillEndTime) ||
+      g(params.prefillMaxClaims);
     if (!pt && !pp && !pc && !pd && !ph && !price0 && !posterPath && !posterUrlParam && !prefillDealEligibility && locIds.length === 0 && !hasSchedulePrefill) {
       setPrefillBaselineReady(true);
       return;
@@ -2171,6 +2182,16 @@ export default function AiDealScreen() {
     if (wem) { const m = Number(wem); if (Number.isFinite(m)) { const d = new Date(); d.setHours(Math.floor(m / 60), m % 60, 0, 0); setWindowEnd(d); } }
     const tz = g(params.prefillTimezone).trim();
     if (tz) setTimezone(tz);
+    const pst = g(params.prefillStartTime).trim();
+    if (pst) {
+      const parsed = new Date(pst);
+      if (Number.isFinite(parsed.getTime())) setStartTime(parsed);
+    }
+    const pet = g(params.prefillEndTime).trim();
+    if (pet) {
+      const parsed = new Date(pet);
+      if (Number.isFinite(parsed.getTime())) setEndTime(parsed);
+    }
     const mc = g(params.prefillMaxClaims).trim();
     if (mc) setMaxClaims(mc);
     const cf = g(params.prefillCutoffMins).trim();
@@ -2195,7 +2216,8 @@ export default function AiDealScreen() {
     params.fromAiCompose, params.fromMenuOffer, params.fromReuse, params.fromCreateHub,
     params.prefillLocationId, params.prefillExtraLocationIds, params.prefillSourceLocale, dealIdFromRoute, localizedOwnerUiEnabled, t,
     params.prefillIsRecurring, params.prefillDaysOfWeek, params.prefillWindowStartMin,
-    params.prefillWindowEndMin, params.prefillTimezone, params.prefillMaxClaims, params.prefillCutoffMins,
+    params.prefillWindowEndMin, params.prefillTimezone, params.prefillStartTime, params.prefillEndTime,
+    params.prefillMaxClaims, params.prefillCutoffMins,
   ]);
 
   useEffect(() => {
@@ -3226,7 +3248,7 @@ export default function AiDealScreen() {
       showPublishError(t("createAi.errOriginalPhotoAckRequired"), "warning");
       return;
     }
-    if (!editingDealId && composedExactPresentationApprovalEnabled) {
+    if (!editingDealId && generatedAd && composedExactPresentationApprovalEnabled) {
       if (!adAccepted || !composedPresentationApprovalMatches) {
         trackEvent(AiAdsEvents.COMPOSED_PUBLISH_BLOCKED, {
           screen: "create_ai",

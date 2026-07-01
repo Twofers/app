@@ -2142,7 +2142,15 @@
     "title": "AI Insights",
     "refresh": "Refresh",
     "loading": "Analyzing your deals...",
-    "noSuggestions": "No suggestions available yet — create a deal first!"
+    "noSuggestions": "No suggestions available yet — create a deal first!",
+    "fallbackFirstDealTitle": "Empieza con una oferta clara",
+    "fallbackFirstDealCategoryBody": "Prueba una oferta fuerte de {{category}} con una recompensa sencilla que los clientes entiendan rapido.",
+    "fallbackFirstDealBody": "Prueba una oferta fuerte con una accion clara para el cliente y una recompensa sencilla.",
+    "fallbackRedeemTitle": "Facilita el canje",
+    "fallbackRedeemBody": "Tienes reclamos pero aun no hay canjes. Recuerda al personal revisar la pestana Canjear y los codigos.",
+    "fallbackRepeatTitle": "Haz otra prueba simple",
+    "fallbackRepeatClaimBody": "Esta semana llegaron {{count}} reclamos. Reutiliza la oferta mas clara y actualiza el horario.",
+    "fallbackRepeatBody": "Reutiliza una oferta anterior con un horario nuevo y compara reclamos y canjes."
   },
   "walkthrough": {
     "dashboardTitle": "Your Dashboard",
@@ -2158,7 +2166,25 @@
     "useAiDeal": "Use This Deal Idea",
     "exploreDashboard": "Explore Dashboard First",
     "aiSuggestionLabel": "AI deal idea for you",
-    "aiLoading": "Generating a deal idea for you..."
+    "aiLoading": "Generating a deal idea for you...",
+    "starterDeal": {
+      "cafe": {
+        "title": "Compra una bebida y recibe otra gratis",
+        "hint": "Crea una oferta de compra una bebida y recibe otra gratis para una cafeteria."
+      },
+      "restaurant": {
+        "title": "Compra un plato y recibe otro gratis",
+        "hint": "Crea una oferta de compra un plato y recibe otro gratis para un restaurante local."
+      },
+      "retail": {
+        "title": "Compra un articulo y recibe otro gratis",
+        "hint": "Crea una oferta de compra un articulo y recibe otro gratis para una tienda local."
+      },
+      "default": {
+        "title": "Compra uno y recibe otro gratis",
+        "hint": "Crea una oferta simple de compra uno y recibe otro gratis para atraer clientes nuevos."
+      }
+    }
   },
   "report": {
     "businessTitle": "Reportar este negocio",

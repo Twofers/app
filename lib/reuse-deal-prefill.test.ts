@@ -24,6 +24,7 @@ describe("reuse deal prefill params", () => {
       prefillTitle: "Buy one latte and get one free",
       prefillHint: "Buy one iced latte, get one free.",
       prefillDescription: "Buy one iced latte, get one free.",
+      prefillCta: "Claim deal",
       prefillPrice: "5",
       prefillSourceLocale: "en",
       prefillDealEligibility: params.prefillDealEligibility,
@@ -60,7 +61,7 @@ describe("reuse deal prefill params", () => {
         max_claims: 25,
         claim_cutoff_buffer_minutes: 10,
       },
-      { resetSchedule: true },
+      { resetSchedule: true, now: new Date("2026-07-01T17:00:00.000Z") },
     );
 
     expect(params).toMatchObject({
@@ -68,6 +69,8 @@ describe("reuse deal prefill params", () => {
       prefillTitle: "Buy one latte and get one free",
       prefillPosterPath: "biz-1/latte.jpg",
       prefillIsRecurring: "0",
+      prefillStartTime: "2026-07-01T17:05:00.000Z",
+      prefillEndTime: "2026-07-01T18:05:00.000Z",
       prefillMaxClaims: "25",
       prefillCutoffMins: "10",
     });
@@ -86,6 +89,7 @@ describe("reuse deal prefill params", () => {
       }),
     ).toMatchObject({
       prefillPromoLine: "Buy one sandwich, get one free.",
+      prefillCta: "Claim deal",
       prefillDescription: "Valid after 2 PM.",
       prefillHint: "Buy one sandwich, get one free.\n\nValid after 2 PM.",
     });

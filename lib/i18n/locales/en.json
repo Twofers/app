@@ -2143,7 +2143,15 @@
     "title": "AI Insights",
     "refresh": "Refresh",
     "loading": "Analyzing your deals...",
-    "noSuggestions": "No suggestions available yet — create a deal first!"
+    "noSuggestions": "No suggestions available yet — create a deal first!",
+    "fallbackFirstDealTitle": "Start with one clear offer",
+    "fallbackFirstDealCategoryBody": "Try one strong {{category}} deal with a simple reward customers can understand fast.",
+    "fallbackFirstDealBody": "Try one strong deal with a clear customer action and reward.",
+    "fallbackRedeemTitle": "Make redemption easy",
+    "fallbackRedeemBody": "You have claims but no redemptions yet. Remind staff to check the Redeem tab and claim codes.",
+    "fallbackRepeatTitle": "Run another simple test",
+    "fallbackRepeatClaimBody": "{{count}} claims came in this week. Reuse the clearest offer and refresh the schedule.",
+    "fallbackRepeatBody": "Reuse a past offer with a fresh schedule, then compare claims and redemptions."
   },
   "walkthrough": {
     "dashboardTitle": "Your dashboard",
@@ -2159,7 +2167,25 @@
     "useAiDeal": "Use this deal idea",
     "exploreDashboard": "Explore dashboard first",
     "aiSuggestionLabel": "AI deal idea for you",
-    "aiLoading": "Generating a deal idea for you..."
+    "aiLoading": "Generating a deal idea for you...",
+    "starterDeal": {
+      "cafe": {
+        "title": "Buy one drink, get one free",
+        "hint": "Create a buy-one-get-one drink deal for a cafe or coffee shop."
+      },
+      "restaurant": {
+        "title": "Buy one entree, get one free",
+        "hint": "Create a buy-one-get-one entree deal for a local restaurant."
+      },
+      "retail": {
+        "title": "Buy one item, get one free",
+        "hint": "Create a buy-one-get-one item deal for a local retail shop."
+      },
+      "default": {
+        "title": "Buy one, get one free",
+        "hint": "Create a simple buy-one-get-one deal to attract first-time customers."
+      }
+    }
   },
   "report": {
     "businessTitle": "Report this business",

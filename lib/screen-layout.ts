@@ -28,10 +28,7 @@ const STACK_DEFAULT_BOTTOM_FLOOR = Spacing.lg;
 export type TabBarPlatform = "android" | "ios" | "default";
 
 export function getTabBarMetrics(insets: ScreenInsets, platform: TabBarPlatform = "default") {
-  const bottomOffset =
-    platform === "android" && insets.bottom < ANDROID_BOTTOM_VISIBILITY_FLOOR
-      ? ANDROID_BOTTOM_VISIBILITY_FLOOR - insets.bottom
-      : 0;
+  const bottomOffset = 0;
   const bottomFloor =
     platform === "android" ? TAB_BAR_ANDROID_BOTTOM_FLOOR : platform === "ios" ? TAB_BAR_IOS_BOTTOM_FLOOR : Spacing.sm;
   const bottomPadding = Math.max(insets.bottom, bottomFloor);
