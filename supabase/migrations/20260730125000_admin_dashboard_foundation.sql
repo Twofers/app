@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS public.system_events (
 );
 
 ALTER TABLE public.businesses
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending_verification',
   ADD COLUMN IF NOT EXISTS access_level text NOT NULL DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS verification_status text NOT NULL DEFAULT 'not_started',
