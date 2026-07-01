@@ -1,76 +1,53 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Twofer | Live local offers</title>
-    <meta
-      name="description"
-      content="Twofer helps people discover live local offers from nearby businesses, starting in select Dallas neighborhoods."
-    />
-    <link rel="stylesheet" href="/styles.css" />
+    <title>Twofer</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      main {
+        flex: 1;
+        padding: 2rem 1.25rem;
+        max-width: 40rem;
+        margin: 0 auto;
+      }
+      footer {
+        border-top: 1px solid #e5e5e5;
+        padding: 1.25rem;
+        text-align: center;
+        font-size: 0.9rem;
+        color: #444;
+      }
+      footer a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+      footer .sep {
+        margin: 0 0.5rem;
+        color: #bbb;
+      }
+    </style>
   </head>
   <body>
-    <header class="site-header">
-      <nav class="nav" aria-label="Main navigation">
-        <a class="brand" href="/">Twofer</a>
-        <div class="nav-links">
-          <a href="/business/">Business access</a>
-          <a href="/support/">Support</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/terms/">Terms</a>
-        </div>
-      </nav>
-    </header>
     <main>
-      <section class="hero">
-        <div>
-          <h1>Twofer</h1>
-          <p class="lede">
-            Discover live local offers from nearby cafes, bakeries, coffee shops, and neighborhood businesses.
-            Twofer is launching first in select Dallas neighborhoods.
-          </p>
-          <div class="cta-row">
-            <a class="button" href="/business/">Request business access</a>
-            <a class="button secondary" href="/support/">Get support</a>
-          </div>
-        </div>
-        <aside class="panel" aria-label="Launch summary">
-          <h2>Dallas-first launch</h2>
-          <p>
-            Consumers can browse, claim, and redeem limited-time local offers. Businesses can request reviewed
-            merchant access for AI-assisted offer creation and performance tools.
-          </p>
-          <p class="small">App Store availability is coming soon.</p>
-        </aside>
-      </section>
-
-      <section class="grid" aria-label="Twofer overview">
-        <article class="panel">
-          <h3>For customers</h3>
-          <p>Find nearby live local specials, save favorite businesses, claim offers, and redeem in person.</p>
-        </article>
-        <article class="panel">
-          <h3>For businesses</h3>
-          <p>Create controlled, time-limited local offers for slower hours after your business account is reviewed.</p>
-        </article>
-        <article class="panel">
-          <h3>For review</h3>
-          <p>Demo accounts can show sample Dallas offers and merchant tools without any billing step in the app.</p>
-        </article>
-      </section>
+      <h1>Twofer</h1>
+      <p>Local deals — browse, claim, and redeem.</p>
     </main>
-    <footer class="site-footer">
-      <div class="nav">
-        <span>Copyright 2026 Twofer</span>
-        <div class="nav-links">
-          <a href="/privacy/">Privacy</a>
-          <a href="/terms/">Terms</a>
-          <a href="/business-terms/">Business Terms</a>
-          <a href="/delete-account/">Delete account</a>
-          <a href="/support/">Support</a>
-        </div>
-      </div>
+    <footer>
+      <a href="https://www.twoferapp.com/privacy">Privacy Policy</a>
+      <span class="sep" aria-hidden="true">·</span>
+      <a href="https://www.twoferapp.com/terms">Terms of Service</a>
     </footer>
   </body>
 </html>
