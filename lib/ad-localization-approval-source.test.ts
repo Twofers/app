@@ -24,5 +24,7 @@ describe("AI create localization approval binding source", () => {
   it("builds publish approval metadata whenever a localization bundle is present", () => {
     expect(source).toContain("const publishLocalizationApproval =\n        offerDefinition && localizationBundleForPublish");
     expect(source).toContain("ownerLanguagePreviewAvailable &&\n    offerDefinition &&\n    generatedAd?.localization_bundle");
+    expect(source).toContain("const deterministicLocalizationBundle =\n        offerDefinition &&\n        baseAdForPublishSpec &&\n        !baseAdForPublishSpec.localization_bundle");
+    expect(source).not.toContain("const deterministicLocalizationBundle =\n        automaticLocalizationApprovalEnabled &&\n        offerDefinition");
   });
 });

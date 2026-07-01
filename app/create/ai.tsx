@@ -3377,7 +3377,6 @@ export default function AiDealScreen() {
           })
         : null);
       const deterministicLocalizationBundle =
-        automaticLocalizationApprovalEnabled &&
         offerDefinition &&
         baseAdForPublishSpec &&
         !baseAdForPublishSpec.localization_bundle
