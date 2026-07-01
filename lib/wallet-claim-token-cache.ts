@@ -1,6 +1,6 @@
 import { secureDeleteItem, secureGetItem, secureSetItem } from "./redemption-secure-store";
 
-const WALLET_CLAIM_TOKEN_PREFIX = "twofer:wallet-claim-token:";
+const WALLET_CLAIM_TOKEN_PREFIX = "twofer_wallet_claim_token_";
 
 function claimTokenKey(claimId: string) {
   return `${WALLET_CLAIM_TOKEN_PREFIX}${claimId}`;
