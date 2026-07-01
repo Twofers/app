@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 99 migration files and the latest is `20260730121000_customer_deal_poster_spec_projection.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 100 migration files and the latest is `20260730123000_business_applications.sql`.
 
 Read-only compare:
 
@@ -37,6 +37,7 @@ High-signal dependencies:
 - **AI / localization:** `20260722120000_ai_generation_cost_ledger.sql`, `20260727120000_ai_provider_circuit_breakers.sql`, `20260728120000_ad_localization_storage.sql`, `20260728123000_customer_deal_localization_projection.sql`.
 - **Deal release push scheduling:** `20260729120000_deal_release_push_events.sql`, then `20260729121000_deal_release_push_cron_schedule.sql`. These create the service-role-only idempotency table, Vault-backed cron secret verifier, and five-minute dispatcher for due release pushes. Applying them is production-changing and requires explicit approval.
 - **Ended-deal owner cleanup / poster projection:** `20260730120000_deals_owner_delete_ended.sql`, then `20260730121000_customer_deal_poster_spec_projection.sql`. These add owner cleanup for ended deals and a customer-safe native poster spec projection RPC. Applying them is production-changing and requires explicit approval.
+- **Business application intake:** `20260730123000_business_applications.sql`. This adds the reviewed website access-request table, indexes, `updated_at` trigger, and RLS-closed client posture. Applying it is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -60,6 +61,7 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `delete-user-account` | Auth user deletion for consumers and business owners |
 | `ingest-analytics-event` | Append-only client analytics |
 | `deal-link` | Deep-link redirect for deal sharing |
+| `submit-business-application` | Public website business access-request intake |
 | `send-deal-push` | Push notifications when a deal goes live |
 
 **AI flows:**
@@ -114,7 +116,7 @@ The app **runs in production with the built-in defaults** above when `EXPO_PUBLI
 
 | Secret | Used by | Required |
 |--------|---------|---------|
-| `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem) | **Yes** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Functions that call admin APIs or bypass RLS (`delete-user-account`, `stripe-webhook`, claim/redeem, `submit-business-application`) | **Yes** |
 | `OPENAI_API_KEY` | OpenAI-backed AI paths, including Whisper voice transcription and OpenAI image generation/editing | **Yes for OpenAI paths** |
 | `STRIPE_SECRET_KEY` | `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook` | **Yes for billing** |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` (validates Stripe-Signature header) | **Yes for billing** |

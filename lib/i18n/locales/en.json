@@ -768,6 +768,7 @@
     "couldNotLoad": "We couldn’t load this deal. It may have ended or been removed.",
     "viewBusiness": "Business profile",
     "reportBusinessLink": "Report this business",
+    "reportOfferLink": "Report this offer",
     "claimTimedOut": "Claim timed out — please try again.",
     "unavailableActionBody": "This deal is no longer available to claim."
   },
@@ -1592,7 +1593,7 @@
     "noOffersSub": "Create your first offer to start filling slow hours.",
     "createOfferAction": "Create offer",
     "multiOfferTitle": "Create another offer",
-    "multiOfferBody": "Upgrade to Pro to run multiple live offers at once.",
+    "multiOfferBody": "Contact Twofer support to enable more live offers for your business account.",
     "proOnly": "Pro only"
   },
   "businessScan": {
@@ -1995,6 +1996,11 @@
     "errSave": "Could not save. Try again.",
     "edit": "Edit"
   },
+  "merchantAccess": {
+    "inactiveTitle": "Business account not active",
+    "inactiveBody": "Your business account is not active. Contact Twofer support to activate your business account.",
+    "contactSupport": "Contact support"
+  },
   "billing": {
     "currentStatus": "Status",
     "retryLoadPricing": "Retry",
@@ -2157,6 +2163,8 @@
   "report": {
     "businessTitle": "Report this business",
     "businessSubtitle": "Tell us what went wrong. We'll review reports and follow up with the business.",
+    "offerTitle": "Report this offer",
+    "offerSubtitle": "Tell us what went wrong. We'll review the offer and follow up with the business.",
     "userTitle": "Report this customer",
     "userSubtitle": "Tell us what happened. We'll review reports and follow up with the customer.",
     "reasonLabel": "Reason",

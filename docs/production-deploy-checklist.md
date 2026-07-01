@@ -24,6 +24,7 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260728123000_customer_deal_localization_projection.sql` | Customer-safe localization projection RPC; no direct app-role access to `ad_localizations`. |
 | `20260730120000_deals_owner_delete_ended.sql` | Allows owners to delete their own ended deals from My offers. |
 | `20260730121000_customer_deal_poster_spec_projection.sql` | Customer-safe native poster spec projection RPC; no direct app-role access to `offer_versions`. |
+| `20260730123000_business_applications.sql` | RLS-closed website business access-request intake table for reviewed onboarding. |
 
 **Also verify:**
 
@@ -62,6 +63,7 @@ supabase functions deploy <function-name>
 - `delete-user-account`
 - `ingest-analytics-event`
 - `publish-offer-version`
+- `submit-business-application`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`
 - `ai-create-deal` (legacy disabled endpoint; should return HTTP 410)
 - Billing / Stripe: `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, and any redirect/simulate helpers your environment still uses
@@ -78,7 +80,7 @@ Set in **Project Settings → Edge Functions → Secrets** (names may vary sligh
 |--------|---------|
 | `OPENAI_API_KEY` | Real GPT / vision for non-demo AI paths. |
 | `SUPABASE_URL` | Usually injected by platform; confirm present for Deno functions. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-side Supabase client in Edge Functions. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side Supabase client in Edge Functions, including website business intake. |
 | `GOOGLE_PLACES_API_KEY` | Optional but recommended for real `ai-business-lookup` results. |
 
 **Optional / model tuning:**

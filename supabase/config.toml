@@ -519,6 +519,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/deal-link/index.ts"
 
+[functions.submit-business-application]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/submit-business-application/index.ts"
+
 [functions.send-deal-push]
 enabled = true
 verify_jwt = false

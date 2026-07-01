@@ -14,7 +14,7 @@ import { useBusinessLocations } from "@/hooks/use-business-locations";
 import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
 import { isSuspendedBillingStatus } from "@/lib/billing/entitlements";
 import { canManageBillingInPortal, getTrialReminderWindowDays } from "@/lib/billing/trial-reminders";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { useScreenInsets } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -40,6 +40,7 @@ export default function BusinessBillingScreen() {
   const router = useRouter();
   const { checkout, reason } = useLocalSearchParams<{ checkout?: BillingCheckout; reason?: string }>();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const mobileBillingEnabled = isMobilePaidBillingEnabled();
   const {
     businessId,
     subscriptionTier,
@@ -49,7 +50,7 @@ export default function BusinessBillingScreen() {
     visibleLocations,
     loading: locationsLoading,
     error: locationsError,
-  } = useBusinessLocations(businessId, subscriptionTier);
+  } = useBusinessLocations(mobileBillingEnabled ? businessId : null, subscriptionTier);
   const primaryLocation = visibleLocations[0] ?? null;
   const locationId = primaryLocation?.id ?? null;
   const {
@@ -57,7 +58,7 @@ export default function BusinessBillingScreen() {
     loading: summaryLoading,
     error: summaryError,
     refresh,
-  } = useLocationBillingSummary(locationId);
+  } = useLocationBillingSummary(mobileBillingEnabled ? locationId : null);
 
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
@@ -115,22 +116,22 @@ export default function BusinessBillingScreen() {
   );
 
   useEffect(() => {
-    if (!PAID_BILLING_ENABLED) return;
+    if (!mobileBillingEnabled) return;
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") void refresh();
     });
     return () => sub.remove();
-  }, [refresh]);
+  }, [mobileBillingEnabled, refresh]);
 
   useEffect(() => {
-    if (!PAID_BILLING_ENABLED) return;
+    if (!mobileBillingEnabled) return;
     if (reason === "reactivate") {
       setBanner({ message: t("billing.locationSuspended"), tone: "warning" });
     }
-  }, [reason, t]);
+  }, [mobileBillingEnabled, reason, t]);
 
   useEffect(() => {
-    if (!PAID_BILLING_ENABLED) return;
+    if (!mobileBillingEnabled) return;
     if (checkout === "cancel") {
       setBanner({ message: t("billing.checkoutCanceled"), tone: "info" });
       void expirePendingCheckout();
@@ -152,7 +153,7 @@ export default function BusinessBillingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [checkout, expirePendingCheckout, refresh, t]);
+  }, [checkout, expirePendingCheckout, mobileBillingEnabled, refresh, t]);
 
   const startTrialCheckout = useCallback(async () => {
     if (!locationId || busy) return;
@@ -186,7 +187,7 @@ export default function BusinessBillingScreen() {
     }
   }, [busy, i18n.language, i18n.resolvedLanguage, locationId, summary.purchaseSurface, t, trialAcknowledged]);
 
-  if (!PAID_BILLING_ENABLED) {
+  if (!mobileBillingEnabled) {
     return <Redirect href="/(tabs)/account" />;
   }
 

@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (99 files, strict filename / timestamp order)
+### 2.1 Full local set (100 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -137,10 +137,11 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 97. `20260729121000_deal_release_push_cron_schedule.sql`
 98. `20260730120000_deals_owner_delete_ended.sql`
 99. `20260730121000_customer_deal_poster_spec_projection.sql`
+100. `20260730123000_business_applications.sql`
 
 ### 2.2 Latest migration
 
-**`20260730121000_customer_deal_poster_spec_projection.sql`**
+**`20260730123000_business_applications.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -169,11 +170,19 @@ The current local chain also includes these later migrations:
 
 These add owner deletion for ended deals and expose customer-safe native poster specs for active published deals. Applying either migration is production-changing and requires explicit approval; after applying the poster projection migration, include the customer poster spec RPC in hosted read-only smoke.
 
-### 2.6 Duplicate timestamp check
+### 2.6 Business application intake migration
+
+The current local chain ends with:
+
+- `20260730123000_business_applications.sql`
+
+This adds the web-submitted `business_applications` intake table, indexes, an `updated_at` trigger, and RLS with direct anon/authenticated table access revoked. Public submissions go through `submit-business-application`. Applying this migration is production-changing and requires explicit approval.
+
+### 2.7 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.7 Command to apply migrations (do not run without explicit approval)
+### 2.8 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
@@ -264,6 +273,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 | `stripe-expire-pending-checkout` |
 | `stripe-request-introductory-refund` |
 | `stripe-webhook` |
+| `submit-business-application` |
 | `weekly-deal-digest` |
 
 **Note:** deploy only function folders that exist above and are present in `supabase/config.toml`.
@@ -278,6 +288,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 - **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
 - **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
 - **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
+- **Web business intake:** `submit-business-application` for the reviewed website access-request form
 - **Billing (if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)

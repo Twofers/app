@@ -988,7 +988,7 @@ export default function DealDetail() {
           }}
         >
           <Text style={{ fontSize: 13, fontWeight: "600", color: theme.mutedText }}>
-            {t("dealDetail.reportBusinessLink", { defaultValue: "Report this business" })}
+            {t("dealDetail.reportOfferLink", { defaultValue: "Report this offer" })}
           </Text>
         </Pressable>
       </ScrollView>
@@ -1018,8 +1018,8 @@ export default function DealDetail() {
 
       <ReportSheet
         visible={reportVisible}
-        mode="business"
-        subjectLabel={deal.businesses?.name ?? t("dealDetail.localBusiness")}
+        mode="offer"
+        subjectLabel={displayTitle}
         onDismiss={() => setReportVisible(false)}
         onSubmit={async ({ reason, comment }) => {
           const result = await submitBusinessReport({

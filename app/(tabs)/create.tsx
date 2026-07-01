@@ -16,12 +16,13 @@ import { Image } from "expo-image";
 import { resolveDealPosterDisplayUri } from "../../lib/deal-poster-url";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
-import { PAID_BILLING_ENABLED, isBillingBypassEnabled } from "@/lib/billing/access";
+import { isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
 import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 
 type TemplateRow = {
   id: string;
@@ -219,20 +220,8 @@ export default function CreateDeal() {
           />
         </View>
       ) : blockedSubscription ? (
-        <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
-          <Banner
-            tone="warning"
-            message={t("billing.paywallExpiredMessage")}
-          />
-          <PrimaryButton
-            title={t("billing.goToBilling")}
-            onPress={() =>
-              router.replace({
-                pathname: PAID_BILLING_ENABLED ? "/(tabs)/account/billing" : "/(tabs)/account",
-                params: PAID_BILLING_ENABLED ? { reason: "reactivate" } : {},
-              } as unknown as Href)
-            }
-          />
+        <View style={{ marginTop: Spacing.lg }}>
+          <MerchantAccessBlockedCard />
         </View>
       ) : !businessId ? (
         <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>

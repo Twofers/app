@@ -764,6 +764,7 @@
     "couldNotLoad": "No pudimos cargar esta oferta. Puede haber terminado o ya no estar disponible.",
     "viewBusiness": "Perfil del negocio",
     "reportBusinessLink": "Reportar este negocio",
+    "reportOfferLink": "Reportar esta oferta",
     "claimTimedOut": "La solicitud expiró. Inténtalo de nuevo.",
     "unavailableActionBody": "Esta oferta ya no está disponible para reclamar."
   },
@@ -1295,7 +1296,7 @@
     "noOffersSub": "Crea tu primera oferta para llenar las horas flojas.",
     "createOfferAction": "Crear oferta",
     "multiOfferTitle": "Crear otra oferta",
-    "multiOfferBody": "Pásate a Pro para tener varias ofertas activas a la vez.",
+    "multiOfferBody": "Contacta al soporte de Twofer para habilitar más ofertas activas en tu cuenta comercial.",
     "proOnly": "Solo Pro"
   },
   "businessScan": {
@@ -1994,6 +1995,11 @@
     "errSave": "No se pudo guardar. Inténtalo de nuevo.",
     "edit": "Editar"
   },
+  "merchantAccess": {
+    "inactiveTitle": "La cuenta comercial no está activa",
+    "inactiveBody": "Tu cuenta comercial no está activa. Contacta al soporte de Twofer para activarla.",
+    "contactSupport": "Contactar soporte"
+  },
   "billing": {
     "currentStatus": "Estado",
     "retryLoadPricing": "Reintentar",
@@ -2156,6 +2162,8 @@
   "report": {
     "businessTitle": "Reportar este negocio",
     "businessSubtitle": "Cuéntanos qué pasó. Revisaremos los reportes y haremos seguimiento con el negocio.",
+    "offerTitle": "Reportar esta oferta",
+    "offerSubtitle": "Cuéntanos qué pasó. Revisaremos la oferta y haremos seguimiento con el negocio.",
     "userTitle": "Reportar a este cliente",
     "userSubtitle": "Cuéntanos qué pasó. Revisaremos los reportes y haremos seguimiento con el cliente.",
     "reasonLabel": "Motivo",

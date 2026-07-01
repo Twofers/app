@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { supabase } from "@/lib/supabase";
 
 export type BusinessLocationRow = {
@@ -15,7 +15,7 @@ export type SubscriptionTier = "pro" | "premium";
 
 /** Pro = 1 location; Premium = up to 3 (billing v4). */
 export function maxLocationsForTier(tier: SubscriptionTier): number {
-  if (!PAID_BILLING_ENABLED) return 1;
+  if (!isMobilePaidBillingEnabled()) return 1;
   return tier === "premium" ? 3 : 1;
 }
 

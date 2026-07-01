@@ -33,8 +33,9 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-access";
 import { signOutAndRedirectToAuthLanding } from "@/lib/auth-app-sign-out";
 import { clearLocalAuthSessionState } from "@/lib/auth-local-session-state";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
+import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { calculateProfileCompleteness } from "@/lib/business-profile-completeness";
 import {
   isBusinessProfileEditorDirty,
@@ -50,6 +51,7 @@ import { getSupportEmail } from "@/lib/support-contact";
 import { ThemePreferenceSelector } from "@/components/theme-preference-selector";
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
+import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 
 type RepeatClaimPolicyType = "NONE" | "COOLDOWN_DAYS" | "FOREVER";
 
@@ -80,9 +82,19 @@ export default function AccountScreen() {
     businessOwnershipAmbiguous,
     businessProfile,
     businessName,
+    subscriptionTier,
     loading,
     refresh,
   } = useBusiness();
+  const mobileBillingEnabled = isMobilePaidBillingEnabled();
+  const {
+    blocked: merchantAccessBlocked,
+    loading: merchantAccessLoading,
+  } = usePrimaryLocationBillingGate({
+    businessId,
+    subscriptionTier,
+    isLoggedIn,
+  });
   const deleteMayIncludeBusinessData = Boolean(businessId || businessOwnershipAmbiguous);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" } | null>(null);
@@ -948,7 +960,11 @@ export default function AccountScreen() {
             </View>
           ) : null}
 
-          {PAID_BILLING_ENABLED && tabMode === "business" && businessId ? (
+          {tabMode === "business" && businessId && !merchantAccessLoading && merchantAccessBlocked ? (
+            <MerchantAccessBlockedCard />
+          ) : null}
+
+          {mobileBillingEnabled && tabMode === "business" && businessId ? (
             <Pressable
               onPress={() => router.push("/(tabs)/account/billing" as Href)}
               accessibilityRole="button"
@@ -959,7 +975,7 @@ export default function AccountScreen() {
                   {t("account.billingRowSubtitle")}
                 </Text>
                 <Text style={{ marginTop: Spacing.sm, fontWeight: "800", fontSize: 14, color: theme.accentText }}>
-                  {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
+                  {t("billing.goToBilling", { defaultValue: "Open billing" })} →
                 </Text>
               </CardShell>
             </Pressable>

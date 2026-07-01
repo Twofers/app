@@ -25,7 +25,7 @@ import {
   type UserReportReason,
 } from "@/lib/reports";
 
-type ReportMode = "business" | "user";
+type ReportMode = "business" | "offer" | "user";
 
 type Props = {
   visible: boolean;
@@ -42,7 +42,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
   const theme = Colors[colorScheme];
   const sheetBottomPadding = getBottomSheetBottomPadding(insets);
   const reasons: readonly (BusinessReportReason | UserReportReason)[] =
-    mode === "business" ? BUSINESS_REPORT_REASONS : USER_REPORT_REASONS;
+    mode === "user" ? USER_REPORT_REASONS : BUSINESS_REPORT_REASONS;
   const [reason, setReason] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -75,18 +75,25 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
     setError(result.errorMessage ?? t("report.errFailed", { defaultValue: "We couldn't submit your report. Try again." }));
   }
 
+  const reasonNamespace = mode === "offer" ? "business" : mode;
   const reasonLabel = (key: string) =>
-    t(`report.${mode}Reason.${key}`, {
+    t(`report.${reasonNamespace}Reason.${key}`, {
       defaultValue: defaultReasonLabel(mode, key),
     });
 
   const sheetTitle =
-    mode === "business"
+    mode === "offer"
+      ? t("report.offerTitle", { defaultValue: "Report this offer" })
+      : mode === "business"
       ? t("report.businessTitle", { defaultValue: "Report this business" })
       : t("report.userTitle", { defaultValue: "Report this customer" });
 
   const sheetSubtitle =
-    mode === "business"
+    mode === "offer"
+      ? t("report.offerSubtitle", {
+          defaultValue: "Tell us what went wrong. We'll review reports and follow up with the business.",
+        })
+      : mode === "business"
       ? t("report.businessSubtitle", {
           defaultValue: "Tell us what went wrong. We'll review reports and follow up with the business.",
         })
@@ -245,7 +252,7 @@ export function ReportSheet({ visible, mode, subjectLabel, onDismiss, onSubmit }
 }
 
 function defaultReasonLabel(mode: ReportMode, key: string): string {
-  if (mode === "business") {
+  if (mode === "business" || mode === "offer") {
     switch (key) {
       case "not_honored":
         return "Didn't honor the offer";

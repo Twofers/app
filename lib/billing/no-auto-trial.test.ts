@@ -28,10 +28,10 @@ describe("billing trial start ownership", () => {
     expect(source).toMatch(/stripe-expire-pending-checkout/);
   });
 
-  it("does not block create navigation on billing RPCs while pilot enforcement is bypassed", () => {
+  it("uses the merchant access helper for create navigation instead of starting trials", () => {
     const source = readRepoFile("hooks/use-primary-location-billing-gate.ts");
-    expect(source).toMatch(/PILOT_DISABLE_BILLING_GATE/);
-    expect(source).toMatch(/enforcementEnabled\s*=\s*PAID_BILLING_ENABLED\s*&&\s*!PILOT_DISABLE_BILLING_GATE/);
-    expect(source).toMatch(/loading:\s*enforcementEnabled\s*&&\s*\(locationsLoading\s*\|\|\s*summaryLoading\)/);
+    expect(source).toMatch(/getMerchantAccessForBillingSummary/);
+    expect(source).toMatch(/useLocationBillingSummary\(bypass \? null : primaryLocationId\)/);
+    expect(source).toMatch(/loading:\s*!bypass\s*&&\s*Boolean\(businessId\)\s*&&\s*\(locationsLoading\s*\|\|\s*summaryLoading\)/);
   });
 });

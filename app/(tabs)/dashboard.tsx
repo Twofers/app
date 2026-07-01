@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -27,9 +27,9 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Controls, Fonts, Gray, PrimaryTint, Radii } from "@/constants/theme";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
 import { useBusiness } from "@/hooks/use-business";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
+import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
@@ -581,14 +581,13 @@ export default function BusinessDashboard() {
   });
 
   const billingBlocked = Boolean(
-    PAID_BILLING_ENABLED &&
       businessId &&
       !billingGateLoading &&
       billingGateBlocked,
   );
 
   const loadMetrics = useCallback(async () => {
-    if (!businessId) return false;
+    if (!businessId || billingBlocked) return false;
     setLoadingMetrics(true);
     setBanner(null);
     setDealsHasMore(false);
@@ -707,7 +706,7 @@ export default function BusinessDashboard() {
     } finally {
       setLoadingMetrics(false);
     }
-  }, [businessId, t]);
+  }, [billingBlocked, businessId, t]);
 
   const loadMoreDeals = useCallback(async () => {
     if (!businessId || !dealsHasMore || dealsLoadingMore || loadingMetrics) return;
@@ -1200,8 +1199,17 @@ export default function BusinessDashboard() {
   }, [doExportAnalytics, filteredDeals.length, t]);
 
   const listTop = useMemo(
-    () => (
-      <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+    () => {
+      if (billingBlocked) {
+        return (
+          <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
+            <MerchantAccessBlockedCard />
+          </View>
+        );
+      }
+
+      return (
+        <View style={{ marginBottom: Spacing.lg, gap: Spacing.md }}>
         {banner ? <Banner message={banner} tone="error" onRetry={() => void loadMetrics()} /> : null}
         <CardShell>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
@@ -1298,18 +1306,6 @@ export default function BusinessDashboard() {
             style={{ marginTop: Spacing.md }}
           />
         </CardShell>
-        {billingBlocked ? (
-          <Pressable onPress={() => router.push("/(tabs)/account/billing" as Href)} accessibilityRole="button">
-            <CardShell variant="muted">
-              <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
-                {t("offersDashboard.billingHintShort")}
-              </Text>
-              <Text style={{ marginTop: 6, fontSize: 14, opacity: 0.65, fontWeight: "600", color: theme.text }}>
-                {t("billing.goToBilling", { defaultValue: "Go to billing" })} →
-              </Text>
-            </CardShell>
-          </Pressable>
-        ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text
             style={{
@@ -1401,11 +1397,11 @@ export default function BusinessDashboard() {
             ) : null}
           </View>
         ) : null}
-      </View>
-    ),
+        </View>
+      );
+    },
     [
       t,
-      router,
       billingBlocked,
       deals.length,
       dealFilter,
@@ -1429,8 +1425,11 @@ export default function BusinessDashboard() {
   );
 
   const listFooter = useMemo(
-    () => (
-      <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
+    () => {
+      if (billingBlocked) return null;
+
+      return (
+        <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: theme.text }}>
             {t("offersDashboard.overview")}
@@ -1573,9 +1572,11 @@ export default function BusinessDashboard() {
             {t("offersDashboard.templatesBrowseLink")} →
           </Text>
         </Pressable>
-      </View>
-    ),
+        </View>
+      );
+    },
     [
+      billingBlocked,
       t,
       primary,
       theme,

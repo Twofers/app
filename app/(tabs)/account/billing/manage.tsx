@@ -11,7 +11,7 @@ import { Colors, Radii } from "@/constants/theme";
 import { useBusiness } from "@/hooks/use-business";
 import { useBusinessLocations } from "@/hooks/use-business-locations";
 import { useLocationBillingSummary } from "@/hooks/use-location-billing-summary";
-import { PAID_BILLING_ENABLED } from "@/lib/billing/access";
+import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { EDGE_FUNCTION_TIMEOUT_MS } from "@/lib/functions";
 import { useScreenInsets } from "@/lib/screen-layout";
 import { supabase } from "@/lib/supabase";
@@ -20,10 +20,16 @@ export default function ManageSubscriptionScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { top, horizontal, scrollBottom } = useScreenInsets("tab");
+  const mobileBillingEnabled = isMobilePaidBillingEnabled();
   const { businessId, subscriptionTier, loading: bizLoading } = useBusiness();
-  const { visibleLocations, loading: locationsLoading } = useBusinessLocations(businessId, subscriptionTier);
+  const { visibleLocations, loading: locationsLoading } = useBusinessLocations(
+    mobileBillingEnabled ? businessId : null,
+    subscriptionTier,
+  );
   const locationId = visibleLocations[0]?.id ?? null;
-  const { summary, loading: summaryLoading, refresh } = useLocationBillingSummary(locationId);
+  const { summary, loading: summaryLoading, refresh } = useLocationBillingSummary(
+    mobileBillingEnabled ? locationId : null,
+  );
 
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ message: string; tone: "error" | "success" | "info" | "warning" } | null>(null);
@@ -179,7 +185,7 @@ export default function ManageSubscriptionScreen() {
     );
   };
 
-  if (!PAID_BILLING_ENABLED) {
+  if (!mobileBillingEnabled) {
     return <Redirect href="/(tabs)/account" />;
   }
 

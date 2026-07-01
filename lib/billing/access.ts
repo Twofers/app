@@ -1,14 +1,64 @@
 import type { SubscriptionStatus } from "@/hooks/use-business";
 import type { BillingStatus, PurchaseSurface } from "@/lib/billing/entitlements";
+import { isMerchantAccessAllowedStatus } from "@/lib/merchant-access";
 
-/** Paid tiers, checkout, and customer portal surfaces are enabled for this build. */
+/** Backend/web billing remains enabled in the codebase. Mobile purchase UI is gated separately below. */
 export const PAID_BILLING_ENABLED = true;
 
 /**
- * While true, billing is visible for checkout testing but does not block setup
- * or deal creation.
+ * Legacy pilot switch. Do not use this to bypass mobile merchant access; the
+ * App Store build gates merchant tools by Supabase entitlement status.
  */
 export const PILOT_DISABLE_BILLING_GATE = true;
+
+const MOBILE_STRIPE_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_STRIPE";
+const MOBILE_SUBSCRIPTION_CTA_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_SUBSCRIPTION_CTA";
+const BUSINESS_SELF_SERVE_MOBILE_FLAG = "EXPO_PUBLIC_ENABLE_BUSINESS_SELF_SERVE_MOBILE";
+const MOBILE_PRICING_PAGE_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_PRICING_PAGE";
+const MOBILE_BILLING_LINKS_FLAG = "EXPO_PUBLIC_ENABLE_MOBILE_BILLING_LINKS";
+
+function isDevRuntime(): boolean {
+  return typeof __DEV__ !== "undefined" && __DEV__;
+}
+
+function isExplicitlyEnabled(name: string): boolean {
+  return process.env[name] === "true";
+}
+
+function isDevEnabledFlag(name: string): boolean {
+  return isDevRuntime() && isExplicitlyEnabled(name);
+}
+
+export function isMobileStripeEnabled(): boolean {
+  return isDevEnabledFlag(MOBILE_STRIPE_FLAG);
+}
+
+export function isMobileSubscriptionCtaEnabled(): boolean {
+  return isDevEnabledFlag(MOBILE_SUBSCRIPTION_CTA_FLAG);
+}
+
+export function isBusinessSelfServeMobileEnabled(): boolean {
+  return isDevEnabledFlag(BUSINESS_SELF_SERVE_MOBILE_FLAG);
+}
+
+export function isMobilePricingPageEnabled(): boolean {
+  return isDevEnabledFlag(MOBILE_PRICING_PAGE_FLAG);
+}
+
+export function isMobileBillingLinksEnabled(): boolean {
+  return isDevEnabledFlag(MOBILE_BILLING_LINKS_FLAG);
+}
+
+export function isMobilePaidBillingEnabled(): boolean {
+  return (
+    PAID_BILLING_ENABLED &&
+    isMobileStripeEnabled() &&
+    isMobileSubscriptionCtaEnabled() &&
+    isBusinessSelfServeMobileEnabled() &&
+    isMobilePricingPageEnabled() &&
+    isMobileBillingLinksEnabled()
+  );
+}
 
 export function isBillingBypassEnabled(skipSetup?: string, e2e?: string): boolean {
   if (!__DEV__) return false;
@@ -60,8 +110,6 @@ export function canCreateDealWithLocationBilling(params: {
 }): boolean {
   if (!params.isLoggedIn) return false;
   if (params.bypass) return true;
-  if (PILOT_DISABLE_BILLING_GATE) return true;
-  if (params.purchaseSurface === "disabled") return true;
 
   switch (params.status) {
     case "trial_active":
@@ -76,7 +124,7 @@ export function canCreateDealWithLocationBilling(params: {
     case "paid_canceling":
       return isCurrentOrMissing(params.currentPeriodEndsAt);
     default:
-      return false;
+      return isMerchantAccessAllowedStatus(params.status);
   }
 }
 

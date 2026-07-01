@@ -5,8 +5,8 @@
  * a permissive CORS policy. However, we restrict to known origins when present
  * to prevent browser-based CSRF from arbitrary websites.
  *
- * All endpoints still require a valid Supabase JWT, so unauthenticated abuse
- * is blocked regardless of CORS.
+ * Most app endpoints still require a valid Supabase JWT. Public web endpoints
+ * must add their own validation and abuse controls in addition to CORS.
  */
 
 const ALLOWED_ORIGINS = new Set([

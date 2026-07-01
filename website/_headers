@@ -1,0 +1,10 @@
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  X-Content-Type-Options: nosniff
+
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  X-Content-Type-Options: nosniff
+
+/*
+  X-Content-Type-Options: nosniff

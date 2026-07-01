@@ -764,6 +764,7 @@
     "couldNotLoad": "이 딜을 불러오지 못했습니다. 종료되었거나 삭제되었을 수 있습니다.",
     "viewBusiness": "매장 프로필",
     "reportBusinessLink": "이 매장 신고",
+    "reportOfferLink": "이 혜택 신고",
     "claimTimedOut": "요청 시간이 초과되었습니다. 다시 시도해 주세요.",
     "unavailableActionBody": "이 딜은 더 이상 받을 수 없습니다."
   },
@@ -1295,7 +1296,7 @@
     "noOffersSub": "첫 오퍼를 만들어 한가한 시간을 채우세요.",
     "createOfferAction": "오퍼 만들기",
     "multiOfferTitle": "오퍼 추가",
-    "multiOfferBody": "Pro로 업그레이드하면 여러 라이브 오퍼를 동시에 운영할 수 있습니다.",
+    "multiOfferBody": "비즈니스 계정에서 더 많은 라이브 오퍼를 사용하려면 Twofer 지원팀에 문의하세요.",
     "proOnly": "Pro 전용"
   },
   "businessScan": {
@@ -1994,6 +1995,11 @@
     "errSave": "저장하지 못했습니다. 다시 시도하세요.",
     "edit": "수정"
   },
+  "merchantAccess": {
+    "inactiveTitle": "비즈니스 계정이 활성 상태가 아닙니다",
+    "inactiveBody": "비즈니스 계정이 활성 상태가 아닙니다. 계정을 활성화하려면 Twofer 지원팀에 문의하세요.",
+    "contactSupport": "지원팀에 문의"
+  },
   "billing": {
     "currentStatus": "현재 상태",
     "retryLoadPricing": "다시 불러오기",
@@ -2156,6 +2162,8 @@
   "report": {
     "businessTitle": "이 매장을 신고합니다",
     "businessSubtitle": "무엇이 잘못되었는지 알려주세요. 신고를 검토한 뒤 매장에 후속 조치를 안내합니다.",
+    "offerTitle": "이 혜택을 신고합니다",
+    "offerSubtitle": "무엇이 잘못되었는지 알려주세요. 혜택 내용을 검토한 뒤 매장에 후속 조치를 안내합니다.",
     "userTitle": "이 고객을 신고합니다",
     "userSubtitle": "어떤 일이 있었는지 알려주세요. 신고를 검토한 뒤 고객에게 후속 조치를 안내합니다.",
     "reasonLabel": "사유",
