@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost } from "../_shared/ai-costs.ts";
+import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -222,18 +223,13 @@ serve(async (req) => {
     const DEFAULT_MONTHLY_LIMIT = Number(
       Deno.env.get("AI_INSIGHTS_MONTHLY_LIMIT") ?? "30",
     );
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
+    const { used } = await countAiQuotaUsage(supabase, {
+      businessId: business_id,
+      scope: "deal_suggestions",
+      monthStartIso: utcMonthStartIso(),
+    });
 
-    const { count: usedThisMonth } = await supabase
-      .from("ai_generation_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", business_id)
-      .eq("request_type", "deal_suggestions")
-      .gte("created_at", monthStart.toISOString());
-
-    if (usedThisMonth !== null && usedThisMonth >= DEFAULT_MONTHLY_LIMIT) {
+    if (used >= DEFAULT_MONTHLY_LIMIT) {
       return new Response(
         JSON.stringify({
           error: "Monthly AI insights limit reached. Try again next month.",

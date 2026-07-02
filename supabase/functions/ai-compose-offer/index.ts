@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC as SHARED_COOLDOWN } from "../_shared/ai-limits.ts";
 import { logAiCost, openAiRequestIdFromHeaders, type AiUsageInput } from "../_shared/ai-costs.ts";
+import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -141,11 +142,6 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(hash))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-function utcMonthStartIso(): string {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString();
 }
 
 function normalizePrompt(parts: (string | null | undefined)[]): string {
@@ -522,17 +518,12 @@ serve(async (req) => {
         low_confidence: !!(dupRow.response_payload as Record<string, unknown>)?.low_confidence,
       });
 
-      const usedOpenAi = await admin
-        .from("ai_generation_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", business_id)
-        .eq("request_type", "compose_offer")
-        .eq("openai_called", true)
-        .eq("success", true)
-        .gte("created_at", monthStart);
-
       const limit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
-      const used = usedOpenAi.count ?? 0;
+      const { used } = await countAiQuotaUsage(admin, {
+        businessId: business_id,
+        scope: "compose_offer",
+        monthStartIso: monthStart,
+      });
 
       return new Response(
         JSON.stringify({
@@ -577,17 +568,12 @@ serve(async (req) => {
       );
     }
 
-    const { count: monthlyCount } = await admin
-      .from("ai_generation_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", business_id)
-      .eq("request_type", "compose_offer")
-      .eq("openai_called", true)
-      .eq("success", true)
-      .gte("created_at", monthStart);
-
     const limit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
-    const used = monthlyCount ?? 0;
+    const { used } = await countAiQuotaUsage(admin, {
+      businessId: business_id,
+      scope: "compose_offer",
+      monthStartIso: monthStart,
+    });
     if (used >= limit) {
       await admin.from("ai_generation_logs").insert({
         business_id,

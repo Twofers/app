@@ -21,6 +21,12 @@ window.TWOFER_STORE_LINKS = {
     },
   };
 
+  const FALLBACK_TEXT = {
+    en: "Notify me when the app is ready",
+    es: "Avísenme cuando la app esté lista",
+    ko: "앱 준비되면 알려주세요",
+  };
+
   function currentLocale() {
     const lang = (document.documentElement.lang || "en").toLowerCase();
     if (lang.startsWith("es")) return "es";
@@ -30,6 +36,7 @@ window.TWOFER_STORE_LINKS = {
 
   function render() {
     const locale = currentLocale();
+    let anyLinkReady = false;
     document.querySelectorAll("[data-store-cta]").forEach((node) => {
       const platform = node.getAttribute("data-store-cta");
       const strings = STRINGS[locale] && STRINGS[locale][platform];
@@ -39,6 +46,7 @@ window.TWOFER_STORE_LINKS = {
       node.textContent = strings.available;
 
       if (link) {
+        anyLinkReady = true;
         node.hidden = false;
         node.dataset.storeReady = "true";
         node.removeAttribute("aria-hidden");
@@ -56,6 +64,14 @@ window.TWOFER_STORE_LINKS = {
       node.removeAttribute("href");
       node.removeAttribute("target");
       node.removeAttribute("rel");
+    });
+
+    // If neither store link is live yet, every data-store-cta button on the
+    // page is hidden. Without this, a section built around "get the app"
+    // (e.g. the customer feature grid) would show no working action at all.
+    document.querySelectorAll("[data-store-fallback]").forEach((node) => {
+      node.hidden = anyLinkReady;
+      node.textContent = FALLBACK_TEXT[locale] || FALLBACK_TEXT.en;
     });
   }
 

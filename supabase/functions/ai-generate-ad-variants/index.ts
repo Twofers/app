@@ -16,6 +16,7 @@
 import { createClient, type SupabaseClient as SupabaseClientBase } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOpenAiChatModel, chatCompletionTuning } from "../_shared/openai-chat-model.ts";
 import { DEFAULT_MONTHLY_LIMIT, DEFAULT_COOLDOWN_SEC } from "../_shared/ai-limits.ts";
+import { countAiQuotaUsage } from "../_shared/ai-quota-resets.ts";
 import {
   buildPhotoAdImagePrompt,
   enhanceUploadedPhotoWithTelemetry,
@@ -1716,15 +1717,11 @@ function withImageSelection(
 
 async function fetchAdQuota(admin: SupabaseClient, businessId: string): Promise<AdQuota> {
   const monthlyLimit = Number.isFinite(DEFAULT_MONTHLY) && DEFAULT_MONTHLY > 0 ? DEFAULT_MONTHLY : 30;
-  const { count } = await admin
-    .from("ai_generation_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .in("request_type", ["ad_variants", "ad_refine"])
-    .eq("openai_called", true)
-    .eq("success", true)
-    .gte("created_at", utcMonthStartIso());
-  const used = count ?? 0;
+  const { used } = await countAiQuotaUsage(admin, {
+    businessId,
+    scope: "ad_generation",
+    monthStartIso: utcMonthStartIso(),
+  });
   return {
     used,
     limit: monthlyLimit,

@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.19.0?target=deno";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -7,15 +6,47 @@ import {
   cleanEmail,
   cleanString,
   createOnboardingRequest,
-  materializeBusinessForUser,
   normalizePhone,
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
-import {
-  billingProfileFromOnboarding,
-  enqueueStripeCustomerSync,
-  ensureStripeCustomerForBusiness,
-} from "../_shared/stripe-business-billing.ts";
+import { enqueueStripeCustomerSync } from "../_shared/stripe-business-billing.ts";
+
+const RATE_LIMIT_WINDOW_MINUTES = 30;
+const RATE_LIMIT_MAX_PER_EMAIL = 3;
+const RATE_LIMIT_MAX_PER_IP = 8;
+
+function firstForwardedIp(header: string | null): string | null {
+  if (!header) return null;
+  const first = header.split(",")[0]?.trim();
+  return first || null;
+}
+
+async function isRateLimited(
+  supabase: DbClient,
+  params: { email: string; ip: string | null },
+): Promise<boolean> {
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
+
+  const { count: emailCount, error: emailError } = await supabase
+    .from("business_onboarding_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_email", params.email)
+    .gte("created_at", windowStart);
+  if (emailError) throw emailError;
+  if ((emailCount ?? 0) >= RATE_LIMIT_MAX_PER_EMAIL) return true;
+
+  if (params.ip) {
+    const { count: ipCount, error: ipError } = await supabase
+      .from("business_onboarding_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("ip_address", params.ip)
+      .gte("created_at", windowStart);
+    if (ipError) throw ipError;
+    if ((ipCount ?? 0) >= RATE_LIMIT_MAX_PER_IP) return true;
+  }
+
+  return false;
+}
 
 type Payload = {
   business_name?: unknown;
@@ -220,30 +251,6 @@ function riskLevel(score: number): "low" | "medium" | "high" | "blocked" {
   return "high";
 }
 
-function billingAccessStatus(decision: IntakeDecision): string {
-  if (decision.access_tier === "trial_limited") return "trial_limited";
-  if (decision.status === "trial_limited") return "trial_limited";
-  return "pending";
-}
-
-async function findExistingAuthUserIdByEmail(
-  supabase: DbClient,
-  email: string,
-): Promise<string | null> {
-  try {
-    for (let page = 1; page <= 5; page += 1) {
-      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-      if (error) throw error;
-      const match = data.users.find((user) => user.email?.toLowerCase() === email);
-      if (match) return match.id;
-      if (data.users.length < 200) break;
-    }
-  } catch (error) {
-    console.warn("[submit-business-application] auth user lookup skipped:", error);
-  }
-  return null;
-}
-
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -284,8 +291,10 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-    const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" }) : null;
+    const requestIp = firstForwardedIp(req.headers.get("x-forwarded-for"));
+    if (await isRateLimited(supabase, { email, ip: requestIp })) {
+      return json(req, { error: "Too many requests. Please try again later." }, 429);
+    }
     const phone = cleanString(payload.phone, 40);
     const address = cleanString(payload.address, 240);
     const businessType = cleanString(payload.business_type, 80);
@@ -348,51 +357,31 @@ serve(async (req) => {
       status: decision.status,
       riskScore: decision.risk_score,
       riskLevel: riskLevel(decision.risk_score),
-      ipAddress: req.headers.get("x-forwarded-for"),
+      ipAddress: requestIp,
       userAgent: req.headers.get("user-agent"),
     });
 
-    const ownerUserId = await findExistingAuthUserIdByEmail(supabase, email);
-    let businessId: string | null = null;
-    if (ownerUserId && decision.status !== "rejected") {
-      const materialized = await materializeBusinessForUser(supabase, {
-        userId: ownerUserId,
-        requestId,
-        applicationId: application.id,
-        normalized,
-        decision,
+    // This is a public, unauthenticated endpoint: we never materialize a
+    // business or create a Stripe customer for an existing account here,
+    // since the submitter's control of `email` is unverified. Once the real
+    // owner signs in to the app, get-business-onboarding-context re-reads
+    // this onboarding request by their verified session email and
+    // materializes the business then.
+    await supabase.from("business_applications").update({ onboarding_request_id: requestId }).eq("id", application.id);
+    await enqueueStripeCustomerSync(supabase, {
+      onboardingRequestId: requestId,
+      businessApplicationId: application.id,
+      reason: "pending_owner_auth_user",
+      payload: {
+        owner_email: normalized.email,
+        business_name: normalized.businessName,
         source: "website_signup",
-      });
-      businessId = materialized.businessId;
-      await ensureStripeCustomerForBusiness({
-        supabase,
-        stripe,
-        input: billingProfileFromOnboarding({
-          businessId,
-          ownerUserId,
-          normalized,
-          source: "website_signup",
-          sourceRecordId: requestId,
-        }),
-        source: "website_signup",
-        trialDays: decision.trial_days,
-        accessStatus: billingAccessStatus(decision),
-      });
-    } else {
-      await supabase.from("business_applications").update({ onboarding_request_id: requestId }).eq("id", application.id);
-      await enqueueStripeCustomerSync(supabase, {
-        onboardingRequestId: requestId,
-        businessApplicationId: application.id,
-        reason: ownerUserId ? "business_rejected_or_not_materialized" : "pending_owner_auth_user",
-        payload: {
-          owner_email: normalized.email,
-          business_name: normalized.businessName,
-          source: "website_signup",
-        },
-      });
-    }
+      },
+    });
 
-    return json(req, { ok: true, onboarding_saved: true, business_linked: Boolean(businessId), stripe_customer_ready: Boolean(businessId) });
+    // Public endpoint: do not echo business_linked/customer state — it would
+    // reveal whether an email already has a Twofer account.
+    return json(req, { ok: true, onboarding_saved: true });
   } catch (err) {
     console.error("[submit-business-application] error:", err);
     return json(req, { error: "Could not submit business application." }, 500);

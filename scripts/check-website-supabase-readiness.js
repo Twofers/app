@@ -9,6 +9,7 @@ const ANDROID_PACKAGE = "com.unvmex2.twoforone";
 
 const requiredFiles = [
   "website/index.html",
+  "website/localization.js",
   "website/vercel.json",
   "website/.well-known/apple-app-site-association",
   "website/.well-known/assetlinks.json",
@@ -35,13 +36,21 @@ const requiredFiles = [
   "website/admin/audit-log/index.html",
   "website/admin/settings/index.html",
   "website/admin/admin.js",
+  "website/admin/admin-login.js",
+  "website/admin/trial-requests.js",
   "supabase/migrations/20260730123000_business_applications.sql",
   "supabase/migrations/20260730124000_business_onboarding_workflow.sql",
   "supabase/migrations/20260730125000_admin_dashboard_foundation.sql",
   "supabase/migrations/20260730126000_website_app_onboarding_sync.sql",
   "supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql",
+  "supabase/migrations/20260730128000_admin_ai_quota_resets.sql",
+  "supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql",
   "supabase/functions/submit-business-application/index.ts",
   "supabase/functions/admin-dashboard-summary/index.ts",
+  "supabase/functions/admin-auth-session/index.ts",
+  "supabase/functions/admin-ai-usage/index.ts",
+  "supabase/functions/admin-business-applications/index.ts",
+  "supabase/functions/_shared/admin-mfa.ts",
   "supabase/functions/get-business-onboarding-context/index.ts",
   "supabase/functions/update-business-profile-section/index.ts",
   "supabase/functions/stripe-create-checkout-session/index.ts",
@@ -66,6 +75,17 @@ function exists(rel) {
   return fs.existsSync(path.join(ROOT, rel));
 }
 
+function walkFiles(relDir) {
+  const absDir = path.join(ROOT, relDir);
+  const files = [];
+  for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
+    const rel = path.join(relDir, entry.name).replace(/\\/g, "/");
+    if (entry.isDirectory()) files.push(...walkFiles(rel));
+    else files.push(rel);
+  }
+  return files;
+}
+
 function routeToFile(route) {
   if (route === "/") return "website/index.html";
   if (!route.startsWith("/")) return null;
@@ -81,6 +101,10 @@ function assertIncludes(rel, text, needle, message) {
 
 function assertMatch(rel, text, pattern, message) {
   if (!pattern.test(text)) failures.push(`${rel}: ${message}`);
+}
+
+function assertNotIncludes(rel, text, needle, message) {
+  if (text.includes(needle)) failures.push(`${rel}: ${message}`);
 }
 
 for (const rel of requiredFiles) {
@@ -108,13 +132,66 @@ if (failures.length === 0) {
     }
   }
 
-  const businessPage = read("website/business/index.html");
-  assertIncludes("website/business/index.html", businessPage, PROD_FUNCTION_URL, "business form must post to the production function URL");
-  assertIncludes("website/business/index.html", businessPage, "Start Your DFW Business Trial", "business form must use trial onboarding copy");
-  assertIncludes("website/business/index.html", businessPage, 'name="company_website"', "business form must keep honeypot field");
-  assertIncludes("website/business/index.html", businessPage, 'name="terms_accepted"', "business form must require terms acknowledgement");
-  assertIncludes("website/business/index.html", businessPage, 'name="privacy_acknowledged"', "business form must require privacy acknowledgement");
-  assertIncludes("website/business/index.html", businessPage, 'window.location.assign("/business/thanks/")', "business form must redirect to thanks page");
+  const homePage = read("website/index.html");
+  const startTrialPage = read("website/business/start-trial/index.html");
+  const localizationScript = read("website/localization.js");
+  const styles = read("website/styles.css");
+  for (const rel of walkFiles("website").filter((file) => file.endsWith(".html"))) {
+    assertNotIncludes(rel, read(rel), "20260701-logo", "website pages must not point at stale stylesheet cache keys");
+  }
+  assertIncludes("website/styles.css", styles, "[hidden]", "shared stylesheet must preserve hidden element behavior");
+  assertIncludes("website/styles.css", styles, ".nav-menu-button", "shared stylesheet must support the mobile navigation menu");
+  assertIncludes("website/styles.css", styles, ".admin-shell .nav-links", "shared stylesheet must keep admin navigation available on mobile");
+  assertIncludes("website/styles.css", styles, "data-mobile-cards", "shared stylesheet must support mobile admin table cards");
+  assertIncludes("website/index.html", homePage, "/localization.js", "home page must load the website localization script");
+  assertIncludes("website/index.html", homePage, "data-language-option=\"es\"", "home page must expose Spanish language switching");
+  assertIncludes("website/index.html", homePage, "data-language-option=\"ko\"", "home page must expose Korean language switching");
+  assertIncludes("website/localization.js", localizationScript, "const messages", "localization script must define static website messages");
+  assertIncludes("website/localization.js", localizationScript, "applyLocale", "localization script must apply selected locale");
+  assertIncludes("website/localization.js", localizationScript, "trial.heading", "localization script must cover business onboarding page copy");
+  for (const key of [
+    "nav.menu",
+    "trial.jump",
+    "support.heading",
+    "delete.heading",
+    "terms.heading",
+    "privacy.heading",
+    "businessTerms.heading",
+    "thanks.heading",
+    "waitlist.heading",
+    "review.heading",
+    "share.heading",
+    "billing.start.heading",
+    "billing.status.heading",
+    "billing.manage.heading",
+    "billing.success.heading",
+    "billing.cancel.heading",
+    "billing.addPayment.heading",
+  ]) {
+    assertIncludes("website/localization.js", localizationScript, key, `localization script must cover ${key}`);
+  }
+  for (const rel of walkFiles("website").filter((file) => file.endsWith(".html") && !file.startsWith("website/admin/"))) {
+    const html = read(rel);
+    assertIncludes(rel, html, "/localization.js", "public website pages must load shared localization");
+    assertIncludes(rel, html, "data-language-option=\"es\"", "public website pages must expose Spanish language switching");
+    assertIncludes(rel, html, "data-language-option=\"ko\"", "public website pages must expose Korean language switching");
+    assertIncludes(rel, html, "data-site-menu-toggle", "public website pages must expose the mobile navigation menu");
+  }
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, PROD_FUNCTION_URL, "business form must post to the production function URL");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, "Request DFW Business Access", "business form must use trial onboarding copy");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'class="button trial-jump"', "business onboarding mobile hero must provide a direct form jump");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="company_website"', "business form must keep honeypot field");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="terms_accepted"', "business form must require terms acknowledgement");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'name="privacy_acknowledged"', "business form must require privacy acknowledgement");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'window.location.assign("/business/thanks/")', "business form must redirect to thanks page");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, "/styles.css", "business onboarding must use the shared website stylesheet");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'value="coffee_shop"', "business type options must submit stable values under localization");
+  assertIncludes("website/business/start-trial/index.html", startTrialPage, 'value="other_local_business"', "business type options must submit stable values under localization");
+  assertNotIncludes("website/business/start-trial/index.html", startTrialPage, "<style>", "business onboarding must not use a one-off embedded stylesheet");
+  assertIncludes("website/business-terms/index.html", read("website/business-terms/index.html"), "/styles.css", "business terms must use the shared website stylesheet");
+  assertNotIncludes("website/business-terms/index.html", read("website/business-terms/index.html"), "<style>", "business terms must not use a one-off embedded stylesheet");
+  assertIncludes("website/business/thanks/index.html", read("website/business/thanks/index.html"), "/styles.css", "business thanks page must use the shared website stylesheet");
+  assertNotIncludes("website/business/thanks/index.html", read("website/business/thanks/index.html"), "<style>", "business thanks page must not use a one-off embedded stylesheet");
 
   const vercel = JSON.parse(read("website/vercel.json"));
   if (!JSON.stringify(vercel.rewrites ?? []).includes("/business")) {
@@ -210,6 +287,18 @@ if (failures.length === 0) {
     /\[functions\.stripe-backfill-customers\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/stripe-backfill-customers\/index\.ts"/,
     "stripe-backfill-customers must be registered for controlled admin backfill",
   );
+  assertMatch(
+    "supabase/config.toml",
+    config,
+    /\[functions\.admin-ai-usage\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/admin-ai-usage\/index\.ts"/,
+    "admin-ai-usage must be registered for admin AI quota lookup/reset",
+  );
+  assertMatch(
+    "supabase/config.toml",
+    config,
+    /\[functions\.admin-business-applications\][\s\S]*?verify_jwt\s*=\s*false[\s\S]*?entrypoint\s*=\s*"\.\/functions\/admin-business-applications\/index\.ts"/,
+    "admin-business-applications must be registered for admin trial request decisions",
+  );
 
   const cors = read("supabase/functions/_shared/cors.ts");
   assertIncludes("supabase/functions/_shared/cors.ts", cors, '"https://twoferapp.com"', "CORS must allow apex website");
@@ -220,6 +309,8 @@ if (failures.length === 0) {
   const adminMigration = read("supabase/migrations/20260730125000_admin_dashboard_foundation.sql");
   const syncMigration = read("supabase/migrations/20260730126000_website_app_onboarding_sync.sql");
   const stripeMigration = read("supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql");
+  const aiQuotaMigration = read("supabase/migrations/20260730128000_admin_ai_quota_resets.sql");
+  const serviceRoleOnboardingMigration = read("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql");
   assertMatch("supabase/migrations/20260730123000_business_applications.sql", migration, /ALTER TABLE public\.business_applications ENABLE ROW LEVEL SECURITY/i, "business_applications must enable RLS");
   assertMatch("supabase/migrations/20260730123000_business_applications.sql", migration, /REVOKE ALL ON TABLE public\.business_applications FROM anon, authenticated/i, "business_applications must revoke public client role access");
   assertMatch("supabase/migrations/20260730123000_business_applications.sql", migration, /CREATE TRIGGER business_applications_set_updated_at/i, "business_applications must maintain updated_at");
@@ -262,17 +353,28 @@ if (failures.length === 0) {
   assertMatch("supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql", stripeMigration, /CREATE OR REPLACE FUNCTION public\.can_business_publish/i, "Stripe reconnection must update central publishing helper");
   assertMatch("supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql", stripeMigration, /business_subscriptions/i, "publish helper must read business subscription status");
   assertMatch("supabase/migrations/20260730127000_stripe_business_billing_reconnection.sql", stripeMigration, /location_entitlements/i, "publish helper must keep legacy entitlement fallback");
+  assertMatch("supabase/migrations/20260730128000_admin_ai_quota_resets.sql", aiQuotaMigration, /CREATE TABLE IF NOT EXISTS public\.admin_ai_quota_resets/i, "AI quota reset migration must create admin reset ledger");
+  assertMatch("supabase/migrations/20260730128000_admin_ai_quota_resets.sql", aiQuotaMigration, /ALTER TABLE public\.admin_ai_quota_resets ENABLE ROW LEVEL SECURITY/i, "AI quota reset ledger must enable RLS");
+  assertMatch("supabase/migrations/20260730128000_admin_ai_quota_resets.sql", aiQuotaMigration, /GRANT SELECT, INSERT ON TABLE public\.admin_ai_quota_resets TO service_role/i, "AI quota resets must be service-role only");
+  assertMatch("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql", serviceRoleOnboardingMigration, /CREATE OR REPLACE FUNCTION public\.businesses_require_invite/i, "admin onboarding migration must update the invite gate trigger function");
+  assertMatch("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql", serviceRoleOnboardingMigration, /auth\.role\(\)[\s\S]*service_role/i, "admin onboarding migration must allow service-role materialization");
+  assertMatch("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql", serviceRoleOnboardingMigration, /business invite required/i, "admin onboarding migration must preserve normal invite-required enforcement");
 
   const fn = read("supabase/functions/submit-business-application/index.ts");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "company_website", "function must enforce honeypot");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "SUPABASE_SERVICE_ROLE_KEY", "function must use service role insert");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, 'from("business_applications").insert', "function must insert applications");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "createOnboardingRequest", "function must save normalized onboarding requests");
-  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "materializeBusinessForUser", "function must link existing app users to canonical business profiles");
+  // This is a public, unauthenticated endpoint: it must never materialize a
+  // business or Stripe customer for an existing account from an unverified
+  // email in the request body. That happens only after the real owner
+  // authenticates in the app, via get-business-onboarding-context.
+  assertNotIncludes("supabase/functions/submit-business-application/index.ts", fn, "materializeBusinessForUser", "public intake function must not eagerly link unverified emails to existing accounts");
+  assertNotIncludes("supabase/functions/submit-business-application/index.ts", fn, "ensureStripeCustomerForBusiness", "public intake function must not create Stripe customers from an unverified email");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "scoreApplication", "function must score trial requests deterministically");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "risk_reasons", "function must store admin-readable risk reasons");
-  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "ensureStripeCustomerForBusiness", "function must create Stripe customers when a canonical owner exists");
   assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "enqueueStripeCustomerSync", "function must queue Stripe sync when owner auth is still pending");
+  assertIncludes("supabase/functions/submit-business-application/index.ts", fn, "RATE_LIMIT_MAX_PER_EMAIL", "function must rate limit public submissions");
   if (/OPENAI_|GOOGLE_PLACES_API_KEY/.test(fn)) {
     failures.push("supabase/functions/submit-business-application/index.ts: intake function must not depend on AI or places secrets");
   }
@@ -283,9 +385,57 @@ if (failures.length === 0) {
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "location_entitlements", "admin summary must use current entitlement source of truth");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "business_subscriptions", "admin summary must include business subscription risk counts");
   assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "business_billing_profiles", "admin summary must include missing Stripe customer counts");
+  assertIncludes("supabase/functions/admin-dashboard-summary/index.ts", adminFn, "ai_generation_cost_daily", "admin summary must include AI API spend totals");
   if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminFn)) {
     failures.push("supabase/functions/admin-dashboard-summary/index.ts: summary function must not depend on payment or AI secrets");
   }
+
+  const adminAuthFn = read("supabase/functions/admin-auth-session/index.ts");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, 'from("admin_users")', "admin auth must check admin_users allowlist");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_success", "admin auth must audit successful logins");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "admin_login_denied", "admin auth must audit denied logins");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=password", "admin auth must perform password grant server-side");
+  assertIncludes("supabase/functions/admin-auth-session/index.ts", adminAuthFn, "grant_type=refresh_token", "admin auth must support persistent browser sessions");
+  if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminAuthFn)) {
+    failures.push("supabase/functions/admin-auth-session/index.ts: admin auth must not depend on payment or AI secrets");
+  }
+
+  const adminAiFn = read("supabase/functions/admin-ai-usage/index.ts");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, 'from("admin_users")', "admin AI usage must check admin_users");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_reset", "admin AI usage must audit quota resets");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "admin_ai_quota_resets", "admin AI usage must write reset ledger rows");
+  assertIncludes("supabase/functions/admin-ai-usage/index.ts", adminAiFn, "countAiQuotaUsage", "admin AI usage must use shared reset-aware quota counts");
+  if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminAiFn)) {
+    failures.push("supabase/functions/admin-ai-usage/index.ts: admin AI usage must not depend on payment or AI secrets");
+  }
+
+  const adminApplicationsFn = read("supabase/functions/admin-business-applications/index.ts");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("admin_users")', "admin business applications must check admin_users");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, 'from("business_applications")', "admin business applications must read and update trial requests");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_limited", "admin business applications must audit limited approvals");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "admin_business_application_approved_full", "admin business applications must audit full approvals");
+  assertIncludes("supabase/functions/admin-business-applications/index.ts", adminApplicationsFn, "ensureStripeCustomerForBusiness", "admin business applications must seed billing access when approving linked owners");
+  if (/STRIPE_SECRET_KEY|OPENAI_API_KEY/.test(adminApplicationsFn)) {
+    failures.push("supabase/functions/admin-business-applications/index.ts: admin trial decisions must not depend on payment or AI secrets");
+  }
+
+  const trialRequestsPage = read("website/admin/trial-requests/index.html");
+  const adminDashboardPage = read("website/admin/index.html");
+  const adminDashboardJs = read("website/admin/admin.js");
+  const adminLoginPage = read("website/admin/login/index.html");
+  assertIncludes("website/admin/index.html", adminDashboardPage, "data-mobile-cards", "admin dashboard tables must render as labeled cards on phones");
+  assertIncludes("website/admin/admin.js", adminDashboardJs, "dataset.label", "admin dashboard dynamic rows must provide mobile table labels");
+  assertIncludes("website/admin/login/index.html", adminLoginPage, "data:image/gif;base64", "admin MFA QR image must use a non-broken placeholder before setup");
+  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-admin-business-applications-endpoint", "trial requests page must point at the admin application endpoint");
+  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "/admin/trial-requests.js", "trial requests page must load the live admin workflow script");
+  assertIncludes("website/admin/trial-requests/index.html", trialRequestsPage, "data-mobile-cards", "trial requests table must render as labeled cards on phones");
+
+  const trialRequestsJs = read("website/admin/trial-requests.js");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "dataset.label", "trial requests dynamic rows must provide mobile table labels");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"list\"", "trial requests script must load applications from the backend");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "action: \"decide\"", "trial requests script must submit admin decisions");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_limited", "trial requests script must expose limited approval");
+  assertIncludes("website/admin/trial-requests.js", trialRequestsJs, "approve_full", "trial requests script must expose full approval");
 
   const contextFn = read("supabase/functions/get-business-onboarding-context/index.ts");
   assertIncludes("supabase/functions/get-business-onboarding-context/index.ts", contextFn, "materializeBusinessForUser", "context function must materialize website requests on app login");

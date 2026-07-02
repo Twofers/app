@@ -28,9 +28,12 @@ describe("business application intake", () => {
     expect(source).toMatch(/website_start_trial/);
     expect(source).toMatch(/risk_reasons/);
     expect(source).toMatch(/from\("business_applications"\)\.insert/);
-    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    // Public, unauthenticated submissions never materialize a business or
+    // create a Stripe customer for an existing account — see
+    // business-onboarding-sync-source.test.ts for the account-takeover guard.
+    expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
     expect(source).toMatch(/enqueueStripeCustomerSync/);
-    expect(source).toMatch(/STRIPE_SECRET_KEY/);
+    expect(source).not.toMatch(/STRIPE_SECRET_KEY/);
     expect(source).not.toMatch(/OPENAI_API_KEY/);
   });
 
@@ -39,9 +42,65 @@ describe("business application intake", () => {
     expect(config).toMatch(
       /\[functions\.submit-business-application\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/submit-business-application\/index\.ts"/,
     );
+    expect(config).toMatch(
+      /\[functions\.admin-business-applications\][\s\S]*verify_jwt\s*=\s*false[\s\S]*entrypoint\s*=\s*"\.\/functions\/admin-business-applications\/index\.ts"/,
+    );
 
     const cors = read("supabase/functions/_shared/cors.ts");
     expect(cors).toContain('"https://www.twoferapp.com"');
     expect(cors).toContain('"https://twoferapp.com"');
+  });
+
+  it("keeps admin trial decisions server-authorized and audited", () => {
+    const source = read("supabase/functions/admin-business-applications/index.ts");
+    expect(source).toMatch(/from\("admin_users"\)/);
+    expect(source).toMatch(/from\("business_applications"\)/);
+    expect(source).toMatch(/admin_business_application_approved_limited/);
+    expect(source).toMatch(/admin_business_application_approved_full/);
+    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
+  });
+
+  it("wires the admin trial request page to live list and decision actions", () => {
+    const page = read("website/admin/trial-requests/index.html");
+    const script = read("website/admin/trial-requests.js");
+    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/\/admin\/trial-requests\.js/);
+    expect(script).toMatch(/action: "list"/);
+    expect(script).toMatch(/action: "decide"/);
+    expect(script).toMatch(/approve_limited/);
+    expect(script).toMatch(/approve_full/);
+    expect(script).toMatch(/AbortController/);
+    expect(script).toMatch(/networkFailureMessage/);
+    expect(script).toMatch(/Decision saved, but the queue refresh failed/);
+  });
+
+  it("lets an admin field-create a business trial through the same audited decision path", () => {
+    const source = read("supabase/functions/admin-business-applications/index.ts");
+    // The founder field-invite path (admin/businesses/new) must insert its own
+    // application row, then reuse applyDecision — not a separate, divergent
+    // code path — so it gets the same business materialization, Stripe billing
+    // hook, and audit logging as a normal trial-request approval.
+    expect(source).toMatch(/action === "create"/);
+    expect(source).toMatch(/async function createApplication/);
+    expect(source).toMatch(/canDecideApplications\(ctx\.adminUser\.role\)/);
+    expect(source).toMatch(/admin_field_invite/);
+    expect(source).toMatch(/admin_business_application_created/);
+    expect(source).toMatch(/return applyDecision\(req, ctx, application/);
+    // terms/privacy acceptance belongs to the owner, not the admin creating the record
+    expect(source).toMatch(/terms_accepted:\s*false/);
+    expect(source).toMatch(/privacy_acknowledged:\s*false/);
+  });
+
+  it("wires the founder field-invite page to the create action", () => {
+    const page = read("website/admin/businesses/new/index.html");
+    const script = read("website/admin/admin-new-trial.js");
+    expect(page).toMatch(/data-admin-business-applications-endpoint/);
+    expect(page).toMatch(/data-new-trial-form/);
+    expect(page).toMatch(/name="business_name"/);
+    expect(page).toMatch(/name="email"/);
+    expect(script).toMatch(/action: "create"/);
+    expect(script).toMatch(/fields/);
+    expect(script).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
   });
 });

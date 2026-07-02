@@ -4,11 +4,11 @@ Date: 2026-07-01
 
 ## Flow
 
-1. Business visits `https://www.twoferapp.com/business/start-trial` or the backwards-compatible `/business` page.
+1. Business visits `https://www.twoferapp.com/business/start-trial`; the backwards-compatible `/business` page redirects to the same canonical form.
 2. Business submits a reviewed DFW trial request.
 3. `submit-business-application` validates the payload, enforces the honeypot, applies deterministic risk routing, inserts `business_applications`, and saves a normalized `business_onboarding_requests` record for app/admin sync.
 4. Low-risk DFW businesses can be marked `trial_limited`; unclear applications become `review_required` or `pending_verification`; outside-launch applications become `waitlisted`; prohibited signals become `rejected`.
-5. Dan reviews or upgrades applications outside the mobile app.
+5. Dan reviews or upgrades applications outside the mobile app through the admin Trial Requests workflow.
 6. Approved businesses are activated through admin/web billing or manual entitlement state.
 7. Business owner logs into the app with the same email.
 8. `get-business-onboarding-context` links or materializes the canonical `businesses` row and returns app-safe imported profile data.
@@ -26,7 +26,9 @@ Date: 2026-07-01
 - `supabase/migrations/20260730123000_business_applications.sql`
 - `supabase/migrations/20260730124000_business_onboarding_workflow.sql`
 - `supabase/migrations/20260730126000_website_app_onboarding_sync.sql`
+- `supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql`
 - `supabase/functions/submit-business-application/index.ts`
+- `supabase/functions/admin-business-applications/index.ts`
 - `supabase/functions/get-business-onboarding-context/index.ts`
 - `supabase/functions/update-business-profile-section/index.ts`
 
@@ -74,7 +76,7 @@ The shared onboarding pipeline adds:
 - `business_setup_checklist`
 - `terms_acceptances`
 
-Business users receive safe projections through Edge Functions. Admin-only risk notes, raw request payloads, and billing/Stripe details are not returned to the mobile app.
+Business users receive safe projections through Edge Functions. Admin-only risk notes, raw request payloads, and billing/Stripe details are not returned to the mobile app. Trial request decisions are handled server-side by `admin-business-applications`, which checks `admin_users` and writes audit rows before changing application, business, or subscription access state.
 
 ## Deployment Notes
 
@@ -85,4 +87,4 @@ Android App Links are enabled in `assetlinks.json` with the Google Play App Sign
 
 On 2026-07-01, a clearly marked non-sensitive Twofer QA business access request was submitted through the hosted Edge Function and returned `200 {"ok":true}`. That validates the production insert path without using real merchant data.
 
-The website-to-app sync migration and new app-facing Edge Functions are local files only until Dan explicitly approves applying/deploying them.
+The admin onboarding invite-gate migration, admin trial request function, and new app-facing Edge Functions are local files only until Dan explicitly approves applying/deploying them.

@@ -24,14 +24,39 @@ describe("website-to-app business onboarding sync", () => {
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.can_business_publish/i);
   });
 
-  it("connects website submit to normalized onboarding and app materialization", () => {
+  it("keeps client business signups invite-gated while allowing service-role onboarding", () => {
+    const originalGate = read("supabase/migrations/20260706120000_business_invite_gate.sql");
+    const serviceRoleGate = read("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql");
+    expect(originalGate).toMatch(/business invite required/i);
+    expect(originalGate).toMatch(/CREATE TRIGGER businesses_require_invite_trg/i);
+    expect(serviceRoleGate).toMatch(/auth\.role\(\).*service_role/is);
+    expect(serviceRoleGate).toMatch(/business_invite_validations/i);
+    expect(serviceRoleGate).toMatch(/business invite required/i);
+  });
+
+  it("connects website submit to normalized onboarding without eager unauthenticated materialization", () => {
     const source = read("supabase/functions/submit-business-application/index.ts");
     expect(source).toMatch(/createOnboardingRequest/);
-    expect(source).toMatch(/materializeBusinessForUser/);
-    expect(source).toMatch(/business_linked/);
-    expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    // This is a public, unauthenticated endpoint: it must never materialize a
+    // business or Stripe customer for an existing account based on an
+    // unverified email in the request body (account-takeover-adjacent risk).
+    // Materialization happens only after the real owner authenticates in the
+    // app, via get-business-onboarding-context.
+    expect(source).not.toMatch(/materializeBusinessForUser/);
+    expect(source).not.toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).not.toMatch(/auth\.admin\.listUsers/);
+    // The public response must stay generic: echoing business_linked would
+    // disclose whether an email already has a Twofer account.
+    expect(source).not.toMatch(/business_linked: Boolean/);
     expect(source).toMatch(/enqueueStripeCustomerSync/);
     expect(source).not.toMatch(/OPENAI_API_KEY/);
+  });
+
+  it("rate limits public business application submissions", () => {
+    const source = read("supabase/functions/submit-business-application/index.ts");
+    expect(source).toMatch(/RATE_LIMIT_MAX_PER_EMAIL/);
+    expect(source).toMatch(/RATE_LIMIT_MAX_PER_IP/);
+    expect(source).toMatch(/business_onboarding_requests/);
   });
 
   it("registers app-safe context and update endpoints", () => {

@@ -29,6 +29,8 @@ For day-to-day pilot QA, use `docs/pilot-smoke-test-checklist.md`. For Edge cove
 | `20260730125000_admin_dashboard_foundation.sql` | Internal admin allowlist, audit log, launch areas, feature flags, and publish eligibility helper. |
 | `20260730126000_website_app_onboarding_sync.sql` | Shared website-to-app onboarding pipeline, membership linkage, field sources, revision log, checklist, and terms acceptance. |
 | `20260730127000_stripe_business_billing_reconnection.sql` | Business billing profiles, subscriptions, billing events, Stripe checkout/portal audit tables, sync jobs, reminders, billing tokens, and publish helper subscription checks. |
+| `20260730128000_admin_ai_quota_resets.sql` | Admin-only AI quota reset ledger and reset-aware compose quota display. |
+| `20260730129000_admin_onboarding_service_role_invite_gate.sql` | Keeps client business signups invite-gated while allowing reviewed website/admin onboarding to materialize businesses server-side. |
 
 **Also verify:**
 
@@ -69,6 +71,8 @@ supabase functions deploy <function-name>
 - `publish-offer-version`
 - `submit-business-application`
 - `admin-dashboard-summary`
+- `admin-ai-usage`
+- `admin-business-applications`
 - `get-business-onboarding-context`
 - `update-business-profile-section`
 - `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`

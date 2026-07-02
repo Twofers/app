@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost } from "../_shared/ai-costs.ts";
+import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -256,18 +257,15 @@ serve(async (req) => {
     const requestGroupId = crypto.randomUUID();
 
     const DEFAULT_MONTHLY_LIMIT = Number(Deno.env.get("AI_COPY_MONTHLY_LIMIT") ?? "30");
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
+    const monthStartIso = utcMonthStartIso();
 
     if (resolvedBusinessId) {
-      const { count: usedThisMonth } = await supabase
-        .from("ai_generation_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", resolvedBusinessId)
-        .eq("request_type", "deal_copy")
-        .gte("created_at", monthStart.toISOString());
-      if (usedThisMonth !== null && usedThisMonth >= DEFAULT_MONTHLY_LIMIT) {
+      const { used } = await countAiQuotaUsage(supabase, {
+        businessId: resolvedBusinessId,
+        scope: "deal_copy",
+        monthStartIso,
+      });
+      if (used >= DEFAULT_MONTHLY_LIMIT) {
         return new Response(
           JSON.stringify({ error: "Monthly AI copy limit reached. Try again next month." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },

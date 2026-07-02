@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (104 files, strict filename / timestamp order)
+### 2.1 Full local set (106 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -142,10 +142,12 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 102. `20260730125000_admin_dashboard_foundation.sql`
 103. `20260730126000_website_app_onboarding_sync.sql`
 104. `20260730127000_stripe_business_billing_reconnection.sql`
+105. `20260730128000_admin_ai_quota_resets.sql`
+106. `20260730129000_admin_onboarding_service_role_invite_gate.sql`
 
 ### 2.2 Latest migration
 
-**`20260730127000_stripe_business_billing_reconnection.sql`**
+**`20260730129000_admin_onboarding_service_role_invite_gate.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -174,13 +176,19 @@ The current local chain also includes these later migrations:
 
 These add owner deletion for ended deals and expose customer-safe native poster specs for active published deals. Applying either migration is production-changing and requires explicit approval; after applying the poster projection migration, include the customer poster spec RPC in hosted read-only smoke.
 
-### 2.6 Business application intake migration
+### 2.6 Website/admin/billing/AI admin migrations
 
-The current local chain ends with:
+The current local chain ends with this website/admin sequence:
 
 - `20260730123000_business_applications.sql`
+- `20260730124000_business_onboarding_workflow.sql`
+- `20260730125000_admin_dashboard_foundation.sql`
+- `20260730126000_website_app_onboarding_sync.sql`
+- `20260730127000_stripe_business_billing_reconnection.sql`
+- `20260730128000_admin_ai_quota_resets.sql`
+- `20260730129000_admin_onboarding_service_role_invite_gate.sql`
 
-This starts from `20260730123000_business_applications.sql`, adds `20260730124000_business_onboarding_workflow.sql` for deterministic onboarding tier/risk metadata and field-invite placeholders, adds `20260730125000_admin_dashboard_foundation.sql` for the internal admin allowlist, audit log, launch areas, feature flags, and central publish eligibility helper, adds `20260730126000_website_app_onboarding_sync.sql` for website-to-app profile materialization, membership linkage, field sources, revision history, setup checklist, terms acceptance, and app-safe profile update flow, then adds `20260730127000_stripe_business_billing_reconnection.sql` for business billing profiles, subscriptions, billing events, web/admin Stripe session audit tables, sync jobs, reminders, and billing tokens. Public submissions go through `submit-business-application`; admin summary reads go through `admin-dashboard-summary`; app onboarding reads and writes go through `get-business-onboarding-context` and `update-business-profile-section`. Web/admin billing starts through `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, and `stripe-backfill-customers`; mobile app billing remains closed. Applying any of these migrations is production-changing and requires explicit approval.
+This starts from `20260730123000_business_applications.sql`, adds `20260730124000_business_onboarding_workflow.sql` for deterministic onboarding tier/risk metadata and field-invite placeholders, adds `20260730125000_admin_dashboard_foundation.sql` for the internal admin allowlist, audit log, launch areas, feature flags, and central publish eligibility helper, adds `20260730126000_website_app_onboarding_sync.sql` for website-to-app profile materialization, membership linkage, field sources, revision history, setup checklist, terms acceptance, and app-safe profile update flow, adds `20260730127000_stripe_business_billing_reconnection.sql` for business billing profiles, subscriptions, billing events, web/admin Stripe session audit tables, sync jobs, reminders, and billing tokens, adds `20260730128000_admin_ai_quota_resets.sql` for admin-only AI quota reset records and reset-aware compose quota display, then adds `20260730129000_admin_onboarding_service_role_invite_gate.sql` so reviewed website/admin onboarding can materialize businesses through service-role Edge Functions while normal client signups remain invite-gated. Public submissions go through `submit-business-application`; admin summary reads go through `admin-dashboard-summary`; admin AI usage and quota resets go through `admin-ai-usage`; admin trial request reviews go through `admin-business-applications`; app onboarding reads and writes go through `get-business-onboarding-context` and `update-business-profile-section`. Web/admin billing starts through `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, and `stripe-backfill-customers`; mobile app billing remains closed. Applying any of these migrations is production-changing and requires explicit approval.
 
 ### 2.7 Duplicate timestamp check
 
@@ -243,6 +251,8 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 |----------|
 | `activate-redemption-mode` |
 | `admin-dashboard-summary` |
+| `admin-ai-usage` |
+| `admin-business-applications` |
 | `ai-business-lookup` |
 | `ai-compose-offer` |
 | `ai-create-deal` |
@@ -298,7 +308,7 @@ All of the following exist under `supabase/functions/` and have `[functions.<nam
 - **Publishing / telemetry:** `publish-offer-version`, `ingest-analytics-event`
 - **Push / scheduled notifications:** `send-deal-push`, `weekly-deal-digest`, `send-trial-ending-reminders`
 - **AI (as used by pilot builds):** `ai-generate-ad-variants`, `ai-extract-menu`, `ai-compose-offer`, `ai-generate-deal-copy`, `ai-business-lookup`, `ai-deal-suggestions`, `ai-translate-deal`; `ai-create-deal` is legacy-disabled and should return HTTP 410 if deployed
-- **Web business intake/admin sync:** `submit-business-application`, `admin-dashboard-summary`, `get-business-onboarding-context`, and `update-business-profile-section`
+- **Web business intake/admin sync:** `submit-business-application`, `admin-dashboard-summary`, `admin-ai-usage`, `admin-business-applications`, `get-business-onboarding-context`, and `update-business-profile-section`
 - **Billing (web/admin only if charging pilots):** `billing-pricing`, `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, `stripe-backfill-customers`, `stripe-webhook`, `billing-checkout-redirect`, `stripe-expire-pending-checkout`, `stripe-cancel-trial-subscription`, `stripe-cancel-paid-subscription`, `stripe-request-introductory-refund`; treat `simulate-subscribe` as **QA-only**
 
 ### 4.3 Deploy commands (PRODUCTION-CHANGING — do not run until approved)

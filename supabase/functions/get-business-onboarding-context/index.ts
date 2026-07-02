@@ -104,15 +104,38 @@ async function ensureLinkedBusiness(
   const requestRow = request as Record<string, unknown> | null;
   if (!requestRow) return null;
 
+  let decision: {
+    status?: string | null;
+    access_tier?: string | null;
+    verification_status?: string | null;
+    risk_score?: number | null;
+  } = {
+    status: requestRow.status as string | null,
+    risk_score: requestRow.risk_score as number | null,
+  };
+  if (requestRow.application_id) {
+    const { data: application, error: applicationError } = await supabase
+      .from("business_applications")
+      .select("status,access_tier,verification_status,risk_score")
+      .eq("id", requestRow.application_id as string)
+      .maybeSingle();
+    if (applicationError) throw applicationError;
+    if (application) {
+      decision = {
+        status: (application as Record<string, unknown>).status as string | null,
+        access_tier: (application as Record<string, unknown>).access_tier as string | null,
+        verification_status: (application as Record<string, unknown>).verification_status as string | null,
+        risk_score: (application as Record<string, unknown>).risk_score as number | null,
+      };
+    }
+  }
+
   const materialized = await materializeBusinessForUser(supabase, {
     userId,
     requestId: requestRow.id as string,
     applicationId: (requestRow.application_id as string | null) ?? null,
     normalized: normalizeFromRequest(requestRow),
-    decision: {
-      status: requestRow.status as string | null,
-      risk_score: requestRow.risk_score as number | null,
-    },
+    decision,
     source: "app_login",
   });
   const normalized = normalizeFromRequest(requestRow);
@@ -130,7 +153,11 @@ async function ensureLinkedBusiness(
     businessId: materialized.businessId,
     source: "app_login",
     trialDays: null,
-    accessStatus: requestRow.status === "trial_limited" ? "trial_limited" : "pending",
+    accessStatus: decision.access_tier === "trialing" || decision.status === "trial_active"
+      ? "trialing"
+      : decision.access_tier === "trial_limited" || decision.status === "trial_limited"
+        ? "trial_limited"
+        : "pending",
   });
   await enqueueStripeCustomerSync(supabase, {
     businessId: materialized.businessId,

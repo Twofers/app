@@ -82,6 +82,8 @@ export function normalizeCategory(value: string | null): string | null {
 
 function businessStatusFromDecision(status: string | null | undefined): string {
   if (status === "trial_limited") return "limited_trial";
+  if (status === "trial_active" || status === "trialing") return "trialing";
+  if (status === "active") return "active";
   if (status === "review_required") return "pending_verification";
   if (status === "waitlisted") return "pending_verification";
   if (status === "rejected") return "rejected";
@@ -91,6 +93,8 @@ function businessStatusFromDecision(status: string | null | undefined): string {
 function accessLevelFromDecision(accessTier: string | null | undefined): string {
   if (accessTier === "trial_limited") return "limited_trial";
   if (accessTier === "field_invited") return "limited_trial";
+  if (accessTier === "trialing") return "full_trial";
+  if (accessTier === "active") return "paid";
   if (accessTier === "waitlisted" || accessTier === "rejected") return "none";
   return "pending";
 }

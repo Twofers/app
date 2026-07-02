@@ -529,6 +529,21 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-dashboard-summary/index.ts"
 
+[functions.admin-auth-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-auth-session/index.ts"
+
+[functions.admin-ai-usage]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-ai-usage/index.ts"
+
+[functions.admin-business-applications]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-business-applications/index.ts"
+
 [functions.get-business-onboarding-context]
 enabled = true
 verify_jwt = false

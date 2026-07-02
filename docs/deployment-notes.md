@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 104 migration files and the latest is `20260730127000_stripe_business_billing_reconnection.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 106 migration files and the latest is `20260730129000_admin_onboarding_service_role_invite_gate.sql`.
 
 Read-only compare:
 
@@ -41,6 +41,8 @@ High-signal dependencies:
 - **Admin dashboard foundation:** `20260730125000_admin_dashboard_foundation.sql`. This adds the web/admin allowlist, audit log, admin notes, launch areas, feature flags, system events, business status/access fields, and the central `can_business_publish` helper. Applying it is production-changing and requires explicit approval.
 - **Website-to-app onboarding sync:** `20260730126000_website_app_onboarding_sync.sql`. This links website requests, app owner membership, field-source tracking, revision history, setup checklist, terms acceptance, slow-hour/promotable-item seeds, and the hardened publish helper. Applying it is production-changing and requires explicit approval.
 - **Stripe business billing reconnection:** `20260730127000_stripe_business_billing_reconnection.sql`. This adds business billing profiles, subscriptions, billing events, checkout/portal audit tables, sync jobs, reminders, single-use billing tokens, and a publish helper that reads business subscription state before falling back to legacy location entitlements. Applying it is production-changing and requires explicit approval.
+- **Admin AI spend and quota resets:** `20260730128000_admin_ai_quota_resets.sql`. This adds the admin-only monthly AI quota reset ledger and updates the compose quota RPC fallback to honor reset boundaries without deleting AI usage history. Applying it is production-changing and requires explicit approval.
+- **Admin onboarding invite gate:** `20260730129000_admin_onboarding_service_role_invite_gate.sql`. This keeps normal client business signups behind the pilot invite gate while allowing reviewed website/admin onboarding to materialize businesses through audited service-role Edge Functions. Applying it is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 
@@ -66,6 +68,8 @@ Recommended: `npx supabase functions deploy` deploys every folder under `supabas
 | `deal-link` | Deep-link redirect for deal sharing |
 | `submit-business-application` | Public website business access-request intake |
 | `admin-dashboard-summary` | Internal admin dashboard summary, active-admin checked |
+| `admin-ai-usage` | Internal admin AI spend/usage lookup and audited monthly quota reset |
+| `admin-business-applications` | Internal admin business trial request listing and audited approval/waitlist/reject decisions |
 | `get-business-onboarding-context` | App-safe imported business onboarding context |
 | `update-business-profile-section` | App-safe canonical business profile edits |
 | `send-deal-push` | Push notifications when a deal goes live |
