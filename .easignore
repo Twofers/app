@@ -55,6 +55,7 @@ android/app/.cxx/
 
 # Local QA, release-prep, and agent artifacts
 artifacts/
+s10-live-publish-qa/
 notification_emulator_*/
 twofer_rc_qa_*/
 share_deal_*

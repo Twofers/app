@@ -1,7 +1,9 @@
 # Go-Public Checklist (branch: release/apple-app-store-readiness-web-billing)
 
-Last updated: 2026-07-02. Everything in "Ready in the working tree" is done locally
-and validated; everything under "Dan's gated actions" needs your explicit go.
+Last updated: 2026-07-02. **Steps 1-4 below are SHIPPED**: committed (7782b8c6),
+migrations confirmed already applied, edge functions deployed, website live on
+www.twoferapp.com, branch pushed to origin. Steps 5-7 (store links, EAS build,
+store submission) are still open.
 
 ## Ready in the working tree (uncommitted)
 
@@ -75,30 +77,34 @@ before an owner starts checkout.
 
 ## Dan's gated actions, in order
 
-1. **Review + commit** this branch (ask the agent to commit; never pushed without your go).
-2. **Apply 2 pending migrations** (then `node scripts/probe-rls-smoke.mjs` immediately):
-   - `supabase/migrations/20260730128000_admin_ai_quota_resets.sql`
-   - `supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql`
-3. **Deploy edge functions** (new/changed since last prod deploy):
-   `admin-auth-session` (new), `admin-business-applications` (changed — new
-   `create` action + section reads), `admin-dashboard-summary` (changed — new
-   per-tab section reads), `submit-business-application`,
-   `get-business-onboarding-context`, `ai-compose-offer`, `ai-deal-suggestions`,
-   `ai-generate-ad-variants`, `ai-generate-deal-copy`.
-   (Already live from 2026-07-01: ai-translate-deal, admin-ai-usage, redeem-token,
-   complete-visual-redeem.)
-4. **Deploy the website** (Vercel). Post-deploy spot checks:
-   - https://www.twoferapp.com/favicon.ico loads; tab icon shows the penguin.
-   - Paste the homepage URL into iMessage/Slack → penguin share card appears.
-   - /admin returns `X-Robots-Tag: noindex`.
-   - Trial form submits; admin login works end-to-end with MFA; every admin
-     tab (Businesses, Offers, Billing Events, Audit Log, Settings) loads data.
-5. **When you have the store URLs**: edit the two `null`s in
+1. ~~**Review + commit** this branch~~ — DONE, commit `7782b8c6` on
+   `release/apple-app-store-readiness-web-billing`.
+2. ~~**Apply 2 pending migrations**~~ — DONE. `supabase db push --dry-run`
+   confirmed "Remote database is up to date" (both `20260730128000` and
+   `20260730129000` were already applied). `node scripts/probe-rls-smoke.mjs`
+   run as a safety check — all checks passed.
+3. ~~**Deploy edge functions**~~ — DONE. Redeployed to guarantee production
+   matches the committed code: `admin-auth-session`,
+   `admin-business-applications`, `admin-ai-usage`, `admin-dashboard-summary`,
+   `submit-business-application`, `get-business-onboarding-context`,
+   `ai-compose-offer`, `ai-deal-suggestions`, `ai-generate-ad-variants`,
+   `ai-generate-deal-copy`. Post-deploy check: `admin-dashboard-summary` and
+   `admin-business-applications` both correctly return 401 unauthenticated.
+4. ~~**Deploy the website**~~ — DONE. Live on www.twoferapp.com. Verified:
+   favicon.ico (200), og-card.jpg (200), homepage shows "Live now in
+   Dallas-Fort Worth" / "Request Business Access", `/admin/` returns
+   `X-Robots-Tag: noindex, nofollow`.
+   Branch pushed to `origin/release/apple-app-store-readiness-web-billing`
+   (was never pushed before — upstream tracking now set).
+5. **Still open — when you have the store URLs**: edit the two `null`s in
    `website/store-links.js` to the real App Store / Play Store links, bump the
    `?v=` on the `<script src="/store-links.js?v=...">` tag in `index.html` so
-   browsers don't serve a cached copy, redeploy.
-6. **Build the app** (EAS): Android AAB + iOS, versionCode 41 / current build number.
-7. **Submit**: TestFlight/App Store + Play Console (Dan-only, agent drafts text).
+   browsers don't serve a cached copy, redeploy (`npx vercel deploy --prod --yes`
+   from `website/`).
+6. **Still open — Build the app** (EAS): Android AAB + iOS, versionCode 41 /
+   current build number.
+7. **Still open — Submit**: TestFlight/App Store + Play Console (Dan-only,
+   agent drafts text).
 
 ## Known-accepted / parked (not blockers)
 
