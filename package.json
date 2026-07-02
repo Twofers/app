@@ -14,6 +14,7 @@
     "assert:brand-assets": "node scripts/assert-no-legacy-branding.js",
     "check:mobile-store-copy": "node scripts/check-mobile-store-copy.js",
     "check:website-supabase": "node scripts/check-website-supabase-readiness.js",
+    "check:website-ui": "node scripts/check-website-ui-crawl.js",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "node scripts/typecheck-functions.cjs",
     "test": "vitest run",

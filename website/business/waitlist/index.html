@@ -3,30 +3,63 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Business Waitlist | Twofer</title>
-    <meta name="description" content="Twofer business waitlist for local businesses outside the current DFW trial fit." />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <title data-i18n="waitlist.title">Business Waitlist | Twofer</title>
+    <meta name="description" content="Twofer business waitlist for local businesses outside the current DFW launch fit." data-i18n-content="waitlist.meta" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="canonical" href="https://www.twoferapp.com/business/waitlist" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Twofer" />
+    <meta property="og:title" content="Business Waitlist | Twofer" />
+    <meta property="og:description" content="Twofer business waitlist for local businesses outside the current DFW launch fit." />
+    <meta property="og:url" content="https://www.twoferapp.com/business/waitlist" />
+    <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
   <body>
     <header class="site-header">
       <nav class="nav" aria-label="Main navigation">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span><span>Twofer</span></a>
-        <div class="nav-links">
-          <a href="/business/start-trial">Start Business Trial</a>
-          <a href="/support">Support</a>
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
+        <div class="nav-links" id="site-nav-links">
+          <a href="/business/start-trial" data-i18n="nav.businessTrial">Request Business Access</a>
+          <a href="/support" data-i18n="nav.support">Support</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button
+            class="nav-menu-button"
+            type="button"
+            aria-controls="site-nav-links"
+            aria-expanded="false"
+            data-site-menu-toggle
+            data-i18n="nav.menu"
+          >
+            Menu
+          </button>
         </div>
       </nav>
     </header>
     <main class="content-page">
-      <p class="eyebrow">Business access</p>
-      <h1>Business Waitlist</h1>
-      <p>
-        Thanks for your interest in Twofer. If your business is outside the current DFW preview area or outside
+      <p class="eyebrow" data-i18n="common.businessAccess">Business access</p>
+      <h1 data-i18n="waitlist.heading">Business Waitlist</h1>
+      <p data-i18n="waitlist.body">
+        Thanks for your interest in Twofer. If your business is outside the current DFW launch area or outside
         the launch categories, we will keep your request for a later onboarding wave.
       </p>
-      <p>
+      <p data-i18n-html="common.questions">
         Questions? Email <a href="mailto:support@twoferapp.com">support@twoferapp.com</a>.
       </p>
     </main>
+    <script src="/localization.js?v=20260702-site-i18n"></script>
   </body>
 </html>

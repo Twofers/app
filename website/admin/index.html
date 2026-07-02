@@ -5,13 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Dashboard | Twofer</title>
     <meta name="robots" content="noindex,nofollow" />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
-  <body class="admin-shell" data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary">
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-ai-usage-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-ai-usage"
+  >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
         <a class="brand" href="/admin" aria-label="Twofer admin home">
-          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span>
+          <span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span>
           <span>Twofer Admin</span>
         </a>
         <div class="nav-links">
@@ -23,7 +33,8 @@
         </div>
         <div class="nav-actions">
           <span data-admin-status class="admin-badge warning">Admin session not connected</span>
-          <a class="button button-small" href="/admin/login">Login</a>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
         </div>
       </nav>
     </header>
@@ -50,6 +61,8 @@
         <article class="admin-card"><span>High-risk requests</span><strong data-metric="trialRequests.highRisk">0</strong></article>
         <article class="admin-card"><span>Live offers</span><strong data-metric="offers.live">0</strong></article>
         <article class="admin-card"><span>Needs offer review</span><strong data-metric="offers.needsReview">0</strong></article>
+        <article class="admin-card"><span>API spend this month</span><strong data-metric="apiSpend.currentMonthUsd">$0.00</strong></article>
+        <article class="admin-card"><span>API spend prior month</span><strong data-metric="apiSpend.priorMonthUsd">$0.00</strong></article>
         <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
         <article class="admin-card"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
         <article class="admin-card"><span>Past due locations</span><strong data-metric="billing.pastDue">0</strong></article>
@@ -61,18 +74,83 @@
       <section class="admin-section">
         <div class="admin-section-header">
           <div>
+            <h2>AI Spend & Quotas</h2>
+            <p>Search a business owner, review monthly AI usage, and reset a selected monthly quota without deleting history.</p>
+          </div>
+          <span class="admin-badge" data-metric="apiSpend.updatedAt">Not loaded</span>
+        </div>
+        <div class="admin-panel">
+          <form class="admin-form admin-ai-form" data-ai-quota-form novalidate>
+            <label>
+              Owner email or user ID
+              <input
+                name="query"
+                type="search"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                inputmode="email"
+                placeholder="owner@example.com"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
+                required
+              />
+            </label>
+            <label>
+              Business
+              <select name="business_id" data-ai-business-select>
+                <option value="">Load a user first</option>
+              </select>
+            </label>
+            <label>
+              Quota
+              <select name="quota_scope" data-ai-scope-select>
+                <option value="ad_generation">AI ad generation</option>
+                <option value="compose_offer">AI compose offer</option>
+                <option value="deal_copy">Quick deal copy</option>
+                <option value="deal_suggestions">Deal suggestions</option>
+                <option value="deal_translate">Translations</option>
+              </select>
+            </label>
+            <label class="full">
+              Reset reason
+              <input name="reason" type="text" autocomplete="off" placeholder="Customer support reset" data-1p-ignore data-lpignore="true" data-form-type="other" />
+            </label>
+            <div class="admin-ai-actions full">
+              <button type="submit" class="button button-small">Load usage</button>
+              <button type="button" class="button button-small button-secondary" data-ai-reset-button disabled>Reset selected quota</button>
+            </div>
+            <p class="status full" data-ai-quota-status role="status" aria-live="polite"></p>
+          </form>
+          <div class="admin-table-wrap admin-ai-usage-table">
+            <table class="admin-table" data-mobile-cards>
+              <thead>
+                <tr><th>Business</th><th>Quota</th><th>Used</th><th>Limit</th><th>Remaining</th><th>Counting Since</th><th>Last Reset</th></tr>
+              </thead>
+              <tbody data-ai-usage-body>
+                <tr><td class="admin-row-detail" colspan="7">Load an owner to review AI usage.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <div class="admin-section-header">
+          <div>
             <h2>Recent Trial Requests</h2>
             <p>Remote requests are routed through deterministic risk scoring before admin review.</p>
           </div>
           <a class="button button-small" href="/admin/trial-requests">Open queue</a>
         </div>
         <div class="admin-table-wrap">
-          <table class="admin-table">
+            <table class="admin-table" data-mobile-cards>
             <thead>
               <tr><th>Business</th><th>Email</th><th>Status</th><th>Access</th><th>Created</th></tr>
             </thead>
             <tbody data-applications-body>
-              <tr><td colspan="5">Connect an active admin session to load requests.</td></tr>
+              <tr><td class="admin-row-detail" colspan="5">Connect an active admin session to load requests.</td></tr>
             </tbody>
           </table>
         </div>
@@ -87,17 +165,17 @@
           <a class="button button-small" href="/admin/audit-log">View audit log</a>
         </div>
         <div class="admin-table-wrap">
-          <table class="admin-table">
+            <table class="admin-table" data-mobile-cards>
             <thead>
               <tr><th>Action</th><th>Target</th><th>Reason</th><th>Type</th><th>Created</th></tr>
             </thead>
             <tbody data-audit-body>
-              <tr><td colspan="5">Connect an active admin session to load audit events.</td></tr>
+              <tr><td class="admin-row-detail" colspan="5">Connect an active admin session to load audit events.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
-    <script src="/admin/admin.js?v=20260701-admin"></script>
+    <script src="/admin/admin.js?v=20260702-admin-ai"></script>
   </body>
 </html>

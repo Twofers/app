@@ -3,29 +3,53 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Billing Confirmed | Twofer</title>
+    <title data-i18n="billing.success.title">Billing Confirmed | Twofer</title>
     <meta name="robots" content="noindex,nofollow" />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <meta name="description" content="Twofer helps local businesses create live 2-for-1 and deep-discount specials, publish nearby, and redeem in store by QR code." />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Twofer" />
+    <meta property="og:title" content="Billing Confirmed | Twofer" />
+    <meta property="og:description" content="Twofer helps local businesses create live 2-for-1 and deep-discount specials, publish nearby, and redeem in store by QR code." />
+    <meta property="og:url" content="https://www.twoferapp.com/business/billing/success" />
+    <meta property="og:image" content="https://www.twoferapp.com/assets/og-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
   <body>
     <header class="site-header">
       <nav class="nav" aria-label="Primary navigation">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span><span>Twofer</span></a>
-        <div class="nav-links"><a href="/business">Business Access</a><a href="/support">Support</a></div>
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer</span></a>
+        <div class="nav-links" id="site-nav-links"><a href="/business" data-i18n="nav.businessAccess">Business Access</a><a href="/support" data-i18n="nav.support">Support</a></div>
+        <div class="nav-actions">
+          <div class="language-set" aria-label="Language options">
+            <button type="button" data-language-option="en" aria-pressed="true" data-i18n="site.lang.en">EN</button>
+            <button type="button" data-language-option="es" aria-pressed="false" data-i18n="site.lang.es">ES</button>
+            <button type="button" data-language-option="ko" aria-pressed="false" data-i18n="site.lang.ko">KO</button>
+          </div>
+          <button class="nav-menu-button" type="button" aria-controls="site-nav-links" aria-expanded="false" data-site-menu-toggle data-i18n="nav.menu">Menu</button>
+        </div>
       </nav>
     </header>
     <main>
       <section class="hero compact">
         <div class="hero-copy">
-          <p class="eyebrow">Stripe confirmation</p>
-          <h1>Billing confirmed</h1>
-          <p class="lede">Stripe is confirming your subscription. Twofer will update your business access after the verified webhook reaches Supabase.</p>
+          <p class="eyebrow" data-i18n="billing.success.eyebrow">Stripe confirmation</p>
+          <h1 data-i18n="billing.success.heading">Billing confirmed</h1>
+          <p class="lede" data-i18n="billing.success.lede">Stripe is confirming your subscription. Twofer will update your business access after the verified webhook reaches Supabase.</p>
           <div class="hero-actions">
-            <a class="button" href="/support">Contact support</a>
-            <a class="button secondary" href="/business">Back to business access</a>
+            <a class="button" href="/support" data-i18n="trial.contactSupport">Contact support</a>
+            <a class="button button-secondary" href="/business" data-i18n="billing.common.backBusiness">Back to business access</a>
           </div>
         </div>
       </section>
     </main>
+    <script src="/localization.js?v=20260702-site-i18n"></script>
   </body>
 </html>

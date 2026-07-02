@@ -4,95 +4,65 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Business Detail | Twofer Admin</title>
-    <meta name="robots" content="noindex,nofollow" />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
-  <body class="admin-shell">
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-section="business_detail"
+  >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
-        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span><span>Twofer Admin</span></a>
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
         <div class="nav-links"><a href="/admin/businesses">Businesses</a><a href="/admin/offers">Offers</a><a href="/admin/billing/events">Billing</a><a href="/admin/audit-log">Audit</a></div>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
       </nav>
     </header>
     <main class="admin-main">
       <div class="admin-title-row">
         <div>
           <p class="admin-kicker">Business detail</p>
-          <h1>Business Profile</h1>
-          <p class="lede">Review owner, verification, access, trial state, Stripe signals, offer activity, redemptions, notes, and audit history.</p>
+          <h1 data-business-name>Business Profile</h1>
+          <p class="lede" data-business-meta>Sign in to load this business.</p>
         </div>
         <div class="admin-actions">
-          <span class="admin-badge warning">Pending verification</span>
-          <span class="admin-badge">Can publish: no</span>
+          <span class="admin-badge" data-admin-status>Checking session</span>
         </div>
       </div>
-      <section class="admin-grid three">
-        <article class="admin-card"><span>Access</span><strong>Pending</strong><p>Approve limited or full trial through a server function.</p></article>
-        <article class="admin-card"><span>Trial</span><strong>--</strong><p>Extensions require role checks, reason, and audit log.</p></article>
-        <article class="admin-card"><span>Risk</span><strong>--</strong><p>Review duplicate, policy, and launch-area signals.</p></article>
+      <section class="admin-section">
+        <h2>Applications</h2>
+        <p class="admin-note">Trial requests and field invites linked to this business. Decisions are made on the Trial Requests page.</p>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Contact</th><th>Email</th><th>Status</th><th>Access</th><th>Trial days</th><th>Created</th></tr></thead>
+            <tbody data-applications>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load applications.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
-      <section class="admin-section admin-grid two">
-        <article class="admin-panel">
-          <h2>Profile</h2>
-          <p>Business name, address, category, contact, public email, website/social, and launch area.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Onboarding Source</h2>
-          <p>Website request, app login materialization, invite source, owner email linkage, and setup checklist status.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Website Submitted Data</h2>
-          <p>Raw request values stay reviewable separately from the current app profile.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Current App Profile</h2>
-          <p>Current canonical business fields after owner edits in the mobile app.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Field Source / Last Edited</h2>
-          <p>Field source rows show website import, app edit, admin edit, AI suggestion, and review state.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Profile Changes Needing Review</h2>
-          <p>Sensitive edits such as address or verified phone changes require admin approval before publishing policy can unlock.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>AI Suggestions</h2>
-          <p>Slow-hour parsing and first-offer ideas are drafts only; no AI suggestion publishes automatically.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Owner App Activity</h2>
-          <p>Context loads, section edits, first offer drafts, publish attempts, and blocked publish reasons appear in events.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Admin Actions</h2>
-          <p class="admin-note">Approve, reject, suspend, unsuspend, extend trial, comp access, resend invite, ensure Stripe customer, create checkout link, and portal-link actions must run through admin Edge Functions with audit logging.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Billing Profile</h2>
-          <p>Show Stripe Customer ID, billing email, billing contact, billing address source, sync status, and last Stripe sync time.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Subscription Access</h2>
-          <p>Display trial, active, past-due grace, canceled, comped, and suspended states from <code>business_subscriptions</code>.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Stripe Actions</h2>
-          <p>Create or sync Stripe Customer, generate web-only Checkout, create Customer Portal session, and queue backfill retries. Never expose these actions in the mobile app.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Billing History</h2>
-          <p>Review Stripe webhook events, checkout sessions, portal sessions, reminders, and admin billing actions.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Offers and Redemptions</h2>
-          <p>Show live offers, drafts, claims, redemptions, redemption rate, and policy review state.</p>
-        </article>
-        <article class="admin-panel">
-          <h2>Notes and Audit</h2>
-          <p>Internal notes and immutable audit trail stay separate from merchant-visible profile data.</p>
-        </article>
+      <section class="admin-section">
+        <h2>Audit History</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Admin</th><th>Action</th><th>Reason</th><th>Created</th></tr></thead>
+            <tbody data-audit>
+              <tr><td colspan="4" class="admin-row-detail">Sign in to load audit history.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
+    <script src="/admin/admin-directory.js?v=20260702-admin-dir"></script>
   </body>
 </html>

@@ -4,14 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Offers | Twofer Admin</title>
-    <meta name="robots" content="noindex,nofollow" />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-site" />
   </head>
-  <body class="admin-shell">
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-summary-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-dashboard-summary"
+    data-admin-section="offers"
+  >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
-        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span><span>Twofer Admin</span></a>
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
         <div class="nav-links"><a href="/admin">Overview</a><a href="/admin/businesses">Businesses</a><a href="/admin/trial-requests">Trial Requests</a><a href="/admin/audit-log">Audit</a></div>
+        <div class="nav-actions">
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
       </nav>
     </header>
     <main class="admin-main">
@@ -19,24 +33,23 @@
         <div>
           <p class="admin-kicker">Offer moderation</p>
           <h1>Offers</h1>
-          <p class="lede">Monitor live, draft, scheduled, expired, paused, and policy-risk offers.</p>
+          <p class="lede">Monitor live, inactive, scheduled, and expired offers across all businesses.</p>
+        </div>
+        <div class="admin-actions">
+          <span class="admin-badge" data-admin-status>Checking session</span>
         </div>
       </div>
-      <section class="admin-grid three">
-        <article class="admin-card"><span>Policy risks</span><p>Alcohol, tobacco, cannabis, weapons, adult products, prescription, counterfeit, discriminatory, bait-and-switch.</p></article>
-        <article class="admin-card"><span>Moderation actions</span><p>Pause, resume, remove, force expire, mark reviewed, send note.</p></article>
-        <article class="admin-card"><span>Publishing gate</span><p>Use <code>can_business_publish</code> before live publish and notification jobs.</p></article>
-      </section>
       <section class="admin-section">
         <div class="admin-table-wrap">
-          <table class="admin-table">
-            <thead><tr><th>Offer</th><th>Business</th><th>Status</th><th>Claims</th><th>Redemptions</th><th>AI policy</th><th>Action</th></tr></thead>
-            <tbody>
-              <tr><td>2-for-1 sample</td><td>Local cafe</td><td><span class="admin-badge">Draft</span></td><td>0</td><td>0</td><td>Pending</td><td>Review</td></tr>
+          <table class="admin-table" data-mobile-cards>
+            <thead><tr><th>Offer</th><th>Business</th><th>Status</th><th>Starts</th><th>Ends</th><th>Created</th></tr></thead>
+            <tbody data-rows>
+              <tr><td colspan="6" class="admin-row-detail">Sign in to load offers.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
+    <script src="/admin/admin-directory.js?v=20260702-admin-dir"></script>
   </body>
 </html>

@@ -5,13 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Trial Requests | Twofer Admin</title>
     <meta name="robots" content="noindex,nofollow" />
-    <link rel="stylesheet" href="/styles.css?v=20260701-logo" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f7f4" />
+    <link rel="stylesheet" href="/styles.css?v=20260702-admin-trial-network" />
   </head>
-  <body class="admin-shell">
+  <body
+    class="admin-shell"
+    data-admin-auth-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-auth-session"
+    data-admin-business-applications-endpoint="https://kvodhiqhdqnptqovovia.supabase.co/functions/v1/admin-business-applications"
+  >
     <header class="site-header">
       <nav class="nav" aria-label="Admin navigation">
-        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-logo.png" alt="" /></span><span>Twofer Admin</span></a>
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><img src="/assets/twofer-mark.png" alt="" /></span><span>Twofer Admin</span></a>
         <div class="nav-links"><a href="/admin">Overview</a><a href="/admin/businesses">Businesses</a><a href="/admin/offers">Offers</a><a href="/admin/audit-log">Audit</a></div>
+        <div class="nav-actions">
+          <span data-admin-status class="admin-badge warning">Admin session not connected</span>
+          <a class="button button-small" href="/admin/login" data-admin-login-link>Login</a>
+          <button class="button button-small button-secondary" type="button" data-admin-sign-out hidden>Sign out</button>
+        </div>
       </nav>
     </header>
     <main class="admin-main">
@@ -24,19 +38,42 @@
       </div>
       <section class="admin-grid three">
         <article class="admin-card"><span>Approve limited</span><p>One live offer, limited claims, offer review required.</p></article>
-        <article class="admin-card"><span>Approve full</span><p>Founder/admin-approved trial with normal pilot limits.</p></article>
+        <article class="admin-card"><span>Approve full</span><p>Founder/admin-approved trial with standard launch limits.</p></article>
         <article class="admin-card"><span>Reject or waitlist</span><p>Outside launch geography, prohibited categories, duplicate/spam signals.</p></article>
       </section>
       <section class="admin-section">
+        <form class="admin-form admin-trial-toolbar" data-trial-filter-form novalidate>
+          <label>
+            Queue
+            <select name="status">
+              <option value="open">Open review</option>
+              <option value="all">All recent</option>
+              <option value="approved">Approved</option>
+              <option value="waitlisted">Waitlisted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+          <label>
+            Decision note
+            <input name="reason" type="text" autocomplete="off" placeholder="Optional internal note" />
+          </label>
+          <div class="admin-ai-actions">
+            <button type="submit" class="button button-small">Load requests</button>
+          </div>
+          <p class="status full" data-trial-status role="status" aria-live="polite"></p>
+        </form>
+      </section>
+      <section class="admin-section">
         <div class="admin-table-wrap">
-          <table class="admin-table">
+          <table class="admin-table" data-mobile-cards>
             <thead><tr><th>Business</th><th>Owner</th><th>Email</th><th>Launch area</th><th>Risk score</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody>
-              <tr><td>Recent website request</td><td>Owner</td><td>email@example.com</td><td>DFW</td><td>70</td><td><span class="admin-badge warning">Review</span></td><td>Open</td></tr>
+            <tbody data-trial-requests-body>
+              <tr><td class="admin-row-detail" colspan="7">Connect an active admin session to load requests.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
+    <script src="/admin/trial-requests.js?v=20260702-trial-requests-network"></script>
   </body>
 </html>

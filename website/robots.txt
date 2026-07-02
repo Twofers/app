@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /business/billing/
+
+Sitemap: https://www.twoferapp.com/sitemap.xml
