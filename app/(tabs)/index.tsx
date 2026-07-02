@@ -42,7 +42,16 @@ import { dealMatchesSearch } from "@/lib/deals-discovery-filters";
 import { formatDistanceMiles, haversineMiles } from "@/lib/geo";
 import { translateFunctionErrorMessage } from "@/lib/i18n/function-errors";
 import { trackAppAnalyticsEvent } from "@/lib/app-analytics";
-import { getConsumerPreferences, setLastKnownConsumerCoords, setConsumerNotificationPrefs, DEFAULT_RADIUS_MILES } from "@/lib/consumer-preferences";
+import {
+  getConsumerPreferences,
+  setLastKnownConsumerCoords,
+  setConsumerNotificationPrefs,
+  setConsumerDealSortMode,
+  DEFAULT_RADIUS_MILES,
+  DEFAULT_DEAL_SORT_MODE,
+  CONSUMER_DEAL_SORT_MODES,
+  type ConsumerDealSortMode,
+} from "@/lib/consumer-preferences";
 import { syncConsumerLocationToServer } from "@/lib/sync-consumer-prefs";
 import {
   PUSH_TOKEN_REGISTRATION_RETRY_MESSAGE,
@@ -219,6 +228,7 @@ export default function HomeScreen() {
   /** Total non-canceled claims per capped deal (deal_claim_counts RPC). Empty until the RPC is deployed. */
   const [claimCountsByDeal, setClaimCountsByDeal] = useState<Map<string, number>>(() => new Map());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<ConsumerDealSortMode>(DEFAULT_DEAL_SORT_MODE);
   const [showAllLiveDeals, setShowAllLiveDeals] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState<number>(DEFAULT_RADIUS_MILES);
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
@@ -541,6 +551,7 @@ export default function HomeScreen() {
   const hydrateLocationFromPrefs = useCallback(async () => {
     const prefs = await getConsumerPreferences();
     setRadiusMiles(prefs.radiusMiles);
+    setSortMode(prefs.dealSortMode);
     setFavoritesOnly(prefs.notificationPrefs.mode === "favorites_only");
     setPreferredCategories(prefs.notificationPrefs.categoryTags ?? []);
     const coords = await resolveConsumerCoordinates(prefs);
@@ -768,6 +779,27 @@ export default function HomeScreen() {
     }
   }
 
+  const onSelectSortMode = useCallback((mode: ConsumerDealSortMode) => {
+    setSortMode(mode);
+    void setConsumerDealSortMode(mode);
+  }, []);
+
+  const sortModeLabel = useCallback(
+    (mode: ConsumerDealSortMode) => {
+      switch (mode) {
+        case "nearest":
+          return t("consumerHome.sortNearest");
+        case "endingSoon":
+          return t("consumerHome.sortEndingSoon");
+        case "newest":
+          return t("consumerHome.sortNewest");
+        default:
+          return t("consumerHome.sortForYou");
+      }
+    },
+    [t],
+  );
+
   const searchFilteredDeals = useMemo(
     () => deals.filter((d) => dealMatchesSearch(d, searchQuery)),
     [deals, searchQuery],
@@ -790,28 +822,49 @@ export default function HomeScreen() {
     if (favoritesOnly) {
       list = list.filter((d) => favoriteBusinessIds.includes(d.business_id));
     }
+    const distanceOf = (deal: Deal) => {
+      if (!userGeo) return Number.POSITIVE_INFINITY;
+      const c = readBusinessCoordinates(deal.businesses);
+      return c ? haversineMiles(userGeo.lat, userGeo.lng, c.lat, c.lng) : Number.POSITIVE_INFINITY;
+    };
+    const endOf = (deal: Deal) => new Date(deal.end_time).getTime();
+    // Deals from before the created_at column was selected sort as oldest.
+    const createdOf = (deal: Deal) => (deal.created_at ? new Date(deal.created_at).getTime() : 0);
     return [...list].sort((a, b) => {
+      if (sortMode === "nearest") {
+        const da = distanceOf(a);
+        const db = distanceOf(b);
+        if (da !== db) return da - db;
+        return endOf(a) - endOf(b);
+      }
+      if (sortMode === "endingSoon") {
+        const ea = endOf(a);
+        const eb = endOf(b);
+        if (ea !== eb) return ea - eb;
+        return distanceOf(a) - distanceOf(b);
+      }
+      if (sortMode === "newest") {
+        const ca = createdOf(a);
+        const cb = createdOf(b);
+        if (ca !== cb) return cb - ca;
+        return distanceOf(a) - distanceOf(b);
+      }
+      // "recommended": favorites, then preferred categories, then distance, then
+      // ending soonest — the first feed feels personalized without hiding anything.
       const aFav = favoriteBusinessIds.includes(a.business_id) ? 0 : 1;
       const bFav = favoriteBusinessIds.includes(b.business_id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
-      // Soft relevance boost: deals from the consumer's chosen categories rank
-      // ahead of others (but after favorites, and before distance) so the first
-      // feed feels personalized without hiding anything.
       if (preferredCategories.length) {
         const aCat = preferredCategories.includes((a.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
         const bCat = preferredCategories.includes((b.businesses?.category ?? "").toLowerCase()) ? 0 : 1;
         if (aCat !== bCat) return aCat - bCat;
       }
-      if (userGeo) {
-        const ca = readBusinessCoordinates(a.businesses);
-        const cb = readBusinessCoordinates(b.businesses);
-        const da = ca ? haversineMiles(userGeo.lat, userGeo.lng, ca.lat, ca.lng) : Number.POSITIVE_INFINITY;
-        const db = cb ? haversineMiles(userGeo.lat, userGeo.lng, cb.lat, cb.lng) : Number.POSITIVE_INFINITY;
-        if (da !== db) return da - db;
-      }
-      return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
+      const da = distanceOf(a);
+      const db = distanceOf(b);
+      if (da !== db) return da - db;
+      return endOf(a) - endOf(b);
     });
-  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo, preferredCategories]);
+  }, [searchFilteredDeals, dealsWithinRadius, showAllLiveDeals, favoritesOnly, favoriteBusinessIds, userGeo, preferredCategories, sortMode]);
 
   // Impressions are tracked from real viewport visibility via the FlatList's
   // onViewableItemsChanged (see onViewableDealsChangedRef), deduped per session.
@@ -1463,6 +1516,46 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: Spacing.md }}
+              contentContainerStyle={{ flexDirection: "row", gap: Spacing.sm }}
+              accessibilityLabel={t("consumerHome.sortDeals")}
+            >
+              {CONSUMER_DEAL_SORT_MODES.map((mode) => {
+                const selected = sortMode === mode;
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => onSelectSortMode(mode)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={sortModeLabel(mode)}
+                    style={{
+                      borderRadius: Radii.pill,
+                      borderWidth: 1,
+                      borderColor: selected ? theme.primary : theme.border,
+                      backgroundColor: selected ? theme.primary : theme.surfaceMuted,
+                      paddingVertical: Spacing.sm,
+                      paddingHorizontal: Spacing.md,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: selected ? theme.primaryText : theme.text,
+                      }}
+                      maxFontSizeMultiplier={1.15}
+                    >
+                      {sortModeLabel(mode)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
             {favoritesOnly ? (
               <Text style={{ fontSize: 13, marginBottom: Spacing.md, lineHeight: 18, color: theme.mutedText }}>
                 {t("consumerHome.favoritesOnlyActive")}
@@ -1585,6 +1678,9 @@ export default function HomeScreen() {
       userGeo,
       radiusMiles,
       favoritesOnly,
+      sortMode,
+      onSelectSortMode,
+      sortModeLabel,
       emptyNearbyLive,
       showDealsSkeleton,
       feedSegment,
