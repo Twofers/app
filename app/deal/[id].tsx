@@ -17,6 +17,7 @@ import { ScreenHeader } from "../../components/ui/screen-header";
 import { QrModal } from "../../components/qr-modal";
 import { useBusiness } from "../../hooks/use-business";
 import { useColorScheme } from "../../hooks/use-color-scheme";
+import { useSaveBusinessPrompt } from "../../hooks/use-save-business-prompt";
 import { Colors, PrimaryTint, Radii } from "../../constants/theme";
 import { formatValiditySummary, getDealClaimScheduleBlock, type DealClaimScheduleBlockReason } from "../../lib/deal-time";
 import { translateKnownApiMessage } from "../../lib/i18n/api-messages";
@@ -167,6 +168,8 @@ export default function DealDetail() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  // Return path: after a fresh claim, offer to save the business once the QR modal closes.
+  const pendingSaveBusinessPromptRef = useRef(false);
   const openedDealIdRef = useRef<string | null>(null);
   const [claimsCount, setClaimsCount] = useState(0);
   /** True only when claimsCount came from the deal_claim_counts RPC (full total, not own-claims-only). */
@@ -186,6 +189,11 @@ export default function DealDetail() {
   const [selectedDealLocale, setSelectedDealLocale] = useState<SupportedLocale | null>(null);
   const deviceDealLocaleRef = useRef(getDeviceDealLocale());
 
+  const { maybePromptSaveBusiness, saveBusinessPromptElement } = useSaveBusinessPrompt({
+    userId,
+    onSaved: () => setIsFavorite(true),
+  });
+
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -194,11 +202,24 @@ export default function DealDetail() {
     }
   }, [router]);
 
+  const handleQrHide = useCallback(() => {
+    setQrVisible(false);
+    if (!pendingSaveBusinessPromptRef.current) return;
+    pendingSaveBusinessPromptRef.current = false;
+    if (!deal) return;
+    void maybePromptSaveBusiness({
+      businessId: deal.business_id,
+      businessName: deal.businesses?.name ?? null,
+      context: "claim",
+      alreadyFavorited: isFavorite,
+    });
+  }, [deal, isFavorite, maybePromptSaveBusiness]);
+
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (qrVisible) {
-        setQrVisible(false);
+        handleQrHide();
         return true;
       }
       if (reportVisible) {
@@ -209,7 +230,7 @@ export default function DealDetail() {
       return true;
     });
     return () => sub.remove();
-  }, [goBack, qrVisible, reportVisible]);
+  }, [goBack, handleQrHide, qrVisible, reportVisible]);
 
   useEffect(() => {
     let cancelled = false;
@@ -484,6 +505,7 @@ export default function DealDetail() {
           claim_id: out.claim_id,
         });
       }
+      if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
       openClaimQr(out, true);
       void loadClaimCount(deal.id);
     } catch (e: unknown) {
@@ -492,6 +514,7 @@ export default function DealDetail() {
         const existing = await loadActiveClaimForDeal(deal.id, userId, 4);
         if (existing) {
           setBanner(null);
+          if (!isFavorite) pendingSaveBusinessPromptRef.current = true;
           openClaimQr(existing, true);
           void loadClaimCount(deal.id);
           return;
@@ -1038,13 +1061,15 @@ export default function DealDetail() {
         expiresAt={qrExpires}
         shortCode={qrShortCode}
         successToastNonce={claimSuccessToastNonce}
-        onHide={() => setQrVisible(false)}
+        onHide={handleQrHide}
         onRefresh={viewQr}
         refreshing={refreshingQr}
         onShare={shareDealEnabled ? handleShare : undefined}
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
       />
+
+      {saveBusinessPromptElement}
     </View>
   );
 }

@@ -643,6 +643,8 @@ The owner-demo proof path (claim -> QR/code modal -> Wallet active ticket -> Wal
 
 Why: `supabase/functions/claim-deal` enforces (a) at most one active claim app-wide and (b) one claim per business per local day (America/Chicago). The old seed left a same-day active claim plus same-day redeemed claims on Cedar & Bean, which trip both guards.
 
+> Update 2026-07-02: rule (b) no longer exists. The per-business-per-local-day guard was replaced by the business-level repeat policy (`businesses.repeat_claim_policy_type`: NONE / COOLDOWN_DAYS / FOREVER), which counts prior **redemptions** only and defaults to NONE. Current server-enforced claim rules are documented in `docs/claim-rules.md`.
+
 Source fix in this repo (no APK rebuilt yet): `scripts/seed-demo.cjs` now backdates the 2 redeemed wallet-history claims 1-2 days and seeds NO active claim, leaving the demo account free to perform exactly one fresh claim per smoke.
 
 ### Preferred: operator reset with service role (claim-clean account)
@@ -666,6 +668,7 @@ Then, on the next APK:
 
 - The demo account can claim Cedar only once per local day. If it already claimed today, use a fresh shopper: Create account with a throwaway email, finish onboarding, claim a live Cedar deal, then redeem as the demo owner (Business -> Redeem) using the shopper's short code.
 - Or rerun the demo flow after the America/Chicago calendar day rolls over.
+- (Update 2026-07-02: the once-per-local-day rule is gone. The blocker today is the one-active-claim-app-wide rule — redeem, release, or let the active claim expire, then claim again. See `docs/claim-rules.md`.)
 - Do NOT use Quick Deal/Create to manufacture claimable data; its publish/route-recovery issue is a separate follow-up.
 
 ### Readiness

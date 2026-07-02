@@ -172,7 +172,10 @@ import {
 import {
   createDefaultOneTimeDealSchedule,
   createOneTimeDealScheduleFromStart,
+  dealDurationExceedsMax,
+  MAX_DEAL_DURATION_MINUTES,
 } from "@/lib/deal-schedule-defaults";
+import { buildSlowHoursSchedulePreset, type SlowHoursSchedulePreset } from "@/lib/slow-hours-preset";
 import {
   aiComposeOfferTranscribe,
   fetchAiComposeQuota,
@@ -225,9 +228,10 @@ const SCHEDULE_DAY_BY_VALUE: Record<number, string> = {
   1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
 };
 
+// Preset windows must stay within MAX_DEAL_DURATION_MINUTES (4h guardrail).
 const SCHEDULE_PRESETS = [
-  { key: "weekdays", days: [1, 2, 3, 4, 5], startMin: 540, endMin: 1020 },
-  { key: "daily", days: [1, 2, 3, 4, 5, 6, 7], startMin: 480, endMin: 1200 },
+  { key: "weekdays", days: [1, 2, 3, 4, 5], startMin: 660, endMin: 840 },
+  { key: "daily", days: [1, 2, 3, 4, 5, 6, 7], startMin: 840, endMin: 1020 },
   { key: "weekends", days: [6, 7], startMin: 600, endMin: 840 },
 ] as const;
 
@@ -986,6 +990,28 @@ export default function AiDealScreen() {
     }, [businessId, reloadQuota, quota]),
   );
 
+  // Slow-hours schedule suggestion. RLS limits business_slow_hours to business
+  // members, so this quietly stays empty for accounts without that data.
+  useEffect(() => {
+    if (!businessId) {
+      setSlowHoursPreset(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("business_slow_hours")
+        .select("day_of_week,starts_at,ends_at")
+        .eq("business_id", businessId)
+        .limit(50);
+      if (cancelled || error) return;
+      setSlowHoursPreset(buildSlowHoursSchedulePreset(data ?? []));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
   function formatPickerTime(date: Date) {
     return format(date, "p", { locale: dateFnsLocaleFor(i18n.language) });
   }
@@ -1016,7 +1042,7 @@ export default function AiDealScreen() {
   const [promoLine, setPromoLine] = useState("");
   const [ctaText, setCtaText] = useState("");
   const [description, setDescription] = useState("");
-  const [maxClaims, setMaxClaims] = useState("50");
+  const [maxClaims, setMaxClaims] = useState("10");
   const [cutoffMins, setCutoffMins] = useState("15");
   const [validityMode, setValidityMode] = useState<"one-time" | "recurring">("one-time");
   const [initialOneTimeSchedule] = useState(() => createDefaultOneTimeDealSchedule());
@@ -1031,11 +1057,14 @@ export default function AiDealScreen() {
   const [showWindowStartPicker, setShowWindowStartPicker] = useState(false);
   const [showWindowEndPicker, setShowWindowEndPicker] = useState(false);
   const [windowStart, setWindowStart] = useState(new Date());
-  const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000));
+  const [windowEnd, setWindowEnd] = useState(new Date(Date.now() + 60 * 60 * 1000));
   const [iosSchedulePicker, setIosSchedulePicker] = useState<IosSchedulePickerTarget | null>(null);
   const [iosScheduleDraft, setIosScheduleDraft] = useState(new Date());
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
   const [schedulePreset, setSchedulePreset] = useState<string | null>(null);
+  // Slow-hours preset built from business_slow_hours (website signup data).
+  // null = no structured slow-hours data visible to this account.
+  const [slowHoursPreset, setSlowHoursPreset] = useState<SlowHoursSchedulePreset | null>(null);
   const [claimSettingsOpen, setClaimSettingsOpen] = useState(false);
   const [timezone, setTimezone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
@@ -2052,7 +2081,7 @@ export default function AiDealScreen() {
         setPhotoStepCollapsed(false);
         setUsePhotoAsFinal(Boolean(templatePhotoPath || templatePosterUrl));
         setMerchantOriginalWarningAcknowledged(false);
-        setMaxClaims(String(row.max_claims ?? 50));
+        setMaxClaims(String(row.max_claims ?? 10));
         setCutoffMins(String(row.claim_cutoff_buffer_minutes ?? 15));
         setValidityMode(row.is_recurring ? "recurring" : "one-time");
         setDaysOfWeek(row.days_of_week ?? [1, 2, 3, 4, 5]);
@@ -2281,6 +2310,19 @@ export default function AiDealScreen() {
     };
   }
 
+  function selectCreativeFormat(nextFormat: CreativeFormat) {
+    if (nextFormat === creativeFormat) return;
+    setCreativeFormat(nextFormat);
+    setPreviewFormat(nextFormat);
+    setPublishStatus("idle");
+    setPublishStatusMessage(null);
+    setApprovedComposedPresentationHash(null);
+    setApprovedLocalizationApprovalHash(null);
+    if (generatedAd || adAccepted) {
+      resetGenerationState();
+    }
+  }
+
   useEffect(() => {
     if (!approvedComposedPresentationHash && approvedLocalizationApprovalHash) {
       setApprovedLocalizationApprovalHash(null);
@@ -2404,6 +2446,16 @@ export default function AiDealScreen() {
         return false;
       }
       const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
+      if (dealDurationExceedsMax(durationMinutes)) {
+        setBanner({
+          message: t("createAi.errMaxDuration", {
+            hours: MAX_DEAL_DURATION_MINUTES / 60,
+            defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
+          }),
+          tone: "error",
+        });
+        return false;
+      }
       if (cutoffNum >= durationMinutes) {
         setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
         return false;
@@ -2420,6 +2472,16 @@ export default function AiDealScreen() {
         return false;
       }
       const windowDurationMinutes = windowEndMinutes - windowStartMinutes;
+      if (dealDurationExceedsMax(windowDurationMinutes)) {
+        setBanner({
+          message: t("createAi.errMaxDuration", {
+            hours: MAX_DEAL_DURATION_MINUTES / 60,
+            defaultValue: "Deals can run for up to {{hours}} hours at a time. Shorten the end time.",
+          }),
+          tone: "error",
+        });
+        return false;
+      }
       if (cutoffNum >= windowDurationMinutes) {
         setBanner({ message: t("createQuick.errCutoffDuration", { defaultValue: CUTOFF_DURATION_MESSAGE }), tone: "error" });
         return false;
@@ -4243,6 +4305,52 @@ export default function AiDealScreen() {
         ) : (
           <>
             <StepBadge n={1} total={3} t={t} />
+            <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.adFormatTitle")}</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+              {(["standard_card", "poster_v1"] as CreativeFormat[]).map((format) => {
+                const selected = creativeFormat === format;
+                const iconName = format === "poster_v1" ? "crop-portrait" : "view-agenda";
+                return (
+                  <Pressable
+                    key={format}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => selectCreativeFormat(format)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      minHeight: 74,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: selected ? theme.primary : theme.border,
+                      backgroundColor: selected ? PrimaryTint.surface : theme.surface,
+                      paddingVertical: 10,
+                      paddingHorizontal: 10,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <MaterialIcons
+                        name={iconName}
+                        size={20}
+                        color={selected ? theme.primary : theme.icon}
+                      />
+                      <Text
+                        style={{ flex: 1, minWidth: 0, color: selected ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.82}
+                      >
+                        {format === "poster_v1" ? t("createAi.adFormatPoster") : t("createAi.adFormatStandard")}
+                      </Text>
+                    </View>
+                    <Text style={{ marginTop: 5, color: theme.mutedText, fontSize: 11, lineHeight: 15 }} numberOfLines={2}>
+                      {format === "poster_v1" ? t("createAi.adFormatPosterHelp") : t("createAi.adFormatStandardHelp")}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.photo")}</Text>
             {/* Both buttons default to width:100%; flex wrappers keep the row inside the viewport. */}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
@@ -4555,6 +4663,15 @@ export default function AiDealScreen() {
                 defaultValue: "Choose when customers can claim this deal. Run it once or repeat it weekly.",
               })}
             </Text>
+            <Text style={{ marginTop: 4, color: theme.accentText, fontSize: 12, lineHeight: 17, fontWeight: "600" }}>
+              {slowHoursPreset
+                ? t("createAi.slowHoursNudge", {
+                    defaultValue: "Best for filling slower times — try your slow-hours preset under Recurring.",
+                  })
+                : t("createAi.slowHoursNudgeManual", {
+                    defaultValue: "Tip: target the times you actually want more customers. Slower hours work best.",
+                  })}
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               <Pressable
                 onPress={() => setValidityMode("one-time")}
@@ -4688,6 +4805,31 @@ export default function AiDealScreen() {
               <>
                 <Text style={{ marginTop: 12, fontWeight: "600", fontSize: 13, opacity: 0.5, color: theme.text }}>{t("createAi.schedulePresetsLabel")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                  {slowHoursPreset ? (
+                    <Pressable
+                      onPress={() => {
+                        if (schedulePreset === "slow_hours") {
+                          setSchedulePreset(null);
+                        } else {
+                          setSchedulePreset("slow_hours");
+                          setDaysOfWeek([...slowHoursPreset.days]);
+                          setWindowStart(dateFromMinutes(slowHoursPreset.startMin));
+                          setWindowEnd(dateFromMinutes(slowHoursPreset.endMin));
+                        }
+                      }}
+                      style={{ maxWidth: "100%", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: schedulePreset === "slow_hours" ? theme.primary : theme.surfaceMuted }}
+                    >
+                      <Text
+                        style={{ color: schedulePreset === "slow_hours" ? theme.primaryText : colorScheme === "dark" ? theme.text : Gray[700], fontWeight: "700", fontSize: 13 }}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
+                        maxFontSizeMultiplier={1.15}
+                      >
+                        {t("createAi.presetSlowHours", { defaultValue: "Use your slow hours" })}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {SCHEDULE_PRESETS.map((preset) => {
                     const active = schedulePreset === preset.key;
                     return (

@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { MerchantInsightsRow } from "@/lib/merchant-insights";
+import type { MerchantInsightsRow, RepeatVisitStats } from "@/lib/merchant-insights";
 import { Spacing } from "@/lib/screen-layout";
 
 // Raw ids the server may emit that have no translation (demo_seed, future
@@ -29,9 +29,17 @@ function formatClaimBlockedReasonLabel(key: string, t: (k: string) => string) {
 
 type Props = {
   insights: MerchantInsightsRow | null;
+  /** Aggregate favorites count (business_saved_customers_count RPC); null hides the line. */
+  savedCustomersCount?: number | null;
+  /** Redemption-confirmed repeat visits (business_repeat_visit_stats RPC); null hides the line. */
+  repeatVisitStats?: RepeatVisitStats | null;
 };
 
-export function MerchantInsightsPanel({ insights }: Props) {
+export function MerchantInsightsPanel({
+  insights,
+  savedCustomersCount = null,
+  repeatVisitStats = null,
+}: Props) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -60,12 +68,32 @@ export function MerchantInsightsPanel({ insights }: Props) {
       <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
         {t("merchantInsights.avgRedeemDelay")}: {avgLine}
       </Text>
+      {/* "Repeat" here means a prior claim at this business, not a confirmed
+          second visit — the RPC (merchant_business_insights) flags claims with
+          any earlier claim, redeemed or not. Copy must not say "returning". */}
       <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
         {t("merchantInsights.newVsReturning", {
           new: insights.new_customer_claims,
           returning: insights.returning_customer_claims,
         })}
       </Text>
+      {savedCustomersCount != null ? (
+        <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+          {t("merchantInsights.savedCustomers", {
+            defaultValue: "Customers who saved this business: {{count}}",
+            count: savedCustomersCount,
+          })}
+        </Text>
+      ) : null}
+      {repeatVisitStats != null ? (
+        <Text style={{ fontSize: 14, color: theme.mutedText, lineHeight: 20 }}>
+          {t("merchantInsights.repeatVisits", {
+            defaultValue: "Confirmed repeat customers: {{repeat}} of {{total}} redeemers came back",
+            repeat: repeatVisitStats.repeat_customers,
+            total: repeatVisitStats.redeemed_customers,
+          })}
+        </Text>
+      ) : null}
 
       {mixEntries(insights.age_band_mix).length > 0 ? (
         <View style={{ gap: 4 }}>

@@ -78,13 +78,18 @@ describe("AI create UX source guards", () => {
     }
   });
 
-  it("keeps poster generation fixed to the premium template", () => {
+  it("surfaces poster format while keeping poster generation fixed to the premium template", () => {
     expect(createAiSource).toContain('const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";');
     expect(createAiSource).toContain("style: FIXED_POSTER_TEMPLATE_ID");
     expect(createAiSource).toContain("selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID");
+    expect(createAiSource).toContain("function selectCreativeFormat(nextFormat: CreativeFormat)");
+    expect(createAiSource).toContain('(["standard_card", "poster_v1"] as CreativeFormat[])');
+    expect(createAiSource).toContain("setCreativeFormat(nextFormat)");
+    expect(createAiSource).toContain("setPreviewFormat(nextFormat)");
+    expect(createAiSource).toContain("createAi.adFormatPoster");
+    expect(createAiSource).toContain("createAi.adFormatStandard");
     expect(createAiSource).not.toContain("EXPLICIT_POSTER_STYLE_CHOICES");
     expect(createAiSource).not.toContain("POSTER_STYLE_CHOICES");
-    expect(createAiSource).not.toContain("selectPosterStyle");
     expect(createAiSource).not.toContain("posterTryOurLabel");
   });
 

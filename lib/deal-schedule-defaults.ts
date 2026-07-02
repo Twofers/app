@@ -1,7 +1,13 @@
 export const DEFAULT_DEAL_START_DELAY_MINUTES = 5;
 export const DEFAULT_DEAL_DURATION_MINUTES = 60;
+/** Guardrail: a deal may be claimable for at most 4 hours at a time (one-time span or recurring daily window). */
+export const MAX_DEAL_DURATION_MINUTES = 4 * 60;
 
 const MINUTE_MS = 60 * 1000;
+
+export function dealDurationExceedsMax(durationMinutes: number): boolean {
+  return durationMinutes > MAX_DEAL_DURATION_MINUTES;
+}
 
 export type OneTimeDealSchedule = {
   startTime: Date;

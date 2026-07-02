@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   createDefaultOneTimeDealSchedule,
   createOneTimeDealScheduleFromStart,
+  dealDurationExceedsMax,
+  MAX_DEAL_DURATION_MINUTES,
 } from "./deal-schedule-defaults";
 
 describe("deal schedule defaults", () => {
@@ -20,5 +22,12 @@ describe("deal schedule defaults", () => {
 
     expect(schedule.startTime.toISOString()).toBe("2026-06-30T21:05:00.000Z");
     expect(schedule.endTime.toISOString()).toBe("2026-06-30T22:05:00.000Z");
+  });
+
+  it("caps deal duration at 4 hours", () => {
+    expect(MAX_DEAL_DURATION_MINUTES).toBe(240);
+    expect(dealDurationExceedsMax(60)).toBe(false);
+    expect(dealDurationExceedsMax(240)).toBe(false);
+    expect(dealDurationExceedsMax(241)).toBe(true);
   });
 });

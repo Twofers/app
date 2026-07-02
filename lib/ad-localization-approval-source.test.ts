@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const source = readFileSync(join(process.cwd(), "app/create/ai.tsx"), "utf8");
+const source = readFileSync(join(process.cwd(), "app/create/ai.tsx"), "utf8").replace(/\r\n/g, "\n");
 
 describe("AI create localization approval binding source", () => {
   it("records and enforces the exact localization approval hash when automatic bundle approval is enabled", () => {

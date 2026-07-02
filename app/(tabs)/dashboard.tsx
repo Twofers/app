@@ -46,7 +46,12 @@ import {
 import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
-import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
+import {
+  parseMerchantInsights,
+  parseRepeatVisitStats,
+  type MerchantInsightsRow,
+  type RepeatVisitStats,
+} from "@/lib/merchant-insights";
 import { supabase } from "@/lib/supabase";
 import { HapticScalePressable } from "@/components/ui/haptic-scale-pressable";
 import { triggerLightHaptic } from "@/lib/press-feedback";
@@ -547,6 +552,11 @@ export default function BusinessDashboard() {
   const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
   const [generatingFlyerId, setGeneratingFlyerId] = useState<string | null>(null);
   const [insights, setInsights] = useState<MerchantInsightsRow | null>(null);
+  // Aggregate favorites count from the business_saved_customers_count RPC.
+  // null = unavailable (RPC not deployed yet or errored) — the tile is hidden.
+  const [savedCustomers, setSavedCustomers] = useState<number | null>(null);
+  // Redemption-confirmed repeat visits (business_repeat_visit_stats RPC); null hides the tile.
+  const [repeatVisits, setRepeatVisits] = useState<RepeatVisitStats | null>(null);
   const [dealsHasMore, setDealsHasMore] = useState(false);
   const [dealsLoadingMore, setDealsLoadingMore] = useState(false);
   const perDealMetricsRef = useRef<Record<string, PerDealMetrics>>({});
@@ -700,10 +710,25 @@ export default function BusinessDashboard() {
       } else {
         setInsights(null);
       }
+
+      const { data: savedCount, error: savedErr } = await supabase.rpc(
+        "business_saved_customers_count",
+        { p_business_id: businessId },
+      );
+      setSavedCustomers(!savedErr && typeof savedCount === "number" ? savedCount : null);
+
+      const { data: repeatRaw, error: repeatErr } = await supabase.rpc(
+        "business_repeat_visit_stats",
+        { p_business_id: businessId },
+      );
+      setRepeatVisits(!repeatErr ? parseRepeatVisitStats(repeatRaw) : null);
+
       setLastUpdatedAt(new Date());
       return true;
     } catch (err: unknown) {
       setInsights(null);
+      setSavedCustomers(null);
+      setRepeatVisits(null);
       setDealsHasMore(false);
       const msg = friendlyDashboardError(err, t("offersDashboard.errLoadDashboard"));
       setBanner(msg);
@@ -1298,6 +1323,26 @@ export default function BusinessDashboard() {
               sublabel={engagementSnapshot.sublabel}
               accent={monthOpens > 0 || monthClaims > 0}
             />
+            {savedCustomers != null ? (
+              <SnapshotMetric
+                label={t("offersDashboard.metricSavedCustomers", { defaultValue: "Saved customers" })}
+                value={String(savedCustomers)}
+                sublabel={t("offersDashboard.metricSavedCustomersSub", {
+                  defaultValue: "Customers following your offers",
+                })}
+                accent={savedCustomers > 0}
+              />
+            ) : null}
+            {repeatVisits != null ? (
+              <SnapshotMetric
+                label={t("offersDashboard.metricRepeatCustomers", { defaultValue: "Repeat customers" })}
+                value={String(repeatVisits.repeat_customers)}
+                sublabel={t("offersDashboard.metricRepeatCustomersSub", {
+                  defaultValue: "Redeemed 2 or more times",
+                })}
+                accent={repeatVisits.repeat_customers > 0}
+              />
+            ) : null}
           </View>
 
           <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
@@ -1422,6 +1467,8 @@ export default function BusinessDashboard() {
       monthClaims,
       monthRedeems,
       monthOpens,
+      savedCustomers,
+      repeatVisits,
       engagementSnapshot,
       dashboardNextActionTitle,
       handleDashboardNextAction,
@@ -1571,7 +1618,13 @@ export default function BusinessDashboard() {
             </Text>
           </Pressable>
         </CardShell>
-        {insightsOpen ? <MerchantInsightsPanel insights={insights} /> : null}
+        {insightsOpen ? (
+          <MerchantInsightsPanel
+            insights={insights}
+            savedCustomersCount={savedCustomers}
+            repeatVisitStats={repeatVisits}
+          />
+        ) : null}
 
         <Pressable onPress={() => router.push("/create/reuse")} accessibilityRole="button">
           <Text style={{ fontWeight: "800", fontSize: 15, color: primary }}>
@@ -1597,6 +1650,8 @@ export default function BusinessDashboard() {
       weekLabels,
       weekCounts,
       insights,
+      savedCustomers,
+      repeatVisits,
       monthlyStatsOpen,
       insightsOpen,
       deals,

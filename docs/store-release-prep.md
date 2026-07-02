@@ -249,9 +249,10 @@ Reviewer-account caveats (verify before submitting):
 
 - [ ] The deleted demo-login helper is not present in production builds. Reviewers sign in through
   the normal email/password form.
-- [ ] The consumer reviewer account must be claim-clean before review. A user can create only one
-  fresh claim per business per local day (America/Chicago), so repeated same-day claim tests against
-  the same business are expected to be blocked.
+- [ ] The consumer reviewer account must be claim-clean before review. A user can hold only one
+  active claim at a time app-wide (claiming the same deal again returns the same ticket), so a second
+  claim test is expected to be blocked until the first claim is redeemed, released, or expires.
+  There is no per-day limit; see `docs/claim-rules.md` for the full current rules.
 - [ ] The business reviewer account owns a pilot business with posted deals and can reach the
   dashboard, create, active-deals, redeem, analytics, profile, and settings flows.
 - [ ] Paste reviewer passwords only into the store review fields. Do not commit them.

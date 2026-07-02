@@ -28,6 +28,7 @@ import { QrModal } from "@/components/qr-modal";
 import { WalletVisualPassModal } from "@/components/wallet-visual-pass";
 import { WalletUseDealSlideModal } from "@/components/wallet-use-deal-slide-modal";
 import { useBusiness } from "@/hooks/use-business";
+import { useSaveBusinessPrompt } from "@/hooks/use-save-business-prompt";
 import { useSecondTick } from "@/hooks/use-second-tick";
 import { formatConsumerCountdown } from "@/lib/consumer-countdown";
 import { DealStatusPill } from "@/components/deal-status-pill";
@@ -174,6 +175,11 @@ export default function WalletScreen() {
     () => new Map(),
   );
   const deviceDealLocaleRef = useRef(getDeviceDealLocale());
+  // Return path: claim ids that were active/redeeming on the previous load. When one
+  // of them shows up redeemed (QR scan at the counter or the in-app visual pass),
+  // offer to save the business. Starts empty, so the first load never prompts.
+  const prevActiveClaimIdsRef = useRef<Set<string>>(new Set());
+  const { maybePromptSaveBusiness, saveBusinessPromptElement } = useSaveBusinessPrompt({ userId });
   const resolvedDealDisplayLocale = customerLocaleResolutionEnabled
     ? resolveDealDisplayLocale({
         customerPreferredLocale: customerPreferredDealLocale,
@@ -273,6 +279,28 @@ export default function WalletScreen() {
         }),
       );
       setClaims(rowsWithCachedTokens);
+
+      const justRedeemed = rowsWithCachedTokens.find(
+        (row) =>
+          (row.redeemed_at || row.claim_status === "redeemed") &&
+          prevActiveClaimIdsRef.current.has(row.id),
+      );
+      prevActiveClaimIdsRef.current = new Set(
+        rowsWithCachedTokens
+          .filter(
+            (row) =>
+              !row.redeemed_at &&
+              (row.claim_status === "active" || row.claim_status === "redeeming"),
+          )
+          .map((row) => row.id),
+      );
+      if (justRedeemed?.deals?.business_id && !isDemoOffer(justRedeemed.deals)) {
+        void maybePromptSaveBusiness({
+          businessId: justRedeemed.deals.business_id,
+          businessName: justRedeemed.deals.businesses?.name ?? null,
+          context: "redeem",
+        });
+      }
     } catch (error) {
       const err = error instanceof Error ? { message: error.message } : { message: "Unknown wallet load error" };
       logPostgrestError("wallet deal_claims", err);
@@ -281,7 +309,7 @@ export default function WalletScreen() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [maybePromptSaveBusiness, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1166,6 +1194,8 @@ export default function WalletScreen() {
         sharing={shareDealEnabled ? isSharing : undefined}
         shareError={shareDealEnabled ? shareError : undefined}
       />
+
+      {saveBusinessPromptElement}
     </View>
   );
 }
