@@ -208,29 +208,33 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.copyOptionCtaLabel");
   });
 
-  it("keeps generated deal review focused on one deal preview", () => {
+  it("routes poster-format generated review to the native poster canvas", () => {
     const generatedPreviewStart = createAiSource.indexOf("{generatedAd && !adAccepted ?");
     const generatedPreviewEnd = createAiSource.indexOf("{showCopyAlternatives", generatedPreviewStart);
     const generatedPreviewSource = createAiSource.slice(generatedPreviewStart, generatedPreviewEnd);
 
     expect(generatedPreviewSource).toContain("createAi.dealPreview");
+    expect(createAiSource).toContain("const showPosterFormat = creativeFormat === \"poster_v1\" || previewFormat === \"poster_v1\";");
+    expect(createAiSource).toContain("const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;");
+    expect(createAiSource).toContain("const renderPosterPreview = () =>");
+    expect(createAiSource).toContain("<AdPosterCanvas");
+    expect(createAiSource).toContain("spec={effectivePosterSpec}");
+    expect(generatedPreviewSource).toContain("showPosterPreview ? (");
+    expect(generatedPreviewSource).toContain("renderPosterPreview()");
     expect(generatedPreviewSource).toContain("<GeneratedAdPreviewCard");
-    expect(generatedPreviewSource).not.toContain("showPosterPreview");
-    expect(generatedPreviewSource).not.toContain("createAi.posterPreviewTitle");
-    expect(generatedPreviewSource).not.toContain("createAi.posterPreviewBadge");
-    expect(generatedPreviewSource).not.toContain("<AdPosterCanvas");
   });
 
-  it("keeps the accepted deal preview on the customer-style card instead of a poster duplicate", () => {
+  it("keeps accepted poster preview native while retaining the standard-card fallback", () => {
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
     const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
 
     expect(createAiSource).not.toContain("showDraftPosterPreview");
-    expect(createAiSource).not.toContain("<AdPosterCanvas");
+    expect(acceptedPreviewSource).toContain("showPosterPreview ? (");
+    expect(acceptedPreviewSource).toContain("renderPosterPreview()");
+    expect(acceptedPreviewSource).toContain("dealDetail.dealDetails");
     expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
     expect(acceptedPreviewSource).toContain("generatedAd?.poster_storage_path");
-    expect(acceptedPreviewSource).not.toContain("spec={effectivePosterSpec}");
   });
 
   it("keeps generated research context out of the owner review UI", () => {

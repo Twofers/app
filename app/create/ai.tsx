@@ -43,6 +43,7 @@ import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
 import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
+import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { Colors, Gray, PrimaryTint } from "@/constants/theme";
@@ -3933,10 +3934,28 @@ export default function AiDealScreen() {
   const adImageUri = generatedAd?.poster_storage_path
     ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
     : usePhotoAsFinal ? selectedPhotoUri : null;
+  const showPosterFormat = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
   const currentAdStoragePath = imageVersionStoragePath(generatedAd);
   const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
+  const fallbackPosterPreviewSpec =
+    showPosterFormat && offerDefinition
+      ? buildPosterSpecFromOfferDefinition({
+          definition: offerDefinition,
+          enabled: true,
+          templateId: selectedPosterTemplateId,
+          sourceAssetPath: currentAdStoragePath ?? originalStoragePath ?? null,
+          renderedAssetPath: null,
+          headline: title.trim() || generatedAd?.headline || null,
+          subline: posterScheduleLabel,
+          businessCategory: businessContextForAi.category,
+          compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
+        })
+      : null;
+  const effectivePosterSpec = showPosterFormat ? generatedAd?.poster ?? fallbackPosterPreviewSpec : null;
+  const showPosterPreview = Boolean(effectivePosterSpec);
+  const posterPreviewImageUri = adImageUri ?? selectedPhotoUri;
   const originalImageAd = generatedAd ? buildOriginalPhotoVersionAd(generatedAd, originalStoragePath) : null;
   const originalImageVersion = originalImageAd ? buildImageVersionEntry(originalImageAd, "original") : null;
   const composedAdPreviewEnabled =
@@ -4126,6 +4145,56 @@ export default function AiDealScreen() {
         ? t("createAi.reviseRevisionsLeftSingular")
         : t("createAi.reviseRevisionsLeftPlural", { count: revisionsLeft });
   const canReviseAd = revisionsLeft > 0 && !revising && !generating;
+  const renderPosterPreview = () => {
+    if (!effectivePosterSpec) return null;
+    return (
+      <View
+        style={{
+          borderRadius: 8,
+          backgroundColor: colorScheme === "dark" ? "#020617" : "#111827",
+          borderWidth: 1,
+          borderColor: colorScheme === "dark" ? "#334155" : "#1F2937",
+          padding: 12,
+          gap: 12,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <Text
+            style={{ flex: 1, minWidth: 0, color: "#F8FAFC", fontSize: 20, lineHeight: 25, fontWeight: "900" }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
+            {t("createAi.posterPreviewTitle", { defaultValue: "Poster preview" })}
+          </Text>
+          <View
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.22)",
+              backgroundColor: "rgba(255,255,255,0.14)",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+            }}
+          >
+            <Text
+              style={{ color: "#FDE68A", fontSize: 13, lineHeight: 17, fontWeight: "900" }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
+              {t("createAi.posterPreviewBadge", { defaultValue: "Poster ad" })}
+            </Text>
+          </View>
+        </View>
+        <AdPosterCanvas
+          spec={effectivePosterSpec}
+          imageUri={posterPreviewImageUri}
+          templateId={selectedPosterTemplateId}
+        />
+      </View>
+    );
+  };
   const progressRevisionTarget = revisionFeedback.trim()
     ? copyOnlyRevisionTargetForFeedback(revisionTarget, revisionFeedback)
     : revisionTarget;
@@ -5111,28 +5180,32 @@ export default function AiDealScreen() {
                       previewShownAtRef={composedPreviewShownAtRef}
                       lastHashRef={lastComposedPreviewTelemetryHashRef}
                     />
-                    <GeneratedAdPreviewCard
-                      imageUri={adImageUri}
-                      businessName={businessName}
-                      headline={ownerLanguagePreview.headline}
-                      body={ownerLanguagePreview.body}
-                      imageAltText={ownerLanguagePreview.imageAltText}
-                      offerLine={ownerLanguagePreview.offerLine}
-                      termsLine={ownerLanguagePreviewDisplayTermsLine}
-                      cta={ownerLanguagePreview.cta}
-                      scheduleSummary={displayScheduleSummary}
-                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                      maxClaimsValue={maxClaims}
-                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                      termsHelper={t("createAi.lockedTermsHelper", {
-                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                      })}
-                      noImageLabel={t("createAi.noImage")}
-                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                      theme={theme}
-                      darkMode={colorScheme === "dark"}
-                    />
+                    {showPosterPreview ? (
+                      renderPosterPreview()
+                    ) : (
+                      <GeneratedAdPreviewCard
+                        imageUri={adImageUri}
+                        businessName={businessName}
+                        headline={ownerLanguagePreview.headline}
+                        body={ownerLanguagePreview.body}
+                        imageAltText={ownerLanguagePreview.imageAltText}
+                        offerLine={ownerLanguagePreview.offerLine}
+                        termsLine={ownerLanguagePreviewDisplayTermsLine}
+                        cta={ownerLanguagePreview.cta}
+                        scheduleSummary={displayScheduleSummary}
+                        maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                        maxClaimsValue={maxClaims}
+                        termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                        termsHelper={t("createAi.lockedTermsHelper", {
+                          defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                        })}
+                        noImageLabel={t("createAi.noImage")}
+                        fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                        theme={theme}
+                        darkMode={colorScheme === "dark"}
+                      />
+                    )}
                     {composedMinimalInputEnabled ? (
                       <View style={{ gap: 8 }}>
                         <SecondaryButton
@@ -5186,28 +5259,32 @@ export default function AiDealScreen() {
                   </>
                 ) : (
                   <>
-                    <GeneratedAdPreviewCard
-                      imageUri={adImageUri}
-                      businessName={businessName}
-                      headline={ownerLanguagePreview.headline}
-                      body={ownerLanguagePreview.body}
-                      imageAltText={ownerLanguagePreview.imageAltText}
-                      offerLine={ownerLanguagePreview.offerLine}
-                      termsLine={ownerLanguagePreviewDisplayTermsLine}
-                      cta={ownerLanguagePreview.cta}
-                      scheduleSummary={displayScheduleSummary}
-                      maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                      maxClaimsValue={maxClaims}
-                      termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                      termsHelper={t("createAi.lockedTermsHelper", {
-                        defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                      })}
-                      noImageLabel={t("createAi.noImage")}
-                      fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                      addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
-                      theme={theme}
-                      darkMode={colorScheme === "dark"}
-                    />
+                    {showPosterPreview ? (
+                      renderPosterPreview()
+                    ) : (
+                      <GeneratedAdPreviewCard
+                        imageUri={adImageUri}
+                        businessName={businessName}
+                        headline={ownerLanguagePreview.headline}
+                        body={ownerLanguagePreview.body}
+                        imageAltText={ownerLanguagePreview.imageAltText}
+                        offerLine={ownerLanguagePreview.offerLine}
+                        termsLine={ownerLanguagePreviewDisplayTermsLine}
+                        cta={ownerLanguagePreview.cta}
+                        scheduleSummary={displayScheduleSummary}
+                        maxClaimsLabel={t("createAi.maxClaimsLabel")}
+                        maxClaimsValue={maxClaims}
+                        termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
+                        termsHelper={t("createAi.lockedTermsHelper", {
+                          defaultValue: "The offer terms are locked so customers always see the correct deal.",
+                        })}
+                        noImageLabel={t("createAi.noImage")}
+                        fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                        theme={theme}
+                        darkMode={colorScheme === "dark"}
+                      />
+                    )}
                   </>
                 )}
 
@@ -5544,38 +5621,69 @@ export default function AiDealScreen() {
                 }}
               >
                 <Text style={{ marginTop: 22, fontWeight: "700" }}>{t("createAi.dealPreview")}</Text>
-                <View
-                  style={{
-                    borderRadius: 18,
-                    backgroundColor: theme.surface,
-                    overflow: "hidden",
-                    marginTop: 10,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                  }}
-                >
-                  {(() => {
-                    const previewUri = generatedAd?.poster_storage_path
-                      ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                      : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
-                    return previewUri ? (
-                      <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
-                    ) : (
-                      <DraftFallbackVisual
-                        businessName={businessName}
-                        headline={title || promoLine || hintText}
-                        offerLine={promoLine || title || description}
-                        label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                      />
-                    );
-                  })()}
-                  <View style={{ padding: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                    {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
-                    {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
-                    <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                {showPosterPreview ? (
+                  <View style={{ marginTop: 10, gap: 12 }}>
+                    {renderPosterPreview()}
+                    <View
+                      style={{
+                        borderRadius: 8,
+                        backgroundColor: theme.surface,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        padding: 14,
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: "900", color: theme.text }}>
+                        {t("dealDetail.dealDetails", { defaultValue: "Deal details" })}
+                      </Text>
+                      <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "900", color: theme.text }}>
+                        {title || t("createAi.placeholderDealTitle")}
+                      </Text>
+                      {promoLine ? (
+                        <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: "700", color: theme.text }}>
+                          {promoLine}
+                        </Text>
+                      ) : null}
+                      <Text style={{ fontSize: 15, lineHeight: 21, color: theme.mutedText }}>
+                        {description || t("createAi.placeholderOfferDetails")}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                ) : (
+                  <View
+                    style={{
+                      borderRadius: 18,
+                      backgroundColor: theme.surface,
+                      overflow: "hidden",
+                      marginTop: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    {(() => {
+                      const previewUri = generatedAd?.poster_storage_path
+                        ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+                        : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
+                      return previewUri ? (
+                        <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
+                      ) : (
+                        <DraftFallbackVisual
+                          businessName={businessName}
+                          headline={title || promoLine || hintText}
+                          offerLine={promoLine || title || description}
+                          label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                        />
+                      );
+                    })()}
+                    <View style={{ padding: 12 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
+                      {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
+                      {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
+                      <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
+                    </View>
+                  </View>
+                )}
 
                 <Text style={{ marginTop: 16, color: theme.text }}>{t("createAi.editHeadline")}</Text>
                 <TextInput value={title} onChangeText={(value) => { setTitle(value); invalidateAcceptedAdDraft(); }} placeholder={t("createAi.headlinePlaceholder")} placeholderTextColor={theme.mutedText} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, marginTop: 6, color: theme.text, backgroundColor: theme.surface }} />
