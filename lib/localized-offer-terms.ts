@@ -198,7 +198,8 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
   },
   "bottled water": {
     "es-US": { displayName: "agua embotellada" },
-    "ko-KR": { displayName: "\uc0dd\uc218", koreanCounterId: "cup" },
+    // A bottle counts as \uac1c, not \uc794 (cup).
+    "ko-KR": { displayName: "\uc0dd\uc218", koreanCounterId: "piece" },
   },
   juice: {
     "es-US": { displayName: "jugo" },
@@ -434,7 +435,8 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
   },
   "kids meal": {
     "es-US": { displayName: "comida para ni\xf1os" },
-    "ko-KR": { displayName: "\ud0a4\uc988 \ubc00", koreanCounterId: "serving" },
+    // \ud0a4\uc988 \uc138\ud2b8 is the standard Korean menu term; \ud0a4\uc988 \ubc00 is awkward.
+    "ko-KR": { displayName: "\ud0a4\uc988 \uc138\ud2b8", koreanCounterId: "serving" },
   },
   "ice cream": {
     "es-US": { displayName: "helado" },
@@ -482,7 +484,8 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
   },
   gyro: {
     "es-US": { displayName: "gyro" },
-    "ko-KR": { displayName: "\uc790\uc774\ub85c", koreanCounterId: "piece" },
+    // \uc790\uc774\ub85c reads as "gyroscope"; Korean menus use \uae30\ub85c\uc2a4 for the dish.
+    "ko-KR": { displayName: "\uae30\ub85c\uc2a4", koreanCounterId: "piece" },
   },
   pita: {
     "es-US": { displayName: "pita" },
@@ -506,7 +509,8 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
   },
   pho: {
     "es-US": { displayName: "pho" },
-    "ko-KR": { displayName: "\ud37c", koreanCounterId: "serving" },
+    // Korean menus call pho \uc300\uad6d\uc218 ("rice noodles"); \ud37c alone is rarely used.
+    "ko-KR": { displayName: "\uc300\uad6d\uc218", koreanCounterId: "serving" },
   },
   "curry bowl": {
     "es-US": { displayName: "bowl de curry" },
@@ -539,6 +543,415 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
   "herbal tea": {
     "es-US": { displayName: "t\xe9 herbal" },
     "ko-KR": { displayName: "\ud5c8\ube0c\ucc28", koreanCounterId: "cup" },
+  },
+  // --- 2026-07-01 expansion batch: breakfast ---
+  bacon: {
+    "es-US": { displayName: "tocino" },
+    "ko-KR": { displayName: "\ubca0\uc774\ucee8", koreanCounterId: "serving" },
+  },
+  sausage: {
+    "es-US": { displayName: "salchicha" },
+    "ko-KR": { displayName: "\uc18c\uc2dc\uc9c0", koreanCounterId: "piece" },
+  },
+  "scrambled eggs": {
+    "es-US": { displayName: "huevos revueltos" },
+    "ko-KR": { displayName: "\uc2a4\ud06c\ub7a8\ube14\ub4dc \uc5d0\uadf8", koreanCounterId: "serving" },
+  },
+  biscuit: {
+    "es-US": { displayName: "bisquet" },
+    "ko-KR": { displayName: "\ube44\uc2a4\ud0b7", koreanCounterId: "piece" },
+  },
+  "biscuits and gravy": {
+    "es-US": { displayName: "bisquets con gravy" },
+    "ko-KR": { displayName: "\ube44\uc2a4\ud0b7 \uc564 \uadf8\ub808\uc774\ube44", koreanCounterId: "serving" },
+  },
+  "french toast": {
+    "es-US": { displayName: "pan franc\xe9s" },
+    "ko-KR": { displayName: "\ud504\ub80c\uce58\ud1a0\uc2a4\ud2b8", koreanCounterId: "serving" },
+  },
+  "breakfast platter": {
+    "es-US": { displayName: "plato de desayuno" },
+    "ko-KR": { displayName: "\uc544\uce68 \uc138\ud2b8", koreanCounterId: "serving" },
+  },
+  "bagel with cream cheese": {
+    "es-US": { displayName: "bagel con queso crema" },
+    "ko-KR": { displayName: "\ud06c\ub9bc\uce58\uc988 \ubca0\uc774\uae00", koreanCounterId: "piece" },
+  },
+  "english muffin": {
+    "es-US": { displayName: "muffin ingl\xe9s" },
+    "ko-KR": { displayName: "\uc789\uae00\ub9ac\uc2dc \uba38\ud540", koreanCounterId: "piece" },
+  },
+  oatmeal: {
+    "es-US": { displayName: "avena" },
+    "ko-KR": { displayName: "\uc624\ud2b8\ubc00", koreanCounterId: "serving" },
+  },
+  "fruit cup": {
+    "es-US": { displayName: "vaso de fruta" },
+    "ko-KR": { displayName: "\uacfc\uc77c \ucef5", koreanCounterId: "serving" },
+  },
+  "croissant sandwich": {
+    "es-US": { displayName: "s\xe1ndwich de croissant" },
+    "ko-KR": { displayName: "\ud06c\ub8e8\uc544\uc0c1 \uc0cc\ub4dc\uc704\uce58", koreanCounterId: "piece" },
+  },
+  "egg bites": {
+    "es-US": { displayName: "bocaditos de huevo" },
+    "ko-KR": { displayName: "\uc5d0\uadf8 \ubc14\uc774\ud2b8", koreanCounterId: "serving" },
+  },
+  "breakfast combo": {
+    "es-US": { displayName: "combo de desayuno" },
+    "ko-KR": { displayName: "\uc544\uce68 \ucf64\ubcf4", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: BBQ and sides ---
+  brisket: {
+    "es-US": { displayName: "brisket" },
+    "ko-KR": { displayName: "\ube0c\ub9ac\uc2a4\ud0b7", koreanCounterId: "serving" },
+  },
+  "brisket plate": {
+    "es-US": { displayName: "plato de brisket" },
+    "ko-KR": { displayName: "\ube0c\ub9ac\uc2a4\ud0b7 \ud50c\ub808\uc774\ud2b8", koreanCounterId: "serving" },
+  },
+  "bbq plate": {
+    "es-US": { displayName: "plato de BBQ" },
+    "ko-KR": { displayName: "\ubc14\ube44\ud050 \ud50c\ub808\uc774\ud2b8", koreanCounterId: "serving" },
+  },
+  "pulled pork sandwich": {
+    "es-US": { displayName: "s\xe1ndwich de cerdo deshebrado" },
+    "ko-KR": { displayName: "\ud480\ub4dc\ud3ec\ud06c \uc0cc\ub4dc\uc704\uce58", koreanCounterId: "piece" },
+  },
+  ribs: {
+    "es-US": { displayName: "costillas" },
+    "ko-KR": { displayName: "\ub9bd", koreanCounterId: "serving" },
+  },
+  "rib plate": {
+    "es-US": { displayName: "plato de costillas" },
+    "ko-KR": { displayName: "\ub9bd \ud50c\ub808\uc774\ud2b8", koreanCounterId: "serving" },
+  },
+  "smoked sausage": {
+    "es-US": { displayName: "salchicha ahumada" },
+    "ko-KR": { displayName: "\ud6c8\uc81c \uc18c\uc2dc\uc9c0", koreanCounterId: "serving" },
+  },
+  "smoked turkey": {
+    "es-US": { displayName: "pavo ahumado" },
+    "ko-KR": { displayName: "\ud6c8\uc81c \uce60\uba74\uc870", koreanCounterId: "serving" },
+  },
+  "mac and cheese": {
+    "es-US": { displayName: "macarrones con queso" },
+    "ko-KR": { displayName: "\ub9e5\uc564\uce58\uc988", koreanCounterId: "serving" },
+  },
+  cornbread: {
+    "es-US": { displayName: "pan de elote" },
+    "ko-KR": { displayName: "\ucf58\ube0c\ub808\ub4dc", koreanCounterId: "piece" },
+  },
+  coleslaw: {
+    "es-US": { displayName: "ensalada de col" },
+    "ko-KR": { displayName: "\ucf54\uc6b8\uc2ac\ub85c", koreanCounterId: "serving" },
+  },
+  "baked beans": {
+    "es-US": { displayName: "frijoles horneados" },
+    "ko-KR": { displayName: "\ubca0\uc774\ud06c\ub4dc \ube48\uc988", koreanCounterId: "serving" },
+  },
+  "potato salad": {
+    "es-US": { displayName: "ensalada de papa" },
+    "ko-KR": { displayName: "\uac10\uc790 \uc0d0\ub7ec\ub4dc", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: Tex-Mex ---
+  fajitas: {
+    "es-US": { displayName: "fajitas" },
+    "ko-KR": { displayName: "\ud30c\ud788\ud0c0", koreanCounterId: "serving" },
+  },
+  "chicken fajitas": {
+    "es-US": { displayName: "fajitas de pollo" },
+    "ko-KR": { displayName: "\uce58\ud0a8 \ud30c\ud788\ud0c0", koreanCounterId: "serving" },
+  },
+  "queso dip": {
+    "es-US": { displayName: "dip de queso" },
+    "ko-KR": { displayName: "\ucf00\uc18c \ub525", koreanCounterId: "serving" },
+  },
+  "street tacos": {
+    "es-US": { displayName: "tacos callejeros" },
+    "ko-KR": { displayName: "\uc2a4\ud2b8\ub9ac\ud2b8 \ud0c0\ucf54", koreanCounterId: "serving" },
+  },
+  "quesabirria tacos": {
+    "es-US": { displayName: "tacos de quesabirria" },
+    "ko-KR": { displayName: "\ud018\uc0ac\ube44\ub9ac\uc544 \ud0c0\ucf54", koreanCounterId: "serving" },
+  },
+  "chicken quesadilla": {
+    "es-US": { displayName: "quesadilla de pollo" },
+    "ko-KR": { displayName: "\uce58\ud0a8 \ud018\uc0ac\ub514\uc544", koreanCounterId: "piece" },
+  },
+  chimichanga: {
+    "es-US": { displayName: "chimichanga" },
+    "ko-KR": { displayName: "\uce58\ubbf8\ucc3d\uac00", koreanCounterId: "piece" },
+  },
+  "taco salad": {
+    "es-US": { displayName: "ensalada de taco" },
+    "ko-KR": { displayName: "\ud0c0\ucf54 \uc0d0\ub7ec\ub4dc", koreanCounterId: "serving" },
+  },
+  "burrito bowl": {
+    "es-US": { displayName: "bowl de burrito" },
+    "ko-KR": { displayName: "\ubd80\ub9ac\ud1a0 \ubcfc", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: pizza and Italian ---
+  pizza: {
+    "es-US": { displayName: "pizza" },
+    "ko-KR": { displayName: "\ud53c\uc790", koreanCounterId: "piece" },
+  },
+  "large pizza": {
+    "es-US": { displayName: "pizza grande" },
+    "ko-KR": { displayName: "\ub77c\uc9c0 \ud53c\uc790", koreanCounterId: "piece" },
+  },
+  calzone: {
+    "es-US": { displayName: "calzone" },
+    "ko-KR": { displayName: "\uce7c\ucd08\ub124", koreanCounterId: "piece" },
+  },
+  breadsticks: {
+    "es-US": { displayName: "palitos de pan" },
+    "ko-KR": { displayName: "\ube0c\ub808\ub4dc\uc2a4\ud2f1", koreanCounterId: "serving" },
+  },
+  "mozzarella sticks": {
+    "es-US": { displayName: "dedos de queso" },
+    "ko-KR": { displayName: "\ubaa8\ucc28\ub810\ub77c \uc2a4\ud2f1", koreanCounterId: "serving" },
+  },
+  lasagna: {
+    "es-US": { displayName: "lasa\xf1a" },
+    "ko-KR": { displayName: "\ub77c\uc790\ub0d0", koreanCounterId: "serving" },
+  },
+  "fettuccine alfredo": {
+    "es-US": { displayName: "fettuccine Alfredo" },
+    "ko-KR": { displayName: "\ud398\ud22c\uce58\ub124 \uc54c\ud504\ub808\ub3c4", koreanCounterId: "serving" },
+  },
+  "meatball sub": {
+    "es-US": { displayName: "s\xe1ndwich de alb\xf3ndigas" },
+    "ko-KR": { displayName: "\ubbf8\ud2b8\ubcfc \uc0cc\ub4dc\uc704\uce58", koreanCounterId: "piece" },
+  },
+  // --- expansion batch: Asian ---
+  "pho bowl": {
+    "es-US": { displayName: "bowl de pho" },
+    "ko-KR": { displayName: "\uc300\uad6d\uc218", koreanCounterId: "serving" },
+  },
+  "banh mi": {
+    "es-US": { displayName: "banh mi" },
+    "ko-KR": { displayName: "\ubc18\ubbf8", koreanCounterId: "piece" },
+  },
+  "pad thai": {
+    "es-US": { displayName: "pad thai" },
+    "ko-KR": { displayName: "\ud31f\ud0c0\uc774", koreanCounterId: "serving" },
+  },
+  "fried rice": {
+    "es-US": { displayName: "arroz frito" },
+    "ko-KR": { displayName: "\ubcf6\uc74c\ubc25", koreanCounterId: "serving" },
+  },
+  "orange chicken": {
+    "es-US": { displayName: "pollo a la naranja" },
+    "ko-KR": { displayName: "\uc624\ub80c\uc9c0 \uce58\ud0a8", koreanCounterId: "serving" },
+  },
+  "teriyaki bowl": {
+    "es-US": { displayName: "bowl de teriyaki" },
+    "ko-KR": { displayName: "\ub370\ub9ac\uc57c\ud0a4 \ub36e\ubc25", koreanCounterId: "serving" },
+  },
+  "sushi platter": {
+    "es-US": { displayName: "plato de sushi" },
+    "ko-KR": { displayName: "\uc2a4\uc2dc \ud50c\ub798\ud130", koreanCounterId: "serving" },
+  },
+  udon: {
+    "es-US": { displayName: "udon" },
+    "ko-KR": { displayName: "\uc6b0\ub3d9", koreanCounterId: "serving" },
+  },
+  "spring roll": {
+    "es-US": { displayName: "rollito primavera" },
+    "ko-KR": { displayName: "\uc2a4\ud504\ub9c1\ub864", koreanCounterId: "piece" },
+  },
+  "egg roll": {
+    "es-US": { displayName: "egg roll" },
+    "ko-KR": { displayName: "\uc5d0\uadf8\ub864", koreanCounterId: "piece" },
+  },
+  "wonton soup": {
+    "es-US": { displayName: "sopa de wonton" },
+    "ko-KR": { displayName: "\uc644\ud0d5 \uc218\ud504", koreanCounterId: "serving" },
+  },
+  "lo mein": {
+    "es-US": { displayName: "lo mein" },
+    "ko-KR": { displayName: "\ubcf6\uc74c\uba74", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: Korean dishes (English source keys) ---
+  bibimbap: {
+    "es-US": { displayName: "bibimbap" },
+    "ko-KR": { displayName: "\ube44\ube54\ubc25", koreanCounterId: "serving" },
+  },
+  bulgogi: {
+    "es-US": { displayName: "bulgogi" },
+    "ko-KR": { displayName: "\ubd88\uace0\uae30", koreanCounterId: "serving" },
+  },
+  "bulgogi bowl": {
+    "es-US": { displayName: "bowl de bulgogi" },
+    "ko-KR": { displayName: "\ubd88\uace0\uae30 \ub36e\ubc25", koreanCounterId: "serving" },
+  },
+  "korean fried chicken": {
+    "es-US": { displayName: "pollo frito coreano" },
+    "ko-KR": { displayName: "\ud6c4\ub77c\uc774\ub4dc \uce58\ud0a8", koreanCounterId: "serving" },
+  },
+  "kimchi fried rice": {
+    "es-US": { displayName: "arroz frito con kimchi" },
+    "ko-KR": { displayName: "\uae40\uce58\ubcf6\uc74c\ubc25", koreanCounterId: "serving" },
+  },
+  tteokbokki: {
+    "es-US": { displayName: "tteokbokki" },
+    "ko-KR": { displayName: "\ub5a1\ubcf6\uc774", koreanCounterId: "serving" },
+  },
+  gimbap: {
+    "es-US": { displayName: "gimbap" },
+    "ko-KR": { displayName: "\uae40\ubc25", koreanCounterId: "piece" },
+  },
+  "korean corn dog": {
+    "es-US": { displayName: "corn dog coreano" },
+    "ko-KR": { displayName: "\ucf54\ub9ac\uc548 \ud56b\ub3c4\uadf8", koreanCounterId: "piece" },
+  },
+  "corn dog": {
+    "es-US": { displayName: "banderilla" },
+    "ko-KR": { displayName: "\ucf58\ub3c4\uadf8", koreanCounterId: "piece" },
+  },
+  japchae: {
+    "es-US": { displayName: "japchae" },
+    "ko-KR": { displayName: "\uc7a1\ucc44", koreanCounterId: "serving" },
+  },
+  kimchi: {
+    "es-US": { displayName: "kimchi" },
+    "ko-KR": { displayName: "\uae40\uce58", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: desserts ---
+  macaron: {
+    "es-US": { displayName: "macarr\xf3n" },
+    "ko-KR": { displayName: "\ub9c8\uce74\ub871", koreanCounterId: "piece" },
+  },
+  tiramisu: {
+    "es-US": { displayName: "tiramis\xfa" },
+    "ko-KR": { displayName: "\ud2f0\ub77c\ubbf8\uc218", koreanCounterId: "piece" },
+  },
+  churro: {
+    "es-US": { displayName: "churro" },
+    "ko-KR": { displayName: "\uce04\ub7ec\uc2a4", koreanCounterId: "piece" },
+  },
+  "cake pop": {
+    "es-US": { displayName: "cake pop" },
+    "ko-KR": { displayName: "\ucf00\uc774\ud06c\ud31d", koreanCounterId: "piece" },
+  },
+  sundae: {
+    "es-US": { displayName: "sundae" },
+    "ko-KR": { displayName: "\uc544\uc774\uc2a4\ud06c\ub9bc \uc120\ub370", koreanCounterId: "serving" },
+  },
+  "banana split": {
+    "es-US": { displayName: "banana split" },
+    "ko-KR": { displayName: "\ubc14\ub098\ub098 \uc2a4\ud50c\ub9bf", koreanCounterId: "serving" },
+  },
+  "funnel cake": {
+    "es-US": { displayName: "funnel cake" },
+    "ko-KR": { displayName: "\ud37c\ub110 \ucf00\uc774\ud06c", koreanCounterId: "piece" },
+  },
+  crepe: {
+    "es-US": { displayName: "crepa" },
+    "ko-KR": { displayName: "\ud06c\ub808\ud398", koreanCounterId: "piece" },
+  },
+  "mochi donut": {
+    "es-US": { displayName: "dona de mochi" },
+    "ko-KR": { displayName: "\ubaa8\ucc0c \ub3c4\ub11b", koreanCounterId: "piece" },
+  },
+  croffle: {
+    "es-US": { displayName: "croffle" },
+    "ko-KR": { displayName: "\ud06c\ub85c\ud50c", koreanCounterId: "piece" },
+  },
+  "egg tart": {
+    "es-US": { displayName: "tarta de huevo" },
+    "ko-KR": { displayName: "\uc5d0\uadf8\ud0c0\ub974\ud2b8", koreanCounterId: "piece" },
+  },
+  "shaved ice": {
+    "es-US": { displayName: "raspado" },
+    "ko-KR": { displayName: "\ube59\uc218", koreanCounterId: "serving" },
+  },
+  // --- expansion batch: drinks ---
+  "flat white": {
+    "es-US": { displayName: "flat white" },
+    "ko-KR": { displayName: "\ud50c\ub7ab\ud654\uc774\ud2b8", koreanCounterId: "cup" },
+  },
+  cortado: {
+    "es-US": { displayName: "cortado" },
+    "ko-KR": { displayName: "\ucf54\ub974\ud0c0\ub3c4", koreanCounterId: "cup" },
+  },
+  "espresso shot": {
+    "es-US": { displayName: "shot de espresso" },
+    "ko-KR": { displayName: "\uc5d0\uc2a4\ud504\ub808\uc18c \uc0f7", koreanCounterId: "cup" },
+  },
+  frappe: {
+    "es-US": { displayName: "frapp\xe9" },
+    "ko-KR": { displayName: "\ud504\ub77c\ud398", koreanCounterId: "cup" },
+  },
+  "thai tea": {
+    "es-US": { displayName: "t\xe9 tailand\xe9s" },
+    "ko-KR": { displayName: "\ud0c0\uc774 \ud2f0", koreanCounterId: "cup" },
+  },
+  "taro milk tea": {
+    "es-US": { displayName: "t\xe9 con leche de taro" },
+    "ko-KR": { displayName: "\ud0c0\ub85c \ubc00\ud06c\ud2f0", koreanCounterId: "cup" },
+  },
+  "brown sugar milk tea": {
+    "es-US": { displayName: "t\xe9 con leche de az\xfacar morena" },
+    "ko-KR": { displayName: "\ud751\ub2f9 \ubc00\ud06c\ud2f0", koreanCounterId: "cup" },
+  },
+  "strawberry lemonade": {
+    "es-US": { displayName: "limonada de fresa" },
+    "ko-KR": { displayName: "\ub538\uae30 \ub808\ubaa8\ub124\uc774\ub4dc", koreanCounterId: "cup" },
+  },
+  "sweet tea": {
+    "es-US": { displayName: "t\xe9 dulce" },
+    "ko-KR": { displayName: "\uc2a4\uc704\ud2b8 \ud2f0", koreanCounterId: "cup" },
+  },
+  "protein shake": {
+    "es-US": { displayName: "licuado de prote\xedna" },
+    "ko-KR": { displayName: "\ud504\ub85c\ud2f4 \uc170\uc774\ud06c", koreanCounterId: "cup" },
+  },
+  "energy drink": {
+    "es-US": { displayName: "bebida energ\xe9tica" },
+    "ko-KR": { displayName: "\uc5d0\ub108\uc9c0 \ub4dc\ub9c1\ud06c", koreanCounterId: "cup" },
+  },
+  "sparkling water": {
+    "es-US": { displayName: "agua mineral" },
+    "ko-KR": { displayName: "\ud0c4\uc0b0\uc218", koreanCounterId: "cup" },
+  },
+  kombucha: {
+    "es-US": { displayName: "kombucha" },
+    "ko-KR": { displayName: "\ucf64\ubd80\ucc28", koreanCounterId: "cup" },
+  },
+  "hot tea": {
+    "es-US": { displayName: "t\xe9 caliente" },
+    "ko-KR": { displayName: "\ub530\ub73b\ud55c \ucc28", koreanCounterId: "cup" },
+  },
+  // --- expansion batch: sizes and generic items ---
+  "small coffee": {
+    "es-US": { displayName: "caf\xe9 chico" },
+    "ko-KR": { displayName: "\uc2a4\ubab0 \ucee4\ud53c", koreanCounterId: "cup" },
+  },
+  "medium coffee": {
+    "es-US": { displayName: "caf\xe9 mediano" },
+    "ko-KR": { displayName: "\ubbf8\ub514\uc5c4 \ucee4\ud53c", koreanCounterId: "cup" },
+  },
+  "large iced tea": {
+    "es-US": { displayName: "t\xe9 helado grande" },
+    "ko-KR": { displayName: "\ub77c\uc9c0 \uc544\uc774\uc2a4 \ud2f0", koreanCounterId: "cup" },
+  },
+  "large drink": {
+    "es-US": { displayName: "bebida grande" },
+    "ko-KR": { displayName: "\ub77c\uc9c0 \uc74c\ub8cc", koreanCounterId: "cup" },
+  },
+  "medium drink": {
+    "es-US": { displayName: "bebida mediana" },
+    "ko-KR": { displayName: "\ubbf8\ub514\uc5c4 \uc74c\ub8cc", koreanCounterId: "cup" },
+  },
+  "small drink": {
+    "es-US": { displayName: "bebida chica" },
+    "ko-KR": { displayName: "\uc2a4\ubab0 \uc74c\ub8cc", koreanCounterId: "cup" },
+  },
+  "any drink": {
+    "es-US": { displayName: "cualquier bebida" },
+    "ko-KR": { displayName: "\ubaa8\ub4e0 \uc74c\ub8cc", koreanCounterId: "cup" },
   },
 };
 
@@ -782,13 +1195,52 @@ function matchesDoNotTranslate(value: string, terms: readonly string[] | null | 
   return Boolean(key && (terms ?? []).some((term) => normalizeKey(term) === key));
 }
 
+// Size/quantity modifiers composed onto reviewed dictionary items so terms
+// like "large iced tea" or "any smoothie" localize without needing their own
+// entries. Spanish only composes gender-invariant modifiers (grande,
+// cualquier); gendered sizes (mediano/a, chico/a) stay explicit entries.
+const SIZE_MODIFIER_COMPOSERS: Record<string, Partial<Record<SupportedLocale, (base: string) => string>>> = {
+  large: {
+    "es-US": (base) => `${base} grande`,
+    "ko-KR": (base) => `라지 ${base}`,
+  },
+  medium: {
+    "ko-KR": (base) => `미디엄 ${base}`,
+  },
+  small: {
+    "ko-KR": (base) => `스몰 ${base}`,
+  },
+  any: {
+    "es-US": (base) => `cualquier ${base}`,
+    "ko-KR": (base) => `모든 ${base}`,
+  },
+};
+
+function composedModifierEntry(
+  key: string,
+  locale: SupportedLocale,
+): { displayName: string; koreanCounterId?: string } | null {
+  const match = key.match(/^(large|medium|small|any) (.+)$/);
+  if (!match) return null;
+  const compose = SIZE_MODIFIER_COMPOSERS[match[1]]?.[locale];
+  const base = GENERIC_LOCALIZED_TERM_DICTIONARY[match[2]]?.[locale];
+  if (!compose || !base?.displayName) return null;
+  return {
+    displayName: compose(base.displayName),
+    ...(base.koreanCounterId ? { koreanCounterId: base.koreanCounterId } : {}),
+  };
+}
+
 function dictionaryTerm(
   sourceDisplayName: string,
   locale: SupportedLocale,
   entityId: string,
 ): LocalizedOfferTerm | null {
   const key = normalizeKey(sourceDisplayName);
-  const entry = GENERIC_LOCALIZED_TERM_DICTIONARY[key]?.[locale] ?? SOURCE_TERM_TO_ENGLISH_DICTIONARY[key]?.[locale];
+  const entry =
+    GENERIC_LOCALIZED_TERM_DICTIONARY[key]?.[locale] ??
+    SOURCE_TERM_TO_ENGLISH_DICTIONARY[key]?.[locale] ??
+    composedModifierEntry(key, locale);
   if (!entry?.displayName) return null;
   return {
     entityId,

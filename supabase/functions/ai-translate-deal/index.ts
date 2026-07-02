@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redemption-role.ts";
 import { logAiCost } from "../_shared/ai-costs.ts";
+import { countAiQuotaUsage, utcMonthStartIso } from "../_shared/ai-quota-resets.ts";
+import { resolveDealTranslateMonthlyLimit } from "../_shared/deal-translate-limit.ts";
 import {
   generateStructuredText,
   resolveAiTextProviderConfig,
@@ -252,21 +254,18 @@ serve(async (req) => {
       return jsonResponse({ ok: true, skipped: true, ...emptyResult }, 200, corsHeaders);
     }
 
-    // Monthly per-business cap (section-4 decision: 30 AI generations/month per
-    // feature). Mirrors ai-generate-deal-copy. The background caller
-    // (translateDeal) swallows this 429 — the deal simply keeps its source text;
-    // the direct caller surfaces the message. Override via AI_TRANSLATE_MONTHLY_LIMIT.
-    const TRANSLATE_MONTHLY_LIMIT = Number(Deno.env.get("AI_TRANSLATE_MONTHLY_LIMIT") ?? "30");
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
-    const { count: usedThisMonth } = await admin
-      .from("ai_generation_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", businessId)
-      .eq("request_type", "deal_translate")
-      .gte("created_at", monthStart.toISOString());
-    if (usedThisMonth !== null && usedThisMonth >= TRANSLATE_MONTHLY_LIMIT) {
+    // Monthly per-business cap sized at 4x the account's deal-credit allowance
+    // (see _shared/deal-translate-limit.ts). When the cap is hit the publish
+    // flow falls back to deterministic renderer translations, so deals still
+    // publish localized; the direct caller surfaces the message.
+    // AI_TRANSLATE_MONTHLY_LIMIT env remains an absolute override.
+    const TRANSLATE_MONTHLY_LIMIT = await resolveDealTranslateMonthlyLimit(admin, businessId);
+    const { used } = await countAiQuotaUsage(admin, {
+      businessId,
+      scope: "deal_translate",
+      monthStartIso: utcMonthStartIso(),
+    });
+    if (used >= TRANSLATE_MONTHLY_LIMIT) {
       return jsonResponse(
         { error: "Monthly translation limit reached. Try again next month." },
         429,

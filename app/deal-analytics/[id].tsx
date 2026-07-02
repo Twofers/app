@@ -18,7 +18,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getDealAnalyticsActivityState } from "@/lib/deal-analytics-state";
 import { exportAnalyticsCsv, exportAnalyticsPdf, type ExportRow } from "@/lib/analytics-export";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
-import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealTitle } from "@/lib/deal-localization";
 
 const CREATE_DEAL_DAY_KEYS = [
   "daySun",
@@ -38,6 +38,10 @@ type ClaimRow = {
 type DealRow = {
   id: string;
   title: string | null;
+  source_locale?: string | null;
+  title_en?: string | null;
+  title_es?: string | null;
+  title_ko?: string | null;
   poster_url: string | null;
   start_time: string;
   end_time: string;
@@ -129,7 +133,7 @@ export default function DealAnalyticsDetail() {
     try {
       const { data: dealData, error: dealError } = await supabase
         .from("deals")
-        .select("id,title,poster_url,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
+        .select("id,title,source_locale,title_en,title_es,title_ko,poster_url,start_time,end_time,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone")
         .eq("id", id)
         .single();
       if (dealError) throw dealError;
@@ -247,7 +251,7 @@ export default function DealAnalyticsDetail() {
       const totalClaims = claims.length;
       const totalRedeems = claims.filter((c) => c.redeemed_at).length;
       const row: ExportRow = {
-        dealTitle: getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback"),
+        dealTitle: localizedDealTitle(deal, i18n.language) || t("offersDashboard.dealFallback"),
         startDate: new Date(deal.start_time).toLocaleDateString(),
         endDate: new Date(deal.end_time).toLocaleDateString(),
         claims: totalClaims,
@@ -267,7 +271,7 @@ export default function DealAnalyticsDetail() {
   }
 
   const headerSubtitle = deal
-    ? `${getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback")}\n${formatValiditySummary(deal, {
+    ? `${localizedDealTitle(deal, i18n.language) || t("offersDashboard.dealFallback")}\n${formatValiditySummary(deal, {
         lang: i18n.language,
         endsVerb: t("commonUi.dealEndsVerb"),
         t,

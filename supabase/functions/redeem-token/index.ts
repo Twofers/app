@@ -250,6 +250,10 @@ serve(async (req) => {
           business_id,
           location_id,
           title,
+          source_locale,
+          title_en,
+          title_es,
+          title_ko,
           is_demo,
           business:businesses!inner(id, owner_id)
         )
@@ -260,6 +264,10 @@ serve(async (req) => {
           id,
           business_id,
           title,
+          source_locale,
+          title_en,
+          title_es,
+          title_ko,
           is_demo,
           business:businesses!inner(id, owner_id)
         )
@@ -344,6 +352,10 @@ serve(async (req) => {
       business_id?: string | null;
       location_id?: string | null;
       title?: string | null;
+      source_locale?: string | null;
+      title_en?: string | null;
+      title_es?: string | null;
+      title_ko?: string | null;
       is_demo?: boolean | null;
       business?: { owner_id?: string };
       max_claims?: number | null;
@@ -518,6 +530,10 @@ serve(async (req) => {
       JSON.stringify({
         ok: true,
         deal_title: deal.title,
+        deal_source_locale: deal.source_locale ?? null,
+        deal_title_en: deal.title_en ?? null,
+        deal_title_es: deal.title_es ?? null,
+        deal_title_ko: deal.title_ko ?? null,
         redeemed_at: nowIso,
         deal_id: deal.id,
         claim_id: claimId,

@@ -200,7 +200,11 @@ serve(async (req) => {
       });
     }
 
-    const { data: dealRow } = await supabase.from("deals").select("title").eq("id", claim.deal_id).maybeSingle();
+    const { data: dealRow } = await supabase
+      .from("deals")
+      .select("title, source_locale, title_en, title_es, title_ko")
+      .eq("id", claim.deal_id)
+      .maybeSingle();
 
     return new Response(
       JSON.stringify({
@@ -208,6 +212,10 @@ serve(async (req) => {
         already_redeemed: false,
         redeemed_at: nowIso,
         deal_title: dealRow?.title ?? null,
+        deal_source_locale: dealRow?.source_locale ?? null,
+        deal_title_en: dealRow?.title_en ?? null,
+        deal_title_es: dealRow?.title_es ?? null,
+        deal_title_ko: dealRow?.title_ko ?? null,
         deal_id: claim.deal_id,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

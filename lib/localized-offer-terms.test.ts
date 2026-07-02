@@ -311,6 +311,109 @@ const koreanSourceOfferTermsToEnglish = [
   ["\ubbf8\uc22b\uac00\ub8e8", "multigrain shake"],
 ] as const;
 
+const additionalOfferTerms = [
+  "bacon",
+  "sausage",
+  "scrambled eggs",
+  "biscuit",
+  "biscuits and gravy",
+  "french toast",
+  "breakfast platter",
+  "bagel with cream cheese",
+  "english muffin",
+  "oatmeal",
+  "fruit cup",
+  "croissant sandwich",
+  "egg bites",
+  "breakfast combo",
+  "brisket",
+  "brisket plate",
+  "bbq plate",
+  "pulled pork sandwich",
+  "ribs",
+  "rib plate",
+  "smoked sausage",
+  "smoked turkey",
+  "mac and cheese",
+  "cornbread",
+  "coleslaw",
+  "baked beans",
+  "potato salad",
+  "fajitas",
+  "chicken fajitas",
+  "queso dip",
+  "street tacos",
+  "quesabirria tacos",
+  "chicken quesadilla",
+  "chimichanga",
+  "taco salad",
+  "burrito bowl",
+  "pizza",
+  "large pizza",
+  "calzone",
+  "breadsticks",
+  "mozzarella sticks",
+  "lasagna",
+  "fettuccine alfredo",
+  "meatball sub",
+  "pho bowl",
+  "banh mi",
+  "pad thai",
+  "fried rice",
+  "orange chicken",
+  "teriyaki bowl",
+  "sushi platter",
+  "udon",
+  "spring roll",
+  "egg roll",
+  "wonton soup",
+  "lo mein",
+  "bibimbap",
+  "bulgogi",
+  "bulgogi bowl",
+  "korean fried chicken",
+  "kimchi fried rice",
+  "tteokbokki",
+  "gimbap",
+  "korean corn dog",
+  "corn dog",
+  "japchae",
+  "kimchi",
+  "macaron",
+  "tiramisu",
+  "churro",
+  "cake pop",
+  "sundae",
+  "banana split",
+  "funnel cake",
+  "crepe",
+  "mochi donut",
+  "croffle",
+  "egg tart",
+  "shaved ice",
+  "flat white",
+  "cortado",
+  "espresso shot",
+  "frappe",
+  "thai tea",
+  "taro milk tea",
+  "brown sugar milk tea",
+  "strawberry lemonade",
+  "sweet tea",
+  "protein shake",
+  "energy drink",
+  "sparkling water",
+  "kombucha",
+  "hot tea",
+  "small coffee",
+  "medium coffee",
+  "large iced tea",
+  "large drink",
+  "medium drink",
+  "small drink",
+  "any drink",
+] as const;
+
 describe("localized offer terms", () => {
   it("covers 100 common generic offer terms in Spanish and Korean", () => {
     expect(commonOfferTerms).toHaveLength(100);
@@ -337,6 +440,68 @@ describe("localized offer terms", () => {
         expect(term.displayName.trim().length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("covers 100 additional common generic offer terms in Spanish and Korean (2026-07-01 expansion)", () => {
+    expect(additionalOfferTerms).toHaveLength(100);
+
+    for (const sourceDisplayName of additionalOfferTerms) {
+      for (const locale of ["es-US", "ko-KR"] as const) {
+        const term = resolveLocalizedOfferTerm({ sourceDisplayName, locale });
+
+        expect({
+          sourceDisplayName,
+          locale,
+          source: term.source,
+          verificationStatus: term.verificationStatus,
+          approvedLocalizedName: term.approvedLocalizedName,
+          doNotTranslate: term.doNotTranslate,
+        }).toEqual({
+          sourceDisplayName,
+          locale,
+          source: "reviewed_dictionary",
+          verificationStatus: "verified",
+          approvedLocalizedName: true,
+          doNotTranslate: false,
+        });
+        expect(term.displayName.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("composes size modifiers onto reviewed dictionary items", () => {
+    const largeIcedCoffeeKo = resolveLocalizedOfferTerm({ sourceDisplayName: "large iced coffee", locale: "ko-KR" });
+    expect(largeIcedCoffeeKo.displayName).toBe("라지 아이스 커피");
+    expect(largeIcedCoffeeKo.source).toBe("reviewed_dictionary");
+    expect(largeIcedCoffeeKo.verificationStatus).toBe("verified");
+    expect(largeIcedCoffeeKo.koreanCounterId).toBe("cup");
+
+    const largeIcedCoffeeEs = resolveLocalizedOfferTerm({ sourceDisplayName: "large iced coffee", locale: "es-US" });
+    expect(largeIcedCoffeeEs.displayName).toBe("caf\xe9 helado grande");
+
+    const anySmoothieEs = resolveLocalizedOfferTerm({ sourceDisplayName: "any smoothie", locale: "es-US" });
+    expect(anySmoothieEs.displayName).toBe("cualquier smoothie");
+
+    const mediumLemonadeKo = resolveLocalizedOfferTerm({ sourceDisplayName: "medium lemonade", locale: "ko-KR" });
+    expect(mediumLemonadeKo.displayName).toBe("미디엄 레모네이드");
+
+    // Gendered Spanish sizes are NOT composed; the merchant term is preserved
+    // for native review instead of risking wrong gender agreement.
+    const mediumLemonadeEs = resolveLocalizedOfferTerm({ sourceDisplayName: "medium lemonade", locale: "es-US" });
+    expect(mediumLemonadeEs.source).toBe("merchant");
+    expect(mediumLemonadeEs.verificationStatus).toBe("needs_native_review");
+    expect(mediumLemonadeEs.displayName).toBe("medium lemonade");
+
+    // Unknown bases never compose.
+    const largeMysteryKo = resolveLocalizedOfferTerm({ sourceDisplayName: "large mystery item", locale: "ko-KR" });
+    expect(largeMysteryKo.source).toBe("merchant");
+  });
+
+  it("uses corrected Korean dish names and counters", () => {
+    expect(resolveLocalizedOfferTerm({ sourceDisplayName: "gyro", locale: "ko-KR" }).displayName).toBe("기로스");
+    expect(resolveLocalizedOfferTerm({ sourceDisplayName: "pho", locale: "ko-KR" }).displayName).toBe("쌀국수");
+    expect(resolveLocalizedOfferTerm({ sourceDisplayName: "kids meal", locale: "ko-KR" }).displayName).toBe("키즈 세트");
+    expect(resolveLocalizedOfferTerm({ sourceDisplayName: "bottled water", locale: "ko-KR" }).koreanCounterId).toBe("piece");
   });
 
   it("covers 100 popular Spanish-language food and drink source terms in English", () => {

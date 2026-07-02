@@ -29,7 +29,7 @@ import {
   type OwnerRedemptionSecurityStatus,
 } from "@/lib/owner-redemption-security";
 import { isRedemptionCodeComplete, normalizeRedemptionCode } from "@/lib/redemption-mode-logic";
-import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealTitle } from "@/lib/deal-localization";
 
 type RedeemMode = "scan" | "manual";
 
@@ -170,7 +170,16 @@ export default function RedeemScanner() {
       const result = await redeemToken(body);
       setSuccess({
         dealTitle: result.deal_title
-          ? getDealDisplayTitle({ title: result.deal_title }, result.deal_title)
+          ? localizedDealTitle(
+              {
+                title: result.deal_title,
+                source_locale: result.deal_source_locale ?? null,
+                title_en: result.deal_title_en ?? null,
+                title_es: result.deal_title_es ?? null,
+                title_ko: result.deal_title_ko ?? null,
+              },
+              i18n.language,
+            ) || result.deal_title
           : t("redeem.defaultDealTitle"),
         redeemedAt: result.redeemed_at,
         claimId: result.claim_id ?? null,

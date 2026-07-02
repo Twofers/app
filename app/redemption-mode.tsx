@@ -27,8 +27,9 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealTitle, type LocalizedDealFields } from "@/lib/deal-localization";
 import { useScreenInsets, Spacing } from "@/lib/screen-layout";
+import { supabase } from "@/lib/supabase";
 import {
   confirmStaffRedemption,
   exitRedemptionMode,
@@ -65,7 +66,7 @@ function codeBodyFromManual(raw: string): InputBody | null {
 
 export default function RedemptionModeScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { height } = useWindowDimensions();
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { session } = useAuthSession();
@@ -79,6 +80,7 @@ export default function RedemptionModeScreen() {
   const [banner, setBanner] = useState<{ message: string; tone?: "error" | "success" | "info" | "warning" } | null>(null);
   const [preview, setPreview] = useState<StaffRedemptionResult | null>(null);
   const [success, setSuccess] = useState<StaffRedemptionResult | null>(null);
+  const [localizedTitleRows, setLocalizedTitleRows] = useState<Record<string, LocalizedDealFields>>({});
   const [lastInput, setLastInput] = useState<InputBody | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -91,18 +93,48 @@ export default function RedemptionModeScreen() {
   const manualCodeComplete = isRedemptionCodeComplete(manualCode);
   const manualPreviewDisabled = busy || !manualCodeComplete;
   const dealTitleFallback = t("redeem.defaultDealTitle", { defaultValue: "Twofer deal" });
-  const previewDealTitle = preview?.deal_title
-    ? getDealDisplayTitle({ title: preview.deal_title }, preview.deal_title) || dealTitleFallback
-    : dealTitleFallback;
-  const successDealTitle = success?.deal_title
-    ? getDealDisplayTitle({ title: success.deal_title }, success.deal_title) || dealTitleFallback
-    : dealTitleFallback;
+  const staffDealTitle = useCallback(
+    (result: StaffRedemptionResult | null): string => {
+      if (!result?.deal_title) return dealTitleFallback;
+      const localizedFields = result.deal_id ? localizedTitleRows[result.deal_id] : undefined;
+      return (
+        localizedDealTitle(localizedFields ?? { title: result.deal_title }, i18n.language) ||
+        result.deal_title ||
+        dealTitleFallback
+      );
+    },
+    [dealTitleFallback, i18n.language, localizedTitleRows],
+  );
+  const previewDealTitle = staffDealTitle(preview);
+  const successDealTitle = staffDealTitle(success);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
   }, []);
+
+  // The staff redemption RPC only returns the source-language title; fetch the
+  // localized title columns so the staff device shows the deal in its own app
+  // language. Best-effort: on any failure the payload title stays in place.
+  useEffect(() => {
+    const dealId = preview?.deal_id ?? success?.deal_id;
+    if (!dealId || localizedTitleRows[dealId]) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("deals")
+        .select("title,source_locale,title_en,title_es,title_ko")
+        .eq("id", dealId)
+        .maybeSingle();
+      if (!cancelled && data) {
+        setLocalizedTitleRows((prev) => ({ ...prev, [dealId]: data as LocalizedDealFields }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [preview?.deal_id, success?.deal_id, localizedTitleRows]);
 
   useFocusEffect(
     useCallback(() => {

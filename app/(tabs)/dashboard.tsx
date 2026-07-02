@@ -43,7 +43,7 @@ import {
   getMerchantDealScheduleStatus,
   type MerchantDealScheduleStatus,
 } from "@/lib/deal-time";
-import { getDealDisplayTitle } from "@/lib/deal-display-copy";
+import { localizedDealDescription, localizedDealTitle } from "@/lib/deal-localization";
 import { resolveDealPosterDisplayUri } from "@/lib/deal-poster-url";
 import { buildReuseDealPrefillParams } from "@/lib/reuse-deal-prefill";
 import { parseMerchantInsights, type MerchantInsightsRow } from "@/lib/merchant-insights";
@@ -135,6 +135,12 @@ type DealRow = {
   title: string | null;
   description: string | null;
   source_locale: string | null;
+  title_en?: string | null;
+  title_es?: string | null;
+  title_ko?: string | null;
+  description_en?: string | null;
+  description_es?: string | null;
+  description_ko?: string | null;
   poster_url: string | null;
   poster_storage_path?: string | null;
   created_at: string;
@@ -172,7 +178,7 @@ type PerDealMetrics = {
 
 const DASHBOARD_DEALS_PAGE_SIZE = 100;
 const DASHBOARD_DEALS_BASE_SELECT =
-  "id,title,description,source_locale,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_demo,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
+  "id,title,description,source_locale,title_en,title_es,title_ko,description_en,description_es,description_ko,poster_url,poster_storage_path,created_at,start_time,end_time,is_active,is_demo,is_recurring,days_of_week,window_start_minutes,window_end_minutes,timezone,price,max_claims,claim_cutoff_buffer_minutes";
 const DASHBOARD_DEALS_ENRICHED_SELECT =
   `${DASHBOARD_DEALS_BASE_SELECT},deal_type,discount_percent,item_description,item_retail_value_cents,required_item_description,required_item_retail_value_cents,free_item_description,free_item_retail_value_cents`;
 const OPTIONAL_DASHBOARD_DEAL_COLUMNS = [
@@ -1032,8 +1038,8 @@ export default function BusinessDashboard() {
       const posterUri = resolveDealPosterDisplayUri(deal.poster_url, deal.poster_storage_path);
       await printDealFlyer({
         dealId: deal.id,
-        title: getDealDisplayTitle(deal, deal.title) || t("offersDashboard.dealFallback"),
-        description: deal.description,
+        title: localizedDealTitle(deal, i18n.language) || t("offersDashboard.dealFallback"),
+        description: localizedDealDescription(deal, i18n.language) || null,
         posterUri,
         businessName: businessName ?? "",
         strings: {
@@ -1064,8 +1070,8 @@ export default function BusinessDashboard() {
   }
 
   const displayDealTitle = useCallback((item: DealRow): string => {
-    return getDealDisplayTitle(item, item.title) || t("offersDashboard.dealFallback");
-  }, [t]);
+    return localizedDealTitle(item, i18n.language) || t("offersDashboard.dealFallback");
+  }, [i18n.language, t]);
 
   function isDealPaused(item: DealRow): boolean {
     return !item.is_active && new Date(item.end_time) > new Date();

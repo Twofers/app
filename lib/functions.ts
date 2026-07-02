@@ -267,6 +267,10 @@ export async function redeemToken(body: { token?: string; short_code?: string })
   return data as {
     ok: boolean;
     deal_title?: string;
+    deal_source_locale?: string | null;
+    deal_title_en?: string | null;
+    deal_title_es?: string | null;
+    deal_title_ko?: string | null;
     redeemed_at: string;
     claim_id?: string;
   };
@@ -331,6 +335,10 @@ export async function completeVisualRedeem(claimId: string) {
     already_redeemed?: boolean;
     redeemed_at: string;
     deal_title?: string | null;
+    deal_source_locale?: string | null;
+    deal_title_en?: string | null;
+    deal_title_es?: string | null;
+    deal_title_ko?: string | null;
     deal_id?: string;
   };
 }
