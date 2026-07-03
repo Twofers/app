@@ -4,6 +4,7 @@ import type { AdImageSelection } from "./merchant-image-selection";
 import type { OfferDefinitionV1 } from "./offer-definition";
 import { supportedLocaleOrDefault, type SupportedLocale } from "./supported-locales";
 import { parsePosterSpecV1, validatePosterSpecV1 } from "./poster/posterAdSpec";
+import { normalizePosterSpecForPublish } from "./poster/posterCopy";
 import type { AdCreativeFormat, PosterSpecV1 } from "./poster/posterTypes";
 
 export const AD_SPEC_RENDERER_VERSION = "twofer-native-ad-renderer-v1";
@@ -315,7 +316,8 @@ function visualFor(definition: OfferDefinitionV1, generatedAd?: GeneratedAd | nu
 
 function posterSpecForAd(generatedAd?: GeneratedAd | null): PosterSpecV1 | null {
   if (!generatedAd?.poster?.enabled) return null;
-  return parsePosterSpecV1(generatedAd.poster);
+  const parsed = parsePosterSpecV1(generatedAd.poster);
+  return parsed ? normalizePosterSpecForPublish(parsed) : null;
 }
 
 function buildSlot(params: {

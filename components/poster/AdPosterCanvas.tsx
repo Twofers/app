@@ -14,7 +14,6 @@ import { Radii } from "@/constants/theme";
 import {
   assertPosterCopyPolicy,
   sanitizePosterCopy,
-  sanitizePosterText,
 } from "@/lib/poster/posterPolicy";
 import type { PosterCopyV1, PosterSpecV1, PosterTemplateId } from "@/lib/poster/posterTypes";
 import { POSTER_TEMPLATES, posterTemplateOrDefault } from "./posterTemplates";
@@ -27,7 +26,6 @@ export type AdPosterCanvasProps = {
   copy?: PosterCopyV1 | null;
   templateId?: PosterTemplateId | null;
   imageUri?: string | null;
-  eyebrowLabel?: string | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -36,6 +34,18 @@ function useScaled(width: number) {
     const ratio = width > 0 ? width / POSTER_CANVAS_WIDTH : 1;
     return (value: number) => Math.round(value * ratio);
   }, [width]);
+}
+
+function cleanText(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+function samePosterLine(left: string | null | undefined, right: string | null | undefined): boolean {
+  const normalize = (value: string | null | undefined) =>
+    cleanText(value).toLocaleLowerCase().replace(/\s+/g, " ");
+  const a = normalize(left);
+  const b = normalize(right);
+  return a.length > 0 && a === b;
 }
 
 function PosterLine({
@@ -138,53 +148,36 @@ function PosterBackground({
 function TopCopyBlock({
   copy,
   templateId,
-  eyebrowLabel,
   scale,
 }: {
   copy: PosterCopyV1;
   templateId: PosterTemplateId;
-  eyebrowLabel: string;
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
-  const hasEyebrow = eyebrowLabel.length > 0;
   return (
-    <>
+    <View
+      style={{
+        position: "absolute",
+        top: scale(24),
+        left: scale(72),
+        width: scale(936),
+        height: scale(54),
+        alignItems: "center",
+        zIndex: 9,
+      }}
+    >
       <PosterLine
         value={copy.business_name}
-        top={14}
-        left={72}
+        top={0}
+        left={0}
         width={936}
         size={40}
         lineHeight={46}
         color={theme.business}
         scale={scale}
       />
-      {eyebrowLabel ? (
-        <PosterLine
-          value={eyebrowLabel}
-          top={94}
-          left={96}
-          width={888}
-          size={42}
-          lineHeight={48}
-          color={theme.accent}
-          weight="800"
-          scale={scale}
-        />
-      ) : null}
-      <PosterLine
-        value={copy.headline}
-        top={hasEyebrow ? 154 : 104}
-        left={72}
-        width={936}
-        size={hasEyebrow ? 78 : 84}
-        lineHeight={hasEyebrow ? 84 : 90}
-        color={theme.headline}
-        lines={2}
-        scale={scale}
-      />
-    </>
+    </View>
   );
 }
 
@@ -198,82 +191,128 @@ function OfferBlock({
   scale: (value: number) => number;
 }) {
   const theme = POSTER_TEMPLATES[templateId];
-  const lineOneColor =
-    templateId === "fresh" ? "#063D3A" : templateId === "bold" ? theme.accent : theme.accent;
-  const lineTwoColor =
-    templateId === "fresh" ? "#0F766E" : templateId === "bold" ? "#FFFFFF" : theme.headline;
-  const sublineColor =
-    templateId === "fresh" ? "#37635F" : templateId === "bold" ? "#FDE68A" : theme.subline;
+  const itemLine = cleanText(copy.headline) || cleanText(copy.offer_line_2);
+  const supportLine = samePosterLine(itemLine, copy.offer_line_2) ? "" : cleanText(copy.offer_line_2);
+  const isPremium = templateId === "premium";
+  const badgeTop = isPremium ? (supportLine ? 884 : 918) : 760;
+  const badgeLeft = isPremium ? 318 : 72;
+  const badgeWidth = isPremium ? 444 : 372;
+  const badgeRadius = isPremium ? 24 : 34;
+  const headlineTop = isPremium ? (supportLine ? 1030 : 1074) : supportLine ? 1060 : 1094;
+  const headlineSize = isPremium ? 74 : 82;
+  const headlineLineHeight = isPremium ? 82 : 90;
+  const badgeTextColor = templateId === "fresh" ? "#063D3A" : "#111827";
 
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: scale(72),
-        top: scale(1030),
-        width: scale(936),
-        minHeight: scale(240),
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 8,
-      }}
-    >
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.54}
-        maxFontSizeMultiplier={1}
+    <>
+      {isPremium ? (
+        <View
+          style={{
+            position: "absolute",
+            left: scale(54),
+            top: scale(850),
+            width: scale(972),
+            height: scale(430),
+            borderRadius: scale(42),
+            backgroundColor: "rgba(0,0,0,0.42)",
+            borderWidth: scale(1),
+            borderColor: "rgba(255,244,214,0.22)",
+            zIndex: 7,
+          }}
+        />
+      ) : null}
+      <View
         style={{
-          width: "100%",
-          color: lineOneColor,
-          fontSize: scale(68),
-          lineHeight: scale(76),
-          fontWeight: "900",
-          textAlign: "center",
-          letterSpacing: 0,
+          position: "absolute",
+          left: scale(badgeLeft),
+          top: scale(badgeTop),
+          width: scale(badgeWidth),
+          minHeight: scale(132),
+          borderRadius: scale(badgeRadius),
+          backgroundColor: theme.accent,
+          borderWidth: scale(5),
+          borderColor: templateId === "fresh" ? "rgba(6,61,58,0.18)" : "rgba(255,255,255,0.72)",
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: scale(28),
+          paddingVertical: scale(16),
+          shadowColor: "#000000",
+          shadowOpacity: 0.24,
+          shadowRadius: scale(18),
+          shadowOffset: { width: 0, height: scale(10) },
+          transform: isPremium ? [] : [{ rotate: "-3deg" }],
+          zIndex: 9,
         }}
       >
-        {copy.offer_line_1}
-      </Text>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.54}
-        maxFontSizeMultiplier={1}
-        style={{
-          width: "100%",
-          marginTop: scale(12),
-          color: lineTwoColor,
-          fontSize: scale(78),
-          lineHeight: scale(86),
-          fontWeight: "900",
-          textAlign: "center",
-          letterSpacing: 0,
-        }}
-      >
-        {copy.offer_line_2}
-      </Text>
-      {copy.subline ? (
         <Text
           numberOfLines={1}
           adjustsFontSizeToFit
-          minimumFontScale={0.7}
+          minimumFontScale={0.52}
           maxFontSizeMultiplier={1}
           style={{
             width: "100%",
-            marginTop: scale(18),
-            color: sublineColor,
-            fontSize: scale(30),
-            lineHeight: scale(36),
-            fontWeight: "800",
+            color: badgeTextColor,
+            fontSize: scale(60),
+            lineHeight: scale(68),
+            fontWeight: "900",
             textAlign: "center",
             letterSpacing: 0,
           }}
         >
-          {copy.subline}
+          {copy.offer_line_1}
         </Text>
-      ) : null}
-    </View>
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          left: scale(72),
+          top: scale(headlineTop),
+          width: scale(936),
+          minHeight: scale(150),
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 8,
+        }}
+      >
+        <Text
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.56}
+          maxFontSizeMultiplier={1}
+          style={{
+            width: "100%",
+            color: theme.headline,
+            fontSize: scale(headlineSize),
+            lineHeight: scale(headlineLineHeight),
+            fontWeight: "900",
+            textAlign: "center",
+            letterSpacing: 0,
+          }}
+        >
+          {itemLine}
+        </Text>
+        {supportLine ? (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.62}
+            maxFontSizeMultiplier={1}
+            style={{
+              width: "100%",
+              marginTop: scale(12),
+              color: theme.subline,
+              fontSize: scale(34),
+              lineHeight: scale(42),
+              fontWeight: "900",
+              textAlign: "center",
+              letterSpacing: 0,
+            }}
+          >
+            {supportLine}
+          </Text>
+        ) : null}
+      </View>
+    </>
   );
 }
 
@@ -281,19 +320,17 @@ function PosterContent({
   copy,
   imageUri,
   templateId,
-  eyebrowLabel,
   scale,
 }: {
   copy: PosterCopyV1;
   imageUri?: string | null;
   templateId: PosterTemplateId;
-  eyebrowLabel: string;
   scale: (value: number) => number;
 }) {
   return (
     <>
       <PosterBackground imageUri={imageUri} templateId={templateId} />
-      <TopCopyBlock copy={copy} templateId={templateId} eyebrowLabel={eyebrowLabel} scale={scale} />
+      <TopCopyBlock copy={copy} templateId={templateId} scale={scale} />
       <OfferBlock copy={copy} templateId={templateId} scale={scale} />
     </>
   );
@@ -304,7 +341,7 @@ export function posterCopyFromSpec(spec: PosterSpecV1 | null | undefined): Poste
   return spec.copy_by_language["en-US"] ?? Object.values(spec.copy_by_language)[0] ?? null;
 }
 
-export function AdPosterCanvas({ spec, copy, templateId, imageUri, eyebrowLabel, style }: AdPosterCanvasProps) {
+export function AdPosterCanvas({ spec, copy, templateId, imageUri, style }: AdPosterCanvasProps) {
   const [width, setWidth] = useState(0);
   const scale = useScaled(width);
   const height = width > 0 ? Math.round((width * POSTER_CANVAS_HEIGHT) / POSTER_CANVAS_WIDTH) : undefined;
@@ -314,10 +351,6 @@ export function AdPosterCanvas({ spec, copy, templateId, imageUri, eyebrowLabel,
     if (!rawCopy) return null;
     return sanitizePosterCopy(rawCopy, rawCopy.business_name || "Local Favorite").copy;
   }, [rawCopy]);
-  const sanitizedEyebrow = useMemo(
-    () => sanitizePosterText(eyebrowLabel ?? "", { fallback: "", maxChars: 18 }),
-    [eyebrowLabel],
-  );
   const policy = sanitized ? assertPosterCopyPolicy(sanitized) : null;
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
@@ -337,13 +370,12 @@ export function AdPosterCanvas({ spec, copy, templateId, imageUri, eyebrowLabel,
         style,
       ]}
       accessibilityRole="image"
-      accessibilityLabel={`${sanitized.business_name} poster. ${sanitized.headline}. ${sanitized.offer_line_1}. ${sanitized.offer_line_2}.`}
+      accessibilityLabel={`${sanitized.business_name} poster. ${sanitized.offer_line_1}. ${sanitized.headline}.`}
     >
       <PosterContent
         copy={sanitized}
         imageUri={imageUri}
         templateId={resolvedTemplate}
-        eyebrowLabel={sanitizedEyebrow}
         scale={scale}
       />
     </View>

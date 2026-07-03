@@ -24,7 +24,9 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).toContain("ImageBackground");
     expect(source).toContain("TopCopyBlock");
     expect(source).toContain("OfferBlock");
-    expect(source).toContain("eyebrowLabel");
+    expect(source).toContain("samePosterLine");
+    expect(source).toContain("transform: isPremium ? [] : [{ rotate: \"-3deg\" }]");
+    expect(source).toContain("const badgeTop = isPremium");
     expect(source).not.toContain("function initials");
     expect(source).not.toContain("OfferPanel");
   });

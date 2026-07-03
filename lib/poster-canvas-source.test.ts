@@ -19,9 +19,12 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).not.toMatch(/Claim|Redeem|Only \d+ available|timeLabel|scarcity/i);
   });
 
-  it("moves the generated headline up when no contextual eyebrow is supplied", () => {
-    expect(source).toContain("hasEyebrow");
-    expect(source).toContain("top={hasEyebrow ? 154 : 104}");
+  it("renders the offer as a badge plus one item/context line", () => {
+    expect(source).toContain("samePosterLine");
+    expect(source).toContain("transform: isPremium ? [] : [{ rotate: \"-3deg\" }]");
+    expect(source).toContain("const badgeTop = isPremium");
+    expect(source).toContain("const itemLine = cleanText(copy.headline) || cleanText(copy.offer_line_2)");
+    expect(source).not.toContain("hasEyebrow");
   });
 
   it("keeps the production poster composed as full-bleed templates", () => {
@@ -29,7 +32,7 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).toContain("ImageBackground");
     expect(source).toContain("TopCopyBlock");
     expect(source).toContain("OfferBlock");
-    expect(source).toContain("eyebrowLabel");
+    expect(source).not.toContain("eyebrowLabel");
     expect(source).not.toContain("function initials");
     expect(source).not.toContain("OfferPanel");
   });

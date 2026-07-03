@@ -24,6 +24,7 @@ import {
   createPublishIdempotencyKey,
 } from "./offer-version-publish";
 import { buildAdImageSelection } from "./merchant-image-selection";
+import { buildPosterSpecFromOfferDefinition } from "./poster/posterCopy";
 
 function buildDefinition() {
   const definition = buildOfferDefinitionV1({
@@ -172,6 +173,48 @@ describe("offer version publish client helpers", () => {
     expect(spec.channels.feed.visual.imageSelection?.selectedStoragePath).toBe("biz/poster.png");
     expect(spec.channels.feed.visual.imageSelection?.sourceMode).toBe("merchant_original");
     expect(spec.channels.claim.accessibility.criticalTextRenderedNatively).toBe(true);
+  });
+
+  it("normalizes poster copy to English only in publish ad specs", () => {
+    const definition = buildOfferDefinitionV1({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Test Cafe",
+      locationId: "22222222-2222-4222-8222-222222222222",
+      locationName: "9460 N MacArthur Blvd, Irving, TX 75063, USA",
+      dealEligibility: {
+        dealType: "PERCENT_OFF_SINGLE_ITEM",
+        appliesTo: "SINGLE_ITEM",
+        discountPercent: 50,
+        itemDescription: "Large americano",
+      },
+      eligibilityResult: { eligible: true, eligibilityStatus: "VALID", customerValuePercent: 50 },
+      activeWindowHumanReadable: "Today, 4:21 PM-5:21 PM",
+      quantityLimit: 10,
+    });
+    if (!definition) throw new Error("Expected valid definition");
+    const poster = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      sourceAssetPath: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
+      renderedAssetPath: null,
+      headline: "Large americano",
+      businessCategory: "Cafe",
+    });
+
+    const spec = buildOfferVersionPublishAdSpec("create_ai", definition, {
+      headline: "Large americano",
+      subheadline: "50% off today",
+      short_description: "50% off today",
+      cta: "Claim deal",
+      poster_storage_path: "11111111-1111-4111-8111-111111111111/ai_ad_generated.png",
+      poster,
+    });
+
+    expect(Object.keys(poster.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
+    expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["en-US"]);
+    expect(spec.poster?.copy_by_language["en-US"]?.headline).toBe("AMERICANO SAVINGS");
+    expect(spec.creative_format).toBe("poster_v1");
   });
 
   it("embeds exact composed-card approval metadata when provided", () => {

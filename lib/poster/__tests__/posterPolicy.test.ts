@@ -5,8 +5,11 @@ import { buildOfferDefinitionV1 } from "../../offer-definition";
 import {
   buildPosterCopyFromOfferDefinition,
   buildPosterOfferLinesFromOfferDefinition,
+  buildPosterSpecFromOfferDefinition,
+  normalizePosterSpecForPublish,
   sanitizePosterBusinessName,
 } from "../posterCopy";
+import { validatePosterSpecV1 } from "../posterAdSpec";
 import { assertPosterCopyPolicy, clampPosterText, sanitizePosterText } from "../posterPolicy";
 import type { PosterCopyV1 } from "../posterTypes";
 
@@ -75,8 +78,8 @@ describe("poster policy", () => {
     });
 
     expect(buildPosterOfferLinesFromOfferDefinition(definition)).toEqual({
-      offer_line_1: "BUY 1 LATTE",
-      offer_line_2: "GET 1 FREE",
+      offer_line_1: "2 FOR 1",
+      offer_line_2: "LATTE",
     });
   });
 
@@ -92,8 +95,8 @@ describe("poster policy", () => {
     });
 
     expect(buildPosterOfferLinesFromOfferDefinition(definition)).toEqual({
-      offer_line_1: "BUY 1 BACON AND EGG SANDWICH",
-      offer_line_2: "GET 1 COFFEE",
+      offer_line_1: "FREE COFFEE",
+      offer_line_2: "WITH BACON AND EGG SANDWICH",
     });
   });
 
@@ -154,8 +157,8 @@ describe("poster policy", () => {
 
     expect(copy.business_name).toBe("Merit Coffee");
     expect(copy.headline).toBe("SANDWICH + COFFEE BREAK");
-    expect(copy.offer_line_1).toBe("BUY 1 BACON AND EGG SANDWICH");
-    expect(copy.offer_line_2).toBe("GET 1 COFFEE");
+    expect(copy.offer_line_1).toBe("FREE COFFEE");
+    expect(copy.offer_line_2).toBe("WITH BACON AND EGG SANDWICH");
   });
 
   it("does not let a bare long product name become the poster hero", () => {
@@ -176,8 +179,8 @@ describe("poster policy", () => {
     });
 
     expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
-    expect(copy.offer_line_1).toBe("BUY ANY LARGE COFFEE DRINK");
-    expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
+    expect(copy.offer_line_1).toBe("FREE COOKIE OF YOUR CHOICE");
+    expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
   });
 
   it("does not let Try our become the poster hero", () => {
@@ -198,7 +201,74 @@ describe("poster policy", () => {
     });
 
     expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
-    expect(copy.offer_line_1).toBe("BUY ANY LARGE COFFEE DRINK");
-    expect(copy.offer_line_2).toBe("GET 1 COOKIE OF YOUR CHOICE");
+    expect(copy.offer_line_1).toBe("FREE COOKIE OF YOUR CHOICE");
+    expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
+  });
+
+  it("does not let percent-off posters use a bare item name as the hero", () => {
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "Large iced americano",
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Large iced americano 50% off",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.headline).toBe("AMERICANO SAVINGS");
+    expect(copy.offer_line_1).toBe("50% OFF");
+    expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");
+  });
+
+  it("normalizes publish poster specs to English copy for hosted validator compatibility", () => {
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "Large americano",
+    });
+
+    const spec = buildPosterSpecFromOfferDefinition({
+      definition,
+      enabled: true,
+      templateId: "premium",
+      sourceAssetPath: "biz_123/ai_ad_generated.png",
+      renderedAssetPath: null,
+      headline: "Large americano",
+      businessCategory: "Cafe",
+    });
+    const publishSpec = normalizePosterSpecForPublish(spec);
+
+    expect(Object.keys(spec.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
+    expect(Object.keys(publishSpec.copy_by_language)).toEqual(["en-US"]);
+    expect(validatePosterSpecV1(publishSpec, { offerDefinition: definition, businessId: "biz_123" })).toEqual({
+      valid: true,
+      reasonCodes: [],
+    });
+  });
+
+  it("localizes poster badge and context lines from offer facts", () => {
+    const definition = definitionFor({
+      dealType: "BUY_ONE_GET_SOMETHING_FREE",
+      appliesTo: "SINGLE_ITEM",
+      requiredPurchaseQuantity: 1,
+      requiredItemDescription: "bagel",
+      freeItemQuantity: 1,
+      freeItemDescription: "coffee",
+      freeItemDiscountPercent: 100,
+    });
+
+    expect(buildPosterOfferLinesFromOfferDefinition(definition, "es-US")).toEqual({
+      offer_line_1: "CAF\u00C9 GRATIS",
+      offer_line_2: "AL COMPRAR 1 BAGEL",
+    });
+    expect(buildPosterOfferLinesFromOfferDefinition(definition, "ko-KR")).toEqual({
+      offer_line_1: "\uCEE4\uD53C \uBB34\uB8CC",
+      offer_line_2: "\uBCA0\uC774\uAE00 X 1 \uAD6C\uB9E4 \uC2DC",
+    });
   });
 });
