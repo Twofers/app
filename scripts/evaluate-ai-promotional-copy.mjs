@@ -146,10 +146,11 @@ function posterDefinitionForFixture(fixture) {
   });
 }
 
-function buildPosterCopy(fixture, headline) {
+function buildPosterCopy(fixture, headline, subline = null) {
   return buildPosterCopyFromOfferDefinition({
     definition: posterDefinitionForFixture(fixture),
     headline,
+    subline,
     businessCategory: fixture.businessCategory,
   });
 }
@@ -159,6 +160,12 @@ function validatePosterFixture(fixture) {
   const base = buildPosterCopy(fixture, null);
   if (base.offer_line_1 !== fixture.expectedOfferLine1) errors.push("offer_line_1_changed");
   if (base.offer_line_2 !== fixture.expectedOfferLine2) errors.push("offer_line_2_changed");
+  if (fixture.expectedPosterKicker) {
+    const copy = buildPosterCopy(fixture, fixture.expectedPosterHeadline, fixture.expectedPosterKicker);
+    if (copy.subline !== fixture.expectedPosterKicker) {
+      errors.push(`poster_kicker_changed:${fixture.expectedPosterKicker}`);
+    }
+  }
   for (const rejected of fixture.rejectedHeadlines ?? []) {
     const copy = buildPosterCopy(fixture, rejected);
     if (copy.headline !== fixture.expectedPosterHeadline) {

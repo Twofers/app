@@ -19,12 +19,20 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).not.toMatch(/Claim|Redeem|Only \d+ available|timeLabel|scarcity/i);
   });
 
-  it("renders the offer as a badge plus one item/context line", () => {
-    expect(source).toContain("samePosterLine");
-    expect(source).toContain("transform: isPremium ? [] : [{ rotate: \"-3deg\" }]");
-    expect(source).toContain("const badgeTop = isPremium");
-    expect(source).toContain("const itemLine = cleanText(copy.headline) || cleanText(copy.offer_line_2)");
-    expect(source).not.toContain("hasEyebrow");
+  it("renders the poster in the classic stacked ad layout", () => {
+    expect(source).toContain("POSTER_TOP_BAND_HEIGHT = 330");
+    expect(source).toContain("POSTER_BOTTOM_BAND_TOP = 888");
+    expect(source).toContain("POSTER_HERO_TEXT_SIZE = 72");
+    expect(source).toContain("POSTER_OFFER_TEXT_SIZE = 58");
+    expect(source).toContain("liveScheduleLabel");
+    expect(source).toContain("eyebrowLabel");
+    expect(source).toContain("copy.subline || eyebrowLabel");
+    expect(source).toContain("posterText(copy.offer_line_1)");
+    expect(source).toContain("posterText(copy.offer_line_2 || copy.headline)");
+    expect(source).not.toContain("samePosterLine");
+    expect(source).not.toContain("badgeTop");
+    expect(source).not.toContain("badgeTextColor");
+    expect(source).not.toContain("premiumFooterTop");
   });
 
   it("keeps the production poster composed as full-bleed templates", () => {
@@ -32,7 +40,7 @@ describe("AdPosterCanvas source contract", () => {
     expect(source).toContain("ImageBackground");
     expect(source).toContain("TopCopyBlock");
     expect(source).toContain("OfferBlock");
-    expect(source).not.toContain("eyebrowLabel");
+    expect(source).toContain("eyebrowLabel");
     expect(source).not.toContain("function initials");
     expect(source).not.toContain("OfferPanel");
   });

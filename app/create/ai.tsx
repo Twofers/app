@@ -405,17 +405,25 @@ function buildDisplayScheduleSummary(
   });
 }
 
-function buildPosterScheduleLabel(
+function formatPosterLiveDateTime(value: Date, language: string): string {
+  return format(value, "MMM d, p", { locale: dateFnsLocaleFor(language) });
+}
+
+function buildPosterLiveScheduleSummary(
   t: (key: string, opts?: Record<string, unknown>) => string,
   validityMode: "one-time" | "recurring",
-  startTime: Date,
   endTime: Date,
   daysOfWeek: number[],
   windowStart: Date,
   windowEnd: Date,
+  language: string,
 ): string {
   if (validityMode === "one-time") {
-    return `${format(startTime, "MMM d, h:mm a")}-${format(endTime, "h:mm a")}`;
+    const datetime = formatPosterLiveDateTime(endTime, language);
+    return t("consumerWallet.expiresAtLabel", {
+      datetime,
+      defaultValue: `Redeem by ${datetime}`,
+    });
   }
   const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
   const days =
@@ -1242,20 +1250,20 @@ export default function AiDealScreen() {
       ),
     [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd, timezone, i18n.language],
   );
-  const posterScheduleLabel = useMemo(
+  const posterLiveScheduleLabel = useMemo(
     () =>
-      buildPosterScheduleLabel(
+      buildPosterLiveScheduleSummary(
         t,
         validityMode,
-        startTime,
         endTime,
         daysOfWeek,
         windowStart,
         windowEnd,
+        i18n.language,
       ),
-    [t, validityMode, startTime, endTime, daysOfWeek, windowStart, windowEnd],
+    [t, validityMode, endTime, daysOfWeek, windowStart, windowEnd, i18n.language],
   );
-
+  const posterEyebrowLabel = t("createAi.posterEyebrowTryOur", { defaultValue: "Try our" });
   const eligibilityInput = useMemo(
     () => dealEligibilityFormToInput(eligibilityForm),
     [eligibilityForm],
@@ -2306,6 +2314,8 @@ export default function AiDealScreen() {
           no_app_brand_token: true,
           no_cta: true,
           no_scarcity: true,
+          no_mutable_live_facts: true,
+          image_text_free: true,
           center_text: true,
         },
       },
@@ -3536,7 +3546,6 @@ export default function AiDealScreen() {
               sourceAssetPath: finalStoragePath,
               renderedAssetPath: null,
               headline: title,
-              subline: posterScheduleLabel,
               businessCategory: businessContextForAi.category,
               compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
             })
@@ -3999,7 +4008,6 @@ export default function AiDealScreen() {
           sourceAssetPath: currentAdStoragePath ?? originalStoragePath ?? null,
           renderedAssetPath: null,
           headline: title.trim() || generatedAd?.headline || null,
-          subline: posterScheduleLabel,
           businessCategory: businessContextForAi.category,
           compositionPlan: generatedAd?.poster?.composition_plan ?? generatedAd?.item_research?.description ?? null,
         })
@@ -4212,6 +4220,8 @@ export default function AiDealScreen() {
           spec={effectivePosterSpec}
           imageUri={posterPreviewImageUri}
           templateId={selectedPosterTemplateId}
+          liveScheduleLabel={posterLiveScheduleLabel}
+          eyebrowLabel={posterEyebrowLabel}
         />
       </View>
     );
@@ -5670,31 +5680,6 @@ export default function AiDealScreen() {
                 {showPosterPreview ? (
                   <View style={{ marginTop: 10, gap: 12 }}>
                     {renderPosterPreview()}
-                    <View
-                      style={{
-                        borderRadius: 8,
-                        backgroundColor: theme.surface,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        padding: 14,
-                        gap: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 18, lineHeight: 23, fontWeight: "900", color: theme.text }}>
-                        {t("dealDetail.dealDetails", { defaultValue: "Deal details" })}
-                      </Text>
-                      <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: "900", color: theme.text }}>
-                        {title || t("createAi.placeholderDealTitle")}
-                      </Text>
-                      {promoLine ? (
-                        <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: "700", color: theme.text }}>
-                          {promoLine}
-                        </Text>
-                      ) : null}
-                      <Text style={{ fontSize: 15, lineHeight: 21, color: theme.mutedText }}>
-                        {description || t("createAi.placeholderOfferDetails")}
-                      </Text>
-                    </View>
                   </View>
                 ) : (
                   <View

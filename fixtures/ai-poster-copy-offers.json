@@ -9,14 +9,14 @@
     "rewardItem": "Cookie of your choice",
     "rewardType": "free",
     "rejectedHeadlines": [
-      "Any large coffee drink",
       "Try our any large coffee drink",
       "Try our cookie and coffee deal",
       "Buy 1 any large coffee drink and get 1 cookie of your choice"
     ],
     "expectedPosterHeadline": "COFFEE + COOKIE BREAK",
-    "expectedOfferLine1": "BUY ANY LARGE COFFEE DRINK",
-    "expectedOfferLine2": "GET 1 COOKIE OF YOUR CHOICE"
+    "expectedPosterKicker": "TRY OUR",
+    "expectedOfferLine1": "FREE COOKIE OF YOUR CHOICE",
+    "expectedOfferLine2": "WITH ANY LARGE COFFEE DRINK"
   },
   {
     "id": "latte-same-item-poster",
@@ -28,13 +28,13 @@
     "rewardItem": "latte",
     "rewardType": "free",
     "rejectedHeadlines": [
-      "latte",
       "Try our latte",
       "Buy 1 latte and get 1 free"
     ],
     "expectedPosterHeadline": "LATTE BONUS",
-    "expectedOfferLine1": "BUY 1 LATTE",
-    "expectedOfferLine2": "GET 1 FREE"
+    "expectedPosterKicker": "LATTE BREAK",
+    "expectedOfferLine1": "2 FOR 1",
+    "expectedOfferLine2": "LATTE"
   },
   {
     "id": "croissant-percent-off-poster",
@@ -45,11 +45,11 @@
     "rewardType": "percent_off",
     "rewardValue": 40,
     "rejectedHeadlines": [
-      "croissant",
       "Try the croissant",
       "40% off croissant"
     ],
     "expectedPosterHeadline": "CROISSANT SAVINGS",
+    "expectedPosterKicker": "BAKERY PICK",
     "expectedOfferLine1": "40% OFF",
     "expectedOfferLine2": "CROISSANT"
   }

@@ -121,13 +121,14 @@ describe("buildAdCopyPrompt", () => {
 
     expect(prompt.userText).toContain("Requested ad format: poster_v1");
     expect(prompt.userText).toContain("POSTER FORMAT DIRECTION");
-    expect(prompt.userText).toContain("not a form-field echo");
-    expect(prompt.userText).toContain("product field, grammar fragment, or owner note");
+    expect(prompt.userText).toContain("posterKicker and headlineAlternative");
+    expect(prompt.userText).toContain("bottom offer lines and schedule line");
     expect(prompt.userText).toContain("Poster headline: ANY LARGE COFFEE DRINK");
-    expect(prompt.userText).toContain("revise headlineAlternative first");
+    expect(prompt.userText).toContain("revise headlineAlternative and posterKicker first");
     expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
-    expect(prompt.system).toContain("Coffee + Cookie Break");
-    expect(prompt.system).toContain("Bad poster headlines are Any large coffee drink");
+    expect(prompt.system).toContain("posterKicker is the small top kicker");
+    expect(prompt.system).not.toContain("Coffee + Cookie Break");
+    expect(prompt.system).not.toContain("Bad poster headlines are Any large coffee drink");
   });
 
   it("passes the locked contract while keeping metadata out of generated fields", () => {
@@ -156,6 +157,7 @@ describe("buildAdCopyPrompt", () => {
       "strategyId",
       "strategyReason",
       "headlineAlternative",
+      "posterKicker",
       "description",
       "pushTitle",
       "pushBody",

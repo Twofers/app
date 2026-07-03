@@ -208,7 +208,7 @@ Model and provider controls:
 Stages:
 
 - Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed, and is disabled entirely when `AI_AD_WEB_SEARCH_ENABLED=false`.
-- Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
+- Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V5`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
 - Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, Gemini primary by default (`AI_VISION_PRIMARY_PROVIDER`, cheap/multimodal), and OpenAI fallback when `AI_VISION_FALLBACK_ENABLED=true` (default true).
@@ -444,7 +444,7 @@ Missing:
 Partially present:
 
 - Strict JSON schema for copy.
-- Versioned prompt constant `AI_COPY_PROMPT_V4`.
+- Versioned prompt constant `AI_COPY_PROMPT_V5`.
 - Five lane-based candidate variants in one response, with validated selection and up to five merchant-facing copy alternatives.
 - Banned-claim/metadata-leak checks.
 - Bounded repair and deterministic fallback.

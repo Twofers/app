@@ -465,6 +465,7 @@ describe("validateAiCopyAgainstOffer", () => {
           strategyId: "value_clarity",
           strategyReason: "Lead with the exchange.",
           headlineAlternative: "Coffee gets the bagel",
+          posterKicker: "Morning deal",
           description: "Buy a coffee and the bagel is on us.",
           pushTitle: "Coffee + bagel",
           pushBody: "Buy a coffee and get a free bagel.",
@@ -537,6 +538,8 @@ describe("validateAiCopyAgainstOffer", () => {
       preliminary_score: 82,
       judge_score: 110,
       cta: "Claim deal",
+      poster_kicker: "Morning deal",
+      image_brief: "Coffee and bagel on a cafe table.",
     });
   });
 });

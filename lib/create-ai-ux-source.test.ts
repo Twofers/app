@@ -164,6 +164,10 @@ describe("AI create UX source guards", () => {
         expect(translated, `${locale}.createAi missing ${key}`).toHaveProperty(key);
       }
     }
+    expect(readLocale("es").createAi.scheduleLabel).toBe("Horario:");
+    expect(readLocale("es").createAi.maxClaimsLabel).toBe("Reclamos máximos:");
+    expect(readLocale("ko").createAi.scheduleLabel).toBe("일정:");
+    expect(readLocale("ko").createAi.maxClaimsLabel).toBe("최대 클레임:");
   });
 
   it("surfaces poster format while keeping poster generation fixed to the premium template", () => {
@@ -201,9 +205,22 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("ownerLanguagePreviewDisplayTermsLine");
     expect(createAiSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
     expect(createAiSource).toContain('const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";');
+    expect(createAiSource).toContain("posterLiveScheduleLabel");
+    expect(createAiSource).toContain("liveScheduleLabel={posterLiveScheduleLabel}");
+    expect(createAiSource).toContain("posterEyebrowLabel");
+    expect(createAiSource).toContain("eyebrowLabel={posterEyebrowLabel}");
+    expect(createAiSource).not.toContain("const renderPosterLiveStrip = () =>");
+    expect(createAiSource).not.toContain("acceptedPosterCta");
+    expect(createAiSource).not.toContain("consumerWallet.useDealTitle");
+    expect(createAiSource).toContain("displayScheduleSummary");
     expect(generatedPreviewSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
     expect(generatedPreviewSource).not.toContain("{ownerLanguagePreview.termsLine}");
     expect(generatedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
+    expect(generatedPreviewSource).not.toContain("renderPosterLiveStrip()");
+    expect(acceptedPreviewSource).not.toContain("renderPosterLiveStrip()");
+    expect(acceptedPreviewSource).not.toContain("acceptedPosterDetailLine");
+    expect(acceptedPreviewSource).not.toContain("acceptedPosterAddress");
+    expect(acceptedPreviewSource).not.toContain("createAi.maxClaimsLabel");
     expect(acceptedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(acceptedPreviewSource).not.toContain('{t("createAi.maxClaimsLabel")} {maxClaims}');
   });
@@ -336,7 +353,11 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("showDraftPosterPreview");
     expect(acceptedPreviewSource).toContain("showPosterPreview ? (");
     expect(acceptedPreviewSource).toContain("renderPosterPreview()");
-    expect(acceptedPreviewSource).toContain("dealDetail.dealDetails");
+    expect(acceptedPreviewSource).not.toContain("renderPosterLiveStrip()");
+    expect(createAiSource).not.toContain('name="event"');
+    expect(createAiSource).not.toContain("consumerWallet.useDealTitle");
+    expect(acceptedPreviewSource).not.toContain('name="confirmation-number"');
+    expect(acceptedPreviewSource).not.toContain("dealDetail.dealDetails");
     expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
     expect(acceptedPreviewSource).toContain("imageVersionStoragePath(generatedAd)");
   });

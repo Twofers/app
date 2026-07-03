@@ -161,7 +161,7 @@ describe("poster policy", () => {
     expect(copy.offer_line_2).toBe("WITH BACON AND EGG SANDWICH");
   });
 
-  it("does not let a bare long product name become the poster hero", () => {
+  it("allows a product name to become the poster hero", () => {
     const definition = definitionFor({
       dealType: "BUY_ONE_GET_SOMETHING_FREE",
       appliesTo: "SINGLE_ITEM",
@@ -178,7 +178,7 @@ describe("poster policy", () => {
       businessCategory: "Cafe",
     });
 
-    expect(copy.headline).toBe("COFFEE + COOKIE BREAK");
+    expect(copy.headline).toBe("ANY LARGE COFFEE DRINK");
     expect(copy.offer_line_1).toBe("FREE COOKIE OF YOUR CHOICE");
     expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
   });
@@ -205,7 +205,7 @@ describe("poster policy", () => {
     expect(copy.offer_line_2).toBe("WITH ANY LARGE COFFEE DRINK");
   });
 
-  it("does not let percent-off posters use a bare item name as the hero", () => {
+  it("does not let percent-off mechanics become the poster hero", () => {
     const definition = definitionFor({
       dealType: "PERCENT_OFF_SINGLE_ITEM",
       appliesTo: "SINGLE_ITEM",
@@ -220,6 +220,25 @@ describe("poster policy", () => {
     });
 
     expect(copy.headline).toBe("AMERICANO SAVINGS");
+    expect(copy.offer_line_1).toBe("50% OFF");
+    expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");
+  });
+
+  it("allows the exact item name as the poster hero", () => {
+    const definition = definitionFor({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      appliesTo: "SINGLE_ITEM",
+      discountPercent: 50,
+      itemDescription: "Large iced americano",
+    });
+
+    const copy = buildPosterCopyFromOfferDefinition({
+      definition,
+      headline: "Large iced americano",
+      businessCategory: "Cafe",
+    });
+
+    expect(copy.headline).toBe("LARGE ICED AMERICANO");
     expect(copy.offer_line_1).toBe("50% OFF");
     expect(copy.offer_line_2).toBe("LARGE ICED AMERICANO");
   });

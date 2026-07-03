@@ -85,6 +85,7 @@ export type AiDealCopyVariant = {
   push_notification: string;
   social_caption?: string;
   headline_alternative?: string;
+  poster_kicker?: string;
   push_title?: string;
   push_body?: string;
   cta?: string;
@@ -1118,6 +1119,8 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     strategyId?: unknown;
     strategyReason?: unknown;
     headlineAlternative?: unknown;
+    posterKicker?: unknown;
+    posterSubline?: unknown;
     description?: unknown;
     pushTitle?: unknown;
     pushBody?: unknown;
@@ -1130,6 +1133,12 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
   };
   const headlineAlternative =
     typeof raw.headlineAlternative === "string" ? raw.headlineAlternative : copy.headline_alternative;
+  const posterKicker =
+    typeof raw.posterKicker === "string"
+      ? raw.posterKicker
+      : typeof raw.posterSubline === "string"
+      ? raw.posterSubline
+      : copy.poster_kicker;
   const description = typeof raw.description === "string" ? raw.description : copy.short_description;
   const pushTitle = typeof raw.pushTitle === "string" ? raw.pushTitle : copy.push_title;
   const pushBody =
@@ -1155,6 +1164,7 @@ function cleanVariant(copy: Partial<AiDealCopyVariant>): AiDealCopyVariant {
     short_description: compactText(cleanText(description), DEAL_COPY_LIMITS.description),
     push_notification: compactText(cleanText(pushBody), DEAL_COPY_LIMITS.pushBody),
     ...(isNonEmptyString(headlineAlternative) ? { headline_alternative: compactText(headlineAlternative, DEAL_COPY_LIMITS.headline) } : {}),
+    ...(isNonEmptyString(posterKicker) ? { poster_kicker: compactText(posterKicker, 32) } : {}),
     ...(isNonEmptyString(pushTitle) ? { push_title: compactText(pushTitle, DEAL_COPY_LIMITS.pushTitle) } : {}),
     ...(isNonEmptyString(pushBody) ? { push_body: compactText(pushBody, DEAL_COPY_LIMITS.pushBody) } : {}),
     ...(isNonEmptyString(socialCaption) ? { social_caption: compactText(socialCaption, DEAL_COPY_LIMITS.socialCaption) } : {}),

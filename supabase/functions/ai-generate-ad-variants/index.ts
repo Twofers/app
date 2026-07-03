@@ -7,7 +7,7 @@
  * - Stage 3: image — enhance the cafe's uploaded photo (touchup / cleanbg / studiopolish)
  *            OR generate a photoreal hero via the configured GPT image model when no photo is provided.
  *
- * The app renders the headline/subline/CTA ABOVE the image — text is never baked in.
+ * The app renders poster text natively; live schedule/status/CTA stay outside exported poster pixels.
  *
  * Returns a single ad. For backward compatibility with old clients, the response also
  * includes `ads: [ad]` so existing UI that expects an array does not crash.
@@ -203,6 +203,8 @@ type SingleAd = {
   push_notification: string;
   terms_summary: string;
   social_caption?: string;
+  image_brief?: string;
+  poster_kicker?: string;
   locked_offer_line?: string;
   locked_terms_line?: string;
   copy_source?: AiDealCopySource;
@@ -546,7 +548,7 @@ async function generateCopy(params: {
   previousAd?: SingleAd;
   creativeFormat?: "standard_card" | "poster_v1";
   costContext: AiCostContext;
-}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+}): Promise<Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
   fallback_reason?: string;
   generator_version?: string;
   copy_latency_ms?: number;
@@ -807,6 +809,8 @@ async function generateCopy(params: {
     push_notification: clip(selected.push_body || selected.push_notification, DEAL_COPY_LIMITS.pushBody),
     terms_summary: clip(selected.terms_summary, DEAL_COPY_LIMITS.terms),
     social_caption: selected.social_caption ? clip(selected.social_caption, DEAL_COPY_LIMITS.socialCaption) : undefined,
+    image_brief: selected.image_brief ? clip(selected.image_brief, 260) : undefined,
+    poster_kicker: selected.poster_kicker ? clip(selected.poster_kicker, 32) : undefined,
     locked_offer_line: selected.locked_offer_line,
     locked_terms_line: selected.locked_terms_line,
     copy_source: selected.copy_source,
@@ -1386,43 +1390,11 @@ function normalizePosterHeadlineText(value: string | null | undefined): string {
     : "";
 }
 
-function stripPosterHeadlineFillers(value: string): string {
-  return normalizePosterHeadlineText(value)
-    .replace(/^(?:try\s+our|try\s+the|our|the|a|an|any|one|1)\s+/, "")
-    .replace(/\s+(?:deal|offer|special|promo)$/g, "")
-    .trim();
-}
-
-function posterOfferItemNames(contract: DealOfferContract): string[] {
-  return [
-    contract.requiredPurchase?.itemName,
-    contract.freeReward?.itemName,
-    contract.singleItemDiscount?.itemName,
-  ]
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .map(stripPosterHeadlineFillers)
-    .filter(Boolean);
-}
-
-function isPosterItemOnlyHeadline(headline: string, itemName: string): boolean {
-  const cleanHeadline = stripPosterHeadlineFillers(headline);
-  const cleanItem = stripPosterHeadlineFillers(itemName);
-  if (!cleanHeadline || !cleanItem) return false;
-  if (cleanHeadline === cleanItem) return true;
-
-  const headlineWords = cleanHeadline.split(/\s+/).filter((word) => word.length > 1);
-  const itemWords = new Set(cleanItem.split(/\s+/).filter((word) => word.length > 1));
-  return headlineWords.length >= 2 && headlineWords.every((word) => itemWords.has(word));
-}
-
 function posterHeadlineGateReasons(candidate: AiDealCopyVariant, contract: DealOfferContract): string[] {
   const headline = normalizePosterHeadlineText(candidate.headline);
   const reasons: string[] = [];
   if (!headline) return reasons;
   if (/^try\s+our\b/.test(headline)) reasons.push("POSTER_HEADLINE_TRY_OUR");
-  if (posterOfferItemNames(contract).some((itemName) => isPosterItemOnlyHeadline(headline, itemName))) {
-    reasons.push("POSTER_HEADLINE_ITEM_ONLY");
-  }
 
   const canonicalOffer = normalizePosterHeadlineText(contract.canonicalOfferLine);
   if (canonicalOffer && headline === canonicalOffer) {
@@ -2181,6 +2153,7 @@ async function produceImageOpenAiOnly(params: {
   itemHint: string;
   businessName: string;
   offerContract: DealOfferContract;
+  creativeImageBrief?: string | null;
   imageEditMode: MerchantImageEditMode;
   customImageEditInstruction?: string;
   merchantOverrideAcknowledged: boolean;
@@ -2201,6 +2174,7 @@ async function produceImageOpenAiOnly(params: {
     itemHint,
     businessName,
     offerContract,
+    creativeImageBrief,
     merchantOverrideAcknowledged,
     costContext,
   } = params;
@@ -2317,6 +2291,7 @@ async function produceImageOpenAiOnly(params: {
     itemDescription: research.is_familiar ? research.description : "",
     businessName,
     requiredVisualItems,
+    creativeDirection: creativeImageBrief,
     visualRevisionInstruction: imageRevisionInstruction({
       revisionPreset: params.revisionPreset,
       revisionFeedback: params.revisionFeedback,
@@ -2556,6 +2531,7 @@ async function produceImage(params: {
   businessName: string;
   businessCategory?: string;
   offerContract: DealOfferContract;
+  creativeImageBrief?: string | null;
   imageSourceMode: MerchantImageSourceMode;
   imageEditMode: MerchantImageEditMode;
   customImageEditInstruction?: string;
@@ -2739,6 +2715,7 @@ async function produceImage(params: {
     paidItem: offerItems.paidItem,
     freeItem: offerItems.freeItem,
     dealType: params.offerContract.dealType,
+    creativeDirection: params.creativeImageBrief,
     customEditInstruction: revisionImageInstruction,
     stylePreset,
     aspectRatio: params.imageAspectRatio,
@@ -2792,6 +2769,7 @@ async function produceImage(params: {
       freeItem: offerItems.freeItem,
       dealType: params.offerContract.dealType,
       referenceImages: [{ mimeType: safeImageMime(imageMime), base64: bytesToBase64(imageBytes) }],
+      creativeDirection: params.creativeImageBrief,
       customEditInstruction: [
         params.imageEditMode === "custom" ? params.customImageEditInstruction : undefined,
         revisionImageInstruction,
@@ -3218,7 +3196,7 @@ function localizationTelemetry(result: VerifiedAdLocalizationBundleResult | null
 
 function buildGenerationTelemetry(params: {
   offerContract: DealOfferContract;
-  copy: Pick<SingleAd, "headline" | "short_description" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
+  copy: Pick<SingleAd, "headline" | "short_description" | "image_brief" | "poster_kicker" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes"> & {
     fallback_reason?: string;
     generator_version?: string;
     copy_latency_ms?: number;
@@ -3258,6 +3236,7 @@ function buildGenerationTelemetry(params: {
     generated: {
       headline: copy.headline,
       offer: copy.short_description,
+      image_brief: copy.image_brief ?? null,
       image_prompt: imageResult.prompt,
     },
     image_generation: {
@@ -3292,6 +3271,7 @@ function buildGenerationTelemetry(params: {
       generator_version: copy.generator_version ?? null,
       latency_ms: copy.copy_latency_ms ?? null,
       fallback_reason: copy.fallback_reason ?? null,
+      poster_kicker: copy.poster_kicker ?? null,
       validation_failure_count: validationRuleIds.length,
       provider: copy.provider ?? null,
       model: copy.model ?? null,
@@ -3706,7 +3686,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
+    let copy: Pick<SingleAd, "headline" | "subheadline" | "short_description" | "push_notification" | "terms_summary" | "social_caption" | "image_brief" | "poster_kicker" | "locked_offer_line" | "locked_terms_line" | "copy_source" | "variant_count" | "selected_variant_index" | "validation_reason_codes" | "cta"> & {
       fallback_reason?: string;
       generator_version?: string;
       copy_latency_ms?: number;
@@ -3730,6 +3710,8 @@ Deno.serve(async (req) => {
         push_notification: previousAd.push_notification || previousAd.headline,
         terms_summary: offerContract.canonicalShortTerms,
         social_caption: previousAd.social_caption,
+        image_brief: previousAd.image_brief,
+        poster_kicker: previousAd.poster?.copy?.subline,
         locked_offer_line: offerContract.canonicalOfferLine,
         locked_terms_line: offerContract.canonicalShortTerms,
         copy_source: previousAd.copy_source,
@@ -3829,6 +3811,7 @@ Deno.serve(async (req) => {
         businessName,
         businessCategory: businessContext.category,
         offerContract,
+        creativeImageBrief: copy.image_brief,
         revisionPreset: revisionPreset || undefined,
         revisionFeedback: revisionFeedback || undefined,
         imageProviderConfig,
@@ -3859,7 +3842,7 @@ Deno.serve(async (req) => {
           sourceAssetPath: imageResult.posterStoragePath,
           renderedAssetPath: null,
           headline: copy.headline,
-          subline: copy.short_description || copy.subheadline,
+          subline: copy.poster_kicker,
           businessCategory: businessContext.category,
           compositionPlan: imageResult.prompt,
         })
@@ -3930,6 +3913,8 @@ Deno.serve(async (req) => {
       push_notification: copy.push_notification,
       terms_summary: copy.terms_summary,
       social_caption: copy.social_caption,
+      image_brief: copy.image_brief,
+      poster_kicker: copy.poster_kicker,
       locked_offer_line: copy.locked_offer_line,
       locked_terms_line: copy.locked_terms_line,
       copy_source: copy.copy_source,
@@ -4133,6 +4118,7 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       : null,
     editMode: imageEditModeFromPhotoTreatment(photoTreatment),
   });
+  const parsedPoster = recordValue(raw.poster) as PosterDraftV1 | null;
 
   return {
     headline: clip(typeof raw.headline === "string" ? raw.headline : "", 70),
@@ -4147,6 +4133,11 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
       240,
     ),
     social_caption: clip(typeof raw.social_caption === "string" ? raw.social_caption : "", 220) || undefined,
+    image_brief: clip(typeof raw.image_brief === "string" ? raw.image_brief : "", 260) || undefined,
+    poster_kicker: clip(
+      typeof raw.poster_kicker === "string" ? raw.poster_kicker : parsedPoster?.copy?.subline ?? "",
+      32,
+    ) || undefined,
     locked_offer_line: clip(
       typeof raw.locked_offer_line === "string" ? raw.locked_offer_line : "",
       240,
@@ -4177,6 +4168,6 @@ function coerceSingleAd(raw: Record<string, unknown>): SingleAd {
     photo_treatment: photoTreatment,
     poster_storage_path: posterStoragePath,
     image_selection: imageSelection,
-    poster: recordValue(raw.poster) as PosterDraftV1 | null,
+    poster: parsedPoster,
   };
 }

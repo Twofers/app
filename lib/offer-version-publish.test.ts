@@ -213,7 +213,7 @@ describe("offer version publish client helpers", () => {
 
     expect(Object.keys(poster.copy_by_language)).toEqual(["en-US", "es-US", "ko-KR"]);
     expect(Object.keys(spec.poster?.copy_by_language ?? {})).toEqual(["en-US"]);
-    expect(spec.poster?.copy_by_language["en-US"]?.headline).toBe("AMERICANO SAVINGS");
+    expect(spec.poster?.copy_by_language["en-US"]?.headline).toBe("LARGE AMERICANO");
     expect(spec.creative_format).toBe("poster_v1");
   });
 

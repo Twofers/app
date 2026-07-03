@@ -72,12 +72,15 @@ describe("buildGeminiAdImagePrompt", () => {
       paidItem: "latte",
       freeItem: "croissant",
       dealType: "SAME_ITEM_BOGO",
+      creativeDirection: "Cozy afternoon cafe table with space for poster text.",
       stylePreset: "playful-twofer",
       aspectRatio: "1:1",
       imageSize: "1K",
     });
 
     expect(prompt).toContain("Required visible items: latte, croissant.");
+    expect(prompt).toContain("Selected AI ad concept for composition only");
+    expect(prompt).toContain("Cozy afternoon cafe table");
     expect(prompt).toContain("Do not add readable text.");
     expect(prompt).toContain("generated image must be text-free");
     expect(prompt).toContain("Do not add fake business names.");

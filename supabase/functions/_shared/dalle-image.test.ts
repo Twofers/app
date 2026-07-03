@@ -33,10 +33,13 @@ describe("buildPhotoAdImagePrompt", () => {
       itemDescription: "A bagel paired with a cup of coffee.",
       businessName: "Test Cafa",
       requiredVisualItems: ["bagel", "coffee"],
+      creativeDirection: "Warm morning coffee break with the bagel and coffee framed for poster text.",
     });
 
     expect(prompt).toMatch(/bagel/i);
     expect(prompt).toMatch(/coffee/i);
+    expect(prompt).toMatch(/Selected ad concept for composition only/i);
+    expect(prompt).toMatch(/Warm morning coffee break/i);
     expect(prompt).toMatch(/Show all required items/i);
     expect(prompt).toMatch(/Do not show only one item/i);
     expect(prompt).toMatch(/no text/i);

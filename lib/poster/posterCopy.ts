@@ -126,26 +126,6 @@ function isWeakPosterHeroHeadline(value: string): boolean {
   return /^try\s+(?:our|the)\b/.test(text);
 }
 
-function isBareOfferItemHeadline(value: string, definition: OfferDefinitionV1): boolean {
-  const headline = normalizePosterComparison(value);
-  if (!headline) return false;
-  const itemNames = [
-    definition.qualifyingItems[0]?.displayName,
-    ...definition.reward.displayNames,
-  ].map((item) => normalizePosterComparison(item ?? "")).filter(Boolean);
-  if (itemNames.some((item) => headline === item)) return true;
-
-  const itemLabels = itemNames.map(posterItemLabel).filter(Boolean);
-  if (itemLabels.some((label) => headline === normalizePosterComparison(label))) return true;
-
-  const words = headline.split(/\s+/).filter((word) => !POSTER_ITEM_STOP_WORDS.has(word));
-  const normalizedWords = words.join(" ");
-  return itemLabels.some((label) => {
-    const normalizedLabel = normalizePosterComparison(label);
-    return normalizedWords === normalizedLabel || (words.length <= 3 && words.includes(normalizedLabel));
-  });
-}
-
 export function sanitizePosterBusinessName(
   input: string | null | undefined,
   category?: string | null,
@@ -311,7 +291,6 @@ function posterHeadline(definition: OfferDefinitionV1, requestedHeadline?: strin
   if (!scanPosterTextPolicy(requested).passed) return fallback;
   if (isWeakPosterHeroHeadline(requested)) return fallback;
   if (isMechanicalOfferHeadline(requested)) return fallback;
-  if (isBareOfferItemHeadline(requested, definition)) return fallback;
   return requested;
 }
 

@@ -77,7 +77,7 @@ export type DealCopyPromptParams = {
   creativeFormat?: "standard_card" | "poster_v1";
 };
 
-export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V4";
+export const AD_COPY_PROMPT_VERSION = "AI_COPY_PROMPT_V5";
 
 export const AD_COPY_JSON_SCHEMA = {
   name: "deal_ad_copy",
@@ -96,6 +96,7 @@ export const AD_COPY_JSON_SCHEMA = {
             strategyId: { type: "string", enum: [...AD_COPY_STRATEGY_IDS] },
             strategyReason: { type: "string" },
             headlineAlternative: { type: "string" },
+            posterKicker: { type: "string" },
             description: { type: "string" },
             pushTitle: { type: "string" },
             pushBody: { type: "string" },
@@ -109,6 +110,7 @@ export const AD_COPY_JSON_SCHEMA = {
             "strategyId",
             "strategyReason",
             "headlineAlternative",
+            "posterKicker",
             "description",
             "pushTitle",
             "pushBody",
@@ -159,7 +161,7 @@ export const AD_COPY_JSON_SCHEMA = {
   },
 };
 
-export const AI_COPY_PROMPT_V4 = [
+export const AI_COPY_PROMPT_V5 = [
   `Generator version: ${AI_COPY_GENERATOR_VERSION}.`,
   "Write a polished mobile advertisement for Twofer, a mobile app for local coffee shops, cafes, bakeries, and small food businesses. This is an ad, not a legal deal description or generic image caption.",
   "Use the normalized deal facts and validated offer contract as ground truth. Owner notes, photo context, product research, and tone preferences may guide wording, but they must never change deal facts.",
@@ -192,6 +194,7 @@ export const AI_COPY_PROMPT_V4 = [
   "",
   "FIELD RULES:",
   "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.",
+  "- posterKicker: short poster top kicker, target 1-3 words, max 24 characters. It may be empty. Good examples: Try our, Coffee break, Menu pick. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
   "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,
@@ -199,8 +202,8 @@ export const AI_COPY_PROMPT_V4 = [
   "- cta: short verb-first action label, max 26 characters.",
   "- imageBrief: short visual idea using only verified offer and merchant facts; no text in image.",
   "- merchantSpecificContextLimited: true only for the merchant_specific lane when verified merchant context is sparse.",
-  "- poster-related headline copy, if requested by the app, must be a compact hero concept based on the whole offer. Do not use the full buy/get sentence, do not use a bare product name, and do not start with Try our because the app renders that eyebrow separately.",
-  "- For poster ads, good headlineAlternative examples are Coffee + Cookie Break, Latte Pairing, Sandwich + Coffee, Morning Bonus, or Cookie Pairing. Bad poster headlines are Any large coffee drink, Buy any large coffee drink and get a free cookie, Try our latte, or Free cookie with coffee.",
+  "- For poster ads, headlineAlternative is the large poster headline and posterKicker is the small top kicker. Make them work together as a real poster concept.",
+  "- Poster offer lines and schedule metadata are app-rendered from locked offer facts. Do not put dates, exact times, claim counts, status, or CTA labels in AI-generated poster fields.",
   "- Do not put Twofer, Claim, Redeem, Scan, Tap, Get in app, availability counts, time left, coupon codes, QR instructions, or urgency/scarcity in any poster-oriented wording or image idea.",
   "",
   "CREATIVE STRATEGIES:",
@@ -234,7 +237,7 @@ export const AI_COPY_PROMPT_V4 = [
   "  If timing, claim limit, price, or size is missing, omit that detail.",
 ];
 
-export const COPY_VOICE_RULES = AI_COPY_PROMPT_V4;
+export const COPY_VOICE_RULES = AI_COPY_PROMPT_V5;
 
 function languageName(outputLanguage: OutputLanguage): string {
   if (outputLanguage === "es") return "Spanish";
@@ -462,7 +465,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     revisionBlock.push("Treat preset adjustments and user feedback as instructions, not reusable ad wording.");
     revisionBlock.push("Keep the same offer mechanics. The revised copy must be visibly different from the previous draft.");
     revisionBlock.push("Do not reuse the exact previous headline, short description, push notification, or social caption unless the user explicitly asks to undo a change.");
-    revisionBlock.push("If the merchant mentions the top part, title, headline, wording, or poster copy, revise headlineAlternative first.");
+    revisionBlock.push("If the merchant mentions title, headline, top text, or wording, revise headlineAlternative and posterKicker first; the poster offer lines remain locked to offer facts.");
     revisionBlock.push("If the adjustment is about tone, rewrite the framing and word choice while preserving the exact locked offer facts.");
   }
 
@@ -489,14 +492,13 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     "",
     "Create exactly one candidate for each strategy ID: value_clarity, social_or_occasion, product_desire, local_discovery, merchant_specific.",
     "The creativeBrief must explain the customer moment, exact hook, verified merchant truth used, offer truth used, desired feeling, natural language direction, visual story, and facts not to invent.",
-    "If the request is used for a poster ad, keep the visualStory and imageBrief text-free and leave calm space for native centered text overlays.",
+    "If the request is used for a poster ad, keep the visualStory and imageBrief text-free and leave calm space for native poster text overlays.",
     ...(creativeFormat === "poster_v1"
       ? [
           "POSTER FORMAT DIRECTION:",
-          "- headlineAlternative is the large top poster headline. Make it a real ad concept from the full offer, not a form-field echo.",
-          "- The app will render the exact buy/get mechanics separately, so headlineAlternative should not repeat the full locked offer line.",
-          "- If the previous poster headline sounds like a product field, grammar fragment, or owner note, replace it with a compact campaign idea.",
-          "- Never output a headlineAlternative that is only the qualifying item, only the reward item, or starts with Try our.",
+          "- Choose posterKicker and headlineAlternative as the poster's top creative idea.",
+          "- The app derives the bottom offer lines and schedule line from locked offer facts and live schedule metadata.",
+          "- Never rely on headlineAlternative or posterKicker to carry dates, times, claim counts, app CTA text, or scarcity.",
         ]
       : []),
     "Each candidate must have a different opening idea and a different strategy reason. Avoid paraphrasing the same headline five ways.",
@@ -504,7 +506,7 @@ export function buildAdCopyPrompt(params: DealCopyPromptParams): {
     "If a fact is missing, write around it without inventing it. If the product is missing, stay neutral instead of naming a latte, pastry, neighborhood, price, or ingredient.",
     "",
     "Return this exact JSON shape:",
-    '{ "creativeBrief": { "targetCustomerMoment": "string", "exactCustomerHook": "string", "merchantTruthUsed": ["string"], "offerTruthUsed": ["string"], "desiredFeeling": "string", "naturalLanguageDirection": "string", "visualStory": "string", "factsNotToInvent": ["string"] }, "variants": [{ "candidateId": "string", "strategyId": "value_clarity", "strategyReason": "string", "headlineAlternative": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string", "cta": "string", "imageBrief": "string", "merchantSpecificContextLimited": false }] }',
+    '{ "creativeBrief": { "targetCustomerMoment": "string", "exactCustomerHook": "string", "merchantTruthUsed": ["string"], "offerTruthUsed": ["string"], "desiredFeeling": "string", "naturalLanguageDirection": "string", "visualStory": "string", "factsNotToInvent": ["string"] }, "variants": [{ "candidateId": "string", "strategyId": "value_clarity", "strategyReason": "string", "headlineAlternative": "string", "posterKicker": "string", "description": "string", "pushTitle": "string", "pushBody": "string", "socialCaption": "string", "cta": "string", "imageBrief": "string", "merchantSpecificContextLimited": false }] }',
   ].join("\n");
 
   return {
