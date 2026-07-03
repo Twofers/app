@@ -20,7 +20,7 @@ type ScreenInsets = {
 
 export const TAB_BAR_BASE_HEIGHT = 64;
 export const TAB_BAR_ANDROID_BOTTOM_FLOOR = Spacing.sm;
-export const ANDROID_BOTTOM_VISIBILITY_FLOOR = 168;
+export const ANDROID_BOTTOM_VISIBILITY_FLOOR = Spacing.xxl;
 const TAB_BAR_IOS_BOTTOM_FLOOR = 6;
 export const STACK_ANDROID_BOTTOM_FLOOR = ANDROID_BOTTOM_VISIBILITY_FLOOR;
 const STACK_DEFAULT_BOTTOM_FLOOR = Spacing.lg;
@@ -48,8 +48,9 @@ export function getScreenLayoutMetrics(
   platform: TabBarPlatform = "default",
 ) {
   // Floor the stack-screen bottom inset: on Android edge-to-edge dev clients
-  // insets.bottom can report 0, which let bottom CTAs (e.g. the AI ads
-  // publish button) sit against the home indicator / nav bar.
+  // insets.bottom can report 0, which let bottom CTAs sit against the home
+  // indicator / nav bar. Keep the floor modest; a large value pushes CTAs into
+  // the middle of compact screens.
   const tabBarMetrics = variant === "tab" ? getTabBarMetrics(insets, platform) : null;
   const stackBottomFloor = platform === "android" ? STACK_ANDROID_BOTTOM_FLOOR : STACK_DEFAULT_BOTTOM_FLOOR;
   const bottomInset = tabBarMetrics?.screenScrollBottom ?? Math.max(insets.bottom, stackBottomFloor) + Spacing.xxxl;

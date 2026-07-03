@@ -150,7 +150,7 @@ function sleep(ms: number) {
 export default function DealDetail() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { height: winH } = useWindowDimensions();
+  const { height: winH, width: winW } = useWindowDimensions();
   const { top, horizontal, scrollBottom, insets } = useScreenInsets("stack");
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
@@ -697,7 +697,10 @@ export default function DealDetail() {
       : scheduleBlockReason
         ? labelForClaimScheduleBlock(scheduleBlockReason, t)
         : null;
-  const heroHeight = Math.round(Math.min(280, Math.max(180, winH * 0.28)));
+  const compactWidth = winW < 390;
+  const titleFontSize = compactWidth ? 24 : 28;
+  const titleLineHeight = compactWidth ? 30 : 34;
+  const heroHeight = Math.round(Math.min(compactWidth ? 220 : 280, Math.max(compactWidth ? 144 : 180, winH * 0.24)));
   const resolvedDisplayLocale = customerLocaleResolutionEnabled
     ? resolveDealDisplayLocale({
         customerPreferredLocale: selectedDealLocale ?? customerPreferredDealLocale,
@@ -870,7 +873,10 @@ export default function DealDetail() {
           />
         ) : (
           <>
-            <Text style={{ fontSize: 28, fontWeight: "800", lineHeight: 34, color: theme.text }} maxFontSizeMultiplier={1.15}>
+            <Text
+              style={{ fontSize: titleFontSize, fontWeight: "800", lineHeight: titleLineHeight, color: theme.text }}
+              maxFontSizeMultiplier={1.15}
+            >
               {displayTitle}
             </Text>
             {posterUri ? (
@@ -890,7 +896,10 @@ export default function DealDetail() {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: theme.mutedText, fontSize: 15 }}>{t("dealDetail.noImage")}</Text>
+                <MaterialIcons name="local-offer" size={28} color={theme.mutedText} />
+                <Text style={{ color: theme.mutedText, fontSize: 14, fontWeight: "700", marginTop: Spacing.xs }}>
+                  {t("dealDetail.noImage")}
+                </Text>
               </View>
             )}
           </>

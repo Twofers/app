@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Modal, Text, View } from "react-native";
+import { Image, Modal, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import QRCode from "react-native-qrcode-svg";
@@ -80,8 +80,12 @@ export function QrModal({
 }: QrModalProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const compactModal = height < 760;
+  const qrSize = compactModal ? 180 : 210;
+  const qrBoxSize = qrSize + 24;
   const [remaining, setRemaining] = useState<string | null>(null);
   const tick = false;
   const [toastVisible, setToastVisible] = useState(false);
@@ -203,9 +207,9 @@ export function QrModal({
         style={{
           flex: 1,
           backgroundColor: "rgba(0,0,0,0.6)",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 16,
+          paddingHorizontal: 16,
+          paddingTop: Math.max(24, insets.top + 12),
+          paddingBottom: Math.max(24, insets.bottom + 16),
         }}
       >
         {toastVisible ? (
@@ -293,12 +297,18 @@ export function QrModal({
           </Animated.View>
         ) : null}
 
+        <ScrollView
+          style={{ width: "100%" }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         <View
           style={{
             backgroundColor: "#fff",
             borderRadius: Radii.lg,
-            padding: 16,
-            paddingBottom: Math.max(16, insets.bottom + 8),
+            padding: compactModal ? 14 : 16,
+            paddingBottom: 16,
             width: "100%",
             maxWidth: 400,
           }}
@@ -339,13 +349,13 @@ export function QrModal({
                   backgroundColor: "#fff",
                 }}
               >
-                <QRCode value={token} size={210} />
+                <QRCode value={token} size={qrSize} />
               </View>
             ) : token ? (
               <View
                 style={{
-                  width: 220,
-                  height: 220,
+                  width: qrBoxSize,
+                  height: qrBoxSize,
                   backgroundColor: Gray[100],
                   borderRadius: Radii.md,
                   alignItems: "center",
@@ -467,6 +477,7 @@ export function QrModal({
             ) : null}
           </View>
         </View>
+        </ScrollView>
       </View>
     </Modal>
   );

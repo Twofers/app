@@ -683,6 +683,9 @@ export default function WalletScreen() {
               ? ("released" as const)
               : ("expired" as const);
     const verifyDisabled = rowIsDemo || isRedeeming || useDealBusy;
+    const activeClaim = bucket === "active" && !redeemed && !tokenDead;
+    const posterWidth = activeClaim ? 72 : 88;
+    const posterHeight = activeClaim ? 88 : 110;
 
     return (
       <View
@@ -706,23 +709,24 @@ export default function WalletScreen() {
           ...Shadows.soft,
         }}
       >
-        {bucket === "active" && !redeemed && !tokenDead && countdown ? (
+        {activeClaim && countdown ? (
           <View
             style={{
               borderRadius: Radii.md,
               backgroundColor: urgent ? "#7c2d12" : Gray[900],
-              paddingVertical: Spacing.sm,
-              paddingHorizontal: Spacing.md,
-              marginBottom: Spacing.md,
+              paddingVertical: Spacing.xs,
+              paddingHorizontal: Spacing.sm,
+              marginBottom: Spacing.sm,
               borderWidth: 1,
               borderColor: urgent ? "#ea580c" : theme.primary,
             }}
           >
             <Text
+              maxFontSizeMultiplier={1.15}
               style={{
                 fontSize: 11,
                 fontWeight: "800",
-                letterSpacing: 0.6,
+                letterSpacing: 0,
                 textTransform: "uppercase",
                 color: urgent ? "#ffedd5" : "#FFD9A8",
               }}
@@ -730,17 +734,24 @@ export default function WalletScreen() {
               {urgent ? t("consumerWallet.redeemSoon") : t("consumerWallet.timeLeftHeading")}
             </Text>
             <Text
+              maxFontSizeMultiplier={1.15}
               style={{
-                fontSize: 32,
-                marginTop: 2,
+                fontSize: 24,
+                marginTop: 1,
                 fontWeight: "900",
                 color: "#fff",
-                letterSpacing: -0.5,
+                letterSpacing: 0,
               }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
             >
               {countdown}
             </Text>
-            <Text style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#FFD9A8", marginTop: 2 }}>
+            <Text
+              maxFontSizeMultiplier={1.15}
+              style={{ fontSize: 12, color: urgent ? "#fed7aa" : "#FFD9A8", marginTop: 1 }}
+              numberOfLines={2}
+            >
               {t("consumerWallet.redeemByCaption", { datetime: expiryShown })}
             </Text>
           </View>
@@ -752,20 +763,20 @@ export default function WalletScreen() {
           disabled={!row.deals?.id}
           style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}
         >
-          <View style={{ flexDirection: "row", gap: Spacing.md }}>
+          <View style={{ flexDirection: "row", gap: activeClaim ? Spacing.sm : Spacing.md }}>
             {(() => {
               const posterUri = resolveDealPosterDisplayUri(row.deals?.poster_url, row.deals?.poster_storage_path);
               return posterUri ? (
                 <Image
                   source={{ uri: posterUri }}
-                  style={{ width: 88, height: 110, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
+                  style={{ width: posterWidth, height: posterHeight, borderRadius: Radii.lg, backgroundColor: Gray[100] }}
                   contentFit="cover"
                 />
               ) : (
                 <View
                   style={{
-                    width: 88,
-                    height: 110,
+                    width: posterWidth,
+                    height: posterHeight,
                     borderRadius: Radii.lg,
                     backgroundColor: Gray[100],
                     alignItems: "center",
@@ -785,40 +796,31 @@ export default function WalletScreen() {
                   <DemoOfferNotice compact />
                 </View>
               ) : null}
-              <Text style={{ fontWeight: "700", fontSize: 16, color: theme.text }} numberOfLines={2}>
+              <Text style={{ fontWeight: "700", fontSize: activeClaim ? 15 : 16, color: theme.text }} numberOfLines={2}>
                 {dealTitle(row)}
               </Text>
               <Text style={{ opacity: 0.65, marginTop: Spacing.xs, fontSize: 14, color: theme.text }} numberOfLines={1}>
                 {businessName(row)}
               </Text>
-              {bucket === "active" ? (
-                <View style={{ marginTop: Spacing.sm }}>
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>
-                    {t("consumerWallet.redeemAtLabel", { defaultValue: "Redeem at:" })}
-                  </Text>
-                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
-                    {redeemLocationLabel(row)}
-                  </Text>
-                  <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: theme.text, opacity: 0.72 }}>
-                    {t("consumerWallet.locationLockedQr", {
-                      defaultValue: "This QR code only works at this location.",
+              {activeClaim ? (
+                <Text
+                  style={{ marginTop: Spacing.xs, fontSize: 12, lineHeight: 16, color: theme.text, opacity: 0.72 }}
+                  numberOfLines={2}
+                >
+                  {t("consumerWallet.redeemAtLabel", { defaultValue: "Redeem at:" })} {redeemLocationLabel(row)}
+                </Text>
+              ) : (
+                <>
+                  <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
+                    {t("consumerWallet.claimedRecord", {
+                      datetime: formatAppDateTime(row.created_at, i18n.language),
                     })}
                   </Text>
-                </View>
-              ) : null}
-              <Text style={{ opacity: 0.55, marginTop: Spacing.sm, fontSize: 12, color: theme.text }}>
-                {t("consumerWallet.claimedRecord", {
-                  datetime: formatAppDateTime(row.created_at, i18n.language),
-                })}
-              </Text>
-              <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12, color: theme.text }}>
-                {t("consumerWallet.expiresAtLabel", { datetime: expiryShown })}
-              </Text>
-              {bucket === "active" ? (
-                <Text style={{ marginTop: Spacing.sm, fontSize: 13, fontWeight: "700", letterSpacing: 1, color: theme.text }}>
-                  {t("consumerWallet.cardCodeLine", { code: shortLabel })}
-                </Text>
-              ) : null}
+                  <Text style={{ opacity: 0.55, marginTop: 4, fontSize: 12, color: theme.text }}>
+                    {t("consumerWallet.expiresAtLabel", { datetime: expiryShown })}
+                  </Text>
+                </>
+              )}
               {row.redeem_method === "visual" && bucket === "redeemed" ? (
                 <Text style={{ marginTop: Spacing.xs, fontSize: 12, opacity: 0.55 }}>
                   {t("consumerWallet.redeemedViaVisual")}
@@ -829,16 +831,29 @@ export default function WalletScreen() {
                   {t("consumerWallet.redeemedViaQr")}
                 </Text>
               ) : null}
-              <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }}>
-                {bucket === "active" && !redeemed && !tokenDead
-                  ? t("consumerWallet.redeemByCaption", { datetime: expiryShown })
-                  : t("consumerWallet.expiresLocal", { datetime: expiryShown })}
-              </Text>
+              {bucket !== "active" ? (
+                <Text style={{ marginTop: Spacing.sm, fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }}>
+                  {t("consumerWallet.expiresLocal", { datetime: expiryShown })}
+                </Text>
+              ) : null}
             </View>
           </View>
         </Pressable>
-        {bucket === "active" && !redeemed && !tokenDead ? (
+        {activeClaim ? (
           <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+            <PrimaryButton
+              title={
+                rowIsDemo
+                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
+                  : useDealBusy
+                    ? t("redeem.redeeming")
+                    : isRedeeming
+                      ? t("consumerWallet.continueUseDeal")
+                      : t("consumerWallet.useDealCta")
+              }
+              onPress={() => void startUseDealFlow(row)}
+              disabled={rowIsDemo || useDealBusy}
+            />
             <NativePressable
               onPress={() => openVerifyForClaim(row)}
               disabled={verifyDisabled}
@@ -848,7 +863,7 @@ export default function WalletScreen() {
               pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
               style={({ pressed }) => ({
                 width: "100%",
-                minHeight: 136,
+                minHeight: 108,
                 borderRadius: Radii.md,
                 borderWidth: 1,
                 borderColor: pressed ? theme.primary : "#fed7aa",
@@ -859,7 +874,7 @@ export default function WalletScreen() {
               })}
             >
               <View pointerEvents="none">
-                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.5, color: "#9a3412" }}>
+                <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0, color: "#9a3412" }}>
                   {t("consumerWallet.scanQrAtCounter")}
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: Spacing.sm }}>
@@ -882,7 +897,7 @@ export default function WalletScreen() {
                     <Text style={{ fontSize: 12, opacity: 0.7, color: "#9a3412", fontWeight: "700" }}>
                       {t("consumerWallet.verifyCodeLabel")}
                     </Text>
-                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 2.2, marginTop: 2, color: Gray[900] }}>
+                    <Text style={{ fontSize: 20, fontWeight: "900", letterSpacing: 0, marginTop: 2, color: Gray[900] }}>
                       {shortLabel}
                     </Text>
                   </View>
@@ -892,19 +907,6 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </NativePressable>
-            <PrimaryButton
-              title={
-                rowIsDemo
-                  ? t("demoOffer.label", { defaultValue: "Demo offer" })
-                  : useDealBusy
-                    ? t("redeem.redeeming")
-                    : isRedeeming
-                      ? t("consumerWallet.continueUseDeal")
-                      : t("consumerWallet.useDealCta")
-              }
-              onPress={() => void startUseDealFlow(row)}
-              disabled={rowIsDemo || useDealBusy}
-            />
             {shareDealEnabled ? (
               <NativePressable
                 onPress={() => void shareWalletDeal(row)}
@@ -951,27 +953,6 @@ export default function WalletScreen() {
                 {releasingClaimId === row.id
                   ? t("consumerWallet.releasingDeal", { defaultValue: "Releasing..." })
                   : t("consumerWallet.releaseDeal", { defaultValue: "Release deal" })}
-              </Text>
-            </NativePressable>
-            <NativePressable
-              onPress={() => openVerifyForClaim(row)}
-              disabled={verifyDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={t("consumerWallet.qrFallbackLabel")}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => ({
-                minHeight: 50,
-                borderRadius: Radii.lg,
-                borderWidth: 1.5,
-                borderColor: theme.primary,
-                backgroundColor: pressed ? "#ffedd5" : "#fff7ed",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: verifyDisabled ? 0.45 : 1,
-              })}
-            >
-              <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 15 }}>
-                {t("consumerWallet.qrFallbackLabel")}
               </Text>
             </NativePressable>
             {hasDirectionsTarget(row.deals?.businesses) ? (

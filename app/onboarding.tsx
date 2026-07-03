@@ -404,6 +404,7 @@ export default function OnboardingScreen() {
           minHeight: footerMetrics.minHeight,
           justifyContent: "center",
           backgroundColor: C.background,
+          paddingHorizontal: horizontal,
           paddingTop: Spacing.sm,
           paddingBottom: Spacing.sm,
         }}
@@ -468,6 +469,7 @@ export default function OnboardingScreen() {
           minHeight: footerMetrics.minHeight + 48,
           justifyContent: "center",
           backgroundColor: C.background,
+          paddingHorizontal: horizontal,
           paddingTop: Spacing.sm,
           paddingBottom: Spacing.sm,
           gap: Spacing.xs,
