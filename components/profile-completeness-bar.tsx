@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -10,6 +11,7 @@ type ProfileCompletenessBarProps = {
 };
 
 export function ProfileCompletenessBar({ percentage, hint }: ProfileCompletenessBarProps) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const progress = useSharedValue(0);
@@ -23,11 +25,14 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
   }));
 
   const isComplete = percentage >= 100;
+  const label = isComplete
+    ? t("profileCompleteness.complete", { defaultValue: "100% complete" })
+    : t("profileCompleteness.incomplete", { percentage, defaultValue: "{{percentage}}% complete" });
 
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>
-        {isComplete ? "100% \u2014 looking great!" : `${percentage}% complete`}
+      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+        {label}
       </Text>
       <View
         style={{

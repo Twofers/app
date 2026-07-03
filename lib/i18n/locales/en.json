@@ -15,6 +15,10 @@
   "emptyState": {
     "encouragement": "No worries — more deals will pop up soon."
   },
+  "profileCompleteness": {
+    "incomplete": "{{percentage}}% complete",
+    "complete": "100% complete"
+  },
   "dealsBrowse": {
     "categoriesHeading": "Categories",
     "categoryHint": "Use categories to narrow the list.",
@@ -1863,6 +1867,7 @@
     "templatesBrowseLink": "Browse templates & reuse",
     "manageDeal": "Manage",
     "runAgainCta": "Run again",
+    "deleteOldDeal": "Delete old deal",
     "billingHintShort": "Billing & subscription",
     "filterAll": "All",
     "filterLive": "Live",

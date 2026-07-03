@@ -458,7 +458,13 @@ function DealStatPill({
         paddingVertical: 8,
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText }} numberOfLines={1}>
+      <Text
+        style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        maxFontSizeMultiplier={1.08}
+      >
         {label}
       </Text>
       <Text
@@ -471,6 +477,7 @@ function DealStatPill({
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.75}
+        maxFontSizeMultiplier={1.15}
       >
         {value}
       </Text>
@@ -1844,7 +1851,13 @@ export default function BusinessDashboard() {
                           )}
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
-                                <Text style={{ fontWeight: "800", fontSize: 17, flex: 1, color: theme.text }} numberOfLines={2}>
+                              <Text
+                                style={{ fontWeight: "800", fontSize: 17, flex: 1, minWidth: 160, color: theme.text }}
+                                numberOfLines={3}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.86}
+                                maxFontSizeMultiplier={1.1}
+                              >
                                 {displayDealTitle(item)}
                               </Text>
                               {item.is_recurring ? (
@@ -1856,7 +1869,13 @@ export default function BusinessDashboard() {
                                     backgroundColor: colorScheme === "dark" ? theme.surfaceMuted : "rgba(17,17,17,0.08)",
                                   }}
                                 >
-                                  <Text style={{ fontSize: 10, fontWeight: "800", color: colorScheme === "dark" ? theme.mutedText : Gray[700] }}>
+                                  <Text
+                                    style={{ fontSize: 10, fontWeight: "800", color: colorScheme === "dark" ? theme.mutedText : Gray[700] }}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.75}
+                                    maxFontSizeMultiplier={1.08}
+                                  >
                                     {t("offersDashboard.badgeRecurring")}
                                   </Text>
                                 </View>
@@ -1879,6 +1898,10 @@ export default function BusinessDashboard() {
                                     fontWeight: "800",
                                     color: active ? theme.accentText : colorScheme === "dark" ? theme.mutedText : Gray[600],
                                   }}
+                                  numberOfLines={1}
+                                  adjustsFontSizeToFit
+                                  minimumFontScale={0.75}
+                                  maxFontSizeMultiplier={1.08}
                                 >
                                   {statusBadgeLabel(sched, item)}
                                 </Text>
