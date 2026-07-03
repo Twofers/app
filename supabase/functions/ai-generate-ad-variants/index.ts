@@ -283,6 +283,16 @@ function dealNotEligibleForAiResponse(
 // ─── Stage 1: research ─────────────────────────────────────────────────────
 
 /**
+ * Live web-search research (Stage 1b) is the only remaining OpenAI call on the
+ * ad hot path. It is already double-gated (Gemini familiarity + common-item
+ * list), but this flag lets it be disabled entirely for full cost control.
+ * Default on so unfamiliar-item copy quality is preserved unless opted out.
+ */
+function webSearchResearchEnabled(): boolean {
+  return envFlag("AI_AD_WEB_SEARCH_ENABLED", true);
+}
+
+/**
  * Research the menu item with web search. Returns description if useful, blank if unfamiliar.
  * Failures are silent — the copy stage works fine without research context.
  */
@@ -331,7 +341,11 @@ async function researchMenuItem(params: {
     return fallbackResult ?? { item_name: cleanHint.slice(0, 60), description: "", is_familiar: true };
   }
 
-  // Stage 1b: use search only for unfamiliar, ambiguous, local, or branded items.
+  // Stage 1b: paid web search, only for unfamiliar/ambiguous/local/branded items.
+  // Skipped entirely when web-search research is disabled.
+  if (!webSearchResearchEnabled()) {
+    return fallbackResult ?? { item_name: cleanHint.slice(0, 60), description: "", is_familiar: false };
+  }
   const webSearchResult = await callResearchModel({
     openAiKey,
     geminiApiKey,
@@ -1739,32 +1753,45 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function geminiVisionQaFallbackEnabled(): boolean {
-  if (!envFlag("AI_VISION_FALLBACK_ENABLED", false)) return false;
-  const provider = (Deno.env.get("AI_VISION_FALLBACK_PROVIDER") ?? "gemini").trim().toLowerCase();
-  return provider === "gemini";
+function visionQaPrimaryProvider(): "gemini" | "openai" {
+  const configured = (Deno.env.get("AI_VISION_PRIMARY_PROVIDER") ?? "gemini").trim().toLowerCase();
+  return configured === "openai" ? "openai" : "gemini";
+}
+
+function visionQaFallbackEnabled(): boolean {
+  return envFlag("AI_VISION_FALLBACK_ENABLED", true);
 }
 
 function makeImageQaConfig() {
-  let fallbackEnabled = geminiVisionQaFallbackEnabled();
   let geminiTextModel = "gemini";
-  if (fallbackEnabled) {
-    try {
-      geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
-    } catch {
-      fallbackEnabled = false;
-      console.log(JSON.stringify({
-        tag: "ai_ads_v2",
-        event: "gemini_image_qa_config_error",
-        errorCode: "AI_TEXT_CONFIG_INVALID",
-      }));
-    }
+  let geminiConfigured = true;
+  try {
+    geminiTextModel = resolveGeminiTextModel(Deno.env, "GEMINI_JUDGE_MODEL");
+  } catch {
+    geminiConfigured = false;
+    console.log(JSON.stringify({
+      tag: "ai_ads_v2",
+      event: "gemini_image_qa_config_error",
+      errorCode: "AI_TEXT_CONFIG_INVALID",
+    }));
   }
+  // Vision QA defaults to Gemini (cheap, multimodal) with OpenAI as a guarded
+  // fallback. This keeps the offer image inspection off the expensive OpenAI
+  // reasoning model on the hot path. If the Gemini judge model is misconfigured,
+  // QA falls back to OpenAI so the guardrail never silently disappears.
+  const requestedPrimary = visionQaPrimaryProvider();
+  const primaryProvider: "gemini" | "openai" =
+    requestedPrimary === "gemini" && !geminiConfigured ? "openai" : requestedPrimary;
+  const fallbackProvider: "gemini" | "openai" = primaryProvider === "gemini" ? "openai" : "gemini";
+  const fallbackEnabled =
+    fallbackProvider === "gemini"
+      ? geminiConfigured && visionQaFallbackEnabled()
+      : visionQaFallbackEnabled();
   return {
     routerEnabled: true,
-    primaryProvider: "openai" as const,
+    primaryProvider,
     fallbackEnabled,
-    fallbackProvider: "gemini" as const,
+    fallbackProvider,
     circuitBreakerEnabled: false,
     openAiModel: CHAT_MODEL,
     geminiTextModel,
@@ -1939,7 +1966,7 @@ async function inspectGeneratedImageForOffer(params: {
         timeoutMs: envNumber("AI_VISION_PRIMARY_TIMEOUT_MS", 25_000),
         generationRunId: params.costContext.requestGroupId,
         promptVersion: "AI_IMAGE_QA_V1",
-        reasoningLevel: "medium",
+        reasoningLevel: "low",
       },
       {
         openAiApiKey: params.openAiKey,

@@ -15,6 +15,28 @@ const MAX_B64_CHARS = 1_200_000;
 const MAX_URL_LEN = 2048;
 const MENU_EXTRACTION_PROMPT_VERSION = "AI_MENU_EXTRACTION_V1";
 
+/**
+ * Menu OCR runs on Gemini vision first (cheap, multimodal) with OpenAI as a
+ * guarded fallback, independent of the shared text-provider primary. This keeps
+ * menu extraction off the expensive OpenAI vision model even if copy generation
+ * is later routed back to OpenAI. Override with AI_MENU_EXTRACTION_PROVIDER.
+ */
+function menuExtractionConfig() {
+  const base = resolveAiTextProviderConfig();
+  const primaryProvider: "gemini" | "openai" =
+    (Deno.env.get("AI_MENU_EXTRACTION_PROVIDER") ?? "gemini").trim().toLowerCase() === "openai"
+      ? "openai"
+      : "gemini";
+  const fallbackProvider: "gemini" | "openai" = primaryProvider === "gemini" ? "openai" : "gemini";
+  return {
+    ...base,
+    routerEnabled: true,
+    primaryProvider,
+    fallbackProvider,
+    fallbackEnabled: true,
+  };
+}
+
 type MenuItemRow = {
   name: string;
   category: string;
@@ -417,7 +439,7 @@ serve(async (req) => {
           openAiApiKey: openAiKey,
           geminiApiKey,
           admin,
-          config: resolveAiTextProviderConfig(),
+          config: menuExtractionConfig(),
         });
         await logMenuProviderAttempts({
           admin,

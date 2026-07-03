@@ -207,11 +207,11 @@ Model and provider controls:
 
 Stages:
 
-- Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed.
+- Research: normal item-identification research uses the shared structured provider router with `operation: "merchant_context"`; `gpt-4o-search-preview` remains a direct OpenAI `chat.completions` call only when live web search is needed, and is disabled entirely when `AI_AD_WEB_SEARCH_ENABLED=false`.
 - Copy: shared structured text provider router with JSON schema; prompt version `AI_COPY_PROMPT_V4`; generator version `ai-copy-v4`.
 - Image generation: `images.generations` using configured GPT image model.
 - Image edit: `images.edits` for uploaded-photo enhancement.
-- Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, OpenAI primary, and Gemini fallback only when `AI_VISION_FALLBACK_ENABLED=true`.
+- Image QA: shared structured provider router with `operation: "image_qa"`, image inputs, JSON schema, Gemini primary by default (`AI_VISION_PRIMARY_PROVIDER`, cheap/multimodal), and OpenAI fallback when `AI_VISION_FALLBACK_ENABLED=true` (default true).
 
 Validation/fallback:
 
@@ -264,7 +264,7 @@ Current image behavior:
 - Uploaded original photo can be used as-is.
 - Uploaded photo can be enhanced with `touchup`, `cleanbg`, or `studiopolish`.
 - Main AI Create no-photo generation now uses a deterministic native fallback visual by default, avoiding image-provider latency and preserving copy-only publishability.
-- Generated image QA checks required items for multi-item offers through the shared structured provider router, uses OpenAI vision first, can fall back to Gemini vision when `AI_VISION_FALLBACK_ENABLED=true`, and may regenerate once.
+- Generated image QA checks required items for multi-item offers through the shared structured provider router, uses Gemini vision first by default, can fall back to OpenAI vision when `AI_VISION_FALLBACK_ENABLED=true`, runs at low reasoning effort, and may regenerate once.
 - The active ad image prompt forbids text, logos, labels, signage, overlays, and QR codes.
 
 Gaps:
@@ -331,9 +331,9 @@ Follow-up completed: `scripts/measure-ai-ad-baseline.mjs` now provides a read-on
 
 Google/Gemini data-flow follow-up: `docs/ai-google-data-flow.md` now documents the Gemini text fallback, independent judge, image generation/edit data flow, sensitive data exclusions, and the public privacy/subprocessor activation gate. Text fallback must remain hosted with `AI_TEXT_FALLBACK_ENABLED=false` until Dan approves and deploys the public privacy/subprocessor update.
 
-Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It tries Gemini multimodal QA behind `AI_VISION_FALLBACK_ENABLED=true` after OpenAI vision failure. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
+Image QA fallback follow-up: generated and AI-edited image QA now uses the shared structured provider router with `operation: "image_qa"` and image inputs. It runs Gemini multimodal QA first by default (`AI_VISION_PRIMARY_PROVIDER=gemini`) at low reasoning effort and falls back to OpenAI vision (`AI_VISION_FALLBACK_ENABLED=true`, default true) when Gemini QA fails or its model is misconfigured. If both QA providers are unavailable, generated/AI-edited/stock paths still fail closed or fall back to safe copy-only/original behavior.
 
-Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet.
+Ad research router follow-up: the ad-variant function's non-web menu-item research now uses the shared structured provider router with `operation: "merchant_context"` and logs provider attempts through the same AI cost path as copy, judging, and image QA. The explicit `gpt-4o-search-preview` web-search branch remains direct because the shared router does not model live-search tooling yet, and is disabled entirely when `AI_AD_WEB_SEARCH_ENABLED=false`.
 
 Menu OCR router follow-up: the app-facing base64 `ai-extract-menu` path now uses the shared structured provider router with image inputs, strict menu JSON schema, and provider-attempt cost telemetry. The legacy `image_url` request shape remains a direct OpenAI Responses path for compatibility because it lets the provider fetch a remote image URL rather than sending inline bytes.
 

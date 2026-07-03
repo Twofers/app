@@ -20,12 +20,18 @@ const geminiProviderSource = readFileSync(
 );
 
 describe("ai-generate-ad-variants vision QA source guard", () => {
-  it("keeps Gemini vision QA fallback behind the hosted fallback flag", () => {
+  it("defaults vision QA to Gemini with OpenAI as a guarded fallback", () => {
     expect(source).toMatch(/AI_VISION_FALLBACK_ENABLED/);
-    expect(source).toMatch(/AI_VISION_FALLBACK_PROVIDER/);
-    expect(source).toMatch(/function geminiVisionQaFallbackEnabled/);
+    expect(source).toMatch(/AI_VISION_PRIMARY_PROVIDER/);
+    expect(source).toMatch(/function visionQaPrimaryProvider/);
     expect(source).toMatch(/function makeImageQaConfig/);
-    expect(source).toMatch(/fallbackEnabled,\s*\n\s*fallbackProvider:\s*"gemini"/);
+    // Gemini is the default primary inspector; OpenAI only backstops it.
+    expect(source).toMatch(/configured === "openai" \? "openai" : "gemini"/);
+    expect(source).toMatch(
+      /fallbackProvider(?::\s*"gemini"\s*\|\s*"openai")?\s*=\s*primaryProvider === "gemini" \? "openai" : "gemini"/,
+    );
+    // Vision QA runs on the low reasoning tier to keep thinking-token cost down.
+    expect(source).toMatch(/promptVersion:\s*"AI_IMAGE_QA_V1",\s*\n\s*reasoningLevel:\s*"low"/);
   });
 
   it("routes image QA through the shared structured provider router", () => {

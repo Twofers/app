@@ -364,11 +364,12 @@ Never paste real secret values into tickets or commits.
 | `AI_RETRY_AFTER_FULL_TIMEOUT` | Allows retry after a full primary timeout when explicitly true. |
 | `AI_CIRCUIT_BREAKER_ENABLED` | Enables provider circuit-breaker checks with the router; activate only after the circuit-breaker migration is applied. |
 | `AI_V3_INDEPENDENT_JUDGE_ENABLED` | Enables Gemini independent judging for ad-variant candidates. |
-| `AI_VISION_FALLBACK_ENABLED` | Enables image QA fallback. |
-| `AI_VISION_FALLBACK_PROVIDER` | Image QA fallback provider; defaults to `gemini`. |
+| `AI_VISION_PRIMARY_PROVIDER` | Image QA primary provider; defaults to `gemini` (set `openai` to run QA on OpenAI). |
+| `AI_VISION_FALLBACK_ENABLED` | Enables the other provider as image QA fallback; default `true`. |
 | `AI_VISION_PRIMARY_TIMEOUT_MS` | Image QA primary timeout; default `25000`. |
 | `AI_VISION_FALLBACK_TIMEOUT_MS` | Image QA fallback timeout; default `14000`. |
 | `AI_STOCK_QA_CANDIDATE_LIMIT` | Ranked stock-candidate QA cap; default `3`, maximum `10`. |
+| `AI_AD_WEB_SEARCH_ENABLED` | Enables the paid `gpt-4o-search-preview` unfamiliar-item lookup; default `true`, set `false` to disable. |
 | `AI_V3_COST_BUDGET_ENABLED` | Enables AI provider cost projection/budget checks. |
 | `AI_TEXT_COST_SOFT_LIMIT_USD` | Text cost soft-limit telemetry threshold; default `0.2`. |
 | `AI_TEXT_COST_HARD_LIMIT_USD` | Per-text-attempt hard projection limit; default `0.5`. |
