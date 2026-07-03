@@ -94,9 +94,9 @@ function cleanPhotoTreatment(value: unknown): PhotoTreatment {
   return VALID_PHOTO_TREATMENTS.includes(value as PhotoTreatment) ? (value as PhotoTreatment) : "studiopolish";
 }
 
-function cleanCreativeFormat(value: unknown, generatedAd: GeneratedAd | null): AiDealDraftCreativeFormat {
+function cleanCreativeFormat(value: unknown): AiDealDraftCreativeFormat {
   if (value === "standard_card" || value === "poster_v1") return value;
-  return generatedAd?.poster?.enabled ? "poster_v1" : "standard_card";
+  return "poster_v1";
 }
 
 function cleanDate(value: unknown, fallback: Date): Date {
@@ -135,8 +135,8 @@ export function buildAiDealRecoveryDraft(input: DraftCandidate): AiDealRecoveryD
   const businessId = cleanString(input.businessId).trim();
   if (!businessId) return null;
   const generatedAd = cleanGeneratedAd(input.generatedAd);
-  const creativeFormat = cleanCreativeFormat(input.creativeFormat, generatedAd);
-  const previewFormat = cleanCreativeFormat(input.previewFormat, generatedAd);
+  const creativeFormat = cleanCreativeFormat(input.creativeFormat);
+  const previewFormat = cleanCreativeFormat(input.previewFormat);
   const now = new Date();
   const defaultSchedule = createDefaultOneTimeDealSchedule(now);
   const startTime = cleanDate(input.startTime, defaultSchedule.startTime);

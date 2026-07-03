@@ -98,6 +98,45 @@ describe("AI deal draft recovery", () => {
     expect(parsed?.generatedAd?.poster_storage_path).toBe("biz-1/generated.jpg");
     expect(parsed?.daysOfWeek).toEqual([1, 5]);
     expect(parsed?.adAccepted).toBe(true);
+    expect(parsed?.creativeFormat).toBe("poster_v1");
+    expect(parsed?.previewFormat).toBe("poster_v1");
+  });
+
+  it("preserves an explicit standard-card draft choice", () => {
+    const draft = buildAiDealRecoveryDraft({
+      businessId: "biz-1",
+      photoPath: "biz-1/reference.jpg",
+      posterUrl: null,
+      photoTreatment: "studiopolish",
+      customImageEditInstruction: "",
+      usePhotoAsFinal: false,
+      merchantOriginalWarningAcknowledged: false,
+      creativeFormat: "standard_card",
+      previewFormat: "standard_card",
+      hintText: "BOGO latte",
+      price: "",
+      title: "BOGO Iced Latte",
+      promoLine: "Buy one, get one free",
+      ctaText: "Claim deal",
+      description: "Today only.",
+      eligibilityForm,
+      maxClaims: "25",
+      cutoffMins: "10",
+      validityMode: "one-time",
+      startTime: "2026-06-16T15:00:00.000Z",
+      endTime: "2026-06-16T17:00:00.000Z",
+      daysOfWeek: [],
+      windowStartMinutes: 600,
+      windowEndMinutes: 900,
+      timezone: "America/Chicago",
+      publishLocationIds: [],
+      generatedAd: null,
+      adAccepted: false,
+      manualDraftUnlocked: false,
+    });
+
+    const parsed = parseAiDealRecoveryDraft(JSON.stringify(draft), "biz-1");
+
     expect(parsed?.creativeFormat).toBe("standard_card");
     expect(parsed?.previewFormat).toBe("standard_card");
   });

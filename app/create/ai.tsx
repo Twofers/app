@@ -222,6 +222,7 @@ type CreativeFormat = AdCreativeFormat;
 type PreviewFormat = CreativeFormat;
 
 const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";
+const DEFAULT_CREATIVE_FORMAT: CreativeFormat = "poster_v1";
 
 const CUTOFF_DURATION_MESSAGE = "Redemption cutoff must be shorter than the deal duration.";
 
@@ -1030,8 +1031,8 @@ export default function AiDealScreen() {
   const [customImageEditInstruction, setCustomImageEditInstruction] = useState("");
   const [usePhotoAsFinal, setUsePhotoAsFinal] = useState(false);
   const [merchantOriginalWarningAcknowledged, setMerchantOriginalWarningAcknowledged] = useState(false);
-  const [creativeFormat, setCreativeFormat] = useState<CreativeFormat>("standard_card");
-  const [previewFormat, setPreviewFormat] = useState<PreviewFormat>("standard_card");
+  const [creativeFormat, setCreativeFormat] = useState<CreativeFormat>(DEFAULT_CREATIVE_FORMAT);
+  const [previewFormat, setPreviewFormat] = useState<PreviewFormat>(DEFAULT_CREATIVE_FORMAT);
 
   const [hintText, setHintText] = useState("");
   const [price, setPrice] = useState("");

@@ -168,6 +168,9 @@ describe("AI create UX source guards", () => {
 
   it("surfaces poster format while keeping poster generation fixed to the premium template", () => {
     expect(createAiSource).toContain('const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";');
+    expect(createAiSource).toContain('const DEFAULT_CREATIVE_FORMAT: CreativeFormat = "poster_v1";');
+    expect(createAiSource).toContain("useState<CreativeFormat>(DEFAULT_CREATIVE_FORMAT)");
+    expect(createAiSource).toContain("useState<PreviewFormat>(DEFAULT_CREATIVE_FORMAT)");
     expect(createAiSource).toContain("style: FIXED_POSTER_TEMPLATE_ID");
     expect(createAiSource).toContain("selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID");
     expect(createAiSource).toContain("function selectCreativeFormat(nextFormat: CreativeFormat)");
