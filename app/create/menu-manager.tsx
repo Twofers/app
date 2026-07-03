@@ -6,7 +6,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { Banner } from "@/components/ui/banner";
@@ -33,7 +33,7 @@ type Row = {
 
 export default function MenuManagerScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
+  const params = useLocalSearchParams<{ add?: string }>();
   const genericMenuError = t("menuManager.errSave");
   const { top, horizontal, scrollBottom } = useScreenInsets("stack");
   const { businessId, loading: bizLoading } = useBusiness();
@@ -71,12 +71,16 @@ export default function MenuManagerScreen() {
   const menuState = getMenuManagerViewState(rows, showArchived);
   const visible = menuState.visibleRows;
 
-  const startAdding = () => {
+  const startAdding = useCallback(() => {
     setEditingId(null);
     setDraft({ name: "", category: "", price_text: "", description: "" });
     setAdding(true);
     setShowArchived(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (params.add === "1") startAdding();
+  }, [params.add, startAdding]);
 
   const startEdit = (r: Row) => {
     setAdding(false);
@@ -266,10 +270,6 @@ export default function MenuManagerScreen() {
               {t("menuManager.emptyBody")}
             </Text>
             <PrimaryButton title={t("menuManager.addManual")} onPress={startAdding} />
-            <SecondaryButton
-              title={t("menuManager.scanMenu")}
-              onPress={() => router.push("/create/menu-scan" as Href)}
-            />
           </View>
         ) : null}
 

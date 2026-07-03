@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View, type LayoutChangeEvent } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
 import { ScreenHeader } from "@/components/ui/screen-header";
@@ -19,7 +19,7 @@ import { isBillingBypassEnabled } from "@/lib/billing/access";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
 import { usePrimaryLocationBillingGate } from "@/hooks/use-primary-location-billing-gate";
 import { translateKnownApiMessage } from "@/lib/i18n/api-messages";
-import { getCreateTabScrollBottom, getExpandedSectionScrollY } from "@/lib/create-tab-scroll";
+import { getCreateTabScrollBottom } from "@/lib/create-tab-scroll";
 import { getDealDisplayTitle } from "@/lib/deal-display-copy";
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
 
@@ -46,11 +46,7 @@ export default function CreateDeal() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [profileCheckLoading, setProfileCheckLoading] = useState(false);
   const [hasBusinessProfileAccess, setHasBusinessProfileAccess] = useState(false);
-  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const scrollRef = useRef<ScrollView | null>(null);
-  const moreToolsYRef = useRef(0);
-  const templatesFolderYRef = useRef(0);
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
   const { confirm, confirmModal } = useBrandedConfirm();
@@ -154,45 +150,8 @@ export default function CreateDeal() {
     }
   }
 
-  function toggleMoreTools() {
-    if (moreToolsOpen) {
-      setTemplatesOpen(false);
-    }
-    setMoreToolsOpen((current) => {
-      const next = !current;
-      if (next) {
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({
-            y: getExpandedSectionScrollY(moreToolsYRef.current),
-            animated: true,
-          });
-        });
-      }
-      return next;
-    });
-  }
-
   function toggleTemplatesFolder() {
-    setTemplatesOpen((current) => {
-      const next = !current;
-      if (next) {
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({
-            y: getExpandedSectionScrollY(templatesFolderYRef.current),
-            animated: true,
-          });
-        });
-      }
-      return next;
-    });
-  }
-
-  function rememberTemplatesFolderLayout(event: LayoutChangeEvent) {
-    templatesFolderYRef.current = event.nativeEvent.layout.y;
-  }
-
-  function rememberMoreToolsLayout(event: LayoutChangeEvent) {
-    moreToolsYRef.current = event.nativeEvent.layout.y;
+    setTemplatesOpen((current) => !current);
   }
 
   function renderHubAction({
@@ -202,8 +161,6 @@ export default function CreateDeal() {
     onPress,
     accent = false,
     trailingIcon = "chevron-right",
-    onLayout,
-    accessibilityState,
   }: {
     title: string;
     subtitle: string;
@@ -211,18 +168,14 @@ export default function CreateDeal() {
     onPress: () => void;
     accent?: boolean;
     trailingIcon?: MaterialIconName;
-    onLayout?: (event: LayoutChangeEvent) => void;
-    accessibilityState?: { expanded?: boolean };
   }) {
     return (
       <Pressable
         onPress={onPress}
-        onLayout={onLayout}
         accessibilityRole="button"
-        accessibilityState={accessibilityState}
         accessibilityLabel={`${title}. ${subtitle}`}
         style={{
-          minHeight: 74,
+          minHeight: 88,
           borderRadius: Radii.md,
           padding: Spacing.md,
           backgroundColor: theme.surface,
@@ -235,8 +188,8 @@ export default function CreateDeal() {
       >
         <View
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             borderRadius: Radii.md,
             alignItems: "center",
             justifyContent: "center",
@@ -247,13 +200,13 @@ export default function CreateDeal() {
         >
           <MaterialIcons
             name={iconName}
-            size={22}
+            size={24}
             color={accent ? theme.primaryText : theme.icon}
           />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
-            style={{ fontSize: 17, lineHeight: 21, fontWeight: "900", color: theme.text }}
+            style={{ fontSize: 18, lineHeight: 23, fontWeight: "900", color: theme.text }}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.82}
@@ -262,11 +215,61 @@ export default function CreateDeal() {
             {title}
           </Text>
           <Text
-            style={{ marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}
+            style={{ marginTop: 4, fontSize: 15, lineHeight: 20, fontWeight: "600", color: theme.mutedText }}
             numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.82}
             maxFontSizeMultiplier={1.12}
+          >
+            {subtitle}
+          </Text>
+        </View>
+        <MaterialIcons name={trailingIcon} size={22} color={theme.icon} />
+      </Pressable>
+    );
+  }
+
+  function renderCompactAction({
+    title,
+    subtitle,
+    iconName,
+    onPress,
+    trailingIcon = "chevron-right",
+    accessibilityState,
+  }: {
+    title: string;
+    subtitle: string;
+    iconName: MaterialIconName;
+    onPress: () => void;
+    trailingIcon?: MaterialIconName;
+    accessibilityState?: { expanded?: boolean };
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={accessibilityState}
+        accessibilityLabel={`${title}. ${subtitle}`}
+        style={{
+          minHeight: 64,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          backgroundColor: theme.surface,
+          borderWidth: 1,
+          borderColor: theme.border,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md,
+        }}
+      >
+        <MaterialIcons name={iconName} size={23} color={theme.accentText} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontWeight: "800", fontSize: 15, lineHeight: 19, color: theme.text }} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text
+            style={{ color: theme.mutedText, fontSize: 13, lineHeight: 18, marginTop: 2 }}
+            numberOfLines={2}
           >
             {subtitle}
           </Text>
@@ -313,7 +316,6 @@ export default function CreateDeal() {
         </View>
       ) : (
         <ScrollView
-          ref={scrollRef}
           style={{ flex: 1, marginTop: Spacing.lg }}
           contentContainerStyle={{ gap: Spacing.md, paddingBottom: createScrollBottom }}
           keyboardShouldPersistTaps="handled"
@@ -328,6 +330,13 @@ export default function CreateDeal() {
             accent: true,
           })}
 
+          {renderHubAction({
+            title: t("createHub.menuOfferTitle"),
+            subtitle: t("createHub.menuOfferSubtitle"),
+            iconName: "restaurant-menu",
+            onPress: () => router.push("/create/menu-offer" as Href),
+          })}
+
           {/* ── Reuse Past Deal ── */}
           {renderHubAction({
             title: t("createHub.reuseDeal"),
@@ -336,67 +345,24 @@ export default function CreateDeal() {
             onPress: () => router.push("/create/reuse"),
           })}
 
-          {/* ── More Tools ── */}
-          {renderHubAction({
-            title: t("createHub.moreToolsTitle"),
-            subtitle: moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow"),
-            iconName: "apps",
-            onPress: toggleMoreTools,
-            onLayout: rememberMoreToolsLayout,
-            accessibilityState: { expanded: moreToolsOpen },
-            trailingIcon: moreToolsOpen ? "keyboard-arrow-up" : "keyboard-arrow-down",
-          })}
+          <View style={{ gap: Spacing.sm, paddingTop: Spacing.xs }}>
+            {renderCompactAction({
+              title: t("createHub.menuManagerTitle"),
+              subtitle: t("createHub.menuManagerSubtitle"),
+              iconName: "menu-book",
+              onPress: () => router.push("/create/menu-manager" as Href),
+            })}
+            {renderCompactAction({
+              title: t("createHub.templatesTitle"),
+              subtitle: t("reuseHub.templatesSection"),
+              iconName: templatesOpen ? "folder-open" : "folder",
+              onPress: toggleTemplatesFolder,
+              accessibilityState: { expanded: templatesOpen },
+              trailingIcon: templatesOpen ? "keyboard-arrow-up" : "keyboard-arrow-down",
+            })}
+          </View>
 
-          {moreToolsOpen ? (
-            <View style={{ gap: Spacing.sm }}>
-              <Pressable
-                onPress={() => router.push("/create/menu" as Href)}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name="restaurant-menu" size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.menuTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("createHub.menuSubtitle")}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.icon} />
-              </Pressable>
-              <Pressable
-                onPress={toggleTemplatesFolder}
-                onLayout={rememberTemplatesFolderLayout}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: templatesOpen }}
-                style={{
-                  borderRadius: Radii.md,
-                  padding: Spacing.md,
-                  backgroundColor: theme.surface,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: Spacing.md,
-                }}
-              >
-                <MaterialIcons name={templatesOpen ? "folder-open" : "folder"} size={22} color={theme.accentText} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontWeight: "700", fontSize: 15, color: theme.text }}>{t("createHub.templatesTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>{t("reuseHub.templatesSection")}</Text>
-                </View>
-                <MaterialIcons name={templatesOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={22} color={theme.icon} />
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* ── Templates ── */}
-          {moreToolsOpen && templatesOpen ? (
+          {templatesOpen ? (
             <View style={{ gap: Spacing.md, paddingTop: Spacing.xs }}>
             {templatesLoadError ? (
               <Banner

@@ -51,9 +51,12 @@ describe("AI create UX source guards", () => {
 
   it("keeps the business create hub compact and row-based", () => {
     expect(createHubSource).toContain("function renderHubAction");
-    expect(createHubSource).toContain("minHeight: 74");
+    expect(createHubSource).toContain("minHeight: 88");
     expect(createHubSource).toContain('iconName: "add-circle-outline"');
+    expect(createHubSource).toContain('iconName: "restaurant-menu"');
     expect(createHubSource).toContain('iconName: "history"');
+    expect(createHubSource).toContain("function renderCompactAction");
+    expect(createHubSource).not.toContain("createHub.moreToolsTitle");
     expect(createHubSource).not.toContain('<CardShell variant="muted">');
     expect(createHubSource).not.toContain('backgroundColor: theme.primary,\n              alignItems: "center"');
   });

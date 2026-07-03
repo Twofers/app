@@ -24,10 +24,10 @@ const MENU_ACTIONS: MenuAction[] = [
     subtitleKey: "createHub.menuDealFastSubtitle",
   },
   {
-    href: "/create/menu-scan" as Href,
-    iconName: "document-scanner",
-    titleKey: "createHub.scanMenuTitle",
-    subtitleKey: "createHub.scanMenuSubtitle",
+    href: "/create/menu-manager?add=1" as Href,
+    iconName: "playlist-add",
+    titleKey: "createHub.addMenuItemsTitle",
+    subtitleKey: "createHub.addMenuItemsSubtitle",
   },
   {
     href: "/create/menu-manager" as Href,
@@ -55,7 +55,7 @@ export default function MenuHubScreen() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+      <Text style={{ color: theme.mutedText, fontSize: 17, lineHeight: 24 }}>
         {t("createHub.menuSubtitle")}
       </Text>
 
@@ -66,6 +66,7 @@ export default function MenuHubScreen() {
             onPress={() => router.push(action.href)}
             accessibilityRole="button"
             style={{
+              minHeight: 92,
               borderRadius: Radii.md,
               padding: Spacing.md,
               backgroundColor: theme.surface,
@@ -76,12 +77,23 @@ export default function MenuHubScreen() {
               gap: Spacing.md,
             }}
           >
-            <MaterialIcons name={action.iconName} size={22} color={theme.accentText} />
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: Radii.md,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colorScheme === "dark" ? theme.surfaceMuted : "rgba(17,24,39,0.06)",
+              }}
+            >
+              <MaterialIcons name={action.iconName} size={24} color={theme.accentText} />
+            </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: theme.text, fontSize: 15, fontWeight: "700" }}>
+              <Text style={{ color: theme.text, fontSize: 18, lineHeight: 23, fontWeight: "900" }}>
                 {t(action.titleKey)}
               </Text>
-              <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 2 }}>
+              <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 20, marginTop: 4 }}>
                 {t(action.subtitleKey)}
               </Text>
             </View>

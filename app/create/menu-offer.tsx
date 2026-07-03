@@ -461,7 +461,15 @@ export default function MenuOfferScreen() {
       ) : null}
 
       {items.length === 0 && !loadErr && step === "main" ? (
-        <Text style={{ opacity: 0.75 }}>{t("menuOffer.emptyMenu")}</Text>
+        <View style={{ gap: Spacing.md }}>
+          <Text style={{ color: theme.mutedText, fontSize: 15, lineHeight: 22 }}>
+            {t("menuOffer.emptyMenu")}
+          </Text>
+          <PrimaryButton
+            title={t("menuManager.addManual")}
+            onPress={() => router.push("/create/menu-manager?add=1" as Href)}
+          />
+        </View>
       ) : null}
 
       {step === "main" && items.length > 0 ? (
