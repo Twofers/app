@@ -214,6 +214,20 @@ const KNOWN_FOOD_ITEM_CANONICALS: Record<string, string> = {
   drinks: "drink",
 };
 
+const COMMON_FOOD_WORD_CORRECTIONS: Record<string, string> = {
+  avacado: "avocado",
+  avacados: "avocados",
+  bagle: "bagel",
+  bagles: "bagels",
+  ceasar: "caesar",
+  expresso: "espresso",
+  mozerella: "mozzarella",
+  mozzarela: "mozzarella",
+};
+
+const DESSERT_SUNDAE_CONTEXT =
+  /\b(?:banana split|caramel|chocolate|dessert|fudge|ice cream|strawberry|sundae|sundaes|vanilla)\b/;
+
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
@@ -225,6 +239,17 @@ function normalizeItemKey(value: string): string {
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function applyKnownFoodSpellcheck(cleanKey: string): string | null {
+  let corrected = cleanKey;
+  corrected = corrected.replace(/\b[a-z]+\b/g, (word) => COMMON_FOOD_WORD_CORRECTIONS[word] ?? word);
+  if (DESSERT_SUNDAE_CONTEXT.test(corrected)) {
+    corrected = corrected
+      .replace(/\bsundays\b/g, "sundaes")
+      .replace(/\bsunday\b/g, "sundae");
+  }
+  return corrected !== cleanKey ? corrected : null;
 }
 
 export function canonicalizeOfferItem(
@@ -254,6 +279,16 @@ export function canonicalizeOfferItem(
       canonical: known,
       confidence: cleanKey === known ? "medium" : "high",
       source: "known_food_dictionary",
+    };
+  }
+
+  const spellchecked = applyKnownFoodSpellcheck(cleanKey);
+  if (spellchecked) {
+    return {
+      original: clean,
+      canonical: spellchecked,
+      confidence: "high",
+      source: "spellcheck",
     };
   }
 
@@ -432,6 +467,8 @@ function normalizeItemForComparison(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
   if (KNOWN_FOOD_ITEM_CANONICALS[clean]) return KNOWN_FOOD_ITEM_CANONICALS[clean];
+  const spellchecked = applyKnownFoodSpellcheck(clean);
+  if (spellchecked) return spellchecked;
   return clean.replace(/ies\b/g, "y").replace(/(?:ches|shes|xes|zes|ses)\b/g, (m) => m.slice(0, -2)).replace(/s\b/g, "");
 }
 

@@ -68,6 +68,13 @@ describe("deal eligibility inference", () => {
     });
   });
 
+  it("uses a plain item description to seed the default single-item discount", () => {
+    expect(inferDealEligibilityFormFromText("Hot fudge sundae")).toMatchObject({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      itemDescription: "Hot fudge sundae",
+    });
+  });
+
   it("merges inferred text into empty fields without overwriting manual entries", () => {
     const current = {
       ...createDefaultDealEligibilityFormState(),
@@ -149,6 +156,26 @@ describe("deal eligibility inference", () => {
       dealType: "BUY_ONE_GET_ONE_FREE",
       requiredItemDescription: "manual house coffee",
       freeItemDescription: "latte",
+    });
+  });
+
+  it("updates a still-auto item when the owner corrects the plain item description", () => {
+    const current = {
+      ...createDefaultDealEligibilityFormState(),
+      dealType: "PERCENT_OFF_SINGLE_ITEM" as const,
+      itemDescription: "Hot fudge sunday",
+    };
+    const previousInferred = inferDealEligibilityFormFromText("Hot fudge sunday");
+    const nextInferred = inferDealEligibilityFormFromText("Hot fudge sundae");
+
+    expect(
+      mergeInferredEligibilityForm(current, nextInferred, {
+        allowDealTypeChange: true,
+        previousInferred,
+      }),
+    ).toMatchObject({
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+      itemDescription: "Hot fudge sundae",
     });
   });
 });

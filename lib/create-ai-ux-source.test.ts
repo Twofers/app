@@ -4,6 +4,13 @@ import { describe, expect, it } from "vitest";
 
 const createAiSource = readFileSync(join(process.cwd(), "app", "create", "ai.tsx"), "utf8");
 const createHubSource = readFileSync(join(process.cwd(), "app", "(tabs)", "create.tsx"), "utf8");
+const redeemSource = readFileSync(join(process.cwd(), "app", "(tabs)", "redeem.tsx"), "utf8");
+const dashboardSource = readFileSync(join(process.cwd(), "app", "(tabs)", "dashboard.tsx"), "utf8");
+const accountSource = readFileSync(join(process.cwd(), "app", "(tabs)", "account", "index.tsx"), "utf8");
+const aiInsightsSource = readFileSync(join(process.cwd(), "components", "ai-insights-card.tsx"), "utf8");
+const redemptionModeSettingsSource = readFileSync(join(process.cwd(), "components", "redemption-mode-settings.tsx"), "utf8");
+const themePreferenceSelectorSource = readFileSync(join(process.cwd(), "components", "theme-preference-selector.tsx"), "utf8");
+const profileCompletenessBarSource = readFileSync(join(process.cwd(), "components", "profile-completeness-bar.tsx"), "utf8");
 const dealEligibilityFormSource = readFileSync(join(process.cwd(), "components", "deal-eligibility-form.tsx"), "utf8");
 const welcomeWalkthroughSource = readFileSync(join(process.cwd(), "components", "welcome-walkthrough.tsx"), "utf8");
 
@@ -42,11 +49,87 @@ describe("AI create UX source guards", () => {
     expect(createHubSource).not.toContain("setBanner({ message: t(\"createHub.templatesLoadError\")");
   });
 
+  it("keeps the business create hub compact and row-based", () => {
+    expect(createHubSource).toContain("function renderHubAction");
+    expect(createHubSource).toContain("minHeight: 74");
+    expect(createHubSource).toContain('iconName: "add-circle-outline"');
+    expect(createHubSource).toContain('iconName: "history"');
+    expect(createHubSource).not.toContain('<CardShell variant="muted">');
+    expect(createHubSource).not.toContain('backgroundColor: theme.primary,\n              alignItems: "center"');
+  });
+
+  it("keeps redeem mode selection from duplicating the manual-code fallback", () => {
+    expect(redeemSource).toContain('accessibilityRole="tab"');
+    expect(redeemSource).toContain('"qr-code-scanner"');
+    expect(redeemSource).toContain('"dialpad"');
+    expect(redeemSource).not.toContain("redeem.manualFallbackCta");
+    expect(redeemSource).not.toContain("redeem-camera-manual-fallback");
+  });
+
+  it("keeps the business offers snapshot dense enough for phone viewports", () => {
+    expect(dashboardSource).toContain('flexBasis: "31%"');
+    expect(dashboardSource).toContain("minHeight: 76");
+    expect(dashboardSource).toContain('defaultValue: "No live deals"');
+    expect(dashboardSource).not.toContain("offersDashboard.snapshotEyebrow");
+    expect(dashboardSource).not.toContain("offersDashboard.dashboardDataNote");
+  });
+
+  it("keeps deeper offers dashboard sections compact on phones", () => {
+    expect(dashboardSource).toContain('flexBasis: "22%"');
+    expect(dashboardSource).toContain("maxFontSizeMultiplier={1.08}");
+    expect(dashboardSource).toContain('minWidth: 92');
+    expect(dashboardSource).not.toContain("offersDashboard.dataCoverageTitle");
+    expect(dashboardSource).not.toContain("offersDashboard.dataCoverageBody");
+    expect(aiInsightsSource).toContain("numberOfLines={3}");
+    expect(aiInsightsSource).toContain("fontSize: 12");
+  });
+
+  it("keeps the business account summary cards compact", () => {
+    expect(accountSource).toContain("numberOfLines={1}");
+    expect(accountSource).toContain("numberOfLines={2}");
+    expect(accountSource).toContain("minimumFontScale={0.72}");
+    expect(accountSource).toContain("supportEmail");
+    expect(accountSource).toContain('fontSize: 13, lineHeight: 17');
+  });
+
+  it("keeps lower business account settings compact on phones", () => {
+    expect(accountSource).toContain("helper && selected");
+    expect(accountSource).toContain("defaultValue: \"Claim again after X days\"");
+    expect(accountSource).toContain("defaultValue: \"Claim once ever\"");
+    expect(accountSource).toContain("style={{ minHeight: 44, paddingVertical: 8 }}");
+    expect(accountSource).toContain("numberOfLines={3} maxFontSizeMultiplier={1.08}");
+    expect(accountSource).not.toContain("Customers can claim again after X days");
+    expect(accountSource).not.toContain("Customers can claim only once ever from my business");
+    expect(redemptionModeSettingsSource).toContain("defaultValue: \"Staff-only redemption device.\"");
+    expect(redemptionModeSettingsSource).toContain("borderRadius: Radii.md");
+    expect(themePreferenceSelectorSource).toContain("minWidth: 88");
+    expect(profileCompletenessBarSource).toContain("height: 6");
+  });
+
+  it("keeps active account locales compact and translated", () => {
+    const en = readLocale("en");
+    const es = readLocale("es");
+    const ko = readLocale("ko");
+
+    expect(en.account.repeatPolicyCooldown).toBe("Claim again after X days");
+    expect(es.account.expandBizProfile).toBe("Editar campos");
+    expect(es.account.advancedOptions).toBe("Más opciones");
+    expect(ko.account.expandBizProfile).toBe("전체 항목 편집");
+    expect(ko.account.advancedOptions).toBe("추가 옵션");
+    for (const locale of [en, es, ko]) {
+      expect(locale.account.repeatPolicyCooldown).not.toContain("Customers can claim again");
+      expect(locale.account.repeatPolicyForever).not.toContain("Customers can claim only once");
+      expect(locale.account.expandBizProfile).not.toContain("Show all business fields");
+      expect(locale.account.advancedOptions).not.toBe("Advanced");
+      expect(locale.deleteAccount.body.length).toBeLessThan(120);
+    }
+  });
+
   it("waits for the photo step to collapse before scrolling to AI Step 2", () => {
     expect(createAiSource).toContain("pendingDescriptionScrollAfterCollapseRef");
     expect(createAiSource).toContain("if (!photoStepCollapsed || !pendingDescriptionScrollAfterCollapseRef.current) return");
     expect(createAiSource).toContain("scrollToDescriptionStep();");
-    expect(createAiSource).toContain('scrollToFormY(descriptionSectionYRef.current, "none", Spacing.xs)');
+    expect(createAiSource).toContain('scrollToFormY(descriptionSectionYRef.current, "none", top + Spacing.lg)');
   });
 
   it("keeps compact offer-rule choices short enough for S10 AI Step 2", () => {
@@ -58,6 +141,8 @@ describe("AI create UX source guards", () => {
     expect(dealEligibilityFormSource).toContain("flexShrink: compact ? 1 : undefined");
     expect(dealEligibilityFormSource).toContain("!compact ? (");
     expect(dealEligibilityFormSource).toContain("activeTypeHelper");
+    expect(dealEligibilityFormSource).toContain('flexDirection: compact ? "column" : "row"');
+    expect(dealEligibilityFormSource).toContain('width: compact ? "100%" : undefined');
     expect(dealEligibilityFormSource).toContain("numberOfLines={1}");
     expect(dealEligibilityFormSource).not.toContain("numberOfLines={compact ? 3 : undefined}");
   });
@@ -88,6 +173,11 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("setPreviewFormat(nextFormat)");
     expect(createAiSource).toContain("createAi.adFormatPoster");
     expect(createAiSource).toContain("createAi.adFormatStandard");
+    expect(createAiSource).toContain("minHeight: 48");
+    expect(createAiSource).not.toContain("createAi.adFormatPosterHelp");
+    expect(createAiSource).not.toContain("createAi.adFormatStandardHelp");
+    expect(createAiSource).not.toContain("createAi.posterPreviewTitle");
+    expect(createAiSource).not.toContain("createAi.posterPreviewBadge");
     expect(createAiSource).not.toContain("EXPLICIT_POSTER_STYLE_CHOICES");
     expect(createAiSource).not.toContain("POSTER_STYLE_CHOICES");
     expect(createAiSource).not.toContain("posterTryOurLabel");
@@ -123,9 +213,17 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("createAi.fallbackVisualLabel");
     expect(createAiSource).toContain('defaultValue: "Local deal"');
     expect(createAiSource).toContain("createAi.generatingHintNoPhoto");
+    expect(createAiSource).toContain("paddingBottom: scrollBottom + Spacing.xxxl * 2");
+    expect(createAiSource).toContain("createAi.errImageGenerationNoImage");
+    expect(createAiSource).toContain('error_code: "NO_IMAGE_RETURNED"');
+    expect(createAiSource).toContain("if (!imageVersionStoragePath(normalizedAd))");
     expect(createAiSource).toMatch(
       /selectedPhotoUri\s*\?\s*t\("createAi\.generatingHint"\)\s*:\s*t\("createAi\.generatingHintNoPhoto"/,
     );
+    expect(createAiSource).not.toContain("setBanner({ message: t(\"createAi.successBatchFirst\")");
+    expect(createAiSource).not.toContain("createAi.photoSkipHint");
+    expect(createAiSource).not.toContain("createAi.photoHint");
+    expect(createAiSource).not.toContain('{t("createAi.takePhoto")} / {t("createAi.pickPhoto")}');
     expect(createAiSource).not.toContain("Twofer fallback");
   });
 
@@ -234,7 +332,7 @@ describe("AI create UX source guards", () => {
     expect(acceptedPreviewSource).toContain("renderPosterPreview()");
     expect(acceptedPreviewSource).toContain("dealDetail.dealDetails");
     expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
-    expect(acceptedPreviewSource).toContain("generatedAd?.poster_storage_path");
+    expect(acceptedPreviewSource).toContain("imageVersionStoragePath(generatedAd)");
   });
 
   it("keeps generated research context out of the owner review UI", () => {

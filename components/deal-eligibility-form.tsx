@@ -82,6 +82,11 @@ export function DealEligibilityForm({
   const fieldMarginTop = compact ? 3 : 6;
   const fieldMinWidth = compact ? 112 : 140;
   const rowGap = compact ? 6 : 10;
+  const fieldRowStyle = {
+    flexDirection: compact ? "column" : "row",
+    flexWrap: "wrap",
+    gap: rowGap,
+  } as const;
   const activeTypeHelper = t(`dealEligibility.type.${activeType.id}.helper`, {
     defaultValue: activeType.helper,
   });
@@ -104,7 +109,7 @@ export function DealEligibilityForm({
   ) {
     const error = fieldError(stateKey);
     return (
-      <View style={{ flex: 1, minWidth: fieldMinWidth }}>
+      <View style={{ flex: compact ? undefined : 1, width: compact ? "100%" : undefined, minWidth: compact ? undefined : fieldMinWidth }}>
         <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
         <TextInput
           value={value[stateKey]}
@@ -164,7 +169,7 @@ export function DealEligibilityForm({
   function renderDiscountPercentField() {
     const error = fieldError("discountPercent");
     return (
-      <View style={{ flex: 1, minWidth: fieldMinWidth }}>
+      <View style={{ flex: compact ? undefined : 1, width: compact ? "100%" : undefined, minWidth: compact ? undefined : fieldMinWidth }}>
         <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>
           {t("dealEligibility.discountLabel", { defaultValue: "Discount percent" })}
         </Text>
@@ -295,7 +300,7 @@ export function DealEligibilityForm({
             "itemDescription",
             t("dealEligibility.itemPlaceholder", { defaultValue: "Example: croissant" }),
           )}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: rowGap }}>
+          <View style={fieldRowStyle}>
             {renderDiscountPercentField()}
             {renderCurrencyField(
               t("dealEligibility.itemValueLabel", { defaultValue: "Retail value (optional)" }),
@@ -318,7 +323,7 @@ export function DealEligibilityForm({
                 t("dealEligibility.freeItemPlaceholder", { defaultValue: "Example: any pastry" }),
               )
             : null}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: rowGap }}>
+          <View style={fieldRowStyle}>
             {renderCurrencyField(
               t("dealEligibility.requiredValueLabel", { defaultValue: "Buy item value (optional)" }),
               "requiredItemRetailValue",

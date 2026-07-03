@@ -20,6 +20,15 @@ function cleanItem(value: string): string {
     .trim();
 }
 
+function looksLikePlainItem(value: string): boolean {
+  const clean = cleanItem(value);
+  if (!clean) return false;
+  if (/\b(?:bogo|buy|purchase|order|get|free|off|discount|percent|deal|offer|sale|valid|expires?)\b|%/i.test(value)) {
+    return false;
+  }
+  return clean.split(/\s+/).length <= 7;
+}
+
 function withItemSeed(item: string): DealEligibilityFormState | null {
   const cleaned = cleanItem(item);
   if (!cleaned) return null;
@@ -130,6 +139,14 @@ export function inferDealEligibilityFormFromText(text: string): DealEligibilityF
         discountPercent: percentOff[1],
       };
     }
+  }
+
+  if (looksLikePlainItem(source)) {
+    const item = cleanItem(source);
+    return {
+      ...createDefaultDealEligibilityFormState({ itemDescription: item }),
+      dealType: "PERCENT_OFF_SINGLE_ITEM",
+    };
   }
 
   return null;

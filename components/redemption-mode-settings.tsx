@@ -348,10 +348,10 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
       style={{
         borderWidth: 1,
         borderColor: theme.border,
-        borderRadius: Radii.lg,
+        borderRadius: Radii.md,
         padding: Spacing.md,
         backgroundColor: theme.surface,
-        gap: Spacing.md,
+        gap: Spacing.sm,
       }}
     >
       <Pressable
@@ -360,14 +360,16 @@ export function RedemptionModeSettings({ businessId, businessName }: Props) {
         style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: Spacing.md }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17 }}>
+          <Text style={{ color: theme.text, fontWeight: "800", fontSize: 16, lineHeight: 20 }} maxFontSizeMultiplier={1.08}>
             {t("redemptionMode.settingsTitle", { defaultValue: "Redemption mode" })}
           </Text>
-          <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 4, lineHeight: 18 }}>
-            {t("redemptionMode.settingsSubtitle", { defaultValue: "Lock this device to staff redemptions only." })}
+          <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 3, lineHeight: 17 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+            {t("redemptionMode.settingsSubtitle", { defaultValue: "Staff-only redemption device." })}
           </Text>
         </View>
-        <Text style={{ color: theme.accentText, fontWeight: "900" }}>{open ? "-" : "+"}</Text>
+        <Text style={{ color: theme.accentText, fontWeight: "900", fontSize: 18 }} maxFontSizeMultiplier={1.08}>
+          {open ? "-" : "+"}
+        </Text>
       </Pressable>
 
       {open ? (

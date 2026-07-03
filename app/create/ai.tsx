@@ -1467,8 +1467,8 @@ export default function AiDealScreen() {
   }, []);
 
   const scrollToDescriptionStep = useCallback(() => {
-    scrollToFormY(descriptionSectionYRef.current, "none", Spacing.xs);
-  }, [scrollToFormY]);
+    scrollToFormY(descriptionSectionYRef.current, "none", top + Spacing.lg);
+  }, [scrollToFormY, top]);
 
   useEffect(() => {
     if (!photoStepCollapsed || !pendingDescriptionScrollAfterCollapseRef.current) return;
@@ -1492,7 +1492,7 @@ export default function AiDealScreen() {
   }
 
   function hasFallbackTemplateSource() {
-    return Boolean(generatedAd?.poster_storage_path || photoPath || photoUri || posterUrl);
+    return Boolean(imageVersionStoragePath(generatedAd) || photoPath || photoUri || posterUrl);
   }
 
   function clearGenerationErrorState() {
@@ -1596,7 +1596,7 @@ export default function AiDealScreen() {
         photoUri,
         photoPath,
         posterUrl,
-        generatedPosterPath: generatedAd?.poster_storage_path ?? null,
+        generatedPosterPath: imageVersionStoragePath(generatedAd),
         hintText,
         price,
         title,
@@ -2750,7 +2750,28 @@ export default function AiDealScreen() {
       // Stale-result guard: discard if user kicked off another generation after this one.
       if (requestId !== generationRequestIdRef.current) return;
       lastSentPhotoTreatmentRef.current = sentTreatment;
-      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      let normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      if (!imageVersionStoragePath(normalizedAd) && path) {
+        const originalPhotoAd = buildOriginalPhotoVersionAd(normalizedAd, path);
+        if (originalPhotoAd) {
+          normalizedAd = originalPhotoAd;
+          setUsePhotoAsFinal(true);
+          setMerchantOriginalWarningAcknowledged(false);
+        }
+      }
+      if (!imageVersionStoragePath(normalizedAd)) {
+        const friendly = t("createAi.errImageGenerationNoImage", {
+          defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
+        });
+        setGenerationFailureState(friendly, "ai_failed_no_fallback");
+        setBanner({ message: friendly, tone: "error" });
+        trackEvent(AiAdsEvents.GENERATION_FAILED, {
+          screen: "create_ai",
+          regeneration_attempt: 0,
+          error_code: "NO_IMAGE_RETURNED",
+        });
+        return;
+      }
       if (sentSourceMode === "merchant_original" && normalizedAd.photo_source !== "uploaded_original") {
         setUsePhotoAsFinal(false);
       }
@@ -2758,7 +2779,6 @@ export default function AiDealScreen() {
       applyAdToDraft(normalizedAd);
       rememberImageVersion(normalizedAd, "generated");
       if (nextQuota) setQuota(nextQuota);
-      setBanner({ message: t("createAi.successBatchFirst"), tone: "success" });
       setTimeout(() => scrollToAdReview(), 260);
       trackEvent(AiAdsEvents.GENERATION_SUCCEEDED, {
         screen: "create_ai",
@@ -2888,7 +2908,29 @@ export default function AiDealScreen() {
       });
       // Stale-result guard: discard if user replaced the photo or kicked off another generation.
       if (requestId !== generationRequestIdRef.current) return;
-      const normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      let normalizedAd = normalizeGeneratedAdDisplayCopy(ad);
+      if (!imageVersionStoragePath(normalizedAd) && photoPath) {
+        const originalPhotoAd = buildOriginalPhotoVersionAd(normalizedAd, photoPath);
+        if (originalPhotoAd) {
+          normalizedAd = originalPhotoAd;
+          setUsePhotoAsFinal(true);
+          setMerchantOriginalWarningAcknowledged(false);
+        }
+      }
+      if (!imageVersionStoragePath(normalizedAd)) {
+        const friendly = t("createAi.errImageGenerationNoImage", {
+          defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
+        });
+        setBanner({ message: friendly, tone: "error" });
+        trackEvent(AiAdsEvents.REVISION_FAILED, {
+          screen: "create_ai",
+          revision_target: effectiveRevisionTarget,
+          selected_revision_target: revisionTarget,
+          revision_count: revisionNumber,
+          error_code: "NO_IMAGE_RETURNED",
+        });
+        return;
+      }
       const revisionChange = summarizeAiRevisionChange({
         previousAd: generatedAd,
         revisedAd: normalizedAd,
@@ -3028,6 +3070,15 @@ export default function AiDealScreen() {
 
   function acceptAd() {
     if (!generatedAd) return;
+    if (!imageVersionStoragePath(generatedAd)) {
+      setBanner({
+        message: t("createAi.errImageGenerationNoImage", {
+          defaultValue: "AI couldn't create an image for this ad. Add a photo or try again before using it.",
+        }),
+        tone: "error",
+      });
+      return;
+    }
     if (composedCompositeQaEnabled && selectedComposedCompositeQa.decision === "block") {
       trackEvent(AiAdsEvents.COMPOSED_APPROVAL_BLOCKED, {
         screen: "create_ai",
@@ -3128,7 +3179,8 @@ export default function AiDealScreen() {
       });
       return;
     }
-    const fallbackPosterPath = generatedAd?.poster_storage_path ?? photoPath ?? null;
+    const generatedPosterPath = imageVersionStoragePath(generatedAd);
+    const fallbackPosterPath = generatedPosterPath ?? photoPath ?? null;
     const hasImageSource = Boolean(fallbackPosterPath || photoUri || posterUrl);
     if (!hasImageSource) {
       setBanner({
@@ -3158,8 +3210,8 @@ export default function AiDealScreen() {
       ? {
           ...fallbackBaseAd,
           poster_storage_path: fallbackPosterPath,
-          photo_source: generatedAd?.poster_storage_path ? generatedAd.photo_source ?? "generated" : ("uploaded_original" as const),
-          photo_treatment: generatedAd?.poster_storage_path ? generatedAd.photo_treatment ?? null : null,
+          photo_source: generatedPosterPath ? generatedAd?.photo_source ?? "generated" : ("uploaded_original" as const),
+          photo_treatment: generatedPosterPath ? generatedAd?.photo_treatment ?? null : null,
         }
       : fallbackBaseAd;
     if (!fallbackPosterPath) {
@@ -3407,7 +3459,7 @@ export default function AiDealScreen() {
         : editingSourceLocale ?? prefillSourceLocale ?? dealOutputLang;
       const supportedSourceLocaleForPublish = supportedLocaleOrDefault(sourceLocaleForPublish);
 
-      const aiPosterPath = generatedAd?.poster_storage_path ?? null;
+      const aiPosterPath = imageVersionStoragePath(generatedAd);
       const finalStoragePath = resolveCurrentDealPosterStoragePath({
         aiPosterStoragePath: aiPosterPath,
         uploadedPhotoStoragePath: userPhotoStoragePath,
@@ -3650,9 +3702,7 @@ export default function AiDealScreen() {
             screenshotQa: composedScreenshotQaSnapshotForPublish,
           }
         : null;
-      const allowTextOnlyPoster =
-        generatedAd?.photo_source === "copy_only" || generatedAd?.photo_source === "fallback_template";
-      if (!posterForPublish && !allowTextOnlyPoster) {
+      if (!posterForPublish) {
         showPublishError(t("createAi.errImageRequired", {
           defaultValue: "Every deal needs an image. Add a photo, or generate again so AI can create one.",
         }));
@@ -3871,7 +3921,7 @@ export default function AiDealScreen() {
       const composedDescription = composeListingDescription(promoLine, ctaText, description);
       const userPhotoStoragePath = path ?? extractDealPhotoStoragePath(posterUrl);
       const storagePath = resolveCurrentDealPosterStoragePath({
-        aiPosterStoragePath: generatedAd?.poster_storage_path ?? null,
+        aiPosterStoragePath: imageVersionStoragePath(generatedAd),
         uploadedPhotoStoragePath: userPhotoStoragePath,
         posterUrl,
         allowPhotoFallback: usePhotoAsFinal,
@@ -3931,13 +3981,13 @@ export default function AiDealScreen() {
   }
 
   const selectedPhotoUri = photoUri ?? posterUrl ?? (photoPath ? buildPublicDealPhotoUrl(photoPath) : null);
-  const adImageUri = generatedAd?.poster_storage_path
-    ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
+  const currentAdStoragePath = imageVersionStoragePath(generatedAd);
+  const adImageUri = currentAdStoragePath
+    ? buildPublicDealPhotoUrl(currentAdStoragePath)
     : usePhotoAsFinal ? selectedPhotoUri : null;
   const showPosterFormat = creativeFormat === "poster_v1" || previewFormat === "poster_v1";
   const originalStoragePath = photoPath ?? extractDealPhotoStoragePath(posterUrl);
   const currentImageVersionId = generatedAd ? imageVersionId(generatedAd) : null;
-  const currentAdStoragePath = imageVersionStoragePath(generatedAd);
   const selectedPosterTemplateId: PosterTemplateId = FIXED_POSTER_TEMPLATE_ID;
   const fallbackPosterPreviewSpec =
     showPosterFormat && offerDefinition
@@ -4151,42 +4201,12 @@ export default function AiDealScreen() {
       <View
         style={{
           borderRadius: 8,
-          backgroundColor: colorScheme === "dark" ? "#020617" : "#111827",
           borderWidth: 1,
-          borderColor: colorScheme === "dark" ? "#334155" : "#1F2937",
-          padding: 12,
-          gap: 12,
+          borderColor: colorScheme === "dark" ? "#334155" : theme.border,
+          backgroundColor: colorScheme === "dark" ? "#020617" : theme.surface,
+          overflow: "hidden",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <Text
-            style={{ flex: 1, minWidth: 0, color: "#F8FAFC", fontSize: 20, lineHeight: 25, fontWeight: "900" }}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.82}
-          >
-            {t("createAi.posterPreviewTitle", { defaultValue: "Poster preview" })}
-          </Text>
-          <View
-            style={{
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.22)",
-              backgroundColor: "rgba(255,255,255,0.14)",
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-            }}
-          >
-            <Text
-              style={{ color: "#FDE68A", fontSize: 13, lineHeight: 17, fontWeight: "900" }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
-            >
-              {t("createAi.posterPreviewBadge", { defaultValue: "Poster ad" })}
-            </Text>
-          </View>
-        </View>
         <AdPosterCanvas
           spec={effectivePosterSpec}
           imageUri={posterPreviewImageUri}
@@ -4313,13 +4333,18 @@ export default function AiDealScreen() {
         contentContainerStyle={{
           paddingTop: top,
           paddingHorizontal: horizontal,
-          paddingBottom: scrollBottom + Spacing.xxxl,
+          paddingBottom: scrollBottom + Spacing.xxxl * 2,
         }}
       >
         <Text style={{ fontSize: 22, fontWeight: "700", letterSpacing: -0.3, color: theme.text }}>
           {editingDealId ? t("createAi.titleEdit") : t("createAi.titleMain")}
         </Text>
-        <Text style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18, color: theme.text }}>{t("createAi.intro")}</Text>
+        <Text
+          style={{ marginTop: 4, opacity: 0.65, fontSize: 13, lineHeight: 18, color: theme.text }}
+          maxFontSizeMultiplier={1.12}
+        >
+          {t("createAi.intro")}
+        </Text>
 
         {banner ? <Banner message={banner.message} tone={banner.tone} /> : null}
         {dealLoadError ? <Banner message={dealLoadError} tone="error" onRetry={() => setDealLoadNonce((n) => n + 1)} /> : null}
@@ -4375,8 +4400,18 @@ export default function AiDealScreen() {
           <>
             <StepBadge n={1} total={3} t={t} />
             <Text style={{ marginTop: 10, fontWeight: "700", fontSize: 16, color: theme.text }}>{t("createAi.adFormatTitle")}</Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              {(["standard_card", "poster_v1"] as CreativeFormat[]).map((format) => {
+            <View
+              style={{
+                flexDirection: "row",
+                marginTop: 8,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 8,
+                overflow: "hidden",
+                backgroundColor: theme.surface,
+              }}
+            >
+              {(["standard_card", "poster_v1"] as CreativeFormat[]).map((format, index) => {
                 const selected = creativeFormat === format;
                 const iconName = format === "poster_v1" ? "crop-portrait" : "view-agenda";
                 return (
@@ -4388,24 +4423,29 @@ export default function AiDealScreen() {
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      minHeight: 74,
-                      borderRadius: 12,
-                      borderWidth: 1.5,
-                      borderColor: selected ? theme.primary : theme.border,
+                      minHeight: 48,
+                      borderRightWidth: index === 0 ? 1 : 0,
+                      borderRightColor: theme.border,
                       backgroundColor: selected ? PrimaryTint.surface : theme.surface,
-                      paddingVertical: 10,
-                      paddingHorizontal: 10,
+                      paddingVertical: 9,
+                      paddingHorizontal: 8,
                       justifyContent: "center",
                     }}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }}>
                       <MaterialIcons
                         name={iconName}
-                        size={20}
+                        size={18}
                         color={selected ? theme.primary : theme.icon}
                       />
                       <Text
-                        style={{ flex: 1, minWidth: 0, color: selected ? theme.accentText : theme.text, fontWeight: "800", fontSize: 13 }}
+                        style={{
+                          minWidth: 0,
+                          color: selected ? theme.accentText : theme.text,
+                          fontWeight: "800",
+                          fontSize: 14,
+                          textAlign: "center",
+                        }}
                         numberOfLines={1}
                         adjustsFontSizeToFit
                         minimumFontScale={0.82}
@@ -4413,9 +4453,6 @@ export default function AiDealScreen() {
                         {format === "poster_v1" ? t("createAi.adFormatPoster") : t("createAi.adFormatStandard")}
                       </Text>
                     </View>
-                    <Text style={{ marginTop: 5, color: theme.mutedText, fontSize: 11, lineHeight: 15 }} numberOfLines={2}>
-                      {format === "poster_v1" ? t("createAi.adFormatPosterHelp") : t("createAi.adFormatStandardHelp")}
-                    </Text>
                   </Pressable>
                 );
               })}
@@ -4430,9 +4467,6 @@ export default function AiDealScreen() {
                 <SecondaryButton title={t("createAi.pickPhoto")} onPress={pickPhotoFromLibrary} />
               </View>
             </View>
-            <Text style={{ marginTop: 8, color: theme.mutedText, fontSize: 12, lineHeight: 17 }}>
-              {t("createAi.photoSkipHint")}
-            </Text>
             {!selectedPhotoUri && !photoStepCollapsed ? (
               <Pressable
                 onPress={skipPhotoToDescription}
@@ -4460,16 +4494,7 @@ export default function AiDealScreen() {
                 style={{ height: 260, width: "100%", borderRadius: 18, marginTop: 12 }}
                 contentFit="cover"
               />
-            ) : photoStepCollapsed ? null : (
-              <View style={{ marginTop: 12 }}>
-                <View style={{ height: 260, borderRadius: 18, backgroundColor: theme.surfaceMuted, borderWidth: 1.5, borderColor: theme.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
-                    {t("createAi.takePhoto")} / {t("createAi.pickPhoto")}
-                  </Text>
-                  <Text style={{ marginTop: 8, opacity: 0.72, textAlign: "center", color: theme.text }}>{t("createAi.photoHint")}</Text>
-                </View>
-              </View>
-            )}
+            ) : null}
 
             {selectedPhotoUri ? (
               <View style={{ marginTop: 14 }}>
@@ -5507,9 +5532,29 @@ export default function AiDealScreen() {
                 {/* Revise panel */}
                 {showComposedRevisePanel ? (
                   <View style={{ padding: 14, borderRadius: 12, backgroundColor: theme.surfaceMuted, borderWidth: 1, borderColor: theme.border, gap: 10 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 14, color: theme.text }}>{t("createAi.tweakTitle")}</Text>
-                      <Text style={{ fontSize: 12, color: theme.mutedText }}>{revisionsLeftLabel}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                      <Text
+                        style={{ flex: 1, minWidth: 160, fontWeight: "800", fontSize: 14, color: theme.text }}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.86}
+                      >
+                        {t("createAi.tweakTitle")}
+                      </Text>
+                      <View
+                        style={{
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface,
+                          paddingHorizontal: 9,
+                          paddingVertical: 5,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, lineHeight: 15, fontWeight: "800", color: theme.mutedText }} numberOfLines={1}>
+                          {revisionsLeftLabel}
+                        </Text>
+                      </View>
                     </View>
 
                     {revisionsLeft === 0 ? (
@@ -5662,9 +5707,10 @@ export default function AiDealScreen() {
                     }}
                   >
                     {(() => {
-                      const previewUri = generatedAd?.poster_storage_path
-                        ? buildPublicDealPhotoUrl(generatedAd.poster_storage_path)
-                        : usePhotoAsFinal ? photoUri ?? posterUrl ?? null : null;
+                      const storagePath = imageVersionStoragePath(generatedAd);
+                      const previewUri = storagePath
+                        ? buildPublicDealPhotoUrl(storagePath)
+                        : usePhotoAsFinal ? selectedPhotoUri : null;
                       return previewUri ? (
                         <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
                       ) : (

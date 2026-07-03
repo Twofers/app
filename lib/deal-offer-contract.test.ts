@@ -75,6 +75,17 @@ describe("buildDealOfferContract", () => {
     expect(canonicalizeOfferItem("Test Cafa").canonical).toBe("Test Cafa");
   });
 
+  it("spellchecks common food words inside multi-word item names", () => {
+    expect(canonicalizeOfferItem("Hot fudge sunday")).toEqual({
+      original: "Hot fudge sunday",
+      canonical: "hot fudge sundae",
+      confidence: "high",
+      source: "spellcheck",
+    });
+    expect(canonicalizeOfferItem("everything bagle sandwich").canonical).toBe("everything bagel sandwich");
+    expect(canonicalizeOfferItem("Sunday brunch").canonical).toBe("Sunday brunch");
+  });
+
   it("builds canonical copy for BUY_ONE_GET_ONE_FREE", () => {
     const contract = contractFor({
       dealType: "BUY_ONE_GET_ONE_FREE",

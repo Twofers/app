@@ -20,15 +20,19 @@ export function ThemePreferenceSelector() {
       style={{
         borderWidth: 1,
         borderColor: theme.border,
-        borderRadius: Radii.lg,
-        padding: Spacing.lg,
-        gap: Spacing.sm,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: Spacing.xs,
         backgroundColor: theme.surface,
       }}
     >
-      <Text style={{ fontWeight: "800", fontSize: 17, color: theme.text }}>{t("appearance.sectionTitle")}</Text>
-      <Text style={{ color: theme.mutedText, fontSize: 14, lineHeight: 20 }}>{t("appearance.sectionHelp")}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: Spacing.sm }}>
+      <Text style={{ fontWeight: "800", fontSize: 16, lineHeight: 20, color: theme.text }} maxFontSizeMultiplier={1.08}>
+        {t("appearance.sectionTitle")}
+      </Text>
+      <Text style={{ color: theme.mutedText, fontSize: 13, lineHeight: 17 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
+        {t("appearance.sectionHelp")}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 2 }}>
         {OPTIONS.map((option) => {
           const active = preference === option;
           const label = t(`appearance.${option}`);
@@ -41,9 +45,9 @@ export function ThemePreferenceSelector() {
               accessibilityLabel={`${label}. ${hint}`}
               accessibilityState={{ selected: active }}
               style={{
-                minWidth: 96,
+                minWidth: 88,
                 flexGrow: 1,
-                flexBasis: 96,
+                flexBasis: 88,
                 borderRadius: Radii.md,
                 borderWidth: active ? 2 : 1,
                 borderColor: active ? theme.primary : theme.border,
@@ -52,22 +56,23 @@ export function ThemePreferenceSelector() {
                     ? "rgba(255,159,28,0.18)"
                     : "rgba(255,159,28,0.12)"
                   : theme.surfaceMuted,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                marginRight: Spacing.sm,
-                marginBottom: Spacing.sm,
+                paddingVertical: 8,
+                paddingHorizontal: 8,
+                marginRight: 6,
+                marginBottom: 6,
               }}
             >
               <Text
                 style={{
                   color: active ? theme.accentText : colorScheme === "dark" ? theme.text : Gray[700],
                   fontWeight: "800",
-                  fontSize: 14,
+                  fontSize: 13,
                   textAlign: "center",
                 }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.82}
+                maxFontSizeMultiplier={1.08}
               >
                 {label}
               </Text>
@@ -76,12 +81,13 @@ export function ThemePreferenceSelector() {
                   marginTop: 3,
                   color: active ? theme.accentText : theme.mutedText,
                   fontWeight: "600",
-                  fontSize: 11,
+                  fontSize: 10,
                   textAlign: "center",
                 }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
+                maxFontSizeMultiplier={1.08}
               >
                 {hint}
               </Text>

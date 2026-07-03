@@ -30,14 +30,14 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
     : t("profileCompleteness.incomplete", { percentage, defaultValue: "{{percentage}}% complete" });
 
   return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+    <View style={{ gap: 5 }}>
+      <Text style={{ fontWeight: "800", fontSize: 12, lineHeight: 16, color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.08}>
         {label}
       </Text>
       <View
         style={{
-          height: 8,
-          borderRadius: 4,
+          height: 6,
+          borderRadius: 3,
           backgroundColor: theme.border,
           overflow: "hidden",
         }}
@@ -45,8 +45,8 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
         <Reanimated.View
           style={[
             {
-              height: 8,
-              borderRadius: 4,
+              height: 6,
+              borderRadius: 3,
               backgroundColor: theme.primary,
             },
             barStyle,
@@ -54,7 +54,7 @@ export function ProfileCompletenessBar({ percentage, hint }: ProfileCompleteness
         />
       </View>
       {hint && !isComplete ? (
-        <Text style={{ fontSize: 13, color: theme.mutedText, lineHeight: 18 }}>
+        <Text style={{ fontSize: 12, color: theme.mutedText, lineHeight: 16 }} numberOfLines={2} maxFontSizeMultiplier={1.08}>
           {hint}
         </Text>
       ) : null}

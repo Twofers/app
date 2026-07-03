@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useScreenInsets, Spacing } from "../../lib/screen-layout";
-import { CardShell } from "@/components/ui/card-shell";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { Colors, Radii } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -31,6 +30,8 @@ type TemplateRow = {
   poster_url: string | null;
   price: number | null;
 };
+
+type MaterialIconName = keyof typeof MaterialIcons.glyphMap;
 
 export default function CreateDeal() {
   const { t } = useTranslation();
@@ -194,6 +195,87 @@ export default function CreateDeal() {
     moreToolsYRef.current = event.nativeEvent.layout.y;
   }
 
+  function renderHubAction({
+    title,
+    subtitle,
+    iconName,
+    onPress,
+    accent = false,
+    trailingIcon = "chevron-right",
+    onLayout,
+    accessibilityState,
+  }: {
+    title: string;
+    subtitle: string;
+    iconName: MaterialIconName;
+    onPress: () => void;
+    accent?: boolean;
+    trailingIcon?: MaterialIconName;
+    onLayout?: (event: LayoutChangeEvent) => void;
+    accessibilityState?: { expanded?: boolean };
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        onLayout={onLayout}
+        accessibilityRole="button"
+        accessibilityState={accessibilityState}
+        accessibilityLabel={`${title}. ${subtitle}`}
+        style={{
+          minHeight: 74,
+          borderRadius: Radii.md,
+          padding: Spacing.md,
+          backgroundColor: theme.surface,
+          borderWidth: 1.5,
+          borderColor: accent ? theme.primary : theme.border,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.md,
+        }}
+      >
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: Radii.md,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: accent
+              ? theme.primary
+              : colorScheme === "dark" ? theme.surfaceMuted : "rgba(17,24,39,0.06)",
+          }}
+        >
+          <MaterialIcons
+            name={iconName}
+            size={22}
+            color={accent ? theme.primaryText : theme.icon}
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={{ fontSize: 17, lineHeight: 21, fontWeight: "900", color: theme.text }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            maxFontSizeMultiplier={1.12}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{ marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            maxFontSizeMultiplier={1.12}
+          >
+            {subtitle}
+          </Text>
+        </View>
+        <MaterialIcons name={trailingIcon} size={22} color={theme.icon} />
+      </Pressable>
+    );
+  }
+
   const createScrollBottom = getCreateTabScrollBottom(scrollBottom);
 
   return (
@@ -238,70 +320,32 @@ export default function CreateDeal() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── New Deal (unified AI builder: photo, voice, or text → review → publish) ── */}
-          <Pressable
-            onPress={() => router.push("/create/ai?fromCreateHub=1" as Href)}
-            accessibilityRole="button"
-            accessibilityLabel={`${t("createHub.newDeal")}. ${t("createHub.newDealSub")}`}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.lg,
-              backgroundColor: theme.primary,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 20, fontWeight: "900", color: theme.primaryText, letterSpacing: 0.2 }}>
-              {t("createHub.newDeal")}
-            </Text>
-            <Text style={{ fontSize: 14, color: theme.primaryText, opacity: 0.88, marginTop: 6 }}>
-              {t("createHub.newDealSub")}
-            </Text>
-          </Pressable>
+          {renderHubAction({
+            title: t("createHub.newDeal"),
+            subtitle: t("createHub.newDealSub"),
+            iconName: "add-circle-outline",
+            onPress: () => router.push("/create/ai?fromCreateHub=1" as Href),
+            accent: true,
+          })}
 
           {/* ── Reuse Past Deal ── */}
-          <Pressable
-            onPress={() => router.push("/create/reuse")}
-            accessibilityRole="button"
-            accessibilityLabel={`${t("createHub.reuseDeal")}. ${t("createHub.reuseDealSub")}`}
-            style={{
-              borderRadius: Radii.lg,
-              padding: Spacing.md,
-              backgroundColor: theme.surface,
-              borderWidth: 1.5,
-              borderColor: theme.border,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
-              {t("createHub.reuseDeal")}
-            </Text>
-            <Text style={{ fontSize: 13, color: theme.mutedText, marginTop: 4 }}>
-              {t("createHub.reuseDealSub")}
-            </Text>
-          </Pressable>
+          {renderHubAction({
+            title: t("createHub.reuseDeal"),
+            subtitle: t("createHub.reuseDealSub"),
+            iconName: "history",
+            onPress: () => router.push("/create/reuse"),
+          })}
 
           {/* ── More Tools ── */}
-          <Pressable
-            onPress={toggleMoreTools}
-            onLayout={rememberMoreToolsLayout}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: moreToolsOpen }}
-          >
-            <CardShell variant="muted">
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{t("createHub.moreToolsTitle")}</Text>
-                  <Text style={{ color: theme.mutedText, marginTop: 2, fontSize: 12 }}>
-                    {moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow")}
-                  </Text>
-                </View>
-                <MaterialIcons
-                  name={moreToolsOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"}
-                  size={22}
-                  color={theme.icon}
-                />
-              </View>
-            </CardShell>
-          </Pressable>
+          {renderHubAction({
+            title: t("createHub.moreToolsTitle"),
+            subtitle: moreToolsOpen ? t("createHub.moreToolsHide") : t("createHub.moreToolsShow"),
+            iconName: "apps",
+            onPress: toggleMoreTools,
+            onLayout: rememberMoreToolsLayout,
+            accessibilityState: { expanded: moreToolsOpen },
+            trailingIcon: moreToolsOpen ? "keyboard-arrow-up" : "keyboard-arrow-down",
+          })}
 
           {moreToolsOpen ? (
             <View style={{ gap: Spacing.sm }}>

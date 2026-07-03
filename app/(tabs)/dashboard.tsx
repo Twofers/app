@@ -300,6 +300,8 @@ function WeeklyClaimsChart({
                 color: theme.text,
                 opacity: 0.45,
               }}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.05}
             >
               {labels[i]}
             </Text>
@@ -378,21 +380,21 @@ function SnapshotMetric({
   return (
     <View
       style={{
-        flexBasis: "47%",
+        flexBasis: "31%",
         flexGrow: 1,
-        minWidth: 0,
-        minHeight: 86,
-        borderRadius: Radii.lg,
+        minWidth: 84,
+        minHeight: 76,
+        borderRadius: Radii.md,
         borderWidth: 1,
         borderColor: theme.border,
         backgroundColor: theme.surface,
-        paddingHorizontal: 10,
-        paddingVertical: Spacing.md,
+        paddingHorizontal: 8,
+        paddingVertical: 10,
         justifyContent: "center",
       }}
     >
       <Text
-        style={{ fontSize: 12, lineHeight: 15, fontWeight: "800", color: theme.mutedText }}
+        style={{ fontSize: 11, lineHeight: 14, fontWeight: "800", color: theme.mutedText }}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.68}
@@ -403,7 +405,7 @@ function SnapshotMetric({
       <Text
         style={{
           marginTop: 4,
-          fontSize: 24,
+          fontSize: 21,
           fontWeight: "900",
           color: accent ? theme.accentText : theme.text,
         }}
@@ -416,7 +418,7 @@ function SnapshotMetric({
       </Text>
       {sublabel ? (
         <Text
-          style={{ marginTop: 4, fontSize: 12, lineHeight: 15, fontWeight: "600", color: theme.mutedText }}
+          style={{ marginTop: 4, fontSize: 11, lineHeight: 14, fontWeight: "600", color: theme.mutedText }}
           numberOfLines={2}
           adjustsFontSizeToFit
           minimumFontScale={0.74}
@@ -444,9 +446,9 @@ function DealStatPill({
     <View
       style={{
         flexGrow: 1,
-        flexBasis: "30%",
-        minWidth: 86,
-        borderRadius: Radii.pill,
+        flexBasis: "22%",
+        minWidth: 0,
+        borderRadius: Radii.md,
         backgroundColor: accent
           ? colorScheme === "dark"
             ? "rgba(255,159,28,0.18)"
@@ -454,30 +456,31 @@ function DealStatPill({
           : theme.surfaceMuted,
         borderWidth: 1,
         borderColor: accent ? "rgba(255,159,28,0.34)" : theme.border,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: 8,
+        paddingHorizontal: 7,
+        paddingVertical: 6,
       }}
     >
       <Text
-        style={{ fontSize: 11, fontWeight: "800", color: theme.mutedText }}
+        style={{ fontSize: 10, lineHeight: 12, fontWeight: "800", color: theme.mutedText }}
         numberOfLines={1}
         adjustsFontSizeToFit
-        minimumFontScale={0.7}
-        maxFontSizeMultiplier={1.08}
+        minimumFontScale={0.62}
+        maxFontSizeMultiplier={1}
       >
         {label}
       </Text>
       <Text
         style={{
           marginTop: 2,
-          fontSize: 15,
+          fontSize: 13,
+          lineHeight: 16,
           fontWeight: "900",
           color: accent ? theme.accentText : theme.text,
         }}
         numberOfLines={1}
         adjustsFontSizeToFit
-        minimumFontScale={0.75}
-        maxFontSizeMultiplier={1.15}
+        minimumFontScale={0.68}
+        maxFontSizeMultiplier={1.05}
       >
         {value}
       </Text>
@@ -1252,10 +1255,13 @@ export default function BusinessDashboard() {
         <CardShell>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: Spacing.md }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontWeight: "800", color: theme.accentText }}>
-                {t("offersDashboard.snapshotEyebrow", { defaultValue: "Merchant snapshot" })}
-              </Text>
-              <Text style={{ marginTop: 4, fontSize: 21, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}>
+              <Text
+                style={{ fontSize: 18, lineHeight: 23, fontWeight: "900", color: theme.text, letterSpacing: -0.2 }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+                maxFontSizeMultiplier={1.12}
+              >
                 {liveDeals.length > 0
                   ? liveDeals.length === 1
                     ? t("offersDashboard.snapshotLiveTitleOne", {
@@ -1266,10 +1272,10 @@ export default function BusinessDashboard() {
                         count: liveDeals.length,
                       })
                   : t("offersDashboard.snapshotNoLiveTitle", {
-                      defaultValue: "No live deal right now",
+                      defaultValue: "No live deals",
                     })}
               </Text>
-              <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: theme.mutedText }}>
+              <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 16, fontWeight: "700", color: theme.mutedText }} maxFontSizeMultiplier={1.1}>
                 {lastUpdatedLabel}
               </Text>
             </View>
@@ -1298,7 +1304,7 @@ export default function BusinessDashboard() {
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.lg }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.md }}>
             <SnapshotMetric
               label={t("offersDashboard.metricLiveDeals", { defaultValue: "Live deals" })}
               value={String(liveDeals.length)}
@@ -1351,12 +1357,6 @@ export default function BusinessDashboard() {
               />
             ) : null}
           </View>
-
-          <Text style={{ marginTop: Spacing.md, fontSize: 12, lineHeight: 18, fontWeight: "600", color: theme.mutedText }}>
-            {t("offersDashboard.dashboardDataNote", {
-              defaultValue: "Claims and redemptions use customer activity. Engagement shows opens when available, otherwise redemption rate after claims.",
-            })}
-          </Text>
 
           <PrimaryButton
             title={dashboardNextActionTitle}
@@ -1490,22 +1490,40 @@ export default function BusinessDashboard() {
 
       return (
         <View style={{ marginTop: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.lg }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: theme.text }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: Spacing.md }}>
+          <Text style={{ flex: 1, fontWeight: "800", fontSize: 16, letterSpacing: -0.2, color: theme.text }} maxFontSizeMultiplier={1.12}>
             {t("offersDashboard.overview")}
           </Text>
           {filteredDeals.length > 0 ? (
-            <SecondaryButton
-              title={exportingAnalytics ? "..." : t("offersDashboard.exportAnalytics", "Export")}
+            <Pressable
               onPress={handleExportAnalytics}
               disabled={exportingAnalytics}
-            />
+              accessibilityRole="button"
+              style={{
+                minHeight: 40,
+                minWidth: 92,
+                borderRadius: Radii.md,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: Spacing.md,
+                opacity: exportingAnalytics ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.08}>
+                {exportingAnalytics ? "..." : t("offersDashboard.exportAnalytics", "Export")}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
-        <Text style={{ fontSize: 13, opacity: 0.55, lineHeight: 18, color: theme.text }}>{t("offersDashboard.periodHint")}</Text>
+        <Text style={{ fontSize: 12, opacity: 0.55, lineHeight: 17, color: theme.text }} maxFontSizeMultiplier={1.1}>
+          {t("offersDashboard.periodHint")}
+        </Text>
 
         <CardShell variant="muted">
-          <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text, opacity: 0.88 }}>
+          <Text style={{ fontSize: 14, lineHeight: 19, fontWeight: "700", color: theme.text, opacity: 0.88 }} maxFontSizeMultiplier={1.08}>
             {t("offersDashboard.monthlyStatsSummary", {
               claims: monthClaims,
               redeems: monthRedeems,
@@ -1517,7 +1535,7 @@ export default function BusinessDashboard() {
             style={{ marginTop: Spacing.sm, paddingVertical: Spacing.xs }}
             accessibilityRole="button"
           >
-            <Text style={{ fontWeight: "800", fontSize: 14, color: primary }}>
+            <Text style={{ fontWeight: "800", fontSize: 13, color: primary }} numberOfLines={1} maxFontSizeMultiplier={1.08}>
               {monthlyStatsOpen ? t("offersDashboard.monthlyStatsCollapse") : t("offersDashboard.monthlyStatsExpand")}
             </Text>
           </Pressable>
@@ -1583,36 +1601,13 @@ export default function BusinessDashboard() {
           />
         ) : null}
 
-        <Animated.View entering={FadeInDown.duration(440).delay(120).springify()}>
-          <CardShell variant="muted">
-            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.md }}>
-              <View
-                style={{
-                  width: 4,
-                  height: 22,
-                  borderRadius: 2,
-                  backgroundColor: primary,
-                }}
-              />
-              <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text, flex: 1 }}>
-                {t("offersDashboard.dataCoverageTitle", { defaultValue: "What this dashboard can prove" })}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 15, lineHeight: 22, opacity: 0.72, fontWeight: "600", color: theme.text }}>
-              {t("offersDashboard.dataCoverageBody", {
-                defaultValue: "Twofer shows live deals, claims, redemptions, and app engagement. Inventory saved, revenue lift, and new-customer attribution need POS or customer-history data, so they are not estimated here.",
-              })}
-            </Text>
-          </CardShell>
-        </Animated.View>
-
         <Animated.View entering={FadeInDown.duration(440).delay(160).springify()}>
           <CardShell>
-            <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: theme.text }}>
+            <Text style={{ fontWeight: "800", fontSize: 15, marginBottom: Spacing.sm, color: theme.text }} maxFontSizeMultiplier={1.1}>
               {t("offersDashboard.chartTitle")}
             </Text>
             <WeeklyClaimsChart labels={weekLabels} values={weekCounts} primary={primary} />
-            <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600", color: theme.text }}>
+            <Text style={{ marginTop: Spacing.md, fontSize: 12, opacity: 0.5, fontWeight: "600", color: theme.text }} maxFontSizeMultiplier={1.08}>
               {t("offersDashboard.chartFooter")}
             </Text>
           </CardShell>
@@ -1620,7 +1615,7 @@ export default function BusinessDashboard() {
 
         <CardShell variant="muted">
           <Pressable onPress={() => setInsightsOpen((v) => !v)} accessibilityRole="button">
-            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }}>
+            <Text style={{ fontWeight: "800", fontSize: 15, color: theme.text }} numberOfLines={1} maxFontSizeMultiplier={1.08}>
               {insightsOpen ? t("offersDashboard.insightsCollapse") : t("offersDashboard.insightsExpand")}
             </Text>
           </Pressable>
@@ -1634,7 +1629,13 @@ export default function BusinessDashboard() {
         ) : null}
 
         <Pressable onPress={() => router.push("/create/reuse")} accessibilityRole="button">
-          <Text style={{ fontWeight: "800", fontSize: 15, color: primary }}>
+          <Text
+            style={{ fontWeight: "800", fontSize: 14, color: primary }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            maxFontSizeMultiplier={1.08}
+          >
             {t("offersDashboard.templatesBrowseLink")} →
           </Text>
         </Pressable>
@@ -1913,8 +1914,11 @@ export default function BusinessDashboard() {
                               </View>
                             ) : null}
                             <Text
-                              style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 13, fontWeight: "600", color: theme.text }}
-                              numberOfLines={2}
+                              style={{ opacity: 0.58, marginTop: Spacing.xs, fontSize: 12, lineHeight: 16, fontWeight: "600", color: theme.text }}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.78}
+                              maxFontSizeMultiplier={1.08}
                             >
                               {formatValiditySummary(item, {
                                 lang: i18n.language,
@@ -1926,8 +1930,8 @@ export default function BusinessDashboard() {
                               style={{
                                 flexDirection: "row",
                                 flexWrap: "wrap",
-                                gap: Spacing.sm,
-                                marginTop: Spacing.md,
+                                gap: Spacing.xs,
+                                marginTop: Spacing.sm,
                               }}
                             >
                               <DealStatPill
