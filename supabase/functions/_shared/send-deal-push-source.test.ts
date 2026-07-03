@@ -11,8 +11,8 @@ function functionBlock(name: string): string {
   const start = source.indexOf(`function ${name}`);
   expect(start).toBeGreaterThan(-1);
 
-  const signatureEnd = source.indexOf("\n", start);
-  const bodyStart = source.lastIndexOf("{", signatureEnd);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
   let depth = 0;
   for (let index = bodyStart; index < source.length; index += 1) {
     const char = source[index];
@@ -26,31 +26,29 @@ function functionBlock(name: string): string {
 }
 
 describe("send-deal-push multilingual rollout source guards", () => {
-  it("does not perform notification-send-time translation or localization lookups", () => {
-    expect(source).toMatch(/buildDeterministicDealChannelCopy/);
-    expect(source).toMatch(/validateDealEligibility/);
-    expect(source).toMatch(/sendExpoPushBatch/);
+  it("builds per-recipient viewer-language push copy without model calls", () => {
+    expect(source).toMatch(/buildDealReleasePushCopy/);
+    expect(source).toMatch(/fetchProfileLocaleByUserId/);
+    expect(source).toMatch(/sendExpoPushMessages/);
 
     expect(source).not.toMatch(/generateStructuredText/);
     expect(source).not.toMatch(/ai-translate-deal/);
     expect(source).not.toMatch(/reviewAdLocalizationSemanticQa/);
     expect(source).not.toMatch(/customer_deal_localizations/);
     expect(source).not.toMatch(/localization_bundle/);
-    expect(source).not.toMatch(/title_es|title_ko|description_es|description_ko/);
     expect(source).not.toMatch(/operation:\s*"translation"/);
   });
 
-  it("builds push copy from structured offer facts rather than localized customer display state", () => {
-    const block = functionBlock("buildPushCopy");
+  it("uses recipient profile locale and sends individualized Expo messages", () => {
+    const block = functionBlock("sendDealPushToAudience");
 
-    expect(block).toMatch(/dealEligibilityFromRow/);
-    expect(block).toMatch(/buildDealOfferContract/);
-    expect(block).toMatch(/buildDeterministicDealChannelCopy/);
-    expect(block).toMatch(/copy\.pushTitle/);
-    expect(block).toMatch(/copy\.pushBody/);
-    expect(block).not.toMatch(/buildLocalizedDealDisplay/);
-    expect(block).not.toMatch(/localizedDealTitle/);
-    expect(block).not.toMatch(/localizedDealDescription/);
+    expect(block).toMatch(/\.select\("user_id,expo_push_token"\)/);
+    expect(block).toMatch(/fetchProfileLocaleByUserId/);
+    expect(block).toMatch(/buildDealReleasePushCopy/);
+    expect(block).toMatch(/localeByUserId\.get\(userId\) \?\? "en-US"/);
+    expect(block).toMatch(/sendExpoPushMessages/);
+    expect(block).not.toMatch(/sendExpoPushBatch/);
+    expect(block).not.toMatch(/getDealDisplayTitle/);
   });
 
   it("schedules upcoming deals and sends only due live release pushes", () => {

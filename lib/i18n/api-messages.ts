@@ -149,7 +149,8 @@ function translateByHeuristic(s: string, t: TFunction): string | null {
 
 /**
  * Map known English API / Edge Function messages to locale JSON.
- * Unknown user-facing English passes through; likely DB/internal errors get a generic localized line.
+ * Unknown backend strings are masked with generic localized copy so source-language
+ * or internal server text does not leak into non-English UI.
  */
 export function translateKnownApiMessage(raw: string, t: TFunction): string {
   const s = raw.trim();
@@ -157,5 +158,7 @@ export function translateKnownApiMessage(raw: string, t: TFunction): string {
   if (fromStructured !== null) return fromStructured;
   const fromHeuristic = translateByHeuristic(s, t);
   if (fromHeuristic !== null) return fromHeuristic;
-  return raw;
+  const fallbackKey = "apiErrors.operationFailedTryAgain";
+  const fallback = String(t(fallbackKey));
+  return fallback !== fallbackKey ? fallback : "Something went wrong. Try again.";
 }

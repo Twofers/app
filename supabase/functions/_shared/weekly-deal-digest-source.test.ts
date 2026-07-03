@@ -13,4 +13,11 @@ describe("weekly deal digest source guards", () => {
     expect(source).toMatch(/\.lte\("start_time", nowIso\)/);
     expect(source).toMatch(/\.gte\("end_time", nowIso\)/);
   });
+
+  it("builds digest push copy in the recipient profile locale", () => {
+    expect(source).toMatch(/fetchProfileLocaleByUserId/);
+    expect(source).toMatch(/buildDigestPushCopy/);
+    expect(source).not.toMatch(/title:\s*"New deals near you"/);
+    expect(source).not.toMatch(/new deal near you this week/);
+  });
 });

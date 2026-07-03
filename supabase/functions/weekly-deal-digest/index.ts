@@ -13,6 +13,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendExpoPushMessages, type ExpoPushMessage } from "../_shared/expo-push.ts";
 import { computeDigestCounts, type DigestConsumer, type DigestDeal } from "../_shared/digest-targeting.ts";
+import { buildDigestPushCopy, fetchProfileLocaleByUserId } from "../_shared/viewer-locale.ts";
 
 const DIGEST_DAYS = 7;
 
@@ -152,14 +153,16 @@ serve(async (req) => {
       .select("user_id, expo_push_token")
       .in("user_id", [...counts.keys()]);
 
+    const localeByUserId = await fetchProfileLocaleByUserId(admin, [...counts.keys()]);
     const messages: ExpoPushMessage[] = [];
     for (const row of tokenRows ?? []) {
       const count = counts.get(row.user_id as string);
       if (!count) continue;
+      const copy = buildDigestPushCopy(localeByUserId.get(row.user_id as string) ?? "en-US", count);
       messages.push({
         to: row.expo_push_token as string,
-        title: "New deals near you",
-        body: count === 1 ? "1 new deal near you this week." : `${count} new deals near you this week.`,
+        title: copy.title,
+        body: copy.body,
         data: { path: "/(tabs)" },
         sound: "default",
         channelId: "deal-alerts",

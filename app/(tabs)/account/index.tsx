@@ -21,6 +21,7 @@ import { SecondaryButton } from "@/components/ui/secondary-button";
 import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { useTabMode } from "@/lib/tab-mode";
 import { LegalExternalLinks } from "@/components/legal-external-links";
 import { deleteUserAccount, updateBusinessProfileSection } from "@/lib/functions";
@@ -744,6 +745,7 @@ export default function AccountScreen() {
     setBanner(null);
     await setUiLocalePreference(locale, { manual: true });
     await setCustomerPreferredDealLocaleFromAppLanguage(locale);
+    await syncAppLocaleToServer(userId, locale);
     await i18n.changeLanguage(locale);
     setBanner({ message: String(i18n.t("account.languageSaved", { lng: locale })), tone: "success" });
   }

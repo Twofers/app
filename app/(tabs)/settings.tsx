@@ -34,6 +34,7 @@ import {
 import { appLocaleFromLanguage, type AppLocale } from "@/lib/i18n/config";
 import { setUiLocalePreference } from "@/lib/locale/ui-locale-storage";
 import { setCustomerPreferredDealLocaleFromAppLanguage } from "@/lib/customer-deal-locale-storage";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -318,6 +319,7 @@ export default function SettingsScreen() {
     try {
       await setUiLocalePreference(locale, { manual: true });
       await setCustomerPreferredDealLocaleFromAppLanguage(locale);
+      await syncAppLocaleToServer(session?.user?.id, locale);
       await i18n.changeLanguage(locale);
     } catch (err: unknown) {
       devWarn("[settings] locale update failed", err);

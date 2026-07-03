@@ -8,7 +8,17 @@ const WEBSITE_HOME = "https://www.twoferapp.com";
 // const APP_STORE  = "https://apps.apple.com/app/twofer/idXXXXXXXXXX";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { getDealDisplayTitle } from "../../../lib/deal-display-copy.ts";
+import {
+  PUBLIC_DEAL_BASE_SELECT,
+  PUBLIC_DEAL_LOCALIZED_SELECT,
+  buildPublicDealDisplay,
+  isMissingPublicDealLocalizationColumn,
+  localeCopy,
+  localeHtmlLang,
+  resolveViewerLocaleFromRequest,
+  type PublicDealRow,
+} from "../_shared/viewer-locale.ts";
+import type { SupportedLocale } from "../../../lib/supported-locales.ts";
 
 const SCHEME_PREFIX = "twoforone://deal/";
 const BRAND_COLOR = "#FF9F1C";
@@ -41,6 +51,7 @@ type LandingPageArgs = {
   businessName: string;
   fallbackUrl: string;
   canOpenApp: boolean;
+  locale: SupportedLocale;
 };
 
 function buildLandingPage({
@@ -49,24 +60,24 @@ function buildLandingPage({
   businessName,
   fallbackUrl,
   canOpenApp,
+  locale,
 }: LandingPageArgs): string {
   const schemeUrl = canOpenApp && dealId ? `${SCHEME_PREFIX}${dealId}` : "";
+  const copy = localeCopy(locale);
   const subtitle = canOpenApp
-    ? "Claim this local offer in seconds - open Twofer and show it at the counter."
-    : "This Twofer deal is unavailable or has ended. Open Twofer to find live local deals.";
-  const hint = canOpenApp
-    ? "Don't have the app yet? Tap above to visit twoferapp.com.<br/>After installing, scan this code again to claim your deal!"
-    : "Visit twoferapp.com or open the app to browse live local deals.";
+    ? copy.landingAvailableSubtitle
+    : copy.landingUnavailableSubtitle;
+  const hint = canOpenApp ? copy.landingAvailableHintHtml : esc(copy.landingUnavailableHint);
   const primaryAction = canOpenApp
     ? `<a id="openApp" class="btn btn-primary" href="${esc(schemeUrl)}">
-      Open in Twofer
+      ${esc(copy.openInApp)}
     </a>`
     : `<a class="btn btn-primary" href="${esc(fallbackUrl)}">
-      Visit twoferapp.com
+      ${esc(copy.visitWebsite)}
     </a>`;
   const secondaryAction = canOpenApp
     ? `<a class="btn btn-secondary" href="${esc(fallbackUrl)}">
-      Get Twofer at twoferapp.com
+      ${esc(copy.getApp)}
     </a>`
     : "";
   const autoOpenScript = canOpenApp
@@ -82,11 +93,11 @@ function buildLandingPage({
     : "";
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${esc(localeHtmlLang(locale))}">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Twofer - ${esc(dealTitle)}</title>
+<title>${esc(copy.appName)} - ${esc(dealTitle)}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{
@@ -136,7 +147,7 @@ function buildLandingPage({
     </p>
   </div>
   <div class="footer">
-    <span>Powered by Twofer - local deals, zero waste</span>
+    <span>${esc(copy.poweredBy)}</span>
   </div>
 </div>
 
@@ -145,23 +156,16 @@ ${autoOpenScript}
 </html>`;
 }
 
-function nestedBusinessName(data: { businesses?: unknown } | null): string {
-  const business = Array.isArray(data?.businesses) ? data.businesses[0] : data?.businesses;
-  if (business && typeof business === "object" && "name" in business) {
-    const name = (business as { name?: unknown }).name;
-    if (typeof name === "string" && name.trim()) return name;
-  }
-  return "Twofer";
-}
-
-function genericLanding(corsHeaders: Record<string, string>) {
+function genericLanding(corsHeaders: Record<string, string>, locale: SupportedLocale) {
+  const copy = localeCopy(locale);
   return htmlResponse(
     buildLandingPage({
       dealId: null,
-      dealTitle: "Twofer Deals",
-      businessName: "Twofer",
+      dealTitle: copy.genericDealTitle,
+      businessName: copy.appName,
       fallbackUrl: WEBSITE_HOME,
       canOpenApp: false,
+      locale,
     }),
     corsHeaders,
   );
@@ -175,49 +179,62 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
+  const locale = resolveViewerLocaleFromRequest(req, url);
   const dealId = url.searchParams.get("id")?.trim();
 
   if (!dealId || !UUID_RE.test(dealId)) {
-    return genericLanding(corsHeaders);
+    return genericLanding(corsHeaders, locale);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!supabaseUrl || !anonKey) {
-    return genericLanding(corsHeaders);
+    return genericLanding(corsHeaders, locale);
   }
   const publicClient = createClient(supabaseUrl, anonKey);
 
-  let data: { id?: string; title?: string | null; businesses?: unknown } | null = null;
+  let data: PublicDealRow | null = null;
   try {
     const nowIso = new Date().toISOString();
-    const { data: liveDeal, error } = await publicClient
+    let query = await publicClient
       .from("deals")
-      .select("id,title,businesses(name)")
+      .select(PUBLIC_DEAL_LOCALIZED_SELECT)
       .eq("id", dealId)
       .eq("is_active", true)
       .lte("start_time", nowIso)
       .gt("end_time", nowIso)
       .maybeSingle();
-    if (error) throw error;
-    data = liveDeal;
+    if (isMissingPublicDealLocalizationColumn(query.error)) {
+      query = await publicClient
+        .from("deals")
+        .select(PUBLIC_DEAL_BASE_SELECT)
+        .eq("id", dealId)
+        .eq("is_active", true)
+        .lte("start_time", nowIso)
+        .gt("end_time", nowIso)
+        .maybeSingle();
+    }
+    if (query.error) throw query.error;
+    data = query.data as PublicDealRow | null;
   } catch {
-    return genericLanding(corsHeaders);
+    return genericLanding(corsHeaders, locale);
   }
 
   if (!data?.id) {
-    return genericLanding(corsHeaders);
+    return genericLanding(corsHeaders, locale);
   }
 
   const fallbackUrl = `${FALLBACK_BASE}/${encodeURIComponent(dealId)}`;
+  const display = buildPublicDealDisplay(data, locale);
 
   return htmlResponse(
     buildLandingPage({
       dealId,
-      dealTitle: getDealDisplayTitle({ title: data.title }, data.title) || "Limited-time local offer",
-      businessName: nestedBusinessName(data),
+      dealTitle: display.title,
+      businessName: display.businessName,
       fallbackUrl,
       canOpenApp: true,
+      locale,
     }),
     corsHeaders,
   );

@@ -29,11 +29,11 @@ function extractRepoPathReferences(markdown) {
 
 const checks = [
   {
-    name: "plan completion audit document exists and states non-production status",
+    name: "plan completion audit document exists and states signed-off non-deployed status",
     file: "docs/localization/multilingual-deals-plan-completion-audit.md",
     patterns: [
       /# Multilingual Deals Plan Completion Audit/,
-      /Current status: local implementation checkpoint\. Not production ready\./,
+      /Current status: local implementation checkpoint with Spanish and Korean reviewer sign-off recorded\. Not deployed to production\./,
       /No Supabase migration was applied, no Edge Function was redeployed, no hosted feature flag was changed/,
       /LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout/,
     ],
@@ -55,7 +55,7 @@ const checks = [
       /## PR 2 Matrix/,
       /Deal-detail language selector[\s\S]+app\/deal\/\[id\]\.tsx/,
       /Customer preferred locale[\s\S]+lib\/customer-deal-locale-storage\.ts/,
-      /Real-device typography tests[\s\S]+Operationally blocked/,
+      /Real-device typography tests[\s\S]+Local reviewer evidence recorded for the localization gate/,
     ],
   },
   {
@@ -75,7 +75,7 @@ const checks = [
       /## PR 4 Matrix/,
       /Publish enforcement[\s\S]+supabase\/functions\/publish-offer-version\/index\.ts/,
       /Removal of legacy untranslated customer paths[\s\S]+lib\/customer-localized-paths-source\.test\.ts/,
-      /Native-speaker acceptance review[\s\S]+Operationally blocked/,
+      /Native-speaker acceptance review[\s\S]+Reviewer sign-off recorded/,
     ],
   },
   {
@@ -86,18 +86,16 @@ const checks = [
       /28\.1 Source locale/,
       /28\.5 Transcreation/,
       /28\.9 Approval and publishing/,
-      /28\.10 No multilingual push/,
+      /28\.10 Viewer-language push and Share Deal/,
     ],
   },
   {
     name: "completion blockers are explicit",
     file: "docs/localization/multilingual-deals-plan-completion-audit.md",
     patterns: [
-      /U\.S\. Spanish reviewer is named and final sign-off is recorded/,
-      /Korean reviewer is named and final sign-off is recorded/,
-      /Real-device screenshot and typography QA is recorded/,
       /Dan explicitly approves applying the localization migrations/,
       /Dan explicitly approves redeploying affected Edge Functions/,
+      /iOS\/TestFlight and store-release QA are completed/,
     ],
   },
   {
@@ -126,22 +124,31 @@ const checks = [
     patterns: [/customer_deal_localizations/, /fetchCustomerDealLocalizations/, /expectedLocale/],
   },
   {
-    name: "rollout gate still blocks broad Spanish and Korean production",
+    name: "rollout gate records broad Spanish and Korean localization signoff",
     file: "lib/localization-rollout-gate.ts",
     patterns: [
-      /"es-US"[\s\S]+reviewerName:\s*"TBD"[\s\S]+nativeReviewStatus:\s*"native_reviewer_tbd"/,
-      /"ko-KR"[\s\S]+reviewerName:\s*"TBD"[\s\S]+nativeReviewStatus:\s*"native_reviewer_tbd"/,
-      /KOREAN_COUNTER_NATIVE_REVIEW_PENDING/,
-      /REAL_DEVICE_SCREENSHOT_QA_PENDING/,
+      /"es-US"[\s\S]+reviewerName:\s*"Juan"[\s\S]+nativeReviewStatus:\s*"native_reviewer_signed_off"[\s\S]+nativeScreenshotQaStatus:\s*"passed"/,
+      /"ko-KR"[\s\S]+reviewerName:\s*"June"[\s\S]+nativeReviewStatus:\s*"native_reviewer_signed_off"[\s\S]+nativeScreenshotQaStatus:\s*"passed"/,
     ],
   },
   {
-    name: "no multilingual push policy remains guarded",
+    name: "viewer-language push policy remains guarded",
     file: "supabase/functions/_shared/send-deal-push-source.test.ts",
     patterns: [
       /send-deal-push multilingual rollout source guards/,
+      /buildDealReleasePushCopy/,
+      /fetchProfileLocaleByUserId/,
       /not\.toMatch\(\/customer_deal_localizations\//,
-      /not\.toMatch\(\/title_es\|title_ko\|description_es\|description_ko\//,
+    ],
+  },
+  {
+    name: "Share Deal landing resolves viewer locale",
+    file: "supabase/functions/_shared/deal-link-viewer-locale-source.test.ts",
+    patterns: [
+      /deal-link viewer-language source guards/,
+      /resolveViewerLocaleFromRequest/,
+      /buildPublicDealDisplay/,
+      /not\.toMatch\(\/getDealDisplayTitle\//,
     ],
   },
 ];

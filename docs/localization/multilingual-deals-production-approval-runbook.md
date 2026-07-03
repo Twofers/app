@@ -8,16 +8,16 @@ Scope: this runbook is the local handoff for moving the multilingual deal system
 ## Current State
 
 - English (`en-US`) has internal ownership recorded under Dan / Twofer admin.
-- U.S. Spanish (`es-US`) and Korean (`ko-KR`) are available for internal code QA, but broad production is blocked.
+- U.S. Spanish (`es-US`) and Korean (`ko-KR`) localization reviewer sign-off is recorded as of 2026-07-03.
 - No Supabase migration has been applied from this multilingual rollout.
 - No Edge Function has been redeployed from this multilingual rollout.
 - Several client-readable `EXPO_PUBLIC_AI_V5_*` flags are now set in `eas.json` production-like profiles for localized rendering/code-path QA. That does **not** mean broad Spanish/Korean production is approved.
-- Server-side hosted flags that trigger provider transcreation, semantic QA, or exact publish approval enforcement still require the migration/deploy/reviewer/screenshot gates below before production activation.
-- Push notifications are intentionally not multilingual in this release.
+- Server-side hosted flags that trigger provider transcreation, semantic QA, or exact publish approval enforcement still require the migration, deploy, and release-approval gates below before production activation.
+- Viewer-language strictness is tracked in `docs/localization/viewer-language-invariant-plan.md`. Local code now includes recipient-language customer push, localized weekly digest copy, localized Share Deal landing copy, and strict unknown-error fallback. Broad production still requires the migration/deploy/QA gates below.
 
 ## Hard Gates Before Broad Production
 
-Do not enable broad Spanish production until all of these are true:
+Spanish localization reviewer gate is clear when all of these are true:
 
 - A named U.S. Spanish reviewer is recorded in `docs/localization/native-review-log.md`.
 - The PR4 native acceptance packet in `docs/localization/multilingual-deals-native-acceptance-packet.md` is complete for every Spanish-required scenario.
@@ -25,7 +25,7 @@ Do not enable broad Spanish production until all of these are true:
 - `lib/localization-rollout-gate.ts` marks `es-US` as signed off with screenshot QA passed.
 - `lib/offer-locale-templates.ts` marks Spanish launch templates reviewed.
 
-Do not enable broad Korean production until all of these are true:
+Korean localization reviewer gate is clear when all of these are true:
 
 - A named Korean reviewer is recorded in `docs/localization/native-review-log.md`.
 - The PR4 native acceptance packet in `docs/localization/multilingual-deals-native-acceptance-packet.md` is complete for every Korean-required scenario.
@@ -53,7 +53,7 @@ npm run dashboard:localization-rollout
 npx expo export --platform android --output-dir C:\tmp\twofer-metro-probe-multilingual-approval
 ```
 
-For a broad-production readiness assertion, this command must fail while reviewers or screenshot QA are still pending, and must pass only after the review records are updated:
+For a broad-production localization readiness assertion, this command must pass only after the review records are updated:
 
 ```powershell
 $env:LOCALIZATION_BROAD_PRODUCTION_ROLLOUT='true'
@@ -73,6 +73,7 @@ The multilingual rollout depends on the hosted project being current through the
 
 - `20260728120000_ad_localization_storage.sql`
 - `20260728123000_customer_deal_localization_projection.sql`
+- `20260731120000_profiles_app_locale.sql`
 
 The second migration exposes only the customer-safe `customer_deal_localizations(p_deal_ids uuid[], p_locale text)` RPC. It must not grant direct app-role access to `ad_localizations`.
 
@@ -96,6 +97,9 @@ After Dan approves deployment, redeploy functions that contain or depend on the 
 npx supabase functions deploy ai-generate-ad-variants
 npx supabase functions deploy publish-offer-version
 npx supabase functions deploy ai-extract-menu
+npx supabase functions deploy deal-link
+npx supabase functions deploy send-deal-push
+npx supabase functions deploy weekly-deal-digest
 ```
 
 Reasons:
@@ -103,12 +107,15 @@ Reasons:
 - `ai-generate-ad-variants` creates source-locale creative, persuasive transcreation bundles, semantic QA, repair, deterministic fallbacks, and localization telemetry.
 - `publish-offer-version` validates localization snapshots, exact approval payloads, and rollout telemetry.
 - `ai-extract-menu` should be redeployed if the current Edge bundle includes the provider-router menu path and the typecheck fix checkpoint.
+- `deal-link` renders the public Share Deal/open-app landing page in the recipient browser language where available.
+- `send-deal-push` builds customer deal-release push copy per recipient `profiles.app_locale`.
+- `weekly-deal-digest` builds weekly digest push copy per recipient `profiles.app_locale`.
 
-Do not deploy `send-deal-push` to claim multilingual push support. The v1 policy is that push delivery remains non-multilingual.
+Do not claim strict viewer-language Share Deal or push support until `profiles.app_locale` is applied, the three Edge Functions above are redeployed, and native/real-device QA covers the new unavailable/fallback strings.
 
 ## Hosted Feature Flag Order
 
-Do not turn server-side hosted rollout flags on until migrations, function deploys, native review, and screenshot QA are complete for the target rollout stage. Current `eas.json` may already set matching `EXPO_PUBLIC_` client aliases for internal QA / production-like builds; those aliases should not be treated as broad-production approval while `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` still fails.
+Do not turn server-side hosted rollout flags on until migrations, function deploys, native review, and screenshot QA are complete for the target rollout stage. Current `eas.json` may already set matching `EXPO_PUBLIC_` client aliases for internal QA / production-like builds; those aliases should not be treated as deployment approval by themselves.
 
 Internal QA may enable selected flags in a non-production environment only after the relevant code and migrations are deployed there:
 

@@ -15,6 +15,8 @@ import { getBusinessProfileAccessForCurrentUser } from "@/lib/business-profile-a
 import { registerPushTokenIfNeeded } from "@/lib/push-token";
 import { getAlertsEnabled } from "@/lib/notifications";
 import { syncConsumerPrefsToServer } from "@/lib/sync-consumer-prefs";
+import { appLocaleFromLanguage } from "@/lib/i18n/config";
+import { syncAppLocaleToServer } from "@/lib/profile-locale";
 import { isAuthBypassEnabled } from "@/lib/auth-bypass";
 import { isMobilePaidBillingEnabled } from "@/lib/billing/access";
 import { getTabBarMetrics, type TabBarPlatform } from "@/lib/screen-layout";
@@ -63,6 +65,7 @@ function useOwnerPinLockedForBusiness(mode: TabMode, businessId: string | null):
 
 function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { session, isInitialLoading } = useAuthSession();
+  const { i18n } = useTranslation();
   const { isLocked, loading: redemptionLoading } = useRedemptionMode();
   const params = useGlobalSearchParams<{ e2e?: string; skipSetup?: string }>();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -87,8 +90,9 @@ function TabAuthGate({ children }: Readonly<{ children: ReactNode }>) {
         }
       })();
       void syncConsumerPrefsToServer(user.id);
+      void syncAppLocaleToServer(user.id, appLocaleFromLanguage(i18n.resolvedLanguage ?? i18n.language));
     }
-  }, [forceBypass, session?.user]);
+  }, [forceBypass, i18n.language, i18n.resolvedLanguage, session?.user]);
 
   // Prevent Android back button from exiting the app while on a tab screen.
   useEffect(() => {
