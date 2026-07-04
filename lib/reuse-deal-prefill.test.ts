@@ -80,6 +80,38 @@ describe("reuse deal prefill params", () => {
     expect(params).not.toHaveProperty("prefillTimezone");
   });
 
+  it("strips stale generated disclosure text when resetting duplicated deal drafts", () => {
+    const params = buildReuseDealPrefillParams(
+      {
+        title: "Iced Americano Deal",
+        description:
+          "Get 40% off one iced americano. Redeem only at 9460 N MacArthur Blvd, Irving, TX 75063, USA. Limited to 10 available. Offer window: One-time: 7/3/2026, 8:08:00 PM to 7/3/2026, 9:08:00 PM. Claims close 15 minutes before the deal ends. Limit one claim per customer.",
+        price: 5,
+        deal_type: "PERCENT_OFF_SINGLE_ITEM",
+        discount_percent: 40,
+        item_description: "iced americano",
+        item_retail_value_cents: 500,
+        is_recurring: false,
+        max_claims: 10,
+        claim_cutoff_buffer_minutes: 15,
+      },
+      { resetSchedule: true, now: new Date("2026-07-04T15:00:00.000Z") },
+    );
+
+    expect(params).toMatchObject({
+      prefillHint: "Get 40% off one iced americano.",
+      prefillDescription: "Get 40% off one iced americano.",
+      prefillStartTime: "2026-07-04T15:05:00.000Z",
+      prefillEndTime: "2026-07-04T16:05:00.000Z",
+      prefillMaxClaims: "10",
+      prefillCutoffMins: "15",
+    });
+    expect(params.prefillDescription).not.toContain("7/3/2026");
+    expect(params.prefillDescription).not.toContain("Offer window");
+    expect(params.prefillDescription).not.toContain("Claims close");
+    expect(params.prefillDescription).not.toContain("Limit one claim");
+  });
+
   it("splits stored listing body back into promo and details fields", () => {
     expect(
       buildReuseDealPrefillParams({

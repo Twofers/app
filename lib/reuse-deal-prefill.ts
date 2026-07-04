@@ -119,6 +119,29 @@ function splitStoredDescription(description: string): { promoLine: string; detai
   };
 }
 
+function isReusableOperationalDisclosure(sentence: string): boolean {
+  return /^(?:Redeem (?:only )?at\b|Limited to \d+\b|Offer window:|Claims close\b|Limit (?:one|\d+) claims? per customer\b)/i.test(
+    sentence.trim(),
+  );
+}
+
+function stripReusableOperationalDisclosures(description: string): string {
+  return description
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const normalizedParagraph = paragraph.replace(/\s+/g, " ").trim();
+      const sentences = normalizedParagraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [];
+      return sentences
+        .map((sentence) => sentence.trim())
+        .filter(Boolean)
+        .filter((sentence) => !isReusableOperationalDisclosure(sentence))
+        .join(" ");
+    })
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export type ReuseDealPrefillOptions = {
   resetSchedule?: boolean;
   now?: Date;
@@ -130,7 +153,10 @@ export function buildReuseDealPrefillParams(
 ): Record<string, string> {
   const params: Record<string, string> = { fromReuse: "1" };
   const title = clean(getDealDisplayTitle(deal, deal.title));
-  const description = clean(deal.description);
+  const storedDescription = clean(deal.description);
+  const description = options.resetSchedule
+    ? stripReusableOperationalDisclosures(storedDescription)
+    : storedDescription;
   const { promoLine, details } = splitStoredDescription(description);
   const price = finiteString(deal.price);
   const sourceLocale = clean(deal.source_locale);
