@@ -1,0 +1,219 @@
+{
+  "lockVersion": 1,
+  "lockedAt": "2026-07-03",
+  "owner": "Dan",
+  "policyDocument": "docs/ai-poster-core-lock.md",
+  "initialApprovalRef": "2026-07-03 chat request: lock AI poster/ad-generation feature and require individual approval before changes",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Codex agent instructions must preserve the owner-approval gate for AI poster/ad-generation changes."
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "9711087861d31f75d4743617c674bddc068d0f08f346c9ca898363729357ed9b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Claude agent instructions must match AGENTS.md and preserve the same approval gate."
+    },
+    {
+      "path": "app/create/ai.tsx",
+      "sha256": "8ea2b2cc2d0c440ef25dc74e4abac93aaa833d78d2b76452cb7ace12d9ab02bf",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior."
+    },
+    {
+      "path": "components/poster/AdPosterCanvas.tsx",
+      "sha256": "4a25436f5401f3611a59eecebba673557b24f551d945342bc72be0b1d704fd2e",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Renders the approved native poster layout, image treatment, and text overlay placement."
+    },
+    {
+      "path": "components/poster/__tests__/AdPosterCanvas.test.ts",
+      "sha256": "18a236bf7315d35b4e2d6fd38ce7e25446377bd135e12d9b24a7a3e92a4d0573",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Protects source-level expectations for the native poster canvas."
+    },
+    {
+      "path": "components/poster/posterTemplates.ts",
+      "sha256": "79a12acaa63a9819bd8e664561fcbcf6a46c35907e219991644167a9783d6170",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Defines poster template ids and color treatments used by the locked renderer."
+    },
+    {
+      "path": "fixtures/ai-poster-copy-offers.json",
+      "sha256": "b33652596395eb3b39083555c2c7c8e5a0e346a75b67c54f0786234677277596",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Holds poster-copy regression fixtures for locked offer facts and expected poster copy."
+    },
+    {
+      "path": "lib/ad-spec.ts",
+      "sha256": "7982af976d5e9270cb0f0a400d44233d7b9b1a92ee0514aa382f94bbd1e4f6b5",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Builds and validates ad specs, including native poster specs used for publish."
+    },
+    {
+      "path": "lib/ad-variants.ts",
+      "sha256": "a5978e0e327fbd1b12125d01dd836822a9005b43857a1e20fc028023dbb09d2a",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Defines generated ad types, including poster payload shape returned by AI generation."
+    },
+    {
+      "path": "lib/ai-poster-core-lock.test.ts",
+      "sha256": "291a0be8f7fd6029bdef50bbcf3fb565296d1fb30f2817e684a0c035a54b0b5b",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Ensures the core lock checker remains part of the normal test suite."
+    },
+    {
+      "path": "lib/create-ai-ux-source.test.ts",
+      "sha256": "707b2fa8bcc4190fa2ca07689eefb62a8d458e141b44490fcc6e559cbde05931",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior."
+    },
+    {
+      "path": "lib/deal-offer-contract.ts",
+      "sha256": "17524d452be6f7a71ee73db74facd28d31b2ba26126cbe05c1d4833b49faf3da",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Keeps deal facts authoritative for AI generation and poster offer lines."
+    },
+    {
+      "path": "lib/deal-offer-contract.test.ts",
+      "sha256": "17aca4d12bff70bfeb579be7d316a37821d8696c8165477bbb73da7bfdef9a05",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression coverage for authoritative offer facts used by AI and poster copy."
+    },
+    {
+      "path": "lib/functions.ts",
+      "sha256": "abdb85d410d264f41d9e63a93a85d170968c1c964f72d2a8e830157571f80c0f",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Client API wrapper for AI ad generation and poster request payloads."
+    },
+    {
+      "path": "lib/offer-version-publish.test.ts",
+      "sha256": "7bad8e299f5cbd6081cd1c732fe536c09e4746781a7537647251d78bb4048106",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Protects publish-time handling of generated poster specs."
+    },
+    {
+      "path": "lib/poster-canvas-source.test.ts",
+      "sha256": "e9adb66b63c02293866ecf063a9b20e8c4312d992b5b1f93ff97186f30c6e243",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Protects source-level expectations for the poster canvas."
+    },
+    {
+      "path": "lib/poster/posterCopy.ts",
+      "sha256": "b284131879ec964bfe195ec2f61ac55954977c3c13231842fd90fb4b41cd31df",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Builds poster offer lines and native poster specs from locked offer definitions."
+    },
+    {
+      "path": "lib/poster/posterPolicy.ts",
+      "sha256": "70db8cc59e14b571716f43133c3804e09c545c03eac158c5621d706e9e6ad5ae",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Enforces poster text safety, no app CTAs, no scarcity, and no forbidden terms."
+    },
+    {
+      "path": "lib/poster/posterTypes.ts",
+      "sha256": "4e43558722af3fe42ed2d950e9f225d791f434fd996f00c4c59494ac5b44ec18",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Defines poster copy/spec contract for AI, renderer, and publish paths."
+    },
+    {
+      "path": "lib/poster/__tests__/posterPolicy.test.ts",
+      "sha256": "17448cfc434286610f0c988292e283559b6bd020cdf9626e706ecb0d8e691076",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for poster copy, offer lines, and policy behavior."
+    },
+    {
+      "path": "scripts/check-ai-poster-core-lock.mjs",
+      "sha256": "73d4f82c12640a5ee251f7421363201b3bd1799a27f25197076e05c6a0c79f47",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Implements the hash-based approval gate for protected AI poster files."
+    },
+    {
+      "path": "scripts/evaluate-ai-promotional-copy.mjs",
+      "sha256": "29f60626216db06c955ecc1434c195a5033a52159f506b117d3cdcd489779314",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Evaluates AI promotional and poster copy fixtures."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/index.ts",
+      "sha256": "cd5b05a765dd6e45c66ddb9ae5eb6507de6dd32e5d6f5f7f990a998baafad7cf",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Hosted AI ad generator for copy, image, poster spec, revision, and logging behavior."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/prompt.ts",
+      "sha256": "e1286b00fb326e76bab0efaac68bcb15e835bc04344670f57b869c00cd383142",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "AI ad-copy prompt, including poster headline and poster kicker guidance."
+    },
+    {
+      "path": "supabase/functions/ai-generate-ad-variants/prompt.test.ts",
+      "sha256": "6865b883568cd8e2c6d7447c5dfd4177ffd3777c776932103a3c4ec76b4fa232",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for AI ad prompt rules and poster-format instructions."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-generate-ad-variants-poster-copy-source.test.ts",
+      "sha256": "0c44aab2061c2377801bcc6ddd56acdc3982fae1db79ead2d0f1c6fbf0d3e967",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Source-level guard for poster copy handling inside AI generation."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-image-provider.ts",
+      "sha256": "2763f389066b92eb3bbe2d0073d4c0061c61aa0d0bd2f563bbccc6cfcc5ba649",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Shared AI image generation provider behavior for poster visuals."
+    },
+    {
+      "path": "supabase/functions/_shared/ai-image-provider.test.ts",
+      "sha256": "27cf42229c4848894203cd7fec89df4be764c86d149cf2834a576cc4d03d2bbe",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for shared AI image provider behavior."
+    },
+    {
+      "path": "supabase/functions/_shared/dalle-image.ts",
+      "sha256": "eacdc1580f63a63e704347aa512fdd91fb46d7e77f14d362b5f519dfd5c1edec",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "OpenAI image generation prompt and image handling for poster visuals."
+    },
+    {
+      "path": "supabase/functions/_shared/dalle-image.test.ts",
+      "sha256": "d1656cefee4b0ba696556c5e179197c13b6c421f39e2ffd9a75041bc2307bcaa",
+      "approvedBy": "Dan",
+      "approvalRef": "2026-07-03 initial AI poster core lock",
+      "rationale": "Regression tests for OpenAI image generation prompt behavior."
+    }
+  ]
+}

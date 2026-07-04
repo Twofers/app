@@ -95,6 +95,7 @@ If you cannot run a required check, say exactly why.
 
 ## AI and offer rules
 
+- AI poster/ad generation is a core locked feature. Before changing AI poster layout, AI ad prompts, AI ad image generation, offer-to-poster copy, AI create review/publish behavior, or the lock files themselves, stop and get Dan's explicit approval for each file individually. The agent must list the exact file, the intended behavior change, validation impact, and any deploy impact before editing. Broad approval such as "fix AI" is not enough. Follow `docs/ai-poster-core-lock.md` and keep `docs/ai-poster-core-lock.json` current after approved changes.
 - Deal facts are authoritative; creativity must never alter them.
 - Headlines must explain the customer action and reward naturally.
 - Do not solve copy-quality bugs with example-specific string replacements.
