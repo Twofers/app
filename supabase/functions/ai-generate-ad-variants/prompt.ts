@@ -194,7 +194,7 @@ export const AI_COPY_PROMPT_V5 = [
   "",
   "FIELD RULES:",
   "- headlineAlternative: short campaign headline, target 3-9 words, max 55 characters when exact product names allow it, no trailing period. Do not merely echo the owner's typed item name.",
-  "- posterKicker: short poster top kicker, target 1-3 words, max 24 characters. It may be empty. Good examples: Try our, Coffee break, Menu pick. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
+  "- posterKicker: short poster top kicker, target 1-3 words, max 24 characters. It may be empty. Derive it from the specific product, customer moment, merchant context, or deal angle. Good examples: Coffee break, Lunch pick, Smoothie run, Date night. Do not use generic defaults such as Try our, Our deal, Special offer, or Menu pick unless the available facts make that phrase uniquely natural. Do not include app CTAs, dates, exact times, claim counts, or scarcity.",
   "- description: short persuasive body line, target 8-18 words, max 110 characters when exact product names allow it. Clarify the offer without adding new terms.",
   `- pushTitle: shorter notification title, max ${DEAL_COPY_LIMITS.pushTitle} characters, understandable without opening the app.`,
   `- pushBody: notification body, max ${DEAL_COPY_LIMITS.pushBody} characters. State the action and reward. Mention timing or limited availability only if supplied in normalized facts.`,

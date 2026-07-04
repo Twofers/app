@@ -127,6 +127,8 @@ describe("buildAdCopyPrompt", () => {
     expect(prompt.userText).toContain("revise headlineAlternative and posterKicker first");
     expect(prompt.userText).toContain("Treat preset adjustments and user feedback as instructions");
     expect(prompt.system).toContain("posterKicker is the small top kicker");
+    expect(prompt.system).toContain("Derive it from the specific product, customer moment, merchant context, or deal angle");
+    expect(prompt.system).toContain("Do not use generic defaults such as Try our");
     expect(prompt.system).not.toContain("Coffee + Cookie Break");
     expect(prompt.system).not.toContain("Bad poster headlines are Any large coffee drink");
   });
