@@ -5,15 +5,14 @@ import { join } from "node:path";
 const source = readFileSync(join(process.cwd(), "app/create/ai.tsx"), "utf8");
 
 describe("AI create owner language preview source guards", () => {
-  it("keeps shared preview data available for composed and legacy preview cards", () => {
+  it("keeps shared preview data available for composed and standard preview cards", () => {
     expect(source).toContain("buildOwnerLanguagePreview");
     expect(source).toContain("const composedOfferFacts = ownerLanguagePreview.offerFacts");
     expect(source).toContain("const composedCopy = ownerLanguagePreview.copy");
+    expect(source).toContain("<StandardDealPreviewCard");
     expect(source).toMatch(/headline=\{ownerLanguagePreview\.headline\}/);
     expect(source).toMatch(/body=\{ownerLanguagePreview\.body\}/);
-    expect(source).toMatch(/offerLine=\{ownerLanguagePreview\.offerLine\}/);
-    expect(source).toMatch(/termsLine=\{ownerLanguagePreviewDisplayTermsLine\}/);
-    expect(source).toMatch(/cta=\{ownerLanguagePreview\.cta\}/);
+    expect(source).toMatch(/statusLabel=\{t\("dealStatus\.live"\)\}/);
   });
 
   it("gates merchant language preview data on localized owner UI and a generated bundle", () => {

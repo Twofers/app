@@ -4,7 +4,6 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -21,7 +20,6 @@ import {
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
@@ -42,7 +40,6 @@ import { DealEligibilityForm } from "@/components/deal-eligibility-form";
 import {
   DancingPenguinProgressOverlay,
 } from "@/components/dancing-penguin-progress-card";
-import { GeneratedAdPreviewCard } from "@/components/generated-ad-preview-card";
 import { AdPosterCanvas } from "@/components/poster/AdPosterCanvas";
 import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-pressable";
 import { useBrandedConfirm } from "@/hooks/use-branded-confirm";
@@ -62,7 +59,6 @@ import {
   buildFallbackTemplateAd,
   composeListingDescription,
   normalizeGeneratedAdDisplayCopy,
-  stripAppRenderedTimingMetadata,
   type GeneratedAd,
   type GeneratedAdCopyAlternative,
   type PhotoTreatment,
@@ -110,7 +106,6 @@ import {
 } from "../../lib/deal-offer-contract";
 import { buildOfferDefinitionV1FromContract, type OfferDefinitionV1 } from "../../lib/offer-definition";
 import { buildPosterSpecFromOfferDefinition } from "@/lib/poster/posterCopy";
-import { buildDeterministicAdFallbackVisual } from "@/lib/deterministic-ad-fallback-visual";
 import { buildDeterministicAdLocalizationBundle } from "@/lib/ad-localization";
 import type {
   AdCreativeFormat,
@@ -220,6 +215,7 @@ type TemplateRow = {
 type PublishStatus = "idle" | "missing" | "ready" | "publishing" | "success" | "error";
 type CreativeFormat = AdCreativeFormat;
 type PreviewFormat = CreativeFormat;
+type CreateAiTheme = typeof Colors.light;
 
 const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";
 const DEFAULT_CREATIVE_FORMAT: CreativeFormat = "poster_v1";
@@ -531,117 +527,150 @@ function compactReviewText(value: string | null | undefined, max = 150): string 
   return `${(lastSpace > Math.floor(max * 0.62) ? clipped.slice(0, lastSpace) : clean.slice(0, max)).trim()}...`;
 }
 
-function DraftFallbackVisual({
+function cleanPreviewText(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function StandardDealPreviewCard({
+  imageUri,
   businessName,
+  addressLine,
   headline,
-  offerLine,
-  label,
+  body,
+  statusLabel,
+  noImageLabel,
+  theme,
+  darkMode,
 }: {
+  imageUri: string | null;
   businessName?: string | null;
-  headline?: string | null;
-  offerLine?: string | null;
-  label: string;
+  addressLine?: string | null;
+  headline: string;
+  body?: string | null;
+  statusLabel: string;
+  noImageLabel: string;
+  theme: CreateAiTheme;
+  darkMode: boolean;
 }) {
-  const fallbackVisual = buildDeterministicAdFallbackVisual({
-    businessName,
-    headline,
-    offerLine,
-  });
+  const cleanBusiness = cleanPreviewText(businessName);
+  const cleanAddress = cleanPreviewText(addressLine);
+  const cleanBody = cleanPreviewText(body);
+  const displayHeadline = cleanPreviewText(headline) || cleanBusiness || statusLabel;
+  const statusColors = darkMode
+    ? { background: "rgba(255,159,28,0.18)", border: "rgba(255,180,84,0.36)", text: theme.accentText }
+    : { background: PrimaryTint.surfaceStrong, border: PrimaryTint.border, text: theme.accentText };
 
   return (
-    <View style={{ height: 200, overflow: "hidden" }}>
-      <LinearGradient
-        colors={fallbackVisual.palette.background}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, opacity: 0.32 }}>
-        <View
-          style={{
-            position: "absolute",
-            top: 58,
-            left: "-12%",
-            width: "128%",
-            height: 46,
-            borderRadius: 6,
-            backgroundColor: "rgba(255,255,255,0.18)",
-            transform: [{ rotate: "-15deg" }],
-          }}
-        />
-        <View
-          style={{
-            position: "absolute",
-            top: 142,
-            left: "-10%",
-            width: "125%",
-            height: 42,
-            borderRadius: 6,
-            backgroundColor: "rgba(255,255,255,0.12)",
-            transform: [{ rotate: "-15deg" }],
-          }}
-        />
-        <View
-          style={{
-            position: "absolute",
-            right: 24,
-            top: 36,
-            width: 76,
-            height: 76,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.32)",
-            backgroundColor: "rgba(255,255,255,0.08)",
-            transform: [{ rotate: "8deg" }],
-          }}
-        />
+    <View
+      style={{
+        borderRadius: 18,
+        backgroundColor: theme.surface,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: theme.border,
+      }}
+    >
+      <View
+        style={{
+          width: "100%",
+          aspectRatio: 1,
+          backgroundColor: theme.surfaceMuted,
+          borderBottomWidth: imageUri ? 0 : 1,
+          borderBottomColor: theme.border,
+        }}
+      >
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+            transition={220}
+          />
+        ) : (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8, padding: Spacing.lg }}>
+            <MaterialIcons name="image-not-supported" size={34} color={theme.mutedText} />
+            <Text
+              style={{ color: theme.mutedText, fontSize: 14, fontWeight: "700", textAlign: "center", lineHeight: 20 }}
+              numberOfLines={3}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
+              {noImageLabel}
+            </Text>
+          </View>
+        )}
       </View>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 9 }}>
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: fallbackVisual.palette.markBackground,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.16,
-            shadowRadius: 14,
-            elevation: 3,
-          }}
-        >
+
+      <View style={{ padding: Spacing.lg, gap: Spacing.sm }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: Spacing.sm }}>
           <Text
-            numberOfLines={1}
+            style={{ fontSize: 26, lineHeight: 32, fontWeight: "900", flex: 1, color: theme.text }}
+            numberOfLines={2}
             adjustsFontSizeToFit
-            minimumFontScale={0.72}
+            minimumFontScale={0.78}
+          >
+            {cleanBusiness || businessName || ""}
+          </Text>
+          <View
             style={{
-              color: fallbackVisual.palette.markText,
-              fontSize: 28,
-              lineHeight: 34,
-              fontWeight: "900",
-              letterSpacing: 0,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: darkMode ? "rgba(240,70,122,0.18)" : "rgba(224,36,94,0.12)",
+              borderWidth: 1,
+              borderColor: theme.favorite,
             }}
           >
-            {fallbackVisual.initials}
-          </Text>
+            <MaterialIcons name="favorite" size={25} color={theme.favorite} />
+          </View>
         </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
+          <View
+            style={{
+              borderRadius: 999,
+              paddingHorizontal: Spacing.md,
+              paddingVertical: 5,
+              backgroundColor: statusColors.background,
+              borderWidth: 1,
+              borderColor: statusColors.border,
+              maxWidth: "100%",
+            }}
+          >
+            <Text
+              style={{ fontSize: 12, fontWeight: "800", color: statusColors.text }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.76}
+            >
+              {statusLabel}
+            </Text>
+          </View>
+          {cleanAddress ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, minWidth: 0, maxWidth: "100%" }}>
+              <MaterialIcons name="place" size={15} color={theme.mutedText} />
+              <Text style={{ color: theme.mutedText, fontWeight: "700", fontSize: 13, flexShrink: 1 }} numberOfLines={1}>
+                {cleanAddress}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
         <Text
-          numberOfLines={1}
+          style={{ fontSize: 23, lineHeight: 31, fontWeight: "900", color: theme.text }}
+          numberOfLines={3}
           adjustsFontSizeToFit
           minimumFontScale={0.78}
-          style={{
-            color: fallbackVisual.palette.accent,
-            fontSize: 12,
-            lineHeight: 16,
-            fontWeight: "900",
-            letterSpacing: 0,
-            textTransform: "uppercase",
-          }}
         >
-          {label}
+          {displayHeadline}
         </Text>
+        {cleanBody ? (
+          <Text numberOfLines={3} style={{ fontSize: 15, color: theme.mutedText, lineHeight: 22, fontWeight: "600" }}>
+            {cleanBody}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -2331,7 +2360,10 @@ export default function AiDealScreen() {
     setApprovedComposedPresentationHash(null);
     setApprovedLocalizationApprovalHash(null);
     if (generatedAd || adAccepted) {
-      resetGenerationState();
+      setAdAccepted(false);
+      setComposedStyleIndex(0);
+      setComposedEditIntent(null);
+      aiDraftBaselineRef.current = null;
     }
   }
 
@@ -4047,7 +4079,6 @@ export default function AiDealScreen() {
     fallbackTermsLine: generatedAd?.locked_terms_line || offerContract?.canonicalShortTerms || description,
     fallbackCtaLabel: ctaText,
   });
-  const ownerLanguagePreviewDisplayTermsLine = stripAppRenderedTimingMetadata(ownerLanguagePreview.termsLine);
   const copyAlternativeOptions = (generatedAd?.copy_alternatives ?? [])
     .filter((option) => option.headline.trim().length > 0 && option.short_description.trim().length > 0)
     .slice(0, 5);
@@ -5219,25 +5250,14 @@ export default function AiDealScreen() {
                     {showPosterPreview ? (
                       renderPosterPreview()
                     ) : (
-                      <GeneratedAdPreviewCard
+                      <StandardDealPreviewCard
                         imageUri={adImageUri}
                         businessName={businessName}
+                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
                         headline={ownerLanguagePreview.headline}
                         body={ownerLanguagePreview.body}
-                        imageAltText={ownerLanguagePreview.imageAltText}
-                        offerLine={ownerLanguagePreview.offerLine}
-                        termsLine={ownerLanguagePreviewDisplayTermsLine}
-                        cta={ownerLanguagePreview.cta}
-                        scheduleSummary={displayScheduleSummary}
-                        maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                        maxClaimsValue={maxClaims}
-                        termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                        termsHelper={t("createAi.lockedTermsHelper", {
-                          defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                        })}
-                        noImageLabel={t("createAi.noImage")}
-                        fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                        statusLabel={t("dealStatus.live")}
+                        noImageLabel={t("createAi.errImageGenerationNoImage")}
                         theme={theme}
                         darkMode={colorScheme === "dark"}
                       />
@@ -5298,25 +5318,14 @@ export default function AiDealScreen() {
                     {showPosterPreview ? (
                       renderPosterPreview()
                     ) : (
-                      <GeneratedAdPreviewCard
+                      <StandardDealPreviewCard
                         imageUri={adImageUri}
                         businessName={businessName}
+                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
                         headline={ownerLanguagePreview.headline}
                         body={ownerLanguagePreview.body}
-                        imageAltText={ownerLanguagePreview.imageAltText}
-                        offerLine={ownerLanguagePreview.offerLine}
-                        termsLine={ownerLanguagePreviewDisplayTermsLine}
-                        cta={ownerLanguagePreview.cta}
-                        scheduleSummary={displayScheduleSummary}
-                        maxClaimsLabel={t("createAi.maxClaimsLabel")}
-                        maxClaimsValue={maxClaims}
-                        termsLabel={t("createAi.lockedTermsLabel", { defaultValue: "Terms" })}
-                        termsHelper={t("createAi.lockedTermsHelper", {
-                          defaultValue: "The offer terms are locked so customers always see the correct deal.",
-                        })}
-                        noImageLabel={t("createAi.noImage")}
-                        fallbackVisualLabel={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
-                        addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                        statusLabel={t("dealStatus.live")}
+                        noImageLabel={t("createAi.errImageGenerationNoImage")}
                         theme={theme}
                         darkMode={colorScheme === "dark"}
                       />
@@ -5682,38 +5691,26 @@ export default function AiDealScreen() {
                     {renderPosterPreview()}
                   </View>
                 ) : (
-                  <View
-                    style={{
-                      borderRadius: 18,
-                      backgroundColor: theme.surface,
-                      overflow: "hidden",
-                      marginTop: 10,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                    }}
-                  >
+                  <View style={{ marginTop: 10 }}>
                     {(() => {
                       const storagePath = imageVersionStoragePath(generatedAd);
                       const previewUri = storagePath
                         ? buildPublicDealPhotoUrl(storagePath)
                         : usePhotoAsFinal ? selectedPhotoUri : null;
-                      return previewUri ? (
-                        <Image source={{ uri: previewUri }} style={{ height: 200, width: "100%" }} contentFit="cover" />
-                      ) : (
-                        <DraftFallbackVisual
+                      return (
+                        <StandardDealPreviewCard
+                          imageUri={previewUri}
                           businessName={businessName}
-                          headline={title || promoLine || hintText}
-                          offerLine={promoLine || title || description}
-                          label={t("createAi.fallbackVisualLabel", { defaultValue: "Local deal" })}
+                          addressLine={businessProfile?.address ?? businessProfile?.location ?? null}
+                          headline={title || promoLine || hintText || t("createAi.placeholderDealTitle")}
+                          body={promoLine || description || null}
+                          statusLabel={t("dealStatus.live")}
+                          noImageLabel={t("createAi.errImageGenerationNoImage")}
+                          theme={theme}
+                          darkMode={colorScheme === "dark"}
                         />
                       );
                     })()}
-                    <View style={{ padding: 12 }}>
-                      <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{title || t("createAi.placeholderDealTitle")}</Text>
-                      {promoLine ? <Text style={{ marginTop: 6, fontWeight: "600", color: theme.text }}>{promoLine}</Text> : null}
-                      {ctaText ? <Text style={{ marginTop: 6, fontWeight: "700", color: theme.text }}>{ctaText}</Text> : null}
-                      <Text style={{ marginTop: 6, opacity: 0.8, color: theme.text }}>{description || t("createAi.placeholderOfferDetails")}</Text>
-                    </View>
                   </View>
                 )}
 

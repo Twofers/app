@@ -171,6 +171,10 @@ describe("AI create UX source guards", () => {
   });
 
   it("surfaces poster format while keeping poster generation fixed to the premium template", () => {
+    const formatSwitchStart = createAiSource.indexOf("function selectCreativeFormat(nextFormat: CreativeFormat)");
+    const formatSwitchEnd = createAiSource.indexOf("useEffect(() =>", formatSwitchStart);
+    const formatSwitchSource = createAiSource.slice(formatSwitchStart, formatSwitchEnd);
+
     expect(createAiSource).toContain('const FIXED_POSTER_TEMPLATE_ID: PosterTemplateId = "premium";');
     expect(createAiSource).toContain('const DEFAULT_CREATIVE_FORMAT: CreativeFormat = "poster_v1";');
     expect(createAiSource).toContain("useState<CreativeFormat>(DEFAULT_CREATIVE_FORMAT)");
@@ -181,6 +185,8 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain('(["standard_card", "poster_v1"] as CreativeFormat[])');
     expect(createAiSource).toContain("setCreativeFormat(nextFormat)");
     expect(createAiSource).toContain("setPreviewFormat(nextFormat)");
+    expect(formatSwitchSource).toContain("setAdAccepted(false);");
+    expect(formatSwitchSource).not.toContain("resetGenerationState();");
     expect(createAiSource).toContain("createAi.adFormatPoster");
     expect(createAiSource).toContain("createAi.adFormatStandard");
     expect(createAiSource).toContain("minHeight: 48");
@@ -193,7 +199,7 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("posterTryOurLabel");
   });
 
-  it("keeps generated and accepted deal previews from repeating separately rendered schedule metadata", () => {
+  it("keeps generated and accepted standard previews on the consumer feed-style card", () => {
     const generatedPreviewStart = createAiSource.indexOf("{generatedAd && !adAccepted ?");
     const generatedPreviewEnd = createAiSource.indexOf("{showCopyAlternatives", generatedPreviewStart);
     const generatedPreviewSource = createAiSource.slice(generatedPreviewStart, generatedPreviewEnd);
@@ -201,9 +207,13 @@ describe("AI create UX source guards", () => {
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
     const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
 
-    expect(createAiSource).toContain("stripAppRenderedTimingMetadata");
-    expect(createAiSource).toContain("ownerLanguagePreviewDisplayTermsLine");
-    expect(createAiSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
+    expect(createAiSource).toContain("function StandardDealPreviewCard");
+    expect(generatedPreviewSource).toContain("<StandardDealPreviewCard");
+    expect(generatedPreviewSource).toContain("imageUri={adImageUri}");
+    expect(generatedPreviewSource).toContain('statusLabel={t("dealStatus.live")}');
+    expect(acceptedPreviewSource).toContain("<StandardDealPreviewCard");
+    expect(acceptedPreviewSource).toContain("imageUri={previewUri}");
+    expect(acceptedPreviewSource).toContain('noImageLabel={t("createAi.errImageGenerationNoImage")}');
     expect(createAiSource).toContain('const shouldPublishPosterSpec = creativeFormat === "poster_v1" || previewFormat === "poster_v1";');
     expect(createAiSource).toContain("posterLiveScheduleLabel");
     expect(createAiSource).toContain("liveScheduleLabel={posterLiveScheduleLabel}");
@@ -213,8 +223,7 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("acceptedPosterCta");
     expect(createAiSource).not.toContain("consumerWallet.useDealTitle");
     expect(createAiSource).toContain("displayScheduleSummary");
-    expect(generatedPreviewSource).toContain("termsLine={ownerLanguagePreviewDisplayTermsLine}");
-    expect(generatedPreviewSource).not.toContain("{ownerLanguagePreview.termsLine}");
+    expect(generatedPreviewSource).not.toContain("termsLine={");
     expect(generatedPreviewSource).not.toContain('{t("createAi.scheduleLabel")} {displayScheduleSummary}');
     expect(generatedPreviewSource).not.toContain("renderPosterLiveStrip()");
     expect(acceptedPreviewSource).not.toContain("renderPosterLiveStrip()");
@@ -233,8 +242,6 @@ describe("AI create UX source guards", () => {
   it("keeps skipped-photo generation on the real image path before fallback", () => {
     expect(createAiSource).toContain('if (!photoPath) return "ai_generated";');
     expect(createAiSource).toContain("image_source_mode: sentSourceMode");
-    expect(createAiSource).toContain("createAi.fallbackVisualLabel");
-    expect(createAiSource).toContain('defaultValue: "Local deal"');
     expect(createAiSource).toContain("createAi.generatingHintNoPhoto");
     expect(createAiSource).toContain("paddingBottom: scrollBottom + Spacing.xxxl * 2");
     expect(createAiSource).toContain("createAi.errImageGenerationNoImage");
@@ -250,15 +257,17 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("Twofer fallback");
   });
 
-  it("keeps no-photo deal preview visually branded instead of blank", () => {
+  it("keeps no-photo manual drafts out of the deterministic fallback visual", () => {
     const acceptedPreviewStart = createAiSource.indexOf("{showDraftEditor");
     const acceptedPreviewEnd = createAiSource.indexOf("<Text style={{ marginTop: 16, color: theme.text }}>{t(\"createAi.editHeadline\")}</Text>", acceptedPreviewStart);
     const acceptedPreviewSource = createAiSource.slice(acceptedPreviewStart, acceptedPreviewEnd);
 
-    expect(createAiSource).toContain("function DraftFallbackVisual");
-    expect(createAiSource).toContain("buildDeterministicAdFallbackVisual");
-    expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
-    expect(acceptedPreviewSource).not.toContain("height: 200, backgroundColor: theme.surfaceMuted");
+    expect(createAiSource).toContain("function StandardDealPreviewCard");
+    expect(createAiSource).toContain('name="image-not-supported"');
+    expect(acceptedPreviewSource).toContain("<StandardDealPreviewCard");
+    expect(acceptedPreviewSource).toContain('noImageLabel={t("createAi.errImageGenerationNoImage")}');
+    expect(acceptedPreviewSource).not.toContain("<DraftFallbackVisual");
+    expect(createAiSource).not.toContain("buildDeterministicAdFallbackVisual");
   });
 
   it("keeps merchant revision comments as a first-class AI input", () => {
@@ -342,7 +351,7 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).toContain("spec={effectivePosterSpec}");
     expect(generatedPreviewSource).toContain("showPosterPreview ? (");
     expect(generatedPreviewSource).toContain("renderPosterPreview()");
-    expect(generatedPreviewSource).toContain("<GeneratedAdPreviewCard");
+    expect(generatedPreviewSource).toContain("<StandardDealPreviewCard");
   });
 
   it("keeps accepted poster preview native while retaining the standard-card fallback", () => {
@@ -358,7 +367,7 @@ describe("AI create UX source guards", () => {
     expect(createAiSource).not.toContain("consumerWallet.useDealTitle");
     expect(acceptedPreviewSource).not.toContain('name="confirmation-number"');
     expect(acceptedPreviewSource).not.toContain("dealDetail.dealDetails");
-    expect(acceptedPreviewSource).toContain("<DraftFallbackVisual");
+    expect(acceptedPreviewSource).toContain("<StandardDealPreviewCard");
     expect(acceptedPreviewSource).toContain("imageVersionStoragePath(generatedAd)");
   });
 

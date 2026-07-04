@@ -21,10 +21,10 @@
     },
     {
       "path": "app/create/ai.tsx",
-      "sha256": "8ea2b2cc2d0c440ef25dc74e4abac93aaa833d78d2b76452cb7ace12d9ab02bf",
+      "sha256": "2165cff880f22777e254dafd72e1af13f8127520f8e71026a6ed7cbfd2af25fb",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior."
+      "approvalRef": "2026-07-04 chat approval: preserve generated image across Standard/Poster format switches and render Standard AI review with a consumer-feed-style image card",
+      "rationale": "Controls AI ad creation, poster preview, revision, acceptance, and publish review behavior. Approved change keeps generated assets across format switches while forcing re-review, and makes Standard preview match the image-led consumer card instead of deterministic fallback art."
     },
     {
       "path": "components/poster/AdPosterCanvas.tsx",
@@ -77,10 +77,10 @@
     },
     {
       "path": "lib/create-ai-ux-source.test.ts",
-      "sha256": "707b2fa8bcc4190fa2ca07689eefb62a8d458e141b44490fcc6e559cbde05931",
+      "sha256": "9f8574f19a89f513710f8150de95c1334bf560fe73ba1b6760cf0d165597dec9",
       "approvedBy": "Dan",
-      "approvalRef": "2026-07-03 initial AI poster core lock",
-      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior."
+      "approvalRef": "2026-07-04 chat approval: update source guards for preserved image format switching and Standard consumer-feed-style preview",
+      "rationale": "Protects source-level expectations for AI Create poster preview and publish behavior. Approved change guards the Standard image-led preview and ensures format switching does not discard the generated asset."
     },
     {
       "path": "lib/deal-offer-contract.ts",
