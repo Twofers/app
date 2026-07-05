@@ -22,7 +22,7 @@ window.TWOFER_STORE_LINKS = {
   };
 
   const FALLBACK_TEXT = {
-    en: "Notify me when the app is ready",
+    en: "Email me launch updates",
     es: "Avísenme cuando la app esté lista",
     ko: "앱 준비되면 알려주세요",
   };
