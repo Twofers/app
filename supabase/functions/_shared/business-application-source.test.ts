@@ -37,6 +37,35 @@ describe("business application intake", () => {
     expect(source).not.toMatch(/OPENAI_API_KEY/);
   });
 
+  it("rate-limits the public endpoint per email and per IP before inserting", () => {
+    const source = read("supabase/functions/submit-business-application/index.ts");
+    // Per-email and per-IP throttles must both exist with finite ceilings.
+    expect(source).toMatch(/const RATE_LIMIT_WINDOW_MINUTES\s*=\s*\d+/);
+    expect(source).toMatch(/const RATE_LIMIT_MAX_PER_EMAIL\s*=\s*\d+/);
+    expect(source).toMatch(/const RATE_LIMIT_MAX_PER_IP\s*=\s*\d+/);
+    // The throttle counts prior onboarding requests within a recent window,
+    // keyed by both the submitted email and the forwarded client IP.
+    expect(source).toMatch(/from\("business_onboarding_requests"\)/);
+    expect(source).toMatch(/\.eq\("owner_email", params\.email\)/);
+    expect(source).toMatch(/\.eq\("ip_address", params\.ip\)/);
+    expect(source).toMatch(/\.gte\("created_at", windowStart\)/);
+    // Exceeding either ceiling returns HTTP 429, and the client IP is read
+    // from the x-forwarded-for header rather than trusted from the body.
+    expect(source).toMatch(/Too many requests/);
+    expect(source).toMatch(/\},\s*429\)/);
+    expect(source).toMatch(/firstForwardedIp\(req\.headers\.get\("x-forwarded-for"\)\)/);
+    // A honeypot field short-circuits obvious bots before any DB work.
+    expect(source).toMatch(/cleanString\(payload\.company_website/);
+
+    // The rate-limit gate must run BEFORE the application row is inserted,
+    // otherwise a flood still writes rows before being rejected.
+    const rateCheckAt = source.indexOf("await isRateLimited(");
+    const insertAt = source.indexOf('from("business_applications").insert');
+    expect(rateCheckAt).toBeGreaterThan(-1);
+    expect(insertAt).toBeGreaterThan(-1);
+    expect(rateCheckAt).toBeLessThan(insertAt);
+  });
+
   it("registers the public function and website CORS origin", () => {
     const config = read("supabase/config.toml");
     expect(config).toMatch(
