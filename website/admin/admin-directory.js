@@ -79,6 +79,59 @@
     return Number.isFinite(date.getTime()) ? date.toLocaleString() : "";
   }
 
+  function toneForStatus(raw) {
+    const value = String(raw ?? "").toLowerCase();
+    if (!value) return "";
+    if (/(past_due|delinquent|failed|error|suspend|reject|block|cancel|spam|fraud|deleted|high)/.test(value)) return "danger";
+    if (/(pending|review|needs|unverified|queued|medium|hold|waitlist)/.test(value)) return "warning";
+    if (/(active|verified|processed|live|approved|paid|complete|succeed|success|low)/.test(value)) return "success";
+    return "info";
+  }
+
+  function statusCell(raw) {
+    const text = String(raw ?? "").trim();
+    if (!text) return "";
+    return { badge: text, tone: toneForStatus(text) };
+  }
+
+  const ERROR_MESSAGES = {
+    error: "Could not load this data. Refresh the page to try again.",
+    expired: "Your admin session expired. Sign in again to continue.",
+  };
+
+  function setTablesState(mode) {
+    for (const table of document.querySelectorAll(".admin-table")) {
+      const tbody = table.querySelector("tbody");
+      if (!tbody) continue;
+      const headers = table.querySelectorAll("thead th");
+      const cols = headers.length || 1;
+      tbody.innerHTML = "";
+      if (mode === "loading") {
+        for (let r = 0; r < 4; r += 1) {
+          const tr = document.createElement("tr");
+          tr.setAttribute("aria-hidden", "true");
+          for (let c = 0; c < cols; c += 1) {
+            const td = document.createElement("td");
+            if (headers[c]) td.dataset.label = headers[c].textContent || "";
+            const bar = document.createElement("span");
+            bar.className = "admin-skeleton";
+            td.appendChild(bar);
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      } else {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = cols;
+        td.className = "admin-row-detail";
+        td.textContent = ERROR_MESSAGES[mode] || ERROR_MESSAGES.error;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+  }
+
   function fillTable(selector, rows, columns, emptyText) {
     const tbody = document.querySelector(selector);
     if (!tbody) return;
@@ -104,6 +157,11 @@
           link.href = value.href;
           link.textContent = value.text;
           td.appendChild(link);
+        } else if (value && typeof value === "object" && "badge" in value) {
+          const badge = document.createElement("span");
+          badge.className = `admin-badge${value.tone ? ` ${value.tone}` : ""}`;
+          badge.textContent = value.badge;
+          td.appendChild(badge);
         } else {
           td.textContent = String(value ?? "");
         }
@@ -126,10 +184,10 @@
       fillTable("[data-rows]", payload.businesses || [], [
         { label: "Business", value: (r) => r.name || r.id },
         { label: "Owner", value: (r) => r.owner_email || "" },
-        { label: "Status", value: (r) => r.status || "" },
+        { label: "Status", value: (r) => statusCell(r.status) },
         { label: "Access", value: (r) => r.access_level || "" },
-        { label: "Verification", value: (r) => r.verification_status || "" },
-        { label: "Risk", value: (r) => r.risk_level || "" },
+        { label: "Verification", value: (r) => statusCell(r.verification_status) },
+        { label: "Risk", value: (r) => statusCell(r.risk_level) },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
         { label: "Actions", value: (r) => ({ href: `/admin/businesses/${r.id}`, text: "Manage" }) },
       ], "No businesses yet.");
@@ -139,7 +197,7 @@
       fillTable("[data-rows]", payload.offers || [], [
         { label: "Offer", value: (r) => r.title || r.id },
         { label: "Business", value: (r) => r.business_name || r.business_id || "" },
-        { label: "Status", value: (r) => (r.is_active ? "Live" : "Inactive") },
+        { label: "Status", value: (r) => ({ badge: r.is_active ? "Live" : "Inactive", tone: r.is_active ? "success" : "" }) },
         { label: "Starts", value: (r) => formatDateTime(r.start_time) },
         { label: "Ends", value: (r) => formatDateTime(r.end_time) },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
@@ -150,7 +208,7 @@
       fillTable("[data-rows]", payload.billing_events || [], [
         { label: "Event", value: (r) => r.event_type || "" },
         { label: "Provider", value: (r) => r.provider || "" },
-        { label: "Status", value: (r) => r.processing_status || "" },
+        { label: "Status", value: (r) => statusCell(r.processing_status) },
         { label: "Received", value: (r) => formatDateTime(r.received_at) },
         { label: "Processed", value: (r) => formatDateTime(r.processed_at) },
         { label: "Error", value: (r) => r.error_message || "" },
@@ -205,7 +263,7 @@
       fillTable("[data-applications]", payload.applications || [], [
         { label: "Contact", value: (r) => r.contact_name || "" },
         { label: "Email", value: (r) => r.email || "" },
-        { label: "Status", value: (r) => r.status || "" },
+        { label: "Status", value: (r) => statusCell(r.status) },
         { label: "Access", value: (r) => r.access_tier || "" },
         { label: "Trial days", value: (r) => r.trial_days ?? "" },
         { label: "Created", value: (r) => formatDateTime(r.created_at) },
@@ -228,6 +286,7 @@
     }
 
     setStatus("Loading...");
+    setTablesState("loading");
     const body = { section };
     if (section === "business_detail") body.business_id = detailBusinessId();
 
@@ -244,6 +303,7 @@
       if (response.status === 401 || response.status === 403) {
         clearSession();
         setStatus("Admin session expired. Sign in again.", "warning");
+        setTablesState("expired");
         return;
       }
       if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed");
@@ -251,6 +311,7 @@
       renderSection(payload);
     } catch {
       setStatus("Could not load this page", "danger");
+      setTablesState("error");
     }
   }
 
