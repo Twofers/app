@@ -64,20 +64,60 @@
       <section class="admin-section" aria-label="Businesses and trials">
         <h2 class="admin-group-title">Businesses &amp; trials</h2>
         <div class="admin-grid">
-          <article class="admin-card"><span>Active businesses</span><strong data-metric="businesses.active">0</strong></article>
-          <article class="admin-card"><span>Pending verification</span><strong data-metric="businesses.pending">0</strong></article>
-          <article class="admin-card"><span>Trialing locations</span><strong data-metric="businesses.trialing">0</strong></article>
-          <article class="admin-card"><span>Trials ending soon</span><strong data-metric="businesses.trialsEndingSoon">0</strong></article>
-          <article class="admin-card"><span>Open trial requests</span><strong data-metric="trialRequests.open">0</strong></article>
-          <article class="admin-card"><span>High-risk requests</span><strong data-metric="trialRequests.highRisk">0</strong></article>
+          <a class="admin-card admin-card-link" href="/admin/businesses?status=active">
+            <span>Active businesses</span>
+            <strong data-metric="businesses.active">0</strong>
+            <span class="visually-hidden">View filtered businesses list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/businesses?status=pending_verification">
+            <span>Pending verification</span>
+            <strong data-metric="businesses.pending">0</strong>
+            <span class="visually-hidden">View filtered businesses list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/businesses?status=trialing">
+            <span>Trialing locations</span>
+            <strong data-metric="businesses.trialing">0</strong>
+            <span class="visually-hidden">View filtered businesses list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/businesses?status=trialing">
+            <span>Trials ending soon</span>
+            <strong data-metric="businesses.trialsEndingSoon">0</strong>
+            <span class="visually-hidden">View filtered businesses list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/trial-requests">
+            <span>Open trial requests</span>
+            <strong data-metric="trialRequests.open">0</strong>
+            <span class="visually-hidden">View trial requests queue</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/trial-requests">
+            <span>High-risk requests</span>
+            <strong data-metric="trialRequests.highRisk">0</strong>
+            <span class="visually-hidden">View trial requests queue</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
         </div>
       </section>
 
       <section class="admin-section" aria-label="Offers and activity">
         <h2 class="admin-group-title">Offers &amp; activity</h2>
         <div class="admin-grid">
-          <article class="admin-card"><span>Live offers</span><strong data-metric="offers.live">0</strong></article>
-          <article class="admin-card"><span>Needs offer review</span><strong data-metric="offers.needsReview">0</strong></article>
+          <a class="admin-card admin-card-link" href="/admin/offers?status=live">
+            <span>Live offers</span>
+            <strong data-metric="offers.live">0</strong>
+            <span class="visually-hidden">View filtered offers list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="admin-card admin-card-link" href="/admin/offers">
+            <span>Needs offer review</span>
+            <strong data-metric="offers.needsReview">0</strong>
+            <span class="visually-hidden">View offers list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
           <article class="admin-card"><span>Claims today</span><strong data-metric="activity.claimsToday">0</strong></article>
           <article class="admin-card"><span>Redemptions today</span><strong data-metric="activity.redemptionsToday">0</strong></article>
         </div>
@@ -89,6 +129,12 @@
           <article class="admin-card"><span>Past due locations</span><strong data-metric="billing.pastDue">0</strong></article>
           <article class="admin-card"><span>Past due businesses</span><strong data-metric="billing.pastDueBusinesses">0</strong></article>
           <article class="admin-card"><span>Missing Stripe customers</span><strong data-metric="billing.missingCustomers">0</strong></article>
+          <a class="admin-card admin-card-link" href="/admin/billing/events?status=failed">
+            <span>Failed billing events</span>
+            <strong data-metric="billing.failedEvents">0</strong>
+            <span class="visually-hidden">View filtered billing events list</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
           <article class="admin-card"><span>API spend this month</span><strong data-metric="apiSpend.currentMonthUsd">$0.00</strong></article>
           <article class="admin-card"><span>API spend prior month</span><strong data-metric="apiSpend.priorMonthUsd">$0.00</strong></article>
         </div>
@@ -100,7 +146,12 @@
           <article class="admin-card"><span>Open prospects</span><strong data-metric="prospects.open">0</strong></article>
           <article class="admin-card"><span>Ready to contact</span><strong data-metric="prospects.readyToContact">0</strong></article>
           <article class="admin-card"><span>Accepted claim links</span><strong data-metric="prospects.acceptedClaimLinks">0</strong></article>
-          <article class="admin-card"><span>Failed admin actions</span><strong data-metric="security.failedActions">0</strong></article>
+          <a class="admin-card admin-card-link" href="/admin/audit-log?q=failed">
+            <span>Failed admin actions</span>
+            <strong data-metric="security.failedActions">0</strong>
+            <span class="visually-hidden">Search audit log</span>
+            <span class="admin-card-arrow" aria-hidden="true">&rarr;</span>
+          </a>
         </div>
       </section>
 

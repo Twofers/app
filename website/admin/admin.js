@@ -355,6 +355,7 @@
       setMetric("billing.pastDue", s.billing?.pastDueLocations ?? 0);
       setMetric("billing.pastDueBusinesses", s.billing?.pastDueBusinesses ?? 0);
       setMetric("billing.missingCustomers", s.billing?.missingStripeCustomers ?? 0);
+      setMetric("billing.failedEvents", s.billing?.stripeWebhookErrors ?? 0);
       setMetric("security.failedActions", s.security?.failedAdminActions ?? 0);
       setMetric("prospects.open", s.prospects?.open ?? 0);
       setMetric("prospects.readyToContact", s.prospects?.readyToContact ?? 0);
