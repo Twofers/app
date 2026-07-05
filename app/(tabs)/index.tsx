@@ -85,7 +85,7 @@ import { HapticScalePressable as Pressable } from "@/components/ui/haptic-scale-
 import { FORM_SCROLL_KEYBOARD_PROPS, KeyboardScreen } from "@/components/ui/keyboard-screen";
 import { ScreenHeader } from "@/components/ui/screen-header";
 import { DEFAULT_CLAIM_GRACE_MINUTES, isPastClaimRedeemDeadline } from "@/lib/claim-redeem-deadline";
-import { collectBusinessesPageByPage } from "@/lib/businesses-fetch";
+import { collectBusinessesPageByPage, mergeBusinessRowsById } from "@/lib/businesses-fetch";
 import { MIN_FEED_REFRESH_MS } from "@/constants/timing";
 import { DemoOfferNotice } from "@/components/demo-offer-notice";
 import { DEMO_OFFER_SHORT_EXPLANATION, isDemoOffer } from "@/lib/demo-content";
@@ -502,11 +502,26 @@ export default function HomeScreen() {
           p_favorite_ids: favoriteIdsRef.current,
         });
         if (!error && Array.isArray(data)) {
-          setBusinesses(
-            (data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]).map(
-              (r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude }),
-            ) as BusinessRow[],
-          );
+          const nearbyBusinesses = (
+            data as { id: string; name: string; location: string | null; latitude: number | null; longitude: number | null }[]
+          ).map((r) => ({ id: r.id, name: r.name, location: r.location, latitude: r.latitude, longitude: r.longitude })) as BusinessRow[];
+          let unlocatedBusinesses: BusinessRow[] = [];
+          try {
+            unlocatedBusinesses = (await collectBusinessesPageByPage(async ({ from, to }) => {
+              return await supabase
+                .from("businesses")
+                .select("id,name,location,latitude,longitude")
+                .or("latitude.is.null,longitude.is.null")
+                .order("name", { ascending: true })
+                .range(from, to);
+            })) as BusinessRow[];
+          } catch (unlocatedError) {
+            if (__DEV__) {
+              const msg = unlocatedError instanceof Error ? unlocatedError.message : String(unlocatedError);
+              console.warn("[home] unlocated businesses load:", msg);
+            }
+          }
+          setBusinesses(mergeBusinessRowsById(nearbyBusinesses, unlocatedBusinesses));
           setLoadingBiz(false);
           return;
         }

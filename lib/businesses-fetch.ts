@@ -26,3 +26,14 @@ export async function collectBusinessesPageByPage(
   }
   return rows;
 }
+
+export function mergeBusinessRowsById<T extends { id: string }>(primary: T[], secondary: T[]): T[] {
+  const seen = new Set(primary.map((row) => row.id));
+  const merged = [...primary];
+  for (const row of secondary) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    merged.push(row);
+  }
+  return merged;
+}

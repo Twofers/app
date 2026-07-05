@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectBusinessesPageByPage, type BusinessListRow } from "./businesses-fetch";
+import { collectBusinessesPageByPage, mergeBusinessRowsById, type BusinessListRow } from "./businesses-fetch";
 
 describe("collectBusinessesPageByPage", () => {
   it("collects all pages until the final short page", async () => {
@@ -17,5 +17,22 @@ describe("collectBusinessesPageByPage", () => {
     expect(out.length).toBe(450);
     expect(out[0]?.id).toBe("b-1");
     expect(out[449]?.id).toBe("b-450");
+  });
+
+  it("appends missing fallback rows without duplicating nearby businesses", () => {
+    const nearby = [
+      { id: "cedar", name: "Cedar & Bean Cafe" },
+      { id: "main", name: "Main Street Deli" },
+    ];
+    const fallback = [
+      { id: "cedar", name: "Cedar & Bean Cafe" },
+      { id: "test", name: "Test Cafe" },
+    ];
+
+    expect(mergeBusinessRowsById(nearby, fallback)).toEqual([
+      { id: "cedar", name: "Cedar & Bean Cafe" },
+      { id: "main", name: "Main Street Deli" },
+      { id: "test", name: "Test Cafe" },
+    ]);
   });
 });

@@ -32,6 +32,7 @@ import { sanitizeUsZipInput, US_ZIP_MAX_LENGTH } from "@/lib/us-zip";
 import { geocodeUsZip } from "@/lib/us-zip-geocode";
 import { updateConsumerProfileZip } from "@/lib/consumer-profile";
 import { trackAppAnalyticsEvent, type AppAnalyticsEventName } from "@/lib/app-analytics";
+import { mergeBusinessRowsById } from "@/lib/businesses-fetch";
 
 // Mirrors the business-setup category keys (minus "other") so a consumer's picks
 // match real business.category values. Labels reuse businessSetup.cat.*.
@@ -102,6 +103,13 @@ export default function OnboardingScreen() {
           name: r.name,
           location: r.location,
         }));
+        const { data: unlocated } = await supabase
+          .from("businesses")
+          .select("id,name,location")
+          .or("latitude.is.null,longitude.is.null")
+          .order("name", { ascending: true })
+          .limit(12);
+        shops = mergeBusinessRowsById(shops, (unlocated ?? []) as { id: string; name: string; location: string | null }[]);
       } else {
         // Fallback if the RPC isn't deployed yet: first page of shops.
         const { data: biz } = await supabase
