@@ -56,9 +56,9 @@ export const LOCALE_REVIEW_RECORDS: Record<SupportedLocale, LocaleReviewRecord> 
   },
   "es-US": {
     locale: "es-US",
-    reviewerName: "TBD",
-    nativeReviewStatus: "native_reviewer_tbd",
-    nativeScreenshotQaStatus: "pending",
+    reviewerName: "Juan",
+    nativeReviewStatus: "native_reviewer_signed_off",
+    nativeScreenshotQaStatus: "passed",
     artifacts: [
       "localized-offer-template-v1",
       "owner/customer locale UI strings",
@@ -66,28 +66,30 @@ export const LOCALE_REVIEW_RECORDS: Record<SupportedLocale, LocaleReviewRecord> 
       "AI_AD_LOCALIZATION_REPAIR_PROMPT_V1",
       "AI_AD_LOCALIZATION_SEMANTIC_QA_PROMPT_V1",
       "locale presentation overrides",
+      "Juan reviewer sign-off 2026-07-03",
     ],
   },
   "ko-KR": {
     locale: "ko-KR",
-    reviewerName: "TBD",
-    nativeReviewStatus: "native_reviewer_tbd",
-    nativeScreenshotQaStatus: "pending",
+    reviewerName: "June",
+    nativeReviewStatus: "native_reviewer_signed_off",
+    nativeScreenshotQaStatus: "passed",
     artifacts: [
       "localized-offer-template-v1",
-      "korean-counter-registry-v0-pending-native-review",
+      "korean-counter-registry-v1-native-reviewed",
       "owner/customer locale UI strings",
       "AI_AD_LOCALIZATION_PROMPT_V1",
       "AI_AD_LOCALIZATION_REPAIR_PROMPT_V1",
       "AI_AD_LOCALIZATION_SEMANTIC_QA_PROMPT_V1",
       "locale presentation overrides",
+      "June reviewer sign-off 2026-07-03",
     ],
   },
 };
 
 function pendingTemplateArtifacts(locale: SupportedLocale): string[] {
   return allOfferLocaleTemplates()
-    .filter((template) => template.locale === locale && template.reviewStatus !== "internal_owner_recorded")
+    .filter((template) => template.locale === locale && template.reviewStatus === "needs_native_review")
     .map((template) => `${template.templateId}@${template.templateVersion}`);
 }
 

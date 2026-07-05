@@ -4,13 +4,13 @@ Date: 2026-06-23
 
 Scope: this gate makes the native-review and broad-production rollout state machine-checkable. It does not hide localized rendering or internal QA paths already built for PR4.
 
-U.S. Spanish and Korean broad production rollout remains blocked until native reviewer sign-off and real-device native-language screenshot QA are recorded.
+U.S. Spanish and Korean localization reviewer sign-off is recorded as of 2026-07-03.
 
 Current state:
 
 - English (`en-US`) has internal owner review recorded for the localization-specific gate.
-- U.S. Spanish (`es-US`) is available for internal QA, but broad production rollout remains blocked until a named U.S. Spanish reviewer signs off, localized templates are marked reviewed, and real-device native-language screenshot QA passes.
-- Korean (`ko-KR`) is available for internal QA, but broad production rollout remains blocked until a named Korean reviewer signs off, localized templates and Korean counters are marked reviewed, and real-device native-language screenshot QA passes.
+- U.S. Spanish (`es-US`) has Juan recorded as reviewer, localized templates marked reviewed, and native-language screenshot QA marked passed.
+- Korean (`ko-KR`) has June recorded as reviewer, localized templates and Korean counters marked reviewed, and native-language screenshot QA marked passed.
 
 Use this local check during release prep:
 
@@ -19,7 +19,7 @@ npm run gate:localization-plan
 npm run gate:localization-rollout
 ```
 
-The plan audit maps PR1-PR4 requirements and required automated tests to current repo evidence. The rollout gate passes when the blocked state is explicit, traceable, and backed by the production approval runbook in `docs/localization/multilingual-deals-production-approval-runbook.md`. To turn the rollout gate into a hard broad-production readiness assertion, run it with:
+The plan audit maps PR1-PR4 requirements and required automated tests to current repo evidence. The rollout gate passes when the signoff state is explicit, traceable, and backed by the production approval runbook in `docs/localization/multilingual-deals-production-approval-runbook.md`. To turn the rollout gate into a hard broad-production readiness assertion, run it with:
 
 ```bash
 LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout
@@ -33,7 +33,7 @@ npm run gate:localization-rollout
 Remove-Item Env:\LOCALIZATION_BROAD_PRODUCTION_ROLLOUT
 ```
 
-Before that readiness assertion may pass, update all of these together:
+The readiness assertion may pass only when all of these are updated together:
 
 - `docs/localization/native-review-log.md` with named reviewers, decisions, required changes, and final sign-off.
 - `docs/localization/multilingual-deals-native-acceptance-packet.md` with every required PR4 native-speaker and real-device scenario mapped to evidence.

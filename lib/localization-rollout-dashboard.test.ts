@@ -13,11 +13,10 @@ describe("localization rollout dashboard", () => {
 
     expect(output).toContain("# Localization Rollout Dashboard");
     expect(output).toContain("Rollout gate version: localization-rollout-gate-v1");
-    expect(output).toContain("| es-US | TBD | native_reviewer_tbd | pending | 0/3 | n/a | Blocked |");
-    expect(output).toContain("| ko-KR | TBD | native_reviewer_tbd | pending | 0/3 | 0/3 | Blocked |");
-    expect(output).toContain("NATIVE_REVIEWER_TBD");
-    expect(output).toContain("REAL_DEVICE_SCREENSHOT_QA_PENDING");
-    expect(output).toContain("KOREAN_COUNTER_NATIVE_REVIEW_PENDING");
+    expect(output).toContain("| es-US | Juan | native_reviewer_signed_off | passed | 3/3 | n/a | Allowed |");
+    expect(output).toContain("| ko-KR | June | native_reviewer_signed_off | passed | 3/3 | 3/3 | Allowed |");
+    expect(output).toContain("- es-US: none");
+    expect(output).toContain("- ko-KR: none");
     expect(output).toContain("## Native Acceptance Packet");
     expect(output).toContain("- Scenario rows: 23/23");
     expect(output).toContain("- Reviewer questions: 8/8");
@@ -25,6 +24,7 @@ describe("localization rollout dashboard", () => {
     expect(output).toContain("- Customer no-model-call rule: yes");
     expect(output).toContain("| localization_source_locale | yes | source-locale publish mix |");
     expect(output).toContain("| localization_approval_hash | yes | exact approval coverage |");
+    expect(output).toContain("Reviewer sign-off recorded for Spanish and Korean localization gates.");
   });
 
   it("is exposed as an npm script for rollout review", () => {

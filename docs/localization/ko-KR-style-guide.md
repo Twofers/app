@@ -1,20 +1,20 @@
 # Twofer ko-KR Style Guide
 
-Status: pending native reviewer.
+Status: native reviewer signed off on 2026-07-03.
 
 Current ownership:
 
 - Internal localization owner: Dan / Twofer admin
-- Korean reviewer: TBD before production launch
+- Korean reviewer: June
 
 ## Exact Offer Mechanics
 
 - Render exact mechanics from structured facts. Do not translate a completed English offer sentence.
-- Do not infer Korean counters at runtime.
-- Until counters and particles are reviewed, use counter-free fallback templates:
-  - "구매 항목: {paidItem} × {paidQuantity}"
-  - "추가 혜택: {rewardItem} × {rewardQuantity}"
-  - "할인 항목: {item} × {quantity}"
+- Do not infer unreviewed Korean counters at runtime.
+- Counter-free fallback templates remain acceptable for ambiguous items:
+  - "구매 항목: {paidItem} x {paidQuantity}"
+  - "추가 혜택: {rewardItem} x {rewardQuantity}"
+  - "할인 항목: {item} x {quantity}"
   - "혜택: {discountPercent}% 할인"
 - Business names and branded product names remain unchanged unless the merchant supplies an approved localized name.
 
@@ -26,4 +26,4 @@ Current ownership:
 
 ## Production Gate
 
-Korean may be used for development and internal preview while the reviewer is TBD. Broad Korean production use is blocked until a named Korean reviewer signs off on templates, fallback copy, counter registry entries, UI strings, accessibility labels, and representative screenshots.
+June reviewed the Korean localization package and reported no issues on 2026-07-03. Broad Korean localization reviewer blockers are cleared, including Korean counter registry approval; production migrations, hosted flags, builds, deployments, and store submissions remain separately hard-gated.

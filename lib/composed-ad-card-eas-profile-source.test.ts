@@ -15,13 +15,16 @@ const eas = JSON.parse(readFileSync(join(process.cwd(), "eas.json"), "utf8")) as
 
 const internalComposedFlags = [
   "EXPO_PUBLIC_AI_V4_COMPOSED_AD_CARD_ENABLED",
-  "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED",
   "EXPO_PUBLIC_AI_V4_AUTHORITATIVE_OFFER_CARD_ENABLED",
   "EXPO_PUBLIC_AI_V4_PRESENTATION_RESOLVER_ENABLED",
   "EXPO_PUBLIC_AI_V4_MINIMAL_INPUT_FLOW_ENABLED",
   "EXPO_PUBLIC_AI_V4_INSTANT_STYLE_ALTERNATES_ENABLED",
   "EXPO_PUBLIC_AI_V4_COMPOSITE_QA_ENABLED",
   "EXPO_PUBLIC_AI_V4_EXACT_PRESENTATION_APPROVAL_ENABLED",
+] as const;
+
+const customerComposedRendererFlags = [
+  "EXPO_PUBLIC_AI_V4_SHARED_RENDERER_ENABLED",
 ] as const;
 
 const customerLocalizationFlags = [
@@ -54,6 +57,15 @@ describe("composed ad card EAS rollout profile guards", () => {
     const productionEnv = eas.build.production?.env ?? {};
     for (const flag of internalComposedFlags) {
       expect(productionEnv[flag], `production ${flag}`).toBeUndefined();
+    }
+  });
+
+  it("enables the shared composed renderer in customer-facing build profiles", () => {
+    for (const profileName of ["development", "preview", "production", "dev-client-apk", "dev-apk-ai-studio", "apk"]) {
+      const env = resolveProfileEnv(profileName);
+      for (const flag of customerComposedRendererFlags) {
+        expect(env[flag], `${profileName} ${flag}`).toBe("true");
+      }
     }
   });
 

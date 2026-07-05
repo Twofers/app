@@ -178,6 +178,24 @@ describe("localized deal display", () => {
     expect(display.lockedOfferContent?.primaryOfferLine).toBe(display.title);
   });
 
+  it("localizes house pastry wallet copy instead of preserving the English item", () => {
+    const display = buildLocalizedDealDisplay({
+      deal: {
+        ...structuredDeal,
+        required_item_description: "house pastry",
+        free_item_description: "house pastry",
+      },
+      locale: "ko-KR",
+      localeResolutionSource: "customer_preference",
+      useLocalizedOfferRenderer: true,
+      fallbackLanguage: "en",
+    });
+
+    expect(display.source).toBe("localized_offer_renderer");
+    expect(display.title).toContain("\uD558\uC6B0\uC2A4 \uD398\uC774\uC2A4\uD2B8\uB9AC");
+    expect(display.title).not.toContain("house pastry");
+  });
+
   it("prefers approved customer localization rows while retaining exact mechanics", () => {
     const display = buildLocalizedDealDisplay({
       deal: {

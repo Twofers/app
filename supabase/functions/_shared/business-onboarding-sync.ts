@@ -199,6 +199,18 @@ async function upsertFieldSource(
   if (error) throw error;
 }
 
+async function ensureBusinessInviteValidation(supabase: DbClient, userId: string, source: string) {
+  const { error } = await supabase.from("business_invite_validations").upsert(
+    {
+      user_id: userId,
+      validated_at: new Date().toISOString(),
+      code_used: source === "admin_created" ? "admin_onboarding" : "reviewed_onboarding",
+    },
+    { onConflict: "user_id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
+
 async function seedChecklist(supabase: DbClient, businessId: string, imported: NormalizedBusinessOnboarding) {
   const rows = [
     ["review_business_basics", "Review business basics", imported.businessName ? "imported" : "not_started"],
@@ -392,6 +404,7 @@ export async function materializeBusinessForUser(
       .eq("id", businessId);
     if (error) throw error;
   } else {
+    await ensureBusinessInviteValidation(supabase, args.userId, args.source);
     const { data, error } = await supabase
       .from("businesses")
       .insert({ owner_id: args.userId, ...basePayload })

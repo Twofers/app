@@ -160,7 +160,10 @@
       clearSession();
       throw new Error(response.status === 401 ? "Admin session expired. Sign in again." : payload.error || "Forbidden.");
     }
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Request failed.");
+    if (!response.ok || !payload.ok) {
+      const message = payload.error || "Request failed.";
+      throw new Error(payload.request_id ? `${message} Request id: ${payload.request_id}.` : message);
+    }
     return payload;
   }
 
@@ -268,9 +271,13 @@
         decision,
         reason: noteValue(),
       });
-      setTrialStatus(payload.business_linked
+      const savedMessage = payload.business_linked
         ? "Decision saved and linked business access updated."
-        : "Decision saved. Business owner will link when they sign in.");
+        : "Decision saved. Business owner will link when they sign in.";
+      setTrialStatus(
+        payload.billing_sync_warning ? `${savedMessage} ${payload.billing_sync_warning}` : savedMessage,
+        payload.billing_sync_warning ? "warning" : "info",
+      );
       try {
         await loadApplications();
       } catch (error) {

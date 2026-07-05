@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LocalizedOfferTerm } from "./localized-offer-terms";
-import {
-  KOREAN_COUNTER_FREE_FALLBACK_TEMPLATE_ID,
-  resolveKoreanOfferTemplate,
-} from "./korean-offer-template-resolver";
+import { resolveKoreanOfferTemplate } from "./korean-offer-template-resolver";
 import {
   renderLocalizedOfferBundleFromDefinition,
   renderLocalizedOfferFromDefinition,
@@ -113,7 +110,6 @@ describe("localized offer renderer", () => {
       "reward:coffee:ko-KR:reviewed-term-v1",
     ]);
   });
-
   it("renders English any-qualified offer facts without awkward articles", () => {
     const coffeeCookie = renderLocalizedOfferFromDefinition(definitionFor({
       dealType: "BUY_ONE_GET_SOMETHING_FREE",
@@ -178,17 +174,33 @@ describe("localized offer renderer", () => {
     ]);
   });
 
-  it("uses counter-free Korean fallback until counters are reviewer-approved", () => {
+  it("uses reviewed Korean counters after native reviewer approval", () => {
     const paidTerm = term({
       entityId: "sku_paid",
       locale: "ko-KR",
-      displayName: "커피",
+      displayName: "coffee",
       koreanCounterId: "cup",
     });
     const resolution = resolveKoreanOfferTemplate({ paidTerm, rewardTerm: paidTerm });
 
-    expect(resolution.templateId).toBe(KOREAN_COUNTER_FREE_FALLBACK_TEMPLATE_ID);
+    expect(resolution.templateId).toBe("ko-KR.offer.reviewed-counter");
+    expect(resolution.counterFallbackUsed).toBe(false);
+    expect(resolution.usesCounters).toBe(true);
+    expect(resolution.reasonCodes).toEqual([]);
+  });
+
+  it("uses counter-free Korean fallback for unknown counters", () => {
+    const paidTerm = term({
+      entityId: "sku_paid",
+      locale: "ko-KR",
+      displayName: "coffee",
+      koreanCounterId: "unknown-counter",
+    });
+    const resolution = resolveKoreanOfferTemplate({ paidTerm, rewardTerm: paidTerm });
+
+    expect(resolution.templateId).toBe("ko-KR.offer.counter-free-fallback");
     expect(resolution.counterFallbackUsed).toBe(true);
+    expect(resolution.usesCounters).toBe(false);
     expect(resolution.reasonCodes).toContain("KOREAN_COUNTER_NOT_REVIEWED");
   });
 });

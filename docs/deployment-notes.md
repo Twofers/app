@@ -12,7 +12,7 @@
 
 ## Database migrations
 
-Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 106 migration files and the latest is `20260730129000_admin_onboarding_service_role_invite_gate.sql`.
+Apply migration files in **filename (timestamp) order**. The authoritative full inventory is in `docs/deployment-command-plan.md` section 2; as of this checkpoint the repo has 109 migration files and the latest is `20260801121000_profiles_app_locale.sql`.
 
 Read-only compare:
 
@@ -43,6 +43,7 @@ High-signal dependencies:
 - **Stripe business billing reconnection:** `20260730127000_stripe_business_billing_reconnection.sql`. This adds business billing profiles, subscriptions, billing events, checkout/portal audit tables, sync jobs, reminders, single-use billing tokens, and a publish helper that reads business subscription state before falling back to legacy location entitlements. Applying it is production-changing and requires explicit approval.
 - **Admin AI spend and quota resets:** `20260730128000_admin_ai_quota_resets.sql`. This adds the admin-only monthly AI quota reset ledger and updates the compose quota RPC fallback to honor reset boundaries without deleting AI usage history. Applying it is production-changing and requires explicit approval.
 - **Admin onboarding invite gate:** `20260730129000_admin_onboarding_service_role_invite_gate.sql`. This keeps normal client business signups behind the pilot invite gate while allowing reviewed website/admin onboarding to materialize businesses through audited service-role Edge Functions. Applying it is production-changing and requires explicit approval.
+- **Saved customers / repeat visits / app locale:** `20260731120000_business_saved_customers_rpc.sql`, `20260801120000_business_repeat_visit_stats.sql`, and `20260801121000_profiles_app_locale.sql`. These add owner-facing saved-customer and repeat-visit helpers plus `profiles.app_locale` for server-originated localized copy. Applying them is production-changing and requires explicit approval.
 
 ## Edge Functions to deploy (exact set)
 

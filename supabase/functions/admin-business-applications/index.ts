@@ -5,7 +5,7 @@ import { forbiddenForRedeemerResponse, isRedeemerUser } from "../_shared/redempt
 import { isAal2 } from "../_shared/admin-mfa.ts";
 import {
   cleanString as cleanBusinessString,
-  materializeBusinessForUser,
+  createOnboardingRequest,
   type NormalizedBusinessOnboarding,
 } from "../_shared/business-onboarding-sync.ts";
 import {
@@ -56,6 +56,11 @@ type DecisionConfig = {
   businessVerificationStatus: string;
   subscriptionAccessStatus: string;
   auditAction: string;
+};
+
+type BusinessDecisionSyncResult = {
+  businessUpdated: boolean;
+  billingSyncWarning: string | null;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -257,19 +262,6 @@ async function requireAdmin(req: Request, requestId: string): Promise<AdminConte
   };
 }
 
-async function authUserByEmail(supabaseAdmin: any, email: string) {
-  const target = email.trim().toLowerCase();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
-    const users = (data?.users ?? []) as Array<{ id: string; email?: string | null }>;
-    const found = users.find((candidate) => (candidate.email ?? "").toLowerCase() === target);
-    if (found) return found;
-    if (users.length < 1000) break;
-  }
-  return null;
-}
-
 function normalizedFromApplication(row: Record<string, unknown>): NormalizedBusinessOnboarding {
   return {
     businessName: String(row.business_name ?? ""),
@@ -295,6 +287,49 @@ function appendAdminNote(existing: unknown, note: string, adminEmail: string | n
     .filter(Boolean)
     .join("\n\n")
     .slice(0, 4000);
+}
+
+async function ensureOnboardingRequestForDecision(
+  ctx: AdminContext,
+  application: Record<string, unknown>,
+  config: DecisionConfig,
+): Promise<string | null> {
+  const existingRequestId = typeof application.onboarding_request_id === "string"
+    ? application.onboarding_request_id
+    : null;
+  if (existingRequestId) return existingRequestId;
+  if (config.status === "rejected" || config.status === "waitlisted") return null;
+
+  const normalized = normalizedFromApplication(application);
+  const requestId = await createOnboardingRequest(
+    ctx.supabaseAdmin,
+    normalized,
+    {
+      source: application.source ?? "admin_review",
+      business_application_id: application.id,
+      business_name: normalized.businessName,
+      contact_name: normalized.contactName,
+      email: normalized.email,
+      phone: normalized.phone,
+      address: normalized.address,
+      business_type: normalized.businessType,
+      website_or_instagram: normalized.websiteOrInstagram,
+      slow_hours: normalized.slowHours,
+      offer_interests: normalized.offerInterests,
+      launch_area: normalized.launchArea,
+    },
+    {
+      applicationId: String(application.id),
+      status: config.status,
+      riskScore: Number(application.risk_score) || null,
+      riskLevel: riskLevel(application.risk_score),
+    },
+  );
+  await ctx.supabaseAdmin
+    .from("business_applications")
+    .update({ onboarding_request_id: requestId })
+    .eq("id", application.id);
+  return requestId;
 }
 
 async function listApplications(req: Request, ctx: AdminContext, payload: Payload) {
@@ -357,24 +392,11 @@ async function maybeMaterializeBusiness(
     return { businessId: null, ownerUserId: null };
   }
 
-  const owner = await authUserByEmail(ctx.supabaseAdmin, String(application.email ?? ""));
-  if (!owner?.id) return { businessId: null, ownerUserId: null };
-
-  const normalized = normalizedFromApplication(application);
-  const materialized = await materializeBusinessForUser(ctx.supabaseAdmin, {
-    userId: owner.id,
-    requestId: typeof application.onboarding_request_id === "string" ? application.onboarding_request_id : null,
-    applicationId: String(application.id),
-    normalized,
-    decision: {
-      status: config.status,
-      access_tier: config.accessTier,
-      verification_status: config.verificationStatus,
-      risk_score: Number(application.risk_score) || null,
-    },
-    source: "admin_created",
-  });
-  return { businessId: materialized.businessId, ownerUserId: owner.id };
+  // Do not scan Supabase Auth by email in the admin decision request. That
+  // makes approval latency depend on Auth user count and can exceed the
+  // browser timeout. Unlinked approved requests materialize when the owner
+  // signs in through get-business-onboarding-context.
+  return { businessId: null, ownerUserId: null };
 }
 
 async function syncBusinessDecision(
@@ -383,8 +405,8 @@ async function syncBusinessDecision(
   config: DecisionConfig,
   businessId: string | null,
   ownerUserId: string | null,
-) {
-  if (!businessId) return;
+): Promise<BusinessDecisionSyncResult> {
+  if (!businessId) return { businessUpdated: false, billingSyncWarning: null };
 
   const approvedPatch = config.status === "trial_limited" || config.status === "trial_active"
     ? {
@@ -407,21 +429,43 @@ async function syncBusinessDecision(
   if (error) throw error;
 
   if ((config.status === "trial_limited" || config.status === "trial_active") && ownerUserId) {
-    await ensureStripeCustomerForBusiness({
-      supabase: ctx.supabaseAdmin,
-      stripe: null,
-      input: billingProfileFromOnboarding({
-        businessId,
-        ownerUserId,
-        normalized: normalizedFromApplication(application),
+    try {
+      await ensureStripeCustomerForBusiness({
+        supabase: ctx.supabaseAdmin,
+        stripe: null,
+        input: billingProfileFromOnboarding({
+          businessId,
+          ownerUserId,
+          normalized: normalizedFromApplication(application),
+          source: "admin_review",
+          sourceRecordId: String(application.id),
+        }),
         source: "admin_review",
-        sourceRecordId: String(application.id),
-      }),
-      source: "admin_review",
-      trialDays: config.trialDays,
-      accessStatus: config.subscriptionAccessStatus,
-    });
+        trialDays: config.trialDays,
+        accessStatus: config.subscriptionAccessStatus,
+      });
+    } catch (billingError) {
+      console.error("[admin-business-applications] billing sync failed:", billingError);
+      const billingWarning = "Billing sync needs follow-up, but the trial decision was saved.";
+      try {
+        await ctx.supabaseAdmin.from("admin_audit_log").insert({
+          admin_user_id: ctx.user.id,
+          admin_email: ctx.adminUser.email ?? ctx.user.email ?? null,
+          action: "admin_business_application_billing_sync_failed",
+          target_type: "business_application",
+          target_id: String(application.id),
+          business_id: businessId,
+          reason: "billing_sync_failed_after_admin_decision",
+          request_id: ctx.requestId,
+        });
+      } catch (auditError) {
+        console.error("[admin-business-applications] billing sync audit failed:", auditError);
+      }
+      return { businessUpdated: true, billingSyncWarning: billingWarning };
+    }
   }
+
+  return { businessUpdated: true, billingSyncWarning: null };
 }
 
 async function applyDecision(
@@ -435,6 +479,7 @@ async function applyDecision(
   const config = decisionConfig(decision);
   const reason = cleanBusinessString(rawReason, 500) ?? "";
   const adminEmail = ctx.adminUser.email ?? ctx.user.email ?? null;
+  const onboardingRequestId = await ensureOnboardingRequestForDecision(ctx, application, config);
   const { businessId, ownerUserId } = await maybeMaterializeBusiness(ctx, application, config);
 
   const applicationPatch = {
@@ -447,6 +492,7 @@ async function applyDecision(
     reviewed_at: new Date().toISOString(),
     reviewed_by: ctx.user.id,
     business_id: businessId ?? application.business_id ?? null,
+    onboarding_request_id: onboardingRequestId ?? application.onboarding_request_id ?? null,
     admin_notes: appendAdminNote(application.admin_notes, reason, adminEmail),
   };
 
@@ -460,7 +506,7 @@ async function applyDecision(
     .single();
   if (updateError) throw updateError;
 
-  if (application.onboarding_request_id) {
+  if (onboardingRequestId) {
     await ctx.supabaseAdmin
       .from("business_onboarding_requests")
       .update({
@@ -471,10 +517,10 @@ async function applyDecision(
         risk_level: riskLevel(application.risk_score),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", application.onboarding_request_id);
+      .eq("id", onboardingRequestId);
   }
 
-  await syncBusinessDecision(ctx, application, config, businessId, ownerUserId);
+  const businessSync = await syncBusinessDecision(ctx, application, config, businessId, ownerUserId);
 
   await ctx.supabaseAdmin.from("admin_audit_log").insert({
     admin_user_id: ctx.user.id,
@@ -504,6 +550,8 @@ async function applyDecision(
     request_id: ctx.requestId,
     application: updated,
     business_linked: Boolean(businessId),
+    business_updated: businessSync.businessUpdated,
+    billing_sync_warning: businessSync.billingSyncWarning,
   });
 }
 
@@ -532,7 +580,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // Founder field invite: Dan signs a business up in person from /admin/businesses/new.
 // Inserts a vetted application, then reuses the exact same audited decision pipeline
-// (business materialization + Stripe customer provisioning) as trial-request approval.
+// (approval + owner-linkable onboarding request) as trial-request approval.
 async function createApplication(req: Request, ctx: AdminContext, payload: Payload) {
   if (!canDecideApplications(ctx.adminUser.role)) {
     return json(req, { error: "This admin role cannot create business trials." }, 403);
@@ -603,13 +651,14 @@ Deno.serve(async (req) => {
   }
 
   const requestId = crypto.randomUUID();
+  let action = "list";
 
   try {
     const payload = await readPayload(req);
     const adminContext = await requireAdmin(req, requestId);
     if (adminContext instanceof Response) return adminContext;
 
-    const action = cleanString(payload.action || "list", 40);
+    action = cleanString(payload.action || "list", 40);
     if (action === "decide") {
       return decideApplication(req, adminContext, payload);
     }
@@ -619,6 +668,11 @@ Deno.serve(async (req) => {
     return listApplications(req, adminContext, payload);
   } catch (err) {
     console.error("[admin-business-applications] error:", err);
-    return json(req, { error: "Failed to load trial requests.", request_id: requestId }, 500);
+    const error = action === "decide"
+      ? "Failed to save trial decision."
+      : action === "create"
+      ? "Failed to create business trial."
+      : "Failed to load trial requests.";
+    return json(req, { error, request_id: requestId }, 500);
   }
 });

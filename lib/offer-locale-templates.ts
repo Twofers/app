@@ -3,6 +3,7 @@ import type { SupportedLocale } from "./supported-locales.ts";
 
 export type OfferLocaleTemplateReviewStatus =
   | "internal_owner_recorded"
+  | "native_reviewer_signed_off"
   | "needs_native_review";
 
 export type OfferLocaleTemplate = {
@@ -45,21 +46,21 @@ const TEMPLATE_BY_LOCALE_AND_TYPE: Record<SupportedLocale, Record<OfferDefinitio
       offerType: "buy_one_get_one",
       templateId: "es-US.offer.same-item-free",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
     buy_one_get_reward_item: {
       locale: "es-US",
       offerType: "buy_one_get_reward_item",
       templateId: "es-US.offer.reward-item-free",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
     percent_off_single_item: {
       locale: "es-US",
       offerType: "percent_off_single_item",
       templateId: "es-US.offer.percent-off-single-item",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
   },
   "ko-KR": {
@@ -68,21 +69,21 @@ const TEMPLATE_BY_LOCALE_AND_TYPE: Record<SupportedLocale, Record<OfferDefinitio
       offerType: "buy_one_get_one",
       templateId: "ko-KR.offer.counter-free-fallback.same-item-free",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
     buy_one_get_reward_item: {
       locale: "ko-KR",
       offerType: "buy_one_get_reward_item",
       templateId: "ko-KR.offer.counter-free-fallback.reward-item-free",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
     percent_off_single_item: {
       locale: "ko-KR",
       offerType: "percent_off_single_item",
       templateId: "ko-KR.offer.counter-free-fallback.percent-off-single-item",
       templateVersion: LOCALIZED_OFFER_TEMPLATE_VERSION,
-      reviewStatus: "needs_native_review",
+      reviewStatus: "native_reviewer_signed_off",
     },
   },
 };

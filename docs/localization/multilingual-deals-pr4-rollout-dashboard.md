@@ -31,18 +31,18 @@ It reports:
 - publish telemetry field coverage for the `ai_ad_versioned_publish` event;
 - native review log row counts and final sign-off counts;
 - native acceptance packet scenario and reviewer-question coverage;
-- pending Korean counter review items;
+- Korean counter review items;
 - operator notes for broad Spanish and Korean rollout.
 
 Current expected local state:
 
 - English is allowed through the localization-specific gate.
-- U.S. Spanish remains blocked because the reviewer is TBD, Spanish templates need native review, and real-device screenshot QA is pending.
-- Korean remains blocked because the reviewer is TBD, Korean templates need native review, Korean counters are unapproved, and real-device screenshot QA is pending.
+- U.S. Spanish is allowed through the localization-specific gate because Juan signed off, Spanish templates are reviewed, and screenshot QA is recorded.
+- Korean is allowed through the localization-specific gate because June signed off, Korean templates are reviewed, Korean counters are approved, and screenshot QA is recorded.
 
 Remaining limitations:
 
 - This is a source/readiness dashboard, not a live analytics dashboard.
 - Hosted analytics will not include the new localization publish fields until Dan explicitly approves redeploying `publish-offer-version`.
-- Real-device screenshot QA evidence and reviewer sign-off are still external QA inputs.
+- Reviewer sign-off has been recorded from Juan and June. Future new localized surfaces still need reviewer evidence before they inherit this approval.
 - Do not commit local generated artifacts unless they are intentionally sanitized and approved for source control.

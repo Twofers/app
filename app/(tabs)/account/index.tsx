@@ -53,6 +53,7 @@ import { ThemePreferenceSelector } from "@/components/theme-preference-selector"
 import { getSwitchAccessibilityState } from "@/lib/switch-accessibility";
 import { getDeleteAccountConfirmationCopyKeys } from "@/lib/delete-account-confirmation";
 import { MerchantAccessBlockedCard } from "@/components/merchant-access-blocked-card";
+import { localizedBusinessCategoryLabel } from "@/lib/business-category-label";
 
 type RepeatClaimPolicyType = "NONE" | "COOLDOWN_DAYS" | "FOREVER";
 
@@ -161,6 +162,7 @@ export default function AccountScreen() {
     businessProfileSnapshot?.address?.trim() ||
     null;
   const businessSummaryCategory = businessProfile?.category?.trim() || null;
+  const businessSummaryCategoryLabel = localizedBusinessCategoryLabel(businessSummaryCategory, t);
   const savedBusinessProfileDraft = useMemo<BusinessProfileEditorDraft>(
     () => ({
       name: businessProfile?.name ?? "",
@@ -967,7 +969,7 @@ export default function AccountScreen() {
                     {businessSummaryAddress ?? t("account.bizNoAddress")}
                   </Text>
                   <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>
-                    {t("account.bizCategory")}: {businessSummaryCategory ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
+                    {t("account.bizCategory")}: {businessSummaryCategoryLabel ?? t("account.bizCategoryMissing", { defaultValue: "Category missing" })}
                   </Text>
                   {visibleBusinessContactName ? (
                     <Text style={{ opacity: 0.7, fontSize: 13, lineHeight: 17, color: theme.text }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.08}>

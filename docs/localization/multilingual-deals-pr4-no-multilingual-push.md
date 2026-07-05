@@ -19,7 +19,7 @@ Superseding local implementation:
 - `supabase/functions/send-deal-push/index.ts` now builds customer deal-release push copy per recipient locale with `buildDealReleasePushCopy()`.
 - `supabase/functions/weekly-deal-digest/index.ts` now builds digest push copy per recipient locale with `buildDigestPushCopy()`.
 - `supabase/functions/deal-link/index.ts` now resolves `lang`/`Accept-Language` and renders localized Share Deal landing copy.
-- `supabase/migrations/20260731120000_profiles_app_locale.sql` adds `profiles.app_locale` for server-rendered recipient-language copy. Applying it remains hard-gated.
+- `supabase/migrations/20260801121000_profiles_app_locale.sql` adds `profiles.app_locale` for server-rendered recipient-language copy. Applying it remains hard-gated.
 - It does not query `customer_deal_localizations`.
 - It does not call the AI translation provider, transcreation provider, semantic QA, or any localization bundle lookup.
 

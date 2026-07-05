@@ -73,7 +73,7 @@ The multilingual rollout depends on the hosted project being current through the
 
 - `20260728120000_ad_localization_storage.sql`
 - `20260728123000_customer_deal_localization_projection.sql`
-- `20260731120000_profiles_app_locale.sql`
+- `20260801121000_profiles_app_locale.sql`
 
 The second migration exposes only the customer-safe `customer_deal_localizations(p_deal_ids uuid[], p_locale text)` RPC. It must not grant direct app-role access to `ad_localizations`.
 

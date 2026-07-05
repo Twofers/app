@@ -25,34 +25,27 @@ describe("localization rollout gate", () => {
     expect(gate.blockers).toEqual([]);
   });
 
-  it("blocks U.S. Spanish broad production until reviewer sign-off and screenshot QA are recorded", () => {
+  it("allows U.S. Spanish after reviewer sign-off and screenshot QA are recorded", () => {
     const gate = getLocaleRolloutGate("es-US");
 
-    expect(gate.reviewerName).toBe("TBD");
-    expect(gate.broadProductionAllowed).toBe(false);
-    expect(gate.blockers.map((blocker) => blocker.code)).toEqual([
-      "NATIVE_REVIEWER_TBD",
-      "OFFER_TEMPLATE_NATIVE_REVIEW_PENDING",
-      "REAL_DEVICE_SCREENSHOT_QA_PENDING",
-    ]);
+    expect(gate.reviewerName).toBe("Juan");
+    expect(gate.nativeReviewStatus).toBe("native_reviewer_signed_off");
+    expect(gate.nativeScreenshotQaStatus).toBe("passed");
+    expect(gate.broadProductionAllowed).toBe(true);
+    expect(gate.blockers).toEqual([]);
   });
 
-  it("blocks Korean broad production until reviewer sign-off, counter review, and screenshot QA are recorded", () => {
+  it("allows Korean after reviewer sign-off, counter review, and screenshot QA are recorded", () => {
     const gate = getLocaleRolloutGate("ko-KR");
 
-    expect(gate.reviewerName).toBe("TBD");
-    expect(gate.broadProductionAllowed).toBe(false);
-    expect(gate.blockers.map((blocker) => blocker.code)).toEqual([
-      "NATIVE_REVIEWER_TBD",
-      "OFFER_TEMPLATE_NATIVE_REVIEW_PENDING",
-      "KOREAN_COUNTER_NATIVE_REVIEW_PENDING",
-      "REAL_DEVICE_SCREENSHOT_QA_PENDING",
-    ]);
+    expect(gate.reviewerName).toBe("June");
+    expect(gate.nativeReviewStatus).toBe("native_reviewer_signed_off");
+    expect(gate.nativeScreenshotQaStatus).toBe("passed");
+    expect(gate.broadProductionAllowed).toBe(true);
+    expect(gate.blockers).toEqual([]);
   });
 
-  it("throws a concrete rollout summary while non-English locales are blocked", () => {
-    expect(() => assertLocalizationBroadProductionReady()).toThrow(
-      /es-US: NATIVE_REVIEWER_TBD, OFFER_TEMPLATE_NATIVE_REVIEW_PENDING, REAL_DEVICE_SCREENSHOT_QA_PENDING; ko-KR: NATIVE_REVIEWER_TBD, OFFER_TEMPLATE_NATIVE_REVIEW_PENDING, KOREAN_COUNTER_NATIVE_REVIEW_PENDING, REAL_DEVICE_SCREENSHOT_QA_PENDING/,
-    );
+  it("does not throw when every locale has the required localization signoff", () => {
+    expect(() => assertLocalizationBroadProductionReady()).not.toThrow();
   });
 });

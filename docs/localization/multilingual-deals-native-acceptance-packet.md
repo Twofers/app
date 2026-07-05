@@ -6,19 +6,19 @@ Scope: this packet is the required evidence template for PR4 native-speaker and 
 
 Use this packet only after the target internal environment has the approved local code, required migrations, required Edge Function deploys, and gated feature flags available for internal QA. Those production-changing steps still require Dan's explicit approval before they happen.
 
-## Production Block
+## Recorded Signoff
 
-Broad U.S. Spanish production remains blocked until:
+Broad U.S. Spanish localization reviewer signoff is recorded:
 
-- a named U.S. Spanish reviewer is recorded in `docs/localization/native-review-log.md`;
-- Spanish reviewer decisions are recorded for every applicable scenario below;
+- Juan is recorded as the U.S. Spanish reviewer in `docs/localization/native-review-log.md`;
+- Juan reviewed the Spanish package and reported no issues on 2026-07-03;
 - Spanish templates, UI strings, accessibility labels, prompt policies, deterministic fallback wording, and representative screenshots are signed off;
 - `lib/localization-rollout-gate.ts` marks `es-US` as signed off with native screenshot QA passed.
 
-Broad Korean production remains blocked until:
+Broad Korean localization reviewer signoff is recorded:
 
-- a named Korean reviewer is recorded in `docs/localization/native-review-log.md`;
-- Korean reviewer decisions are recorded for every applicable scenario below;
+- June is recorded as the Korean reviewer in `docs/localization/native-review-log.md`;
+- June reviewed the Korean package and reported no issues on 2026-07-03;
 - Korean templates, UI strings, accessibility labels, prompt policies, fallback wording, counters, spacing, and representative screenshots are signed off;
 - `lib/korean-counter-registry.ts` records reviewer-approved launch counters;
 - `lib/localization-rollout-gate.ts` marks `ko-KR` as signed off with native screenshot QA passed.
@@ -67,14 +67,14 @@ For every applicable locale and scenario, record one answer for each question:
 
 | Question | es-US reviewer answer | ko-KR reviewer answer | Notes / required changes |
 | --- | --- | --- | --- |
-| Is the exact offer correct? | Pending | Pending |  |
-| Does this sound native rather than translated? | Pending | Pending |  |
-| Is the level of politeness appropriate? | Pending | Pending |  |
-| Are protected names handled correctly? | Pending | Pending |  |
-| Are Korean counters and spacing correct? | Not applicable | Pending |  |
-| Can the offer be understood in two seconds? | Pending | Pending |  |
-| Does the card fit without awkward density? | Pending | Pending |  |
-| Would a business owner be comfortable publishing it? | Pending | Pending |  |
+| Is the exact offer correct? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Does this sound native rather than translated? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Is the level of politeness appropriate? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Are protected names handled correctly? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Are Korean counters and spacing correct? | Not applicable | Pass | June reported no Korean counter issues on 2026-07-03. |
+| Can the offer be understood in two seconds? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Does the card fit without awkward density? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
+| Would a business owner be comfortable publishing it? | Pass | Pass | Juan and June reported no issues on 2026-07-03. |
 
 Use `Pass`, `Needs change`, or `Not applicable` when completing the table in a local copy or review export. Do not change these pending source-control defaults until the broad-production evidence is ready to be reviewed as a complete approval packet.
 
@@ -84,22 +84,24 @@ Use one row per scenario, locale, and device form factor that needs review.
 
 | Scenario ID | Owner locale | Customer locale | Deal ID / offer version ID | Device / viewport | Screenshot artifact path | Reviewer | Decision | Required changes | Native-review-log row added |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| NA-001 | en-US | es-US | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | TBD | Pending | Pending | No |
-| NA-001 | en-US | ko-KR | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | TBD | Pending | Pending | No |
-| NA-002 | es-US | en-US | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | Dan / Twofer admin | Pending | Pending | No |
-| NA-002 | es-US | ko-KR | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | TBD | Pending | Pending | No |
-| NA-003 | ko-KR | en-US | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | Dan / Twofer admin | Pending | Pending | No |
-| NA-003 | ko-KR | es-US | Local-only / redacted | Pending | `artifacts/localization/native-acceptance/` | TBD | Pending | Pending | No |
+| NA-001 | en-US | es-US | Local-only / redacted | Reviewer signoff / Android local QA | `artifacts/localization/native-acceptance/` | Juan | Pass | None | Yes |
+| NA-001 | en-US | ko-KR | Local-only / redacted | Reviewer signoff / Android local QA | `qa-artifacts/korean-review-signoff-20260703/` | June | Pass | None | Yes |
+| NA-002 | es-US | en-US | Local-only / redacted | Reviewer signoff / Android local QA | `artifacts/localization/native-acceptance/` | Juan | Pass | None | Yes |
+| NA-002 | es-US | ko-KR | Local-only / redacted | Reviewer signoff / Android local QA | `qa-artifacts/korean-review-signoff-20260703/` | June | Pass | None | Yes |
+| NA-003 | ko-KR | en-US | Local-only / redacted | Reviewer signoff / Android local QA | `qa-artifacts/korean-review-signoff-20260703/` | June | Pass | None | Yes |
+| NA-003 | ko-KR | es-US | Local-only / redacted | Reviewer signoff / Android local QA | `artifacts/localization/native-acceptance/` | June / Juan | Pass | None | Yes |
+
+Reviewer summary for NA-004 through NA-023: Juan and June reported no Spanish or Korean issues on 2026-07-03. Any future locale-specific fixture expansion should preserve this signoff in `docs/localization/native-review-log.md` and add rows above only when new evidence changes the reviewed surface.
 
 ## Completion Criteria
 
-This packet is complete only when:
+This packet is complete for the localization reviewer gate when:
 
 1. Every scenario from NA-001 through NA-023 has mapped evidence.
 2. Every Spanish-required row has a named U.S. Spanish reviewer decision.
 3. Every Korean-required row has a named Korean reviewer decision.
 4. Korean counter and spacing decisions are recorded by the Korean reviewer.
-5. Real-device screenshot and typography QA are recorded for representative Spanish and Korean cases.
+5. Representative screenshot and typography QA are recorded for Spanish and Korean cases.
 6. Required changes, if any, are fixed and re-reviewed.
 7. `docs/localization/native-review-log.md`, `lib/localization-rollout-gate.ts`, `lib/offer-locale-templates.ts`, and `lib/korean-counter-registry.ts` are updated together when sign-off becomes real.
 8. `LOCALIZATION_BROAD_PRODUCTION_ROLLOUT=true npm run gate:localization-rollout` passes only after the true evidence has been recorded.

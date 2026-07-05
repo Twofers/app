@@ -1566,6 +1566,7 @@
     "scanQrAtCounter": "Show QR at the counter",
     "timeLeftHeading": "Time left",
     "countdownLabel": "{{time}}",
+    "redeemAtLabel": "Redeem at:",
     "redeemByCaption": "Redeem by {{datetime}} · store’s local time",
     "expiresLocal": "Expires {{datetime}} (business time)",
     "statRedeemed": "Deals redeemed",

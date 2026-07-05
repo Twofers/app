@@ -96,6 +96,10 @@ const GENERIC_LOCALIZED_TERM_DICTIONARY: Record<string, GenericLocalizedTermDict
     "es-US": { displayName: "caf\u00E9 de filtro de la casa" },
     "ko-KR": { displayName: "\uD558\uC6B0\uC2A4 \uB4DC\uB9BD \uCEE4\uD53C", koreanCounterId: "cup" },
   },
+  "house pastry": {
+    "es-US": { displayName: "pastelito de la casa" },
+    "ko-KR": { displayName: "\uD558\uC6B0\uC2A4 \uD398\uC774\uC2A4\uD2B8\uB9AC", koreanCounterId: "piece" },
+  },
   "iced latte": {
     "es-US": { displayName: "latte helado" },
     "ko-KR": { displayName: "\uC544\uC774\uC2A4 \uB77C\uB5BC", koreanCounterId: "cup" },

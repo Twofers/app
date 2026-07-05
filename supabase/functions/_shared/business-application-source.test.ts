@@ -55,9 +55,13 @@ describe("business application intake", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     expect(source).toMatch(/from\("admin_users"\)/);
     expect(source).toMatch(/from\("business_applications"\)/);
+    expect(source).toMatch(/createOnboardingRequest/);
     expect(source).toMatch(/admin_business_application_approved_limited/);
     expect(source).toMatch(/admin_business_application_approved_full/);
+    expect(source).toMatch(/admin_business_application_billing_sync_failed/);
     expect(source).toMatch(/ensureStripeCustomerForBusiness/);
+    expect(source).toMatch(/billing_sync_warning/);
+    expect(source).not.toMatch(/auth\.admin\.listUsers/);
     expect(source).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
   });
 
@@ -72,21 +76,24 @@ describe("business application intake", () => {
     expect(script).toMatch(/approve_full/);
     expect(script).toMatch(/AbortController/);
     expect(script).toMatch(/networkFailureMessage/);
+    expect(script).toMatch(/billing_sync_warning/);
+    expect(script).toMatch(/Request id:/);
     expect(script).toMatch(/Decision saved, but the queue refresh failed/);
   });
 
   it("lets an admin field-create a business trial through the same audited decision path", () => {
     const source = read("supabase/functions/admin-business-applications/index.ts");
     // The founder field-invite path (admin/businesses/new) must insert its own
-    // application row, then reuse applyDecision — not a separate, divergent
-    // code path — so it gets the same business materialization, Stripe billing
-    // hook, and audit logging as a normal trial-request approval.
+    // application row, then reuse applyDecision so it gets the same approval,
+    // owner-linkable onboarding request, billing follow-up, and audit logging
+    // as a normal trial-request approval.
     expect(source).toMatch(/action === "create"/);
     expect(source).toMatch(/async function createApplication/);
     expect(source).toMatch(/canDecideApplications\(ctx\.adminUser\.role\)/);
     expect(source).toMatch(/admin_field_invite/);
     expect(source).toMatch(/admin_business_application_created/);
     expect(source).toMatch(/return applyDecision\(req, ctx, application/);
+    expect(source).toMatch(/ensureOnboardingRequestForDecision/);
     // terms/privacy acceptance belongs to the owner, not the admin creating the record
     expect(source).toMatch(/terms_accepted:\s*false/);
     expect(source).toMatch(/privacy_acknowledged:\s*false/);
@@ -101,6 +108,8 @@ describe("business application intake", () => {
     expect(page).toMatch(/name="email"/);
     expect(script).toMatch(/action: "create"/);
     expect(script).toMatch(/fields/);
+    expect(script).toMatch(/billing_sync_warning/);
+    expect(script).toMatch(/Request id:/);
     expect(script).not.toMatch(/OPENAI_API_KEY|STRIPE_SECRET_KEY/);
   });
 });

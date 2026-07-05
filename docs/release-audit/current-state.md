@@ -10,7 +10,7 @@ This document reflects the repository after the launch-hardening pass. Routes an
 - Share Deal: enabled in production/apk/preview EAS profiles with `EXPO_PUBLIC_ENABLE_SHARE_DEAL=true`, read through `lib/runtime-env.ts`.
 - Billing: `PAID_BILLING_ENABLED=true` and `PILOT_DISABLE_BILLING_GATE=true`; billing UI exists, while pilot publish enforcement is bypassed.
 - AI Deal Studio dev variant: separate app name/package (`Twofer Dev`, `com.unvmex2.twoforone.dev`) behind `TWOFER_APP_VARIANT=ai-studio-dev` / `EXPO_PUBLIC_APP_VARIANT=ai-studio-dev`, with publishing disabled by `EXPO_PUBLIC_DISABLE_AI_STUDIO_PUBLISHING=true`.
-- Localization: English, U.S. Spanish, and Korean code paths exist; broad Spanish/Korean production remains blocked by native reviewer and real-device screenshot QA gates.
+- Localization: English, U.S. Spanish, and Korean code paths exist; Juan signed off Spanish and June signed off Korean on 2026-07-03. Production deployment, hosted flags, migrations, and store submissions remain hard-gated.
 
 ## App routes / screens
 

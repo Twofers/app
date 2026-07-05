@@ -504,6 +504,18 @@ describe("localized offer terms", () => {
     expect(resolveLocalizedOfferTerm({ sourceDisplayName: "bottled water", locale: "ko-KR" }).koreanCounterId).toBe("piece");
   });
 
+  it("localizes house pastry for customer wallet and detail copy", () => {
+    const korean = resolveLocalizedOfferTerm({ sourceDisplayName: "house pastry", locale: "ko-KR" });
+    expect(korean.displayName).toBe("\uD558\uC6B0\uC2A4 \uD398\uC774\uC2A4\uD2B8\uB9AC");
+    expect(korean.source).toBe("reviewed_dictionary");
+    expect(korean.verificationStatus).toBe("verified");
+    expect(korean.koreanCounterId).toBe("piece");
+
+    const spanish = resolveLocalizedOfferTerm({ sourceDisplayName: "house pastry", locale: "es-US" });
+    expect(spanish.displayName).toBe("pastelito de la casa");
+    expect(spanish.source).toBe("reviewed_dictionary");
+  });
+
   it("covers 100 popular Spanish-language food and drink source terms in English", () => {
     expect(spanishSourceOfferTermsToEnglish).toHaveLength(100);
 

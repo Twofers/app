@@ -27,11 +27,15 @@ describe("website-to-app business onboarding sync", () => {
   it("keeps client business signups invite-gated while allowing service-role onboarding", () => {
     const originalGate = read("supabase/migrations/20260706120000_business_invite_gate.sql");
     const serviceRoleGate = read("supabase/migrations/20260730129000_admin_onboarding_service_role_invite_gate.sql");
+    const helper = read("supabase/functions/_shared/business-onboarding-sync.ts");
     expect(originalGate).toMatch(/business invite required/i);
     expect(originalGate).toMatch(/CREATE TRIGGER businesses_require_invite_trg/i);
     expect(serviceRoleGate).toMatch(/auth\.role\(\).*service_role/is);
     expect(serviceRoleGate).toMatch(/business_invite_validations/i);
     expect(serviceRoleGate).toMatch(/business invite required/i);
+    expect(helper).toMatch(/ensureBusinessInviteValidation/);
+    expect(helper).toMatch(/from\("business_invite_validations"\)\.upsert/i);
+    expect(helper).toMatch(/code_used:\s*source === "admin_created" \? "admin_onboarding" : "reviewed_onboarding"/);
   });
 
   it("connects website submit to normalized onboarding without eager unauthenticated materialization", () => {

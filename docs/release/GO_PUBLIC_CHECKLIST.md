@@ -55,12 +55,14 @@ state (no console errors anywhere).
 ## How business → Stripe onboarding actually works (verified in code)
 
 1. Admin approves a trial (Trial Requests page, or Businesses → New Trial for
-   someone met in person) → `admin-business-applications` materializes the
-   `businesses` row and calls `ensureStripeCustomerForBusiness` with no live
-   Stripe client — this **queues** a `stripe_sync_jobs` row and seeds a trial
-   `business_subscriptions` row. No live Stripe customer exists yet at this point.
+   someone met in person) → `admin-business-applications` saves the audited
+   decision and ensures there is a `business_onboarding_requests` row tied to
+   the owner email. It does not scan Supabase Auth by email during the browser
+   request.
 2. The owner signs in to the app with the same email → `get-business-onboarding-context`
-   links the business to their account.
+   materializes or links the `businesses` row, queues the Stripe customer sync
+   job, and seeds the trial `business_subscriptions` row. No live Stripe
+   customer exists yet at this point.
 3. The moment the owner (or an admin) starts billing — `/business/billing/start`
    → `stripe-create-checkout-session` — that function passes a **real** Stripe
    client, so it creates the actual Stripe customer on demand and returns a

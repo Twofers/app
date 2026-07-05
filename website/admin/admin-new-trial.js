@@ -120,13 +120,15 @@
         return;
       }
       if (!response.ok || !payload.ok) {
-        setStatus(payload.error || "Could not create the trial.", "danger");
+        const message = payload.error || "Could not create the trial.";
+        setStatus(payload.request_id ? `${message} Request id: ${payload.request_id}.` : message, "danger");
         return;
       }
       const linked = payload.business_linked
         ? "Business record is linked and ready."
         : "Saved. The business record links automatically when the owner signs in to the app with this email.";
-      setStatus(`Trial created for ${fields.business_name}. ${linked}`);
+      const billingWarning = payload.billing_sync_warning ? ` ${payload.billing_sync_warning}` : "";
+      setStatus(`Trial created for ${fields.business_name}. ${linked}${billingWarning}`);
       form.reset();
     } catch {
       setStatus("Could not reach the admin service. Check that admin-business-applications is deployed.", "danger");

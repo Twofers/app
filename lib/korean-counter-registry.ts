@@ -9,7 +9,7 @@ export type KoreanCounterDefinition = {
   version: string;
 };
 
-export const KOREAN_COUNTER_REGISTRY_VERSION = "korean-counter-registry-v0-pending-native-review";
+export const KOREAN_COUNTER_REGISTRY_VERSION = "korean-counter-registry-v1-native-reviewed";
 
 export const KOREAN_COUNTER_REGISTRY: KoreanCounterDefinition[] = [
   {
@@ -17,9 +17,9 @@ export const KOREAN_COUNTER_REGISTRY: KoreanCounterDefinition[] = [
     display: "잔",
     applicableCategoryIds: ["coffee", "drink", "tea"],
     examples: ["coffee", "latte", "tea"],
-    reviewerApproved: false,
-    reviewerId: "TBD",
-    approvedAt: "",
+    reviewerApproved: true,
+    reviewerId: "June",
+    approvedAt: "2026-07-03",
     version: KOREAN_COUNTER_REGISTRY_VERSION,
   },
   {
@@ -27,9 +27,9 @@ export const KOREAN_COUNTER_REGISTRY: KoreanCounterDefinition[] = [
     display: "개",
     applicableCategoryIds: ["pastry", "retail_item"],
     examples: ["cookie", "muffin", "bagel"],
-    reviewerApproved: false,
-    reviewerId: "TBD",
-    approvedAt: "",
+    reviewerApproved: true,
+    reviewerId: "June",
+    approvedAt: "2026-07-03",
     version: KOREAN_COUNTER_REGISTRY_VERSION,
   },
   {
@@ -37,9 +37,9 @@ export const KOREAN_COUNTER_REGISTRY: KoreanCounterDefinition[] = [
     display: "인분",
     applicableCategoryIds: ["meal"],
     examples: ["lunch plate", "meal"],
-    reviewerApproved: false,
-    reviewerId: "TBD",
-    approvedAt: "",
+    reviewerApproved: true,
+    reviewerId: "June",
+    approvedAt: "2026-07-03",
     version: KOREAN_COUNTER_REGISTRY_VERSION,
   },
 ];

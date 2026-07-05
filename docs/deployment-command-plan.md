@@ -34,7 +34,7 @@ Command-by-command verification for moving from code readiness to **deployment r
 
 ## 2. Supabase migrations
 
-### 2.1 Full local set (106 files, strict filename / timestamp order)
+### 2.1 Full local set (109 files, strict filename / timestamp order)
 
 Apply order is **lexicographic sort of the full filename** (standard Supabase CLI behavior).
 
@@ -144,10 +144,13 @@ Apply order is **lexicographic sort of the full filename** (standard Supabase CL
 104. `20260730127000_stripe_business_billing_reconnection.sql`
 105. `20260730128000_admin_ai_quota_resets.sql`
 106. `20260730129000_admin_onboarding_service_role_invite_gate.sql`
+107. `20260731120000_business_saved_customers_rpc.sql`
+108. `20260801120000_business_repeat_visit_stats.sql`
+109. `20260801121000_profiles_app_locale.sql`
 
 ### 2.2 Latest migration
 
-**`20260730129000_admin_onboarding_service_role_invite_gate.sql`**
+**`20260801121000_profiles_app_locale.sql`**
 
 ### 2.3 Multilingual rollout migrations
 
@@ -190,11 +193,21 @@ The current local chain ends with this website/admin sequence:
 
 This starts from `20260730123000_business_applications.sql`, adds `20260730124000_business_onboarding_workflow.sql` for deterministic onboarding tier/risk metadata and field-invite placeholders, adds `20260730125000_admin_dashboard_foundation.sql` for the internal admin allowlist, audit log, launch areas, feature flags, and central publish eligibility helper, adds `20260730126000_website_app_onboarding_sync.sql` for website-to-app profile materialization, membership linkage, field sources, revision history, setup checklist, terms acceptance, and app-safe profile update flow, adds `20260730127000_stripe_business_billing_reconnection.sql` for business billing profiles, subscriptions, billing events, web/admin Stripe session audit tables, sync jobs, reminders, and billing tokens, adds `20260730128000_admin_ai_quota_resets.sql` for admin-only AI quota reset records and reset-aware compose quota display, then adds `20260730129000_admin_onboarding_service_role_invite_gate.sql` so reviewed website/admin onboarding can materialize businesses through service-role Edge Functions while normal client signups remain invite-gated. Public submissions go through `submit-business-application`; admin summary reads go through `admin-dashboard-summary`; admin AI usage and quota resets go through `admin-ai-usage`; admin trial request reviews go through `admin-business-applications`; app onboarding reads and writes go through `get-business-onboarding-context` and `update-business-profile-section`. Web/admin billing starts through `stripe-create-checkout-session`, `stripe-customer-portal-session`, `stripe-ensure-customer`, and `stripe-backfill-customers`; mobile app billing remains closed. Applying any of these migrations is production-changing and requires explicit approval.
 
-### 2.7 Duplicate timestamp check
+### 2.7 Saved customers, repeat visits, and app locale
+
+The current local chain also includes:
+
+- `20260731120000_business_saved_customers_rpc.sql`
+- `20260801120000_business_repeat_visit_stats.sql`
+- `20260801121000_profiles_app_locale.sql`
+
+These add owner-facing saved-customer and repeat-visit helpers plus `profiles.app_locale` for server-originated localized copy. Applying any of these migrations is production-changing and requires explicit approval.
+
+### 2.8 Duplicate timestamp check
 
 No duplicate timestamp prefixes are present in the current migration directory. Keep future migration prefixes unique; lexicographic order is stable, but duplicate prefixes are an operational footgun.
 
-### 2.8 Command to apply migrations (do not run without explicit approval)
+### 2.9 Command to apply migrations (do not run without explicit approval)
 
 ```bash
 npx supabase link --project-ref <YOUR_PROJECT_REF>   # if not already linked
