@@ -8,6 +8,8 @@
   const statusEl = document.querySelector("[data-admin-status]");
   const signOutButton = document.querySelector("[data-admin-sign-out]");
   const loginLink = document.querySelector("[data-admin-login-link]");
+  let currentDirectoryRows = [];
+  let directoryControlsState = { q: "", filters: {}, sortKey: "", dir: "asc" };
 
   function sessionStorageSource() {
     return window.localStorage.getItem(tokenKey) ? window.localStorage : window.sessionStorage;
@@ -171,6 +173,377 @@
     }
   }
 
+  function formatOptionLabel(value) {
+    return String(value)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function buildFilterOptions(filterConfig, rows) {
+    if (filterConfig.options) return filterConfig.options;
+    const seen = new Set();
+    for (const row of rows) {
+      const value = filterConfig.getValue(row);
+      if (value) seen.add(String(value));
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b)).map((value) => ({ value, label: formatOptionLabel(value) }));
+  }
+
+  function matchesSearch(row, config, query) {
+    if (!query) return true;
+    const haystack = config.searchFields
+      .map((field) => String(row[field] ?? ""))
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  }
+
+  function matchesFilters(row, config, filters) {
+    return config.filters.every((filterConfig) => {
+      const active = filters[filterConfig.key];
+      if (!active) return true;
+      return String(filterConfig.getValue(row) ?? "") === active;
+    });
+  }
+
+  function compareRows(a, b, sortDef, dir) {
+    const av = sortDef.getValue ? sortDef.getValue(a) : a[sortDef.key];
+    const bv = sortDef.getValue ? sortDef.getValue(b) : b[sortDef.key];
+    let result;
+    if (sortDef.type === "date") {
+      result = new Date(av).getTime() - new Date(bv).getTime();
+    } else if (sortDef.type === "number") {
+      result = Number(av) - Number(bv);
+    } else {
+      result = String(av).localeCompare(String(bv), undefined, { sensitivity: "base" });
+    }
+    return dir === "desc" ? -result : result;
+  }
+
+  function isSortValueEmpty(row, sortDef) {
+    const raw = sortDef.getValue ? sortDef.getValue(row) : row[sortDef.key];
+    if (raw === null || raw === undefined || raw === "") return true;
+    if (sortDef.type === "date") return Number.isNaN(new Date(raw).getTime());
+    return false;
+  }
+
+  function applyDirectoryControls(config, rows, state) {
+    const filtered = rows.filter((row) => matchesSearch(row, config, state.q) && matchesFilters(row, config, state.filters));
+    if (!state.sortKey) return filtered;
+    const sortDef = config.sortOptions.find((option) => option.key === state.sortKey);
+    if (!sortDef) return filtered;
+    const withValue = [];
+    const withoutValue = [];
+    for (const row of filtered) {
+      (isSortValueEmpty(row, sortDef) ? withoutValue : withValue).push(row);
+    }
+    withValue.sort((a, b) => compareRows(a, b, sortDef, state.dir));
+    return withValue.concat(withoutValue);
+  }
+
+  function isDirectoryStateActive(state) {
+    if (state.q) return true;
+    if (state.sortKey) return true;
+    return Object.values(state.filters).some(Boolean);
+  }
+
+  function readDirectoryStateFromUrl(config) {
+    const params = new URLSearchParams(window.location.search);
+    const state = {
+      q: params.get("q") || "",
+      filters: {},
+      sortKey: params.get("sort") || "",
+      dir: params.get("dir") === "desc" ? "desc" : "asc",
+    };
+    for (const filterConfig of config.filters) {
+      const value = params.get(filterConfig.key);
+      if (value) state.filters[filterConfig.key] = value;
+    }
+    return state;
+  }
+
+  function writeDirectoryStateToUrl(config, state) {
+    const params = new URLSearchParams();
+    if (state.q) params.set("q", state.q);
+    for (const filterConfig of config.filters) {
+      const value = state.filters[filterConfig.key];
+      if (value) params.set(filterConfig.key, value);
+    }
+    if (state.sortKey) {
+      params.set("sort", state.sortKey);
+      if (state.dir === "desc") params.set("dir", "desc");
+    }
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+  }
+
+  function updateDirectoryCount(total, shown) {
+    const countEl = document.querySelector("[data-directory-count]");
+    if (!countEl) return;
+    countEl.textContent = total === 0 ? "" : shown === total ? `${total} total` : `Showing ${shown} of ${total}`;
+  }
+
+  function refreshDirectoryView(config) {
+    const filtered = applyDirectoryControls(config, currentDirectoryRows, directoryControlsState);
+    const emptyText = currentDirectoryRows.length === 0 ? config.emptyText : config.noMatchText;
+    fillTable(config.selector, filtered, config.columns, emptyText);
+    updateDirectoryCount(currentDirectoryRows.length, filtered.length);
+    const clearButton = document.querySelector("[data-directory-clear]");
+    if (clearButton) clearButton.hidden = !isDirectoryStateActive(directoryControlsState);
+  }
+
+  function buildToolbar(container, config, rows) {
+    container.innerHTML = "";
+    const controlsRow = document.createElement("div");
+    controlsRow.className = "admin-toolbar-controls";
+
+    const searchLabel = document.createElement("label");
+    searchLabel.className = "admin-toolbar-field";
+    const searchSpan = document.createElement("span");
+    searchSpan.textContent = "Search";
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.autocomplete = "off";
+    searchInput.placeholder = "Search";
+    searchInput.dataset.directorySearch = "";
+    searchInput.value = directoryControlsState.q;
+    searchInput.addEventListener("input", () => {
+      directoryControlsState.q = searchInput.value.trim();
+      refreshDirectoryView(config);
+      writeDirectoryStateToUrl(config, directoryControlsState);
+    });
+    searchLabel.append(searchSpan, searchInput);
+    controlsRow.appendChild(searchLabel);
+
+    const filterSelects = [];
+    for (const filterConfig of config.filters) {
+      const label = document.createElement("label");
+      label.className = "admin-toolbar-field";
+      const span = document.createElement("span");
+      span.textContent = filterConfig.label;
+      const select = document.createElement("select");
+      select.dataset.directoryFilter = filterConfig.key;
+      const allOption = document.createElement("option");
+      allOption.value = "";
+      allOption.textContent = `All ${filterConfig.label.toLowerCase()}`;
+      select.appendChild(allOption);
+      const derivedOptions = buildFilterOptions(filterConfig, rows);
+      for (const option of derivedOptions) {
+        const optionEl = document.createElement("option");
+        optionEl.value = option.value;
+        optionEl.textContent = option.label;
+        select.appendChild(optionEl);
+      }
+      const activeFilterValue = directoryControlsState.filters[filterConfig.key] || "";
+      if (activeFilterValue && !derivedOptions.some((option) => option.value === activeFilterValue)) {
+        // Deep-linked value not present in the currently loaded rows -- keep it visible instead of
+        // silently falling back to "All" while the table stays filtered to zero rows.
+        const activeOptionEl = document.createElement("option");
+        activeOptionEl.value = activeFilterValue;
+        activeOptionEl.textContent = formatOptionLabel(activeFilterValue);
+        select.appendChild(activeOptionEl);
+      }
+      select.value = activeFilterValue;
+      select.addEventListener("change", () => {
+        if (select.value) directoryControlsState.filters[filterConfig.key] = select.value;
+        else delete directoryControlsState.filters[filterConfig.key];
+        refreshDirectoryView(config);
+        writeDirectoryStateToUrl(config, directoryControlsState);
+      });
+      label.append(span, select);
+      controlsRow.appendChild(label);
+      filterSelects.push(select);
+    }
+
+    const sortLabel = document.createElement("label");
+    sortLabel.className = "admin-toolbar-field";
+    const sortSpan = document.createElement("span");
+    sortSpan.textContent = "Sort";
+    const sortSelect = document.createElement("select");
+    sortSelect.dataset.directorySort = "";
+    const originalOption = document.createElement("option");
+    originalOption.value = "";
+    originalOption.textContent = "Original order";
+    sortSelect.appendChild(originalOption);
+    for (const sortDef of config.sortOptions) {
+      const optionEl = document.createElement("option");
+      optionEl.value = sortDef.key;
+      optionEl.textContent = sortDef.label;
+      sortSelect.appendChild(optionEl);
+    }
+    sortSelect.value = directoryControlsState.sortKey;
+    sortSelect.addEventListener("change", () => {
+      directoryControlsState.sortKey = sortSelect.value;
+      refreshDirectoryView(config);
+      writeDirectoryStateToUrl(config, directoryControlsState);
+    });
+    sortLabel.append(sortSpan, sortSelect);
+    controlsRow.appendChild(sortLabel);
+
+    const dirButton = document.createElement("button");
+    dirButton.type = "button";
+    dirButton.className = "button button-small button-secondary";
+    dirButton.dataset.directorySortDir = "";
+    dirButton.setAttribute("aria-label", "Sort direction");
+    dirButton.textContent = directoryControlsState.dir === "desc" ? "Desc" : "Asc";
+    dirButton.setAttribute("aria-pressed", String(directoryControlsState.dir === "desc"));
+    dirButton.addEventListener("click", () => {
+      directoryControlsState.dir = directoryControlsState.dir === "desc" ? "asc" : "desc";
+      dirButton.textContent = directoryControlsState.dir === "desc" ? "Desc" : "Asc";
+      dirButton.setAttribute("aria-pressed", String(directoryControlsState.dir === "desc"));
+      refreshDirectoryView(config);
+      writeDirectoryStateToUrl(config, directoryControlsState);
+    });
+    controlsRow.appendChild(dirButton);
+
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "button button-small button-secondary";
+    clearButton.textContent = "Clear filters";
+    clearButton.dataset.directoryClear = "";
+    clearButton.hidden = !isDirectoryStateActive(directoryControlsState);
+    clearButton.addEventListener("click", () => {
+      directoryControlsState = { q: "", filters: {}, sortKey: "", dir: "asc" };
+      searchInput.value = "";
+      for (const select of filterSelects) select.value = "";
+      sortSelect.value = "";
+      dirButton.textContent = "Asc";
+      dirButton.setAttribute("aria-pressed", "false");
+      refreshDirectoryView(config);
+      writeDirectoryStateToUrl(config, directoryControlsState);
+    });
+    controlsRow.appendChild(clearButton);
+
+    const countEl = document.createElement("p");
+    countEl.className = "admin-toolbar-count";
+    countEl.dataset.directoryCount = "";
+    countEl.setAttribute("aria-live", "polite");
+
+    container.append(controlsRow, countEl);
+  }
+
+  function renderDirectorySection(config, payload) {
+    currentDirectoryRows = payload[config.dataKey] || [];
+    const container = document.querySelector("[data-directory-controls]");
+    if (container && container.dataset.built !== "true") {
+      container.dataset.built = "true";
+      directoryControlsState = readDirectoryStateFromUrl(config);
+      buildToolbar(container, config, currentDirectoryRows);
+    }
+    refreshDirectoryView(config);
+  }
+
+  const DIRECTORY_CONFIG = {
+    businesses: {
+      selector: "[data-rows]",
+      dataKey: "businesses",
+      emptyText: "No businesses yet.",
+      noMatchText: "No matching results. Clear filters to see all.",
+      searchFields: ["name", "owner_email"],
+      filters: [
+        { key: "status", label: "Status", getValue: (r) => r.status },
+        { key: "verification", label: "Verification", getValue: (r) => r.verification_status },
+        { key: "risk", label: "Risk", getValue: (r) => r.risk_level },
+      ],
+      sortOptions: [
+        { key: "created_at", label: "Created", type: "date" },
+        { key: "name", label: "Business name", type: "text", getValue: (r) => r.name || r.id },
+        { key: "status", label: "Status", type: "text" },
+        { key: "risk_level", label: "Risk", type: "text" },
+      ],
+      columns: [
+        { label: "Business", value: (r) => r.name || r.id },
+        { label: "Owner", value: (r) => r.owner_email || "" },
+        { label: "Status", value: (r) => statusCell(r.status) },
+        { label: "Access", value: (r) => r.access_level || "" },
+        { label: "Verification", value: (r) => statusCell(r.verification_status) },
+        { label: "Risk", value: (r) => statusCell(r.risk_level) },
+        { label: "Created", value: (r) => formatDateTime(r.created_at) },
+        { label: "Actions", value: (r) => ({ href: `/admin/businesses/${r.id}`, text: "Manage" }) },
+      ],
+    },
+    offers: {
+      selector: "[data-rows]",
+      dataKey: "offers",
+      emptyText: "No offers yet.",
+      noMatchText: "No matching results. Clear filters to see all.",
+      searchFields: ["title", "business_name"],
+      filters: [
+        {
+          key: "status",
+          label: "Status",
+          getValue: (r) => (r.is_active ? "live" : "inactive"),
+          options: [
+            { value: "live", label: "Live" },
+            { value: "inactive", label: "Inactive" },
+          ],
+        },
+      ],
+      sortOptions: [
+        { key: "created_at", label: "Created", type: "date" },
+        { key: "start_time", label: "Starts", type: "date" },
+        { key: "end_time", label: "Ends", type: "date" },
+        { key: "status", label: "Status", type: "number", getValue: (r) => (r.is_active ? 1 : 0) },
+      ],
+      columns: [
+        { label: "Offer", value: (r) => r.title || r.id },
+        { label: "Business", value: (r) => r.business_name || r.business_id || "" },
+        { label: "Status", value: (r) => ({ badge: r.is_active ? "Live" : "Inactive", tone: r.is_active ? "success" : "" }) },
+        { label: "Starts", value: (r) => formatDateTime(r.start_time) },
+        { label: "Ends", value: (r) => formatDateTime(r.end_time) },
+        { label: "Created", value: (r) => formatDateTime(r.created_at) },
+      ],
+    },
+    billing_events: {
+      selector: "[data-rows]",
+      dataKey: "billing_events",
+      emptyText: "No billing events yet.",
+      noMatchText: "No matching results. Clear filters to see all.",
+      searchFields: ["event_type", "provider", "error_message"],
+      filters: [
+        { key: "status", label: "Processing status", getValue: (r) => r.processing_status },
+        { key: "provider", label: "Provider", getValue: (r) => r.provider },
+      ],
+      sortOptions: [
+        { key: "received_at", label: "Received", type: "date" },
+        { key: "processed_at", label: "Processed", type: "date" },
+        { key: "processing_status", label: "Status", type: "text" },
+      ],
+      columns: [
+        { label: "Event", value: (r) => r.event_type || "" },
+        { label: "Provider", value: (r) => r.provider || "" },
+        { label: "Status", value: (r) => statusCell(r.processing_status) },
+        { label: "Received", value: (r) => formatDateTime(r.received_at) },
+        { label: "Processed", value: (r) => formatDateTime(r.processed_at) },
+        { label: "Error", value: (r) => r.error_message || "" },
+      ],
+    },
+    audit_log: {
+      selector: "[data-rows]",
+      dataKey: "audit_log",
+      emptyText: "No audit events yet.",
+      noMatchText: "No matching results. Clear filters to see all.",
+      searchFields: ["action", "admin_email", "target_type", "reason"],
+      filters: [
+        { key: "action", label: "Action", getValue: (r) => r.action },
+        { key: "target", label: "Target type", getValue: (r) => r.target_type },
+      ],
+      sortOptions: [
+        { key: "created_at", label: "Created", type: "date" },
+        { key: "action", label: "Action", type: "text" },
+        { key: "admin_email", label: "Admin", type: "text" },
+      ],
+      columns: [
+        { label: "Admin", value: (r) => r.admin_email || "" },
+        { label: "Action", value: (r) => r.action || "" },
+        { label: "Target", value: (r) => r.target_type || "" },
+        { label: "Business", value: (r) => r.business_id || "" },
+        { label: "Reason", value: (r) => r.reason || "" },
+        { label: "Created", value: (r) => formatDateTime(r.created_at) },
+      ],
+    },
+  };
+
   function detailBusinessId() {
     const fromQuery = new URLSearchParams(window.location.search).get("businessId");
     if (fromQuery) return fromQuery;
@@ -180,50 +553,9 @@
   }
 
   function renderSection(payload) {
-    if (section === "businesses") {
-      fillTable("[data-rows]", payload.businesses || [], [
-        { label: "Business", value: (r) => r.name || r.id },
-        { label: "Owner", value: (r) => r.owner_email || "" },
-        { label: "Status", value: (r) => statusCell(r.status) },
-        { label: "Access", value: (r) => r.access_level || "" },
-        { label: "Verification", value: (r) => statusCell(r.verification_status) },
-        { label: "Risk", value: (r) => statusCell(r.risk_level) },
-        { label: "Created", value: (r) => formatDateTime(r.created_at) },
-        { label: "Actions", value: (r) => ({ href: `/admin/businesses/${r.id}`, text: "Manage" }) },
-      ], "No businesses yet.");
-      return;
-    }
-    if (section === "offers") {
-      fillTable("[data-rows]", payload.offers || [], [
-        { label: "Offer", value: (r) => r.title || r.id },
-        { label: "Business", value: (r) => r.business_name || r.business_id || "" },
-        { label: "Status", value: (r) => ({ badge: r.is_active ? "Live" : "Inactive", tone: r.is_active ? "success" : "" }) },
-        { label: "Starts", value: (r) => formatDateTime(r.start_time) },
-        { label: "Ends", value: (r) => formatDateTime(r.end_time) },
-        { label: "Created", value: (r) => formatDateTime(r.created_at) },
-      ], "No offers yet.");
-      return;
-    }
-    if (section === "billing_events") {
-      fillTable("[data-rows]", payload.billing_events || [], [
-        { label: "Event", value: (r) => r.event_type || "" },
-        { label: "Provider", value: (r) => r.provider || "" },
-        { label: "Status", value: (r) => statusCell(r.processing_status) },
-        { label: "Received", value: (r) => formatDateTime(r.received_at) },
-        { label: "Processed", value: (r) => formatDateTime(r.processed_at) },
-        { label: "Error", value: (r) => r.error_message || "" },
-      ], "No billing events yet.");
-      return;
-    }
-    if (section === "audit_log") {
-      fillTable("[data-rows]", payload.audit_log || [], [
-        { label: "Admin", value: (r) => r.admin_email || "" },
-        { label: "Action", value: (r) => r.action || "" },
-        { label: "Target", value: (r) => r.target_type || "" },
-        { label: "Business", value: (r) => r.business_id || "" },
-        { label: "Reason", value: (r) => r.reason || "" },
-        { label: "Created", value: (r) => formatDateTime(r.created_at) },
-      ], "No audit events yet.");
+    const directoryConfig = DIRECTORY_CONFIG[section];
+    if (directoryConfig) {
+      renderDirectorySection(directoryConfig, payload);
       return;
     }
     if (section === "settings") {

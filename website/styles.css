@@ -1307,7 +1307,9 @@ main.content-page {
 
 .admin-form input,
 .admin-form select,
-.admin-form textarea {
+.admin-form textarea,
+.admin-toolbar-field input,
+.admin-toolbar-field select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1320,10 +1322,54 @@ main.content-page {
 
 .admin-form input:focus,
 .admin-form select:focus,
-.admin-form textarea:focus {
+.admin-form textarea:focus,
+.admin-toolbar-field input:focus,
+.admin-toolbar-field select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(240 138 84 / 16%);
   outline: none;
+}
+
+.admin-table-toolbar {
+  margin-bottom: 14px;
+}
+
+.admin-table-toolbar:empty {
+  display: none;
+}
+
+.admin-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.admin-toolbar-field {
+  display: grid;
+  flex: 1 1 160px;
+  gap: 7px;
+  min-width: 140px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-toolbar-field input,
+.admin-toolbar-field select {
+  padding: 10px 12px;
+}
+
+.admin-toolbar-controls .button-small {
+  flex: 0 0 auto;
+}
+
+.admin-toolbar-count {
+  flex-basis: 100%;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .admin-shell a:focus-visible,
@@ -1499,7 +1545,9 @@ main.content-page {
   .admin-table tbody tr,
   .admin-form input,
   .admin-form select,
-  .admin-form textarea {
+  .admin-form textarea,
+  .admin-toolbar-field input,
+  .admin-toolbar-field select {
     transition: none;
   }
 
